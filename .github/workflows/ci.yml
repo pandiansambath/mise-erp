@@ -52,5 +52,6 @@ jobs:
 
       - name: Run tests with coverage
         env:
+          DATABASE_URL: postgresql+asyncpg://mise:mise@localhost:5432/mise_test
           SECRET_KEY: ci-secret
         run: pytest --cov=app --cov-report=term-missing --cov-fail-under=70

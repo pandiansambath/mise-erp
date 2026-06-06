@@ -21,4 +21,4 @@ ignore = ["B008"]  # FastAPI uses function calls (Depends()) in defaults by desi
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/main.py", "tests/*"]
+omit = ["app/main.py", "app/scripts/*", "tests/*"]
