@@ -18,12 +18,14 @@ PERMISSIONS: dict[str, list[str]] = {
         "payroll:read",
         "vendors:write",
         "inventory:write",
+        "recipes:write",
         "indent:approve",
         "sales:read",
         "reports:read",
     ],
     Role.KITCHEN_MANAGER.value: [
         "inventory:read",
+        "recipes:write",
         "indent:write",
         "stock:read",
     ],
@@ -31,6 +33,7 @@ PERMISSIONS: dict[str, list[str]] = {
         "payroll:write",
         "vendor_payments:write",
         "vendors:read",
+        "recipes:read",
         "reports:read",
     ],
     Role.CASHIER.value: [
