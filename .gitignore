@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────
+# SECRETS — never commit. (Credentials live only on the dev machine.)
+# ─────────────────────────────────────────────────────────────
+github_token.txt
+*accessKeys*.csv
+pandiansambath_accessKeys.csv
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials*
+
+# ─────────────────────────────────────────────────────────────
+# CLIENT BUSINESS DATA — real PII / financials. Never commit.
+# (Kept locally as reference only.)
+# ─────────────────────────────────────────────────────────────
+*.xlsx
+*.xls
+*.pdf
+client_data/
+raw_data/
+
+# ─────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.db
+*.sqlite3
+
+# ─────────────────────────────────────────────────────────────
+# Node / Next.js
+# ─────────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+.turbo/
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# ─────────────────────────────────────────────────────────────
+# Terraform
+# ─────────────────────────────────────────────────────────────
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# ─────────────────────────────────────────────────────────────
+# Editor / OS / tooling-local
+# ─────────────────────────────────────────────────────────────
+.claude/settings.local.json
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
