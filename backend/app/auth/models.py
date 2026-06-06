@@ -1,0 +1,36 @@
+"""Auth domain models: User + Role."""
+import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, String, Uuid, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+
+class Role(str, enum.Enum):
+    """The 6 roles for NIRAI (PRD names + Cashier for daily sales entry)."""
+
+    SUPER_ADMIN = "SUPER_ADMIN"  # Owner — full access
+    MANAGER = "MANAGER"  # Restaurant Manager
+    KITCHEN_MANAGER = "KITCHEN_MANAGER"  # Chef / kitchen lead
+    ACCOUNTANT = "ACCOUNTANT"  # Payroll, vendor payments, financial reports
+    CASHIER = "CASHIER"  # Daily sales & cash entry
+    STAFF = "STAFF"  # General staff — own attendance & payslip only
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default=Role.STAFF.value)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<User {self.email} ({self.role})>"
