@@ -46,4 +46,11 @@ PERMISSIONS: dict[str, list[str]] = {
 
 def has_permission(role: str, permission: str) -> bool:
     perms = PERMISSIONS.get(role, [])
-    return "*" in perms or permission in perms
+    if "*" in perms or permission in perms:
+        return True
+    # ":write" on a module implies ":read" on that module.
+    if permission.endswith(":read"):
+        module = permission.rsplit(":", 1)[0]
+        if f"{module}:write" in perms:
+            return True
+    return False
