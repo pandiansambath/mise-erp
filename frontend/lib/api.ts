@@ -211,6 +211,19 @@ export interface DaySummary {
   totals: DayTotals;
 }
 
+export interface PayrollRow {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  pay_period: string;
+  gross_pay: string;
+  overtime_pay: string;
+  advance_deduction: string;
+  other_deductions: string;
+  net_pay: string;
+  status: string;
+}
+
 export interface Employee {
   id: string;
   employee_code: string;
