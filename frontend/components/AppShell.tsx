@@ -5,12 +5,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
+import { can } from "@/lib/permissions";
 
-const NAV = [
+type NavItem = { href: string; label: string; icon: string; perm?: string };
+
+const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "▦" },
-  { href: "/price-comparison", label: "Price Comparison", icon: "⚖" },
-  { href: "/inventory", label: "Inventory", icon: "📦" },
-  { href: "/recipes", label: "Recipes", icon: "🍲" },
+  { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read" },
+  { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
+  { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },
+  { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
   { href: "/profile", label: "Profile", icon: "👤" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
@@ -47,10 +51,18 @@ function Brand() {
   );
 }
 
-function NavLinks({ pathname, onClick }: { pathname: string; onClick?: () => void }) {
+function NavLinks({
+  items,
+  pathname,
+  onClick,
+}: {
+  items: NavItem[];
+  pathname: string;
+  onClick?: () => void;
+}) {
   return (
     <nav className="flex flex-col gap-1 px-3">
-      {NAV.map((item) => {
+      {items.map((item) => {
         const active = pathname === item.href;
         return (
           <Link
@@ -85,12 +97,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (hotel?.base_currency) applyDefault(hotel.base_currency);
   }, [hotel, applyDefault]);
 
+  const navItems = NAV.filter((item) => !item.perm || can(user?.role, item.perm));
+
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">
       {/* Desktop sidebar */}
       <aside className="hidden border-r border-slate-200 bg-white lg:flex lg:flex-col">
         <Brand />
-        <NavLinks pathname={pathname} />
+        <NavLinks items={navItems} pathname={pathname} />
         <div className="mt-auto border-t border-slate-200 p-4 text-xs text-slate-500">
           {hotel && (
             <p className="truncate text-sm font-semibold text-slate-800">
@@ -113,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           />
           <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-white shadow-xl">
             <Brand />
-            <NavLinks pathname={pathname} onClick={() => setOpen(false)} />
+            <NavLinks items={navItems} pathname={pathname} onClick={() => setOpen(false)} />
           </aside>
         </div>
       )}
