@@ -1,0 +1,68 @@
+import { expect, test, type Page } from "@playwright/test";
+
+const EMAIL = "owner@nirai.com";
+const PASSWORD = "StrongPass123!";
+
+/** Assert the page has no horizontal scroll (the #1 responsive bug). */
+async function assertNoHorizontalOverflow(page: Page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(overflow, "page must not scroll horizontally").toBeLessThanOrEqual(2);
+}
+
+async function login(page: Page) {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(EMAIL);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("**/dashboard");
+}
+
+test("login page renders and fits the viewport", async ({ page }) => {
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: "Mise" })).toBeVisible();
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("user can log in and see the dashboard", async ({ page }) => {
+  await login(page);
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("price comparison page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/price-comparison");
+  await expect(page.getByRole("heading", { name: "Price Comparison" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("inventory page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/inventory");
+  await expect(page.getByRole("heading", { name: "Inventory" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("recipes page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/recipes");
+  await expect(page.getByRole("heading", { name: "Recipes" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("navigation adapts: hamburger on mobile, sidebar on desktop", async ({ page }, testInfo) => {
+  await login(page);
+  const menuButton = page.getByRole("button", { name: "Open menu" });
+  // Persistent sidebar appears at the lg breakpoint (1024px); below that
+  // (phones + portrait tablets) we use the hamburger drawer.
+  if (testInfo.project.name === "desktop") {
+    await expect(menuButton).toBeHidden();
+    await expect(page.getByRole("link", { name: "Price Comparison" })).toBeVisible();
+  } else {
+    await expect(menuButton).toBeVisible();
+  }
+});
