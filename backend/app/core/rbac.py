@@ -37,6 +37,7 @@ PERMISSIONS: dict[str, list[str]] = {
         "vendors:read",
         "recipes:read",
         "expenses:write",
+        "employees:read",
         "reports:read",
     ],
     Role.CASHIER.value: [

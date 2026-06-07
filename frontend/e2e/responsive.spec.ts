@@ -77,6 +77,20 @@ test("expenses page fits the viewport", async ({ page }) => {
   await assertNoHorizontalOverflow(page);
 });
 
+test("employees page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/employees");
+  await expect(page.getByRole("heading", { name: "Employees" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("attendance page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/attendance");
+  await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
 test("staff page: admin can manage the team", async ({ page }) => {
   await login(page);
   await page.goto("/staff");
