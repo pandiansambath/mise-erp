@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type Item, type PriceComparison } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useCurrency } from "@/lib/currency";
 
 export default function PriceComparisonPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -10,6 +11,7 @@ export default function PriceComparisonPage() {
   const [data, setData] = useState<PriceComparison | null>(null);
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadingCompare, setLoadingCompare] = useState(false);
+  const { format } = useCurrency();
 
   useEffect(() => {
     api
@@ -80,10 +82,12 @@ export default function PriceComparisonPage() {
                   <p className="text-sm text-brand-700">
                     Cheapest is{" "}
                     <span className="font-semibold">{data.cheapest_vendor?.vendor_name}</span> at{" "}
-                    <span className="font-semibold">£{data.cheapest_vendor?.price_per_unit}</span> /
-                    {data.unit}. Switching from the priciest saves{" "}
                     <span className="font-semibold">
-                      £{data.potential_saving_per_unit}/{data.unit}
+                      {format(data.cheapest_vendor?.price_per_unit)}
+                    </span>{" "}
+                    /{data.unit}. Switching from the priciest saves{" "}
+                    <span className="font-semibold">
+                      {format(data.potential_saving_per_unit)}/{data.unit}
                     </span>
                     .
                   </p>
@@ -111,7 +115,7 @@ export default function PriceComparisonPage() {
                             {row.vendor_name}
                           </td>
                           <td className="px-5 py-3 text-right font-semibold text-slate-900">
-                            £{row.price_per_unit}
+                            {format(row.price_per_unit)}
                           </td>
                           <td className="px-5 py-3 text-right text-slate-400">
                             {row.last_updated}
