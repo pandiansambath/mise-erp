@@ -98,6 +98,13 @@ test("payroll page fits the viewport", async ({ page }) => {
   await assertNoHorizontalOverflow(page);
 });
 
+test("purchasing page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/purchasing");
+  await expect(page.getByRole("heading", { name: "Purchasing" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
 test("staff page: admin can manage the team", async ({ page }) => {
   await login(page);
   await page.goto("/staff");

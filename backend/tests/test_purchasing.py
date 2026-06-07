@@ -1,0 +1,116 @@
+"""Kitchen indent -> purchase order -> receive tests."""
+from decimal import Decimal
+
+import pytest
+
+from app.auth.models import Role
+from app.inventory import service as inv
+from app.purchasing import service
+from app.vendors import service as ven
+
+
+async def _setup_catalog(db, hotel_id):
+    rice = await inv.create_item(db, hotel_id, name="Rice", unit="kg")
+    chicken = await inv.create_item(db, hotel_id, name="Chicken", unit="kg")
+    v1 = await ven.create_vendor(db, hotel_id, name="V1")
+    v2 = await ven.create_vendor(db, hotel_id, name="V2")
+    await ven.upsert_vendor_item(db, v1.id, rice.id, Decimal("5.00"))
+    await ven.upsert_vendor_item(db, v2.id, rice.id, Decimal("5.50"))
+    await ven.upsert_vendor_item(db, v1.id, chicken.id, Decimal("9.00"))
+    await ven.upsert_vendor_item(db, v2.id, chicken.id, Decimal("8.00"))
+    return rice, chicken, v1, v2
+
+
+@pytest.mark.asyncio
+async def test_generate_pos_groups_by_cheapest_vendor(db, hotel):
+    rice, chicken, v1, v2 = await _setup_catalog(db, hotel.id)
+    indent = await service.create_indent(
+        db, hotel.id,
+        [{"item_id": rice.id, "required_qty": Decimal("10")},
+         {"item_id": chicken.id, "required_qty": Decimal("4")}],
+    )
+    result = await service.generate_pos(db, indent)
+    pos = result["purchase_orders"]
+    assert len(pos) == 2  # rice->V1, chicken->V2 (different cheapest vendors)
+    by_vendor = {po.vendor_id: po for po in pos}
+    assert by_vendor[v1.id].total_amount == Decimal("50.00")  # 10 * 5.00
+    assert by_vendor[v2.id].total_amount == Decimal("32.00")  # 4 * 8.00
+    assert result["skipped_items"] == []
+    assert indent.status == "ORDERED"
+
+
+@pytest.mark.asyncio
+async def test_unpriced_item_skipped(db, hotel):
+    item = await inv.create_item(db, hotel.id, name="Mystery", unit="kg")  # no vendor price
+    indent = await service.create_indent(
+        db, hotel.id, [{"item_id": item.id, "required_qty": Decimal("5")}]
+    )
+    result = await service.generate_pos(db, indent)
+    assert result["purchase_orders"] == []
+    assert "Mystery" in result["skipped_items"]
+
+
+@pytest.mark.asyncio
+async def test_receive_po_increases_stock_and_cost(db, hotel):
+    rice, _chicken, v1, _v2 = await _setup_catalog(db, hotel.id)
+    indent = await service.create_indent(
+        db, hotel.id, [{"item_id": rice.id, "required_qty": Decimal("10")}]
+    )
+    result = await service.generate_pos(db, indent)
+    po = next(p for p in result["purchase_orders"] if p.vendor_id == v1.id)
+
+    await service.receive_po(db, po)
+    refreshed = await inv.get_item(db, rice.id, hotel.id)
+    assert refreshed.current_stock == Decimal("10.000")
+    assert refreshed.average_cost == Decimal("5.0000")  # received at £5
+    assert po.status == "RECEIVED"
+
+
+# ── API + RBAC ────────────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_kitchen_manager_creates_indent(client, make_user, auth_header, db, hotel):
+    km = await make_user("km@nirai.com", Role.KITCHEN_MANAGER.value)
+    item = await inv.create_item(db, hotel.id, name="Onion", unit="kg")
+    resp = await client.post(
+        "/api/purchasing/indents",
+        headers=auth_header(km),
+        json={"items": [{"item_id": str(item.id), "required_qty": "20"}]},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_cashier_cannot_create_indent(client, make_user, auth_header, db, hotel):
+    cashier = await make_user("cash@nirai.com", Role.CASHIER.value)
+    item = await inv.create_item(db, hotel.id, name="Onion", unit="kg")
+    resp = await client.post(
+        "/api/purchasing/indents",
+        headers=auth_header(cashier),
+        json={"items": [{"item_id": str(item.id), "required_qty": "20"}]},
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_full_flow_and_po_pdf_via_api(client, make_user, auth_header, db, hotel):
+    mgr = await make_user("mgr@nirai.com", Role.MANAGER.value)
+    h = auth_header(mgr)
+    rice, _c, _v1, _v2 = await _setup_catalog(db, hotel.id)
+
+    indent = (await client.post(
+        "/api/purchasing/indents", headers=h,
+        json={"items": [{"item_id": str(rice.id), "required_qty": "10"}]},
+    )).json()
+    await client.post(f"/api/purchasing/indents/{indent['id']}/approve", headers=h)
+    gen = (await client.post(f"/api/purchasing/indents/{indent['id']}/generate-pos", headers=h)).json()
+    assert len(gen["purchase_orders"]) == 1
+    po_id = gen["purchase_orders"][0]["id"]
+
+    pdf = await client.get(f"/api/purchasing/purchase-orders/{po_id}/pdf", headers=h)
+    assert pdf.status_code == 200
+    assert pdf.content[:4] == b"%PDF"
+
+    recv = await client.post(f"/api/purchasing/purchase-orders/{po_id}/receive", headers=h)
+    assert recv.status_code == 200
+    assert recv.json()["status"] == "RECEIVED"
