@@ -1,13 +1,20 @@
 <svg width="320" height="96" viewBox="0 0 320 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mise — restaurant intelligence">
   <defs>
     <linearGradient id="g" x1="16" y1="16" x2="80" y2="80" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#10b981"/>
+      <stop stop-color="#34d399"/>
+      <stop offset="0.55" stop-color="#10b981"/>
       <stop offset="1" stop-color="#047857"/>
     </linearGradient>
   </defs>
   <rect x="16" y="16" width="64" height="64" rx="15" fill="url(#g)"/>
-  <path d="M33 61 V38 L48 53 L63 38 V61" stroke="white" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="48" cy="35.5" r="3.1" fill="white"/>
+  <g fill="white" transform="translate(16,16)">
+    <rect x="16.5" y="27" width="5" height="9" rx="2.5"/>
+    <rect x="24.5" y="23" width="5" height="13" rx="2.5"/>
+    <rect x="32.5" y="19" width="5" height="17" rx="2.5"/>
+    <rect x="40.5" y="14" width="5" height="22" rx="2.5"/>
+    <rect x="16.5" y="34" width="29" height="4.5" rx="2.25"/>
+    <rect x="28.5" y="37" width="5" height="14" rx="2.5"/>
+  </g>
   <text x="98" y="50" font-family="Geist, Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#0f172a">Mise</text>
   <text x="99" y="70" font-family="Geist, Arial, Helvetica, sans-serif" font-size="13" font-weight="500" fill="#64748b" letter-spacing="0.5">restaurant intelligence</text>
 </svg>
