@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { Logo } from "@/components/Logo";
 
 type NavItem = { href: string; label: string; icon: string; perm?: string };
 
@@ -14,6 +15,7 @@ const NAV: NavItem[] = [
   { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read" },
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
   { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },
+  { href: "/sales", label: "Sales & Cash", icon: "🧾", perm: "sales:read" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
   { href: "/profile", label: "Profile", icon: "👤" },
   { href: "/settings", label: "Settings", icon: "⚙" },
@@ -42,10 +44,8 @@ function CurrencySwitcher() {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2 px-5 py-5">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-        M
-      </div>
+    <div className="flex items-center gap-2.5 px-5 py-5">
+      <Logo size={32} />
       <span className="text-lg font-semibold tracking-tight text-slate-900">Mise</span>
     </div>
   );

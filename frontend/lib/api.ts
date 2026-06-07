@@ -63,6 +63,7 @@ export const api = {
     request<T>(path, { method: "POST", body: data ? JSON.stringify(data) : undefined }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: "PATCH", body: data ? JSON.stringify(data) : undefined }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
 // ── Domain types (mirror backend schemas) ──────────────────────────────────
@@ -153,6 +154,43 @@ export interface IngredientCost {
   price_source: string;
   vendor_name: string | null;
   line_cost: string;
+}
+
+export interface SalesChannel {
+  id: string;
+  name: string;
+  commission_pct: string;
+  is_active: boolean;
+}
+
+export interface SalesLine {
+  id: string;
+  channel_id: string;
+  channel_name: string;
+  gross_amount: string;
+  commission: string;
+  net_amount: string;
+  payment_method: string;
+}
+
+export interface DayTotals {
+  gross: string;
+  commission: string;
+  net: string;
+  cash_sales: string;
+  card_sales: string;
+}
+
+export interface DaySummary {
+  id: string | null;
+  date: string;
+  opening_cash: string;
+  cash_counted: string | null;
+  expected_cash: string;
+  cash_variance: string | null;
+  notes: string | null;
+  lines: SalesLine[];
+  totals: DayTotals;
 }
 
 export interface RecipeCostBreakdown {

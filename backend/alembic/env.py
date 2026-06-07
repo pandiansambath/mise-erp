@@ -12,6 +12,7 @@ import app.auth.models  # noqa: F401
 import app.hotels.models  # noqa: F401
 import app.inventory.models  # noqa: F401
 import app.recipes.models  # noqa: F401
+import app.sales.models  # noqa: F401
 import app.vendors.models  # noqa: F401
 from alembic import context
 from app.core.config import settings

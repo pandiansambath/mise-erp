@@ -19,6 +19,7 @@ from app.inventory import service as inv
 from app.inventory.models import Item, StockMovement
 from app.recipes import service as rec
 from app.recipes.models import Recipe
+from app.sales import service as sales_svc
 from app.vendors import service as ven
 from app.vendors.models import Vendor
 
@@ -271,6 +272,9 @@ async def seed_hotel(db, hotel: Hotel) -> None:
             if item_name in items:
                 await rec.upsert_ingredient(db, recipe.id, items[item_name].id, Decimal(qty), unit)
         await rec.calculate_recipe_cost(db, recipe.id, hid)
+
+    # Default sales channels (Dine-In, Takeaway, Deliveroo, …) for this hotel.
+    await sales_svc.ensure_default_channels(db, hid)
 
 
 async def main() -> None:
