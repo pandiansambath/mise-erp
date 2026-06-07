@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { Logo } from "@/components/Logo";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -28,9 +29,7 @@ export default function LoginPage() {
     <div className="grid min-h-screen place-items-center bg-slate-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-xl font-bold text-white">
-            M
-          </div>
+          <Logo size={56} />
           <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">Mise</h1>
           <p className="mt-1 text-sm text-slate-500">Restaurant intelligence — sign in</p>
         </div>
