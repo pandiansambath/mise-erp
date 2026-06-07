@@ -20,6 +20,7 @@ const NAV: NavItem[] = [
   { href: "/expenses", label: "Expenses", icon: "💸", perm: "expenses:read" },
   { href: "/employees", label: "Employees", icon: "🧑‍🍳", perm: "employees:read" },
   { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read" },
+  { href: "/payroll", label: "Payroll", icon: "💷", perm: "payroll:read" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
   { href: "/profile", label: "Profile", icon: "👤" },
   { href: "/settings", label: "Settings", icon: "⚙" },

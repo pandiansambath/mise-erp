@@ -13,6 +13,7 @@ import app.employees.models  # noqa: F401
 import app.expenses.models  # noqa: F401
 import app.hotels.models  # noqa: F401
 import app.inventory.models  # noqa: F401
+import app.payroll.models  # noqa: F401
 import app.recipes.models  # noqa: F401
 import app.sales.models  # noqa: F401
 import app.vendors.models  # noqa: F401
