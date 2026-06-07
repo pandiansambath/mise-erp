@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 
@@ -77,7 +77,13 @@ function NavLinks({ pathname, onClick }: { pathname: string; onClick?: () => voi
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, hotel, logout } = useAuth();
+  const { applyDefault } = useCurrency();
+
+  // Default the display currency to the hotel's currency (unless the user chose one).
+  useEffect(() => {
+    if (hotel?.base_currency) applyDefault(hotel.base_currency);
+  }, [hotel, applyDefault]);
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">
@@ -86,7 +92,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Brand />
         <NavLinks pathname={pathname} />
         <div className="mt-auto border-t border-slate-200 p-4 text-xs text-slate-500">
-          <p className="truncate font-medium text-slate-700">{user?.email}</p>
+          {hotel && (
+            <p className="truncate text-sm font-semibold text-slate-800">
+              {hotel.name}
+              {hotel.city ? ` · ${hotel.city}` : ""}
+            </p>
+          )}
+          <p className="mt-1 truncate text-slate-600">{user?.email}</p>
           <p className="mt-0.5">{user?.role.replace(/_/g, " ")}</p>
         </div>
       </aside>

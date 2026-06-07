@@ -48,9 +48,11 @@ import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
 import app.auth.models  # noqa: E402,F401  (register models on Base.metadata)
+import app.hotels.models  # noqa: E402,F401
 from app.auth.service import create_user  # noqa: E402
 from app.core.database import AsyncSessionLocal, Base, engine  # noqa: E402
 from app.core.security import create_access_token  # noqa: E402
+from app.hotels.models import Hotel  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -77,11 +79,27 @@ async def client():
 
 
 @pytest.fixture
-def make_user(db):
-    """Factory: create a persisted user with a given role."""
+async def hotel(db) -> Hotel:
+    """A default tenant for tests."""
+    h = Hotel(name="Test Hotel", country="GB", base_currency="GBP", city="London")
+    db.add(h)
+    await db.commit()
+    await db.refresh(h)
+    return h
 
-    async def _make(email: str, role: str, password: str = "password123", is_active: bool = True):
-        user = await create_user(db, email, password, role)
+
+@pytest.fixture
+def make_user(db, hotel):
+    """Factory: create a persisted user in a hotel (defaults to the test hotel)."""
+
+    async def _make(
+        email: str,
+        role: str,
+        password: str = "password123",
+        is_active: bool = True,
+        hotel_id=None,
+    ):
+        user = await create_user(db, email, password, role, hotel_id or hotel.id)
         if not is_active:
             user.is_active = False
             await db.commit()

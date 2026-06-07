@@ -4,7 +4,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, hotel } = useAuth();
   const initial = user?.email?.[0]?.toUpperCase() ?? "?";
 
   return (
@@ -39,6 +39,29 @@ export default function ProfilePage() {
           </div>
         </dl>
       </Card>
+
+      {hotel && (
+        <Card className="mt-6">
+          <h3 className="font-semibold text-slate-900">Restaurant</h3>
+          <dl className="mt-3 grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-slate-500">Name</dt>
+              <dd className="font-medium text-slate-800">{hotel.name}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Location</dt>
+              <dd className="font-medium text-slate-800">
+                {hotel.city ? `${hotel.city}, ` : ""}
+                {hotel.country}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Base currency</dt>
+              <dd className="font-medium text-slate-800">{hotel.base_currency}</dd>
+            </div>
+          </dl>
+        </Card>
+      )}
 
       <Card className="mt-6">
         <h3 className="font-semibold text-slate-900">Security</h3>

@@ -10,14 +10,14 @@ from app.recipes import service as rec
 from app.vendors import service as ven
 
 
-async def _setup_biryani(db, chicken_price=Decimal("8.00")):
-    rice = await inv.create_item(db, name="Basmati Rice", unit="kg")
-    chicken = await inv.create_item(db, name="Chicken", unit="kg")
-    vendor = await ven.create_vendor(db, name="SK")
+async def _setup_biryani(db, hotel, chicken_price=Decimal("8.00")):
+    rice = await inv.create_item(db, hotel.id, name="Basmati Rice", unit="kg")
+    chicken = await inv.create_item(db, hotel.id, name="Chicken", unit="kg")
+    vendor = await ven.create_vendor(db, hotel.id, name="SK")
     await ven.upsert_vendor_item(db, vendor.id, rice.id, Decimal("5.00"))
     await ven.upsert_vendor_item(db, vendor.id, chicken.id, chicken_price)
     recipe = await rec.create_recipe(
-        db, name="Chicken Biryani", servings_default=50, selling_price=Decimal("15.00")
+        db, hotel.id, name="Chicken Biryani", servings_default=50, selling_price=Decimal("15.00")
     )
     await rec.upsert_ingredient(db, recipe.id, rice.id, Decimal("5"), "kg")
     await rec.upsert_ingredient(db, recipe.id, chicken.id, Decimal("4"), "kg")
@@ -25,9 +25,9 @@ async def _setup_biryani(db, chicken_price=Decimal("8.00")):
 
 
 @pytest.mark.asyncio
-async def test_biryani_cost_and_margin(db):
-    recipe, *_ = await _setup_biryani(db)
-    result = await rec.calculate_recipe_cost(db, recipe.id)
+async def test_biryani_cost_and_margin(db, hotel):
+    recipe, *_ = await _setup_biryani(db, hotel)
+    result = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)
     assert result["total_cost"] == Decimal("57.0000")  # 5*5 + 4*8
     assert result["cost_per_serving"] == Decimal("1.1400")  # 57/50
     assert result["profit_margin_pct"] == Decimal("92.40")  # (15-1.14)/15*100
@@ -35,29 +35,29 @@ async def test_biryani_cost_and_margin(db):
 
 
 @pytest.mark.asyncio
-async def test_margin_drops_when_vendor_price_rises(db):
-    recipe, _rice, chicken, vendor = await _setup_biryani(db)
-    initial = await rec.calculate_recipe_cost(db, recipe.id)
+async def test_margin_drops_when_vendor_price_rises(db, hotel):
+    recipe, _rice, chicken, vendor = await _setup_biryani(db, hotel)
+    initial = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)
 
     # Chicken price jumps 8 -> 12
     await ven.upsert_vendor_item(db, vendor.id, chicken.id, Decimal("12.00"))
-    updated = await rec.calculate_recipe_cost(db, recipe.id)
+    updated = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)
 
     assert updated["cost_per_serving"] > initial["cost_per_serving"]
     assert updated["profit_margin_pct"] < initial["profit_margin_pct"]
 
 
 @pytest.mark.asyncio
-async def test_cost_uses_cheapest_vendor(db):
-    item = await inv.create_item(db, name="Oil", unit="litre")
-    a = await ven.create_vendor(db, name="A")
-    b = await ven.create_vendor(db, name="B")
+async def test_cost_uses_cheapest_vendor(db, hotel):
+    item = await inv.create_item(db, hotel.id, name="Oil", unit="litre")
+    a = await ven.create_vendor(db, hotel.id, name="A")
+    b = await ven.create_vendor(db, hotel.id, name="B")
     await ven.upsert_vendor_item(db, a.id, item.id, Decimal("3.00"))
     await ven.upsert_vendor_item(db, b.id, item.id, Decimal("2.50"))
-    recipe = await rec.create_recipe(db, name="Fry", servings_default=1)
+    recipe = await rec.create_recipe(db, hotel.id, name="Fry", servings_default=1)
     await rec.upsert_ingredient(db, recipe.id, item.id, Decimal("2"), "litre")
 
-    result = await rec.calculate_recipe_cost(db, recipe.id)
+    result = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)
     ing = result["ingredients"][0]
     assert ing["unit_price"] == Decimal("2.50")
     assert ing["vendor_name"] == "B"
@@ -65,34 +65,34 @@ async def test_cost_uses_cheapest_vendor(db):
 
 
 @pytest.mark.asyncio
-async def test_missing_vendor_price_falls_back_to_average_cost(db):
-    item = await inv.create_item(db, name="Salt", unit="kg")
+async def test_missing_vendor_price_falls_back_to_average_cost(db, hotel):
+    item = await inv.create_item(db, hotel.id, name="Salt", unit="kg")
     # Establish weighted-average cost via a purchase (no vendor price set)
     await inv.record_movement(db, item, "PURCHASE_IN", Decimal("10"), unit_cost=Decimal("2.00"))
-    recipe = await rec.create_recipe(db, name="Brine", servings_default=1)
+    recipe = await rec.create_recipe(db, hotel.id, name="Brine", servings_default=1)
     await rec.upsert_ingredient(db, recipe.id, item.id, Decimal("3"), "kg")
 
-    result = await rec.calculate_recipe_cost(db, recipe.id)
+    result = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)
     assert result["ingredients"][0]["price_source"] == "average_cost"
     assert result["total_cost"] == Decimal("6.0000")  # 3 * 2.00
     assert result["has_missing_prices"] is False
 
 
 @pytest.mark.asyncio
-async def test_unpriced_ingredient_flags_missing(db):
-    item = await inv.create_item(db, name="Mystery Spice", unit="kg")
-    recipe = await rec.create_recipe(db, name="Mystery Dish", servings_default=1)
+async def test_unpriced_ingredient_flags_missing(db, hotel):
+    item = await inv.create_item(db, hotel.id, name="Mystery Spice", unit="kg")
+    recipe = await rec.create_recipe(db, hotel.id, name="Mystery Dish", servings_default=1)
     await rec.upsert_ingredient(db, recipe.id, item.id, Decimal("2"), "kg")
 
-    result = await rec.calculate_recipe_cost(db, recipe.id)
+    result = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)
     assert result["has_missing_prices"] is True
     assert result["ingredients"][0]["price_source"] == "none"
     assert result["total_cost"] == Decimal("0.0000")
 
 
 @pytest.mark.asyncio
-async def test_calculate_missing_recipe_returns_none(db):
-    assert await rec.calculate_recipe_cost(db, uuid.uuid4()) is None
+async def test_calculate_missing_recipe_returns_none(db, hotel):
+    assert await rec.calculate_recipe_cost(db, uuid.uuid4(), hotel.id) is None
 
 
 # ── API + RBAC ─────────────────────────────────────────────────────────────

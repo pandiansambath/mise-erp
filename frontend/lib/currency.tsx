@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 // Money is STORED in the hotel's base currency (NIRAI = GBP). This is a
 // DISPLAY-ONLY conversion for viewing in another currency. Rates are static
@@ -20,6 +20,8 @@ const BASE: CurrencyCode = "GBP"; // the currency amounts are stored in
 interface CurrencyState {
   currency: CurrencyCode;
   setCurrency: (c: CurrencyCode) => void;
+  /** Set a default (e.g. the hotel's currency) only if the user hasn't chosen one. */
+  applyDefault: (c: string) => void;
   /** Format a base-currency (GBP) amount into the selected currency. */
   format: (gbpAmount: string | number | null | undefined) => string;
 }
@@ -28,15 +30,26 @@ const CurrencyContext = createContext<CurrencyState | null>(null);
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [currency, setCurrencyState] = useState<CurrencyCode>(BASE);
+  const userPicked = useRef(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY) as CurrencyCode | null;
-    if (saved && saved in CURRENCIES) setCurrencyState(saved);
+    if (saved && saved in CURRENCIES) {
+      userPicked.current = true;
+      setCurrencyState(saved);
+    }
   }, []);
 
   const setCurrency = useCallback((c: CurrencyCode) => {
+    userPicked.current = true;
     setCurrencyState(c);
     window.localStorage.setItem(STORAGE_KEY, c);
+  }, []);
+
+  const applyDefault = useCallback((c: string) => {
+    if (!userPicked.current && c in CURRENCIES) {
+      setCurrencyState(c as CurrencyCode);
+    }
   }, []);
 
   const format = useCallback(
@@ -53,7 +66,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <CurrencyContext.Provider value={{ currency, setCurrency, format }}>
+    <CurrencyContext.Provider value={{ currency, setCurrency, applyDefault, format }}>
       {children}
     </CurrencyContext.Provider>
   );

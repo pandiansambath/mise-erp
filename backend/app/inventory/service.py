@@ -42,23 +42,30 @@ def signed_delta(movement_type: str, quantity: Decimal) -> Decimal:
     return quantity  # ADJUSTMENT — caller-supplied sign
 
 
-# ── Item CRUD ──────────────────────────────────────────────────────────────
-async def create_item(db: AsyncSession, **fields) -> Item:
-    item = Item(**fields)
+# ── Item CRUD (all scoped to a hotel) ───────────────────────────────────────
+async def create_item(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Item:
+    item = Item(hotel_id=hotel_id, **fields)
     db.add(item)
     await db.commit()
     await db.refresh(item)
     return item
 
 
-async def get_item(db: AsyncSession, item_id: uuid.UUID) -> Item | None:
-    return await db.get(Item, item_id)
+async def get_item(db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID) -> Item | None:
+    item = await db.get(Item, item_id)
+    if item is None or item.hotel_id != hotel_id:
+        return None
+    return item
 
 
 async def list_items(
-    db: AsyncSession, *, category: str | None = None, active_only: bool = True
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    *,
+    category: str | None = None,
+    active_only: bool = True,
 ) -> list[Item]:
-    stmt = select(Item)
+    stmt = select(Item).where(Item.hotel_id == hotel_id)
     if active_only:
         stmt = stmt.where(Item.is_active.is_(True))
     if category:
@@ -130,10 +137,11 @@ async def list_movements(db: AsyncSession, item_id: uuid.UUID) -> list[StockMove
     return list(result.scalars().all())
 
 
-async def low_stock_items(db: AsyncSession) -> list[Item]:
+async def low_stock_items(db: AsyncSession, hotel_id: uuid.UUID) -> list[Item]:
     """Active items whose current stock is at or below their minimum level."""
     result = await db.execute(
         select(Item).where(
+            Item.hotel_id == hotel_id,
             Item.is_active.is_(True),
             Item.min_stock_level.is_not(None),
             Item.current_stock <= Item.min_stock_level,

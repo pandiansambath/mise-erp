@@ -22,10 +22,26 @@ class UserOut(BaseModel):
     is_active: bool
 
 
+class HotelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    country: str
+    city: str | None
+    base_currency: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+    hotel: HotelOut
+
+
+class MeResponse(BaseModel):
+    user: UserOut
+    hotel: HotelOut
 
 
 class UserCreate(BaseModel):
