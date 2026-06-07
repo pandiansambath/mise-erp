@@ -23,6 +23,7 @@ ignore = ["B008"]  # FastAPI uses function calls (Depends()) in defaults by desi
 # Alembic migrations + seed data have naturally wide lines — not worth wrapping.
 "alembic/versions/*" = ["E501"]
 "app/scripts/*" = ["E501"]
+"tests/*" = ["E501"]
 
 [tool.coverage.run]
 source = ["app"]

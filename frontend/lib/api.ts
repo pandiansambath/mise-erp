@@ -193,6 +193,36 @@ export interface DaySummary {
   totals: DayTotals;
 }
 
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  kind: string;
+  is_active: boolean;
+}
+
+export interface Expense {
+  id: string;
+  category_id: string;
+  category_name: string;
+  kind: string;
+  date: string;
+  amount: string;
+  vat_amount: string;
+  description: string | null;
+  payment_method: string;
+  is_recurring: boolean;
+}
+
+export interface ExpenseSummary {
+  date_from: string;
+  date_to: string;
+  fixed_total: string;
+  variable_total: string;
+  vat_total: string;
+  grand_total: string;
+  by_category: { category_id: string; category_name: string; kind: string; total: string }[];
+}
+
 export interface RecipeCostBreakdown {
   recipe_id: string;
   recipe_name: string;

@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 import app.auth.models  # noqa: F401  (register users table for FK resolution)
 from app.auth.models import Role
 from app.auth.service import create_user, get_user_by_email
+from app.expenses import service as exp_svc
 from app.hotels.models import Hotel
 from app.inventory import service as inv
 from app.inventory.models import Item, StockMovement
@@ -275,6 +276,33 @@ async def seed_hotel(db, hotel: Hotel) -> None:
 
     # Default sales channels (Dine-In, Takeaway, Deliveroo, …) for this hotel.
     await sales_svc.ensure_default_channels(db, hid)
+
+    # Default expense categories + a few sample expenses this month (for the P&L).
+    await exp_svc.ensure_default_categories(db, hid)
+    existing = await exp_svc.list_expenses(db, hid)
+    if not existing:
+        import datetime as _dt
+
+        cats = {c.name: c for c in await exp_svc.list_categories(db, hid)}
+        first = _dt.date.today().replace(day=1)
+        samples = [
+            ("Rent", "1200.00", "0"),
+            ("Electricity", "320.00", "0"),
+            ("Gas", "150.00", "0"),
+            ("Internet & Phone", "60.00", "10.00"),
+            ("Vegetables", "480.00", "0"),
+            ("Meat & Fish", "640.00", "0"),
+            ("Packaging", "130.00", "21.67"),
+            ("Marketing", "90.00", "15.00"),
+        ]
+        for name, amount, vat in samples:
+            if name in cats:
+                await exp_svc.create_expense(
+                    db, hid, category_id=cats[name].id, date=first,
+                    amount=Decimal(amount), vat_amount=Decimal(vat),
+                    description=f"Monthly {name.lower()}", payment_method="BANK",
+                    is_recurring=name in {"Rent", "Electricity", "Gas", "Internet & Phone"},
+                )
 
 
 async def main() -> None:
