@@ -57,6 +57,24 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+/** Fetch a file (with auth) and trigger a browser download. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new ApiError(res.status, "Download failed");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, data?: unknown) =>
@@ -191,6 +209,35 @@ export interface DaySummary {
   notes: string | null;
   lines: SalesLine[];
   totals: DayTotals;
+}
+
+export interface PnL {
+  date_from: string;
+  date_to: string;
+  gross_sales: string;
+  commission: string;
+  net_sales: string;
+  cost_of_sales: string;
+  gross_profit: string;
+  operating_expenses: string;
+  net_profit: string;
+  food_cost_pct: string;
+  gross_margin_pct: string;
+  net_margin_pct: string;
+  expense_breakdown: { category_id: string; category_name: string; kind: string; total: string }[];
+}
+
+export interface DashboardKpis {
+  month_start: string;
+  today: string;
+  today_net_sales: string;
+  month_net_sales: string;
+  month_expenses: string;
+  month_net_profit: string;
+  month_net_margin_pct: string;
+  low_stock_count: number;
+  recipe_count: number;
+  avg_recipe_margin_pct: string;
 }
 
 export interface ExpenseCategory {
