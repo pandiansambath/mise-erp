@@ -11,6 +11,7 @@ const NAV = [
   { href: "/price-comparison", label: "Price Comparison", icon: "⚖" },
   { href: "/inventory", label: "Inventory", icon: "📦" },
   { href: "/recipes", label: "Recipes", icon: "🍲" },
+  { href: "/profile", label: "Profile", icon: "👤" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
