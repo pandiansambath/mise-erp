@@ -29,7 +29,8 @@ test("login page renders and fits the viewport", async ({ page }) => {
 
 test("user can log in and see the dashboard", async ({ page }) => {
   await login(page);
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(page.getByRole("heading", { name: "Quick actions" })).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
 
@@ -51,6 +52,14 @@ test("recipes page fits the viewport", async ({ page }) => {
   await login(page);
   await page.goto("/recipes");
   await expect(page.getByRole("heading", { name: "Recipes" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("reports P&L page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/reports");
+  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
+  await expect(page.getByText("Profit & Loss")).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
 
