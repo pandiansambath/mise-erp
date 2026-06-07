@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Item } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useCurrency } from "@/lib/currency";
 
 function isLow(item: Item): boolean {
   if (item.min_stock_level == null) return false;
@@ -17,6 +18,7 @@ export default function InventoryPage() {
   const [min, setMin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { format } = useCurrency();
 
   function load() {
     return api.get<Item[]>("/inventory/items").then(setItems);
@@ -123,7 +125,7 @@ export default function InventoryPage() {
                         {item.current_stock} {item.unit}
                       </td>
                       <td className="px-5 py-3 text-right text-slate-700">
-                        £{parseFloat(item.average_cost).toFixed(2)}
+                        {format(item.average_cost)}
                       </td>
                       <td className="px-5 py-3">{isLow(item) && <Badge tone="red">Low</Badge>}</td>
                     </tr>
