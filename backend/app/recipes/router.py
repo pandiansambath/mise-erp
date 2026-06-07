@@ -1,4 +1,4 @@
-"""Recipe endpoints: CRUD, ingredients, and cost/margin calculation."""
+"""Recipe endpoints: CRUD, ingredients, and cost/margin calculation. Hotel-scoped."""
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,18 +25,18 @@ router = APIRouter(prefix="/recipes", tags=["recipes"])
 async def create_recipe(
     payload: RecipeCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require("recipes:write")),
+    user: User = Depends(require("recipes:write")),
 ) -> RecipeOut:
-    recipe = await service.create_recipe(db, **payload.model_dump(exclude_none=True))
+    recipe = await service.create_recipe(db, user.hotel_id, **payload.model_dump(exclude_none=True))
     return RecipeOut.model_validate(recipe)
 
 
 @router.get("", response_model=list[RecipeOut])
 async def list_recipes(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require("recipes:read")),
+    user: User = Depends(require("recipes:read")),
 ) -> list[RecipeOut]:
-    recipes = await service.list_recipes(db)
+    recipes = await service.list_recipes(db, user.hotel_id)
     return [RecipeOut.model_validate(r) for r in recipes]
 
 
@@ -44,9 +44,9 @@ async def list_recipes(
 async def get_recipe(
     recipe_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require("recipes:read")),
+    user: User = Depends(require("recipes:read")),
 ) -> RecipeOut:
-    recipe = await service.get_recipe(db, recipe_id)
+    recipe = await service.get_recipe(db, recipe_id, user.hotel_id)
     if recipe is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Recipe not found")
     return RecipeOut.model_validate(recipe)
@@ -57,9 +57,9 @@ async def update_recipe(
     recipe_id: uuid.UUID,
     payload: RecipeUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require("recipes:write")),
+    user: User = Depends(require("recipes:write")),
 ) -> RecipeOut:
-    recipe = await service.get_recipe(db, recipe_id)
+    recipe = await service.get_recipe(db, recipe_id, user.hotel_id)
     if recipe is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Recipe not found")
     recipe = await service.update_recipe(db, recipe, **payload.model_dump(exclude_unset=True))
@@ -73,11 +73,11 @@ async def add_ingredient(
     recipe_id: uuid.UUID,
     payload: IngredientUpsert,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require("recipes:write")),
+    user: User = Depends(require("recipes:write")),
 ) -> IngredientOut:
-    if await service.get_recipe(db, recipe_id) is None:
+    if await service.get_recipe(db, recipe_id, user.hotel_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Recipe not found")
-    if await get_item(db, payload.item_id) is None:
+    if await get_item(db, payload.item_id, user.hotel_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     ing = await service.upsert_ingredient(
         db, recipe_id, payload.item_id, payload.quantity, payload.unit
@@ -89,9 +89,9 @@ async def add_ingredient(
 async def list_ingredients(
     recipe_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require("recipes:read")),
+    user: User = Depends(require("recipes:read")),
 ) -> list[IngredientOut]:
-    if await service.get_recipe(db, recipe_id) is None:
+    if await service.get_recipe(db, recipe_id, user.hotel_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Recipe not found")
     ings = await service.list_ingredients(db, recipe_id)
     return [IngredientOut.model_validate(i) for i in ings]
@@ -101,10 +101,10 @@ async def list_ingredients(
 async def recipe_cost(
     recipe_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require("recipes:read")),
+    user: User = Depends(require("recipes:read")),
 ) -> RecipeCostBreakdown:
     """Compute cost/serving and profit margin from current cheapest vendor prices."""
-    result = await service.calculate_recipe_cost(db, recipe_id)
+    result = await service.calculate_recipe_cost(db, recipe_id, user.hotel_id)
     if result is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Recipe not found")
     return RecipeCostBreakdown.model_validate(result)

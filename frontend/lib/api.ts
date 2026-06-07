@@ -73,10 +73,24 @@ export interface UserOut {
   is_active: boolean;
 }
 
+export interface Hotel {
+  id: string;
+  name: string;
+  country: string;
+  city: string | null;
+  base_currency: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;
   user: UserOut;
+  hotel: Hotel;
+}
+
+export interface MeResponse {
+  user: UserOut;
+  hotel: Hotel;
 }
 
 export interface Item {

@@ -30,16 +30,22 @@ async def authenticate(db: AsyncSession, email: str, password: str) -> User | No
     return user
 
 
-async def create_user(db: AsyncSession, email: str, password: str, role: str) -> User:
-    user = User(email=email, password_hash=hash_password(password), role=role)
+async def create_user(
+    db: AsyncSession, email: str, password: str, role: str, hotel_id: uuid.UUID
+) -> User:
+    user = User(
+        email=email, password_hash=hash_password(password), role=role, hotel_id=hotel_id
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
     return user
 
 
-async def list_users(db: AsyncSession) -> list[User]:
-    result = await db.execute(select(User).order_by(User.created_at))
+async def list_users(db: AsyncSession, hotel_id: uuid.UUID) -> list[User]:
+    result = await db.execute(
+        select(User).where(User.hotel_id == hotel_id).order_by(User.created_at)
+    )
     return list(result.scalars().all())
 
 

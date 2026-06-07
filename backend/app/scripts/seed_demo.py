@@ -12,12 +12,17 @@ from decimal import Decimal
 from sqlalchemy import func, select
 
 import app.auth.models  # noqa: F401  (register users table for FK resolution)
+from app.auth.models import Role
+from app.auth.service import create_user, get_user_by_email
+from app.hotels.models import Hotel
 from app.inventory import service as inv
 from app.inventory.models import Item, StockMovement
 from app.recipes import service as rec
 from app.recipes.models import Recipe
 from app.vendors import service as ven
 from app.vendors.models import Vendor
+
+NIRAI_ID = "d0000000-0000-0000-0000-000000000001"  # matches migration 0005
 
 # name -> (unit, category, min_stock, opening_stock, base_price_gbp)
 ITEMS: dict[str, tuple[str, str, str, str, str]] = {
@@ -177,83 +182,108 @@ CONSUMPTION = {
 WASTE = {"Coriander Leaves": "0.5", "Tomato": "1"}
 
 
-async def _get_or_create_item(db, name, unit, category, min_stock):
-    res = await db.execute(select(Item).where(Item.name == name))
+async def _get_or_create_item(db, hotel_id, name, unit, category, min_stock):
+    res = await db.execute(
+        select(Item).where(Item.hotel_id == hotel_id, Item.name == name)
+    )
     item = res.scalar_one_or_none()
     if item:
         return item
     return await inv.create_item(
-        db, name=name, unit=unit, category=category, min_stock_level=Decimal(min_stock)
+        db, hotel_id, name=name, unit=unit, category=category, min_stock_level=Decimal(min_stock)
     )
 
 
-async def _get_or_create_vendor(db, name):
-    res = await db.execute(select(Vendor).where(Vendor.name == name))
+async def _get_or_create_vendor(db, hotel_id, name):
+    res = await db.execute(
+        select(Vendor).where(Vendor.hotel_id == hotel_id, Vendor.name == name)
+    )
     v = res.scalar_one_or_none()
-    return v or await ven.create_vendor(db, name=name, category="FOOD")
+    return v or await ven.create_vendor(db, hotel_id, name=name, category="FOOD")
 
 
-async def _get_or_create_recipe(db, name, servings, price):
-    res = await db.execute(select(Recipe).where(Recipe.name == name))
+async def _get_or_create_recipe(db, hotel_id, name, servings, price):
+    res = await db.execute(
+        select(Recipe).where(Recipe.hotel_id == hotel_id, Recipe.name == name)
+    )
     r = res.scalar_one_or_none()
     if r:
         return r
     return await rec.create_recipe(
-        db, name=name, servings_default=servings, selling_price=Decimal(price), category="Main"
+        db, hotel_id, name=name, servings_default=servings,
+        selling_price=Decimal(price), category="Main",
     )
+
+
+async def get_or_create_hotel(db, *, hotel_id, name, country, currency, city) -> Hotel:
+    existing = await db.get(Hotel, hotel_id)
+    if existing:
+        return existing
+    hotel = Hotel(id=hotel_id, name=name, country=country, base_currency=currency, city=city)
+    db.add(hotel)
+    await db.commit()
+    await db.refresh(hotel)
+    return hotel
+
+
+async def get_or_create_owner(db, *, email, hotel_id, password="Passw0rd!") -> None:
+    if await get_user_by_email(db, email):
+        return
+    await create_user(db, email, password, Role.SUPER_ADMIN.value, hotel_id)
+
+
+async def seed_hotel(db, hotel: Hotel) -> None:
+    """Seed the full catalog (items, vendors, prices, recipes) for one hotel."""
+    hid = hotel.id
+
+    items: dict[str, Item] = {}
+    for name, (unit, cat, mn, opening, base) in ITEMS.items():
+        item = await _get_or_create_item(db, hid, name, unit, cat, mn)
+        items[name] = item
+        if item.current_stock == 0 and Decimal(opening) > 0:
+            await inv.record_movement(
+                db, item, "PURCHASE_IN", Decimal(opening), unit_cost=Decimal(base)
+            )
+
+    vendors = {name: await _get_or_create_vendor(db, hid, name) for name in VENDORS}
+    for i, (name, (_u, _c, _m, _o, base)) in enumerate(ITEMS.items()):
+        n_vendors = 2 + (i % 3)
+        for j in range(n_vendors):
+            vname = VENDORS[(i + j) % len(VENDORS)]
+            price = (Decimal(base) * PRICE_FACTORS[j]).quantize(Decimal("0.01"))
+            await ven.upsert_vendor_item(db, vendors[vname].id, items[name].id, price)
+
+    for name, qty in CONSUMPTION.items():
+        it = items[name]
+        count = await db.scalar(
+            select(func.count()).select_from(StockMovement).where(StockMovement.item_id == it.id)
+        )
+        if count and count <= 1 and it.current_stock >= Decimal(qty):
+            await inv.record_movement(db, it, "CONSUMPTION", Decimal(qty))
+    for name, qty in WASTE.items():
+        it = items[name]
+        if it.current_stock >= Decimal(qty):
+            await inv.record_movement(db, it, "WASTE", Decimal(qty), notes="Spoiled")
+
+    for rname, (servings, price, ingredients) in RECIPES.items():
+        recipe = await _get_or_create_recipe(db, hid, rname, servings, price)
+        for item_name, qty, unit in ingredients:
+            if item_name in items:
+                await rec.upsert_ingredient(db, recipe.id, items[item_name].id, Decimal(qty), unit)
+        await rec.calculate_recipe_cost(db, recipe.id, hid)
 
 
 async def main() -> None:
     from app.core.database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:
-        # ── Items + opening stock ──
-        items: dict[str, Item] = {}
-        for name, (unit, cat, mn, opening, base) in ITEMS.items():
-            item = await _get_or_create_item(db, name, unit, cat, mn)
-            items[name] = item
-            if item.current_stock == 0 and Decimal(opening) > 0:
-                await inv.record_movement(
-                    db, item, "PURCHASE_IN", Decimal(opening), unit_cost=Decimal(base)
-                )
-
-        # ── Vendors + auto-generated prices (2-4 vendors per item) ──
-        vendors = {name: await _get_or_create_vendor(db, name) for name in VENDORS}
-        for i, (name, (_u, _c, _m, _o, base)) in enumerate(ITEMS.items()):
-            n_vendors = 2 + (i % 3)  # 2..4 vendors
-            for j in range(n_vendors):
-                vname = VENDORS[(i + j) % len(VENDORS)]
-                price = (Decimal(base) * PRICE_FACTORS[j]).quantize(Decimal("0.01"))
-                await ven.upsert_vendor_item(db, vendors[vname].id, items[name].id, price)
-
-        # ── Consumption + waste history (only if no movements beyond opening) ──
-        for name, qty in CONSUMPTION.items():
-            it = items[name]
-            count = await db.scalar(
-                select(func.count()).select_from(StockMovement).where(
-                    StockMovement.item_id == it.id
-                )
-            )
-            if count and count <= 1 and it.current_stock >= Decimal(qty):
-                await inv.record_movement(db, it, "CONSUMPTION", Decimal(qty))
-        for name, qty in WASTE.items():
-            it = items[name]
-            if it.current_stock >= Decimal(qty):
-                await inv.record_movement(db, it, "WASTE", Decimal(qty), notes="Spoiled")
-
-        # ── Recipes + ingredients + computed cost/margin ──
-        for rname, (servings, price, ingredients) in RECIPES.items():
-            recipe = await _get_or_create_recipe(db, rname, servings, price)
-            for item_name, qty, unit in ingredients:
-                if item_name in items:
-                    await rec.upsert_ingredient(
-                        db, recipe.id, items[item_name].id, Decimal(qty), unit
-                    )
-            await rec.calculate_recipe_cost(db, recipe.id)
-
+        hotel = await get_or_create_hotel(
+            db, hotel_id=NIRAI_ID, name="NIRAI", country="GB", currency="GBP", city="London"
+        )
+        await get_or_create_owner(db, email="owner@nirai.com", hotel_id=hotel.id)
+        await seed_hotel(db, hotel)
         print(
-            f"Seeded {len(ITEMS)} items, {len(VENDORS)} vendors, {len(RECIPES)} recipes "
-            "with prices, stock, consumption/waste history, and computed margins."
+            f"Seeded NIRAI: {len(ITEMS)} items, {len(VENDORS)} vendors, {len(RECIPES)} recipes."
         )
 
 

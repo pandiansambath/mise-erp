@@ -38,8 +38,8 @@ def test_signed_delta_directions():
 
 # ── Service-level (Decimal-exact, against Postgres) ────────────────────────
 @pytest.mark.asyncio
-async def test_purchase_updates_stock_and_avg_cost(db):
-    item = await service.create_item(db, name="Basmati Rice", unit="kg")
+async def test_purchase_updates_stock_and_avg_cost(db, hotel):
+    item = await service.create_item(db, hotel.id, name="Basmati Rice", unit="kg")
     await service.record_movement(db, item, "PURCHASE_IN", Decimal("10"), unit_cost=Decimal("5.00"))
     assert item.current_stock == Decimal("10")
     assert item.average_cost == Decimal("5.0000")
@@ -49,14 +49,14 @@ async def test_purchase_updates_stock_and_avg_cost(db):
     assert item.average_cost == Decimal("5.5000")
 
     # Persisted correctly (re-fetch from DB)
-    refetched = await service.get_item(db, item.id)
+    refetched = await service.get_item(db, item.id, hotel.id)
     assert refetched.current_stock == Decimal("20")
     assert refetched.average_cost == Decimal("5.5000")
 
 
 @pytest.mark.asyncio
-async def test_consumption_reduces_stock(db):
-    item = await service.create_item(db, name="Onion", unit="kg")
+async def test_consumption_reduces_stock(db, hotel):
+    item = await service.create_item(db, hotel.id, name="Onion", unit="kg")
     await service.record_movement(db, item, "PURCHASE_IN", Decimal("20"), unit_cost=Decimal("1.00"))
     await service.record_movement(db, item, "CONSUMPTION", Decimal("8"))
     assert item.current_stock == Decimal("12")
@@ -65,19 +65,23 @@ async def test_consumption_reduces_stock(db):
 
 
 @pytest.mark.asyncio
-async def test_stock_cannot_go_negative(db):
-    item = await service.create_item(db, name="Saffron", unit="g")
+async def test_stock_cannot_go_negative(db, hotel):
+    item = await service.create_item(db, hotel.id, name="Saffron", unit="g")
     with pytest.raises(service.InsufficientStockError):
         await service.record_movement(db, item, "CONSUMPTION", Decimal("5"))
 
 
 @pytest.mark.asyncio
-async def test_low_stock_detection(db):
-    low = await service.create_item(db, name="Salt", unit="kg", min_stock_level=Decimal("10"))
-    ok = await service.create_item(db, name="Flour", unit="kg", min_stock_level=Decimal("1"))
+async def test_low_stock_detection(db, hotel):
+    low = await service.create_item(
+        db, hotel.id, name="Salt", unit="kg", min_stock_level=Decimal("10")
+    )
+    ok = await service.create_item(
+        db, hotel.id, name="Flour", unit="kg", min_stock_level=Decimal("1")
+    )
     await service.record_movement(db, ok, "PURCHASE_IN", Decimal("50"), unit_cost=Decimal("0.80"))
 
-    lows = await service.low_stock_items(db)
+    lows = await service.low_stock_items(db, hotel.id)
     ids = {i.id for i in lows}
     assert low.id in ids  # 0 <= 10
     assert ok.id not in ids  # 50 > 1

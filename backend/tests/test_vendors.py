@@ -10,17 +10,17 @@ from app.vendors import service as vendor_service
 
 # ── Price comparison engine (the money feature) ────────────────────────────
 @pytest.mark.asyncio
-async def test_price_comparison_picks_cheapest_and_savings(db):
-    chicken = await inv_service.create_item(db, name="Chicken Breast", unit="kg")
-    al_halal = await vendor_service.create_vendor(db, name="Al-Halal")
-    leicester = await vendor_service.create_vendor(db, name="Leicester Foods")
-    local = await vendor_service.create_vendor(db, name="Local Market")
+async def test_price_comparison_picks_cheapest_and_savings(db, hotel):
+    chicken = await inv_service.create_item(db, hotel.id, name="Chicken Breast", unit="kg")
+    al_halal = await vendor_service.create_vendor(db, hotel.id, name="Al-Halal")
+    leicester = await vendor_service.create_vendor(db, hotel.id, name="Leicester Foods")
+    local = await vendor_service.create_vendor(db, hotel.id, name="Local Market")
 
     await vendor_service.upsert_vendor_item(db, al_halal.id, chicken.id, Decimal("7.50"))
     await vendor_service.upsert_vendor_item(db, leicester.id, chicken.id, Decimal("8.20"))
     await vendor_service.upsert_vendor_item(db, local.id, chicken.id, Decimal("8.50"))
 
-    result = await vendor_service.compare_vendor_prices(db, chicken.id)
+    result = await vendor_service.compare_vendor_prices(db, chicken.id, hotel.id)
     assert result["vendor_count"] == 3
     assert result["cheapest_vendor"]["vendor_name"] == "Al-Halal"
     assert result["comparisons"][0]["price_per_unit"] == Decimal("7.50")  # sorted asc
@@ -29,26 +29,26 @@ async def test_price_comparison_picks_cheapest_and_savings(db):
 
 
 @pytest.mark.asyncio
-async def test_price_comparison_no_vendors(db):
-    item = await inv_service.create_item(db, name="Lonely Item", unit="kg")
-    result = await vendor_service.compare_vendor_prices(db, item.id)
+async def test_price_comparison_no_vendors(db, hotel):
+    item = await inv_service.create_item(db, hotel.id, name="Lonely Item", unit="kg")
+    result = await vendor_service.compare_vendor_prices(db, item.id, hotel.id)
     assert result["vendor_count"] == 0
     assert result["cheapest_vendor"] is None
     assert result["potential_saving_per_unit"] == Decimal("0")
 
 
 @pytest.mark.asyncio
-async def test_price_comparison_missing_item_returns_none(db):
+async def test_price_comparison_missing_item_returns_none(db, hotel):
     import uuid
 
-    result = await vendor_service.compare_vendor_prices(db, uuid.uuid4())
+    result = await vendor_service.compare_vendor_prices(db, uuid.uuid4(), hotel.id)
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_upsert_vendor_item_is_idempotent(db):
-    item = await inv_service.create_item(db, name="Tomato", unit="box")
-    vendor = await vendor_service.create_vendor(db, name="Farm2Land")
+async def test_upsert_vendor_item_is_idempotent(db, hotel):
+    item = await inv_service.create_item(db, hotel.id, name="Tomato", unit="box")
+    vendor = await vendor_service.create_vendor(db, hotel.id, name="Farm2Land")
     await vendor_service.upsert_vendor_item(db, vendor.id, item.id, Decimal("12.50"))
     # update the same vendor+item -> still one row, new price
     await vendor_service.upsert_vendor_item(db, vendor.id, item.id, Decimal("11.00"))
@@ -58,15 +58,15 @@ async def test_upsert_vendor_item_is_idempotent(db):
 
 
 @pytest.mark.asyncio
-async def test_inactive_vendor_excluded_from_comparison(db):
-    item = await inv_service.create_item(db, name="Ginger", unit="kg")
-    active = await vendor_service.create_vendor(db, name="Active Co")
-    inactive = await vendor_service.create_vendor(db, name="Closed Co")
+async def test_inactive_vendor_excluded_from_comparison(db, hotel):
+    item = await inv_service.create_item(db, hotel.id, name="Ginger", unit="kg")
+    active = await vendor_service.create_vendor(db, hotel.id, name="Active Co")
+    inactive = await vendor_service.create_vendor(db, hotel.id, name="Closed Co")
     await vendor_service.upsert_vendor_item(db, active.id, item.id, Decimal("3.00"))
     await vendor_service.upsert_vendor_item(db, inactive.id, item.id, Decimal("2.00"))
     await vendor_service.update_vendor(db, inactive, is_active=False)
 
-    result = await vendor_service.compare_vendor_prices(db, item.id)
+    result = await vendor_service.compare_vendor_prices(db, item.id, hotel.id)
     assert result["vendor_count"] == 1
     assert result["cheapest_vendor"]["vendor_name"] == "Active Co"
 

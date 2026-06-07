@@ -2,10 +2,20 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearToken, getToken, setToken, type TokenResponse, type UserOut } from "./api";
+import {
+  api,
+  clearToken,
+  getToken,
+  setToken,
+  type Hotel,
+  type MeResponse,
+  type TokenResponse,
+  type UserOut,
+} from "./api";
 
 interface AuthState {
   user: UserOut | null;
+  hotel: Hotel | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -15,18 +25,22 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserOut | null>(null);
+  const [hotel, setHotel] = useState<Hotel | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    // On mount, if we have a token, fetch the current user.
+    // On mount, if we have a token, fetch the current user + hotel.
     if (!getToken()) {
       setLoading(false);
       return;
     }
     api
-      .get<UserOut>("/auth/me")
-      .then(setUser)
+      .get<MeResponse>("/auth/me")
+      .then((me) => {
+        setUser(me.user);
+        setHotel(me.hotel);
+      })
       .catch(() => clearToken())
       .finally(() => setLoading(false));
   }, []);
@@ -36,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.post<TokenResponse>("/auth/login", { email, password });
       setToken(res.access_token);
       setUser(res.user);
+      setHotel(res.hotel);
       router.push("/dashboard");
     },
     [router]
@@ -44,11 +59,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     clearToken();
     setUser(null);
+    setHotel(null);
     router.push("/login");
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, hotel, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

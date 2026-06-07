@@ -10,23 +10,30 @@ from app.inventory.models import Item
 from app.vendors.models import Vendor, VendorItem
 
 
-# ── Vendor CRUD ────────────────────────────────────────────────────────────
-async def create_vendor(db: AsyncSession, **fields) -> Vendor:
-    vendor = Vendor(**fields)
+# ── Vendor CRUD (hotel-scoped) ──────────────────────────────────────────────
+async def create_vendor(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Vendor:
+    vendor = Vendor(hotel_id=hotel_id, **fields)
     db.add(vendor)
     await db.commit()
     await db.refresh(vendor)
     return vendor
 
 
-async def get_vendor(db: AsyncSession, vendor_id: uuid.UUID) -> Vendor | None:
-    return await db.get(Vendor, vendor_id)
+async def get_vendor(db: AsyncSession, vendor_id: uuid.UUID, hotel_id: uuid.UUID) -> Vendor | None:
+    vendor = await db.get(Vendor, vendor_id)
+    if vendor is None or vendor.hotel_id != hotel_id:
+        return None
+    return vendor
 
 
 async def list_vendors(
-    db: AsyncSession, *, category: str | None = None, active_only: bool = True
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    *,
+    category: str | None = None,
+    active_only: bool = True,
 ) -> list[Vendor]:
-    stmt = select(Vendor)
+    stmt = select(Vendor).where(Vendor.hotel_id == hotel_id)
     if active_only:
         stmt = stmt.where(Vendor.is_active.is_(True))
     if category:
@@ -79,19 +86,25 @@ async def list_vendor_items(db: AsyncSession, vendor_id: uuid.UUID) -> list[Vend
 
 
 # ── Price comparison engine ──────────────────────────────────────────────────
-async def compare_vendor_prices(db: AsyncSession, item_id: uuid.UUID) -> dict | None:
+async def compare_vendor_prices(
+    db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID
+) -> dict | None:
     """Return every active vendor's price for an item, cheapest first, with savings.
 
-    Returns None if the item doesn't exist.
+    Returns None if the item doesn't exist in this hotel.
     """
     item = await db.get(Item, item_id)
-    if item is None:
+    if item is None or item.hotel_id != hotel_id:
         return None
 
     result = await db.execute(
         select(VendorItem, Vendor)
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
-        .where(VendorItem.item_id == item_id, Vendor.is_active.is_(True))
+        .where(
+            VendorItem.item_id == item_id,
+            Vendor.hotel_id == hotel_id,
+            Vendor.is_active.is_(True),
+        )
         .order_by(VendorItem.price_per_unit.asc())
     )
     rows = result.all()

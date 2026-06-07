@@ -36,6 +36,9 @@ class Item(Base):
     __tablename__ = "items"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     category: Mapped[str | None] = mapped_column(String(60))
     unit: Mapped[str] = mapped_column(String(20), nullable=False)  # kg, litre, piece, box, bag

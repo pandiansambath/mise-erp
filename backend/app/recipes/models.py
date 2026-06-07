@@ -23,6 +23,9 @@ class Recipe(Base):
     __tablename__ = "recipes"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     category: Mapped[str | None] = mapped_column(String(60))
     servings_default: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

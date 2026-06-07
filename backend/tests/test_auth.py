@@ -49,8 +49,10 @@ async def test_me_returns_current_user(client, make_user, auth_header):
     user = await make_user("chef@nirai.com", Role.KITCHEN_MANAGER.value)
     resp = await client.get("/api/auth/me", headers=auth_header(user))
     assert resp.status_code == 200
-    assert resp.json()["email"] == "chef@nirai.com"
-    assert resp.json()["role"] == "KITCHEN_MANAGER"
+    body = resp.json()
+    assert body["user"]["email"] == "chef@nirai.com"
+    assert body["user"]["role"] == "KITCHEN_MANAGER"
+    assert body["hotel"]["base_currency"] == "GBP"
 
 
 @pytest.mark.asyncio

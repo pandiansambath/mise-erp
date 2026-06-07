@@ -19,21 +19,26 @@ _Q4 = Decimal("0.0001")
 _Q2 = Decimal("0.01")
 
 
-# ── Recipe CRUD ────────────────────────────────────────────────────────────
-async def create_recipe(db: AsyncSession, **fields) -> Recipe:
-    recipe = Recipe(**fields)
+# ── Recipe CRUD (hotel-scoped) ──────────────────────────────────────────────
+async def create_recipe(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Recipe:
+    recipe = Recipe(hotel_id=hotel_id, **fields)
     db.add(recipe)
     await db.commit()
     await db.refresh(recipe)
     return recipe
 
 
-async def get_recipe(db: AsyncSession, recipe_id: uuid.UUID) -> Recipe | None:
-    return await db.get(Recipe, recipe_id)
+async def get_recipe(db: AsyncSession, recipe_id: uuid.UUID, hotel_id: uuid.UUID) -> Recipe | None:
+    recipe = await db.get(Recipe, recipe_id)
+    if recipe is None or recipe.hotel_id != hotel_id:
+        return None
+    return recipe
 
 
-async def list_recipes(db: AsyncSession, *, active_only: bool = True) -> list[Recipe]:
-    stmt = select(Recipe)
+async def list_recipes(
+    db: AsyncSession, hotel_id: uuid.UUID, *, active_only: bool = True
+) -> list[Recipe]:
+    stmt = select(Recipe).where(Recipe.hotel_id == hotel_id)
     if active_only:
         stmt = stmt.where(Recipe.is_active.is_(True))
     result = await db.execute(stmt.order_by(Recipe.name))
@@ -77,13 +82,17 @@ async def list_ingredients(db: AsyncSession, recipe_id: uuid.UUID) -> list[Recip
 
 
 async def _cheapest_price(
-    db: AsyncSession, item_id: uuid.UUID
+    db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID
 ) -> tuple[Decimal | None, str | None]:
-    """Lowest price among active vendors for an item, with the vendor name."""
+    """Lowest price among the hotel's active vendors for an item, with vendor name."""
     result = await db.execute(
         select(VendorItem.price_per_unit, Vendor.name)
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
-        .where(VendorItem.item_id == item_id, Vendor.is_active.is_(True))
+        .where(
+            VendorItem.item_id == item_id,
+            Vendor.hotel_id == hotel_id,
+            Vendor.is_active.is_(True),
+        )
         .order_by(VendorItem.price_per_unit.asc())
         .limit(1)
     )
@@ -92,11 +101,13 @@ async def _cheapest_price(
 
 
 # ── The costing engine ───────────────────────────────────────────────────────
-async def calculate_recipe_cost(db: AsyncSession, recipe_id: uuid.UUID) -> dict | None:
+async def calculate_recipe_cost(
+    db: AsyncSession, recipe_id: uuid.UUID, hotel_id: uuid.UUID
+) -> dict | None:
     """Compute (and persist) a recipe's cost/serving and profit margin from
     current cheapest vendor prices. Returns a full breakdown, or None if the
-    recipe doesn't exist."""
-    recipe = await get_recipe(db, recipe_id)
+    recipe doesn't exist in this hotel."""
+    recipe = await get_recipe(db, recipe_id, hotel_id)
     if recipe is None:
         return None
 
@@ -107,7 +118,7 @@ async def calculate_recipe_cost(db: AsyncSession, recipe_id: uuid.UUID) -> dict 
 
     for ing in ingredients:
         item = await db.get(Item, ing.item_id)
-        price, vendor_name = await _cheapest_price(db, ing.item_id)
+        price, vendor_name = await _cheapest_price(db, ing.item_id, hotel_id)
         if price is not None:
             source = "vendor"
         elif item is not None and item.average_cost and item.average_cost > 0:
