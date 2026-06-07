@@ -19,6 +19,7 @@ PERMISSIONS: dict[str, list[str]] = {
         "vendors:write",
         "inventory:write",
         "recipes:write",
+        "indent:write",
         "indent:approve",
         "sales:write",
         "sales:config",

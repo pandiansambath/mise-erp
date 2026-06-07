@@ -211,6 +211,29 @@ export interface DaySummary {
   totals: DayTotals;
 }
 
+export interface IndentItemRow {
+  item_id: string;
+  item_name: string;
+  required_qty: string;
+  unit: string;
+}
+
+export interface Indent {
+  id: string;
+  date: string;
+  status: string;
+  notes: string | null;
+  items: IndentItemRow[];
+}
+
+export interface POSummary {
+  id: string;
+  vendor_id: string;
+  po_number: string;
+  status: string;
+  total_amount: string;
+}
+
 export interface PayrollRow {
   id: string;
   employee_id: string;
