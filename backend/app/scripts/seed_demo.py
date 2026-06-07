@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 import app.auth.models  # noqa: F401  (register users table for FK resolution)
 from app.auth.models import Role
 from app.auth.service import create_user, get_user_by_email
+from app.employees import service as emp_svc
 from app.expenses import service as exp_svc
 from app.hotels.models import Hotel
 from app.inventory import service as inv
@@ -276,6 +277,28 @@ async def seed_hotel(db, hotel: Hotel) -> None:
 
     # Default sales channels (Dine-In, Takeaway, Deliveroo, …) for this hotel.
     await sales_svc.ensure_default_channels(db, hid)
+
+    # A few staff (one with a visa expiring soon, to demo the compliance alert).
+    if not await emp_svc.list_employees(db, hid):
+        import datetime as _dt
+
+        soon = _dt.date.today() + _dt.timedelta(days=25)
+        staff = [
+            ("Balaji", "Manager", "MONTHLY", "2600", None, None),
+            ("Rajkumar", "Head Chef", "MONTHLY", "2400", None, soon),  # visa alert
+            ("Sundar", "Tawa Master", "MONTHLY", "1900", None, None),
+            ("Mohamed", "Helper", "HOURLY", None, "11.60", None),
+            ("Praveen", "Steward", "HOURLY", None, "11.60", None),
+        ]
+        for name, title, stype, monthly, hourly, visa in staff:
+            fields: dict = {"full_name": name, "job_title": title, "salary_type": stype}
+            if monthly:
+                fields["monthly_salary"] = Decimal(monthly)
+            if hourly:
+                fields["hourly_rate"] = Decimal(hourly)
+            if visa:
+                fields["visa_expiry_date"] = visa
+            await emp_svc.create_employee(db, hid, **fields)
 
     # Default expense categories + a few sample expenses this month (for the P&L).
     await exp_svc.ensure_default_categories(db, hid)

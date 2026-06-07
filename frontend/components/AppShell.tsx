@@ -18,6 +18,8 @@ const NAV: NavItem[] = [
   { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },
   { href: "/sales", label: "Sales & Cash", icon: "🧾", perm: "sales:read" },
   { href: "/expenses", label: "Expenses", icon: "💸", perm: "expenses:read" },
+  { href: "/employees", label: "Employees", icon: "🧑‍🍳", perm: "employees:read" },
+  { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
   { href: "/profile", label: "Profile", icon: "👤" },
   { href: "/settings", label: "Settings", icon: "⚙" },

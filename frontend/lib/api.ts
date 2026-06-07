@@ -211,6 +211,40 @@ export interface DaySummary {
   totals: DayTotals;
 }
 
+export interface Employee {
+  id: string;
+  employee_code: string;
+  full_name: string;
+  job_title: string | null;
+  salary_type: string;
+  monthly_salary: string | null;
+  hourly_rate: string | null;
+  mobile: string | null;
+  ni_number: string | null;
+  visa_expiry_date: string | null;
+  bank_sort_code: string | null;
+  bank_account_no: string | null;
+  joining_date: string | null;
+  is_active: boolean;
+}
+
+export interface VisaAlert {
+  employee_id: string;
+  full_name: string;
+  visa_expiry_date: string;
+  days_left: number;
+}
+
+export interface AttendanceRow {
+  employee_id: string;
+  employee_name: string;
+  date: string;
+  clock_in: string | null;
+  clock_out: string | null;
+  working_hours: string | null;
+  status: string;
+}
+
 export interface PnL {
   date_from: string;
   date_to: string;
