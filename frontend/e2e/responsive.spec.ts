@@ -54,6 +54,14 @@ test("recipes page fits the viewport", async ({ page }) => {
   await assertNoHorizontalOverflow(page);
 });
 
+test("staff page: admin can manage the team", async ({ page }) => {
+  await login(page);
+  await page.goto("/staff");
+  await expect(page.getByRole("heading", { name: "Staff" })).toBeVisible();
+  await expect(page.getByText("Add a team member")).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
 test("navigation adapts: hamburger on mobile, sidebar on desktop", async ({ page }, testInfo) => {
   await login(page);
   const menuButton = page.getByRole("button", { name: "Open menu" });
