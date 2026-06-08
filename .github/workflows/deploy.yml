@@ -108,6 +108,14 @@ jobs:
           docker push "$IMG"
           echo "BACKEND_IMAGE=$IMG" >> "$GITHUB_ENV"
 
+      - name: Build & push frontend image
+        # Same-origin behind Caddy on the EC2 box -> relative /api (empty base).
+        run: |
+          IMG="${{ steps.ecr.outputs.registry }}/mise-frontend:${{ github.sha }}"
+          docker build --build-arg NEXT_PUBLIC_API_URL="" -t "$IMG" ./frontend
+          docker push "$IMG"
+          echo "FRONTEND_IMAGE=$IMG" >> "$GITHUB_ENV"
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.8"
@@ -116,36 +124,22 @@ jobs:
         working-directory: infra
         run: terraform init -input=false
 
-      - name: Terraform apply (backend + infra)
+      - name: Terraform apply (EC2 + RDS + networking)
         working-directory: infra
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
           TF_VAR_app_secret_key: ${{ secrets.APP_SECRET_KEY }}
-        run: terraform apply -input=false -auto-approve -var="backend_image=$BACKEND_IMAGE"
-
-      - name: Read backend URL
-        working-directory: infra
-        run: echo "BACKEND_URL=$(terraform output -raw backend_url)" >> "$GITHUB_ENV"
-
-      - name: Build & push frontend image (with backend URL baked in)
         run: |
-          IMG="${{ steps.ecr.outputs.registry }}/mise-frontend:${{ github.sha }}"
-          docker build --build-arg NEXT_PUBLIC_API_URL="$BACKEND_URL" -t "$IMG" ./frontend
-          docker push "$IMG"
-          echo "FRONTEND_IMAGE=$IMG" >> "$GITHUB_ENV"
-
-      - name: Terraform apply (frontend)
-        working-directory: infra
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-          TF_VAR_app_secret_key: ${{ secrets.APP_SECRET_KEY }}
-        run: terraform apply -input=false -auto-approve -var="backend_image=$BACKEND_IMAGE" -var="frontend_image=$FRONTEND_IMAGE"
+          terraform apply -input=false -auto-approve \
+            -var="backend_image=$BACKEND_IMAGE" \
+            -var="frontend_image=$FRONTEND_IMAGE"
 
       - name: Summary
         working-directory: infra
         run: |
           {
             echo "### 🚀 Mise deployed to eu-west-2"
-            echo "- **Frontend:** $(terraform output -raw frontend_url)"
-            echo "- **Backend:** $(terraform output -raw backend_url)"
+            echo "- **App:** $(terraform output -raw app_url)"
+            echo ""
+            echo "_The box pulls images + runs DB migrations on boot — give it ~2-3 min after apply._"
           } >> "$GITHUB_STEP_SUMMARY"

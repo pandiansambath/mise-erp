@@ -25,7 +25,9 @@ resource "aws_db_instance" "main" {
   publicly_accessible    = false
   multi_az               = false
 
-  backup_retention_period = 7
+  # Free-tier accounts cap backup retention; 0 disables automated backups.
+  # Bump to 7 once the account is on a standard (paid) plan.
+  backup_retention_period = 0
   deletion_protection     = false
   skip_final_snapshot     = true
   apply_immediately       = true

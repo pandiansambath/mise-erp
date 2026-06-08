@@ -1,9 +1,10 @@
-output "backend_url" {
-  value = "https://${aws_apprunner_service.backend.service_url}"
+output "app_url" {
+  description = "Public URL of the Mise app"
+  value       = "http://${aws_eip.app.public_ip}"
 }
 
-output "frontend_url" {
-  value = length(aws_apprunner_service.frontend) > 0 ? "https://${aws_apprunner_service.frontend[0].service_url}" : ""
+output "public_ip" {
+  value = aws_eip.app.public_ip
 }
 
 output "db_address" {

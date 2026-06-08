@@ -1,0 +1,70 @@
+#!/bin/bash
+set -eux
+
+# 1GB swap — t3.micro has only 1GB RAM and runs 3 containers.
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=1024
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# Docker + compose plugin
+dnf install -y docker
+systemctl enable --now docker
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# Pull images from ECR
+aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}
+
+mkdir -p /opt/mise
+
+cat > /opt/mise/Caddyfile <<'CADDY'
+:80 {
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
+CADDY
+
+cat > /opt/mise/docker-compose.yml <<'COMPOSE'
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - /opt/mise/Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - backend
+      - frontend
+  backend:
+    image: ${backend_image}
+    restart: always
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://mise:${db_password}@${db_host}:5432/mise"
+      SECRET_KEY: "${app_secret_key}"
+      ENVIRONMENT: "production"
+      CORS_ORIGINS: '["*"]'
+      UPLOAD_DIR: "/data/uploads"
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"]
+    volumes:
+      - uploads:/data/uploads
+  frontend:
+    image: ${frontend_image}
+    restart: always
+volumes:
+  uploads: {}
+COMPOSE
+
+cd /opt/mise
+docker compose pull
+docker compose up -d
