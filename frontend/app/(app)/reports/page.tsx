@@ -47,9 +47,15 @@ export default function ReportsPage() {
   const [to, setTo] = useState(today());
   const [pnl, setPnl] = useState<PnL | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (f: string, t: string) => {
-    setPnl(await api.get<PnL>(`/reports/pnl?date_from=${f}&date_to=${t}`));
+    try {
+      setError(null);
+      setPnl(await api.get<PnL>(`/reports/pnl?date_from=${f}&date_to=${t}`));
+    } catch {
+      setError("Couldn't load the report. Please try again.");
+    }
   }, []);
 
   useEffect(() => {
@@ -94,8 +100,14 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {loading || !pnl ? (
+      {loading ? (
         <Spinner />
+      ) : error || !pnl ? (
+        <Card>
+          <p className="py-6 text-center text-sm text-rose-600">
+            {error || "No data for this range."}
+          </p>
+        </Card>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

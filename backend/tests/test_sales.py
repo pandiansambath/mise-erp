@@ -85,6 +85,20 @@ async def test_cashier_can_enter_sales(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
+async def test_save_cash_drawer(client, make_user, auth_header):
+    """PATCH day with only cash fields (no date in body) must work — regression."""
+    cashier = await make_user("cashier@nirai.com", Role.CASHIER.value)
+    h = auth_header(cashier)
+    patched = await client.patch(
+        f"/api/sales/days/{DAY}", headers=h, json={"opening_cash": "200", "cash_counted": "150"}
+    )
+    assert patched.status_code == 200
+    day = (await client.get(f"/api/sales/days/{DAY}", headers=h)).json()
+    assert float(day["opening_cash"]) == 200.0
+    assert float(day["cash_variance"]) == -50.0  # counted 150 - expected 200
+
+
+@pytest.mark.asyncio
 async def test_cashier_cannot_configure_channels(client, make_user, auth_header):
     cashier = await make_user("cashier@nirai.com", Role.CASHIER.value)
     resp = await client.post(

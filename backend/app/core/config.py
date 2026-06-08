@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # CORS (comma-separated in env: CORS_ORIGINS="http://localhost:3000,https://app.example")
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    # Document storage (local disk now; swap to S3 at deploy)
+    upload_dir: str = "uploads"
+    max_upload_mb: int = 10
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

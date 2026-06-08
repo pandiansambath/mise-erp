@@ -2,6 +2,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
@@ -17,6 +18,10 @@ from app.vendors.schemas import (
     VendorOut,
     VendorUpdate,
 )
+
+
+class PreferredIn(BaseModel):
+    vendor_id: uuid.UUID | None = None
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
@@ -51,6 +56,21 @@ async def price_comparison(
     result = await service.compare_vendor_prices(db, item_id, user.hotel_id)
     if result is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    return PriceComparison.model_validate(result)
+
+
+@router.post("/items/{item_id}/preferred", response_model=PriceComparison)
+async def set_preferred(
+    item_id: uuid.UUID,
+    payload: PreferredIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> PriceComparison:
+    """Mark a vendor as preferred for this item (recipe costing uses preferred, else cheapest)."""
+    ok = await service.set_preferred_vendor(db, user.hotel_id, item_id, payload.vendor_id)
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor does not supply this item")
+    result = await service.compare_vendor_prices(db, item_id, user.hotel_id)
     return PriceComparison.model_validate(result)
 
 

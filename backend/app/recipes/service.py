@@ -81,11 +81,13 @@ async def list_ingredients(db: AsyncSession, recipe_id: uuid.UUID) -> list[Recip
     return list(result.scalars().all())
 
 
-async def _cheapest_price(
+async def _best_price(
     db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID
-) -> tuple[Decimal | None, str | None]:
-    """Lowest price among the hotel's active vendors for an item, with vendor name."""
-    result = await db.execute(
+) -> tuple[Decimal | None, str | None, str | None]:
+    """Price used for costing: the PREFERRED vendor if one is set, else the cheapest
+    active vendor. Returns (price, vendor_name, source) where source is
+    'preferred' | 'cheapest' | None."""
+    base = (
         select(VendorItem.price_per_unit, Vendor.name)
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
         .where(
@@ -93,11 +95,14 @@ async def _cheapest_price(
             Vendor.hotel_id == hotel_id,
             Vendor.is_active.is_(True),
         )
-        .order_by(VendorItem.price_per_unit.asc())
-        .limit(1)
     )
-    row = result.first()
-    return (row[0], row[1]) if row else (None, None)
+    pref = await db.execute(base.where(VendorItem.is_preferred.is_(True)).limit(1))
+    row = pref.first()
+    if row:
+        return (row[0], row[1], "preferred")
+    cheapest = await db.execute(base.order_by(VendorItem.price_per_unit.asc()).limit(1))
+    row = cheapest.first()
+    return (row[0], row[1], "cheapest") if row else (None, None, None)
 
 
 # ── The costing engine ───────────────────────────────────────────────────────
@@ -118,9 +123,9 @@ async def calculate_recipe_cost(
 
     for ing in ingredients:
         item = await db.get(Item, ing.item_id)
-        price, vendor_name = await _cheapest_price(db, ing.item_id, hotel_id)
+        price, vendor_name, vsrc = await _best_price(db, ing.item_id, hotel_id)
         if price is not None:
-            source = "vendor"
+            source = vsrc  # "preferred" or "cheapest"
         elif item is not None and item.average_cost and item.average_cost > 0:
             price, source = item.average_cost, "average_cost"
         else:

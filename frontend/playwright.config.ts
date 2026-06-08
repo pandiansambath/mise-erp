@@ -5,6 +5,10 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // Cap workers: the whole suite shares ONE Next server + ONE backend, so too
+  // much parallelism starves the single backend and makes data-heavy pages
+  // (e.g. /reports) render slowly enough to trip layout/overflow checks.
+  workers: 3,
   reporter: "list",
   retries: process.env.CI ? 2 : 1,
   timeout: 30_000,
