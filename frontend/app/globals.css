@@ -112,9 +112,36 @@ body {
   }
 }
 
+/* ── Aurora waves (visible, animated gradient on a dark base) ─────────────── */
+@keyframes mise-aurora-drift {
+  0%   { transform: translate3d(-8%, -6%, 0) scale(1); }
+  33%  { transform: translate3d(10%, 4%, 0) scale(1.15); }
+  66%  { transform: translate3d(-4%, 8%, 0) scale(0.95); }
+  100% { transform: translate3d(-8%, -6%, 0) scale(1); }
+}
+.mise-aurora { position: absolute; inset: -25%; pointer-events: none; overflow: hidden; }
+.mise-aurora span {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  animation: mise-aurora-drift 20s ease-in-out infinite;
+}
+
+/* ── 3D ecosystem carousel (centered, continuously rotating) ──────────────── */
+.mise-carousel-stage { perspective: 1100px; }
+@keyframes mise-spin-cylinder { to { transform: rotateY(360deg); } }
+.mise-carousel {
+  position: relative;
+  margin: 0 auto;
+  transform-style: preserve-3d;
+  animation: mise-spin-cylinder 26s linear infinite;
+}
+.mise-carousel-face { position: absolute; inset: 0; backface-visibility: hidden; }
+
 @media (prefers-reduced-motion: reduce) {
   .mise-float, .mise-blob, .mise-hero-gradient, .mise-hero-text,
-  .mise-3d, .mise-scroll-spin { animation: none; }
+  .mise-3d, .mise-scroll-spin, .mise-aurora span, .mise-carousel { animation: none; }
   .mise-3d { transform: rotateY(-10deg) rotateX(4deg); }
   .mise-reveal { opacity: 1; transform: none; transition: none; }
 }

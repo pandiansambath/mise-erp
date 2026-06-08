@@ -26,6 +26,17 @@ const STEPS = [
   { n: "04", title: "Profit, in the open", desc: "A live P&L shows exactly what you kept — and what to fix." },
 ];
 
+const ECO = [
+  { icon: "🪑", label: "Reservations" },
+  { icon: "👨‍🍳", label: "Chefs" },
+  { icon: "📦", label: "Inventory" },
+  { icon: "🛒", label: "Purchasing" },
+  { icon: "🧾", label: "Sales" },
+  { icon: "🧑‍🤝‍🧑", label: "Staff" },
+  { icon: "🧹", label: "Housekeeping" },
+  { icon: "📈", label: "Reports" },
+];
+
 const CHIPS = [
   { icon: "🍲", title: "Recipes & margins", sub: "cost per plate, live" },
   { icon: "📦", title: "Live inventory", sub: "weighted-avg cost" },
@@ -81,9 +92,13 @@ export default function Landing() {
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden">
-        <div className="mise-hero-gradient absolute inset-0 opacity-25" />
-        <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-brand-500/30 blur-3xl mise-blob" />
-        <div className="pointer-events-none absolute -right-20 top-40 h-72 w-72 rounded-full bg-sky-500/20 blur-3xl mise-blob" style={{ animationDelay: "4s" }} />
+        {/* animated aurora waves on a near-black base */}
+        <div className="mise-aurora">
+          <span style={{ left: "-6%", top: "-12%", width: 560, height: 560, background: "radial-gradient(circle, #10b981, transparent 68%)" }} />
+          <span style={{ right: "-8%", top: "6%", width: 520, height: 520, background: "radial-gradient(circle, #0ea5e9, transparent 70%)", animationDelay: "6s" }} />
+          <span style={{ left: "28%", bottom: "-22%", width: 620, height: 620, background: "radial-gradient(circle, #14b8a6, transparent 72%)", animationDelay: "11s" }} />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/40 to-slate-950" />
         <div className="relative mx-auto max-w-6xl px-5 pb-24 pt-20 sm:pt-28">
           <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
             {/* LEFT — message */}
@@ -120,60 +135,81 @@ export default function Landing() {
             {/* RIGHT — 3D app preview (tilts upright as you scroll in) */}
             <Reveal delay={200} className="mise-3d-stage hidden sm:block">
               <div className="mise-3d relative">
-                <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.14] to-white/[0.03] p-5 shadow-2xl shadow-black/50 backdrop-blur-xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Logo size={22} />
-                      <span className="text-sm font-semibold text-white">NIRAI</span>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/15 px-2 py-0.5 text-[11px] font-medium text-brand-200">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" /> Live
-                    </span>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/90 to-slate-900/95 shadow-2xl shadow-emerald-950/50 ring-1 ring-white/5 backdrop-blur-xl">
+                  {/* window chrome */}
+                  <div className="flex items-center gap-1.5 border-b border-white/5 px-4 py-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
+                    <span className="ml-2 text-[11px] text-slate-500">mise · dashboard</span>
                   </div>
-                  <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">Tonight at a glance</p>
-                  <div className="mt-3 grid grid-cols-3 gap-3">
-                    <div className="rounded-xl bg-white/5 p-3">
-                      <p className="text-[11px] text-slate-400">Net sales</p>
-                      <p className="mt-1 text-lg font-bold text-white">£1,840</p>
-                    </div>
-                    <div className="rounded-xl bg-white/5 p-3">
-                      <p className="text-[11px] text-slate-400">Net profit</p>
-                      <p className="mt-1 text-lg font-bold text-brand-300">£612</p>
-                    </div>
-                    <div className="rounded-xl bg-white/5 p-3">
-                      <p className="text-[11px] text-slate-400">Food cost</p>
-                      <p className="mt-1 text-lg font-bold text-amber-300">29%</p>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Gross margin</span><span className="text-brand-300">74%</span>
-                    </div>
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div className="mise-hero-gradient h-full rounded-full" style={{ width: "74%" }} />
-                    </div>
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    {[
-                      { n: "Butter Chicken", m: "89%" },
-                      { n: "Chicken Biryani", m: "91%" },
-                      { n: "Masala Dosa", m: "82%" },
-                    ].map((d) => (
-                      <div key={d.n} className="flex items-center justify-between rounded-lg bg-white/[0.04] px-3 py-2 text-sm">
-                        <span className="text-slate-200">{d.n}</span>
-                        <span className="font-semibold text-brand-300">{d.m}</span>
+
+                  <div className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Logo size={22} />
+                        <span className="text-sm font-semibold text-white">NIRAI</span>
                       </div>
-                    ))}
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/15 px-2 py-0.5 text-[11px] font-medium text-brand-200">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" /> Live
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2.5">
+                      {[
+                        { l: "Net sales", v: "£1,840", t: "↑ 12%", c: "text-white" },
+                        { l: "Net profit", v: "£612", t: "↑ 8%", c: "text-brand-300" },
+                        { l: "Food cost", v: "29%", t: "target 25-35", c: "text-amber-300" },
+                      ].map((k) => (
+                        <div key={k.l} className="rounded-xl border border-white/5 bg-white/[0.04] p-3">
+                          <p className="text-[10px] uppercase tracking-wide text-slate-400">{k.l}</p>
+                          <p className={`mt-1 text-lg font-bold ${k.c}`}>{k.v}</p>
+                          <p className="text-[10px] text-brand-300/80">{k.t}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* sparkline */}
+                    <div className="mt-4 flex items-end gap-1.5">
+                      {[38, 52, 44, 66, 58, 74, 90].map((h, i) => (
+                        <div
+                          key={i}
+                          className="mise-hero-gradient flex-1 rounded-t"
+                          style={{ height: `${h * 0.5}px`, opacity: 0.55 + i * 0.06 }}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-500">Net sales · last 7 days</p>
+
+                    <div className="mt-4 space-y-1.5">
+                      {[
+                        { n: "Butter Chicken", m: 89 },
+                        { n: "Chicken Biryani", m: 91 },
+                        { n: "Masala Dosa", m: 82 },
+                      ].map((d) => (
+                        <div key={d.n} className="flex items-center gap-3 text-sm">
+                          <span className="w-28 shrink-0 text-slate-300">{d.n}</span>
+                          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                            <span className="block h-full rounded-full bg-brand-400" style={{ width: `${d.m}%` }} />
+                          </span>
+                          <span className="w-9 text-right text-xs font-semibold text-brand-300">{d.m}%</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* floating depth cards */}
-                <div className="mise-3d-layer mise-float absolute -left-6 bottom-6 rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2 text-xs shadow-xl backdrop-blur" style={{ animationDelay: "1s" }}>
-                  <p className="text-slate-400">PO approved</p>
-                  <p className="font-semibold text-white">Rudra Foods · £43.60</p>
+                {/* notification toasts — anchored cleanly at the card edges */}
+                <div className="absolute -right-3 -top-3 flex items-center gap-2 rounded-xl border border-amber-400/30 bg-slate-900/95 px-3 py-2 text-xs shadow-2xl shadow-black/40">
+                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-amber-500/20 text-amber-300">⚠</span>
+                  <span className="font-medium text-amber-100">Paneer low — reorder</span>
                 </div>
-                <div className="mise-3d-layer mise-float absolute -right-5 -top-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs shadow-xl backdrop-blur" style={{ animationDelay: "2.2s" }}>
-                  <p className="font-semibold text-amber-200">⚠ Paneer low</p>
+                <div className="absolute -bottom-4 -left-3 flex items-center gap-2 rounded-xl border border-brand-400/30 bg-slate-900/95 px-3 py-2 text-xs shadow-2xl shadow-black/40">
+                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-500/20 text-brand-300">✓</span>
+                  <div>
+                    <p className="font-medium text-white">PO approved</p>
+                    <p className="text-slate-400">Rudra Foods · £43.60</p>
+                  </div>
                 </div>
               </div>
             </Reveal>
@@ -237,6 +273,43 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Orchestration carousel (centered, rotating 3D) ── */}
+      <section className="relative overflow-hidden border-y border-white/5 bg-slate-950 py-28">
+        <div className="mise-aurora">
+          <span style={{ left: "20%", top: "0%", width: 520, height: 520, background: "radial-gradient(circle, #10b981, transparent 70%)" }} />
+          <span style={{ right: "15%", bottom: "-10%", width: 480, height: 480, background: "radial-gradient(circle, #0ea5e9, transparent 72%)", animationDelay: "7s" }} />
+        </div>
+        <div className="relative mx-auto max-w-3xl px-5 text-center">
+          <Reveal>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Everything, in concert.</h2>
+            <p className="mx-auto mt-4 max-w-xl text-slate-400">
+              One system conducting every station — spinning quietly in the background so you
+              don&apos;t have to.
+            </p>
+          </Reveal>
+        </div>
+        {/* rotating 3D ring of module icons */}
+        <div className="mise-carousel-stage relative mx-auto mt-16 h-[260px]">
+          <div className="absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-500/20 blur-3xl" />
+          <div className="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-2xl border border-white/10 bg-slate-900/80 shadow-2xl">
+            <Logo size={34} />
+          </div>
+          <div className="mise-carousel absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2">
+            {ECO.map((e, i) => (
+              <div
+                key={e.label}
+                className="mise-carousel-face grid place-items-center"
+                style={{ transform: `rotateY(${i * 45}deg) translateZ(220px)` }}
+              >
+                <div className="grid h-20 w-20 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.12] to-white/[0.02] text-3xl shadow-xl backdrop-blur" title={e.label}>
+                  {e.icon}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── How it works ── */}
       <section className="border-y border-white/5 bg-gradient-to-b from-emerald-950/30 to-transparent">
         <div className="mx-auto max-w-6xl px-5 py-24">
@@ -272,13 +345,19 @@ export default function Landing() {
       </section>
 
       {/* ── Final CTA ── */}
-      <section className="px-5 pb-24">
+      <section className="px-5 py-24">
         <Reveal>
-          <div className="mise-hero-gradient mx-auto max-w-5xl overflow-hidden rounded-3xl p-px">
-            <div className="rounded-3xl bg-slate-950/80 px-8 py-14 text-center backdrop-blur">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Bring order to your kitchen.</h2>
+          <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-900/50 via-slate-900 to-sky-900/40 px-8 py-16 text-center shadow-2xl shadow-emerald-950/40">
+            <div className="mise-aurora">
+              <span style={{ left: "10%", top: "-30%", width: 420, height: 420, background: "radial-gradient(circle, #10b981, transparent 70%)" }} />
+              <span style={{ right: "8%", bottom: "-30%", width: 380, height: 380, background: "radial-gradient(circle, #0ea5e9, transparent 72%)", animationDelay: "5s" }} />
+            </div>
+            <div className="relative">
+              <Logo size={44} className="mx-auto" />
+              <h2 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">Bring order to your kitchen.</h2>
               <p className="mx-auto mt-3 max-w-xl text-slate-300">
-                Set up your restaurant in minutes. No card required.
+                Set up your restaurant in minutes — costs, recipes, staff and profit, all in one
+                place. No card required.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 <Link href="/signup" className="rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-slate-950 shadow-xl shadow-brand-500/25 transition hover:-translate-y-0.5 hover:bg-brand-100">
