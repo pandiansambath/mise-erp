@@ -113,6 +113,25 @@ async def test_punch_via_api(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
+async def test_timesheet_pdf_and_xlsx(client, make_user, auth_header):
+    """Attendance timesheet exports as a valid PDF and Excel file."""
+    mgr = await make_user("mgr@nirai.com", Role.MANAGER.value)
+    h = auth_header(mgr)
+    emp = (await client.post("/api/employees", headers=h, json={"full_name": "Punchy"})).json()
+    await client.post(
+        "/api/attendance/punch", headers=h, json={"employee_id": emp["id"], "type": "CLOCK_IN"}
+    )
+    pdf = await client.get("/api/attendance/timesheet.pdf", headers=h)
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content[:4] == b"%PDF"
+
+    xlsx = await client.get("/api/attendance/timesheet.xlsx", headers=h)
+    assert xlsx.status_code == 200
+    assert xlsx.content[:2] == b"PK"  # xlsx is a zip
+
+
+@pytest.mark.asyncio
 async def test_employees_isolated_between_hotels(client, make_user, auth_header, db):
     from app.hotels.models import Hotel
 

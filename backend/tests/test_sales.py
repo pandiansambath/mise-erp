@@ -99,6 +99,18 @@ async def test_save_cash_drawer(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
+async def test_day_sheet_pdf(client, make_user, auth_header):
+    """Daily sales & cash sheet downloads as a valid PDF."""
+    cashier = await make_user("cashier@nirai.com", Role.CASHIER.value)
+    h = auth_header(cashier)
+    await client.patch(f"/api/sales/days/{DAY}", headers=h, json={"opening_cash": "100"})
+    pdf = await client.get(f"/api/sales/days/{DAY}/sheet.pdf", headers=h)
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
 async def test_cashier_cannot_configure_channels(client, make_user, auth_header):
     cashier = await make_user("cashier@nirai.com", Role.CASHIER.value)
     resp = await client.post(

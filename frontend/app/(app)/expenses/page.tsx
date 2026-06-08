@@ -9,6 +9,7 @@ import {
   type ExpenseSummary,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -24,6 +25,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function ExpensesPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
+  const confirm = useConfirm();
   const canWrite = can(user?.role, "expenses:write");
 
   const [from, setFrom] = useState(monthStart());
@@ -92,6 +94,13 @@ export default function ExpensesPage() {
   }
 
   async function remove(id: string) {
+    const ok = await confirm({
+      title: "Delete this expense?",
+      message: "It will be removed from your records and the P&L.",
+      confirmText: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
     await api.delete(`/expenses/${id}`);
     await loadData(from, to);
   }

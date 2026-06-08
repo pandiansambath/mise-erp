@@ -10,6 +10,7 @@ import {
   type POSummary,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -31,6 +32,7 @@ const poTone: Record<string, "slate" | "amber" | "green"> = {
 export default function PurchasingPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
+  const confirm = useConfirm();
   const canWrite = can(user?.role, "indent:write");
   const canApprove = can(user?.role, "indent:approve");
 
@@ -78,7 +80,18 @@ export default function PurchasingPage() {
     }
   }
 
+  function resetIndent() {
+    setLines([{ item_id: items[0]?.id ?? "", qty: "" }]);
+    setMsg(null);
+  }
+
   async function generate(id: string) {
+    const ok = await confirm({
+      title: "Approve & generate purchase orders?",
+      message: "This approves the indent and creates one purchase order per cheapest vendor.",
+      confirmText: "Approve & generate",
+    });
+    if (!ok) return;
     setMsg(null);
     try {
       const res = await api.post<{ skipped_items: string[] }>(
@@ -94,6 +107,12 @@ export default function PurchasingPage() {
   }
 
   async function receive(poId: string) {
+    const ok = await confirm({
+      title: "Receive this purchase order?",
+      message: "Marks all items as received and adds them to stock (updates average cost).",
+      confirmText: "Receive into stock",
+    });
+    if (!ok) return;
     setMsg(null);
     try {
       await api.post(`/purchasing/purchase-orders/${poId}/receive`);
@@ -137,12 +156,15 @@ export default function PurchasingPage() {
                 )}
               </div>
             ))}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setLines([...lines, { item_id: items[0]?.id ?? "", qty: "" }])} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
                 + Add item
               </button>
               <button type="submit" className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
                 Submit indent
+              </button>
+              <button type="button" onClick={resetIndent} className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                Cancel
               </button>
             </div>
           </form>

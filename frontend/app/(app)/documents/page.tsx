@@ -10,6 +10,7 @@ import {
   type ExpiringDoc,
 } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 
@@ -24,6 +25,7 @@ function fmtSize(bytes: number): string {
 
 export default function DocumentsPage() {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const canWrite = can(user?.role, "documents:write");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -75,6 +77,13 @@ export default function DocumentsPage() {
   }
 
   async function remove(id: string) {
+    const ok = await confirm({
+      title: "Delete document?",
+      message: "This permanently removes the file. This can't be undone.",
+      confirmText: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
     setError(null);
     try {
       await api.delete(`/documents/${id}`);

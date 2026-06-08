@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type AttendanceRow, type Employee } from "@/lib/api";
+import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -72,6 +72,20 @@ export default function AttendancePage() {
         />
         <span className="text-sm text-slate-500">{present} present · {employees.length} staff</span>
         {!isToday && <span className="text-xs text-slate-400">(punching only works for today)</span>}
+        <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => downloadFile(`/attendance/timesheet.pdf?on=${day}`, `timesheet-${day}.pdf`)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            ⬇ PDF
+          </button>
+          <button
+            onClick={() => downloadFile(`/attendance/timesheet.xlsx?on=${day}`, `timesheet-${day}.xlsx`)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            ⬇ Excel
+          </button>
+        </div>
       </div>
 
       {error && <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}

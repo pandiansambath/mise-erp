@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
+import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { ComboBox } from "@/components/ComboBox";
+import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
+import { can } from "@/lib/permissions";
 
 function marginTone(pct: number): "green" | "amber" | "red" {
   if (pct >= 65) return "green";
@@ -89,23 +92,182 @@ function CostDetail({ recipeId }: { recipeId: string }) {
   );
 }
 
+type IngLine = { item_id: string; qty: string };
+
 export default function RecipesPage() {
+  const { user } = useAuth();
+  const canWrite = can(user?.role, "recipes:write");
+
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
 
+  // New-recipe form
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [servings, setServings] = useState("1");
+  const [price, setPrice] = useState("");
+  const [ings, setIngs] = useState<IngLine[]>([{ item_id: "", qty: "" }]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reload() {
+    return api.get<Recipe[]>("/recipes").then(setRecipes);
+  }
+
   useEffect(() => {
-    api
-      .get<Recipe[]>("/recipes")
-      .then(setRecipes)
-      .finally(() => setLoading(false));
+    Promise.all([
+      reload(),
+      api.get<Item[]>("/inventory/items").then((i) => {
+        setItems(i);
+        setIngs([{ item_id: i[0]?.id ?? "", qty: "" }]);
+      }),
+    ]).finally(() => setLoading(false));
   }, []);
 
+  function resetForm() {
+    setName("");
+    setCategory("");
+    setServings("1");
+    setPrice("");
+    setIngs([{ item_id: items[0]?.id ?? "", qty: "" }]);
+    setError(null);
+    setShowForm(false);
+  }
+
+  async function createRecipe(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError("Give the dish a name.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const recipe = await api.post<Recipe>("/recipes", {
+        name: name.trim(),
+        servings_default: parseInt(servings || "1", 10),
+        category: category || null,
+        selling_price: price || null,
+      });
+      for (const ln of ings) {
+        if (!ln.item_id || !ln.qty) continue;
+        const item = items.find((it) => it.id === ln.item_id);
+        await api.post(`/recipes/${recipe.id}/ingredients`, {
+          item_id: ln.item_id,
+          quantity: ln.qty,
+          unit: item?.unit ?? "unit",
+        });
+      }
+      await reload();
+      resetForm();
+      setOpenId(recipe.id); // open the new dish to show its computed cost
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not create recipe");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <Spinner />;
+
+  const inputCls =
+    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500";
+  const categoryOptions = [
+    ...new Set(recipes.map((r) => r.category).filter(Boolean) as string[]),
+  ].sort();
 
   return (
     <div>
       <PageHeader title="Recipes" subtitle="Cost per plate and profit margin for each dish." />
+
+      {canWrite && (
+        <div className="mb-6">
+          {!showForm ? (
+            <button
+              onClick={() => setShowForm(true)}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              + New recipe
+            </button>
+          ) : (
+            <Card>
+              <p className="mb-3 text-sm font-medium text-slate-700">New recipe</p>
+              <form onSubmit={createRecipe} className="space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700">Dish name</label>
+                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Masala Dosa" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Category</label>
+                    <div className="mt-1">
+                      <ComboBox
+                        value={category}
+                        onChange={setCategory}
+                        options={categoryOptions}
+                        placeholder="Select category…"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Serves</label>
+                    <input value={servings} onChange={(e) => setServings(e.target.value)} inputMode="numeric" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Selling price (optional)</label>
+                    <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="per serving" className={inputCls} />
+                  </div>
+                </div>
+
+                <p className="pt-1 text-sm font-medium text-slate-700">Ingredients</p>
+                {ings.map((l, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <select
+                      value={l.item_id}
+                      onChange={(e) => setIngs(ings.map((x, i) => (i === idx ? { ...x, item_id: e.target.value } : x)))}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    >
+                      {items.map((it) => (
+                        <option key={it.id} value={it.id}>{it.name} ({it.unit})</option>
+                      ))}
+                    </select>
+                    <input
+                      value={l.qty}
+                      onChange={(e) => setIngs(ings.map((x, i) => (i === idx ? { ...x, qty: e.target.value } : x)))}
+                      inputMode="decimal"
+                      placeholder="qty"
+                      className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                    {ings.length > 1 && (
+                      <button type="button" onClick={() => setIngs(ings.filter((_, i) => i !== idx))} className="rounded-lg border border-slate-200 px-2 text-slate-400 hover:bg-slate-50">×</button>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setIngs([...ings, { item_id: items[0]?.id ?? "", qty: "" }])} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+                    + Add ingredient
+                  </button>
+                  <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+                    {saving ? "Saving…" : "Save recipe"}
+                  </button>
+                  <button type="button" onClick={resetForm} className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                </div>
+                {error && <p className="text-sm text-rose-600">{error}</p>}
+                <p className="text-xs text-slate-400">
+                  Cost/serving &amp; margin are calculated automatically from current vendor prices.
+                </p>
+              </form>
+            </Card>
+          )}
+        </div>
+      )}
 
       {recipes.length === 0 ? (
         <Card>

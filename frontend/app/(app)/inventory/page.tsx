@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Item } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { ComboBox } from "@/components/ComboBox";
 import { useCurrency } from "@/lib/currency";
+
+const STD_UNITS = ["kg", "g", "litre", "ml", "piece", "pack", "box", "bag", "dozen", "bottle"];
 
 function isLow(item: Item): boolean {
   if (item.min_stock_level == null) return false;
@@ -75,6 +78,9 @@ export default function InventoryPage() {
   const inputCls =
     "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 
+  const categoryOptions = [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort();
+  const unitOptions = [...new Set([...STD_UNITS, ...items.map((i) => i.unit)])];
+
   return (
     <div>
       <PageHeader title="Inventory" subtitle="Items, stock levels, and weighted-average cost." />
@@ -94,23 +100,29 @@ export default function InventoryPage() {
               className={inputCls}
             />
           </div>
-          <div className="w-full sm:w-40">
+          <div className="w-full sm:w-44">
             <label className="block text-sm font-medium text-slate-700">Category</label>
-            <input
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              placeholder="e.g. Rice"
-              className={inputCls}
-            />
+            <div className="mt-1">
+              <ComboBox
+                value={form.category}
+                onChange={(v) => setForm({ ...form, category: v })}
+                options={categoryOptions}
+                placeholder="Select category…"
+                className="w-full"
+              />
+            </div>
           </div>
-          <div className="w-full sm:w-24">
+          <div className="w-full sm:w-32">
             <label className="block text-sm font-medium text-slate-700">Unit</label>
-            <input
-              value={form.unit}
-              onChange={(e) => setForm({ ...form, unit: e.target.value })}
-              required
-              className={inputCls}
-            />
+            <div className="mt-1">
+              <ComboBox
+                value={form.unit}
+                onChange={(v) => setForm({ ...form, unit: v })}
+                options={unitOptions}
+                placeholder="Select unit…"
+                className="w-full"
+              />
+            </div>
           </div>
           <div className="w-full sm:w-28">
             <label className="block text-sm font-medium text-slate-700">Min stock</label>

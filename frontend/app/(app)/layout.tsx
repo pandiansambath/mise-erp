@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { ConfirmProvider } from "@/components/confirm";
 import { Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 
@@ -22,5 +23,9 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
     );
   }
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <ConfirmProvider>
+      <AppShell>{children}</AppShell>
+    </ConfirmProvider>
+  );
 }
