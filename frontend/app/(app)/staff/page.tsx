@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { can, ROLE_LABELS, ROLES } from "@/lib/permissions";
 
 export default function StaffPage() {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const canWrite = can(user?.role, "users:write");
   const canRead = can(user?.role, "users:read");
 
@@ -62,6 +64,15 @@ export default function StaffPage() {
   }
 
   async function toggleActive(u: UserOut) {
+    const ok = await confirm({
+      title: u.is_active ? "Deactivate this user?" : "Reactivate this user?",
+      message: u.is_active
+        ? `${u.email} will no longer be able to log in.`
+        : `${u.email} will be able to log in again.`,
+      confirmText: u.is_active ? "Deactivate" : "Reactivate",
+      tone: u.is_active ? "danger" : "default",
+    });
+    if (!ok) return;
     await api.patch<UserOut>(`/auth/users/${u.id}`, { is_active: !u.is_active });
     await load();
   }
