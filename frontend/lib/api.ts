@@ -250,6 +250,17 @@ export interface ExpiringDoc {
   days_left: number;
 }
 
+export interface DocRequest {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  doc_type: string;
+  title: string;
+  status: string; // PENDING | UPLOADED | APPROVED
+  document_id: string | null;
+  created_at: string;
+}
+
 export interface IndentItemRow {
   item_id: string;
   item_name: string;

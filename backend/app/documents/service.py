@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import get_storage
-from app.documents.models import Document
+from app.documents.models import DocRequestStatus, Document, DocumentRequest
+from app.employees.models import Employee
 
 
 async def create_document(
@@ -74,6 +75,103 @@ async def delete_document(db: AsyncSession, doc: Document) -> None:
     get_storage().delete(doc.storage_key)
     await db.delete(doc)
     await db.commit()
+
+
+# ── Document requests (Super Admin asks an employee for a document) ──────────
+async def create_request(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    *,
+    employee_id: uuid.UUID,
+    doc_type: str,
+    title: str,
+    requested_by: uuid.UUID | None = None,
+) -> DocumentRequest:
+    req = DocumentRequest(
+        hotel_id=hotel_id,
+        employee_id=employee_id,
+        doc_type=doc_type,
+        title=title,
+        requested_by=requested_by,
+    )
+    db.add(req)
+    await db.commit()
+    await db.refresh(req)
+    return req
+
+
+async def get_request(
+    db: AsyncSession, request_id: uuid.UUID, hotel_id: uuid.UUID
+) -> DocumentRequest | None:
+    req = await db.get(DocumentRequest, request_id)
+    if req is None or req.hotel_id != hotel_id:
+        return None
+    return req
+
+
+async def list_requests(
+    db: AsyncSession, hotel_id: uuid.UUID, *, employee_id: uuid.UUID | None = None
+) -> list[dict]:
+    stmt = (
+        select(DocumentRequest, Employee)
+        .join(Employee, DocumentRequest.employee_id == Employee.id)
+        .where(DocumentRequest.hotel_id == hotel_id)
+    )
+    if employee_id is not None:
+        stmt = stmt.where(DocumentRequest.employee_id == employee_id)
+    rows = await db.execute(stmt.order_by(DocumentRequest.created_at.desc()))
+    return [
+        {
+            "id": r.id,
+            "employee_id": r.employee_id,
+            "employee_name": e.full_name,
+            "doc_type": r.doc_type,
+            "title": r.title,
+            "status": r.status,
+            "document_id": r.document_id,
+            "created_at": r.created_at,
+        }
+        for r, e in rows.all()
+    ]
+
+
+async def fulfil_request(
+    db: AsyncSession,
+    req: DocumentRequest,
+    *,
+    filename: str,
+    mime_type: str | None,
+    data: bytes,
+    uploaded_by: uuid.UUID | None = None,
+) -> Document:
+    """Employee uploads the requested file → create a Document tagged to them,
+    link it to the request, and mark it awaiting approval."""
+    doc = await create_document(
+        db,
+        req.hotel_id,
+        title=req.title,
+        doc_type=req.doc_type,
+        filename=filename,
+        mime_type=mime_type,
+        data=data,
+        related_entity_type="EMPLOYEE",
+        related_entity_id=req.employee_id,
+        uploaded_by=uploaded_by,
+    )
+    req.document_id = doc.id
+    req.status = DocRequestStatus.UPLOADED.value
+    await db.commit()
+    await db.refresh(req)
+    return doc
+
+
+async def set_request_status(
+    db: AsyncSession, req: DocumentRequest, status: str
+) -> DocumentRequest:
+    req.status = status
+    await db.commit()
+    await db.refresh(req)
+    return req
 
 
 async def expiring(db: AsyncSession, hotel_id: uuid.UUID, within_days: int = 30) -> list[dict]:

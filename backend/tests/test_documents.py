@@ -50,6 +50,42 @@ async def test_expiring_documents(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
+async def test_document_request_flow(client, make_user, auth_header, db, hotel):
+    """Super Admin requests → employee uploads (PENDING→UPLOADED, tagged to them) → approve."""
+    from app.employees import service as emp_service
+
+    admin = await make_user("owner2@nirai.com", Role.SUPER_ADMIN.value)
+    staff = await make_user("selvi@nirai.com", Role.STAFF.value)
+    emp = await emp_service.create_employee(db, hotel.id, full_name="Selvi")
+    await emp_service.update_employee(db, emp, user_id=staff.id)
+    ah, sh = auth_header(admin), auth_header(staff)
+
+    req = await client.post(
+        "/api/documents/requests", headers=ah,
+        json={"employee_id": str(emp.id), "doc_type": "EMPLOYEE_DOC", "title": "Passport"},
+    )
+    assert req.status_code == 201
+    rid = req.json()["id"]
+    assert req.json()["status"] == "PENDING"
+
+    mine = await client.get("/api/me/document-requests", headers=sh)
+    assert any(r["id"] == rid for r in mine.json())
+
+    up = await client.post(
+        f"/api/me/document-requests/{rid}/upload", headers=sh,
+        files={"file": ("passport.pdf", PDF, "application/pdf")},
+    )
+    assert up.status_code == 200
+    assert up.json()["status"] == "UPLOADED"
+    mydocs = (await client.get("/api/me/documents", headers=sh)).json()
+    assert any(d["title"] == "Passport" for d in mydocs)
+
+    ap = await client.post(f"/api/documents/requests/{rid}/approve", headers=ah)
+    assert ap.status_code == 200
+    assert ap.json()["status"] == "APPROVED"
+
+
+@pytest.mark.asyncio
 async def test_cashier_cannot_upload(client, make_user, auth_header):
     cashier = await make_user("cash@nirai.com", Role.CASHIER.value)
     resp = await client.post(

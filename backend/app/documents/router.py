@@ -21,7 +21,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.storage import get_storage
 from app.documents import service
-from app.documents.schemas import DocumentOut, ExpiringDoc
+from app.documents.models import DocRequestStatus
+from app.documents.schemas import DocRequestCreate, DocRequestOut, DocumentOut, ExpiringDoc
+from app.employees import service as emp_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -80,6 +82,48 @@ async def expiring_documents(
 ) -> list[ExpiringDoc]:
     rows = await service.expiring(db, user.hotel_id, within_days)
     return [ExpiringDoc.model_validate(d) for d in rows]
+
+
+# ── Document requests (Super Admin → employee) ───────────────────────────────
+@router.post("/requests", response_model=DocRequestOut, status_code=status.HTTP_201_CREATED)
+async def create_doc_request(
+    payload: DocRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("documents:write")),
+) -> DocRequestOut:
+    emp = await emp_service.get_employee(db, payload.employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    await service.create_request(
+        db, user.hotel_id,
+        employee_id=payload.employee_id, doc_type=payload.doc_type,
+        title=payload.title, requested_by=user.id,
+    )
+    rows = await service.list_requests(db, user.hotel_id, employee_id=payload.employee_id)
+    return DocRequestOut.model_validate(rows[0])
+
+
+@router.get("/requests", response_model=list[DocRequestOut])
+async def list_doc_requests(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("documents:read")),
+) -> list[DocRequestOut]:
+    rows = await service.list_requests(db, user.hotel_id)
+    return [DocRequestOut.model_validate(r) for r in rows]
+
+
+@router.post("/requests/{request_id}/approve", response_model=DocRequestOut)
+async def approve_doc_request(
+    request_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("documents:write")),
+) -> DocRequestOut:
+    req = await service.get_request(db, request_id, user.hotel_id)
+    if req is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Request not found")
+    await service.set_request_status(db, req, DocRequestStatus.APPROVED.value)
+    rows = await service.list_requests(db, user.hotel_id, employee_id=req.employee_id)
+    return DocRequestOut.model_validate(next(r for r in rows if r["id"] == request_id))
 
 
 @router.get("/{doc_id}/download")

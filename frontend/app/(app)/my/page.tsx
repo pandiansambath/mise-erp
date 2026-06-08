@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
   downloadFile,
+  postForm,
   type AttendanceRow,
+  type DocRequest,
   type DocumentItem,
   type Employee,
   type PayrollRow,
@@ -33,8 +35,37 @@ export default function MySpacePage() {
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [payslips, setPayslips] = useState<PayrollRow[]>([]);
   const [docs, setDocs] = useState<DocumentItem[]>([]);
+  const [requests, setRequests] = useState<DocRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [notLinked, setNotLinked] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadFor, setUploadFor] = useState<string | null>(null);
+
+  function reloadDocs() {
+    api.get<DocumentItem[]>("/me/documents").then(setDocs).catch(() => {});
+    api.get<DocRequest[]>("/me/document-requests").then(setRequests).catch(() => {});
+  }
+
+  function pickFile(requestId: string) {
+    setUploadFor(requestId);
+    fileRef.current?.click();
+  }
+
+  async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !uploadFor) return;
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      await postForm(`/me/document-requests/${uploadFor}/upload`, form);
+      reloadDocs();
+    } catch {
+      /* surfaced inline below via reload */
+    } finally {
+      e.target.value = "";
+      setUploadFor(null);
+    }
+  }
 
   useEffect(() => {
     api
@@ -45,6 +76,7 @@ export default function MySpacePage() {
           api.get<AttendanceRow[]>("/me/attendance").then(setAttendance).catch(() => {}),
           api.get<PayrollRow[]>("/me/payslips").then(setPayslips).catch(() => {}),
           api.get<DocumentItem[]>("/me/documents").then(setDocs).catch(() => {}),
+          api.get<DocRequest[]>("/me/document-requests").then(setRequests).catch(() => {}),
         ]);
       })
       .catch((err) => {
@@ -69,9 +101,39 @@ export default function MySpacePage() {
     );
   }
 
+  const pendingReqs = requests.filter((r) => r.status !== "APPROVED");
+
   return (
     <div>
+      <input ref={fileRef} type="file" className="hidden" onChange={onFileChosen} />
       <PageHeader title={`Hi, ${emp.full_name.split(" ")[0]}`} subtitle="Your attendance, payslips and documents." />
+
+      {pendingReqs.length > 0 && (
+        <Card className="mb-6 border-amber-200 bg-amber-50/40">
+          <h3 className="font-semibold text-slate-900">📋 Requested from you</h3>
+          <p className="mt-1 text-sm text-slate-500">Your manager has asked for these documents.</p>
+          <ul className="mt-3 divide-y divide-amber-100">
+            {pendingReqs.map((r) => (
+              <li key={r.id} className="flex items-center justify-between py-2.5">
+                <div>
+                  <p className="text-sm font-medium text-slate-800">{r.title}</p>
+                  <p className="text-xs text-slate-500">{r.doc_type.replace(/_/g, " ").toLowerCase()}</p>
+                </div>
+                {r.status === "UPLOADED" ? (
+                  <Badge tone="amber">awaiting approval</Badge>
+                ) : (
+                  <button
+                    onClick={() => pickFile(r.id)}
+                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
+                  >
+                    Upload
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card className="mb-6">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

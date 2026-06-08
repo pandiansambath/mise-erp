@@ -6,10 +6,12 @@ import {
   ApiError,
   downloadFile,
   postForm,
+  type DocRequest,
   type DocumentItem,
+  type Employee,
   type ExpiringDoc,
 } from "@/lib/api";
-import { Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -31,6 +33,8 @@ export default function DocumentsPage() {
 
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [expiring, setExpiring] = useState<ExpiringDoc[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [requests, setRequests] = useState<DocRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [docType, setDocType] = useState("LICENSE");
@@ -38,11 +42,53 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // request-a-document form
+  const [reqEmpId, setReqEmpId] = useState("");
+  const [reqType, setReqType] = useState("EMPLOYEE_DOC");
+  const [reqTitle, setReqTitle] = useState("");
+
   function load() {
     return Promise.all([
       api.get<DocumentItem[]>("/documents").then(setDocs),
       api.get<ExpiringDoc[]>("/documents/expiring?within_days=60").then(setExpiring).catch(() => {}),
+      api.get<Employee[]>("/employees").then(setEmployees).catch(() => {}),
+      api.get<DocRequest[]>("/documents/requests").then(setRequests).catch(() => {}),
     ]);
+  }
+
+  async function createRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reqEmpId || !reqTitle.trim()) {
+      setError("Pick a staff member and a document title.");
+      return;
+    }
+    setError(null);
+    try {
+      await api.post("/documents/requests", {
+        employee_id: reqEmpId,
+        doc_type: reqType,
+        title: reqTitle.trim(),
+      });
+      setReqTitle("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not create request");
+    }
+  }
+
+  async function approveRequest(id: string) {
+    const ok = await confirm({
+      title: "Approve this document?",
+      message: "Mark the uploaded document as approved.",
+      confirmText: "Approve",
+    });
+    if (!ok) return;
+    try {
+      await api.post(`/documents/requests/${id}/approve`);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not approve");
+    }
   }
 
   useEffect(() => {
@@ -144,6 +190,81 @@ export default function DocumentsPage() {
               {error && <span className="ml-3 text-sm text-rose-600">{error}</span>}
             </div>
           </form>
+        </Card>
+      )}
+
+      {canWrite && (
+        <Card className="mb-6">
+          <p className="mb-1 text-sm font-medium text-slate-700">Request a document from staff</p>
+          <p className="mb-3 text-xs text-slate-400">
+            They&apos;ll see it in their <b>My Space</b> as pending, upload it, then you approve.
+          </p>
+          <form onSubmit={createRequest} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Staff member</label>
+              <select value={reqEmpId} onChange={(e) => setReqEmpId(e.target.value)} className={inputCls}>
+                <option value="">Select…</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.full_name} ({emp.employee_code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Type</label>
+              <select value={reqType} onChange={(e) => setReqType(e.target.value)} className={inputCls}>
+                {TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700">What to provide</label>
+              <input value={reqTitle} onChange={(e) => setReqTitle(e.target.value)} placeholder="e.g. Passport, Right-to-work" className={inputCls} />
+            </div>
+            <div className="sm:col-span-4">
+              <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                Request document
+              </button>
+            </div>
+          </form>
+
+          {requests.length > 0 && (
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
+                    <th className="px-3 py-2 font-medium">Staff</th>
+                    <th className="px-3 py-2 font-medium">Document</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                    <th className="px-3 py-2 text-right font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requests.map((r) => (
+                    <tr key={r.id} className="border-b border-slate-100">
+                      <td className="px-3 py-2 text-slate-700">{r.employee_name}</td>
+                      <td className="px-3 py-2 font-medium text-slate-800">{r.title}</td>
+                      <td className="px-3 py-2">
+                        <Badge tone={r.status === "APPROVED" ? "green" : r.status === "UPLOADED" ? "amber" : "slate"}>
+                          {r.status.toLowerCase()}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex justify-end gap-1">
+                          {r.document_id && (
+                            <button onClick={() => downloadFile(`/documents/${r.document_id}/download`, r.title)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">View</button>
+                          )}
+                          {r.status === "UPLOADED" && (
+                            <button onClick={() => approveRequest(r.id)} className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700">Approve</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 

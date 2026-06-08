@@ -18,6 +18,36 @@ class DocType(str, enum.Enum):
     OTHER = "OTHER"
 
 
+class DocRequestStatus(str, enum.Enum):
+    PENDING = "PENDING"    # requested — awaiting the employee's upload
+    UPLOADED = "UPLOADED"  # employee uploaded — awaiting Super Admin approval
+    APPROVED = "APPROVED"  # approved by Super Admin
+
+
+class DocumentRequest(Base):
+    """Super Admin asks an employee for a document; they upload to fulfil it."""
+
+    __tablename__ = "document_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    doc_type: Mapped[str] = mapped_column(String(30), nullable=False, default=DocType.OTHER.value)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=DocRequestStatus.PENDING.value
+    )
+    document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"))
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class Document(Base):
     __tablename__ = "documents"
 

@@ -2,14 +2,23 @@
 attendance, payslips, and documents. Resolves the Employee linked to the user."""
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
 from app.auth.models import User
+from app.core.config import settings
 from app.core.database import get_db
 from app.documents import service as doc_service
-from app.documents.schemas import DocumentOut
+from app.documents.schemas import DocRequestOut, DocumentOut
 from app.employees import service as emp_service
 from app.employees.models import Employee
 from app.employees.schemas import AttendanceRow, EmployeeOut
@@ -85,3 +94,40 @@ async def my_documents(
         db, emp.hotel_id, entity_type="EMPLOYEE", entity_id=emp.id
     )
     return [DocumentOut.model_validate(d) for d in docs]
+
+
+@router.get("/document-requests", response_model=list[DocRequestOut])
+async def my_document_requests(
+    emp: Employee = Depends(_my_employee),
+    db: AsyncSession = Depends(get_db),
+) -> list[DocRequestOut]:
+    rows = await doc_service.list_requests(db, emp.hotel_id, employee_id=emp.id)
+    return [DocRequestOut.model_validate(r) for r in rows]
+
+
+@router.post("/document-requests/{request_id}/upload", response_model=DocRequestOut)
+async def fulfil_document_request(
+    request_id: uuid.UUID,
+    file: UploadFile = File(...),
+    emp: Employee = Depends(_my_employee),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> DocRequestOut:
+    req = await doc_service.get_request(db, request_id, emp.hotel_id)
+    if req is None or req.employee_id != emp.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Request not found")
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds {settings.max_upload_mb} MB",
+        )
+    await doc_service.fulfil_request(
+        db, req,
+        filename=file.filename or "document",
+        mime_type=file.content_type,
+        data=data,
+        uploaded_by=user.id,
+    )
+    rows = await doc_service.list_requests(db, emp.hotel_id, employee_id=emp.id)
+    return DocRequestOut.model_validate(next(r for r in rows if r["id"] == request_id))
