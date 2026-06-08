@@ -13,6 +13,7 @@ from app.employees.schemas import (
     AttendanceOut,
     AttendanceRow,
     AttendanceSet,
+    EmployeeAccountIn,
     EmployeeCreate,
     EmployeeOut,
     EmployeeUpdate,
@@ -80,6 +81,26 @@ async def update_employee(
     if emp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
     emp = await service.update_employee(db, emp, **payload.model_dump(exclude_unset=True))
+    return EmployeeOut.model_validate(emp)
+
+
+@router.post("/{employee_id}/account", response_model=EmployeeOut)
+async def create_employee_account(
+    employee_id: uuid.UUID,
+    payload: EmployeeAccountIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> EmployeeOut:
+    """Create a login for this employee so they can sign in (self-service)."""
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    try:
+        emp = await service.create_account_for_employee(
+            db, emp, email=payload.email, password=payload.password, role=payload.role
+        )
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return EmployeeOut.model_validate(emp)
 
 

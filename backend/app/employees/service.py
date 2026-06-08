@@ -45,6 +45,31 @@ async def create_employee(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Em
     return emp
 
 
+class AccountError(Exception):
+    """Raised when a login cannot be created/attached to an employee."""
+
+
+async def create_account_for_employee(
+    db: AsyncSession, emp: Employee, *, email: str, password: str, role: str
+) -> Employee:
+    """Create a login (User) for this employee and link it. Hotel-scoped."""
+    from app.auth import service as auth_service
+    from app.auth.models import Role
+
+    valid_roles = {r.value for r in Role}
+    if role not in valid_roles:
+        raise AccountError(f"role must be one of {sorted(valid_roles)}")
+    if await auth_service.get_user_by_email(db, email) is not None:
+        raise AccountError("That email already has an account")
+    user = await auth_service.create_user(
+        db, email=email, password=password, role=role, hotel_id=emp.hotel_id
+    )
+    emp.user_id = user.id
+    await db.commit()
+    await db.refresh(emp)
+    return emp
+
+
 async def get_employee(
     db: AsyncSession, employee_id: uuid.UUID, hotel_id: uuid.UUID
 ) -> Employee | None:
@@ -166,6 +191,42 @@ async def set_attendance(
     await db.commit()
     await db.refresh(rec)
     return rec
+
+
+async def get_employee_for_user(
+    db: AsyncSession, user_id: uuid.UUID, hotel_id: uuid.UUID
+) -> Employee | None:
+    """The Employee linked to a login (for self-service)."""
+    res = await db.execute(
+        select(Employee).where(Employee.user_id == user_id, Employee.hotel_id == hotel_id)
+    )
+    return res.scalar_one_or_none()
+
+
+async def list_attendance_for_employee(
+    db: AsyncSession, employee_id: uuid.UUID, *, limit: int = 90
+) -> list[dict]:
+    """Recent attendance rows for one employee, newest first (self-service)."""
+    rows = await db.execute(
+        select(Attendance, Employee)
+        .join(Employee, Attendance.employee_id == Employee.id)
+        .where(Attendance.employee_id == employee_id)
+        .order_by(Attendance.date.desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "employee_id": e.id,
+            "employee_name": e.full_name,
+            "date": a.date,
+            "clock_in": a.clock_in,
+            "clock_out": a.clock_out,
+            "working_hours": a.working_hours,
+            "status": a.status,
+            "on_break": a.break_start is not None,
+        }
+        for a, e in rows.all()
+    ]
 
 
 async def list_attendance(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> list[dict]:

@@ -299,6 +299,7 @@ export interface Employee {
   bank_account_no: string | null;
   joining_date: string | null;
   is_active: boolean;
+  user_id: string | null;
 }
 
 export interface VisaAlert {

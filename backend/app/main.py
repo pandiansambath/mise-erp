@@ -18,6 +18,7 @@ from app.purchasing.router import router as purchasing_router
 from app.recipes.router import router as recipes_router
 from app.reports.router import router as reports_router
 from app.sales.router import router as sales_router
+from app.selfservice.router import router as selfservice_router
 from app.vendors.router import router as vendors_router
 
 
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(payroll_router, prefix="/api")
     app.include_router(purchasing_router, prefix="/api")
     app.include_router(documents_router, prefix="/api")
+    app.include_router(selfservice_router, prefix="/api")
 
     @app.get("/", tags=["root"])
     async def root() -> dict:

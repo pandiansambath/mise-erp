@@ -178,6 +178,15 @@ export default function RecipesPage() {
   const categoryOptions = [
     ...new Set(recipes.map((r) => r.category).filter(Boolean) as string[]),
   ].sort();
+  const recipeNames = [...new Set(recipes.map((r) => r.name))].sort();
+
+  // group recipes by name so a dish with several serves-variants shows as one card
+  const groups = new Map<string, Recipe[]>();
+  for (const r of recipes) {
+    const g = groups.get(r.name) ?? [];
+    g.push(r);
+    groups.set(r.name, g);
+  }
 
   return (
     <div>
@@ -199,7 +208,17 @@ export default function RecipesPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-slate-700">Dish name</label>
-                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Masala Dosa" className={inputCls} />
+                    <div className="mt-1">
+                      <ComboBox
+                        value={name}
+                        onChange={setName}
+                        options={recipeNames}
+                        placeholder="Search a dish or type a new one…"
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Same dish at different serves? Pick the existing name to keep spelling consistent.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700">Category</label>
@@ -275,31 +294,46 @@ export default function RecipesPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {recipes.map((r) => {
-            const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
-            const open = openId === r.id;
+          {[...groups.entries()].map(([dishName, variants]) => {
+            const sorted = [...variants].sort(
+              (a, b) => a.servings_default - b.servings_default
+            );
             return (
-              <Card key={r.id}>
-                <button
-                  onClick={() => setOpenId(open ? null : r.id)}
-                  className="flex w-full items-center justify-between text-left"
-                >
-                  <div>
-                    <p className="font-semibold text-slate-900">{r.name}</p>
-                    <p className="text-sm text-slate-500">
-                      {r.category || "Dish"} · serves {r.servings_default}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
-                    <span className="text-slate-400">{open ? "▲" : "▼"}</span>
-                  </div>
-                </button>
-                {open && (
-                  <div className="mt-4 border-t border-slate-100 pt-4">
-                    <CostDetail recipeId={r.id} />
-                  </div>
-                )}
+              <Card key={dishName}>
+                <div className="mb-1">
+                  <p className="font-semibold text-slate-900">{dishName}</p>
+                  <p className="text-sm text-slate-500">
+                    {sorted[0].category || "Dish"}
+                    {sorted.length > 1 && ` · ${sorted.length} serving sizes`}
+                  </p>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {sorted.map((r) => {
+                    const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
+                    const open = openId === r.id;
+                    return (
+                      <div key={r.id}>
+                        <button
+                          onClick={() => setOpenId(open ? null : r.id)}
+                          className="flex w-full items-center justify-between py-2.5 text-left"
+                        >
+                          <span className="text-sm font-medium text-slate-700">
+                            serves {r.servings_default}
+                          </span>
+                          <span className="flex items-center gap-3">
+                            {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
+                            <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+                          </span>
+                        </button>
+                        {open && (
+                          <div className="border-t border-slate-100 pb-2 pt-3">
+                            <CostDetail recipeId={r.id} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
             );
           })}

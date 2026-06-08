@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type UserOut } from "@/lib/api";
+import { api, ApiError, type Employee, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -14,22 +14,27 @@ export default function StaffPage() {
   const canRead = can(user?.role, "users:read");
 
   const [users, setUsers] = useState<UserOut[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<string>("STAFF");
+  const [linkEmpId, setLinkEmpId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   function load() {
-    return api
-      .get<UserOut[]>("/auth/users")
-      .then(setUsers)
-      .catch((e) => {
-        if (e instanceof ApiError && e.status === 403) setDenied(true);
-      });
+    return Promise.all([
+      api
+        .get<UserOut[]>("/auth/users")
+        .then(setUsers)
+        .catch((e) => {
+          if (e instanceof ApiError && e.status === 403) setDenied(true);
+        }),
+      api.get<Employee[]>("/employees").then(setEmployees).catch(() => {}),
+    ]);
   }
 
   useEffect(() => {
@@ -46,10 +51,16 @@ export default function StaffPage() {
     setSaving(true);
     setError(null);
     try {
-      await api.post<UserOut>("/auth/users", { email, password, role });
+      if (linkEmpId) {
+        // attach a login to an existing employee (self-service)
+        await api.post(`/employees/${linkEmpId}/account`, { email, password, role });
+      } else {
+        await api.post<UserOut>("/auth/users", { email, password, role });
+      }
       setEmail("");
       setPassword("");
       setRole("STAFF");
+      setLinkEmpId("");
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add user");
@@ -104,6 +115,23 @@ export default function StaffPage() {
         <Card className="mb-6">
           <p className="mb-3 text-sm font-medium text-slate-700">Add a team member</p>
           <form onSubmit={addUser} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="w-full sm:w-52">
+              <label className="block text-sm font-medium text-slate-700">Employee (optional)</label>
+              <select
+                value={linkEmpId}
+                onChange={(e) => setLinkEmpId(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— Standalone login —</option>
+                {employees
+                  .filter((emp) => !emp.user_id)
+                  .map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.full_name} ({emp.employee_code})
+                    </option>
+                  ))}
+              </select>
+            </div>
             <div className="flex-1 sm:min-w-[14rem]">
               <label className="block text-sm font-medium text-slate-700">Email</label>
               <input
@@ -147,7 +175,8 @@ export default function StaffPage() {
           {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
           <p className="mt-2 text-xs text-slate-400">
             Share the email + temp password with them. They sign in directly — staff don&apos;t
-            self-register.
+            self-register. Pick an <b>Employee</b> to give that person a login tied to their HR
+            record (so they can later see their own attendance &amp; payslips).
           </p>
         </Card>
       )}

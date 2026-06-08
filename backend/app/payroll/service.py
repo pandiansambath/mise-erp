@@ -173,6 +173,33 @@ async def list_payroll(db: AsyncSession, hotel_id: uuid.UUID, pay_period: str) -
     ]
 
 
+async def list_payroll_for_employee(
+    db: AsyncSession, hotel_id: uuid.UUID, employee_id: uuid.UUID
+) -> list[dict]:
+    """All payslips for one employee, newest period first (for self-service)."""
+    rows = await db.execute(
+        select(Payroll, Employee)
+        .join(Employee, Payroll.employee_id == Employee.id)
+        .where(Payroll.hotel_id == hotel_id, Payroll.employee_id == employee_id)
+        .order_by(Payroll.pay_period.desc())
+    )
+    return [
+        {
+            "id": p.id,
+            "employee_id": p.employee_id,
+            "employee_name": e.full_name,
+            "pay_period": p.pay_period,
+            "gross_pay": p.gross_pay,
+            "overtime_pay": p.overtime_pay,
+            "advance_deduction": p.advance_deduction,
+            "other_deductions": p.other_deductions,
+            "net_pay": p.net_pay,
+            "status": p.status,
+        }
+        for p, e in rows.all()
+    ]
+
+
 async def set_status(db: AsyncSession, rec: Payroll, status: str) -> Payroll:
     rec.status = status
     await db.commit()

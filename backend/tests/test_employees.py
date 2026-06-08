@@ -113,6 +113,66 @@ async def test_punch_via_api(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
+async def test_create_login_for_employee(client, make_user, auth_header):
+    """Manager attaches a login to an employee; the employee can then sign in."""
+    mgr = await make_user("mgr@nirai.com", Role.MANAGER.value)
+    h = auth_header(mgr)
+    emp = (await client.post("/api/employees", headers=h, json={"full_name": "Selvi"})).json()
+    assert emp["user_id"] is None
+
+    resp = await client.post(
+        f"/api/employees/{emp['id']}/account",
+        headers=h,
+        json={"email": "selvi@nirai.com", "password": "StaffPass123", "role": "STAFF"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["user_id"] is not None
+
+    # the new staff login works
+    login = await client.post(
+        "/api/auth/login", json={"email": "selvi@nirai.com", "password": "StaffPass123"}
+    )
+    assert login.status_code == 200
+
+    # duplicate email is rejected
+    dup = await client.post(
+        f"/api/employees/{emp['id']}/account",
+        headers=h,
+        json={"email": "selvi@nirai.com", "password": "StaffPass123", "role": "STAFF"},
+    )
+    assert dup.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_self_service_views(client, make_user, auth_header, db, hotel):
+    """A linked staff login sees only their own employee record + attendance; an
+    unlinked login gets 404 from /me."""
+    staff = await make_user("selvi@nirai.com", Role.STAFF.value)
+    emp = await service.create_employee(
+        db, hotel.id, full_name="Selvi", monthly_salary=Decimal("2000")
+    )
+    await service.update_employee(db, emp, user_id=staff.id)  # link login -> employee
+    await service.set_attendance(db, emp, date(2026, 6, 2), status="PRESENT")
+    h = auth_header(staff)
+
+    me = await client.get("/api/me/employee", headers=h)
+    assert me.status_code == 200
+    assert me.json()["full_name"] == "Selvi"
+
+    att = await client.get("/api/me/attendance", headers=h)
+    assert att.status_code == 200
+    assert len(att.json()) >= 1
+
+    ps = await client.get("/api/me/payslips", headers=h)
+    assert ps.status_code == 200  # empty list is fine
+
+    # a login with no linked employee -> 404
+    other = await make_user("nolink@nirai.com", Role.CASHIER.value)
+    miss = await client.get("/api/me/employee", headers=auth_header(other))
+    assert miss.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_timesheet_pdf_and_xlsx(client, make_user, auth_header):
     """Attendance timesheet exports as a valid PDF and Excel file."""
     mgr = await make_user("mgr@nirai.com", Role.MANAGER.value)

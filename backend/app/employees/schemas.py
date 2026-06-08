@@ -72,6 +72,14 @@ class EmployeeOut(BaseModel):
     bank_account_no: str | None
     joining_date: date_type | None
     is_active: bool
+    user_id: uuid.UUID | None  # linked login account, if any
+
+
+class EmployeeAccountIn(BaseModel):
+    """Create/attach a login for an employee (super-admin/manager only)."""
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    role: str = "STAFF"
 
 
 class VisaAlert(BaseModel):
