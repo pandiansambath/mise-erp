@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Lean container build (.next/standalone/server.js) for App Runner.
+  output: "standalone",
 };
 
 export default nextConfig;

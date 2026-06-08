@@ -37,10 +37,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # We authenticate with Bearer tokens (no cookies), so a "*" origin is safe;
+    # browsers forbid credentials + "*", so only enable credentials for explicit origins.
+    _wildcard = "*" in settings.cors_origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        allow_credentials=not _wildcard,
         allow_methods=["*"],
         allow_headers=["*"],
     )

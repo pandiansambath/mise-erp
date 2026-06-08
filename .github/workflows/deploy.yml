@@ -1,0 +1,151 @@
+name: Deploy (eu-west-2)
+
+# Manual trigger so deployments (and AWS spend) are always intentional.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  STATE_BUCKET: mise-tfstate-765607524925
+
+jobs:
+  # ── Test gate: nothing deploys unless backend + frontend are green ──
+  test-backend:
+    name: Test · backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mise_test
+          POSTGRES_USER: mise
+          POSTGRES_PASSWORD: mise
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mise"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - name: Migrate + test
+        env:
+          DATABASE_URL: postgresql+asyncpg://mise:mise@localhost:5432/mise_test
+          SECRET_KEY: ci-secret
+        run: |
+          alembic upgrade head
+          pytest -q --cov=app --cov-fail-under=70
+
+  test-frontend:
+    name: Test · frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  deploy:
+    name: Build images + Terraform apply
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Bootstrap state bucket + ECR repos (idempotent)
+        run: |
+          aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null || \
+            aws s3api create-bucket --bucket "$STATE_BUCKET" --region "$AWS_REGION" \
+              --create-bucket-configuration LocationConstraint="$AWS_REGION"
+          aws s3api put-bucket-versioning --bucket "$STATE_BUCKET" \
+            --versioning-configuration Status=Enabled || true
+          for r in mise-backend mise-frontend; do
+            aws ecr describe-repositories --repository-names "$r" >/dev/null 2>&1 || \
+              aws ecr create-repository --repository-name "$r" \
+                --image-scanning-configuration scanOnPush=true >/dev/null
+          done
+
+      - name: ECR login
+        id: ecr
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          REG="$ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com"
+          echo "registry=$REG" >> "$GITHUB_OUTPUT"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$REG"
+
+      - name: Build & push backend image
+        run: |
+          IMG="${{ steps.ecr.outputs.registry }}/mise-backend:${{ github.sha }}"
+          docker build --target prod -t "$IMG" ./backend
+          docker push "$IMG"
+          echo "BACKEND_IMAGE=$IMG" >> "$GITHUB_ENV"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Terraform init
+        working-directory: infra
+        run: terraform init -input=false
+
+      - name: Terraform apply (backend + infra)
+        working-directory: infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_app_secret_key: ${{ secrets.APP_SECRET_KEY }}
+        run: terraform apply -input=false -auto-approve -var="backend_image=$BACKEND_IMAGE"
+
+      - name: Read backend URL
+        working-directory: infra
+        run: echo "BACKEND_URL=$(terraform output -raw backend_url)" >> "$GITHUB_ENV"
+
+      - name: Build & push frontend image (with backend URL baked in)
+        run: |
+          IMG="${{ steps.ecr.outputs.registry }}/mise-frontend:${{ github.sha }}"
+          docker build --build-arg NEXT_PUBLIC_API_URL="$BACKEND_URL" -t "$IMG" ./frontend
+          docker push "$IMG"
+          echo "FRONTEND_IMAGE=$IMG" >> "$GITHUB_ENV"
+
+      - name: Terraform apply (frontend)
+        working-directory: infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_app_secret_key: ${{ secrets.APP_SECRET_KEY }}
+        run: terraform apply -input=false -auto-approve -var="backend_image=$BACKEND_IMAGE" -var="frontend_image=$FRONTEND_IMAGE"
+
+      - name: Summary
+        working-directory: infra
+        run: |
+          {
+            echo "### 🚀 Mise deployed to eu-west-2"
+            echo "- **Frontend:** $(terraform output -raw frontend_url)"
+            echo "- **Backend:** $(terraform output -raw backend_url)"
+          } >> "$GITHUB_STEP_SUMMARY"
