@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -77,6 +78,13 @@ export default function LoginPage() {
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
+
+          <p className="text-center text-sm text-slate-500">
+            New here?{" "}
+            <Link href="/signup" className="font-medium text-brand-600 hover:underline">
+              Register your hotel
+            </Link>
+          </p>
         </form>
       </div>
     </div>

@@ -19,6 +19,39 @@ async def test_login_success(client, make_user):
 
 
 @pytest.mark.asyncio
+async def test_register_hotel_creates_hotel_and_super_admin(client):
+    resp = await client.post(
+        "/api/auth/register-hotel",
+        json={
+            "hotel_name": "Spice Garden",
+            "country": "IN",
+            "email": "owner@spicegarden.com",
+            "password": "StrongPass123",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["access_token"]
+    assert body["user"]["role"] == "SUPER_ADMIN"
+    assert body["hotel"]["name"] == "Spice Garden"
+    assert body["hotel"]["base_currency"] == "INR"  # derived from country
+
+    # the new owner can immediately log in
+    login = await client.post(
+        "/api/auth/login",
+        json={"email": "owner@spicegarden.com", "password": "StrongPass123"},
+    )
+    assert login.status_code == 200
+
+    # duplicate email is rejected
+    dup = await client.post(
+        "/api/auth/register-hotel",
+        json={"hotel_name": "X", "country": "GB", "email": "owner@spicegarden.com", "password": "StrongPass123"},
+    )
+    assert dup.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_login_wrong_password(client, make_user):
     await make_user("owner@nirai.com", Role.SUPER_ADMIN.value, password="password123")
     resp = await client.post(

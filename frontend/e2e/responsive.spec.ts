@@ -33,6 +33,20 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard");
 }
 
+test("landing page renders and fits the viewport", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: /symphony/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("signup page renders and fits the viewport", async ({ page }) => {
+  await page.goto("/signup");
+  await expect(page.getByRole("heading", { name: "Register your hotel" })).toBeVisible();
+  await expect(page.getByLabel("Restaurant name")).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
 test("login page renders and fits the viewport", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Mise" })).toBeVisible();

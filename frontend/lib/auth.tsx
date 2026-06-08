@@ -13,11 +13,20 @@ import {
   type UserOut,
 } from "./api";
 
+export interface RegisterHotelInput {
+  hotel_name: string;
+  country: string;
+  city?: string;
+  email: string;
+  password: string;
+}
+
 interface AuthState {
   user: UserOut | null;
   hotel: Hotel | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  registerHotel: (input: RegisterHotelInput) => Promise<void>;
   logout: () => void;
 }
 
@@ -56,6 +65,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [router]
   );
 
+  const registerHotel = useCallback(
+    async (input: RegisterHotelInput) => {
+      const res = await api.post<TokenResponse>("/auth/register-hotel", input);
+      setToken(res.access_token);
+      setUser(res.user);
+      setHotel(res.hotel);
+      router.push("/dashboard");
+    },
+    [router]
+  );
+
   const logout = useCallback(() => {
     clearToken();
     setUser(null);
@@ -64,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, hotel, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, hotel, loading, login, registerHotel, logout }}>
       {children}
     </AuthContext.Provider>
   );

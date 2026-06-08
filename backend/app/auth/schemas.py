@@ -14,6 +14,15 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterHotel(BaseModel):
+    """Public self-signup: creates a new hotel + its first Super Admin."""
+    hotel_name: str = Field(min_length=1, max_length=120)
+    country: str = Field(default="GB", min_length=2, max_length=2)
+    city: str | None = None
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

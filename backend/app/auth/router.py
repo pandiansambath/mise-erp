@@ -6,11 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import service
 from app.auth.deps import get_current_user, require
-from app.auth.models import User
+from app.auth.models import Role, User
 from app.auth.schemas import (
     HotelOut,
     LoginRequest,
     MeResponse,
+    RegisterHotel,
     TokenResponse,
     UserCreate,
     UserOut,
@@ -21,6 +22,9 @@ from app.core.security import create_access_token
 from app.hotels.models import Hotel
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Sensible default currency per country for self-signup.
+_CURRENCY_BY_COUNTRY = {"GB": "GBP", "IN": "INR", "US": "USD", "AE": "AED", "EU": "EUR"}
 
 
 async def _hotel_or_404(db: AsyncSession, hotel_id: uuid.UUID) -> Hotel:
@@ -39,6 +43,34 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         )
     token = create_access_token(subject=str(user.id), role=user.role)
     hotel = await _hotel_or_404(db, user.hotel_id)
+    return TokenResponse(
+        access_token=token,
+        user=UserOut.model_validate(user),
+        hotel=HotelOut.model_validate(hotel),
+    )
+
+
+@router.post("/register-hotel", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def register_hotel(
+    payload: RegisterHotel, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
+    """Public self-signup: create a hotel + its first Super Admin, then log them in."""
+    if await service.get_user_by_email(db, payload.email):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account")
+    country = payload.country.upper()
+    hotel = Hotel(
+        name=payload.hotel_name.strip(),
+        country=country,
+        city=payload.city,
+        base_currency=_CURRENCY_BY_COUNTRY.get(country, "GBP"),
+    )
+    db.add(hotel)
+    await db.flush()
+    user = await service.create_user(
+        db, payload.email, payload.password, Role.SUPER_ADMIN.value, hotel.id
+    )
+    await db.refresh(hotel)  # create_user committed; reload before serialising
+    token = create_access_token(subject=str(user.id), role=user.role)
     return TokenResponse(
         access_token=token,
         user=UserOut.model_validate(user),
