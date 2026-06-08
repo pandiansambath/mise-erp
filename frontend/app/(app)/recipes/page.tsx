@@ -74,7 +74,11 @@ function CostDetail({ recipeId }: { recipeId: string }) {
                   {format(ing.line_cost)}
                 </td>
                 <td className="py-2 text-slate-500">
-                  {ing.price_source === "vendor" ? ing.vendor_name : ing.price_source}
+                  {ing.price_source === "preferred"
+                    ? `★ ${ing.vendor_name}`
+                    : ing.price_source === "cheapest"
+                      ? ing.vendor_name
+                      : ing.price_source}
                 </td>
               </tr>
             ))}

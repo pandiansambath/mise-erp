@@ -17,6 +17,11 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  /* Reserve scrollbar space: no content shift between short and tall pages. */
+  scrollbar-gutter: stable;
+}
+
 html,
 body {
   background: var(--background);

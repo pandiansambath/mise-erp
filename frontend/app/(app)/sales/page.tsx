@@ -72,16 +72,26 @@ export default function SalesPage() {
   }
 
   async function removeLine(id: string) {
-    const s = await api.delete<DaySummary>(`/sales/days/${day}/lines/${id}`);
-    setSummary(s);
+    setError(null);
+    try {
+      const s = await api.delete<DaySummary>(`/sales/days/${day}/lines/${id}`);
+      setSummary(s);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove line");
+    }
   }
 
   async function saveCash() {
-    await api.patch(`/sales/days/${day}`, {
-      opening_cash: opening || "0",
-      cash_counted: counted === "" ? null : counted,
-    });
-    await loadDay(day);
+    setError(null);
+    try {
+      await api.patch(`/sales/days/${day}`, {
+        opening_cash: opening || "0",
+        cash_counted: counted === "" ? null : counted,
+      });
+      await loadDay(day);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save cash");
+    }
   }
 
   if (loading || !summary) return <Spinner />;

@@ -3,15 +3,26 @@
 import { useEffect, useState } from "react";
 import { api, type Item, type PriceComparison } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
+import { can } from "@/lib/permissions";
 
 export default function PriceComparisonPage() {
+  const { user } = useAuth();
+  const canWrite = can(user?.role, "vendors:write");
   const [items, setItems] = useState<Item[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [data, setData] = useState<PriceComparison | null>(null);
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadingCompare, setLoadingCompare] = useState(false);
   const { format } = useCurrency();
+
+  async function setPreferred(vendorId: string | null) {
+    const res = await api.post<PriceComparison>(`/vendors/items/${selected}/preferred`, {
+      vendor_id: vendorId,
+    });
+    setData(res);
+  }
 
   useEffect(() => {
     api
@@ -101,15 +112,15 @@ export default function PriceComparisonPage() {
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                         <th className="px-5 py-3 font-medium">Vendor</th>
                         <th className="px-5 py-3 text-right font-medium">Price / {data.unit}</th>
-                        <th className="px-5 py-3 text-right font-medium">Updated</th>
                         <th className="px-5 py-3 font-medium"></th>
+                        <th className="px-5 py-3 text-right font-medium"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.comparisons.map((row, idx) => (
                         <tr
                           key={row.vendor_id}
-                          className={`border-b border-slate-100 ${idx === 0 ? "bg-brand-50/50" : ""}`}
+                          className={`border-b border-slate-100 ${row.is_preferred ? "bg-brand-50" : idx === 0 ? "bg-brand-50/40" : ""}`}
                         >
                           <td className="px-5 py-3 font-medium text-slate-800">
                             {row.vendor_name}
@@ -117,11 +128,29 @@ export default function PriceComparisonPage() {
                           <td className="px-5 py-3 text-right font-semibold text-slate-900">
                             {format(row.price_per_unit)}
                           </td>
-                          <td className="px-5 py-3 text-right text-slate-400">
-                            {row.last_updated}
-                          </td>
                           <td className="px-5 py-3">
-                            {idx === 0 && <Badge tone="green">Cheapest</Badge>}
+                            <div className="flex gap-1.5">
+                              {idx === 0 && <Badge tone="green">Cheapest</Badge>}
+                              {row.is_preferred && <Badge tone="amber">★ Preferred</Badge>}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            {canWrite && !row.is_preferred && (
+                              <button
+                                onClick={() => setPreferred(row.vendor_id)}
+                                className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                              >
+                                Set preferred
+                              </button>
+                            )}
+                            {canWrite && row.is_preferred && (
+                              <button
+                                onClick={() => setPreferred(null)}
+                                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-400 hover:bg-slate-50"
+                              >
+                                Clear
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -129,6 +158,10 @@ export default function PriceComparisonPage() {
                   </table>
                 </div>
               </Card>
+              <p className="mt-3 text-xs text-slate-400">
+                Recipe costs use the <b>cheapest</b> vendor by default. Set a <b>preferred</b>{" "}
+                vendor (e.g. for quality/reliability) and costing will use that instead.
+              </p>
             </>
           )}
         </>

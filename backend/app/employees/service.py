@@ -184,6 +184,7 @@ async def list_attendance(db: AsyncSession, hotel_id: uuid.UUID, day: date_type)
             "clock_out": a.clock_out,
             "working_hours": a.working_hours,
             "status": a.status,
+            "on_break": a.break_start is not None,
         }
         for a, e in rows.all()
     ]

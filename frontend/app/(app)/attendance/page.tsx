@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type AttendanceRow, type Employee } from "@/lib/api";
+import { api, ApiError, type AttendanceRow, type Employee } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -13,13 +13,6 @@ function fmtTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-const statusTone: Record<string, "green" | "red" | "amber" | "slate"> = {
-  PRESENT: "green",
-  ABSENT: "red",
-  HALF_DAY: "amber",
-  LEAVE: "slate",
-};
-
 export default function AttendancePage() {
   const { user } = useAuth();
   const canWrite = can(user?.role, "attendance:write");
@@ -28,6 +21,7 @@ export default function AttendancePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rows, setRows] = useState<Record<string, AttendanceRow>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (d: string) => {
     const [emps, att] = await Promise.all([
@@ -50,30 +44,37 @@ export default function AttendancePage() {
   }
 
   async function punch(employeeId: string, type: string) {
-    await api.post("/attendance/punch", { employee_id: employeeId, type });
-    await load(day);
+    setError(null);
+    try {
+      await api.post("/attendance/punch", { employee_id: employeeId, type });
+      await load(day);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Punch failed");
+    }
   }
 
   if (loading) return <Spinner />;
 
   const isToday = day === today();
   const present = Object.values(rows).filter((r) => r.status === "PRESENT").length;
+  const btn = "rounded border px-2 py-1 text-xs font-medium";
 
   return (
     <div>
-      <PageHeader title="Attendance" subtitle="Clock in/out, breaks, and daily presence." />
+      <PageHeader title="Attendance" subtitle="Clock in → (break → resume) → clock out. Hours auto-calculate." />
 
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
           type="date"
           value={day}
           onChange={(e) => changeDay(e.target.value)}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
-        <span className="text-sm text-slate-500">
-          {present} present · {employees.length} staff
-        </span>
+        <span className="text-sm text-slate-500">{present} present · {employees.length} staff</span>
+        {!isToday && <span className="text-xs text-slate-400">(punching only works for today)</span>}
       </div>
+
+      {error && <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       <Card className="p-0">
         <div className="overflow-x-auto">
@@ -85,7 +86,7 @@ export default function AttendancePage() {
                 <th className="px-5 py-3 font-medium">In</th>
                 <th className="px-5 py-3 font-medium">Out</th>
                 <th className="px-5 py-3 text-right font-medium">Hours</th>
-                {canWrite && isToday && <th className="px-5 py-3 font-medium">Punch</th>}
+                {canWrite && isToday && <th className="px-5 py-3 font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -94,11 +95,22 @@ export default function AttendancePage() {
               ) : (
                 employees.map((e) => {
                   const r = rows[e.id];
+                  const clockedIn = !!r?.clock_in;
+                  const clockedOut = !!r?.clock_out;
+                  const onBreak = !!r?.on_break;
                   return (
                     <tr key={e.id} className="border-b border-slate-100">
                       <td className="px-5 py-3 font-medium text-slate-800">{e.full_name}</td>
                       <td className="px-5 py-3">
-                        {r ? <Badge tone={statusTone[r.status] ?? "slate"}>{r.status}</Badge> : <span className="text-slate-300">—</span>}
+                        {onBreak ? (
+                          <Badge tone="amber">On break</Badge>
+                        ) : clockedOut ? (
+                          <Badge tone="slate">Clocked out</Badge>
+                        ) : clockedIn ? (
+                          <Badge tone="green">Working</Badge>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_in ?? null)}</td>
                       <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_out ?? null)}</td>
@@ -106,16 +118,19 @@ export default function AttendancePage() {
                       {canWrite && isToday && (
                         <td className="px-5 py-3">
                           <div className="flex flex-wrap gap-1">
-                            {!r?.clock_in && (
-                              <button onClick={() => punch(e.id, "CLOCK_IN")} className="rounded border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700">In</button>
+                            {!clockedIn && (
+                              <button onClick={() => punch(e.id, "CLOCK_IN")} className={`${btn} border-brand-200 bg-brand-50 text-brand-700`}>Clock in</button>
                             )}
-                            {r?.clock_in && !r?.clock_out && (
+                            {clockedIn && !clockedOut && !onBreak && (
                               <>
-                                <button onClick={() => punch(e.id, "BREAK_START")} className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600">Break</button>
-                                <button onClick={() => punch(e.id, "BREAK_END")} className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600">Resume</button>
-                                <button onClick={() => punch(e.id, "CLOCK_OUT")} className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700">Out</button>
+                                <button onClick={() => punch(e.id, "BREAK_START")} className={`${btn} border-amber-200 bg-amber-50 text-amber-700`}>Start break</button>
+                                <button onClick={() => punch(e.id, "CLOCK_OUT")} className={`${btn} border-slate-300 text-slate-700`}>Clock out</button>
                               </>
                             )}
+                            {clockedIn && !clockedOut && onBreak && (
+                              <button onClick={() => punch(e.id, "BREAK_END")} className={`${btn} border-brand-200 bg-brand-50 text-brand-700`}>End break</button>
+                            )}
+                            {clockedOut && <span className="text-xs text-slate-400">Done for today</span>}
                           </div>
                         </td>
                       )}
@@ -127,6 +142,11 @@ export default function AttendancePage() {
           </table>
         </div>
       </Card>
+
+      <p className="mt-4 text-xs text-slate-400">
+        Flow: <b>Clock in</b> → optionally <b>Start break</b> then <b>End break</b> → <b>Clock out</b>.
+        Break time is subtracted from the day&apos;s working hours.
+      </p>
     </div>
   );
 }
