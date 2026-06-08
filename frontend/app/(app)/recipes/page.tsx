@@ -93,6 +93,11 @@ function CostDetail({ recipeId }: { recipeId: string }) {
 }
 
 type IngLine = { item_id: string; qty: string };
+type IngredientOut = { item_id: string; quantity: string; unit: string };
+
+const DEFAULT_CATEGORIES = [
+  "Main", "Starter", "Dessert", "Beverage", "Side", "Bread", "Rice", "Snack", "Soup", "Salad",
+];
 
 export default function RecipesPage() {
   const { user } = useAuth();
@@ -103,13 +108,15 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  // New-recipe form
+  // New/edit-recipe form
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [servings, setServings] = useState("1");
   const [price, setPrice] = useState("");
   const [ings, setIngs] = useState<IngLine[]>([{ item_id: "", qty: "" }]);
+  const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,14 +134,58 @@ export default function RecipesPage() {
     ]).finally(() => setLoading(false));
   }, []);
 
+  // Autofill: typing a dish name that already exists copies its ingredients in
+  // (editable) — so the same dish at a new serve-size doesn't need re-entry.
+  useEffect(() => {
+    if (editId) return;
+    const match = recipes.find(
+      (r) => r.name.trim().toLowerCase() === name.trim().toLowerCase()
+    );
+    if (!match) {
+      setCopiedFrom(null);
+      return;
+    }
+    if (copiedFrom === match.id) return;
+    setCopiedFrom(match.id);
+    setCategory((c) => c || match.category || "");
+    setPrice((p) => p || match.selling_price || "");
+    api
+      .get<IngredientOut[]>(`/recipes/${match.id}/ingredients`)
+      .then((list) => {
+        if (list.length) setIngs(list.map((i) => ({ item_id: i.item_id, qty: String(i.quantity) })));
+      })
+      .catch(() => {});
+  }, [name, recipes, editId, copiedFrom]);
+
   function resetForm() {
+    setEditId(null);
     setName("");
     setCategory("");
     setServings("1");
     setPrice("");
     setIngs([{ item_id: items[0]?.id ?? "", qty: "" }]);
+    setCopiedFrom(null);
     setError(null);
     setShowForm(false);
+  }
+
+  async function startEdit(r: Recipe) {
+    setEditId(r.id);
+    setShowForm(true);
+    setName(r.name);
+    setCategory(r.category || "");
+    setServings(String(r.servings_default));
+    setPrice(r.selling_price || "");
+    setError(null);
+    const list = await api
+      .get<IngredientOut[]>(`/recipes/${r.id}/ingredients`)
+      .catch(() => [] as IngredientOut[]);
+    setIngs(
+      list.length
+        ? list.map((i) => ({ item_id: i.item_id, qty: String(i.quantity) }))
+        : [{ item_id: items[0]?.id ?? "", qty: "" }]
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function createRecipe(e: React.FormEvent) {
@@ -145,15 +196,18 @@ export default function RecipesPage() {
     }
     setSaving(true);
     setError(null);
+    const body = {
+      name: name.trim(),
+      servings_default: parseInt(servings || "1", 10),
+      category: category || null,
+      selling_price: price || null,
+    };
     try {
-      const recipe = await api.post<Recipe>("/recipes", {
-        name: name.trim(),
-        servings_default: parseInt(servings || "1", 10),
-        category: category || null,
-        selling_price: price || null,
-      });
-      for (const ln of ings) {
-        if (!ln.item_id || !ln.qty) continue;
+      const recipe = editId
+        ? await api.patch<Recipe>(`/recipes/${editId}`, body)
+        : await api.post<Recipe>("/recipes", body);
+      const rows = ings.filter((ln) => ln.item_id && ln.qty);
+      for (const ln of rows) {
         const item = items.find((it) => it.id === ln.item_id);
         await api.post(`/recipes/${recipe.id}/ingredients`, {
           item_id: ln.item_id,
@@ -161,11 +215,24 @@ export default function RecipesPage() {
           unit: item?.unit ?? "unit",
         });
       }
+      if (editId) {
+        // remove ingredients the user deleted from the form
+        const keep = new Set(rows.map((r) => r.item_id));
+        const existing = await api
+          .get<IngredientOut[]>(`/recipes/${editId}/ingredients`)
+          .catch(() => [] as IngredientOut[]);
+        for (const ex of existing) {
+          if (!keep.has(ex.item_id)) {
+            await api.delete(`/recipes/${editId}/ingredients/${ex.item_id}`).catch(() => {});
+          }
+        }
+      }
       await reload();
+      const newId = recipe.id;
       resetForm();
-      setOpenId(recipe.id); // open the new dish to show its computed cost
+      setOpenId(newId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create recipe");
+      setError(err instanceof ApiError ? err.message : "Could not save recipe");
     } finally {
       setSaving(false);
     }
@@ -176,8 +243,8 @@ export default function RecipesPage() {
   const inputCls =
     "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500";
   const categoryOptions = [
-    ...new Set(recipes.map((r) => r.category).filter(Boolean) as string[]),
-  ].sort();
+    ...new Set([...DEFAULT_CATEGORIES, ...(recipes.map((r) => r.category).filter(Boolean) as string[])]),
+  ];
   const recipeNames = [...new Set(recipes.map((r) => r.name))].sort();
 
   // group recipes by name so a dish with several serves-variants shows as one card
@@ -203,7 +270,9 @@ export default function RecipesPage() {
             </button>
           ) : (
             <Card>
-              <p className="mb-3 text-sm font-medium text-slate-700">New recipe</p>
+              <p className="mb-3 text-sm font-medium text-slate-700">
+                {editId ? "Edit recipe" : "New recipe"}
+              </p>
               <form onSubmit={createRecipe} className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                   <div className="sm:col-span-2">
@@ -272,7 +341,7 @@ export default function RecipesPage() {
                     + Add ingredient
                   </button>
                   <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-                    {saving ? "Saving…" : "Save recipe"}
+                    {saving ? "Saving…" : editId ? "Save changes" : "Save recipe"}
                   </button>
                   <button type="button" onClick={resetForm} className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
                     Cancel
@@ -313,18 +382,28 @@ export default function RecipesPage() {
                     const open = openId === r.id;
                     return (
                       <div key={r.id}>
-                        <button
-                          onClick={() => setOpenId(open ? null : r.id)}
-                          className="flex w-full items-center justify-between py-2.5 text-left"
-                        >
-                          <span className="text-sm font-medium text-slate-700">
-                            serves {r.servings_default}
-                          </span>
-                          <span className="flex items-center gap-3">
-                            {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
-                            <span className="text-slate-400">{open ? "▲" : "▼"}</span>
-                          </span>
-                        </button>
+                        <div className="flex items-center gap-2 py-2.5">
+                          <button
+                            onClick={() => setOpenId(open ? null : r.id)}
+                            className="flex flex-1 items-center justify-between text-left"
+                          >
+                            <span className="text-sm font-medium text-slate-700">
+                              serves {r.servings_default}
+                            </span>
+                            <span className="flex items-center gap-3">
+                              {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
+                              <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+                            </span>
+                          </button>
+                          {canWrite && (
+                            <button
+                              onClick={() => startEdit(r)}
+                              className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
                         {open && (
                           <div className="border-t border-slate-100 pb-2 pt-3">
                             <CostDetail recipeId={r.id} />

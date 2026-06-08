@@ -97,6 +97,18 @@ async def list_ingredients(
     return [IngredientOut.model_validate(i) for i in ings]
 
 
+@router.delete("/{recipe_id}/ingredients/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_ingredient(
+    recipe_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:write")),
+) -> None:
+    if await service.get_recipe(db, recipe_id, user.hotel_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Recipe not found")
+    await service.delete_ingredient(db, recipe_id, item_id)
+
+
 @router.get("/{recipe_id}/cost", response_model=RecipeCostBreakdown)
 async def recipe_cost(
     recipe_id: uuid.UUID,

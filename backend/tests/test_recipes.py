@@ -25,6 +25,18 @@ async def _setup_biryani(db, hotel, chicken_price=Decimal("8.00")):
 
 
 @pytest.mark.asyncio
+async def test_delete_ingredient(db, hotel):
+    recipe, rice, chicken, _ = await _setup_biryani(db, hotel)
+    assert len(await rec.list_ingredients(db, recipe.id)) == 2
+    assert await rec.delete_ingredient(db, recipe.id, chicken.id) is True
+    remaining = await rec.list_ingredients(db, recipe.id)
+    assert len(remaining) == 1
+    assert remaining[0].item_id == rice.id
+    # deleting again is a no-op
+    assert await rec.delete_ingredient(db, recipe.id, chicken.id) is False
+
+
+@pytest.mark.asyncio
 async def test_biryani_cost_and_margin(db, hotel):
     recipe, *_ = await _setup_biryani(db, hotel)
     result = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)

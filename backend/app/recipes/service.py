@@ -81,6 +81,20 @@ async def list_ingredients(db: AsyncSession, recipe_id: uuid.UUID) -> list[Recip
     return list(result.scalars().all())
 
 
+async def delete_ingredient(db: AsyncSession, recipe_id: uuid.UUID, item_id: uuid.UUID) -> bool:
+    result = await db.execute(
+        select(RecipeIngredient).where(
+            RecipeIngredient.recipe_id == recipe_id, RecipeIngredient.item_id == item_id
+        )
+    )
+    ing = result.scalar_one_or_none()
+    if ing is None:
+        return False
+    await db.delete(ing)
+    await db.commit()
+    return True
+
+
 async def _best_price(
     db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID
 ) -> tuple[Decimal | None, str | None, str | None]:
