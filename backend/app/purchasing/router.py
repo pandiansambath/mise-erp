@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
+from app.core.events import publish
 from app.hotels.models import Hotel
 from app.inventory.service import get_item
 from app.purchasing import pdf as pdf_gen
@@ -53,6 +54,7 @@ async def create_indent(
         db, user.hotel_id, [it.model_dump() for it in payload.items],
         notes=payload.notes, created_by=user.id,
     )
+    await publish(user.hotel_id, {"type": "purchasing", "action": "indent_created"})
     return await _indent_out(db, indent)
 
 
@@ -75,6 +77,7 @@ async def approve_indent(
     if indent is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Indent not found")
     await service.set_indent_status(db, indent, IndentStatus.APPROVED.value)
+    await publish(user.hotel_id, {"type": "purchasing", "action": "indent_approved"})
     return await _indent_out(db, indent)
 
 
@@ -90,6 +93,7 @@ async def generate_pos(
     if indent.status not in (IndentStatus.APPROVED.value, IndentStatus.PENDING.value):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Indent already ordered")
     result = await service.generate_pos(db, indent)
+    await publish(user.hotel_id, {"type": "purchasing", "action": "pos_generated"})
     return GenerateResult(
         purchase_orders=[await _po_out(db, po) for po in result["purchase_orders"]],
         skipped_items=result["skipped_items"],
@@ -128,6 +132,7 @@ async def receive_po(
     if po is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
     await service.receive_po(db, po, created_by=user.id)
+    await publish(user.hotel_id, {"type": "purchasing", "action": "po_received"})
     return await _po_out(db, po)
 
 

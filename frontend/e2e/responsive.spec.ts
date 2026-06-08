@@ -5,7 +5,10 @@ const PASSWORD = "StrongPass123!";
 
 /** Assert the page has no horizontal scroll (the #1 responsive bug). */
 async function assertNoHorizontalOverflow(page: Page) {
-  await page.waitForLoadState("networkidle");
+  // Use "load" not "networkidle": the live SSE connection is long-lived, so
+  // networkidle would never settle. Tests already wait for page content, and
+  // the poll below absorbs late renders.
+  await page.waitForLoadState("load");
   // Wait for webfonts so text metrics are final (fallback fonts are wider and
   // can briefly overflow under load until Geist loads).
   await page.evaluate(() => document.fonts.ready);

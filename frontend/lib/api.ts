@@ -1,7 +1,7 @@
 // Typed client for the Mise backend API. Stores the JWT in localStorage and
 // attaches it to every request. Keep this the single place that talks to the API.
 
-const API_BASE =
+export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
 
 const TOKEN_KEY = "mise_token";

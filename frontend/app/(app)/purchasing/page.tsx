@@ -12,6 +12,7 @@ import {
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 
@@ -61,6 +62,9 @@ export default function PurchasingPage() {
       load(),
     ]).finally(() => setLoading(false));
   }, []);
+
+  // Live updates: when anyone in this hotel submits/approves/receives, refresh.
+  useLiveRefresh("purchasing", load);
 
   async function submitIndent(e: React.FormEvent) {
     e.preventDefault();

@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.documents.router import router as documents_router
 from app.employees.router import attendance_router
 from app.employees.router import router as employees_router
+from app.events.router import router as events_router
 from app.expenses.router import router as expenses_router
 from app.hotels.router import router as hotels_router
 from app.inventory.router import router as inventory_router
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_router, prefix="/api")
     app.include_router(selfservice_router, prefix="/api")
     app.include_router(hotels_router, prefix="/api")
+    app.include_router(events_router, prefix="/api")
 
     @app.get("/", tags=["root"])
     async def root() -> dict:
