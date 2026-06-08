@@ -79,13 +79,28 @@ export default function PurchasingPage() {
   }
 
   async function generate(id: string) {
-    const res = await api.post<{ skipped_items: string[] }>(
-      `/purchasing/indents/${id}/generate-pos`
-    );
-    if (res.skipped_items?.length) {
-      setMsg(`No vendor price for: ${res.skipped_items.join(", ")} — add prices to order these.`);
+    setMsg(null);
+    try {
+      const res = await api.post<{ skipped_items: string[] }>(
+        `/purchasing/indents/${id}/generate-pos`
+      );
+      if (res.skipped_items?.length) {
+        setMsg(`No vendor price for: ${res.skipped_items.join(", ")} — add prices to order these.`);
+      }
+      await load();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not generate POs");
     }
-    await load();
+  }
+
+  async function receive(poId: string) {
+    setMsg(null);
+    try {
+      await api.post(`/purchasing/purchase-orders/${poId}/receive`);
+      await load();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not receive PO");
+    }
   }
 
   if (loading) return <Spinner />;
@@ -193,7 +208,7 @@ export default function PurchasingPage() {
                       <div className="flex justify-end gap-1">
                         <button onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf`, `${po.po_number}.pdf`)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">PDF</button>
                         {canApprove && po.status !== "RECEIVED" && (
-                          <button onClick={async () => { await api.post(`/purchasing/purchase-orders/${po.id}/receive`); await load(); }} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">Receive</button>
+                          <button onClick={() => receive(po.id)} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">Receive</button>
                         )}
                       </div>
                     </td>

@@ -38,6 +38,8 @@ htmlcov/
 coverage.xml
 *.db
 *.sqlite3
+uploads/
+backend/uploads/
 
 # ─────────────────────────────────────────────────────────────
 # Node / Next.js

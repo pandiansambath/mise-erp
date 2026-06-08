@@ -32,7 +32,7 @@ class ChannelOut(BaseModel):
 
 
 class DayUpsert(BaseModel):
-    date: date_type
+    # date comes from the URL path; not required in the body
     opening_cash: Decimal | None = Field(default=None, ge=0)
     cash_counted: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None

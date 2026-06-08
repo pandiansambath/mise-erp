@@ -57,6 +57,23 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+/** POST multipart form-data (file uploads) with auth. */
+export async function postForm<T>(path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const detail = (body as { detail?: string })?.detail || "Upload failed";
+    throw new ApiError(res.status, typeof detail === "string" ? detail : "Upload failed");
+  }
+  return body as T;
+}
+
 /** Fetch a file (with auth) and trigger a browser download. */
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const token = getToken();
@@ -211,6 +228,26 @@ export interface DaySummary {
   totals: DayTotals;
 }
 
+export interface DocumentItem {
+  id: string;
+  title: string;
+  doc_type: string;
+  related_entity_type: string | null;
+  expiry_date: string | null;
+  filename: string;
+  mime_type: string | null;
+  file_size: number;
+  uploaded_at: string;
+}
+
+export interface ExpiringDoc {
+  id: string;
+  title: string;
+  doc_type: string;
+  expiry_date: string;
+  days_left: number;
+}
+
 export interface IndentItemRow {
   item_id: string;
   item_name: string;
@@ -279,6 +316,7 @@ export interface AttendanceRow {
   clock_out: string | null;
   working_hours: string | null;
   status: string;
+  on_break: boolean;
 }
 
 export interface PnL {

@@ -8,6 +8,7 @@ from app import __version__
 from app.api.health import router as health_router
 from app.auth.router import router as auth_router
 from app.core.config import settings
+from app.documents.router import router as documents_router
 from app.employees.router import attendance_router
 from app.employees.router import router as employees_router
 from app.expenses.router import router as expenses_router
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(attendance_router, prefix="/api")
     app.include_router(payroll_router, prefix="/api")
     app.include_router(purchasing_router, prefix="/api")
+    app.include_router(documents_router, prefix="/api")
 
     @app.get("/", tags=["root"])
     async def root() -> dict:

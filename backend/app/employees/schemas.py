@@ -129,3 +129,4 @@ class AttendanceRow(BaseModel):
     clock_out: datetime | None
     working_hours: Decimal | None
     status: str
+    on_break: bool = False

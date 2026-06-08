@@ -85,6 +85,26 @@ async def list_vendor_items(db: AsyncSession, vendor_id: uuid.UUID) -> list[Vend
     return list(result.scalars().all())
 
 
+async def set_preferred_vendor(
+    db: AsyncSession, hotel_id: uuid.UUID, item_id: uuid.UUID, vendor_id: uuid.UUID | None
+) -> bool:
+    """Mark one vendor as preferred for an item (clears others). vendor_id=None clears all.
+    Returns True if applied, False if the target vendor doesn't supply the item."""
+    result = await db.execute(
+        select(VendorItem)
+        .join(Vendor, VendorItem.vendor_id == Vendor.id)
+        .where(VendorItem.item_id == item_id, Vendor.hotel_id == hotel_id)
+    )
+    rows = list(result.scalars().all())
+    found = vendor_id is None
+    for vi in rows:
+        vi.is_preferred = vi.vendor_id == vendor_id
+        if vi.vendor_id == vendor_id:
+            found = True
+    await db.commit()
+    return found
+
+
 # ── Price comparison engine ──────────────────────────────────────────────────
 async def compare_vendor_prices(
     db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID

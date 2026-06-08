@@ -5,10 +5,21 @@ const PASSWORD = "StrongPass123!";
 
 /** Assert the page has no horizontal scroll (the #1 responsive bug). */
 async function assertNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-  );
-  expect(overflow, "page must not scroll horizontally").toBeLessThanOrEqual(2);
+  await page.waitForLoadState("networkidle");
+  // Wait for webfonts so text metrics are final (fallback fonts are wider and
+  // can briefly overflow under load until Geist loads).
+  await page.evaluate(() => document.fonts.ready);
+  // Poll the measurement so a transient render/layout blip settles before we
+  // judge it, while a *persistent* real overflow still fails (stays > 2 for 4s).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        ),
+      { message: "page must not scroll horizontally", timeout: 8000 }
+    )
+    .toBeLessThanOrEqual(2);
 }
 
 async function login(page: Page) {
@@ -59,7 +70,9 @@ test("reports P&L page fits the viewport", async ({ page }) => {
   await login(page);
   await page.goto("/reports");
   await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
-  await expect(page.getByText("Profit & Loss")).toBeVisible();
+  // Wait for loaded content (the P&L card heading) — use role to avoid matching
+  // the page subtitle, which also contains "Profit & Loss".
+  await expect(page.getByRole("heading", { name: "Profit & Loss" })).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
 
@@ -102,6 +115,13 @@ test("purchasing page fits the viewport", async ({ page }) => {
   await login(page);
   await page.goto("/purchasing");
   await expect(page.getByRole("heading", { name: "Purchasing" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("documents page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents");
+  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
 

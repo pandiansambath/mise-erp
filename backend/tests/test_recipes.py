@@ -65,6 +65,25 @@ async def test_cost_uses_cheapest_vendor(db, hotel):
 
 
 @pytest.mark.asyncio
+async def test_cost_uses_preferred_vendor_over_cheapest(db, hotel):
+    item = await inv.create_item(db, hotel.id, name="Oil", unit="litre")
+    cheap = await ven.create_vendor(db, hotel.id, name="Cheap Co")
+    quality = await ven.create_vendor(db, hotel.id, name="Quality Co")
+    await ven.upsert_vendor_item(db, cheap.id, item.id, Decimal("2.00"))
+    await ven.upsert_vendor_item(db, quality.id, item.id, Decimal("3.00"))
+    # Manager prefers the (pricier) quality vendor
+    await ven.set_preferred_vendor(db, hotel.id, item.id, quality.id)
+
+    recipe = await rec.create_recipe(db, hotel.id, name="Fry", servings_default=1)
+    await rec.upsert_ingredient(db, recipe.id, item.id, Decimal("1"), "litre")
+    result = await rec.calculate_recipe_cost(db, recipe.id, hotel.id)
+    ing = result["ingredients"][0]
+    assert ing["vendor_name"] == "Quality Co"
+    assert ing["unit_price"] == Decimal("3.00")
+    assert ing["price_source"] == "preferred"
+
+
+@pytest.mark.asyncio
 async def test_missing_vendor_price_falls_back_to_average_cost(db, hotel):
     item = await inv.create_item(db, hotel.id, name="Salt", unit="kg")
     # Establish weighted-average cost via a purchase (no vendor price set)
