@@ -25,6 +25,17 @@ async def _setup_biryani(db, hotel, chicken_price=Decimal("8.00")):
 
 
 @pytest.mark.asyncio
+async def test_duplicate_recipe_name_and_serves(db, hotel):
+    await rec.create_recipe(db, hotel.id, name="Biryani", servings_default=40)
+    # same name + same serves -> rejected
+    with pytest.raises(rec.DuplicateRecipeError):
+        await rec.create_recipe(db, hotel.id, name=" biryani ", servings_default=40)
+    # same name + different serves -> allowed
+    other = await rec.create_recipe(db, hotel.id, name="Biryani", servings_default=60)
+    assert other.servings_default == 60
+
+
+@pytest.mark.asyncio
 async def test_delete_ingredient(db, hotel):
     recipe, rice, chicken, _ = await _setup_biryani(db, hotel)
     assert len(await rec.list_ingredients(db, recipe.id)) == 2

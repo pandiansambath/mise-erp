@@ -8,12 +8,19 @@ margin shown is never silently wrong).
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.inventory.models import Item
 from app.recipes.models import Recipe, RecipeIngredient
 from app.vendors.models import Vendor, VendorItem
+
+
+class DuplicateRecipeError(ValueError):
+    """Raised when a recipe with the same name AND serving size already exists.
+
+    (Same name with a *different* serving size is intentionally allowed.)
+    """
 
 _Q4 = Decimal("0.0001")
 _Q2 = Decimal("0.01")
@@ -21,6 +28,21 @@ _Q2 = Decimal("0.01")
 
 # ── Recipe CRUD (hotel-scoped) ──────────────────────────────────────────────
 async def create_recipe(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Recipe:
+    name = fields.get("name", "")
+    servings = fields.get("servings_default", 1)
+    if name:
+        exists = await db.execute(
+            select(Recipe.id).where(
+                Recipe.hotel_id == hotel_id,
+                func.lower(Recipe.name) == name.strip().lower(),
+                Recipe.servings_default == servings,
+            ).limit(1)
+        )
+        if exists.first() is not None:
+            raise DuplicateRecipeError(
+                f'"{name.strip()}" at {servings} serves already exists — '
+                "edit it, or use a different serving size"
+            )
     recipe = Recipe(hotel_id=hotel_id, **fields)
     db.add(recipe)
     await db.commit()

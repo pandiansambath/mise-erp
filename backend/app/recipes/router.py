@@ -27,7 +27,12 @@ async def create_recipe(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("recipes:write")),
 ) -> RecipeOut:
-    recipe = await service.create_recipe(db, user.hotel_id, **payload.model_dump(exclude_none=True))
+    try:
+        recipe = await service.create_recipe(
+            db, user.hotel_id, **payload.model_dump(exclude_none=True)
+        )
+    except service.DuplicateRecipeError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return RecipeOut.model_validate(recipe)
 
 

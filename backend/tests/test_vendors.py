@@ -8,6 +8,13 @@ from app.inventory import service as inv_service
 from app.vendors import service as vendor_service
 
 
+@pytest.mark.asyncio
+async def test_duplicate_vendor_name_rejected(db, hotel):
+    await vendor_service.create_vendor(db, hotel.id, name="Farm2Land")
+    with pytest.raises(vendor_service.DuplicateVendorError):
+        await vendor_service.create_vendor(db, hotel.id, name=" farm2land ")
+
+
 # ── Price comparison engine (the money feature) ────────────────────────────
 @pytest.mark.asyncio
 async def test_price_comparison_picks_cheapest_and_savings(db, hotel):

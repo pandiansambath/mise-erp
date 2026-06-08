@@ -3,15 +3,30 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.inventory.models import Item
 from app.vendors.models import Vendor, VendorItem
 
 
+class DuplicateVendorError(ValueError):
+    """Raised when a vendor with the same name already exists in the hotel."""
+
+
 # ── Vendor CRUD (hotel-scoped) ──────────────────────────────────────────────
 async def create_vendor(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Vendor:
+    name = fields.get("name", "")
+    if name:
+        exists = await db.execute(
+            select(Vendor.id).where(
+                Vendor.hotel_id == hotel_id,
+                Vendor.is_active.is_(True),
+                func.lower(Vendor.name) == name.strip().lower(),
+            ).limit(1)
+        )
+        if exists.first() is not None:
+            raise DuplicateVendorError(f'A vendor called "{name.strip()}" already exists')
     vendor = Vendor(hotel_id=hotel_id, **fields)
     db.add(vendor)
     await db.commit()

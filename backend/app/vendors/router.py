@@ -32,7 +32,12 @@ async def create_vendor(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("vendors:write")),
 ) -> VendorOut:
-    vendor = await service.create_vendor(db, user.hotel_id, **payload.model_dump(exclude_none=True))
+    try:
+        vendor = await service.create_vendor(
+            db, user.hotel_id, **payload.model_dump(exclude_none=True)
+        )
+    except service.DuplicateVendorError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return VendorOut.model_validate(vendor)
 
 
