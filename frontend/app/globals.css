@@ -79,7 +79,42 @@ body {
   transform: translateY(0);
 }
 
+/* ── 3D hero showpiece (perspective + scroll-driven straighten) ───────────── */
+.mise-3d-stage { perspective: 1400px; }
+.mise-3d {
+  transform: rotateY(-20deg) rotateX(9deg) rotateZ(-1.5deg);
+  transform-style: preserve-3d;
+}
+@keyframes mise-straighten {
+  from { transform: rotateY(-26deg) rotateX(13deg) translateY(24px); }
+  to   { transform: rotateY(-7deg)  rotateX(4deg)  translateY(0); }
+}
+/* Where the browser supports native scroll timelines, tie the 3D tilt to scroll
+   so the panel "stands up" as it enters the viewport. Pure CSS, zero JS. */
+@supports (animation-timeline: view()) {
+  .mise-3d {
+    animation: mise-straighten linear both;
+    animation-timeline: view();
+    animation-range: entry 5% cover 45%;
+  }
+}
+.mise-3d-layer { transform: translateZ(40px); }
+
+/* Centered showpiece that gently rotates as the whole page scrolls. */
+@keyframes mise-spin-y {
+  from { transform: rotateY(-16deg) rotateX(6deg); }
+  to   { transform: rotateY(16deg)  rotateX(6deg); }
+}
+@supports (animation-timeline: scroll(root)) {
+  .mise-scroll-spin {
+    animation: mise-spin-y linear both;
+    animation-timeline: scroll(root);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mise-float, .mise-blob, .mise-hero-gradient, .mise-hero-text { animation: none; }
+  .mise-float, .mise-blob, .mise-hero-gradient, .mise-hero-text,
+  .mise-3d, .mise-scroll-spin { animation: none; }
+  .mise-3d { transform: rotateY(-10deg) rotateX(4deg); }
   .mise-reveal { opacity: 1; transform: none; transition: none; }
 }

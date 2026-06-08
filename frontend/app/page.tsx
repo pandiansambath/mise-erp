@@ -26,6 +26,13 @@ const STEPS = [
   { n: "04", title: "Profit, in the open", desc: "A live P&L shows exactly what you kept — and what to fix." },
 ];
 
+const CHIPS = [
+  { icon: "🍲", title: "Recipes & margins", sub: "cost per plate, live" },
+  { icon: "📦", title: "Live inventory", sub: "weighted-avg cost" },
+  { icon: "🧾", title: "Sales & cash", sub: "till reconciled" },
+  { icon: "💷", title: "Payroll", sub: "UK-compliant payslips" },
+];
+
 const STATS = [
   { value: "₹ / £ / $", label: "Multi-currency, multi-restaurant" },
   { value: "Per-gram", label: "Dish costing accuracy" },
@@ -78,44 +85,115 @@ export default function Landing() {
         <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-brand-500/30 blur-3xl mise-blob" />
         <div className="pointer-events-none absolute -right-20 top-40 h-72 w-72 rounded-full bg-sky-500/20 blur-3xl mise-blob" style={{ animationDelay: "4s" }} />
         <div className="relative mx-auto max-w-6xl px-5 pb-24 pt-20 sm:pt-28">
-          <Reveal>
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-brand-100">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-400" /> Restaurant ERP &amp; intelligence
-            </span>
-          </Reveal>
-          <Reveal delay={80}>
-            <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-              Run your restaurant like a <span className="mise-hero-text">symphony</span>.
-            </h1>
-          </Reveal>
-          <Reveal delay={160}>
-            <p className="mt-5 max-w-xl text-lg text-slate-300">
-              Guests, chefs, inventory, purchasing, sales, staff and payroll — every moving
-              part of your kitchen, beautifully orchestrated in one platform. And at the
-              centre of it all: <span className="font-semibold text-white">your money</span>.
-            </p>
-          </Reveal>
-          <Reveal delay={240}>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/signup" className="rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-slate-950 shadow-xl shadow-brand-500/25 transition hover:-translate-y-0.5 hover:bg-brand-100">
-                Start free — register your hotel
-              </Link>
-              <Link href="/login" className="rounded-xl border border-white/15 px-6 py-3 text-base font-semibold text-white transition hover:bg-white/5">
-                Sign in
-              </Link>
+          <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+            {/* LEFT — message */}
+            <div>
+              <Reveal>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-brand-100">
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand-400" /> Restaurant ERP &amp; intelligence
+                </span>
+              </Reveal>
+              <Reveal delay={80}>
+                <h1 className="mt-6 text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+                  Run your restaurant like a <span className="mise-hero-text">symphony</span>.
+                </h1>
+              </Reveal>
+              <Reveal delay={160}>
+                <p className="mt-5 max-w-xl text-lg text-slate-300">
+                  Guests, chefs, inventory, purchasing, sales, staff and payroll — every moving
+                  part of your kitchen, beautifully orchestrated in one platform. And at the
+                  centre of it all: <span className="font-semibold text-white">your money</span>.
+                </p>
+              </Reveal>
+              <Reveal delay={240}>
+                <div className="mt-8 flex flex-wrap gap-3">
+                  <Link href="/signup" className="rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-slate-950 shadow-xl shadow-brand-500/25 transition hover:-translate-y-0.5 hover:bg-brand-100">
+                    Start free — register your hotel
+                  </Link>
+                  <Link href="/login" className="rounded-xl border border-white/15 px-6 py-3 text-base font-semibold text-white transition hover:bg-white/5">
+                    Sign in
+                  </Link>
+                </div>
+              </Reveal>
             </div>
-          </Reveal>
 
-          {/* floating module chips */}
+            {/* RIGHT — 3D app preview (tilts upright as you scroll in) */}
+            <Reveal delay={200} className="mise-3d-stage hidden sm:block">
+              <div className="mise-3d relative">
+                <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.14] to-white/[0.03] p-5 shadow-2xl shadow-black/50 backdrop-blur-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Logo size={22} />
+                      <span className="text-sm font-semibold text-white">NIRAI</span>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/15 px-2 py-0.5 text-[11px] font-medium text-brand-200">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" /> Live
+                    </span>
+                  </div>
+                  <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">Tonight at a glance</p>
+                  <div className="mt-3 grid grid-cols-3 gap-3">
+                    <div className="rounded-xl bg-white/5 p-3">
+                      <p className="text-[11px] text-slate-400">Net sales</p>
+                      <p className="mt-1 text-lg font-bold text-white">£1,840</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 p-3">
+                      <p className="text-[11px] text-slate-400">Net profit</p>
+                      <p className="mt-1 text-lg font-bold text-brand-300">£612</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 p-3">
+                      <p className="text-[11px] text-slate-400">Food cost</p>
+                      <p className="mt-1 text-lg font-bold text-amber-300">29%</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Gross margin</span><span className="text-brand-300">74%</span>
+                    </div>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className="mise-hero-gradient h-full rounded-full" style={{ width: "74%" }} />
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {[
+                      { n: "Butter Chicken", m: "89%" },
+                      { n: "Chicken Biryani", m: "91%" },
+                      { n: "Masala Dosa", m: "82%" },
+                    ].map((d) => (
+                      <div key={d.n} className="flex items-center justify-between rounded-lg bg-white/[0.04] px-3 py-2 text-sm">
+                        <span className="text-slate-200">{d.n}</span>
+                        <span className="font-semibold text-brand-300">{d.m}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* floating depth cards */}
+                <div className="mise-3d-layer mise-float absolute -left-6 bottom-6 rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2 text-xs shadow-xl backdrop-blur" style={{ animationDelay: "1s" }}>
+                  <p className="text-slate-400">PO approved</p>
+                  <p className="font-semibold text-white">Rudra Foods · £43.60</p>
+                </div>
+                <div className="mise-3d-layer mise-float absolute -right-5 -top-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs shadow-xl backdrop-blur" style={{ animationDelay: "2.2s" }}>
+                  <p className="font-semibold text-amber-200">⚠ Paneer low</p>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          {/* what's inside — module cards */}
           <Reveal delay={320}>
-            <div className="mt-16 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {["Recipes & margins", "Live inventory", "Sales & cash", "Payroll"].map((t, i) => (
+            <div className="mt-20 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+              {CHIPS.map((c, i) => (
                 <div
-                  key={t}
-                  className="mise-float rounded-2xl border border-white/10 bg-white/5 p-4 text-sm font-medium text-slate-200 backdrop-blur"
+                  key={c.title}
+                  className="mise-float group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.12] to-white/[0.02] p-4 shadow-xl shadow-black/20 backdrop-blur transition hover:-translate-y-1 hover:border-brand-400/50"
                   style={{ animationDelay: `${i * 0.8}s` }}
                 >
-                  {t}
+                  <div className="absolute -right-6 -top-6 h-16 w-16 rounded-full bg-brand-500/20 blur-2xl transition group-hover:bg-brand-400/40" />
+                  <div className="relative">
+                    <span className="text-2xl">{c.icon}</span>
+                    <p className="mt-2 text-sm font-semibold text-white">{c.title}</p>
+                    <p className="text-xs text-brand-200/80">{c.sub}</p>
+                  </div>
                 </div>
               ))}
             </div>
