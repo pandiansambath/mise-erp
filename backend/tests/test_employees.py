@@ -112,6 +112,29 @@ async def test_punch_via_api(client, make_user, auth_header):
     assert resp.json()["clock_in"] is not None
 
 
+def test_break_penalty_pure():
+    assert service.break_penalty(40, 30, Decimal("0.50")) == (10, Decimal("5.00"))
+    assert service.break_penalty(20, 30, Decimal("0.50")) == (0, Decimal("0.00"))
+    assert service.break_penalty(30, 30, Decimal("0.50")) == (0, Decimal("0.00"))
+
+
+@pytest.mark.asyncio
+async def test_attendance_penalty_in_rows(db, hotel):
+    """Over-break minutes beyond the hotel allowance carry a per-minute penalty."""
+    hotel.break_allowance_minutes = 30
+    hotel.break_penalty_per_min = Decimal("0.50")
+    await db.commit()
+    emp = await service.create_employee(db, hotel.id, full_name="Over Breaker")
+    rec = await service.set_attendance(db, emp, date(2026, 6, 2), status="PRESENT")
+    rec.break_minutes = 45  # 15 over the 30-min allowance
+    await db.commit()
+
+    rows = await service.list_attendance(db, hotel.id, date(2026, 6, 2))
+    row = next(r for r in rows if r["employee_id"] == emp.id)
+    assert row["over_break_minutes"] == 15
+    assert row["break_penalty"] == Decimal("7.50")  # 15 * 0.50
+
+
 @pytest.mark.asyncio
 async def test_create_login_for_employee(client, make_user, auth_header):
     """Manager attaches a login to an employee; the employee can then sign in."""

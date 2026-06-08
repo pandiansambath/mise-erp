@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -15,6 +16,7 @@ function fmtTime(iso: string | null): string {
 
 export default function AttendancePage() {
   const { user } = useAuth();
+  const { format } = useCurrency();
   const canWrite = can(user?.role, "attendance:write");
 
   const [day, setDay] = useState(today());
@@ -99,13 +101,15 @@ export default function AttendancePage() {
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">In</th>
                 <th className="px-5 py-3 font-medium">Out</th>
+                <th className="px-5 py-3 text-right font-medium">Break</th>
                 <th className="px-5 py-3 text-right font-medium">Hours</th>
+                <th className="px-5 py-3 text-right font-medium">Penalty</th>
                 {canWrite && isToday && <th className="px-5 py-3 font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {employees.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400">No employees yet.</td></tr>
+                <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-400">No employees yet.</td></tr>
               ) : (
                 employees.map((e) => {
                   const r = rows[e.id];
@@ -128,7 +132,19 @@ export default function AttendancePage() {
                       </td>
                       <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_in ?? null)}</td>
                       <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_out ?? null)}</td>
+                      <td className="px-5 py-3 text-right text-slate-600">
+                        {r?.break_minutes
+                          ? `${r.break_minutes}m${r.over_break_minutes ? ` (+${r.over_break_minutes})` : ""}`
+                          : "—"}
+                      </td>
                       <td className="px-5 py-3 text-right text-slate-700">{r?.working_hours ?? "—"}</td>
+                      <td className="px-5 py-3 text-right">
+                        {r && parseFloat(r.break_penalty) > 0 ? (
+                          <span className="text-rose-600">{format(r.break_penalty)}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
                       {canWrite && isToday && (
                         <td className="px-5 py-3">
                           <div className="flex flex-wrap gap-1">

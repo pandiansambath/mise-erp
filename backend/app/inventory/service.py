@@ -6,7 +6,7 @@ and the P&L later — float rounding here would corrupt the whole product).
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.inventory.models import _INFLOW, _OUTFLOW, Item, MovementType, StockMovement
@@ -16,6 +16,24 @@ _COST_QUANT = Decimal("0.0001")  # average_cost stored to 4dp
 
 class InsufficientStockError(ValueError):
     """Raised when a movement would drive stock below zero."""
+
+
+class DuplicateItemError(ValueError):
+    """Raised when an item with the same name already exists in the hotel."""
+
+
+async def _name_taken(
+    db: AsyncSession, hotel_id: uuid.UUID, name: str, *, exclude_id: uuid.UUID | None = None
+) -> bool:
+    """Case-insensitive check for an existing active item of the same name."""
+    stmt = select(Item.id).where(
+        Item.hotel_id == hotel_id,
+        Item.is_active.is_(True),
+        func.lower(Item.name) == name.strip().lower(),
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(Item.id != exclude_id)
+    return (await db.execute(stmt.limit(1))).first() is not None
 
 
 def weighted_average_cost(
@@ -44,6 +62,9 @@ def signed_delta(movement_type: str, quantity: Decimal) -> Decimal:
 
 # ── Item CRUD (all scoped to a hotel) ───────────────────────────────────────
 async def create_item(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Item:
+    name = fields.get("name", "")
+    if name and await _name_taken(db, hotel_id, name):
+        raise DuplicateItemError(f'An item called "{name.strip()}" already exists')
     item = Item(hotel_id=hotel_id, **fields)
     db.add(item)
     await db.commit()
@@ -76,6 +97,9 @@ async def list_items(
 
 
 async def update_item(db: AsyncSession, item: Item, **fields) -> Item:
+    new_name = fields.get("name")
+    if new_name and await _name_taken(db, item.hotel_id, new_name, exclude_id=item.id):
+        raise DuplicateItemError(f'An item called "{new_name.strip()}" already exists')
     for key, value in fields.items():
         if value is not None:
             setattr(item, key, value)

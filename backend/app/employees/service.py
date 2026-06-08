@@ -13,6 +13,7 @@ from app.employees.models import (
     Employee,
     PunchType,
 )
+from app.hotels.models import Hotel
 
 _Q2 = Decimal("0.01")
 
@@ -26,6 +27,15 @@ def working_hours(clock_in: datetime, clock_out: datetime, break_minutes: int) -
     seconds = (clock_out - clock_in).total_seconds() - break_minutes * 60
     hours = Decimal(max(seconds, 0)) / Decimal(3600)
     return hours.quantize(_Q2, ROUND_HALF_UP)
+
+
+def break_penalty(
+    break_minutes: int, allowance_minutes: int, penalty_per_min: Decimal
+) -> tuple[int, Decimal]:
+    """Minutes over the allowance, and the money penalty for them. Pure."""
+    over = max(0, break_minutes - allowance_minutes)
+    penalty = (penalty_per_min * over).quantize(_Q2) if over else Decimal("0.00")
+    return over, penalty
 
 
 # ── Employees ─────────────────────────────────────────────────────────────
@@ -158,6 +168,7 @@ async def punch(db: AsyncSession, employee: Employee, ptype: str) -> Attendance:
         if not rec or not rec.break_start:
             raise PunchError("Break not started")
         rec.break_minutes += int((now - rec.break_start).total_seconds() // 60)
+        rec.break_end = now
         rec.break_start = None
     elif ptype == PunchType.CLOCK_OUT.value:
         if not rec or not rec.clock_in:
@@ -203,6 +214,31 @@ async def get_employee_for_user(
     return res.scalar_one_or_none()
 
 
+def _attendance_row(a: Attendance, e: Employee, allowance: int, ppm: Decimal) -> dict:
+    over, penalty = break_penalty(a.break_minutes, allowance, ppm)
+    return {
+        "employee_id": e.id,
+        "employee_name": e.full_name,
+        "date": a.date,
+        "clock_in": a.clock_in,
+        "clock_out": a.clock_out,
+        "break_end": a.break_end,
+        "break_minutes": a.break_minutes,
+        "working_hours": a.working_hours,
+        "status": a.status,
+        "on_break": a.break_start is not None,
+        "over_break_minutes": over,
+        "break_penalty": penalty,
+    }
+
+
+async def _break_policy(db: AsyncSession, hotel_id: uuid.UUID) -> tuple[int, Decimal]:
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        return 0, Decimal("0")
+    return hotel.break_allowance_minutes, hotel.break_penalty_per_min
+
+
 async def list_attendance_for_employee(
     db: AsyncSession, employee_id: uuid.UUID, *, limit: int = 90
 ) -> list[dict]:
@@ -214,38 +250,17 @@ async def list_attendance_for_employee(
         .order_by(Attendance.date.desc())
         .limit(limit)
     )
-    return [
-        {
-            "employee_id": e.id,
-            "employee_name": e.full_name,
-            "date": a.date,
-            "clock_in": a.clock_in,
-            "clock_out": a.clock_out,
-            "working_hours": a.working_hours,
-            "status": a.status,
-            "on_break": a.break_start is not None,
-        }
-        for a, e in rows.all()
-    ]
+    pairs = rows.all()
+    allowance, ppm = (await _break_policy(db, pairs[0][1].hotel_id)) if pairs else (0, Decimal("0"))
+    return [_attendance_row(a, e, allowance, ppm) for a, e in pairs]
 
 
 async def list_attendance(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> list[dict]:
+    allowance, ppm = await _break_policy(db, hotel_id)
     rows = await db.execute(
         select(Attendance, Employee)
         .join(Employee, Attendance.employee_id == Employee.id)
         .where(Attendance.hotel_id == hotel_id, Attendance.date == day)
         .order_by(Employee.full_name)
     )
-    return [
-        {
-            "employee_id": e.id,
-            "employee_name": e.full_name,
-            "date": a.date,
-            "clock_in": a.clock_in,
-            "clock_out": a.clock_out,
-            "working_hours": a.working_hours,
-            "status": a.status,
-            "on_break": a.break_start is not None,
-        }
-        for a, e in rows.all()
-    ]
+    return [_attendance_row(a, e, allowance, ppm) for a, e in rows.all()]

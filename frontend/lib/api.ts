@@ -115,6 +115,8 @@ export interface Hotel {
   country: string;
   city: string | null;
   base_currency: string;
+  break_allowance_minutes: number;
+  break_penalty_per_min: string;
 }
 
 export interface TokenResponse {
@@ -315,9 +317,13 @@ export interface AttendanceRow {
   date: string;
   clock_in: string | null;
   clock_out: string | null;
+  break_end: string | null;
+  break_minutes: number;
   working_hours: string | null;
   status: string;
   on_break: boolean;
+  over_break_minutes: number;
+  break_penalty: string;
 }
 
 export interface PnL {

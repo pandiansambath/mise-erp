@@ -8,11 +8,14 @@ import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
 
-type NavItem = { href: string; label: string; icon: string; perm?: string };
+// `hideIfPerm`: hide the item when the user ALSO has this permission — used so
+// "My Space" (self-service) shows only for staff, not managers/owners who have
+// the full management view.
+type NavItem = { href: string; label: string; icon: string; perm?: string; hideIfPerm?: string };
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "▦" },
-  { href: "/my", label: "My Space", icon: "🙋", perm: "attendance:self" },
+  { href: "/my", label: "My Space", icon: "🙋", perm: "attendance:self", hideIfPerm: "attendance:read" },
   { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read" },
   { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read" },
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
@@ -105,7 +108,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (hotel?.base_currency) applyDefault(hotel.base_currency);
   }, [hotel, applyDefault]);
 
-  const navItems = NAV.filter((item) => !item.perm || can(user?.role, item.perm));
+  const navItems = NAV.filter(
+    (item) =>
+      (!item.perm || can(user?.role, item.perm)) &&
+      (!item.hideIfPerm || !can(user?.role, item.hideIfPerm))
+  );
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">

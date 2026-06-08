@@ -135,6 +135,10 @@ class AttendanceRow(BaseModel):
     date: date_type
     clock_in: datetime | None
     clock_out: datetime | None
+    break_end: datetime | None = None
+    break_minutes: int = 0
     working_hours: Decimal | None
     status: str
     on_break: bool = False
+    over_break_minutes: int = 0
+    break_penalty: Decimal = Decimal("0")

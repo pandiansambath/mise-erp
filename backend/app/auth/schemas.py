@@ -1,5 +1,6 @@
 """Pydantic request/response schemas for auth & user management."""
 import uuid
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -30,6 +31,16 @@ class HotelOut(BaseModel):
     country: str
     city: str | None
     base_currency: str
+    break_allowance_minutes: int = 0
+    break_penalty_per_min: Decimal = Decimal("0")
+
+
+class HotelUpdate(BaseModel):
+    """Super-admin tweaks to the hotel (e.g. attendance break policy)."""
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    city: str | None = None
+    break_allowance_minutes: int | None = Field(default=None, ge=0, le=600)
+    break_penalty_per_min: Decimal | None = Field(default=None, ge=0)
 
 
 class TokenResponse(BaseModel):

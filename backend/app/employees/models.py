@@ -89,6 +89,7 @@ class Attendance(Base):
     clock_in: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     clock_out: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     break_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    break_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     break_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     working_hours: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     status: Mapped[str] = mapped_column(

@@ -11,7 +11,9 @@ import {
   type PayrollRow,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
+import { ROLE_LABELS } from "@/lib/permissions";
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "—";
@@ -26,6 +28,7 @@ const payTone: Record<string, "slate" | "amber" | "green"> = {
 
 export default function MySpacePage() {
   const { format } = useCurrency();
+  const { user } = useAuth();
   const [emp, setEmp] = useState<Employee | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [payslips, setPayslips] = useState<PayrollRow[]>([]);
@@ -77,8 +80,14 @@ export default function MySpacePage() {
             <p className="font-semibold text-slate-900">{emp.employee_code}</p>
           </div>
           <div>
-            <p className="text-xs uppercase text-slate-500">Role</p>
-            <p className="font-semibold text-slate-900">{emp.job_title || "Staff"}</p>
+            <p className="text-xs uppercase text-slate-500">Job title</p>
+            <p className="font-semibold text-slate-900">{emp.job_title || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-slate-500">Access</p>
+            <p className="font-semibold text-slate-900">
+              {user ? ROLE_LABELS[user.role] ?? user.role : "—"}
+            </p>
           </div>
           <div>
             <p className="text-xs uppercase text-slate-500">Pay</p>

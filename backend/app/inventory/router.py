@@ -27,7 +27,12 @@ async def create_item(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("inventory:write")),
 ) -> ItemOut:
-    item = await service.create_item(db, user.hotel_id, **payload.model_dump(exclude_none=True))
+    try:
+        item = await service.create_item(
+            db, user.hotel_id, **payload.model_dump(exclude_none=True)
+        )
+    except service.DuplicateItemError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return ItemOut.model_validate(item)
 
 
@@ -81,7 +86,10 @@ async def update_item(
     item = await service.get_item(db, item_id, user.hotel_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
-    item = await service.update_item(db, item, **payload.model_dump(exclude_unset=True))
+    try:
+        item = await service.update_item(db, item, **payload.model_dump(exclude_unset=True))
+    except service.DuplicateItemError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return ItemOut.model_validate(item)
 
 

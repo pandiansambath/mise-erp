@@ -187,7 +187,7 @@ export default function EmployeesPage() {
               <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                 <th className="px-5 py-3 font-medium">Code</th>
                 <th className="px-5 py-3 font-medium">Name</th>
-                <th className="px-5 py-3 font-medium">Role</th>
+                <th className="px-5 py-3 font-medium">Job title</th>
                 <th className="px-5 py-3 text-right font-medium">Pay</th>
                 <th className="px-5 py-3 font-medium">Visa</th>
                 <th className="px-5 py-3"></th>

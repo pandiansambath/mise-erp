@@ -87,6 +87,14 @@ async def test_low_stock_detection(db, hotel):
     assert ok.id not in ids  # 50 > 1
 
 
+@pytest.mark.asyncio
+async def test_duplicate_item_name_rejected(db, hotel):
+    """No two active items share a name (case-insensitive) in the same hotel."""
+    await service.create_item(db, hotel.id, name="Basmati Rice", unit="kg")
+    with pytest.raises(service.DuplicateItemError):
+        await service.create_item(db, hotel.id, name="  basmati rice ", unit="kg")
+
+
 # ── API + RBAC ─────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_full_purchase_flow_via_api(client, make_user, auth_header):
