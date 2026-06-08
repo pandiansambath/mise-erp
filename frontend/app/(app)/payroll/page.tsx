@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type PayrollRow } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -18,6 +19,7 @@ const statusTone: Record<string, "slate" | "amber" | "green"> = {
 export default function PayrollPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
+  const confirm = useConfirm();
   const canWrite = can(user?.role, "payroll:write");
 
   const [period, setPeriod] = useState(thisMonth());
@@ -43,6 +45,12 @@ export default function PayrollPage() {
   }
 
   async function runPayroll() {
+    const ok = await confirm({
+      title: "Run payroll?",
+      message: `This calculates pay for ${period} using ${workingDays || "26"} working days for every active employee.`,
+      confirmText: "Run payroll",
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {
@@ -59,6 +67,15 @@ export default function PayrollPage() {
   }
 
   async function act(id: string, action: "approve" | "pay") {
+    const ok = await confirm({
+      title: action === "pay" ? "Mark as paid?" : "Approve payslip?",
+      message:
+        action === "pay"
+          ? "Confirm this payslip has been paid to the employee."
+          : "Approve this payslip so it can be paid.",
+      confirmText: action === "pay" ? "Mark paid" : "Approve",
+    });
+    if (!ok) return;
     await api.post(`/payroll/${id}/${action}`);
     await load(period);
   }

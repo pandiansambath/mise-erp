@@ -118,6 +118,40 @@ test("purchasing page fits the viewport", async ({ page }) => {
   await assertNoHorizontalOverflow(page);
 });
 
+test("confirmation dialog gates a destructive action", async ({ page }) => {
+  // Use a unique future date per viewport so parallel workers don't share rows.
+  const byProject: Record<string, string> = {
+    mobile: "2030-02-01",
+    tablet: "2030-02-02",
+    desktop: "2030-02-03",
+  };
+  const day = byProject[test.info().project.name] ?? "2030-02-09";
+
+  await login(page);
+  await page.goto("/sales");
+  await expect(page.getByRole("heading", { name: "Sales & Cash" })).toBeVisible();
+  await page.locator('input[type="date"]').first().fill(day);
+
+  // Add a sales line.
+  await page.getByPlaceholder("0.00").fill("100");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const removeBtn = page.getByRole("button", { name: "Remove", exact: true });
+  await expect(removeBtn).toBeVisible();
+
+  // Clicking Remove opens a confirmation dialog; Cancel keeps the line.
+  await removeBtn.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Remove this sales line?")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(removeBtn).toBeVisible();
+
+  // Confirming actually removes it.
+  await removeBtn.click();
+  await dialog.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(page.getByText("No sales entered for this day yet.")).toBeVisible();
+});
+
 test("documents page fits the viewport", async ({ page }) => {
   await login(page);
   await page.goto("/documents");

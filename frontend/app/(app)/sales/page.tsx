@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type DaySummary, type SalesChannel } from "@/lib/api";
+import { api, ApiError, downloadFile, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -13,6 +14,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function SalesPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
+  const confirm = useConfirm();
   const canWrite = can(user?.role, "sales:write");
   const canConfig = can(user?.role, "sales:config");
 
@@ -72,6 +74,13 @@ export default function SalesPage() {
   }
 
   async function removeLine(id: string) {
+    const ok = await confirm({
+      title: "Remove this sales line?",
+      message: "It will be deleted from today's takings.",
+      confirmText: "Remove",
+      tone: "danger",
+    });
+    if (!ok) return;
     setError(null);
     try {
       const s = await api.delete<DaySummary>(`/sales/days/${day}/lines/${id}`);
@@ -103,7 +112,7 @@ export default function SalesPage() {
     <div>
       <PageHeader title="Sales & Cash" subtitle="Daily takings by channel, commissions, and the till." />
 
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <label className="text-sm font-medium text-slate-700">Date</label>
         <input
           type="date"
@@ -111,6 +120,12 @@ export default function SalesPage() {
           onChange={(e) => changeDay(e.target.value)}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
         />
+        <button
+          onClick={() => downloadFile(`/sales/days/${day}/sheet.pdf`, `sales-${day}.pdf`)}
+          className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          ⬇ PDF
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

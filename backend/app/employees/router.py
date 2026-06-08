@@ -2,13 +2,13 @@
 import uuid
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
-from app.employees import service
+from app.employees import service, timesheet
 from app.employees.schemas import (
     AttendanceOut,
     AttendanceRow,
@@ -19,6 +19,9 @@ from app.employees.schemas import (
     PunchRequest,
     VisaAlert,
 )
+from app.hotels.models import Hotel
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 attendance_router = APIRouter(prefix="/attendance", tags=["attendance"])
@@ -90,6 +93,40 @@ async def list_attendance(
     day = on or date_type.today()
     rows = await service.list_attendance(db, user.hotel_id, day)
     return [AttendanceRow.model_validate(r) for r in rows]
+
+
+@attendance_router.get("/timesheet.pdf")
+async def timesheet_pdf(
+    on: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> Response:
+    day = on or date_type.today()
+    rows = await service.list_attendance(db, user.hotel_id, day)
+    hotel = await db.get(Hotel, user.hotel_id)
+    pdf = timesheet.generate_timesheet_pdf(rows, hotel, day)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="timesheet-{day}.pdf"'},
+    )
+
+
+@attendance_router.get("/timesheet.xlsx")
+async def timesheet_xlsx(
+    on: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> Response:
+    day = on or date_type.today()
+    rows = await service.list_attendance(db, user.hotel_id, day)
+    hotel = await db.get(Hotel, user.hotel_id)
+    xlsx = timesheet.generate_timesheet_xlsx(rows, hotel, day)
+    return Response(
+        content=xlsx,
+        media_type=XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="timesheet-{day}.xlsx"'},
+    )
 
 
 @attendance_router.post("/punch", response_model=AttendanceOut)

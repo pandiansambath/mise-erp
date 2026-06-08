@@ -2,12 +2,14 @@
 import uuid
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
+from app.hotels.models import Hotel
+from app.sales import pdf as sales_pdf
 from app.sales import service
 from app.sales.schemas import (
     ChannelCreate,
@@ -66,6 +68,22 @@ async def get_day(
     user: User = Depends(require("sales:read")),
 ) -> DaySummary:
     return DaySummary.model_validate(await service.day_summary(db, user.hotel_id, day))
+
+
+@router.get("/days/{day}/sheet.pdf")
+async def day_sheet_pdf(
+    day: date_type,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:read")),
+) -> Response:
+    summary = await service.day_summary(db, user.hotel_id, day)
+    hotel = await db.get(Hotel, user.hotel_id)
+    pdf = sales_pdf.generate_day_pdf(summary, hotel)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="sales-{day}.pdf"'},
+    )
 
 
 @router.patch("/days/{day}", response_model=DayCreatedOut)
