@@ -22,6 +22,13 @@ function fmtTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Friendly download name: "Balaji - license.pdf" (sanitised, keeps extension). */
+function docName(person: string, type: string, filename?: string): string {
+  const ext = filename?.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  const t = type.replace(/_/g, " ").toLowerCase();
+  return `${person} - ${t}${ext}`.replace(/[\\/:*?"<>|]/g, "");
+}
+
 const payTone: Record<string, "slate" | "amber" | "green"> = {
   DRAFT: "slate",
   APPROVED: "amber",
@@ -120,7 +127,17 @@ export default function MySpacePage() {
                   <p className="text-xs text-slate-500">{r.doc_type.replace(/_/g, " ").toLowerCase()}</p>
                 </div>
                 {r.status === "UPLOADED" ? (
-                  <Badge tone="amber">awaiting approval</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge tone="amber">awaiting approval</Badge>
+                    {r.document_id && (
+                      <button
+                        onClick={() => downloadFile(`/me/documents/${r.document_id}/download`, docName(emp.full_name, r.doc_type))}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50"
+                      >
+                        View
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
                     onClick={() => pickFile(r.id)}
@@ -236,19 +253,36 @@ export default function MySpacePage() {
               <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
                 <th className="px-5 py-2 font-medium">Title</th>
                 <th className="px-5 py-2 font-medium">Type</th>
+                <th className="px-5 py-2 font-medium">Status</th>
                 <th className="px-5 py-2 font-medium">Expiry</th>
+                <th className="px-5 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {docs.length === 0 ? (
-                <tr><td colSpan={3} className="px-5 py-6 text-center text-slate-400">No documents shared with you yet.</td></tr>
-              ) : docs.map((d) => (
+                <tr><td colSpan={5} className="px-5 py-6 text-center text-slate-400">No documents shared with you yet.</td></tr>
+              ) : docs.map((d) => {
+                const req = requests.find((r) => r.document_id === d.id);
+                return (
                 <tr key={d.id} className="border-b border-slate-100">
                   <td className="px-5 py-2 font-medium text-slate-800">{d.title}</td>
                   <td className="px-5 py-2 text-slate-500">{d.doc_type.replace(/_/g, " ").toLowerCase()}</td>
+                  <td className="px-5 py-2">
+                    {req?.status === "APPROVED" ? (
+                      <Badge tone="green">approved ✓</Badge>
+                    ) : req?.status === "UPLOADED" ? (
+                      <Badge tone="amber">awaiting approval</Badge>
+                    ) : (
+                      <Badge tone="slate">shared</Badge>
+                    )}
+                  </td>
                   <td className="px-5 py-2 text-slate-500">{d.expiry_date || "—"}</td>
+                  <td className="px-5 py-2 text-right">
+                    <button onClick={() => downloadFile(`/me/documents/${d.id}/download`, docName(emp.full_name, d.doc_type, d.filename))} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">Download</button>
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

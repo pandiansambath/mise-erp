@@ -25,6 +25,13 @@ function fmtSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** Friendly download name: "Balaji - license.pdf" (sanitised, keeps extension). */
+function docName(person: string, type: string, filename?: string): string {
+  const ext = filename?.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  const t = type.replace(/_/g, " ").toLowerCase();
+  return `${person} - ${t}${ext}`.replace(/[\\/:*?"<>|]/g, "");
+}
+
 export default function DocumentsPage() {
   const { user } = useAuth();
   const confirm = useConfirm();
@@ -252,7 +259,7 @@ export default function DocumentsPage() {
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
                           {r.document_id && (
-                            <button onClick={() => downloadFile(`/documents/${r.document_id}/download`, r.title)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">View</button>
+                            <button onClick={() => downloadFile(`/documents/${r.document_id}/download`, docName(r.employee_name, r.doc_type, docs.find((x) => x.id === r.document_id)?.filename))} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">View</button>
                           )}
                           {r.status === "UPLOADED" && (
                             <button onClick={() => approveRequest(r.id)} className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700">Approve</button>
@@ -269,6 +276,12 @@ export default function DocumentsPage() {
       )}
 
       <Card className="p-0">
+        <div className="border-b border-slate-100 px-5 pt-4">
+          <h3 className="font-semibold text-slate-900">Restaurant documents</h3>
+          <p className="mb-3 mt-0.5 text-xs text-slate-400">
+            Your venue&apos;s own files — licences, insurance, contracts, bills. Staff documents live under their request above, not here.
+          </p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -281,9 +294,9 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
-              {docs.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">No documents yet.</td></tr>
-              ) : docs.map((d) => (
+              {docs.filter((d) => d.related_entity_type !== "EMPLOYEE").length === 0 ? (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">No restaurant documents yet.</td></tr>
+              ) : docs.filter((d) => d.related_entity_type !== "EMPLOYEE").map((d) => (
                 <tr key={d.id} className="border-b border-slate-100">
                   <td className="px-5 py-3 font-medium text-slate-800">{d.title}</td>
                   <td className="px-5 py-3 text-slate-500">{typeLabel(d.doc_type)}</td>

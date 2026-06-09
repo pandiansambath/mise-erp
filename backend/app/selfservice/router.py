@@ -17,6 +17,7 @@ from app.auth.deps import get_current_user
 from app.auth.models import User
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.storage import get_storage
 from app.documents import service as doc_service
 from app.documents.schemas import DocRequestOut, DocumentOut
 from app.employees import service as emp_service
@@ -94,6 +95,27 @@ async def my_documents(
         db, emp.hotel_id, entity_type="EMPLOYEE", entity_id=emp.id
     )
     return [DocumentOut.model_validate(d) for d in docs]
+
+
+@router.get("/documents/{doc_id}/download")
+async def download_my_document(
+    doc_id: uuid.UUID,
+    emp: Employee = Depends(_my_employee),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Download one of MY OWN documents (must be tagged to this employee)."""
+    doc = await doc_service.get_document(db, doc_id, emp.hotel_id)
+    if doc is None or doc.related_entity_type != "EMPLOYEE" or doc.related_entity_id != emp.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    try:
+        data = get_storage().read(doc.storage_key)
+    except FileNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "File missing") from exc
+    return Response(
+        content=data,
+        media_type=doc.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{doc.filename}"'},
+    )
 
 
 @router.get("/document-requests", response_model=list[DocRequestOut])
