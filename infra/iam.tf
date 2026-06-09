@@ -25,3 +25,24 @@ resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project}-ec2"
   role = aws_iam_role.ec2.name
 }
+
+# Read/write app uploads in the private S3 bucket (document storage).
+resource "aws_iam_role_policy" "s3_uploads" {
+  name = "${var.project}-s3-uploads"
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.uploads.arn}/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.uploads.arn
+      }
+    ]
+  })
+}

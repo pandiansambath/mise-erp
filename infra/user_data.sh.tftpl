@@ -54,15 +54,13 @@ services:
       SECRET_KEY: "${app_secret_key}"
       ENVIRONMENT: "production"
       CORS_ORIGINS: '["*"]'
-      UPLOAD_DIR: "/data/uploads"
+      STORAGE_BACKEND: "s3"
+      S3_BUCKET: "${s3_bucket}"
+      AWS_REGION: "${region}"
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"]
-    volumes:
-      - uploads:/data/uploads
   frontend:
     image: ${frontend_image}
     restart: always
-volumes:
-  uploads: {}
 COMPOSE
 
 cd /opt/mise

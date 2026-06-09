@@ -25,8 +25,11 @@ class Settings(BaseSettings):
     # CORS (comma-separated in env: CORS_ORIGINS="http://localhost:3000,https://app.example")
     cors_origins: list[str] = ["http://localhost:3000"]
 
-    # Document storage (local disk now; swap to S3 at deploy)
+    # Document storage: local disk for dev, S3 in the cloud (box disk is ephemeral).
+    storage_backend: str = "local"  # local | s3
     upload_dir: str = "uploads"
+    s3_bucket: str = ""
+    aws_region: str = "eu-west-2"
     max_upload_mb: int = 10
 
     @property

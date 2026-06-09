@@ -1,16 +1,9 @@
 data "aws_caller_identity" "current" {}
 
-data "aws_ami" "al2023" {
-  most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-  filter {
-    name   = "architecture"
-    values = ["x86_64"]
-  }
+# Standard AL2023 (NOT minimal) via the AWS-published SSM parameter — ships with
+# the SSM agent and EC2 Instance Connect so we have a way onto the box.
+data "aws_ssm_parameter" "al2023" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
 
 locals {
@@ -18,7 +11,7 @@ locals {
 }
 
 resource "aws_instance" "app" {
-  ami                    = data.aws_ami.al2023.id
+  ami                    = data.aws_ssm_parameter.al2023.value
   instance_type          = "t3.micro" # free-tier eligible (750h/mo, 12 mo)
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.ec2.id]
@@ -29,6 +22,14 @@ resource "aws_instance" "app" {
     volume_type = "gp3"
   }
 
+  # Hop limit 2 so containers (one extra network hop) can reach IMDS for the
+  # instance-role credentials boto3 uses to talk to S3.
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     region         = var.region
     registry       = local.registry
@@ -37,6 +38,7 @@ resource "aws_instance" "app" {
     db_host        = aws_db_instance.main.address
     db_password    = var.db_password
     app_secret_key = var.app_secret_key
+    s3_bucket      = aws_s3_bucket.uploads.bucket
   })
   # Re-run cloud-init (pull new images + restart) whenever the images change.
   user_data_replace_on_change = true
