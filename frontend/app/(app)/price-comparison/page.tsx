@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Item, type PriceComparison } from "@/lib/api";
+import { api, ApiError, type Item, type PriceComparison, type Vendor } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -11,10 +11,14 @@ export default function PriceComparisonPage() {
   const { user } = useAuth();
   const canWrite = can(user?.role, "vendors:write");
   const [items, setItems] = useState<Item[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [data, setData] = useState<PriceComparison | null>(null);
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadingCompare, setLoadingCompare] = useState(false);
+  const [addVendorId, setAddVendorId] = useState("");
+  const [addPrice, setAddPrice] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
   const { format } = useCurrency();
 
   async function setPreferred(vendorId: string | null) {
@@ -24,7 +28,32 @@ export default function PriceComparisonPage() {
     setData(res);
   }
 
+  function reloadCompare() {
+    api.get<PriceComparison>(`/vendors/items/${selected}/price-comparison`).then(setData);
+  }
+
+  async function addVendorPrice(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addVendorId || !addPrice) {
+      setAddError("Pick a vendor and enter a price.");
+      return;
+    }
+    setAddError(null);
+    try {
+      await api.post(`/vendors/${addVendorId}/items`, {
+        item_id: selected,
+        price_per_unit: addPrice,
+      });
+      setAddPrice("");
+      setAddVendorId("");
+      reloadCompare();
+    } catch (err) {
+      setAddError(err instanceof ApiError ? err.message : "Could not add price");
+    }
+  }
+
   useEffect(() => {
+    api.get<Vendor[]>("/vendors").then(setVendors).catch(() => {});
     api
       .get<Item[]>("/inventory/items")
       .then((i) => {
@@ -44,6 +73,40 @@ export default function PriceComparisonPage() {
   }, [selected]);
 
   if (loadingItems) return <Spinner />;
+
+  const addPriceForm = canWrite ? (
+    <Card className="mt-4">
+      <p className="mb-2 text-sm font-medium text-slate-700">Add a vendor price for this item</p>
+      <form onSubmit={addVendorPrice} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto]">
+        <select
+          value={addVendorId}
+          onChange={(e) => setAddVendorId(e.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        >
+          <option value="">Select vendor…</option>
+          {vendors.filter((v) => v.is_active).map((v) => (
+            <option key={v.id} value={v.id}>{v.name}</option>
+          ))}
+        </select>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={addPrice}
+          onChange={(e) => setAddPrice(e.target.value)}
+          placeholder="price"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:w-28"
+        />
+        <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+          Add
+        </button>
+      </form>
+      {addError && <p className="mt-2 text-sm text-rose-600">{addError}</p>}
+      <p className="mt-2 text-xs text-slate-400">
+        Vendor not listed? Add them on the <b>Vendors</b> page first.
+      </p>
+    </Card>
+  ) : null;
 
   return (
     <div>
@@ -81,11 +144,14 @@ export default function PriceComparisonPage() {
           {loadingCompare || !data ? (
             <Spinner />
           ) : data.vendor_count === 0 ? (
-            <Card>
-              <p className="py-6 text-center text-sm text-slate-400">
-                No vendor prices recorded for this item yet.
-              </p>
-            </Card>
+            <>
+              <Card>
+                <p className="py-6 text-center text-sm text-slate-400">
+                  No vendor prices recorded for this item yet — add one below so it can be ordered.
+                </p>
+              </Card>
+              {addPriceForm}
+            </>
           ) : (
             <>
               {parseFloat(data.potential_saving_per_unit) > 0 && (

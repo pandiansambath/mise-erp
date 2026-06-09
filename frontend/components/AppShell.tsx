@@ -17,6 +17,7 @@ const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "▦" },
   { href: "/my", label: "My Space", icon: "🙋", perm: "attendance:self", hideIfPerm: "attendance:read" },
   { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read" },
+  { href: "/vendors", label: "Vendors", icon: "🤝", perm: "vendors:read" },
   { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read" },
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
   { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },

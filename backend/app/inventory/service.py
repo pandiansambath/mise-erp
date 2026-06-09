@@ -96,6 +96,20 @@ async def list_items(
     return list(result.scalars().all())
 
 
+async def vendor_counts(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID, int]:
+    """Map item_id -> number of ACTIVE vendors pricing it. 0 means not orderable yet."""
+    from app.vendors.models import Vendor, VendorItem  # local import avoids cycle
+
+    stmt = (
+        select(VendorItem.item_id, func.count(VendorItem.id))
+        .join(Vendor, Vendor.id == VendorItem.vendor_id)
+        .where(Vendor.hotel_id == hotel_id, Vendor.is_active.is_(True))
+        .group_by(VendorItem.item_id)
+    )
+    result = await db.execute(stmt)
+    return {row[0]: row[1] for row in result.all()}
+
+
 async def update_item(db: AsyncSession, item: Item, **fields) -> Item:
     new_name = fields.get("name")
     if new_name and await _name_taken(db, item.hotel_id, new_name, exclude_id=item.id):

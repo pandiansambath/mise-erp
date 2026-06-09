@@ -5,18 +5,15 @@ import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
+import { useHotelTime } from "@/lib/time";
 import { can } from "@/lib/permissions";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function fmtTime(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
 export default function AttendancePage() {
   const { user } = useAuth();
   const { format } = useCurrency();
+  const { time: fmtTime, timeZone } = useHotelTime();
   const canWrite = can(user?.role, "attendance:write");
 
   const [day, setDay] = useState(today());
@@ -73,6 +70,7 @@ export default function AttendancePage() {
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
         <span className="text-sm text-slate-500">{present} present · {employees.length} staff</span>
+        <span className="text-xs text-slate-400">· times in {timeZone}</span>
         {!isToday && <span className="text-xs text-slate-400">(punching only works for today)</span>}
         <div className="ml-auto flex gap-2">
           <button
@@ -133,9 +131,13 @@ export default function AttendancePage() {
                       <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_in ?? null)}</td>
                       <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_out ?? null)}</td>
                       <td className="px-5 py-3 text-right text-slate-600">
-                        {r?.break_minutes
-                          ? `${r.break_minutes}m${r.over_break_minutes ? ` (+${r.over_break_minutes})` : ""}`
-                          : "—"}
+                        {onBreak ? (
+                          <span className="text-amber-600">on break…</span>
+                        ) : r?.break_end ? (
+                          `${r.break_minutes}m${r.over_break_minutes ? ` (+${r.over_break_minutes})` : ""}`
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-5 py-3 text-right text-slate-700">{r?.working_hours ?? "—"}</td>
                       <td className="px-5 py-3 text-right">

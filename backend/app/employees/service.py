@@ -167,7 +167,8 @@ async def punch(db: AsyncSession, employee: Employee, ptype: str) -> Attendance:
     elif ptype == PunchType.BREAK_END.value:
         if not rec or not rec.break_start:
             raise PunchError("Break not started")
-        rec.break_minutes += int((now - rec.break_start).total_seconds() // 60)
+        # Round to the nearest minute so a short (~1 min) break isn't floored to 0.
+        rec.break_minutes += max(0, round((now - rec.break_start).total_seconds() / 60))
         rec.break_end = now
         rec.break_start = None
     elif ptype == PunchType.CLOCK_OUT.value:

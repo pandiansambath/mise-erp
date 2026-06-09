@@ -146,14 +146,29 @@ export interface Item {
   cost_price: string | null;
   average_cost: string;
   is_active: boolean;
+  vendor_count?: number; // active vendors pricing this item (0 = not orderable yet)
 }
 
 export interface Vendor {
   id: string;
   name: string;
   category: string | null;
+  sub_category?: string | null;
+  contact_person?: string | null;
+  mobile?: string | null;
+  email?: string | null;
+  credit_days?: number;
   rating: string;
   is_active: boolean;
+}
+
+export interface VendorItem {
+  id: string;
+  vendor_id: string;
+  item_id: string;
+  price_per_unit: string;
+  last_updated: string;
+  is_preferred: boolean;
 }
 
 export interface VendorPriceRow {

@@ -15,12 +15,8 @@ import {
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
+import { useHotelTime } from "@/lib/time";
 import { ROLE_LABELS } from "@/lib/permissions";
-
-function fmtTime(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
 
 /** Friendly download name: "Balaji - license.pdf" (sanitised, keeps extension). */
 function docName(person: string, type: string, filename?: string): string {
@@ -37,6 +33,7 @@ const payTone: Record<string, "slate" | "amber" | "green"> = {
 
 export default function MySpacePage() {
   const { format } = useCurrency();
+  const { time: fmtTime } = useHotelTime();
   const { user } = useAuth();
   const [emp, setEmp] = useState<Employee | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);

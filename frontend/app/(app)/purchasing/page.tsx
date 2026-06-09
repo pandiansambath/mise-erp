@@ -57,7 +57,8 @@ export default function PurchasingPage() {
     Promise.all([
       api.get<Item[]>("/inventory/items").then((i) => {
         setItems(i);
-        if (i.length) setLines([{ item_id: i[0].id, qty: "" }]);
+        const fo = i.find((x) => (x.vendor_count ?? 0) > 0);
+        if (fo) setLines([{ item_id: fo.id, qty: "" }]);
       }),
       load(),
     ]).finally(() => setLoading(false));
@@ -77,7 +78,7 @@ export default function PurchasingPage() {
     if (payload.items.length === 0) return;
     try {
       await api.post("/purchasing/indents", payload);
-      setLines([{ item_id: items[0]?.id ?? "", qty: "" }]);
+      setLines([{ item_id: items.find((x) => (x.vendor_count ?? 0) > 0)?.id ?? "", qty: "" }]);
       await load();
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not create indent");
@@ -85,7 +86,7 @@ export default function PurchasingPage() {
   }
 
   function resetIndent() {
-    setLines([{ item_id: items[0]?.id ?? "", qty: "" }]);
+    setLines([{ item_id: items.find((x) => (x.vendor_count ?? 0) > 0)?.id ?? "", qty: "" }]);
     setMsg(null);
   }
 
@@ -128,6 +129,9 @@ export default function PurchasingPage() {
 
   if (loading) return <Spinner />;
 
+  // Only items a vendor actually prices can be ordered — keeps the chain honest.
+  const orderable = items.filter((it) => (it.vendor_count ?? 0) > 0);
+
   return (
     <div>
       <PageHeader title="Purchasing" subtitle="Kitchen indents → vendor-wise purchase orders." />
@@ -135,7 +139,15 @@ export default function PurchasingPage() {
 
       {canWrite && (
         <Card className="mb-6">
-          <p className="mb-3 text-sm font-medium text-slate-700">New kitchen indent</p>
+          <p className="mb-1 text-sm font-medium text-slate-700">New kitchen indent</p>
+          <p className="mb-3 text-xs text-slate-400">
+            Only items a vendor supplies appear here. New item? Add it in <b>Inventory</b>, then set its price on the <b>Vendors</b> page.
+          </p>
+          {orderable.length === 0 ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              No orderable items yet — add a vendor price for at least one item on the <b>Vendors</b> page.
+            </p>
+          ) : (
           <form onSubmit={submitIndent} className="space-y-2">
             {lines.map((l, idx) => (
               <div key={idx} className="flex gap-2">
@@ -144,7 +156,7 @@ export default function PurchasingPage() {
                   onChange={(e) => setLines(lines.map((x, i) => (i === idx ? { ...x, item_id: e.target.value } : x)))}
                   className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 >
-                  {items.map((it) => (
+                  {orderable.map((it) => (
                     <option key={it.id} value={it.id}>{it.name} ({it.unit})</option>
                   ))}
                 </select>
@@ -161,7 +173,7 @@ export default function PurchasingPage() {
               </div>
             ))}
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => setLines([...lines, { item_id: items[0]?.id ?? "", qty: "" }])} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+              <button type="button" onClick={() => setLines([...lines, { item_id: orderable[0]?.id ?? "", qty: "" }])} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
                 + Add item
               </button>
               <button type="submit" className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
@@ -172,6 +184,7 @@ export default function PurchasingPage() {
               </button>
             </div>
           </form>
+          )}
         </Card>
       )}
 

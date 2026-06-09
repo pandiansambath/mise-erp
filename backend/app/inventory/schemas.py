@@ -42,6 +42,7 @@ class ItemOut(BaseModel):
     cost_price: Decimal | None
     average_cost: Decimal
     is_active: bool
+    vendor_count: int = 0  # active vendors pricing this item (0 = not orderable yet)
 
 
 class StockMovementCreate(BaseModel):

@@ -183,7 +183,14 @@ export default function InventoryPage() {
                 ) : (
                   items.map((item) => (
                     <tr key={item.id} className="border-b border-slate-100">
-                      <td className="px-5 py-3 font-medium text-slate-800">{item.name}</td>
+                      <td className="px-5 py-3 font-medium text-slate-800">
+                        {item.name}
+                        {(item.vendor_count ?? 0) === 0 && (
+                          <span className="ml-2 align-middle" title="No vendor supplies this yet — add a price on the Vendors page to order it">
+                            <Badge tone="amber">no vendor</Badge>
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-slate-500">{item.category || "—"}</td>
                       <td className="px-5 py-3 text-right text-slate-700">
                         {item.current_stock} {item.unit}

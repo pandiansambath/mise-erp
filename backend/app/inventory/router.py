@@ -43,7 +43,13 @@ async def list_items(
     user: User = Depends(require("inventory:read")),
 ) -> list[ItemOut]:
     items = await service.list_items(db, user.hotel_id, category=category)
-    return [ItemOut.model_validate(i) for i in items]
+    counts = await service.vendor_counts(db, user.hotel_id)
+    out = []
+    for i in items:
+        row = ItemOut.model_validate(i)
+        row.vendor_count = counts.get(i.id, 0)
+        out.append(row)
+    return out
 
 
 @router.get("/alerts/low-stock", response_model=list[LowStockAlert])
