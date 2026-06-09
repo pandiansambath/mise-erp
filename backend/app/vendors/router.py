@@ -1,12 +1,16 @@
 """Vendor endpoints: CRUD, item pricing, and price comparison. Hotel-scoped."""
+import io
+import re
 import uuid
+from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
+from app.core.config import settings
 from app.core.database import get_db
 from app.inventory.service import get_item
 from app.vendors import service
@@ -49,6 +53,30 @@ async def list_vendors(
 ) -> list[VendorOut]:
     vendors = await service.list_vendors(db, user.hotel_id, category=category)
     return [VendorOut.model_validate(v) for v in vendors]
+
+
+@router.get("/price-list-template.xlsx")
+async def price_list_template(
+    user: User = Depends(require("vendors:read")),
+) -> Response:
+    """A sample Excel super admins can send to vendors so everyone uses one format."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Price list"
+    ws.append(["Item", "Price", "Unit"])
+    ws.append(["Basmati Rice", 5.00, "kg"])
+    ws.append(["Ghee", 6.80, "kg"])
+    ws.append(["Carry Bags (Large)", 3.55, "pack"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    fname = "mise-vendor-price-list-template.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @router.get("/items/{item_id}/price-comparison", response_model=PriceComparison)
@@ -128,6 +156,81 @@ async def upsert_vendor_item(
         notes=payload.notes,
     )
     return VendorItemOut.model_validate(vi)
+
+
+def _parse_price_list(data: bytes) -> list[tuple[str, Decimal | None, str | None]]:
+    """Read an .xlsx with columns Item / Price (+ optional Unit). Lenient on
+    header names and on price formatting (strips £, commas, etc.)."""
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except Exception as exc:  # noqa: BLE001 - any parse failure -> friendly 400
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Could not read the file — upload a .xlsx Excel file."
+        ) from exc
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+    header = next(rows_iter, None)
+    if header is None:
+        return []
+    cols = {str(h).strip().lower(): i for i, h in enumerate(header) if h is not None}
+
+    def find(*names: str) -> int | None:
+        return next((cols[n] for n in names if n in cols), None)
+
+    ci = find("item", "item name", "name", "product")
+    pi = find("price", "price per unit", "price_per_unit", "unit price", "rate")
+    ui = find("unit", "uom")
+    if ci is None or pi is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Excel needs an 'Item' column and a 'Price' column (a 'Unit' column is optional).",
+        )
+
+    out: list[tuple[str, Decimal | None, str | None]] = []
+    for row in rows_iter:
+        name = row[ci] if ci < len(row) else None
+        raw_price = row[pi] if pi < len(row) else None
+        unit = row[ui] if (ui is not None and ui < len(row)) else None
+        if name is None and raw_price is None:
+            continue
+        price: Decimal | None = None
+        if raw_price is not None:
+            cleaned = re.sub(r"[^0-9.]", "", str(raw_price))
+            try:
+                price = Decimal(cleaned) if cleaned else None
+            except InvalidOperation:
+                price = None
+        out.append((
+            str(name).strip() if name is not None else "",
+            price,
+            str(unit).strip() if unit is not None else None,
+        ))
+    return out
+
+
+@router.post("/{vendor_id}/items/import")
+async def import_price_list(
+    vendor_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> dict:
+    """Upload a vendor's price-list Excel. Matches items by name (creates new
+    ones), upserts each price — re-uploading the same file is a no-op."""
+    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"File exceeds {settings.max_upload_mb} MB"
+        )
+    rows = _parse_price_list(data)
+    if not rows:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No rows found in the file.")
+    return await service.import_price_list(db, user.hotel_id, vendor_id, rows)
 
 
 @router.get("/{vendor_id}/items", response_model=list[VendorItemOut])

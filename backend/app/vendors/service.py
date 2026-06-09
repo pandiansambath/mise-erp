@@ -95,6 +95,48 @@ async def upsert_vendor_item(
     return vi
 
 
+async def import_price_list(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    vendor_id: uuid.UUID,
+    rows: list[tuple[str, Decimal, str | None]],
+) -> dict:
+    """Bulk upsert a vendor's price list. Idempotent: items matched by
+    case-insensitive name (created if new), prices upserted per (vendor, item)
+    so re-uploading the same file changes nothing. Preserves the preferred flag."""
+    from app.inventory import service as inv
+
+    created_items = 0
+    priced = 0
+    skipped: list[str] = []
+    for name, price, unit in rows:
+        name = (name or "").strip()
+        if not name or price is None or price <= 0:
+            if name:
+                skipped.append(name)
+            continue
+        item = await inv.get_item_by_name(db, hotel_id, name)
+        if item is None:
+            item = await inv.create_item(
+                db, hotel_id, name=name, unit=(unit or "unit").strip()[:20] or "unit"
+            )
+            created_items += 1
+        result = await db.execute(
+            select(VendorItem).where(
+                VendorItem.vendor_id == vendor_id, VendorItem.item_id == item.id
+            )
+        )
+        vi = result.scalar_one_or_none()
+        if vi is None:
+            vi = VendorItem(vendor_id=vendor_id, item_id=item.id, is_preferred=False)
+            db.add(vi)
+        vi.price_per_unit = price  # only the price changes on re-import
+        vi.last_updated = date.today()
+        priced += 1
+    await db.commit()
+    return {"created_items": created_items, "priced_items": priced, "skipped": skipped}
+
+
 async def list_vendor_items(db: AsyncSession, vendor_id: uuid.UUID) -> list[VendorItem]:
     result = await db.execute(select(VendorItem).where(VendorItem.vendor_id == vendor_id))
     return list(result.scalars().all())

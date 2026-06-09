@@ -194,6 +194,17 @@ export default function RecipesPage() {
       setError("Give the dish a name.");
       return;
     }
+    // Validate ingredients up-front so nothing is silently dropped.
+    const rows = ings.filter((ln) => ln.item_id && ln.qty.trim());
+    const incomplete = ings.some((ln) => ln.item_id && !(parseFloat(ln.qty) > 0));
+    if (incomplete) {
+      setError("Enter a quantity greater than 0 for every ingredient.");
+      return;
+    }
+    if (!editId && rows.length === 0) {
+      setError("Add at least one ingredient (pick an item and a quantity).");
+      return;
+    }
     setSaving(true);
     setError(null);
     const body = {
@@ -206,7 +217,6 @@ export default function RecipesPage() {
       const recipe = editId
         ? await api.patch<Recipe>(`/recipes/${editId}`, body)
         : await api.post<Recipe>("/recipes", body);
-      const rows = ings.filter((ln) => ln.item_id && ln.qty);
       for (const ln of rows) {
         const item = items.find((it) => it.id === ln.item_id);
         await api.post(`/recipes/${recipe.id}/ingredients`, {

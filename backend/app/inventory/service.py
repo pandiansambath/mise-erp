@@ -79,6 +79,17 @@ async def get_item(db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID) ->
     return item
 
 
+async def get_item_by_name(db: AsyncSession, hotel_id: uuid.UUID, name: str) -> Item | None:
+    """Case-insensitive lookup by name (used by the vendor price-list import)."""
+    stmt = (
+        select(Item)
+        .where(Item.hotel_id == hotel_id, func.lower(Item.name) == name.strip().lower())
+        .order_by(Item.is_active.desc())
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalars().first()
+
+
 async def list_items(
     db: AsyncSession,
     hotel_id: uuid.UUID,

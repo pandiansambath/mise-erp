@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
+  downloadFile,
+  postForm,
   type Item,
   type Vendor,
   type VendorItem,
@@ -30,6 +32,8 @@ export default function VendorsPage() {
   const [vendorItems, setVendorItems] = useState<VendorItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // add-vendor form
   const [vName, setVName] = useState("");
@@ -101,6 +105,33 @@ export default function VendorsPage() {
     }
   }
 
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !selected) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await postForm<{ created_items: number; priced_items: number; skipped: string[] }>(
+        `/vendors/${selected}/items/import`,
+        form,
+      );
+      await load();
+      selectVendor(selected);
+      setNotice(
+        `Imported ${res.priced_items} price${res.priced_items === 1 ? "" : "s"}` +
+          (res.created_items ? `, ${res.created_items} new item${res.created_items === 1 ? "" : "s"} created` : "") +
+          (res.skipped.length ? `, ${res.skipped.length} row${res.skipped.length === 1 ? "" : "s"} skipped` : "") +
+          ".",
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Import failed");
+    } finally {
+      e.target.value = "";
+    }
+  }
+
   async function toggleActive(v: Vendor) {
     if (v.is_active) {
       const ok = await confirm({
@@ -140,7 +171,9 @@ export default function VendorsPage() {
         vendor price can&apos;t be ordered yet.
       </div>
 
+      <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={onImportFile} />
       {error && <p className="mb-4 text-sm text-rose-600">{error}</p>}
+      {notice && <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{notice}</p>}
 
       {canWrite && (
         <Card className="mb-6">
@@ -288,6 +321,31 @@ export default function VendorsPage() {
                   </div>
                   <p className="mt-2 text-xs text-slate-400">Same item again = updates the price. Set the chosen supplier as &quot;preferred&quot; on the Price Comparison page.</p>
                 </form>
+              )}
+
+              {canWrite && (
+                <div className="border-t border-slate-100 px-5 py-4">
+                  <p className="mb-1 text-sm font-medium text-slate-700">Or bulk import a price list</p>
+                  <p className="mb-2 text-xs text-slate-400">
+                    Upload the vendor&apos;s Excel — columns <b>Item</b>, <b>Price</b>, optional <b>Unit</b>. New items are created automatically; re-uploading the same file is safe (prices just update).
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                    >
+                      ⬆ Import .xlsx
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadFile("/vendors/price-list-template.xlsx", "mise-vendor-price-list-template.xlsx")}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      ⬇ Download template
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )}
