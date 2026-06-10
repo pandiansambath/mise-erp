@@ -147,6 +147,7 @@ export interface Item {
   average_cost: string;
   is_active: boolean;
   vendor_count?: number; // active vendors pricing this item (0 = not orderable yet)
+  best_vendor?: string | null; // preferred-or-cheapest vendor name (null = no vendor)
 }
 
 export interface Vendor {

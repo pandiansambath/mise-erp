@@ -191,7 +191,7 @@ export default function PurchasingPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-0">
           <h3 className="px-5 pt-4 font-semibold text-slate-900">Indents</h3>
-          <div className="mt-2 overflow-x-auto">
+          <div className="mt-2 max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
@@ -225,7 +225,7 @@ export default function PurchasingPage() {
 
         <Card className="p-0">
           <h3 className="px-5 pt-4 font-semibold text-slate-900">Purchase orders</h3>
-          <div className="mt-2 overflow-x-auto">
+          <div className="mt-2 max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">

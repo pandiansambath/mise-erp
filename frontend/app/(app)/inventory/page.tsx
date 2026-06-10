@@ -160,12 +160,13 @@ export default function InventoryPage() {
         <Spinner />
       ) : (
         <Card className="p-0">
-          <div className="overflow-x-auto">
+          <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-5 py-3 font-medium">Item</th>
                   <th className="px-5 py-3 font-medium">Category</th>
+                  <th className="px-5 py-3 font-medium">Vendor</th>
                   <th className="px-5 py-3 text-right font-medium">Stock</th>
                   <th className="px-5 py-3 text-right font-medium">Min stock</th>
                   <th className="px-5 py-3 text-right font-medium">Avg cost</th>
@@ -176,22 +177,26 @@ export default function InventoryPage() {
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
+                    <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
                       No items yet — add your first above.
                     </td>
                   </tr>
                 ) : (
                   items.map((item) => (
                     <tr key={item.id} className="border-b border-slate-100">
-                      <td className="px-5 py-3 font-medium text-slate-800">
-                        {item.name}
-                        {(item.vendor_count ?? 0) === 0 && (
-                          <span className="ml-2 align-middle" title="No vendor supplies this yet — add a price on the Vendors page to order it">
+                      <td className="px-5 py-3 font-medium text-slate-800">{item.name}</td>
+                      <td className="px-5 py-3 text-slate-500">{item.category || "—"}</td>
+                      <td className="px-5 py-3">
+                        {item.best_vendor ? (
+                          <span className="text-slate-600" title="Preferred or cheapest vendor — set a preferred one on Price Comparison">
+                            {item.best_vendor}
+                          </span>
+                        ) : (
+                          <span title="No vendor supplies this yet — add a price on the Vendors page to order it">
                             <Badge tone="amber">no vendor</Badge>
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-slate-500">{item.category || "—"}</td>
                       <td className="px-5 py-3 text-right text-slate-700">
                         {item.current_stock} {item.unit}
                       </td>

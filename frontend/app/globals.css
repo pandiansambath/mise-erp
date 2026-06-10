@@ -8,13 +8,34 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Brand — emerald, full ramp */
   --color-brand-50: #ecfdf5;
   --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
   --color-brand-500: #10b981;
   --color-brand-600: #059669;
   --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+  --color-brand-950: #022c22;
+
+  /* Copper — pans & pennies. Used for money figures on the landing. */
+  --color-copper-200: #f6d8b8;
+  --color-copper-300: #eab78a;
+  --color-copper-400: #d9985f;
+  --color-copper-500: #c07b3e;
+
+  /* Ink — the landing's "kitchen at midnight" green-black base */
+  --color-ink-950: #030d09;
+  --color-ink-900: #051510;
+  --color-ink-800: #0a2018;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-fraunces);
 }
 
 html {
@@ -32,27 +53,56 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* ── Landing-page animations (dependency-free, GPU-friendly) ───────────────── */
-@keyframes mise-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-14px); }
+/* ════════════════════════════════════════════════════════════════════════
+   LANDING PAGE SYSTEM — dependency-free, GPU-friendly (transform/opacity/
+   filter only). Everything below is scoped to `mise-*` classes used by the
+   public pages (/, /signup); the logged-in app is untouched.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Aurora: drifting blobs + slow hue glide (one colour melts into the next) */
+@keyframes mise-aurora-drift {
+  0%   { transform: translate3d(-8%, -6%, 0) scale(1); }
+  33%  { transform: translate3d(10%, 5%, 0) scale(1.18); }
+  66%  { transform: translate3d(-5%, 9%, 0) scale(0.94); }
+  100% { transform: translate3d(-8%, -6%, 0) scale(1); }
 }
+@keyframes mise-aurora-hue {
+  0%   { filter: hue-rotate(0deg); }
+  30%  { filter: hue-rotate(48deg); }   /* emerald → teal → blue        */
+  55%  { filter: hue-rotate(-18deg); }  /* drift back through sea-green */
+  80%  { filter: hue-rotate(28deg); }
+  100% { filter: hue-rotate(0deg); }
+}
+.mise-aurora {
+  position: absolute;
+  inset: -25%;
+  pointer-events: none;
+  overflow: hidden;
+}
+.mise-aurora-shift {
+  animation: mise-aurora-hue 36s ease-in-out infinite;
+}
+.mise-aurora span {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(75px);
+  opacity: 0.58;
+  animation: mise-aurora-drift 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ── Faint dot-grid texture behind the hero ─────────────────────────────── */
+.mise-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 35%, black 30%, transparent 75%);
+}
+
+/* ── Animated gradients ─────────────────────────────────────────────────── */
 @keyframes mise-gradient {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
-@keyframes mise-rise {
-  from { opacity: 0; transform: translateY(28px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes mise-blob {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -40px) scale(1.1); }
-  66% { transform: translate(-20px, 20px) scale(0.95); }
-}
-
-.mise-float { animation: mise-float 6s ease-in-out infinite; }
-.mise-blob { animation: mise-blob 18s ease-in-out infinite; }
 .mise-hero-gradient {
   background: linear-gradient(120deg, #064e3b, #047857, #10b981, #0ea5e9, #047857);
   background-size: 300% 300%;
@@ -66,31 +116,88 @@ body {
   background-clip: text;
   color: transparent;
 }
+/* Emerald melting into copper — for the money words. */
+.mise-profit-text {
+  background: linear-gradient(110deg, #a7f3d0 0%, #6ee7b7 30%, #f6d8b8 65%, #eab78a 100%);
+  background-size: 250% 250%;
+  animation: mise-gradient 12s ease infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
-/* Scroll-reveal: hidden until .is-visible is toggled by IntersectionObserver. */
+/* ── Floating accents (notification toasts etc.) ────────────────────────── */
+@keyframes mise-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.mise-float { animation: mise-float 6s ease-in-out infinite; }
+
+/* ── Marquee: module strip gliding under the hero ───────────────────────── */
+@keyframes mise-marquee {
+  to { transform: translateX(-50%); }
+}
+.mise-marquee {
+  display: flex;
+  width: max-content;
+  animation: mise-marquee 30s linear infinite;
+  will-change: transform;
+}
+.mise-marquee-mask {
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+.mise-marquee-mask:hover .mise-marquee { animation-play-state: paused; }
+
+/* ── Shimmer sweep on the primary CTA ───────────────────────────────────── */
+@keyframes mise-shimmer {
+  0% { transform: translateX(-160%) skewX(-14deg); }
+  55%, 100% { transform: translateX(320%) skewX(-14deg); }
+}
+.mise-btn-shine { position: relative; overflow: hidden; }
+.mise-btn-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 38%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: translateX(-160%) skewX(-14deg);
+  animation: mise-shimmer 3.4s ease-in-out infinite;
+}
+
+/* ── Scroll-reveal (driven by components/Reveal.tsx) ────────────────────── */
 .mise-reveal {
   opacity: 0;
-  transform: translateY(28px);
-  transition: opacity 0.7s ease, transform 0.7s ease;
-  will-change: opacity, transform;
+  transform: translateY(30px);
+  filter: blur(5px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
 }
+.mise-reveal-left { transform: translateX(-36px); }
+.mise-reveal-right { transform: translateX(36px); }
+.mise-reveal-down { transform: translateY(-30px); }
+.mise-reveal-none { transform: none; }
 .mise-reveal.is-visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
+  filter: blur(0);
 }
 
-/* ── 3D hero showpiece (perspective + scroll-driven straighten) ───────────── */
-.mise-3d-stage { perspective: 1400px; }
+/* ── 3D hero showpiece (perspective + scroll-driven straighten) ─────────── */
+.mise-3d-stage { perspective: 1500px; }
 .mise-3d {
-  transform: rotateY(-20deg) rotateX(9deg) rotateZ(-1.5deg);
+  transform: rotateY(-18deg) rotateX(8deg) rotateZ(-1deg);
   transform-style: preserve-3d;
 }
 @keyframes mise-straighten {
-  from { transform: rotateY(-26deg) rotateX(13deg) translateY(24px); }
-  to   { transform: rotateY(-7deg)  rotateX(4deg)  translateY(0); }
+  from { transform: rotateY(-24deg) rotateX(12deg) translateY(22px); }
+  to   { transform: rotateY(-6deg)  rotateX(3deg)  translateY(0); }
 }
-/* Where the browser supports native scroll timelines, tie the 3D tilt to scroll
-   so the panel "stands up" as it enters the viewport. Pure CSS, zero JS. */
+/* Where the browser supports native scroll timelines, tie the 3D tilt to
+   scroll so the panel "stands up" as it enters the viewport. Zero JS. */
 @supports (animation-timeline: view()) {
   .mise-3d {
     animation: mise-straighten linear both;
@@ -98,50 +205,96 @@ body {
     animation-range: entry 5% cover 45%;
   }
 }
-.mise-3d-layer { transform: translateZ(40px); }
 
-/* Centered showpiece that gently rotates as the whole page scrolls. */
-@keyframes mise-spin-y {
-  from { transform: rotateY(-16deg) rotateX(6deg); }
-  to   { transform: rotateY(16deg)  rotateX(6deg); }
-}
-@supports (animation-timeline: scroll(root)) {
-  .mise-scroll-spin {
-    animation: mise-spin-y linear both;
-    animation-timeline: scroll(root);
+/* ── Reduced motion: calm everything down ───────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mise-float,
+  .mise-hero-gradient,
+  .mise-hero-text,
+  .mise-profit-text,
+  .mise-3d,
+  .mise-aurora-shift,
+  .mise-aurora span,
+  .mise-marquee,
+  .mise-btn-shine::after {
+    animation: none;
+  }
+  .mise-3d { transform: rotateY(-8deg) rotateX(3deg); }
+  .mise-reveal,
+  .mise-reveal-left,
+  .mise-reveal-right,
+  .mise-reveal-down {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
   }
 }
 
-/* ── Aurora waves (visible, animated gradient on a dark base) ─────────────── */
-@keyframes mise-aurora-drift {
-  0%   { transform: translate3d(-8%, -6%, 0) scale(1); }
-  33%  { transform: translate3d(10%, 4%, 0) scale(1.15); }
-  66%  { transform: translate3d(-4%, 8%, 0) scale(0.95); }
-  100% { transform: translate3d(-8%, -6%, 0) scale(1); }
+/* ── Preloader (plays once per session, curtain-lift exit) ───────────────── */
+@keyframes mise-loader-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.mise-aurora { position: absolute; inset: -25%; pointer-events: none; overflow: hidden; }
-.mise-aurora span {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(70px);
-  opacity: 0.55;
-  animation: mise-aurora-drift 20s ease-in-out infinite;
+@keyframes mise-tracking {
+  from { letter-spacing: 0.6em; opacity: 0; }
+  to   { letter-spacing: 0.3em; opacity: 1; }
+}
+.mise-loader-front,
+.mise-loader-back {
+  transition: transform 0.9s cubic-bezier(0.76, 0, 0.24, 1);
+  will-change: transform;
+}
+.mise-loader.is-leaving .mise-loader-front { transform: translateY(-101%); }
+.mise-loader.is-leaving .mise-loader-back  { transform: translateY(-101%); transition-delay: 0.1s; }
+.mise-loader-content { animation: mise-loader-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; transition: opacity 0.4s ease, transform 0.4s ease; }
+.mise-loader.is-leaving .mise-loader-content { opacity: 0; transform: translateY(-24px); }
+.mise-loader-tag { animation: mise-tracking 1s 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Hero entrance — staggered in by JS once the preloader lifts ────────── */
+.mise-enter {
+  opacity: 0;
+  transform: translateY(34px);
+  filter: blur(6px);
+  transition: opacity 0.95s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.95s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.95s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+.mise-enter-right { transform: translateX(44px); }
+.mise-enter-down { transform: translateY(-18px); }
+.mise-enter.is-in { opacity: 1; transform: none; filter: blur(0); }
+
+/* ── Magnetic buttons (springs back via transition) ─────────────────────── */
+.mise-magnetic {
+  display: inline-block;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
-/* ── 3D ecosystem carousel (centered, continuously rotating) ──────────────── */
-.mise-carousel-stage { perspective: 1100px; }
-@keyframes mise-spin-cylinder { to { transform: rotateY(360deg); } }
-.mise-carousel {
-  position: relative;
-  margin: 0 auto;
-  transform-style: preserve-3d;
-  animation: mise-spin-cylinder 26s linear infinite;
+/* ── Cursor-following ambient light ─────────────────────────────────────── */
+.mise-cursor-glow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  height: 700px;
+  width: 700px;
+  pointer-events: none;
+  border-radius: 9999px;
+  mix-blend-mode: screen;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.12), rgba(14, 165, 233, 0.06) 42%, transparent 66%);
+  will-change: transform;
 }
-.mise-carousel-face { position: absolute; inset: 0; backface-visibility: hidden; }
+
+/* Dark document behind the landing/signup (kills white overscroll flash). */
+html:has(.mise-dark-page) { background: #030d09; }
 
 @media (prefers-reduced-motion: reduce) {
-  .mise-float, .mise-blob, .mise-hero-gradient, .mise-hero-text,
-  .mise-3d, .mise-scroll-spin, .mise-aurora span, .mise-carousel { animation: none; }
-  .mise-3d { transform: rotateY(-10deg) rotateX(4deg); }
-  .mise-reveal { opacity: 1; transform: none; transition: none; }
+  .mise-loader-content, .mise-loader-tag { animation: none; opacity: 1; }
+  .mise-enter, .mise-enter-right, .mise-enter-down {
+    opacity: 1; transform: none; filter: none; transition: none;
+  }
+  .mise-magnetic { transition: none; }
+  .mise-cursor-glow { display: none; }
 }

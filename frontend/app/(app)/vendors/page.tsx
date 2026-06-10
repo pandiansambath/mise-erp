@@ -212,7 +212,7 @@ export default function VendorsPage() {
         {/* Vendor list */}
         <Card className="p-0">
           <h3 className="px-5 pt-4 font-semibold text-slate-900">All vendors ({vendors.length})</h3>
-          <div className="mt-2 overflow-x-auto">
+          <div className="mt-2 max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
@@ -274,7 +274,8 @@ export default function VendorsPage() {
 
               <div className="px-5 py-3">
                 <p className="text-sm font-medium text-slate-700">What they supply</p>
-                <table className="mt-2 w-full text-sm">
+                <div className="mt-2 max-h-[42vh] overflow-auto">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
                       <th className="py-2 font-medium">Item</th>
@@ -294,6 +295,7 @@ export default function VendorsPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               {canWrite && (

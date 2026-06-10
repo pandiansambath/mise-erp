@@ -121,6 +121,25 @@ async def vendor_counts(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID
     return {row[0]: row[1] for row in result.all()}
 
 
+async def best_vendors(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID, str]:
+    """Map item_id -> the vendor shown in inventory: the PREFERRED vendor if set,
+    otherwise the CHEAPEST. Mirrors how recipe costing picks a price."""
+    from app.vendors.models import Vendor, VendorItem  # local import avoids cycle
+
+    stmt = (
+        select(VendorItem.item_id, Vendor.name, VendorItem.is_preferred, VendorItem.price_per_unit)
+        .join(Vendor, Vendor.id == VendorItem.vendor_id)
+        .where(Vendor.hotel_id == hotel_id, Vendor.is_active.is_(True))
+        # per item: preferred first, then cheapest — first row per item wins
+        .order_by(VendorItem.item_id, VendorItem.is_preferred.desc(), VendorItem.price_per_unit.asc())
+    )
+    best: dict[uuid.UUID, str] = {}
+    for item_id, name, _pref, _price in (await db.execute(stmt)).all():
+        if item_id not in best:
+            best[item_id] = name
+    return best
+
+
 async def update_item(db: AsyncSession, item: Item, **fields) -> Item:
     new_name = fields.get("name")
     if new_name and await _name_taken(db, item.hotel_id, new_name, exclude_id=item.id):

@@ -44,10 +44,12 @@ async def list_items(
 ) -> list[ItemOut]:
     items = await service.list_items(db, user.hotel_id, category=category)
     counts = await service.vendor_counts(db, user.hotel_id)
+    best = await service.best_vendors(db, user.hotel_id)
     out = []
     for i in items:
         row = ItemOut.model_validate(i)
         row.vendor_count = counts.get(i.id, 0)
+        row.best_vendor = best.get(i.id)
         out.append(row)
     return out
 
