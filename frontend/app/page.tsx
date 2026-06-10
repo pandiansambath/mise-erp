@@ -452,7 +452,7 @@ function MoneyLoop() {
               </h2>
             </div>
 
-            <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-8 px-5 pt-28 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10 lg:pt-24">
+            <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-3 px-5 pt-28 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10 lg:pt-24">
               {/* LEFT column — steps 1 & 3 (desktop only) */}
               <div className="relative hidden h-[430px] lg:block">
                 {[0, 2].map((i) => (
@@ -466,8 +466,9 @@ function MoneyLoop() {
                 ))}
               </div>
 
-              {/* CENTRE — the pinned plate dial (scaled to fit small screens) */}
-              <div className="origin-center scale-[0.72] sm:scale-90 lg:scale-100">
+              {/* CENTRE — the pinned plate dial (scaled to fit small screens; negative
+                  margins reclaim the empty space the scale leaves in the 360px box) */}
+              <div className="origin-center scale-[0.66] -mb-14 sm:scale-90 sm:-mb-6 lg:scale-100 lg:mb-0">
               <div
                 className="relative h-[360px] w-[360px] will-change-transform"
                 style={{ opacity: dialOpacity, transform: `scale(${dialScale})` }}
@@ -527,7 +528,7 @@ function MoneyLoop() {
               </div>
 
               {/* MOBILE (below lg) — the active step's card under the dial */}
-              <div className="relative h-[300px] w-full max-w-xs lg:hidden">
+              <div className="relative h-[250px] w-full max-w-xs lg:hidden">
                 {LOOP_STEPS.map((s, i) => (
                   <div
                     key={s.n}
