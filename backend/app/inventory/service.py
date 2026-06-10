@@ -131,7 +131,11 @@ async def best_vendors(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID,
         .join(Vendor, Vendor.id == VendorItem.vendor_id)
         .where(Vendor.hotel_id == hotel_id, Vendor.is_active.is_(True))
         # per item: preferred first, then cheapest — first row per item wins
-        .order_by(VendorItem.item_id, VendorItem.is_preferred.desc(), VendorItem.price_per_unit.asc())
+        .order_by(
+            VendorItem.item_id,
+            VendorItem.is_preferred.desc(),
+            VendorItem.price_per_unit.asc(),
+        )
     )
     best: dict[uuid.UUID, str] = {}
     for item_id, name, _pref, _price in (await db.execute(stmt)).all():
