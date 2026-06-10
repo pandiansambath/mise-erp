@@ -1,4 +1,4 @@
-"""Purchasing service: indents, auto vendor-wise POs (cheapest price), receiving."""
+"""Purchasing service: indents, vendor-wise POs (the admin's chosen supplier), receiving."""
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -86,10 +86,12 @@ async def set_indent_status(db: AsyncSession, indent: Indent, status: str) -> In
     return indent
 
 
-# ── Cheapest vendor lookup ────────────────────────────────────────────────────
-async def _cheapest_vendor(
+# ── Chosen vendor lookup (the admin's pick — no cheapest fallback) ────────────
+async def _chosen_vendor(
     db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID
 ) -> tuple[uuid.UUID, Decimal] | None:
+    """The vendor the admin CHOSE for this item (is_preferred). No cheapest
+    fallback — the admin must pick a supplier on purpose."""
     row = await db.execute(
         select(VendorItem.vendor_id, VendorItem.price_per_unit)
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
@@ -97,8 +99,8 @@ async def _cheapest_vendor(
             VendorItem.item_id == item_id,
             Vendor.hotel_id == hotel_id,
             Vendor.is_active.is_(True),
+            VendorItem.is_preferred.is_(True),
         )
-        .order_by(VendorItem.price_per_unit.asc())
         .limit(1)
     )
     r = row.first()
@@ -117,17 +119,18 @@ async def _next_po_number(db: AsyncSession, hotel_id: uuid.UUID) -> tuple[int, i
 
 # ── Generate POs from an approved indent ──────────────────────────────────────
 async def generate_pos(db: AsyncSession, indent: Indent) -> dict:
-    """Group indent items by their cheapest active vendor and create one PO each."""
+    """Group indent items by their CHOSEN supplier and create one PO each.
+    Items with no chosen supplier are skipped and reported (admin must pick one)."""
     items = await indent_items(db, indent.id)
 
     by_vendor: dict[uuid.UUID, list[dict]] = {}
     skipped: list[str] = []
     for it in items:
-        cheapest = await _cheapest_vendor(db, it["item_id"], indent.hotel_id)
-        if cheapest is None:
+        chosen = await _chosen_vendor(db, it["item_id"], indent.hotel_id)
+        if chosen is None:
             skipped.append(it["item_name"])
             continue
-        vendor_id, price = cheapest
+        vendor_id, price = chosen
         by_vendor.setdefault(vendor_id, []).append({**it, "unit_price": price})
 
     seq, year = await _next_po_number(db, indent.hotel_id)

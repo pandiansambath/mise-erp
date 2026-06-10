@@ -197,7 +197,7 @@ export default function PriceComparisonPage() {
                           <td className="px-5 py-3">
                             <div className="flex gap-1.5">
                               {idx === 0 && <Badge tone="green">Cheapest</Badge>}
-                              {row.is_preferred && <Badge tone="amber">★ Preferred</Badge>}
+                              {row.is_preferred && <Badge tone="amber">★ Chosen supplier</Badge>}
                             </div>
                           </td>
                           <td className="px-5 py-3 text-right">
@@ -206,7 +206,7 @@ export default function PriceComparisonPage() {
                                 onClick={() => setPreferred(row.vendor_id)}
                                 className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
                               >
-                                Set preferred
+                                Choose supplier
                               </button>
                             )}
                             {canWrite && row.is_preferred && (
@@ -225,8 +225,9 @@ export default function PriceComparisonPage() {
                 </div>
               </Card>
               <p className="mt-3 text-xs text-slate-400">
-                Recipe costs use the <b>cheapest</b> vendor by default. Set a <b>preferred</b>{" "}
-                vendor (e.g. for quality/reliability) and costing will use that instead.
+                <b>Purchasing orders from your chosen supplier</b> — pick one here for each item
+                (no auto-cheapest), e.g. for quality/reliability. Recipe costs still use the
+                cheapest vendor until a supplier is chosen.
               </p>
             </>
           )}

@@ -18,11 +18,14 @@ async def _setup_catalog(db, hotel_id):
     await ven.upsert_vendor_item(db, v2.id, rice.id, Decimal("5.50"))
     await ven.upsert_vendor_item(db, v1.id, chicken.id, Decimal("9.00"))
     await ven.upsert_vendor_item(db, v2.id, chicken.id, Decimal("8.00"))
+    # Admin's chosen suppliers (POs use these, NOT the cheapest).
+    await ven.set_preferred_vendor(db, hotel_id, rice.id, v1.id)
+    await ven.set_preferred_vendor(db, hotel_id, chicken.id, v2.id)
     return rice, chicken, v1, v2
 
 
 @pytest.mark.asyncio
-async def test_generate_pos_groups_by_cheapest_vendor(db, hotel):
+async def test_generate_pos_groups_by_chosen_vendor(db, hotel):
     rice, chicken, v1, v2 = await _setup_catalog(db, hotel.id)
     indent = await service.create_indent(
         db, hotel.id,
@@ -31,12 +34,25 @@ async def test_generate_pos_groups_by_cheapest_vendor(db, hotel):
     )
     result = await service.generate_pos(db, indent)
     pos = result["purchase_orders"]
-    assert len(pos) == 2  # rice->V1, chicken->V2 (different cheapest vendors)
+    assert len(pos) == 2  # rice->V1 (chosen), chicken->V2 (chosen)
     by_vendor = {po.vendor_id: po for po in pos}
     assert by_vendor[v1.id].total_amount == Decimal("50.00")  # 10 * 5.00
     assert by_vendor[v2.id].total_amount == Decimal("32.00")  # 4 * 8.00
     assert result["skipped_items"] == []
     assert indent.status == "ORDERED"
+
+
+@pytest.mark.asyncio
+async def test_item_without_chosen_vendor_skipped(db, hotel):
+    rice = await inv.create_item(db, hotel.id, name="Rice", unit="kg")
+    v1 = await ven.create_vendor(db, hotel.id, name="V1")
+    await ven.upsert_vendor_item(db, v1.id, rice.id, Decimal("5.00"))  # priced, but NOT chosen
+    indent = await service.create_indent(
+        db, hotel.id, [{"item_id": rice.id, "required_qty": Decimal("10")}]
+    )
+    result = await service.generate_pos(db, indent)
+    assert result["purchase_orders"] == []
+    assert "Rice" in result["skipped_items"]
 
 
 @pytest.mark.asyncio

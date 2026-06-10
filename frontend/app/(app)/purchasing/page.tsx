@@ -103,7 +103,7 @@ export default function PurchasingPage() {
         `/purchasing/indents/${id}/generate-pos`
       );
       if (res.skipped_items?.length) {
-        setMsg(`No vendor price for: ${res.skipped_items.join(", ")} — add prices to order these.`);
+        setMsg(`No chosen supplier for: ${res.skipped_items.join(", ")} — pick one on Price Comparison, then generate POs.`);
       }
       await load();
     } catch (err) {
