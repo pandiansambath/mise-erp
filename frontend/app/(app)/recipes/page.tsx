@@ -322,29 +322,45 @@ export default function RecipesPage() {
                 </div>
 
                 <p className="pt-1 text-sm font-medium text-slate-700">Ingredients</p>
-                {ings.map((l, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <select
-                      value={l.item_id}
-                      onChange={(e) => setIngs(ings.map((x, i) => (i === idx ? { ...x, item_id: e.target.value } : x)))}
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    >
-                      {items.map((it) => (
-                        <option key={it.id} value={it.id}>{it.name} ({it.unit})</option>
-                      ))}
-                    </select>
-                    <input
-                      value={l.qty}
-                      onChange={(e) => setIngs(ings.map((x, i) => (i === idx ? { ...x, qty: e.target.value } : x)))}
-                      inputMode="decimal"
-                      placeholder="qty"
-                      className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    {ings.length > 1 && (
-                      <button type="button" onClick={() => setIngs(ings.filter((_, i) => i !== idx))} className="rounded-lg border border-slate-200 px-2 text-slate-400 hover:bg-slate-50">×</button>
-                    )}
-                  </div>
-                ))}
+                {ings.map((l, idx) => {
+                  const lineItem = items.find((x) => x.id === l.item_id);
+                  const isKg = (lineItem?.unit ?? "").toLowerCase() === "kg";
+                  const qnum = parseFloat(l.qty) || 0;
+                  const kgPart = Math.floor(qnum);
+                  const gPart = Math.round((qnum - kgPart) * 1000);
+                  const setQty = (v: string) => setIngs(ings.map((x, i) => (i === idx ? { ...x, qty: v } : x)));
+                  const combine = (kg: number, g: number) => String(Math.round((kg + g / 1000) * 1000) / 1000);
+                  return (
+                    <div key={idx} className="flex gap-2">
+                      <select
+                        value={l.item_id}
+                        onChange={(e) => setIngs(ings.map((x, i) => (i === idx ? { ...x, item_id: e.target.value } : x)))}
+                        className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      >
+                        {items.map((it) => (
+                          <option key={it.id} value={it.id}>{it.name} ({it.unit})</option>
+                        ))}
+                      </select>
+                      {isKg ? (
+                        <>
+                          <input inputMode="numeric" value={kgPart ? String(kgPart) : ""} onChange={(e) => setQty(combine(parseInt(e.target.value) || 0, gPart))} placeholder="kg" title="kilograms" className="w-16 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                          <input inputMode="numeric" value={gPart ? String(gPart) : ""} onChange={(e) => setQty(combine(kgPart, parseInt(e.target.value) || 0))} placeholder="g" title="grams" className="w-16 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                        </>
+                      ) : (
+                        <input
+                          value={l.qty}
+                          onChange={(e) => setQty(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="qty"
+                          className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      )}
+                      {ings.length > 1 && (
+                        <button type="button" onClick={() => setIngs(ings.filter((_, i) => i !== idx))} className="rounded-lg border border-slate-200 px-2 text-slate-400 hover:bg-slate-50">×</button>
+                      )}
+                    </div>
+                  );
+                })}
 
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => setIngs([...ings, { item_id: items[0]?.id ?? "", qty: "" }])} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">

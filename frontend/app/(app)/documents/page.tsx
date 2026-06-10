@@ -37,6 +37,8 @@ export default function DocumentsPage() {
   const confirm = useConfirm();
   const canWrite = can(user?.role, "documents:write");
   const fileRef = useRef<HTMLInputElement>(null);
+  const reqFileRef = useRef<HTMLInputElement>(null);
+  const [uploadForReq, setUploadForReq] = useState<string | null>(null);
 
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [expiring, setExpiring] = useState<ExpiringDoc[]>([]);
@@ -80,6 +82,28 @@ export default function DocumentsPage() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create request");
+    }
+  }
+
+  function pickReqFile(id: string) {
+    setUploadForReq(id);
+    reqFileRef.current?.click();
+  }
+
+  async function onReqFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !uploadForReq) return;
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      await postForm(`/documents/requests/${uploadForReq}/upload`, form);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Upload failed");
+    } finally {
+      e.target.value = "";
+      setUploadForReq(null);
     }
   }
 
@@ -154,6 +178,7 @@ export default function DocumentsPage() {
   return (
     <div>
       <PageHeader title="Documents" subtitle="Licences, contracts, insurance, bills — with expiry alerts." />
+      <input ref={reqFileRef} type="file" className="hidden" onChange={onReqFileChosen} />
 
       {expiring.length > 0 && (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -260,6 +285,9 @@ export default function DocumentsPage() {
                         <div className="flex justify-end gap-1">
                           {r.document_id && (
                             <button onClick={() => downloadFile(`/documents/${r.document_id}/download`, docName(r.employee_name, r.doc_type, docs.find((x) => x.id === r.document_id)?.filename))} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">View</button>
+                          )}
+                          {r.status === "PENDING" && (
+                            <button onClick={() => pickReqFile(r.id)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" title="Upload this document for the staff member">Upload for them</button>
                           )}
                           {r.status === "UPLOADED" && (
                             <button onClick={() => approveRequest(r.id)} className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700">Approve</button>

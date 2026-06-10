@@ -126,6 +126,35 @@ async def approve_doc_request(
     return DocRequestOut.model_validate(next(r for r in rows if r["id"] == request_id))
 
 
+@router.post("/requests/{request_id}/upload", response_model=DocRequestOut)
+async def admin_fulfil_request(
+    request_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("documents:write")),
+) -> DocRequestOut:
+    """Super Admin uploads the requested file ON BEHALF of the staff member
+    (e.g. when the employee can't do it themselves). Same as the staff upload,
+    just initiated from the admin side."""
+    req = await service.get_request(db, request_id, user.hotel_id)
+    if req is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Request not found")
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"File exceeds {settings.max_upload_mb} MB"
+        )
+    await service.fulfil_request(
+        db, req,
+        filename=file.filename or "document",
+        mime_type=file.content_type,
+        data=data,
+        uploaded_by=user.id,
+    )
+    rows = await service.list_requests(db, user.hotel_id, employee_id=req.employee_id)
+    return DocRequestOut.model_validate(next(r for r in rows if r["id"] == request_id))
+
+
 @router.get("/{doc_id}/download")
 async def download_document(
     doc_id: uuid.UUID,
