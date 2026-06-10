@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, downloadFile, type DaySummary, type SalesChannel } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -33,6 +33,9 @@ export default function SalesPage() {
   const [opening, setOpening] = useState("");
   const [counted, setCounted] = useState("");
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
   const loadDay = useCallback(async (d: string) => {
     const s = await api.get<DaySummary>(`/sales/days/${d}`);
     setSummary(s);
@@ -55,6 +58,33 @@ export default function SalesPage() {
     setDay(d);
     setLoading(true);
     await loadDay(d).finally(() => setLoading(false));
+  }
+
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await postForm<{ added: number; skipped: string[] }>(
+        `/sales/days/${day}/import`,
+        form,
+      );
+      await loadDay(day);
+      setNotice(
+        `Imported ${res.added} line${res.added === 1 ? "" : "s"}` +
+          (res.skipped.length
+            ? `, ${res.skipped.length} skipped (${res.skipped.slice(0, 3).join(", ")}${res.skipped.length > 3 ? "…" : ""})`
+            : "") +
+          ".",
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Import failed");
+    } finally {
+      e.target.value = "";
+    }
   }
 
   async function addLine(e: React.FormEvent) {
@@ -120,13 +150,35 @@ export default function SalesPage() {
           onChange={(e) => changeDay(e.target.value)}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
         />
-        <button
-          onClick={() => downloadFile(`/sales/days/${day}/sheet.pdf`, `sales-${day}.pdf`)}
-          className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          ⬇ PDF
-        </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {canWrite && (
+            <>
+              <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={onImportFile} />
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                title="Upload a day's sales from Excel (Channel, Gross, Method)"
+              >
+                ⬆ Import Excel
+              </button>
+              <button
+                onClick={() => downloadFile("/sales/sales-template.xlsx", "mise-sales-template.xlsx")}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                ⬇ Template
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => downloadFile(`/sales/days/${day}/sheet.pdf`, `sales-${day}.pdf`)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            ⬇ PDF
+          </button>
+        </div>
       </div>
+      {notice && <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{notice}</p>}
+      {error && <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Gross sales" value={format(summary.totals.gross)} />

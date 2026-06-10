@@ -3,7 +3,7 @@ import uuid
 from datetime import date as date_type
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.sales.models import DailySales, PaymentMethod, SalesChannel, SalesLine
@@ -43,6 +43,16 @@ async def get_channel(
     if ch is None or ch.hotel_id != hotel_id:
         return None
     return ch
+
+
+async def get_channel_by_name(
+    db: AsyncSession, hotel_id: uuid.UUID, name: str
+) -> SalesChannel | None:
+    """Case-insensitive channel lookup (used by the sales Excel import)."""
+    stmt = select(SalesChannel).where(
+        SalesChannel.hotel_id == hotel_id, func.lower(SalesChannel.name) == name.strip().lower()
+    ).limit(1)
+    return (await db.execute(stmt)).scalars().first()
 
 
 async def create_channel(

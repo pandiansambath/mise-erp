@@ -1,12 +1,16 @@
 """Daily sales & cash endpoints. Hotel-scoped."""
+import io
+import re
 import uuid
 from datetime import date as date_type
+from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
+from app.core.config import settings
 from app.core.database import get_db
 from app.hotels.models import Hotel
 from app.sales import pdf as sales_pdf
@@ -21,6 +25,8 @@ from app.sales.schemas import (
     LineCreate,
     RangeSummary,
 )
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -58,6 +64,108 @@ async def update_channel(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Channel not found")
     ch = await service.update_channel(db, ch, **payload.model_dump(exclude_unset=True))
     return ChannelOut.model_validate(ch)
+
+
+# ── Excel import (daily sales) ───────────────────────────────────────────────
+def _parse_sales_rows(data: bytes) -> list[tuple[str, Decimal | None, str]]:
+    """Read an .xlsx with columns Channel / Gross (+ optional Method=CASH|CARD)."""
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except Exception as exc:  # noqa: BLE001 - any parse failure -> friendly 400
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Could not read the file — upload a .xlsx Excel file."
+        ) from exc
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+    header = next(rows_iter, None)
+    if header is None:
+        return []
+    cols = {str(h).strip().lower(): i for i, h in enumerate(header) if h is not None}
+
+    def find(*names: str) -> int | None:
+        return next((cols[n] for n in names if n in cols), None)
+
+    ci = find("channel", "source", "platform")
+    gi = find("gross", "gross amount", "amount", "sales", "total")
+    mi = find("method", "payment", "payment method", "type")
+    if ci is None or gi is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Excel needs a 'Channel' column and a 'Gross' column."
+        )
+    out: list[tuple[str, Decimal | None, str]] = []
+    for row in rows_iter:
+        ch = row[ci] if ci < len(row) else None
+        raw = row[gi] if gi < len(row) else None
+        m = row[mi] if (mi is not None and mi < len(row)) else None
+        if ch is None and raw is None:
+            continue
+        gross: Decimal | None = None
+        if raw is not None:
+            cleaned = re.sub(r"[^0-9.]", "", str(raw))
+            try:
+                gross = Decimal(cleaned) if cleaned else None
+            except InvalidOperation:
+                gross = None
+        method = "CASH" if (m is not None and "cash" in str(m).lower()) else "CARD"
+        out.append((str(ch).strip() if ch is not None else "", gross, method))
+    return out
+
+
+@router.get("/sales-template.xlsx")
+async def sales_template(user: User = Depends(require("sales:read"))) -> Response:
+    """A sample Excel for the daily-sales import (Channel, Gross, Method)."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Sales"
+    ws.append(["Channel", "Gross", "Method"])
+    ws.append(["Dine-in", 240.00, "CARD"])
+    ws.append(["Deliveroo", 86.50, "CARD"])
+    ws.append(["Cash counter", 120.00, "CASH"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    fname = "mise-sales-template.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type=XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.post("/days/{day}/import")
+async def import_day_sales(
+    day: date_type,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:write")),
+) -> dict:
+    """Upload a day's sales as Excel. Channels matched by name; unknown skipped."""
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"File exceeds {settings.max_upload_mb} MB"
+        )
+    rows = _parse_sales_rows(data)
+    if not rows:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No rows found in the file.")
+    record = await service.upsert_day(db, user.hotel_id, day, entered_by=user.id)
+    added = 0
+    skipped: list[str] = []
+    for name, gross, method in rows:
+        if not name or gross is None or gross < 0:
+            if name:
+                skipped.append(name)
+            continue
+        ch = await service.get_channel_by_name(db, user.hotel_id, name)
+        if ch is None:
+            skipped.append(f"{name} (unknown channel)")
+            continue
+        await service.add_line(db, record, ch.id, gross, method)
+        added += 1
+    return {"added": added, "skipped": skipped}
 
 
 # ── Daily entry ───────────────────────────────────────────────────────────────
