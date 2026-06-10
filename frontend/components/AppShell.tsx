@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
+import { THEMES, brandVars, useTheme, type ThemeKey } from "@/lib/theme";
 
 // `hideIfPerm`: hide the item when the user ALSO has this permission — used so
 // "My Space" (self-service) shows only for staff, not managers/owners who have
@@ -51,6 +52,44 @@ function CurrencySwitcher() {
         ))}
       </select>
     </label>
+  );
+}
+
+function ThemeSwitcher() {
+  const { theme, setTheme } = useTheme();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Change theme"
+        title="Theme"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50"
+      >
+        <span className="h-4 w-4 rounded-full ring-1 ring-black/10" style={{ background: THEMES[theme].brand["500"] }} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute right-0 z-40 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+            <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Theme</p>
+            {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => { setTheme(k); setOpen(false); }}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50 ${theme === k ? "font-semibold text-slate-900" : "text-slate-600"}`}
+              >
+                <span className="h-4 w-4 rounded-full ring-1 ring-black/10" style={{ background: THEMES[k].brand["500"] }} />
+                {THEMES[k].label}
+                {theme === k && <span className="ml-auto text-brand-600">✓</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -103,6 +142,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, hotel, logout } = useAuth();
   const { applyDefault } = useCurrency();
+  const { theme } = useTheme();
 
   // Default the display currency to the hotel's currency (unless the user chose one).
   useEffect(() => {
@@ -116,7 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden">
+    <div style={brandVars(theme)} className="min-h-screen lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden">
       {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
       <aside className="hidden border-r border-slate-200 bg-white lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
         <Brand />
@@ -163,6 +203,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <h1 className="text-sm font-semibold text-slate-700 lg:hidden">Mise</h1>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <ThemeSwitcher />
             <CurrencySwitcher />
             <span className="hidden text-sm text-slate-500 lg:inline">{user?.email}</span>
             <button
