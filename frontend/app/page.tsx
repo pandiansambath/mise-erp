@@ -97,7 +97,9 @@ function useScrollProgress(ref: RefObject<HTMLDivElement | null>) {
         setP(0);
         return;
       }
-      setP(Math.min(1, Math.max(0, -rect.top / total)));
+      const next = Math.min(1, Math.max(0, -rect.top / total));
+      // Skip the re-render when the change is negligible (React bails on equal value).
+      setP((prev) => (Math.abs(next - prev) < 0.002 ? prev : next));
     };
     const onScroll = () => {
       cancelAnimationFrame(raf);
@@ -250,11 +252,18 @@ function CursorGlow() {
     const onMove = (e: PointerEvent) => {
       tx = e.clientX;
       ty = e.clientY;
+      if (!raf) raf = requestAnimationFrame(tick); // wake the loop only when moving
     };
     const tick = () => {
       x += (tx - x) * 0.08;
       y += (ty - y) * 0.08;
       if (ref.current) ref.current.style.transform = `translate3d(${x - 350}px, ${y - 350}px, 0)`;
+      // Settle and STOP — no per-frame mix-blend repaint while the cursor is idle
+      // (e.g. during scrolling), which is where the jank came from.
+      if (Math.abs(tx - x) < 0.5 && Math.abs(ty - y) < 0.5) {
+        raf = 0;
+        return;
+      }
       raf = requestAnimationFrame(tick);
     };
     window.addEventListener("pointermove", onMove, { passive: true });
@@ -564,7 +573,9 @@ export default function Landing() {
   const heroIn = intro === "leaving" || intro === "done";
 
   useDarkDocument();
-  useButterScroll(intro === "done" || intro === "leaving");
+  // Native scroll is GPU-accelerated and smoother than a JS wheel-lerp on real
+  // hardware/browsers — the lerp was causing the "stuck" feel, so it's disabled.
+  useButterScroll(false);
 
   // Decide whether to play the intro (once per tab session; never for
   // reduced-motion users).

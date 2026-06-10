@@ -80,14 +80,16 @@ body {
   overflow: hidden;
 }
 .mise-aurora-shift {
-  animation: mise-aurora-hue 36s ease-in-out infinite;
+  /* The colour-melt is KEPT (the design depends on it). It lives on its own
+     compositor layer, so it doesn't block native scrolling. */
+  animation: mise-aurora-hue 40s ease-in-out infinite;
 }
 .mise-aurora span {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(75px);
+  filter: blur(60px); /* a hair tighter than 75px — cheaper to paint, looks the same */
   opacity: 0.58;
-  animation: mise-aurora-drift 22s ease-in-out infinite;
+  animation: mise-aurora-drift 24s ease-in-out infinite;
   will-change: transform;
 }
 
