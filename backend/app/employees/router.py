@@ -10,6 +10,7 @@ from app.auth.models import User
 from app.core.database import get_db
 from app.employees import service, timesheet
 from app.employees.schemas import (
+    AttendanceEdit,
     AttendanceOut,
     AttendanceRow,
     AttendanceSet,
@@ -178,5 +179,25 @@ async def set_attendance(
     rec = await service.set_attendance(
         db, emp, payload.date, status=payload.status,
         working_hours_value=payload.working_hours, notes=payload.notes,
+    )
+    return AttendanceOut.model_validate(rec)
+
+
+@attendance_router.post("/edit", response_model=AttendanceOut)
+async def edit_attendance(
+    payload: AttendanceEdit,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:write")),
+) -> AttendanceOut:
+    """Manually set/fix clock in/out for any date (incl. back-dated) — for
+    missed punches. Times are in the hotel's local time; stored as UTC."""
+    emp = await service.get_employee(db, payload.employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    hotel = await db.get(Hotel, user.hotel_id)
+    rec = await service.edit_attendance(
+        db, emp, payload.date, hotel.country if hotel else None,
+        clock_in=payload.clock_in, clock_out=payload.clock_out,
+        break_minutes=payload.break_minutes,
     )
     return AttendanceOut.model_validate(rec)

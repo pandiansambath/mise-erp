@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime
 from datetime import date as date_type
 from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -177,6 +178,54 @@ async def punch(db: AsyncSession, employee: Employee, ptype: str) -> Attendance:
         rec.clock_out = now
         rec.working_hours = working_hours(rec.clock_in, now, rec.break_minutes)
 
+    await db.commit()
+    await db.refresh(rec)
+    return rec
+
+
+# Hotel region → IANA timezone (mirrors the frontend). Admin edits times in the
+# hotel's local wall-clock; we store UTC.
+_TZ_BY_COUNTRY = {
+    "GB": "Europe/London", "IN": "Asia/Kolkata", "US": "America/New_York",
+    "AE": "Asia/Dubai", "EU": "Europe/Paris",
+}
+
+
+def hotel_timezone(country: str | None) -> ZoneInfo:
+    return ZoneInfo(_TZ_BY_COUNTRY.get((country or "").upper(), "Europe/London"))
+
+
+def _local_hhmm_to_utc(day: date_type, hhmm: str, tz: ZoneInfo) -> datetime:
+    hh, mm = hhmm.split(":")
+    return datetime(day.year, day.month, day.day, int(hh), int(mm), tzinfo=tz).astimezone(UTC)
+
+
+async def edit_attendance(
+    db: AsyncSession,
+    employee: Employee,
+    day: date_type,
+    country: str | None,
+    *,
+    clock_in: str | None,
+    clock_out: str | None,
+    break_minutes: int,
+) -> Attendance:
+    """Super-Admin manual edit/back-date: set clock in/out (entered as the
+    hotel's local time, stored in UTC) for ANY date — fixes missed punches."""
+    rec = await _today_attendance(db, employee, day)
+    if rec is None:
+        rec = Attendance(hotel_id=employee.hotel_id, employee_id=employee.id, date=day)
+        db.add(rec)
+    tz = hotel_timezone(country)
+    ci = _local_hhmm_to_utc(day, clock_in, tz) if clock_in else None
+    co = _local_hhmm_to_utc(day, clock_out, tz) if clock_out else None
+    rec.clock_in = ci
+    rec.clock_out = co
+    rec.break_minutes = max(0, break_minutes)
+    rec.break_start = None
+    rec.break_end = None
+    rec.working_hours = working_hours(ci, co, rec.break_minutes) if (ci and co) else None
+    rec.status = AttendanceStatus.PRESENT.value if ci else AttendanceStatus.ABSENT.value
     await db.commit()
     await db.refresh(rec)
     return rec

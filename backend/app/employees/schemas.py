@@ -116,6 +116,28 @@ class AttendanceSet(BaseModel):
         return v
 
 
+class AttendanceEdit(BaseModel):
+    """Super-Admin manual edit. Times are 'HH:MM' in the hotel's local time."""
+    employee_id: uuid.UUID
+    date: date_type
+    clock_in: str | None = None
+    clock_out: str | None = None
+    break_minutes: int = Field(default=0, ge=0)
+
+    @field_validator("clock_in", "clock_out")
+    @classmethod
+    def valid_hhmm(cls, v: str | None) -> str | None:
+        if v in (None, ""):
+            return None
+        parts = v.split(":")
+        if len(parts) != 2 or not (parts[0].isdigit() and parts[1].isdigit()):
+            raise ValueError("time must be HH:MM")
+        h, m = int(parts[0]), int(parts[1])
+        if not (0 <= h < 24 and 0 <= m < 60):
+            raise ValueError("invalid time")
+        return f"{h:02d}:{m:02d}"
+
+
 class AttendanceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

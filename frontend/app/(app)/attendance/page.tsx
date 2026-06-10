@@ -22,6 +22,17 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Manual edit / back-date (for missed punches)
+  const [editEmp, setEditEmp] = useState<Employee | null>(null);
+  const [ci, setCi] = useState("");
+  const [co, setCo] = useState("");
+  const [brk, setBrk] = useState("0");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // UTC ISO -> "HH:MM" in the hotel's timezone (for prefilling the time inputs)
+  const toHHMM = (iso: string | null | undefined): string =>
+    iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }) : "";
+
   const load = useCallback(async (d: string) => {
     const [emps, att] = await Promise.all([
       api.get<Employee[]>("/employees"),
@@ -49,6 +60,36 @@ export default function AttendancePage() {
       await load(day);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Punch failed");
+    }
+  }
+
+  function openEdit(e: Employee) {
+    const r = rows[e.id];
+    setEditEmp(e);
+    setCi(toHHMM(r?.clock_in));
+    setCo(toHHMM(r?.clock_out));
+    setBrk(String(r?.break_minutes ?? 0));
+    setError(null);
+  }
+
+  async function saveEdit() {
+    if (!editEmp) return;
+    setSavingEdit(true);
+    setError(null);
+    try {
+      await api.post("/attendance/edit", {
+        employee_id: editEmp.id,
+        date: day,
+        clock_in: ci || null,
+        clock_out: co || null,
+        break_minutes: parseInt(brk || "0", 10),
+      });
+      setEditEmp(null);
+      await load(day);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -102,7 +143,7 @@ export default function AttendancePage() {
                 <th className="px-5 py-3 text-right font-medium">Break</th>
                 <th className="px-5 py-3 text-right font-medium">Hours</th>
                 <th className="px-5 py-3 text-right font-medium">Penalty</th>
-                {canWrite && isToday && <th className="px-5 py-3 font-medium">Actions</th>}
+                {canWrite && <th className="px-5 py-3 font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -147,22 +188,22 @@ export default function AttendancePage() {
                           <span className="text-slate-300">—</span>
                         )}
                       </td>
-                      {canWrite && isToday && (
+                      {canWrite && (
                         <td className="px-5 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {!clockedIn && (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {isToday && !clockedIn && (
                               <button onClick={() => punch(e.id, "CLOCK_IN")} className={`${btn} border-brand-200 bg-brand-50 text-brand-700`}>Clock in</button>
                             )}
-                            {clockedIn && !clockedOut && !onBreak && (
+                            {isToday && clockedIn && !clockedOut && !onBreak && (
                               <>
                                 <button onClick={() => punch(e.id, "BREAK_START")} className={`${btn} border-amber-200 bg-amber-50 text-amber-700`}>Start break</button>
                                 <button onClick={() => punch(e.id, "CLOCK_OUT")} className={`${btn} border-slate-300 text-slate-700`}>Clock out</button>
                               </>
                             )}
-                            {clockedIn && !clockedOut && onBreak && (
+                            {isToday && clockedIn && !clockedOut && onBreak && (
                               <button onClick={() => punch(e.id, "BREAK_END")} className={`${btn} border-brand-200 bg-brand-50 text-brand-700`}>End break</button>
                             )}
-                            {clockedOut && <span className="text-xs text-slate-400">Done for today</span>}
+                            <button onClick={() => openEdit(e)} className={`${btn} border-slate-200 text-slate-500 hover:bg-slate-50`} title="Manually set / fix times (works for past dates)">Edit</button>
                           </div>
                         </td>
                       )}
@@ -177,8 +218,36 @@ export default function AttendancePage() {
 
       <p className="mt-4 text-xs text-slate-400">
         Flow: <b>Clock in</b> → optionally <b>Start break</b> then <b>End break</b> → <b>Clock out</b>.
-        Break time is subtracted from the day&apos;s working hours.
+        Break time is subtracted from the day&apos;s working hours. Use <b>Edit</b> to fix or
+        back-date a record if someone forgot to punch.
       </p>
+
+      {editEmp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setEditEmp(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(ev) => ev.stopPropagation()}>
+            <h3 className="font-semibold text-slate-900">Edit attendance</h3>
+            <p className="mt-0.5 text-sm text-slate-500">{editEmp.full_name} · {day} · times in {timeZone}</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="text-sm text-slate-600">Clock in
+                <input type="time" value={ci} onChange={(ev) => setCi(ev.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </label>
+              <label className="text-sm text-slate-600">Clock out
+                <input type="time" value={co} onChange={(ev) => setCo(ev.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </label>
+              <label className="col-span-2 text-sm text-slate-600">Break (minutes)
+                <input type="number" min="0" value={brk} onChange={(ev) => setBrk(ev.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Leave clock-in empty to mark the day absent.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setEditEmp(null)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button onClick={saveEdit} disabled={savingEdit} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+                {savingEdit ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
