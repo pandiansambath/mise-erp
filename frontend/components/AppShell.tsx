@@ -116,9 +116,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">
-      {/* Desktop sidebar */}
-      <aside className="hidden border-r border-slate-200 bg-white lg:flex lg:flex-col">
+    <div className="min-h-screen lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden">
+      {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
+      <aside className="hidden border-r border-slate-200 bg-white lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
         <Brand />
         <NavLinks items={navItems} pathname={pathname} />
         <div className="mt-auto border-t border-slate-200 p-4 text-xs text-slate-500">
@@ -148,7 +148,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:px-8">
           <button
@@ -174,7 +174,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>
     </div>
   );
