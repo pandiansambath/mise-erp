@@ -398,9 +398,9 @@ function MoneyLoop() {
     </div>
   );
 
-  /* Simple stacked fallback — mobile & reduced motion. */
+  /* Simple stacked fallback — reduced-motion only (the dial now runs on mobile too). */
   const stacked = (
-    <div className={`${reduced ? "" : "lg:hidden"} mx-auto max-w-6xl px-5 py-20 sm:py-24`}>
+    <div className={`${reduced ? "" : "hidden"} mx-auto max-w-6xl px-5 py-20 sm:py-24`}>
       <Reveal>
         <p className="text-center font-mono text-xs tracking-[0.35em] text-brand-300/90">THE MONEY LOOP</p>
         <h2 className="mt-4 text-center font-display text-4xl text-white sm:text-5xl">
@@ -433,7 +433,7 @@ function MoneyLoop() {
       {stacked}
 
       {!reduced && (
-        <div ref={stageRef} className="relative hidden lg:block" style={{ height: "420vh" }}>
+        <div ref={stageRef} className="relative block" style={{ height: "420vh" }}>
           <div className="sticky top-0 flex h-screen items-center overflow-hidden">
             {/* quiet aurora behind the stage */}
             <div className="mise-aurora mise-aurora-shift opacity-70">
@@ -452,9 +452,9 @@ function MoneyLoop() {
               </h2>
             </div>
 
-            <div className="relative mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-10 px-5 pt-24">
-              {/* LEFT column — steps 1 & 3 */}
-              <div className="relative h-[430px]">
+            <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-8 px-5 pt-28 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10 lg:pt-24">
+              {/* LEFT column — steps 1 & 3 (desktop only) */}
+              <div className="relative hidden h-[430px] lg:block">
                 {[0, 2].map((i) => (
                   <div
                     key={i}
@@ -466,7 +466,8 @@ function MoneyLoop() {
                 ))}
               </div>
 
-              {/* CENTRE — the pinned plate dial */}
+              {/* CENTRE — the pinned plate dial (scaled to fit small screens) */}
+              <div className="origin-center scale-[0.72] sm:scale-90 lg:scale-100">
               <div
                 className="relative h-[360px] w-[360px] will-change-transform"
                 style={{ opacity: dialOpacity, transform: `scale(${dialScale})` }}
@@ -523,9 +524,23 @@ function MoneyLoop() {
                   })}
                 </div>
               </div>
+              </div>
 
-              {/* RIGHT column — steps 2 & 4 */}
-              <div className="relative h-[430px]">
+              {/* MOBILE (below lg) — the active step's card under the dial */}
+              <div className="relative h-[300px] w-full max-w-xs lg:hidden">
+                {LOOP_STEPS.map((s, i) => (
+                  <div
+                    key={s.n}
+                    className="absolute inset-0 flex items-start justify-center will-change-transform"
+                    style={cardStyle(i)}
+                  >
+                    {stepCard(s)}
+                  </div>
+                ))}
+              </div>
+
+              {/* RIGHT column — steps 2 & 4 (desktop only) */}
+              <div className="relative hidden h-[430px] lg:block">
                 {[1, 3].map((i) => (
                   <div
                     key={i}
