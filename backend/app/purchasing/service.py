@@ -1,4 +1,10 @@
-"""Purchasing service: indents, vendor-wise POs (the admin's chosen supplier), receiving."""
+"""Purchasing service: indents, vendor-wise POs, receiving.
+
+Supplier resolution per line (user-confirmed 2026-06-12): the vendor PICKED on
+the indent line wins; otherwise the item's preferred ("chosen") vendor;
+otherwise the CHEAPEST active vendor. Only items no active vendor prices at
+all are skipped.
+"""
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -39,6 +45,7 @@ async def create_indent(
                 indent_id=indent.id,
                 item_id=it["item_id"],
                 required_qty=it["required_qty"],
+                vendor_id=it.get("vendor_id"),
                 notes=it.get("notes"),
             )
         )
@@ -56,8 +63,9 @@ async def get_indent(db: AsyncSession, indent_id: uuid.UUID, hotel_id: uuid.UUID
 
 async def indent_items(db: AsyncSession, indent_id: uuid.UUID) -> list[dict]:
     rows = await db.execute(
-        select(IndentItem, Item)
+        select(IndentItem, Item, Vendor.name)
         .join(Item, IndentItem.item_id == Item.id)
+        .outerjoin(Vendor, IndentItem.vendor_id == Vendor.id)
         .where(IndentItem.indent_id == indent_id)
         .order_by(Item.name)
     )
@@ -67,8 +75,10 @@ async def indent_items(db: AsyncSession, indent_id: uuid.UUID) -> list[dict]:
             "item_name": it.name,
             "required_qty": ii.required_qty,
             "unit": it.unit,
+            "vendor_id": ii.vendor_id,
+            "vendor_name": vname,  # the PICKED override, if any (display)
         }
-        for ii, it in rows.all()
+        for ii, it, vname in rows.all()
     ]
 
 
@@ -86,25 +96,66 @@ async def set_indent_status(db: AsyncSession, indent: Indent, status: str) -> In
     return indent
 
 
-# ── Chosen vendor lookup (the admin's pick — no cheapest fallback) ────────────
-async def _chosen_vendor(
-    db: AsyncSession, item_id: uuid.UUID, hotel_id: uuid.UUID
+# ── Supplier resolution: picked (per line) > preferred > cheapest ────────────
+async def _resolve_supplier(
+    db: AsyncSession,
+    item_id: uuid.UUID,
+    hotel_id: uuid.UUID,
+    override_vendor_id: uuid.UUID | None = None,
 ) -> tuple[uuid.UUID, Decimal] | None:
-    """The vendor the admin CHOSE for this item (is_preferred). No cheapest
-    fallback — the admin must pick a supplier on purpose."""
-    row = await db.execute(
+    """Which vendor (and price) to order this item from.
+
+    1. The vendor PICKED on the indent line — if they're active and price it.
+    2. The item's preferred ("chosen") vendor.
+    3. The cheapest active vendor.
+    None only when no active vendor prices the item at all.
+    """
+    base = (
         select(VendorItem.vendor_id, VendorItem.price_per_unit)
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
         .where(
             VendorItem.item_id == item_id,
             Vendor.hotel_id == hotel_id,
             Vendor.is_active.is_(True),
-            VendorItem.is_preferred.is_(True),
         )
-        .limit(1)
     )
-    r = row.first()
-    return (r[0], r[1]) if r else None
+    if override_vendor_id is not None:
+        row = (await db.execute(base.where(Vendor.id == override_vendor_id).limit(1))).first()
+        if row:
+            return (row[0], row[1])
+    row = (await db.execute(base.where(VendorItem.is_preferred.is_(True)).limit(1))).first()
+    if row:
+        return (row[0], row[1])
+    row = (await db.execute(base.order_by(VendorItem.price_per_unit.asc()).limit(1))).first()
+    return (row[0], row[1]) if row else None
+
+
+async def item_suppliers(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID, list[dict]]:
+    """Map item_id -> every active vendor pricing it (cheapest first), so the
+    UI can offer a per-line supplier choice without N requests."""
+    rows = await db.execute(
+        select(
+            VendorItem.item_id,
+            VendorItem.vendor_id,
+            Vendor.name,
+            VendorItem.price_per_unit,
+            VendorItem.is_preferred,
+        )
+        .join(Vendor, VendorItem.vendor_id == Vendor.id)
+        .where(Vendor.hotel_id == hotel_id, Vendor.is_active.is_(True))
+        .order_by(VendorItem.item_id, VendorItem.price_per_unit.asc())
+    )
+    out: dict[uuid.UUID, list[dict]] = {}
+    for item_id, vendor_id, name, price, pref in rows.all():
+        out.setdefault(item_id, []).append(
+            {
+                "vendor_id": vendor_id,
+                "vendor_name": name,
+                "price_per_unit": price,
+                "is_preferred": pref,
+            }
+        )
+    return out
 
 
 async def _next_po_number(db: AsyncSession, hotel_id: uuid.UUID) -> tuple[int, int]:
@@ -119,14 +170,15 @@ async def _next_po_number(db: AsyncSession, hotel_id: uuid.UUID) -> tuple[int, i
 
 # ── Generate POs from an approved indent ──────────────────────────────────────
 async def generate_pos(db: AsyncSession, indent: Indent) -> dict:
-    """Group indent items by their CHOSEN supplier and create one PO each.
-    Items with no chosen supplier are skipped and reported (admin must pick one)."""
+    """Group indent items by their resolved supplier (picked > preferred >
+    cheapest) and create one PO per vendor. Only items NO active vendor prices
+    are skipped and reported."""
     items = await indent_items(db, indent.id)
 
     by_vendor: dict[uuid.UUID, list[dict]] = {}
     skipped: list[str] = []
     for it in items:
-        chosen = await _chosen_vendor(db, it["item_id"], indent.hotel_id)
+        chosen = await _resolve_supplier(db, it["item_id"], indent.hotel_id, it["vendor_id"])
         if chosen is None:
             skipped.append(it["item_name"])
             continue

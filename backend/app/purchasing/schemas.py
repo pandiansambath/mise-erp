@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class IndentItemIn(BaseModel):
     item_id: uuid.UUID
     required_qty: Decimal = Field(gt=0)
+    # Optional supplier picked for THIS line (falls back preferred > cheapest).
+    vendor_id: uuid.UUID | None = None
     notes: str | None = None
 
 
@@ -22,6 +24,8 @@ class IndentItemOut(BaseModel):
     item_name: str
     required_qty: Decimal
     unit: str
+    vendor_id: uuid.UUID | None = None  # per-line override, if picked
+    vendor_name: str | None = None
 
 
 class IndentOut(BaseModel):
@@ -56,6 +60,7 @@ class POSummary(BaseModel):
 
     id: uuid.UUID
     vendor_id: uuid.UUID
+    vendor_name: str = ""
     po_number: str
     status: str
     total_amount: Decimal
@@ -64,3 +69,15 @@ class POSummary(BaseModel):
 class GenerateResult(BaseModel):
     purchase_orders: list[POOut]
     skipped_items: list[str]  # item names with no vendor price (can't be ordered)
+
+
+class SupplierOption(BaseModel):
+    vendor_id: uuid.UUID
+    vendor_name: str
+    price_per_unit: Decimal
+    is_preferred: bool
+
+
+class ItemSuppliers(BaseModel):
+    item_id: uuid.UUID
+    vendors: list[SupplierOption]

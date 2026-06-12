@@ -394,12 +394,35 @@ html:has(.mise-app) { background: #04120d; }
 .mise-stagger > *:nth-child(11) { animation-delay: 0.44s; }
 .mise-stagger > *:nth-child(n + 12) { animation-delay: 0.48s; }
 
+/* ── Curtain sweep across the auth boundary (login/signup → app) ────────── */
+@keyframes mise-curtain-up {
+  from { transform: translateY(101%); }
+  to   { transform: none; }
+}
+.mise-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(60% 50% at 50% 20%, rgba(16, 185, 129, 0.12), transparent 70%),
+    linear-gradient(160deg, #07140f, #030d09 65%);
+  animation: mise-curtain-up 0.5s cubic-bezier(0.76, 0, 0.24, 1) both;
+  will-change: transform;
+}
+.mise-curtain-content {
+  animation: mise-fade-in 0.35s 0.22s ease-out both;
+}
+
 /* ── Reduced motion: the app calms down too ─────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .mise-page,
   .mise-pop,
   .mise-fade,
   .mise-drawer,
+  .mise-curtain,
+  .mise-curtain-content,
   .mise-stagger > * {
     animation: none;
   }

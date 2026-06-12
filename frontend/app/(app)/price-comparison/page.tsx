@@ -124,10 +124,13 @@ export default function PriceComparisonPage() {
         </Card>
       ) : (
         <>
-          <Card className="mb-6">
-            <p className="mb-3 text-sm font-medium text-fg-soft">Pick an item to compare suppliers</p>
+          <div className="mb-6 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-5 shadow-lg shadow-black/20">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold text-fg">🧑‍🍳 Pick an item to compare suppliers</p>
+              <p className="text-xs text-fg-faint">★ = its current supplier · you can pick any vendor per order on Purchasing</p>
+            </div>
             <ItemPickerSingle items={items} value={selected} onChange={setSelected} />
-          </Card>
+          </div>
 
           {loadingCompare || !data ? (
             <Spinner />
@@ -213,9 +216,9 @@ export default function PriceComparisonPage() {
                 </div>
               </Card>
               <p className="mt-3 text-xs text-fg-faint">
-                <b>Purchasing orders from your chosen supplier</b> — pick one here for each item
-                (no auto-cheapest), e.g. for quality/reliability. Recipe costs still use the
-                cheapest vendor until a supplier is chosen.
+                <b>How ordering picks a supplier:</b> the vendor you pick on the order itself wins;
+                otherwise your ★ chosen supplier here; otherwise the cheapest. Recipe costing
+                follows the same rule.
               </p>
             </>
           )}

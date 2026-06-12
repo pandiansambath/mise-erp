@@ -95,6 +95,16 @@ async def test_duplicate_item_name_rejected(db, hotel):
         await service.create_item(db, hotel.id, name="  basmati rice ", unit="kg")
 
 
+@pytest.mark.asyncio
+async def test_item_names_stored_normalized(db, hotel):
+    """Stray/double spaces can't create sneaky duplicates — names are stored
+    trimmed + space-collapsed, and the dup check matches the normalized form."""
+    first = await service.create_item(db, hotel.id, name="  Aluminium   Containers ", unit="pack")
+    assert first.name == "Aluminium Containers"
+    with pytest.raises(service.DuplicateItemError):
+        await service.create_item(db, hotel.id, name="Aluminium Containers  ", unit="pack")
+
+
 # ── API + RBAC ─────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_full_purchase_flow_via_api(client, make_user, auth_header):

@@ -286,6 +286,20 @@ export interface IndentItemRow {
   item_name: string;
   required_qty: string;
   unit: string;
+  vendor_id?: string | null; // per-line supplier override, if one was picked
+  vendor_name?: string | null;
+}
+
+export interface SupplierOption {
+  vendor_id: string;
+  vendor_name: string;
+  price_per_unit: string;
+  is_preferred: boolean;
+}
+
+export interface ItemSuppliers {
+  item_id: string;
+  vendors: SupplierOption[];
 }
 
 export interface Indent {
@@ -299,6 +313,7 @@ export interface Indent {
 export interface POSummary {
   id: string;
   vendor_id: string;
+  vendor_name: string;
   po_number: string;
   status: string;
   total_amount: string;

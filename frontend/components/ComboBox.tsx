@@ -82,7 +82,7 @@ export function ComboBox({
         autoComplete="off"
       />
       {open && (matches.length > 0 || showAddNew) && (
-        <ul className="mise-pop absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-white/10 bg-ink-900/95 py-1 text-sm shadow-2xl shadow-black/40 backdrop-blur-xl">
+        <ul className="mise-pop absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-white/10 bg-paper-2/95 py-1 text-sm shadow-2xl shadow-black/40 backdrop-blur-xl">
           {matches.map((o, i) => (
             <li key={o}>
               <button

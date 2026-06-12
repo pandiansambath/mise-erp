@@ -386,7 +386,7 @@ function MoneyLoop() {
   };
 
   const stepCard = (s: (typeof LOOP_STEPS)[number]) => (
-    <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-7 shadow-2xl shadow-black/30 backdrop-blur-xl">
+    <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.02] p-7 shadow-2xl shadow-black/30 backdrop-blur-xl lg:max-w-[20rem] lg:p-6 xl:max-w-sm xl:p-7">
       <p className="font-mono text-xs tracking-[0.35em] text-brand-300/90">STEP {s.n}</p>
       <h3 className="mt-3 font-display text-3xl text-white">{s.title}</h3>
       <p className="mt-3 text-sm leading-relaxed text-slate-300">{s.desc}</p>
@@ -443,16 +443,19 @@ function MoneyLoop() {
 
             {/* heading pinned at the top of the stage */}
             <div
-              className="pointer-events-none absolute inset-x-0 top-24 text-center transition-opacity duration-300"
+              className="pointer-events-none z-10 absolute inset-x-0 top-10 text-center transition-opacity duration-300 sm:top-14"
               style={{ opacity: 0.4 + dialOpacity * 0.6 }}
             >
               <p className="font-mono text-xs tracking-[0.35em] text-brand-300/90">THE MONEY LOOP</p>
-              <h2 className="mt-3 font-display text-4xl text-white xl:text-5xl">
+              <h2 className="mt-3 font-display text-3xl text-white sm:text-4xl xl:text-5xl">
                 Watch a pound move <em className="mise-profit-text not-italic">through your kitchen</em>.
               </h2>
             </div>
 
-            <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-3 px-5 pt-28 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10 lg:pt-24">
+            {/* pt clears the pinned heading on every viewport so the dial and
+                its cards never collide with it; pb keeps the mobile card off
+                the screen edge. */}
+            <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-3 px-5 pb-10 pt-40 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-12 lg:pb-0 lg:pt-48">
               {/* LEFT column — steps 1 & 3 (desktop only) */}
               <div className="relative hidden h-[430px] lg:block">
                 {[0, 2].map((i) => (
@@ -528,7 +531,7 @@ function MoneyLoop() {
               </div>
 
               {/* MOBILE (below lg) — the active step's card under the dial */}
-              <div className="relative h-[250px] w-full max-w-xs lg:hidden">
+              <div className="relative h-[300px] w-full max-w-xs lg:hidden">
                 {LOOP_STEPS.map((s, i) => (
                   <div
                     key={s.n}

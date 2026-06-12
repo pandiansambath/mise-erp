@@ -6,13 +6,13 @@
 // "Your list" tray below, where quantities are entered with kg + g fields for
 // weighed items. Used by Purchasing (indents), Recipes (ingredients) and — in
 // single-select mode — Price Comparison.
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Item } from "@/lib/api";
 
 export type PickedLine = { item_id: string; qty: string };
 
 /* Best-effort emoji for a category name, so the tabs read at a glance. */
-function categoryEmoji(name: string): string {
+export function categoryEmoji(name: string): string {
   const n = name.toLowerCase();
   if (/veg/.test(n)) return "🥬";
   if (/fruit/.test(n)) return "🍎";
@@ -35,7 +35,7 @@ function categoryEmoji(name: string): string {
 
 type StockState = { dot: string; label: string; cls: string };
 
-function stockState(it: Item): StockState {
+export function stockState(it: Item): StockState {
   const qty = parseFloat(it.current_stock || "0");
   const min = parseFloat(it.min_stock_level || "0");
   if (qty <= 0) return { dot: "🔴", label: "out of stock", cls: "text-rose-300" };
@@ -105,11 +105,14 @@ export function ItemPicker({
   lines,
   onChange,
   emptyHint = "Nothing here yet.",
+  lineExtra,
 }: {
   items: Item[];
   lines: PickedLine[];
   onChange: (lines: PickedLine[]) => void;
   emptyHint?: string;
+  /** Extra controls per tray row (e.g. a supplier picker on Purchasing). */
+  lineExtra?: (line: PickedLine, item: Item) => ReactNode;
 }) {
   const [tab, setTab] = useState<string>("ALL");
   const [q, setQ] = useState("");
@@ -253,28 +256,31 @@ export function ItemPicker({
             Tap items above to add them here, then enter how much you need.
           </p>
         ) : (
-          <ul className="mt-2 space-y-2">
+          <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
             {chosen.map(({ line, item }) => (
-              <li key={item.id} className="mise-pop flex flex-wrap items-center gap-2 rounded-lg border border-line bg-paper/80 px-3 py-2">
-                <span aria-hidden>{categoryEmoji(groupKey(item))}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-fg">{item.name}</span>
-                  <span className="block text-xs text-fg-faint">
-                    {stockState(item).dot} have {item.current_stock} {item.unit}
+              <li key={item.id} className="mise-pop rounded-lg border border-line bg-paper/80 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span aria-hidden>{categoryEmoji(groupKey(item))}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-fg">{item.name}</span>
+                    <span className="block text-xs text-fg-faint">
+                      {stockState(item).dot} have {item.current_stock} {item.unit}
+                    </span>
                   </span>
-                </span>
-                <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
-                {item.unit.toLowerCase() !== "kg" && (
-                  <span className="text-xs text-fg-faint">{item.unit}</span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => toggle(item)}
-                  aria-label={`Remove ${item.name}`}
-                  className="rounded-lg border border-line px-2 py-1 text-sm text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
-                >
-                  ✕
-                </button>
+                  <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
+                  {item.unit.toLowerCase() !== "kg" && (
+                    <span className="text-xs text-fg-faint">{item.unit}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggle(item)}
+                    aria-label={`Remove ${item.name}`}
+                    className="rounded-lg border border-line px-2 py-1 text-sm text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {lineExtra && <div className="mt-1.5 pl-7">{lineExtra(line, item)}</div>}
               </li>
             ))}
           </ul>
@@ -399,6 +405,11 @@ export function ItemPickerSingle({
               <span className="mt-0.5 block text-xs text-fg-faint">
                 {it.unit} · have {it.current_stock}
               </span>
+              {it.best_vendor ? (
+                <span className="mt-1 block truncate text-xs text-brand-300">★ {it.best_vendor}</span>
+              ) : (
+                <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>
+              )}
             </button>
           );
         })}

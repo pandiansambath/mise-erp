@@ -54,15 +54,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Let the current page raise its transition curtain (components/Curtain.tsx)
+  // and give the sweep time to cover the screen before the route swaps.
+  const sweepThenGo = useCallback(
+    async (path: string) => {
+      window.dispatchEvent(new Event("mise:transition"));
+      await new Promise((r) => setTimeout(r, 520));
+      router.push(path);
+    },
+    [router]
+  );
+
   const login = useCallback(
     async (email: string, password: string) => {
       const res = await api.post<TokenResponse>("/auth/login", { email, password });
       setToken(res.access_token);
       setUser(res.user);
       setHotel(res.hotel);
-      router.push("/dashboard");
+      await sweepThenGo("/dashboard");
     },
-    [router]
+    [sweepThenGo]
   );
 
   const registerHotel = useCallback(
@@ -71,9 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(res.access_token);
       setUser(res.user);
       setHotel(res.hotel);
-      router.push("/dashboard");
+      await sweepThenGo("/dashboard");
     },
-    [router]
+    [sweepThenGo]
   );
 
   const logout = useCallback(() => {

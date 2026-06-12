@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { Curtain, useCurtain } from "@/components/Curtain";
 import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 
@@ -37,6 +38,7 @@ export default function SignupPage() {
   }, []);
 
   const { registerHotel } = useAuth();
+  const curtain = useCurtain();
   const [hotelName, setHotelName] = useState("");
   const [country, setCountry] = useState("GB");
   const [city, setCity] = useState("");
@@ -64,6 +66,7 @@ export default function SignupPage() {
 
   return (
     <div className="mise-dark-page relative min-h-screen overflow-hidden bg-ink-950 text-slate-100">
+      <Curtain show={curtain} label="Setting your tables…" />
       {/* aurora backdrop — same colour-gliding treatment as the landing */}
       <div className="mise-aurora mise-aurora-shift">
         <span style={{ left: "-10%", top: "-15%", width: 560, height: 560, background: "radial-gradient(circle, #10b981, transparent 68%)" }} />

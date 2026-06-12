@@ -43,16 +43,38 @@ async def test_generate_pos_groups_by_chosen_vendor(db, hotel):
 
 
 @pytest.mark.asyncio
-async def test_item_without_chosen_vendor_skipped(db, hotel):
+async def test_item_without_chosen_vendor_falls_back_to_cheapest(db, hotel):
     rice = await inv.create_item(db, hotel.id, name="Rice", unit="kg")
     v1 = await ven.create_vendor(db, hotel.id, name="V1")
-    await ven.upsert_vendor_item(db, v1.id, rice.id, Decimal("5.00"))  # priced, but NOT chosen
+    v2 = await ven.create_vendor(db, hotel.id, name="V2")
+    await ven.upsert_vendor_item(db, v1.id, rice.id, Decimal("5.00"))  # cheapest
+    await ven.upsert_vendor_item(db, v2.id, rice.id, Decimal("5.50"))
+    # nobody is "chosen" — order from the cheapest
     indent = await service.create_indent(
         db, hotel.id, [{"item_id": rice.id, "required_qty": Decimal("10")}]
     )
     result = await service.generate_pos(db, indent)
-    assert result["purchase_orders"] == []
-    assert "Rice" in result["skipped_items"]
+    assert result["skipped_items"] == []
+    assert len(result["purchase_orders"]) == 1
+    po = result["purchase_orders"][0]
+    assert po.vendor_id == v1.id
+    assert po.total_amount == Decimal("50.00")
+
+
+@pytest.mark.asyncio
+async def test_per_line_picked_vendor_beats_preferred(db, hotel):
+    rice, _chicken, _v1, v2 = await _setup_catalog(db, hotel.id)
+    # rice's preferred is V1 (5.00), but the chef PICKS V2 (5.50) for this order
+    indent = await service.create_indent(
+        db, hotel.id,
+        [{"item_id": rice.id, "required_qty": Decimal("10"), "vendor_id": v2.id}],
+    )
+    result = await service.generate_pos(db, indent)
+    assert result["skipped_items"] == []
+    assert len(result["purchase_orders"]) == 1
+    po = result["purchase_orders"][0]
+    assert po.vendor_id == v2.id
+    assert po.total_amount == Decimal("55.00")  # 10 * 5.50 — the picked vendor's price
 
 
 @pytest.mark.asyncio

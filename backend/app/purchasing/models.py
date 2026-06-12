@@ -59,6 +59,9 @@ class IndentItem(Base):
     )
     item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("items.id"), nullable=False)
     required_qty: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    # Optional per-line supplier override (the chef/admin picked one for THIS
+    # order). None = fall back to the item's preferred vendor, else cheapest.
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vendors.id"))
     notes: Mapped[str | None] = mapped_column(Text)
 
 

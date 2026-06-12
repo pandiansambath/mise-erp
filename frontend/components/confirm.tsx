@@ -74,7 +74,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => settle(false)}
           />
-          <div className="mise-pop relative w-full max-w-sm rounded-2xl border border-white/10 bg-ink-900/95 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="mise-pop relative w-full max-w-sm rounded-2xl border border-white/10 bg-paper-2/95 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <h3 className="text-base font-semibold text-fg">
               {opts.title ?? "Are you sure?"}
             </h3>

@@ -56,19 +56,21 @@ export default function DashboardPage() {
 
       {seeFinance && kpis && (
         <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Today's net sales" value={format(kpis.today_net_sales)} />
-          <StatCard label="Month net sales" value={format(kpis.month_net_sales)} />
+          <StatCard label="Today's net sales" value={format(kpis.today_net_sales)} href="/sales" />
+          <StatCard label="Month net sales" value={format(kpis.month_net_sales)} href="/reports" />
           <StatCard
             label="Month profit"
             value={format(kpis.month_net_profit)}
             accent={parseFloat(kpis.month_net_profit) >= 0 ? "brand" : "rose"}
             hint={`${kpis.month_net_margin_pct}% margin`}
+            href="/reports"
           />
           <StatCard
             label="Low stock"
             value={String(kpis.low_stock_count)}
             accent={kpis.low_stock_count ? "rose" : "brand"}
-            hint={kpis.low_stock_count ? "Need reordering" : "All good"}
+            hint={kpis.low_stock_count ? "Tap to see & reorder" : "All good"}
+            href="/inventory?filter=low"
           />
         </div>
       )}
@@ -89,11 +91,22 @@ export default function DashboardPage() {
             ) : (
               <ul className="divide-y divide-line">
                 {low.slice(0, 6).map((l) => (
-                  <li key={l.item_id} className="flex items-center justify-between py-2.5 text-sm">
-                    <span className="font-medium text-fg-soft">{l.name}</span>
-                    <Badge tone="red">
-                      {l.current_stock} left (min {l.min_stock_level})
-                    </Badge>
+                  <li key={l.item_id}>
+                    <Link
+                      href={`/purchasing?item=${l.item_id}`}
+                      title="Order this item — opens Purchasing with it picked"
+                      className="group flex items-center justify-between gap-2 py-2.5 text-sm transition hover:bg-white/[0.03]"
+                    >
+                      <span className="font-medium text-fg-soft group-hover:text-fg">{l.name}</span>
+                      <span className="flex items-center gap-2">
+                        <Badge tone="red">
+                          {l.current_stock} left (min {l.min_stock_level})
+                        </Badge>
+                        <span className="text-xs font-medium text-brand-300 opacity-0 transition group-hover:opacity-100">
+                          🛒 order →
+                        </span>
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>

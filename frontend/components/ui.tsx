@@ -1,4 +1,5 @@
 // Small presentational primitives used across pages.
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 export function Card({
@@ -22,11 +23,14 @@ export function StatCard({
   value,
   hint,
   accent = "slate",
+  href,
 }: {
   label: string;
   value: string;
   hint?: string;
   accent?: "slate" | "brand" | "amber" | "rose" | "copper";
+  /** Makes the whole card a shortcut (e.g. "Low stock" → inventory, filtered). */
+  href?: string;
 }) {
   const accents: Record<string, string> = {
     slate: "text-fg",
@@ -35,13 +39,25 @@ export function StatCard({
     rose: "text-rose-400",
     copper: "text-copper-300",
   };
-  return (
-    <Card className="transition duration-300 hover:border-line-2 hover:bg-paper-2/90">
-      <p className="text-xs font-medium uppercase tracking-wide text-fg-faint">{label}</p>
+  const body = (
+    <Card
+      className={`transition duration-300 hover:border-line-2 hover:bg-paper-2/90 ${
+        href ? "group cursor-pointer hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/30" : ""
+      }`}
+    >
+      <p className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-fg-faint">
+        {label}
+        {href && (
+          <span aria-hidden className="text-fg-faint opacity-0 transition group-hover:opacity-100">
+            →
+          </span>
+        )}
+      </p>
       <p className={`mt-2 text-2xl font-semibold ${accents[accent]}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-fg-faint">{hint}</p>}
     </Card>
   );
+  return href ? <Link href={href} className="block">{body}</Link> : body;
 }
 
 export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {

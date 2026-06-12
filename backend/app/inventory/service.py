@@ -22,6 +22,12 @@ class DuplicateItemError(ValueError):
     """Raised when an item with the same name already exists in the hotel."""
 
 
+def normalize_name(name: str) -> str:
+    """Trim and collapse inner whitespace so "Rice " / "Rice" / "Ric  e" can't
+    create sneaky duplicates. Names are STORED normalized too."""
+    return " ".join(name.split())
+
+
 async def _name_taken(
     db: AsyncSession, hotel_id: uuid.UUID, name: str, *, exclude_id: uuid.UUID | None = None
 ) -> bool:
@@ -29,7 +35,7 @@ async def _name_taken(
     stmt = select(Item.id).where(
         Item.hotel_id == hotel_id,
         Item.is_active.is_(True),
-        func.lower(Item.name) == name.strip().lower(),
+        func.lower(Item.name) == normalize_name(name).lower(),
     )
     if exclude_id is not None:
         stmt = stmt.where(Item.id != exclude_id)
@@ -63,8 +69,10 @@ def signed_delta(movement_type: str, quantity: Decimal) -> Decimal:
 # ── Item CRUD (all scoped to a hotel) ───────────────────────────────────────
 async def create_item(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Item:
     name = fields.get("name", "")
-    if name and await _name_taken(db, hotel_id, name):
-        raise DuplicateItemError(f'An item called "{name.strip()}" already exists')
+    if name:
+        fields["name"] = normalize_name(name)
+        if await _name_taken(db, hotel_id, fields["name"]):
+            raise DuplicateItemError(f'An item called "{fields["name"]}" already exists')
     item = Item(hotel_id=hotel_id, **fields)
     db.add(item)
     await db.commit()
@@ -146,8 +154,10 @@ async def best_vendors(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID,
 
 async def update_item(db: AsyncSession, item: Item, **fields) -> Item:
     new_name = fields.get("name")
-    if new_name and await _name_taken(db, item.hotel_id, new_name, exclude_id=item.id):
-        raise DuplicateItemError(f'An item called "{new_name.strip()}" already exists')
+    if new_name:
+        fields["name"] = normalize_name(new_name)
+        if await _name_taken(db, item.hotel_id, fields["name"], exclude_id=item.id):
+            raise DuplicateItemError(f'An item called "{fields["name"]}" already exists')
     for key, value in fields.items():
         if value is not None:
             setattr(item, key, value)

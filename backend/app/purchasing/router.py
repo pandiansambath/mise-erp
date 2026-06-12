@@ -2,6 +2,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
@@ -17,9 +18,11 @@ from app.purchasing.schemas import (
     GenerateResult,
     IndentCreate,
     IndentOut,
+    ItemSuppliers,
     POOut,
     POSummary,
 )
+from app.vendors.models import Vendor
 
 router = APIRouter(prefix="/purchasing", tags=["purchasing"])
 
@@ -100,6 +103,16 @@ async def generate_pos(
     )
 
 
+# ── Supplier options (for the per-line picker in the UI) ─────────────────────
+@router.get("/item-suppliers", response_model=list[ItemSuppliers])
+async def list_item_suppliers(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:read")),
+) -> list[ItemSuppliers]:
+    by_item = await service.item_suppliers(db, user.hotel_id)
+    return [ItemSuppliers(item_id=k, vendors=v) for k, v in by_item.items()]
+
+
 # ── Purchase orders ───────────────────────────────────────────────────────────
 @router.get("/purchase-orders", response_model=list[POSummary])
 async def list_pos(
@@ -107,7 +120,18 @@ async def list_pos(
     user: User = Depends(require("indent:read")),
 ) -> list[POSummary]:
     pos = await service.list_pos(db, user.hotel_id)
-    return [POSummary.model_validate(p) for p in pos]
+    names = {
+        v.id: v.name
+        for v in (await db.execute(
+            select(Vendor).where(Vendor.hotel_id == user.hotel_id)
+        )).scalars().all()
+    }
+    out = []
+    for p in pos:
+        row = POSummary.model_validate(p)
+        row.vendor_name = names.get(p.vendor_id, "")
+        out.append(row)
+    return out
 
 
 @router.get("/purchase-orders/{po_id}", response_model=POOut)

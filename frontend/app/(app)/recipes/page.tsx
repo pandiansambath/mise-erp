@@ -15,6 +15,28 @@ function marginTone(pct: number): "green" | "amber" | "red" {
   return "red";
 }
 
+/** Chefs think in grams: show kg quantities as "1 kg 500 g" (or "500 g"). */
+function fmtQty(quantity: string, unit: string): string {
+  if (unit.toLowerCase() !== "kg") return `${quantity} ${unit}`;
+  const q = parseFloat(quantity) || 0;
+  const kg = Math.floor(q);
+  const g = Math.round((q - kg) * 1000);
+  if (kg && g) return `${kg} kg ${g} g`;
+  if (kg) return `${kg} kg`;
+  return `${g} g`;
+}
+
+/** Where the price came from — as a readable chip. */
+function SourceChip({ source, vendor }: { source: string; vendor: string | null }) {
+  if (source === "preferred")
+    return <Badge tone="amber">★ {vendor ?? "chosen"}</Badge>;
+  if (source === "cheapest")
+    return <Badge tone="slate">cheapest · {vendor ?? "?"}</Badge>;
+  if (source === "average_cost")
+    return <Badge tone="green">avg cost</Badge>;
+  return <Badge tone="red">no price</Badge>;
+}
+
 function CostDetail({ recipeId }: { recipeId: string }) {
   const [data, setData] = useState<RecipeCostBreakdown | null>(null);
   const { format } = useCurrency();
@@ -24,37 +46,27 @@ function CostDetail({ recipeId }: { recipeId: string }) {
 
   if (!data) return <Spinner />;
 
+  const marginCls =
+    data.profit_margin_pct == null
+      ? "text-fg"
+      : { green: "text-brand-400", amber: "text-amber-400", red: "text-rose-400" }[
+          marginTone(parseFloat(data.profit_margin_pct))
+        ];
+
   return (
     <div className="space-y-4">
-      <div className="mise-stagger grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div>
-          <p className="text-xs uppercase text-fg-faint">Cost / serving</p>
-          <p className="text-lg font-semibold text-fg">{format(data.cost_per_serving)}</p>
-        </div>
-        <div>
-          <p className="text-xs uppercase text-fg-faint">Sells at</p>
-          <p className="text-lg font-semibold text-fg">
-            {data.selling_price ? format(data.selling_price) : "—"}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase text-fg-faint">Margin</p>
-          <p
-            className={`text-lg font-semibold ${
-              data.profit_margin_pct == null
-                ? "text-fg"
-                : { green: "text-brand-400", amber: "text-amber-400", red: "text-rose-400" }[
-                    marginTone(parseFloat(data.profit_margin_pct))
-                  ]
-            }`}
-          >
-            {data.profit_margin_pct ? `${data.profit_margin_pct}%` : "—"}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase text-fg-faint">Batch ({data.servings})</p>
-          <p className="text-lg font-semibold text-fg">{format(data.total_cost)}</p>
-        </div>
+      <div className="mise-stagger grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Cost / serving", value: format(data.cost_per_serving), cls: "text-copper-300" },
+          { label: "Sells at", value: data.selling_price ? format(data.selling_price) : "—", cls: "text-fg" },
+          { label: "Margin", value: data.profit_margin_pct ? `${data.profit_margin_pct}%` : "—", cls: marginCls },
+          { label: `Batch (${data.servings} serves)`, value: format(data.total_cost), cls: "text-fg" },
+        ].map((kpi) => (
+          <div key={kpi.label} className="rounded-xl border border-line bg-paper-2/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-fg-faint">{kpi.label}</p>
+            <p className={`mt-1 text-lg font-semibold ${kpi.cls}`}>{kpi.value}</p>
+          </div>
+        ))}
       </div>
 
       {data.has_missing_prices && (
@@ -63,34 +75,30 @@ function CostDetail({ recipeId }: { recipeId: string }) {
         </p>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border border-line">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-              <th className="py-2 pr-4 font-medium">Ingredient</th>
-              <th className="py-2 pr-4 text-right font-medium">Qty</th>
-              <th className="py-2 pr-4 text-right font-medium">Unit price</th>
-              <th className="py-2 pr-4 text-right font-medium">Line cost</th>
-              <th className="py-2 font-medium">Source</th>
+          <thead className="bg-paper-2/60">
+            <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-faint">
+              <th className="px-3 py-2 font-medium">Ingredient</th>
+              <th className="px-3 py-2 text-right font-medium">Qty</th>
+              <th className="px-3 py-2 text-right font-medium">Unit price</th>
+              <th className="px-3 py-2 text-right font-medium">Line cost</th>
+              <th className="px-3 py-2 font-medium">Priced from</th>
             </tr>
           </thead>
           <tbody>
             {data.ingredients.map((ing) => (
-              <tr key={ing.item_id} className="border-b border-line">
-                <td className="py-2 pr-4 text-fg">{ing.item_name}</td>
-                <td className="py-2 pr-4 text-right text-fg-soft">
-                  {ing.quantity} {ing.unit}
+              <tr key={ing.item_id} className="border-b border-line transition hover:bg-white/[0.03]">
+                <td className="px-3 py-2 text-fg">{ing.item_name}</td>
+                <td className="px-3 py-2 text-right text-fg-soft" title={`${ing.quantity} ${ing.unit}`}>
+                  {fmtQty(ing.quantity, ing.unit)}
                 </td>
-                <td className="py-2 pr-4 text-right text-fg-soft">{format(ing.unit_price)}</td>
-                <td className="py-2 pr-4 text-right font-medium text-fg">
+                <td className="px-3 py-2 text-right text-fg-soft">{format(ing.unit_price)}</td>
+                <td className="px-3 py-2 text-right font-medium text-copper-300">
                   {format(ing.line_cost)}
                 </td>
-                <td className="py-2 text-fg-faint">
-                  {ing.price_source === "preferred"
-                    ? `★ ${ing.vendor_name}`
-                    : ing.price_source === "cheapest"
-                      ? ing.vendor_name
-                      : ing.price_source}
+                <td className="px-3 py-2">
+                  <SourceChip source={ing.price_source} vendor={ing.vendor_name} />
                 </td>
               </tr>
             ))}

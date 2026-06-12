@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
-import { THEMES, brandVars, useTheme, type ThemeKey } from "@/lib/theme";
+import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
 
 // `hideIfPerm`: hide the item when the user ALSO has this permission — used so
 // "My Space" (self-service) shows only for staff, not managers/owners who have
@@ -72,7 +72,7 @@ function ThemeSwitcher() {
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
-          <div className="mise-pop absolute right-0 z-40 mt-2 w-44 rounded-xl border border-white/10 bg-ink-900/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div className="mise-pop absolute right-0 z-40 mt-2 w-52 rounded-xl border border-white/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
             <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-fg-faint">Theme</p>
             {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
               <button
@@ -81,7 +81,13 @@ function ThemeSwitcher() {
                 onClick={() => { setTheme(k); setOpen(false); }}
                 className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-white/5 ${theme === k ? "font-semibold text-fg" : "text-fg-soft"}`}
               >
-                <span className="h-4 w-4 rounded-full ring-1 ring-white/25" style={{ background: THEMES[k].brand["500"] }} />
+                {/* two-tone swatch: the theme's surface with its accent inside */}
+                <span
+                  className="grid h-5 w-5 shrink-0 place-items-center rounded-md ring-1 ring-white/25"
+                  style={{ background: THEMES[k].surfaces[1] }}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: THEMES[k].brand["500"] }} />
+                </span>
                 {THEMES[k].label}
                 {theme === k && <span className="ml-auto text-brand-400">✓</span>}
               </button>
@@ -138,14 +144,15 @@ function NavLinks({
 }
 
 /** Drifting aurora behind the whole app — same ingredient as the landing,
-    dialled down so tables stay crisp. Fixed + pointer-events-none. */
+    dialled down so tables stay crisp. Colours follow the chosen theme via
+    the --mise-aurora-* variables set by themeVars(). */
 function ShellAurora() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
       <div className="mise-aurora mise-aurora-shift opacity-40">
-        <span style={{ left: "-8%", top: "-14%", width: 560, height: 560, background: "radial-gradient(circle, #10b981, transparent 68%)" }} />
-        <span style={{ right: "-10%", top: "10%", width: 520, height: 520, background: "radial-gradient(circle, #0ea5e9, transparent 70%)", animationDelay: "8s" }} />
-        <span style={{ left: "35%", bottom: "-28%", width: 620, height: 620, background: "radial-gradient(circle, #14b8a6, transparent 72%)", animationDelay: "14s" }} />
+        <span style={{ left: "-8%", top: "-14%", width: 560, height: 560, background: "radial-gradient(circle, var(--mise-aurora-1), transparent 68%)" }} />
+        <span style={{ right: "-10%", top: "10%", width: 520, height: 520, background: "radial-gradient(circle, var(--mise-aurora-2), transparent 70%)", animationDelay: "8s" }} />
+        <span style={{ left: "35%", bottom: "-28%", width: 620, height: 620, background: "radial-gradient(circle, var(--mise-aurora-3), transparent 72%)", animationDelay: "14s" }} />
       </div>
     </div>
   );
@@ -171,13 +178,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      style={brandVars(theme)}
+      style={themeVars(theme)}
       className="mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden"
     >
       <ShellAurora />
 
       {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
-      <aside className="relative hidden border-r border-white/10 bg-ink-950/70 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
+      <aside className="relative hidden border-r border-white/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
         <Brand />
         <NavLinks items={navItems} pathname={pathname} />
         <div className="mt-auto border-t border-white/10 p-4 text-xs text-fg-faint">
@@ -200,7 +207,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col border-r border-white/10 bg-ink-950/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col border-r border-white/10 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <Brand />
             <NavLinks items={navItems} pathname={pathname} onClick={() => setOpen(false)} />
           </aside>
@@ -209,7 +216,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-white/10 bg-ink-950/60 px-4 py-3 backdrop-blur-xl lg:px-8">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-white/10 bg-shell/70 px-4 py-3 backdrop-blur-xl lg:px-8">
           <button
             type="button"
             aria-label="Open menu"

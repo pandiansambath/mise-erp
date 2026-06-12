@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { Curtain, useCurtain } from "@/components/Curtain";
 import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 
@@ -23,6 +24,7 @@ export default function LoginPage() {
   }, []);
 
   const { login } = useAuth();
+  const curtain = useCurtain();
   const [email, setEmail] = useState("owner@nirai.com");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +49,7 @@ export default function LoginPage() {
 
   return (
     <div className="mise-dark-page relative grid min-h-screen place-items-center overflow-hidden bg-ink-950 px-4 text-slate-100">
+      <Curtain show={curtain} />
       {/* aurora backdrop — same colour-gliding treatment as the landing / signup */}
       <div className="mise-aurora mise-aurora-shift">
         <span style={{ left: "-10%", top: "-15%", width: 540, height: 540, background: "radial-gradient(circle, #10b981, transparent 68%)" }} />
