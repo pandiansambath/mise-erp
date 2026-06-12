@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Item, type PriceComparison, type Vendor } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -76,12 +77,12 @@ export default function PriceComparisonPage() {
 
   const addPriceForm = canWrite ? (
     <Card className="mt-4">
-      <p className="mb-2 text-sm font-medium text-slate-700">Add a vendor price for this item</p>
+      <p className="mb-2 text-sm font-medium text-fg-soft">Add a vendor price for this item</p>
       <form onSubmit={addVendorPrice} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto]">
         <select
           value={addVendorId}
           onChange={(e) => setAddVendorId(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          className="rounded-lg border border-line-2 bg-paper px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
         >
           <option value="">Select vendor…</option>
           {vendors.filter((v) => v.is_active).map((v) => (
@@ -95,14 +96,14 @@ export default function PriceComparisonPage() {
           value={addPrice}
           onChange={(e) => setAddPrice(e.target.value)}
           placeholder="price"
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:w-28"
+          className="rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 sm:w-28"
         />
         <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
           Add
         </button>
       </form>
-      {addError && <p className="mt-2 text-sm text-rose-600">{addError}</p>}
-      <p className="mt-2 text-xs text-slate-400">
+      {addError && <p className="mt-2 text-sm text-rose-400">{addError}</p>}
+      <p className="mt-2 text-xs text-fg-faint">
         Vendor not listed? Add them on the <b>Vendors</b> page first.
       </p>
     </Card>
@@ -117,36 +118,23 @@ export default function PriceComparisonPage() {
 
       {items.length === 0 ? (
         <Card>
-          <p className="py-6 text-center text-sm text-slate-400">
+          <p className="py-6 text-center text-sm text-fg-faint">
             No items yet. Add items and vendor prices to compare.
           </p>
         </Card>
       ) : (
         <>
-          <div className="mb-6 max-w-md">
-            <label htmlFor="item" className="block text-sm font-medium text-slate-700">
-              Item
-            </label>
-            <select
-              id="item"
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            >
-              {items.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name} ({i.unit})
-                </option>
-              ))}
-            </select>
-          </div>
+          <Card className="mb-6">
+            <p className="mb-3 text-sm font-medium text-fg-soft">Pick an item to compare suppliers</p>
+            <ItemPickerSingle items={items} value={selected} onChange={setSelected} />
+          </Card>
 
           {loadingCompare || !data ? (
             <Spinner />
           ) : data.vendor_count === 0 ? (
             <>
               <Card>
-                <p className="py-6 text-center text-sm text-slate-400">
+                <p className="py-6 text-center text-sm text-fg-faint">
                   No vendor prices recorded for this item yet — add one below so it can be ordered.
                 </p>
               </Card>
@@ -155,8 +143,8 @@ export default function PriceComparisonPage() {
           ) : (
             <>
               {parseFloat(data.potential_saving_per_unit) > 0 && (
-                <div className="mb-5 rounded-xl border border-brand-200 bg-brand-50 p-4">
-                  <p className="text-sm text-brand-700">
+                <div className="mb-5 rounded-xl border border-brand-400/30 bg-brand-400/10 p-4">
+                  <p className="text-sm text-brand-300">
                     Cheapest is{" "}
                     <span className="font-semibold">{data.cheapest_vendor?.vendor_name}</span> at{" "}
                     <span className="font-semibold">
@@ -175,7 +163,7 @@ export default function PriceComparisonPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                      <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-faint">
                         <th className="px-5 py-3 font-medium">Vendor</th>
                         <th className="px-5 py-3 text-right font-medium">Price / {data.unit}</th>
                         <th className="px-5 py-3 font-medium"></th>
@@ -186,12 +174,12 @@ export default function PriceComparisonPage() {
                       {data.comparisons.map((row, idx) => (
                         <tr
                           key={row.vendor_id}
-                          className={`border-b border-slate-100 ${row.is_preferred ? "bg-brand-50" : idx === 0 ? "bg-brand-50/40" : ""}`}
+                          className={`border-b border-line ${row.is_preferred ? "bg-brand-400/10" : idx === 0 ? "bg-brand-400/5" : ""}`}
                         >
-                          <td className="px-5 py-3 font-medium text-slate-800">
+                          <td className="px-5 py-3 font-medium text-fg">
                             {row.vendor_name}
                           </td>
-                          <td className="px-5 py-3 text-right font-semibold text-slate-900">
+                          <td className="px-5 py-3 text-right font-semibold text-fg">
                             {format(row.price_per_unit)}
                           </td>
                           <td className="px-5 py-3">
@@ -204,7 +192,7 @@ export default function PriceComparisonPage() {
                             {canWrite && !row.is_preferred && (
                               <button
                                 onClick={() => setPreferred(row.vendor_id)}
-                                className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                                className="rounded-md border border-line px-2 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
                               >
                                 Choose supplier
                               </button>
@@ -212,7 +200,7 @@ export default function PriceComparisonPage() {
                             {canWrite && row.is_preferred && (
                               <button
                                 onClick={() => setPreferred(null)}
-                                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-400 hover:bg-slate-50"
+                                className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2"
                               >
                                 Clear
                               </button>
@@ -224,7 +212,7 @@ export default function PriceComparisonPage() {
                   </table>
                 </div>
               </Card>
-              <p className="mt-3 text-xs text-slate-400">
+              <p className="mt-3 text-xs text-fg-faint">
                 <b>Purchasing orders from your chosen supplier</b> — pick one here for each item
                 (no auto-cheapest), e.g. for quality/reliability. Recipe costs still use the
                 cheapest vendor until a supplier is chosen.

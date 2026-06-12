@@ -96,7 +96,7 @@ export default function MySpacePage() {
       <div>
         <PageHeader title="My Space" subtitle="Your attendance, payslips and documents." />
         <Card>
-          <p className="py-6 text-center text-sm text-slate-500">
+          <p className="py-6 text-center text-sm text-fg-faint">
             Your login isn&apos;t linked to an employee record yet. Ask your manager to link it
             (Staff → Add member → pick your name).
           </p>
@@ -113,15 +113,15 @@ export default function MySpacePage() {
       <PageHeader title={`Hi, ${emp.full_name.split(" ")[0]}`} subtitle="Your attendance, payslips and documents." />
 
       {pendingReqs.length > 0 && (
-        <Card className="mb-6 border-amber-200 bg-amber-50/40">
-          <h3 className="font-semibold text-slate-900">📋 Requested from you</h3>
-          <p className="mt-1 text-sm text-slate-500">Your manager has asked for these documents.</p>
-          <ul className="mt-3 divide-y divide-amber-100">
+        <Card className="mb-6 border-amber-400/30 bg-amber-400/5">
+          <h3 className="font-semibold text-fg">📋 Requested from you</h3>
+          <p className="mt-1 text-sm text-fg-faint">Your manager has asked for these documents.</p>
+          <ul className="mt-3 divide-y divide-amber-400/20">
             {pendingReqs.map((r) => (
               <li key={r.id} className="flex items-center justify-between py-2.5">
                 <div>
-                  <p className="text-sm font-medium text-slate-800">{r.title}</p>
-                  <p className="text-xs text-slate-500">{r.doc_type.replace(/_/g, " ").toLowerCase()}</p>
+                  <p className="text-sm font-medium text-fg">{r.title}</p>
+                  <p className="text-xs text-fg-faint">{r.doc_type.replace(/_/g, " ").toLowerCase()}</p>
                 </div>
                 {r.status === "UPLOADED" ? (
                   <div className="flex items-center gap-2">
@@ -129,7 +129,7 @@ export default function MySpacePage() {
                     {r.document_id && (
                       <button
                         onClick={() => downloadFile(`/me/documents/${r.document_id}/download`, docName(emp.full_name, r.doc_type))}
-                        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50"
+                        className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10"
                       >
                         View
                       </button>
@@ -150,24 +150,24 @@ export default function MySpacePage() {
       )}
 
       <Card className="mb-6">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mise-stagger grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div>
-            <p className="text-xs uppercase text-slate-500">Code</p>
-            <p className="font-semibold text-slate-900">{emp.employee_code}</p>
+            <p className="text-xs uppercase text-fg-faint">Code</p>
+            <p className="font-semibold text-fg">{emp.employee_code}</p>
           </div>
           <div>
-            <p className="text-xs uppercase text-slate-500">Job title</p>
-            <p className="font-semibold text-slate-900">{emp.job_title || "—"}</p>
+            <p className="text-xs uppercase text-fg-faint">Job title</p>
+            <p className="font-semibold text-fg">{emp.job_title || "—"}</p>
           </div>
           <div>
-            <p className="text-xs uppercase text-slate-500">Access</p>
-            <p className="font-semibold text-slate-900">
+            <p className="text-xs uppercase text-fg-faint">Access</p>
+            <p className="font-semibold text-fg">
               {user ? ROLE_LABELS[user.role] ?? user.role : "—"}
             </p>
           </div>
           <div>
-            <p className="text-xs uppercase text-slate-500">Pay</p>
-            <p className="font-semibold text-slate-900">
+            <p className="text-xs uppercase text-fg-faint">Pay</p>
+            <p className="font-semibold text-fg">
               {emp.salary_type === "HOURLY"
                 ? `${emp.hourly_rate ? format(emp.hourly_rate) : "—"}/hr`
                 : `${emp.monthly_salary ? format(emp.monthly_salary) : "—"}/mo`}
@@ -175,8 +175,8 @@ export default function MySpacePage() {
           </div>
           {emp.visa_expiry_date && (
             <div>
-              <p className="text-xs uppercase text-slate-500">Visa expiry</p>
-              <p className="font-semibold text-slate-900">{emp.visa_expiry_date}</p>
+              <p className="text-xs uppercase text-fg-faint">Visa expiry</p>
+              <p className="font-semibold text-fg">{emp.visa_expiry_date}</p>
             </div>
           )}
         </div>
@@ -184,11 +184,11 @@ export default function MySpacePage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-0">
-          <h3 className="px-5 pt-4 font-semibold text-slate-900">My payslips</h3>
+          <h3 className="px-5 pt-4 font-semibold text-fg">My payslips</h3>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
+                <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
                   <th className="px-5 py-2 font-medium">Period</th>
                   <th className="px-5 py-2 text-right font-medium">Net pay</th>
                   <th className="px-5 py-2 font-medium">Status</th>
@@ -197,14 +197,14 @@ export default function MySpacePage() {
               </thead>
               <tbody>
                 {payslips.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-6 text-center text-slate-400">No payslips yet.</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-6 text-center text-fg-faint">No payslips yet.</td></tr>
                 ) : payslips.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-100">
-                    <td className="px-5 py-2 font-medium text-slate-800">{p.pay_period}</td>
-                    <td className="px-5 py-2 text-right text-slate-700">{format(p.net_pay)}</td>
+                  <tr key={p.id} className="border-b border-line">
+                    <td className="px-5 py-2 font-medium text-fg">{p.pay_period}</td>
+                    <td className="px-5 py-2 text-right text-fg-soft">{format(p.net_pay)}</td>
                     <td className="px-5 py-2"><Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge></td>
                     <td className="px-5 py-2 text-right">
-                      <button onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">PDF</button>
+                      <button onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">PDF</button>
                     </td>
                   </tr>
                 ))}
@@ -214,11 +214,11 @@ export default function MySpacePage() {
         </Card>
 
         <Card className="p-0">
-          <h3 className="px-5 pt-4 font-semibold text-slate-900">Recent attendance</h3>
+          <h3 className="px-5 pt-4 font-semibold text-fg">Recent attendance</h3>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
+                <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
                   <th className="px-5 py-2 font-medium">Date</th>
                   <th className="px-5 py-2 font-medium">In</th>
                   <th className="px-5 py-2 font-medium">Out</th>
@@ -227,13 +227,13 @@ export default function MySpacePage() {
               </thead>
               <tbody>
                 {attendance.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-6 text-center text-slate-400">No attendance recorded.</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-6 text-center text-fg-faint">No attendance recorded.</td></tr>
                 ) : attendance.map((a) => (
-                  <tr key={a.date} className="border-b border-slate-100">
-                    <td className="px-5 py-2 text-slate-600">{a.date}</td>
-                    <td className="px-5 py-2 text-slate-600">{fmtTime(a.clock_in)}</td>
-                    <td className="px-5 py-2 text-slate-600">{fmtTime(a.clock_out)}</td>
-                    <td className="px-5 py-2 text-right text-slate-700">{a.working_hours ?? "—"}</td>
+                  <tr key={a.date} className="border-b border-line">
+                    <td className="px-5 py-2 text-fg-soft">{a.date}</td>
+                    <td className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_in)}</td>
+                    <td className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_out)}</td>
+                    <td className="px-5 py-2 text-right text-fg-soft">{a.working_hours ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -243,11 +243,11 @@ export default function MySpacePage() {
       </div>
 
       <Card className="mt-6 p-0">
-        <h3 className="px-5 pt-4 font-semibold text-slate-900">My documents</h3>
+        <h3 className="px-5 pt-4 font-semibold text-fg">My documents</h3>
         <div className="mt-2 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
+              <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
                 <th className="px-5 py-2 font-medium">Title</th>
                 <th className="px-5 py-2 font-medium">Type</th>
                 <th className="px-5 py-2 font-medium">Status</th>
@@ -257,13 +257,13 @@ export default function MySpacePage() {
             </thead>
             <tbody>
               {docs.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-6 text-center text-slate-400">No documents shared with you yet.</td></tr>
+                <tr><td colSpan={5} className="px-5 py-6 text-center text-fg-faint">No documents shared with you yet.</td></tr>
               ) : docs.map((d) => {
                 const req = requests.find((r) => r.document_id === d.id);
                 return (
-                <tr key={d.id} className="border-b border-slate-100">
-                  <td className="px-5 py-2 font-medium text-slate-800">{d.title}</td>
-                  <td className="px-5 py-2 text-slate-500">{d.doc_type.replace(/_/g, " ").toLowerCase()}</td>
+                <tr key={d.id} className="border-b border-line">
+                  <td className="px-5 py-2 font-medium text-fg">{d.title}</td>
+                  <td className="px-5 py-2 text-fg-faint">{d.doc_type.replace(/_/g, " ").toLowerCase()}</td>
                   <td className="px-5 py-2">
                     {req?.status === "APPROVED" ? (
                       <Badge tone="green">approved ✓</Badge>
@@ -273,9 +273,9 @@ export default function MySpacePage() {
                       <Badge tone="slate">shared</Badge>
                     )}
                   </td>
-                  <td className="px-5 py-2 text-slate-500">{d.expiry_date || "—"}</td>
+                  <td className="px-5 py-2 text-fg-faint">{d.expiry_date || "—"}</td>
                   <td className="px-5 py-2 text-right">
-                    <button onClick={() => downloadFile(`/me/documents/${d.id}/download`, docName(emp.full_name, d.doc_type, d.filename))} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">Download</button>
+                    <button onClick={() => downloadFile(`/me/documents/${d.id}/download`, docName(emp.full_name, d.doc_type, d.filename))} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">Download</button>
                   </td>
                 </tr>
                 );

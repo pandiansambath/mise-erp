@@ -47,6 +47,21 @@
   --color-brand-950: #022c22;
 }
 
+/* Dashboard dark surfaces — same "kitchen at midnight" family as the landing.
+   NON-inline so a future light/dark toggle can remap them at runtime. The
+   accent stays brand-* (theme switcher); these are only the base surfaces. */
+@theme {
+  --color-shell: #04120d; /* page backdrop, under the aurora */
+  --color-paper: #0a2018; /* card surface (ink-800 family) */
+  --color-paper-2: #0e2a1f; /* nested surface / hover */
+  --color-paper-3: #14352a; /* strong hover / active */
+  --color-line: rgba(255, 255, 255, 0.09); /* hairline borders */
+  --color-line-2: rgba(255, 255, 255, 0.18); /* input borders / stronger lines */
+  --color-fg: #eef6f1; /* primary text */
+  --color-fg-soft: #bdd0c6; /* secondary text */
+  --color-fg-faint: #87a294; /* muted text / labels */
+}
+
 html {
   /* Reserve scrollbar space: no content shift between short and tall pages. */
   scrollbar-gutter: stable;
@@ -300,6 +315,101 @@ body {
 
 /* Dark document behind the landing/signup (kills white overscroll flash). */
 html:has(.mise-dark-page) { background: #030d09; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   DASHBOARD DARK SYSTEM — the logged-in app shares the landing's midnight
+   palette. `.mise-app` is set on the AppShell root; everything here is scoped
+   to it (or to `mise-*` utility classes), so public pages are unaffected.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Dark document behind the app (overscroll + native form controls). */
+html:has(.mise-app) { background: #04120d; }
+.mise-app { color-scheme: dark; }
+
+/* Native date/select controls: keep them legible on dark surfaces. */
+.mise-app input,
+.mise-app select,
+.mise-app textarea {
+  color-scheme: dark;
+}
+
+/* Micro-interactions: every button in the app gets a soft transition + press. */
+.mise-app button {
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+.mise-app button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* ── Page transition (used by app/(app)/template.tsx — remounts per route) ── */
+@keyframes mise-page-in {
+  from { opacity: 0; transform: translateY(14px); filter: blur(4px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+.mise-page {
+  animation: mise-page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Pop-in for dropdowns / modals ──────────────────────────────────────── */
+@keyframes mise-pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.mise-pop { animation: mise-pop-in 0.18s ease-out both; }
+
+@keyframes mise-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.mise-fade { animation: mise-fade-in 0.2s ease-out both; }
+
+@keyframes mise-drawer-in {
+  from { transform: translateX(-100%); }
+  to   { transform: none; }
+}
+.mise-drawer { animation: mise-drawer-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Staggered rise for grids of cards (KPIs, quick actions, pickers) ───── */
+@keyframes mise-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+.mise-stagger > * { animation: mise-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mise-stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.mise-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+.mise-stagger > *:nth-child(3) { animation-delay: 0.12s; }
+.mise-stagger > *:nth-child(4) { animation-delay: 0.16s; }
+.mise-stagger > *:nth-child(5) { animation-delay: 0.2s; }
+.mise-stagger > *:nth-child(6) { animation-delay: 0.24s; }
+.mise-stagger > *:nth-child(7) { animation-delay: 0.28s; }
+.mise-stagger > *:nth-child(8) { animation-delay: 0.32s; }
+.mise-stagger > *:nth-child(9) { animation-delay: 0.36s; }
+.mise-stagger > *:nth-child(10) { animation-delay: 0.4s; }
+.mise-stagger > *:nth-child(11) { animation-delay: 0.44s; }
+.mise-stagger > *:nth-child(n + 12) { animation-delay: 0.48s; }
+
+/* ── Reduced motion: the app calms down too ─────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mise-page,
+  .mise-pop,
+  .mise-fade,
+  .mise-drawer,
+  .mise-stagger > * {
+    animation: none;
+  }
+  .mise-app button {
+    transition: none;
+  }
+  .mise-app button:not(:disabled):active {
+    transform: none;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .mise-loader-content, .mise-loader-tag { animation: none; opacity: 1; }

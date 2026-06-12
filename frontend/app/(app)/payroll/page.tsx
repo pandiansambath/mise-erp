@@ -91,14 +91,14 @@ export default function PayrollPage() {
       <Card className="mb-6">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs font-medium text-slate-500">Pay period</label>
-            <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <label className="block text-xs font-medium text-fg-faint">Pay period</label>
+            <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
           </div>
           {canWrite && (
             <>
               <div className="w-28">
-                <label className="block text-xs font-medium text-slate-500">Working days</label>
-                <input value={workingDays} onChange={(e) => setWorkingDays(e.target.value)} inputMode="numeric" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <label className="block text-xs font-medium text-fg-faint">Working days</label>
+                <input value={workingDays} onChange={(e) => setWorkingDays(e.target.value)} inputMode="numeric" className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
               </div>
               <button onClick={runPayroll} disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {busy ? "Running…" : "Run payroll"}
@@ -106,19 +106,19 @@ export default function PayrollPage() {
             </>
           )}
           {rows.length > 0 && (
-            <span className="ml-auto text-sm text-slate-500">
-              Net total: <span className="font-semibold text-slate-800">{format(String(totalNet))}</span>
+            <span className="ml-auto text-sm text-fg-faint">
+              Net total: <span className="font-semibold text-fg">{format(String(totalNet))}</span>
             </span>
           )}
         </div>
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
       </Card>
 
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                 <th className="px-5 py-3 font-medium">Employee</th>
                 <th className="px-5 py-3 text-right font-medium">Gross</th>
                 <th className="px-5 py-3 text-right font-medium">Deductions</th>
@@ -130,23 +130,23 @@ export default function PayrollPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-400">
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-fg-faint">
                   No payroll for this period yet. {canWrite ? "Click “Run payroll”." : ""}
                 </td></tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="border-b border-slate-100">
-                    <td className="px-5 py-3 font-medium text-slate-800">{r.employee_name}</td>
-                    <td className="px-5 py-3 text-right text-slate-700">{format(r.gross_pay)}</td>
-                    <td className="px-5 py-3 text-right text-rose-600">
+                  <tr key={r.id} className="border-b border-line">
+                    <td className="px-5 py-3 font-medium text-fg">{r.employee_name}</td>
+                    <td className="px-5 py-3 text-right text-fg-soft">{format(r.gross_pay)}</td>
+                    <td className="px-5 py-3 text-right text-rose-400">
                       {format(String(parseFloat(r.advance_deduction) + parseFloat(r.other_deductions)))}
                     </td>
-                    <td className="px-5 py-3 text-right font-semibold text-slate-900">{format(r.net_pay)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-fg">{format(r.net_pay)}</td>
                     <td className="px-5 py-3"><Badge tone={statusTone[r.status] ?? "slate"}>{r.status}</Badge></td>
                     <td className="px-5 py-3 text-right">
                       <button
                         onClick={() => downloadFile(`/payroll/${r.id}/payslip.pdf`, `payslip-${r.employee_name}-${r.pay_period}.pdf`)}
-                        className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50"
+                        className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
                       >
                         ⬇ PDF
                       </button>
@@ -155,10 +155,10 @@ export default function PayrollPage() {
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-1">
                           {r.status === "DRAFT" && (
-                            <button onClick={() => act(r.id, "approve")} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">Approve</button>
+                            <button onClick={() => act(r.id, "approve")} className="rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2">Approve</button>
                           )}
                           {r.status === "APPROVED" && (
-                            <button onClick={() => act(r.id, "pay")} className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700">Mark paid</button>
+                            <button onClick={() => act(r.id, "pay")} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Mark paid</button>
                           )}
                         </div>
                       </td>

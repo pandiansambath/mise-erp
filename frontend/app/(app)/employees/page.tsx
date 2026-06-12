@@ -94,16 +94,16 @@ export default function EmployeesPage() {
   if (loading) return <Spinner />;
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
+    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
 
   return (
     <div>
       <PageHeader title="Employees" subtitle="Your team, pay details, and UK compliance." />
 
       {alerts.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-800">⚠️ Visa expiry alerts</p>
-          <ul className="mt-1 text-sm text-amber-700">
+        <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
+          <p className="text-sm font-semibold text-amber-200">⚠️ Visa expiry alerts</p>
+          <ul className="mt-1 text-sm text-amber-300">
             {alerts.map((a) => (
               <li key={a.employee_id}>
                 {a.full_name} — visa {a.days_left < 0 ? `expired ${-a.days_left}d ago` : `expires in ${a.days_left}d`} ({a.visa_expiry_date})
@@ -115,20 +115,20 @@ export default function EmployeesPage() {
 
       {canWrite && (
         <Card className="mb-6">
-          <p className="mb-3 text-sm font-medium text-slate-700">
+          <p className="mb-3 text-sm font-medium text-fg-soft">
             {editingId ? "Edit employee" : "Add employee"}
           </p>
           <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Full name</label>
+              <label className="block text-sm font-medium text-fg-soft">Full name</label>
               <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Job title</label>
+              <label className="block text-sm font-medium text-fg-soft">Job title</label>
               <input value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} placeholder="Chef, Cashier…" className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Salary type</label>
+              <label className="block text-sm font-medium text-fg-soft">Salary type</label>
               <select value={form.salary_type} onChange={(e) => setForm({ ...form, salary_type: e.target.value })} className={inputCls}>
                 <option value="MONTHLY">Monthly</option>
                 <option value="HOURLY">Hourly</option>
@@ -136,33 +136,33 @@ export default function EmployeesPage() {
             </div>
             {form.salary_type === "MONTHLY" ? (
               <div>
-                <label className="block text-sm font-medium text-slate-700">Monthly salary</label>
+                <label className="block text-sm font-medium text-fg-soft">Monthly salary</label>
                 <input value={form.monthly_salary} onChange={(e) => setForm({ ...form, monthly_salary: e.target.value })} inputMode="decimal" className={inputCls} />
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-slate-700">Hourly rate</label>
+                <label className="block text-sm font-medium text-fg-soft">Hourly rate</label>
                 <input value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} inputMode="decimal" className={inputCls} />
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-700">Mobile</label>
+              <label className="block text-sm font-medium text-fg-soft">Mobile</label>
               <input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">NI number</label>
+              <label className="block text-sm font-medium text-fg-soft">NI number</label>
               <input value={form.ni_number} onChange={(e) => setForm({ ...form, ni_number: e.target.value })} placeholder="QQ123456C" className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Visa expiry</label>
+              <label className="block text-sm font-medium text-fg-soft">Visa expiry</label>
               <input type="date" value={form.visa_expiry_date} onChange={(e) => setForm({ ...form, visa_expiry_date: e.target.value })} className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Sort code</label>
+              <label className="block text-sm font-medium text-fg-soft">Sort code</label>
               <input value={form.bank_sort_code} onChange={(e) => setForm({ ...form, bank_sort_code: e.target.value })} placeholder="00-00-00" className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Account no.</label>
+              <label className="block text-sm font-medium text-fg-soft">Account no.</label>
               <input value={form.bank_account_no} onChange={(e) => setForm({ ...form, bank_account_no: e.target.value })} className={inputCls} />
             </div>
             <div className="flex items-end gap-2 sm:col-span-3">
@@ -170,11 +170,11 @@ export default function EmployeesPage() {
                 {saving ? "Saving…" : editingId ? "Save changes" : "Add employee"}
               </button>
               {editingId && (
-                <button type="button" onClick={reset} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <button type="button" onClick={reset} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2">
                   Cancel
                 </button>
               )}
-              {error && <span className="text-sm text-rose-600">{error}</span>}
+              {error && <span className="text-sm text-rose-400">{error}</span>}
             </div>
           </form>
         </Card>
@@ -184,7 +184,7 @@ export default function EmployeesPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                 <th className="px-5 py-3 font-medium">Code</th>
                 <th className="px-5 py-3 font-medium">Name</th>
                 <th className="px-5 py-3 font-medium">Job title</th>
@@ -195,16 +195,16 @@ export default function EmployeesPage() {
             </thead>
             <tbody>
               {employees.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-400">No employees yet.</td></tr>
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-fg-faint">No employees yet.</td></tr>
               ) : (
                 employees.map((e) => {
                   const alert = alerts.find((a) => a.employee_id === e.id);
                   return (
-                    <tr key={e.id} className="border-b border-slate-100">
-                      <td className="px-5 py-3 text-slate-500">{e.employee_code}</td>
-                      <td className="px-5 py-3 font-medium text-slate-800">{e.full_name}</td>
-                      <td className="px-5 py-3 text-slate-500">{e.job_title || "—"}</td>
-                      <td className="px-5 py-3 text-right text-slate-700">
+                    <tr key={e.id} className="border-b border-line">
+                      <td className="px-5 py-3 text-fg-faint">{e.employee_code}</td>
+                      <td className="px-5 py-3 font-medium text-fg">{e.full_name}</td>
+                      <td className="px-5 py-3 text-fg-faint">{e.job_title || "—"}</td>
+                      <td className="px-5 py-3 text-right text-fg-soft">
                         {e.salary_type === "MONTHLY"
                           ? e.monthly_salary ? `${format(e.monthly_salary)}/mo` : "—"
                           : e.hourly_rate ? `${format(e.hourly_rate)}/hr` : "—"}
@@ -216,15 +216,15 @@ export default function EmployeesPage() {
                               {alert.days_left < 0 ? "Expired" : `${alert.days_left}d`}
                             </Badge>
                           ) : (
-                            <span className="text-slate-400">{e.visa_expiry_date}</span>
+                            <span className="text-fg-faint">{e.visa_expiry_date}</span>
                           )
                         ) : (
-                          <span className="text-slate-300">—</span>
+                          <span className="text-fg-faint">—</span>
                         )}
                       </td>
                       <td className="px-5 py-3 text-right">
                         {canWrite && (
-                          <button onClick={() => startEdit(e)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                          <button onClick={() => startEdit(e)} className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2">
                             Edit
                           </button>
                         )}

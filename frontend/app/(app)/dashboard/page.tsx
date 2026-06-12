@@ -55,7 +55,7 @@ export default function DashboardPage() {
       />
 
       {seeFinance && kpis && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard label="Today's net sales" value={format(kpis.today_net_sales)} />
           <StatCard label="Month net sales" value={format(kpis.month_net_sales)} />
           <StatCard
@@ -77,20 +77,20 @@ export default function DashboardPage() {
         {seeInventory && (
           <Card>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-semibold text-slate-900">Low stock alerts</h3>
-              <Link href="/inventory" className="text-sm font-medium text-brand-600 hover:underline">
+              <h3 className="font-semibold text-fg">Low stock alerts</h3>
+              <Link href="/inventory" className="text-sm font-medium text-brand-400 hover:underline">
                 View all
               </Link>
             </div>
             {low.length === 0 ? (
-              <p className="py-6 text-center text-sm text-slate-400">
+              <p className="py-6 text-center text-sm text-fg-faint">
                 Nothing low — stock levels are healthy.
               </p>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-line">
                 {low.slice(0, 6).map((l) => (
                   <li key={l.item_id} className="flex items-center justify-between py-2.5 text-sm">
-                    <span className="font-medium text-slate-700">{l.name}</span>
+                    <span className="font-medium text-fg-soft">{l.name}</span>
                     <Badge tone="red">
                       {l.current_stock} left (min {l.min_stock_level})
                     </Badge>
@@ -102,18 +102,18 @@ export default function DashboardPage() {
         )}
 
         <Card>
-          <h3 className="mb-4 font-semibold text-slate-900">Quick actions</h3>
-          <div className="grid gap-3">
+          <h3 className="mb-4 font-semibold text-fg">Quick actions</h3>
+          <div className="mise-stagger grid gap-3">
             {actions.map((a) => (
               <Link
                 key={a.href}
                 href={a.href}
-                className="rounded-lg border border-slate-200 p-4 transition hover:border-brand-300 hover:bg-brand-50"
+                className="rounded-lg border border-line p-4 transition hover:border-brand-400/40 hover:bg-brand-400/10"
               >
-                <p className="font-medium text-slate-900">
+                <p className="font-medium text-fg">
                   {a.icon} {a.title}
                 </p>
-                <p className="mt-1 text-sm text-slate-500">{a.desc}</p>
+                <p className="mt-1 text-sm text-fg-faint">{a.desc}</p>
               </Link>
             ))}
           </div>

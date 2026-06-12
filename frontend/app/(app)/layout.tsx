@@ -17,7 +17,7 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
 
   if (loading || !user) {
     return (
-      <div className="grid min-h-screen place-items-center">
+      <div className="grid min-h-screen place-items-center bg-ink-950">
         <Spinner />
       </div>
     );

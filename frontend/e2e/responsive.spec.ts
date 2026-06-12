@@ -35,7 +35,7 @@ async function login(page: Page) {
 
 test("landing page renders and fits the viewport", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /symphony/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /everything in its place/i })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
@@ -49,7 +49,7 @@ test("signup page renders and fits the viewport", async ({ page }) => {
 
 test("login page renders and fits the viewport", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "Mise" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   await assertNoHorizontalOverflow(page);
@@ -172,7 +172,7 @@ test("confirmation dialog gates a destructive action", async ({ page }) => {
 test("documents page fits the viewport", async ({ page }) => {
   await login(page);
   await page.goto("/documents");
-  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
 

@@ -43,7 +43,7 @@ function CurrencySwitcher() {
         aria-label="Display currency"
         value={currency}
         onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-        className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-brand-500"
+        className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-fg-soft outline-none transition focus:border-brand-500"
       >
         {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
           <option key={code} value={code}>
@@ -65,25 +65,25 @@ function ThemeSwitcher() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Change theme"
         title="Theme"
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 hover:bg-white/5"
       >
-        <span className="h-4 w-4 rounded-full ring-1 ring-black/10" style={{ background: THEMES[theme].brand["500"] }} />
+        <span className="h-4 w-4 rounded-full ring-1 ring-white/25" style={{ background: THEMES[theme].brand["500"] }} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute right-0 z-40 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-            <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Theme</p>
+          <div className="mise-pop absolute right-0 z-40 mt-2 w-44 rounded-xl border border-white/10 bg-ink-900/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+            <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-fg-faint">Theme</p>
             {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
               <button
                 key={k}
                 type="button"
                 onClick={() => { setTheme(k); setOpen(false); }}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50 ${theme === k ? "font-semibold text-slate-900" : "text-slate-600"}`}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-white/5 ${theme === k ? "font-semibold text-fg" : "text-fg-soft"}`}
               >
-                <span className="h-4 w-4 rounded-full ring-1 ring-black/10" style={{ background: THEMES[k].brand["500"] }} />
+                <span className="h-4 w-4 rounded-full ring-1 ring-white/25" style={{ background: THEMES[k].brand["500"] }} />
                 {THEMES[k].label}
-                {theme === k && <span className="ml-auto text-brand-600">✓</span>}
+                {theme === k && <span className="ml-auto text-brand-400">✓</span>}
               </button>
             ))}
           </div>
@@ -97,7 +97,7 @@ function Brand() {
   return (
     <div className="flex items-center gap-2.5 px-5 py-5">
       <Logo size={32} />
-      <span className="text-lg font-semibold tracking-tight text-slate-900">Mise</span>
+      <span className="font-display text-lg font-semibold tracking-tight text-fg">Mise</span>
     </div>
   );
 }
@@ -120,10 +120,10 @@ function NavLinks({
             key={item.href}
             href={item.href}
             onClick={onClick}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition duration-200 ${
               active
-                ? "bg-brand-600 text-white"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
+                : "text-fg-faint hover:translate-x-0.5 hover:bg-white/5 hover:text-fg"
             }`}
           >
             <span aria-hidden className="text-base">
@@ -134,6 +134,20 @@ function NavLinks({
         );
       })}
     </nav>
+  );
+}
+
+/** Drifting aurora behind the whole app — same ingredient as the landing,
+    dialled down so tables stay crisp. Fixed + pointer-events-none. */
+function ShellAurora() {
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div className="mise-aurora mise-aurora-shift opacity-40">
+        <span style={{ left: "-8%", top: "-14%", width: 560, height: 560, background: "radial-gradient(circle, #10b981, transparent 68%)" }} />
+        <span style={{ right: "-10%", top: "10%", width: 520, height: 520, background: "radial-gradient(circle, #0ea5e9, transparent 70%)", animationDelay: "8s" }} />
+        <span style={{ left: "35%", bottom: "-28%", width: 620, height: 620, background: "radial-gradient(circle, #14b8a6, transparent 72%)", animationDelay: "14s" }} />
+      </div>
+    </div>
   );
 }
 
@@ -156,19 +170,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div style={brandVars(theme)} className="min-h-screen lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden">
+    <div
+      style={brandVars(theme)}
+      className="mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden"
+    >
+      <ShellAurora />
+
       {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
-      <aside className="hidden border-r border-slate-200 bg-white lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
+      <aside className="relative hidden border-r border-white/10 bg-ink-950/70 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
         <Brand />
         <NavLinks items={navItems} pathname={pathname} />
-        <div className="mt-auto border-t border-slate-200 p-4 text-xs text-slate-500">
+        <div className="mt-auto border-t border-white/10 p-4 text-xs text-fg-faint">
           {hotel && (
-            <p className="truncate text-sm font-semibold text-slate-800">
+            <p className="truncate text-sm font-semibold text-fg">
               {hotel.name}
               {hotel.city ? ` · ${hotel.city}` : ""}
             </p>
           )}
-          <p className="mt-1 truncate text-slate-600">{user?.email}</p>
+          <p className="mt-1 truncate text-fg-soft">{user?.email}</p>
           <p className="mt-0.5">{user?.role.replace(/_/g, " ")}</p>
         </div>
       </aside>
@@ -177,38 +196,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
-            className="absolute inset-0 bg-slate-900/40"
+            className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-white shadow-xl">
+          <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col border-r border-white/10 bg-ink-950/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <Brand />
             <NavLinks items={navItems} pathname={pathname} onClick={() => setOpen(false)} />
           </aside>
         </div>
       )}
 
-      <div className="flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
+      <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:px-8">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-white/10 bg-ink-950/60 px-4 py-3 backdrop-blur-xl lg:px-8">
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setOpen(true)}
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+            className="rounded-lg p-2 text-fg-soft hover:bg-white/5 lg:hidden"
           >
             <span className="block h-0.5 w-5 bg-current" />
             <span className="mt-1 block h-0.5 w-5 bg-current" />
             <span className="mt-1 block h-0.5 w-5 bg-current" />
           </button>
-          <h1 className="text-sm font-semibold text-slate-700 lg:hidden">Mise</h1>
+          <h1 className="font-display text-sm font-semibold text-fg lg:hidden">Mise</h1>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <ThemeSwitcher />
             <CurrencySwitcher />
-            <span className="hidden text-sm text-slate-500 lg:inline">{user?.email}</span>
+            <span className="hidden text-sm text-fg-faint lg:inline">{user?.email}</span>
             <button
               onClick={logout}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-white/5"
             >
               Log out
             </button>

@@ -8,6 +8,15 @@ import { useCurrency } from "@/lib/currency";
 
 const STD_UNITS = ["kg", "g", "litre", "ml", "piece", "pack", "box", "bag", "dozen", "bottle"];
 
+// Suggested item categories — these group the chef-friendly pickers on the
+// Purchasing/Recipes/Price-Comparison pages, so consistent names matter.
+// The ComboBox still lets you add a brand-new category any time.
+const STD_CATEGORIES = [
+  "Vegetables", "Fruits", "Meat", "Fish & Seafood", "Dairy", "Eggs", "Spices",
+  "Grains & Rice", "Oil & Ghee", "Sauces & Tins", "Beverages", "Bakery",
+  "Frozen", "Dry Goods", "Packaging", "Cleaning",
+];
+
 function isLow(item: Item): boolean {
   if (item.min_stock_level == null) return false;
   return parseFloat(item.current_stock) <= parseFloat(item.min_stock_level);
@@ -76,9 +85,11 @@ export default function InventoryPage() {
   }
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
+    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
 
-  const categoryOptions = [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort();
+  const categoryOptions = [
+    ...new Set([...STD_CATEGORIES, ...(items.map((i) => i.category).filter(Boolean) as string[])]),
+  ];
   const unitOptions = [...new Set([...STD_UNITS, ...items.map((i) => i.unit)])];
 
   return (
@@ -86,12 +97,12 @@ export default function InventoryPage() {
       <PageHeader title="Inventory" subtitle="Items, stock levels, and weighted-average cost." />
 
       <Card className="mb-6">
-        <p className="mb-3 text-sm font-medium text-slate-700">
+        <p className="mb-3 text-sm font-medium text-fg-soft">
           {editingId ? "Edit item" : "Add a new item"}
         </p>
         <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="flex-1 sm:min-w-[12rem]">
-            <label className="block text-sm font-medium text-slate-700">Item name</label>
+            <label className="block text-sm font-medium text-fg-soft">Item name</label>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -101,7 +112,7 @@ export default function InventoryPage() {
             />
           </div>
           <div className="w-full sm:w-44">
-            <label className="block text-sm font-medium text-slate-700">Category</label>
+            <label className="block text-sm font-medium text-fg-soft">Category</label>
             <div className="mt-1">
               <ComboBox
                 value={form.category}
@@ -113,7 +124,7 @@ export default function InventoryPage() {
             </div>
           </div>
           <div className="w-full sm:w-32">
-            <label className="block text-sm font-medium text-slate-700">Unit</label>
+            <label className="block text-sm font-medium text-fg-soft">Unit</label>
             <div className="mt-1">
               <ComboBox
                 value={form.unit}
@@ -125,7 +136,7 @@ export default function InventoryPage() {
             </div>
           </div>
           <div className="w-full sm:w-28">
-            <label className="block text-sm font-medium text-slate-700">Min stock</label>
+            <label className="block text-sm font-medium text-fg-soft">Min stock</label>
             <input
               value={form.min}
               onChange={(e) => setForm({ ...form, min: e.target.value })}
@@ -146,14 +157,14 @@ export default function InventoryPage() {
               <button
                 type="button"
                 onClick={cancelEdit}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
               >
                 Cancel
               </button>
             )}
           </div>
         </form>
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
       </Card>
 
       {loading ? (
@@ -163,7 +174,7 @@ export default function InventoryPage() {
           <div className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-faint">
                   <th className="px-5 py-3 font-medium">Item</th>
                   <th className="px-5 py-3 font-medium">Category</th>
                   <th className="px-5 py-3 font-medium">Vendor</th>
@@ -177,18 +188,18 @@ export default function InventoryPage() {
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
+                    <td colSpan={8} className="px-5 py-8 text-center text-fg-faint">
                       No items yet — add your first above.
                     </td>
                   </tr>
                 ) : (
                   items.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100">
-                      <td className="px-5 py-3 font-medium text-slate-800">{item.name}</td>
-                      <td className="px-5 py-3 text-slate-500">{item.category || "—"}</td>
+                    <tr key={item.id} className="border-b border-line">
+                      <td className="px-5 py-3 font-medium text-fg">{item.name}</td>
+                      <td className="px-5 py-3 text-fg-faint">{item.category || "—"}</td>
                       <td className="px-5 py-3">
                         {item.best_vendor ? (
-                          <span className="text-slate-600" title="Preferred or cheapest vendor — set a preferred one on Price Comparison">
+                          <span className="text-fg-soft" title="Preferred or cheapest vendor — set a preferred one on Price Comparison">
                             {item.best_vendor}
                           </span>
                         ) : (
@@ -197,20 +208,20 @@ export default function InventoryPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-700">
+                      <td className="px-5 py-3 text-right text-fg-soft">
                         {item.current_stock} {item.unit}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-500">
+                      <td className="px-5 py-3 text-right text-fg-faint">
                         {item.min_stock_level ? `${item.min_stock_level} ${item.unit}` : "—"}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-700">
+                      <td className="px-5 py-3 text-right text-fg-soft">
                         {format(item.average_cost)}
                       </td>
                       <td className="px-5 py-3">{isLow(item) && <Badge tone="red">Low</Badge>}</td>
                       <td className="px-5 py-3 text-right">
                         <button
                           onClick={() => startEdit(item)}
-                          className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                          className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
                         >
                           Edit
                         </button>

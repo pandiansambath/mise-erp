@@ -108,7 +108,7 @@ export default function ExpensesPage() {
   if (loading || !summary) return <Spinner />;
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
+    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
 
   return (
     <div>
@@ -116,19 +116,19 @@ export default function ExpensesPage() {
 
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-500">From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="block text-xs font-medium text-fg-faint">From</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500">To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="block text-xs font-medium text-fg-faint">To</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
         </div>
-        <button onClick={applyRange} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        <button onClick={applyRange} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2">
           Apply
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Fixed costs" value={format(summary.fixed_total)} />
         <StatCard label="Variable costs" value={format(summary.variable_total)} />
         <StatCard label="VAT" value={format(summary.vat_total)} hint="reclaimable if VAT-registered" />
@@ -141,7 +141,7 @@ export default function ExpensesPage() {
             <Card className="mb-4">
               <form onSubmit={addExpense} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-slate-700">Category</label>
+                  <label className="block text-sm font-medium text-fg-soft">Category</label>
                   <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -151,11 +151,11 @@ export default function ExpensesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Date</label>
+                  <label className="block text-sm font-medium text-fg-soft">Date</label>
                   <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Payment</label>
+                  <label className="block text-sm font-medium text-fg-soft">Payment</label>
                   <select value={method} onChange={(e) => setMethod(e.target.value)} className={inputCls}>
                     {METHODS.map((m) => (
                       <option key={m} value={m}>{m}</option>
@@ -163,22 +163,22 @@ export default function ExpensesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Amount (incl VAT)</label>
+                  <label className="block text-sm font-medium text-fg-soft">Amount (incl VAT)</label>
                   <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" required placeholder="0.00" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">of which VAT</label>
+                  <label className="block text-sm font-medium text-fg-soft">of which VAT</label>
                   <input value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputCls} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-slate-700">Description</label>
+                  <label className="block text-sm font-medium text-fg-soft">Description</label>
                   <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
                 </div>
                 <div className="sm:col-span-2">
                   <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
                     Add expense
                   </button>
-                  {error && <span className="ml-3 text-sm text-rose-600">{error}</span>}
+                  {error && <span className="ml-3 text-sm text-rose-400">{error}</span>}
                 </div>
               </form>
             </Card>
@@ -188,7 +188,7 @@ export default function ExpensesPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+                  <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                     <th className="px-5 py-3 font-medium">Date</th>
                     <th className="px-5 py-3 font-medium">Category</th>
                     <th className="px-5 py-3 text-right font-medium">Amount</th>
@@ -198,25 +198,25 @@ export default function ExpensesPage() {
                 <tbody>
                   {expenses.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-5 py-8 text-center text-slate-400">
+                      <td colSpan={4} className="px-5 py-8 text-center text-fg-faint">
                         No expenses in this range.
                       </td>
                     </tr>
                   ) : (
                     expenses.map((x) => (
-                      <tr key={x.id} className="border-b border-slate-100">
-                        <td className="px-5 py-3 text-slate-500">{x.date}</td>
+                      <tr key={x.id} className="border-b border-line">
+                        <td className="px-5 py-3 text-fg-faint">{x.date}</td>
                         <td className="px-5 py-3">
-                          <span className="font-medium text-slate-800">{x.category_name}</span>
-                          {x.description && <span className="ml-2 text-slate-400">{x.description}</span>}
+                          <span className="font-medium text-fg">{x.category_name}</span>
+                          {x.description && <span className="ml-2 text-fg-faint">{x.description}</span>}
                           <Badge tone={x.kind === "FIXED" ? "slate" : "amber"}>
                             {x.kind === "FIXED" ? "Fixed" : "Variable"}
                           </Badge>
                         </td>
-                        <td className="px-5 py-3 text-right font-medium text-slate-900">{format(x.amount)}</td>
+                        <td className="px-5 py-3 text-right font-medium text-fg">{format(x.amount)}</td>
                         <td className="px-5 py-3 text-right">
                           {canWrite && (
-                            <button onClick={() => remove(x.id)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50">
+                            <button onClick={() => remove(x.id)} className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2">
                               Remove
                             </button>
                           )}
@@ -232,15 +232,15 @@ export default function ExpensesPage() {
 
         {/* Breakdown by category */}
         <Card>
-          <h3 className="font-semibold text-slate-900">By category</h3>
+          <h3 className="font-semibold text-fg">By category</h3>
           {summary.by_category.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-400">No spend yet.</p>
+            <p className="py-6 text-center text-sm text-fg-faint">No spend yet.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-slate-100">
+            <ul className="mt-3 divide-y divide-line">
               {summary.by_category.map((c) => (
                 <li key={c.category_id} className="flex items-center justify-between py-2 text-sm">
-                  <span className="text-slate-700">{c.category_name}</span>
-                  <span className="font-medium text-slate-900">{format(c.total)}</span>
+                  <span className="text-fg-soft">{c.category_name}</span>
+                  <span className="font-medium text-fg">{format(c.total)}</span>
                 </li>
               ))}
             </ul>

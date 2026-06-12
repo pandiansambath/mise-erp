@@ -93,7 +93,7 @@ export default function StaffPage() {
       <div>
         <PageHeader title="Staff" />
         <Card>
-          <p className="py-6 text-center text-sm text-slate-500">
+          <p className="py-6 text-center text-sm text-fg-faint">
             You don&apos;t have permission to manage staff. Ask your Super Admin.
           </p>
         </Card>
@@ -102,7 +102,7 @@ export default function StaffPage() {
   }
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
+    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
 
   return (
     <div>
@@ -113,10 +113,10 @@ export default function StaffPage() {
 
       {canWrite && (
         <Card className="mb-6">
-          <p className="mb-3 text-sm font-medium text-slate-700">Add a team member</p>
+          <p className="mb-3 text-sm font-medium text-fg-soft">Add a team member</p>
           <form onSubmit={addUser} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="w-full sm:w-52">
-              <label className="block text-sm font-medium text-slate-700">Employee (optional)</label>
+              <label className="block text-sm font-medium text-fg-soft">Employee (optional)</label>
               <select
                 value={linkEmpId}
                 onChange={(e) => setLinkEmpId(e.target.value)}
@@ -133,7 +133,7 @@ export default function StaffPage() {
               </select>
             </div>
             <div className="flex-1 sm:min-w-[14rem]">
-              <label className="block text-sm font-medium text-slate-700">Email</label>
+              <label className="block text-sm font-medium text-fg-soft">Email</label>
               <input
                 type="email"
                 value={email}
@@ -144,7 +144,7 @@ export default function StaffPage() {
               />
             </div>
             <div className="w-full sm:w-44">
-              <label className="block text-sm font-medium text-slate-700">Temp password</label>
+              <label className="block text-sm font-medium text-fg-soft">Temp password</label>
               <input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -155,7 +155,7 @@ export default function StaffPage() {
               />
             </div>
             <div className="w-full sm:w-48">
-              <label className="block text-sm font-medium text-slate-700">Role</label>
+              <label className="block text-sm font-medium text-fg-soft">Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls}>
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
@@ -172,8 +172,8 @@ export default function StaffPage() {
               {saving ? "Adding…" : "Add member"}
             </button>
           </form>
-          {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
-          <p className="mt-2 text-xs text-slate-400">
+          {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+          <p className="mt-2 text-xs text-fg-faint">
             Share the email + temp password with them. They sign in directly — staff don&apos;t
             self-register. Pick an <b>Employee</b> to give that person a login tied to their HR
             record (so they can later see their own attendance &amp; payslips).
@@ -188,7 +188,7 @@ export default function StaffPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-faint">
                   <th className="px-5 py-3 font-medium">Email</th>
                   <th className="px-5 py-3 font-medium">Role</th>
                   <th className="px-5 py-3 font-medium">Status</th>
@@ -199,17 +199,17 @@ export default function StaffPage() {
                 {users.map((u) => {
                   const isSelf = u.id === user?.id;
                   return (
-                    <tr key={u.id} className="border-b border-slate-100">
-                      <td className="px-5 py-3 font-medium text-slate-800">
+                    <tr key={u.id} className="border-b border-line">
+                      <td className="px-5 py-3 font-medium text-fg">
                         {u.email}
-                        {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
+                        {isSelf && <span className="ml-2 text-xs text-fg-faint">(you)</span>}
                       </td>
                       <td className="px-5 py-3">
                         {canWrite && !isSelf ? (
                           <select
                             value={u.role}
                             onChange={(e) => changeRole(u.id, e.target.value)}
-                            className="rounded-md border border-slate-200 px-2 py-1 text-xs"
+                            className="rounded-md border border-line px-2 py-1 text-xs"
                           >
                             {ROLES.map((r) => (
                               <option key={r} value={r}>
@@ -218,7 +218,7 @@ export default function StaffPage() {
                             ))}
                           </select>
                         ) : (
-                          <span className="text-slate-600">{ROLE_LABELS[u.role] ?? u.role}</span>
+                          <span className="text-fg-soft">{ROLE_LABELS[u.role] ?? u.role}</span>
                         )}
                       </td>
                       <td className="px-5 py-3">
@@ -232,7 +232,7 @@ export default function StaffPage() {
                         {canWrite && !isSelf && (
                           <button
                             onClick={() => toggleActive(u)}
-                            className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                            className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
                           >
                             {u.is_active ? "Deactivate" : "Activate"}
                           </button>

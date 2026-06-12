@@ -71,18 +71,18 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           aria-modal="true"
         >
           <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => settle(false)}
           />
-          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-900">
+          <div className="mise-pop relative w-full max-w-sm rounded-2xl border border-white/10 bg-ink-900/95 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl">
+            <h3 className="text-base font-semibold text-fg">
               {opts.title ?? "Are you sure?"}
             </h3>
-            <div className="mt-2 text-sm text-slate-600">{opts.message}</div>
+            <div className="mt-2 text-sm text-fg-soft">{opts.message}</div>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => settle(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-white/5"
               >
                 {opts.cancelText ?? "Cancel"}
               </button>

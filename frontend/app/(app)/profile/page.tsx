@@ -94,45 +94,45 @@ export default function ProfilePage() {
             {initial}
           </div>
           <div>
-            <p className="text-lg font-semibold text-slate-900">{user?.email}</p>
-            <p className="text-sm text-slate-500">{user?.role.replace(/_/g, " ")}</p>
+            <p className="text-lg font-semibold text-fg">{user?.email}</p>
+            <p className="text-sm text-fg-faint">{user?.role.replace(/_/g, " ")}</p>
           </div>
         </div>
 
-        <dl className="mt-6 grid grid-cols-1 gap-4 border-t border-slate-100 pt-6 text-sm sm:grid-cols-2">
+        <dl className="mt-6 grid grid-cols-1 gap-4 border-t border-line pt-6 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-500">Email</dt>
-            <dd className="font-medium text-slate-800">{user?.email}</dd>
+            <dt className="text-fg-faint">Email</dt>
+            <dd className="font-medium text-fg">{user?.email}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">Role</dt>
-            <dd className="font-medium text-slate-800">{user?.role.replace(/_/g, " ")}</dd>
+            <dt className="text-fg-faint">Role</dt>
+            <dd className="font-medium text-fg">{user?.role.replace(/_/g, " ")}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">Status</dt>
-            <dd className="font-medium text-brand-600">{user?.is_active ? "Active" : "Inactive"}</dd>
+            <dt className="text-fg-faint">Status</dt>
+            <dd className="font-medium text-brand-400">{user?.is_active ? "Active" : "Inactive"}</dd>
           </div>
         </dl>
       </Card>
 
       {hotel && (
         <Card className="mt-6">
-          <h3 className="font-semibold text-slate-900">Restaurant</h3>
+          <h3 className="font-semibold text-fg">Restaurant</h3>
           <dl className="mt-3 grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-slate-500">Name</dt>
-              <dd className="font-medium text-slate-800">{hotel.name}</dd>
+              <dt className="text-fg-faint">Name</dt>
+              <dd className="font-medium text-fg">{hotel.name}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Location</dt>
-              <dd className="font-medium text-slate-800">
+              <dt className="text-fg-faint">Location</dt>
+              <dd className="font-medium text-fg">
                 {hotel.city ? `${hotel.city}, ` : ""}
                 {hotel.country}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-500">Base currency</dt>
-              <dd className="font-medium text-slate-800">{hotel.base_currency}</dd>
+              <dt className="text-fg-faint">Base currency</dt>
+              <dd className="font-medium text-fg">{hotel.base_currency}</dd>
             </div>
           </dl>
         </Card>
@@ -140,14 +140,14 @@ export default function ProfilePage() {
 
       {canExpenses && (
         <Card className="mt-6">
-          <h3 className="font-semibold text-slate-900">Monthly overheads</h3>
-          <p className="mt-1 text-sm text-slate-500">
+          <h3 className="font-semibold text-fg">Monthly overheads</h3>
+          <p className="mt-1 text-sm text-fg-faint">
             Your standing fixed costs (rent, gas, electricity…). Set the amounts and post them to
             this month&apos;s expenses in one click — they flow straight into your P&amp;L. Amounts
             remember last month&apos;s figures.
           </p>
           {fixedCats.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-4 text-sm text-fg-faint">
               No fixed expense categories yet — add some on the Expenses page (kind: fixed).
             </p>
           ) : (
@@ -155,9 +155,9 @@ export default function ProfilePage() {
               <div className="mt-4 space-y-2">
                 {fixedCats.map((c) => (
                   <div key={c.id} className="flex items-center gap-3">
-                    <span className="flex-1 text-sm text-slate-700">{c.name}</span>
+                    <span className="flex-1 text-sm text-fg-soft">{c.name}</span>
                     {postedThisMonth(c.id) ? (
-                      <span className="text-xs font-medium text-brand-600">✓ posted for {monthLabel}</span>
+                      <span className="text-xs font-medium text-brand-400">✓ posted for {monthLabel}</span>
                     ) : (
                       <input
                         type="number"
@@ -166,7 +166,7 @@ export default function ProfilePage() {
                         value={amounts[c.id] ?? ""}
                         onChange={(e) => setAmounts({ ...amounts, [c.id]: e.target.value })}
                         placeholder="amount"
-                        className="w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                        className="w-28 rounded-lg border border-line-2 px-3 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
                       />
                     )}
                   </div>
@@ -180,7 +180,7 @@ export default function ProfilePage() {
                 >
                   {posting ? "Posting…" : `Post to ${monthLabel}`}
                 </button>
-                {msg && <span className="text-sm text-slate-500">{msg}</span>}
+                {msg && <span className="text-sm text-fg-faint">{msg}</span>}
               </div>
             </>
           )}
@@ -188,13 +188,13 @@ export default function ProfilePage() {
       )}
 
       <Card className="mt-6">
-        <h3 className="font-semibold text-slate-900">Security</h3>
-        <p className="mt-1 text-sm text-slate-500">
+        <h3 className="font-semibold text-fg">Security</h3>
+        <p className="mt-1 text-sm text-fg-faint">
           Change-password, two-factor, and Google sign-in are on the roadmap.
         </p>
         <button
           disabled
-          className="mt-3 cursor-not-allowed rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400"
+          className="mt-3 cursor-not-allowed rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg-faint"
         >
           Change password (coming soon)
         </button>

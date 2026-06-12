@@ -27,12 +27,12 @@ function PnlLine({
 }) {
   const { format } = useCurrency();
   const profit =
-    tone === "profit" ? (parseFloat(value) >= 0 ? "text-brand-600" : "text-rose-600") : "";
+    tone === "profit" ? (parseFloat(value) >= 0 ? "text-brand-400" : "text-rose-400") : "";
   return (
     <div
-      className={`flex items-center justify-between py-2.5 ${bold ? "border-t border-slate-200" : ""}`}
+      className={`flex items-center justify-between py-2.5 ${bold ? "border-t border-line" : ""}`}
     >
-      <span className={bold ? "font-semibold text-slate-900" : "text-slate-600"}>{label}</span>
+      <span className={bold ? "font-semibold text-fg" : "text-fg-soft"}>{label}</span>
       <span className={`tabular-nums ${bold ? "font-semibold" : ""} ${profit}`}>
         {sign === "minus" ? "−" : ""}
         {format(value)}
@@ -74,14 +74,14 @@ export default function ReportsPage() {
 
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-500">From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="block text-xs font-medium text-fg-faint">From</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500">To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <label className="block text-xs font-medium text-fg-faint">To</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
         </div>
-        <button onClick={apply} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        <button onClick={apply} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2">
           Apply
         </button>
         <div className="ml-auto flex gap-2">
@@ -93,7 +93,7 @@ export default function ReportsPage() {
           </button>
           <button
             onClick={() => downloadFile(`/reports/pnl.csv?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.csv`)}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
           >
             ⬇ CSV
           </button>
@@ -104,13 +104,13 @@ export default function ReportsPage() {
         <Spinner />
       ) : error || !pnl ? (
         <Card>
-          <p className="py-6 text-center text-sm text-rose-600">
+          <p className="py-6 text-center text-sm text-rose-400">
             {error || "No data for this range."}
           </p>
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label="Net sales" value={format(pnl.net_sales)} />
             <StatCard label="Net profit" value={format(pnl.net_profit)} accent={parseFloat(pnl.net_profit) >= 0 ? "brand" : "rose"} />
             <StatCard label="Net margin" value={`${pnl.net_margin_pct}%`} accent="brand" />
@@ -119,7 +119,7 @@ export default function ReportsPage() {
 
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2">
-              <h3 className="mb-2 font-semibold text-slate-900">Profit &amp; Loss</h3>
+              <h3 className="mb-2 font-semibold text-fg">Profit &amp; Loss</h3>
               <div className="text-sm">
                 <PnlLine label="Gross sales" value={pnl.gross_sales} />
                 <PnlLine label="Delivery commission" value={pnl.commission} sign="minus" />
@@ -132,15 +132,15 @@ export default function ReportsPage() {
             </Card>
 
             <Card>
-              <h3 className="font-semibold text-slate-900">Expense breakdown</h3>
+              <h3 className="font-semibold text-fg">Expense breakdown</h3>
               {pnl.expense_breakdown.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-400">No expenses in range.</p>
+                <p className="py-6 text-center text-sm text-fg-faint">No expenses in range.</p>
               ) : (
-                <ul className="mt-3 divide-y divide-slate-100">
+                <ul className="mt-3 divide-y divide-line">
                   {pnl.expense_breakdown.map((c) => (
                     <li key={c.category_id} className="flex items-center justify-between py-2 text-sm">
-                      <span className="text-slate-700">{c.category_name}</span>
-                      <span className="font-medium text-slate-900">{format(c.total)}</span>
+                      <span className="text-fg-soft">{c.category_name}</span>
+                      <span className="font-medium text-fg">{format(c.total)}</span>
                     </li>
                   ))}
                 </ul>

@@ -108,34 +108,34 @@ export default function AttendancePage() {
           type="date"
           value={day}
           onChange={(e) => changeDay(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="rounded-lg border border-line-2 px-3 py-2 text-sm"
         />
-        <span className="text-sm text-slate-500">{present} present · {employees.length} staff</span>
-        <span className="text-xs text-slate-400">· times in {timeZone}</span>
-        {!isToday && <span className="text-xs text-slate-400">(punching only works for today)</span>}
+        <span className="text-sm text-fg-faint">{present} present · {employees.length} staff</span>
+        <span className="text-xs text-fg-faint">· times in {timeZone}</span>
+        {!isToday && <span className="text-xs text-fg-faint">(punching only works for today)</span>}
         <div className="ml-auto flex gap-2">
           <button
             onClick={() => downloadFile(`/attendance/timesheet.pdf?on=${day}`, `timesheet-${day}.pdf`)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
           >
             ⬇ PDF
           </button>
           <button
             onClick={() => downloadFile(`/attendance/timesheet.xlsx?on=${day}`, `timesheet-${day}.xlsx`)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
           >
             ⬇ Excel
           </button>
         </div>
       </div>
 
-      {error && <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                 <th className="px-5 py-3 font-medium">Employee</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">In</th>
@@ -148,7 +148,7 @@ export default function AttendancePage() {
             </thead>
             <tbody>
               {employees.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-400">No employees yet.</td></tr>
+                <tr><td colSpan={8} className="px-5 py-8 text-center text-fg-faint">No employees yet.</td></tr>
               ) : (
                 employees.map((e) => {
                   const r = rows[e.id];
@@ -156,8 +156,8 @@ export default function AttendancePage() {
                   const clockedOut = !!r?.clock_out;
                   const onBreak = !!r?.on_break;
                   return (
-                    <tr key={e.id} className="border-b border-slate-100">
-                      <td className="px-5 py-3 font-medium text-slate-800">{e.full_name}</td>
+                    <tr key={e.id} className="border-b border-line">
+                      <td className="px-5 py-3 font-medium text-fg">{e.full_name}</td>
                       <td className="px-5 py-3">
                         {onBreak ? (
                           <Badge tone="amber">On break</Badge>
@@ -166,44 +166,44 @@ export default function AttendancePage() {
                         ) : clockedIn ? (
                           <Badge tone="green">Working</Badge>
                         ) : (
-                          <span className="text-slate-300">—</span>
+                          <span className="text-fg-faint">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_in ?? null)}</td>
-                      <td className="px-5 py-3 text-slate-600">{fmtTime(r?.clock_out ?? null)}</td>
-                      <td className="px-5 py-3 text-right text-slate-600">
+                      <td className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_in ?? null)}</td>
+                      <td className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_out ?? null)}</td>
+                      <td className="px-5 py-3 text-right text-fg-soft">
                         {onBreak ? (
-                          <span className="text-amber-600">on break…</span>
+                          <span className="text-amber-400">on break…</span>
                         ) : r?.break_end ? (
                           `${r.break_minutes}m${r.over_break_minutes ? ` (+${r.over_break_minutes})` : ""}`
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-700">{r?.working_hours ?? "—"}</td>
+                      <td className="px-5 py-3 text-right text-fg-soft">{r?.working_hours ?? "—"}</td>
                       <td className="px-5 py-3 text-right">
                         {r && parseFloat(r.break_penalty) > 0 ? (
-                          <span className="text-rose-600">{format(r.break_penalty)}</span>
+                          <span className="text-rose-400">{format(r.break_penalty)}</span>
                         ) : (
-                          <span className="text-slate-300">—</span>
+                          <span className="text-fg-faint">—</span>
                         )}
                       </td>
                       {canWrite && (
                         <td className="px-5 py-3">
                           <div className="flex flex-wrap items-center gap-1">
                             {isToday && !clockedIn && (
-                              <button onClick={() => punch(e.id, "CLOCK_IN")} className={`${btn} border-brand-200 bg-brand-50 text-brand-700`}>Clock in</button>
+                              <button onClick={() => punch(e.id, "CLOCK_IN")} className={`${btn} border-brand-400/30 bg-brand-400/10 text-brand-300`}>Clock in</button>
                             )}
                             {isToday && clockedIn && !clockedOut && !onBreak && (
                               <>
-                                <button onClick={() => punch(e.id, "BREAK_START")} className={`${btn} border-amber-200 bg-amber-50 text-amber-700`}>Start break</button>
-                                <button onClick={() => punch(e.id, "CLOCK_OUT")} className={`${btn} border-slate-300 text-slate-700`}>Clock out</button>
+                                <button onClick={() => punch(e.id, "BREAK_START")} className={`${btn} border-amber-400/30 bg-amber-400/10 text-amber-300`}>Start break</button>
+                                <button onClick={() => punch(e.id, "CLOCK_OUT")} className={`${btn} border-line-2 text-fg-soft`}>Clock out</button>
                               </>
                             )}
                             {isToday && clockedIn && !clockedOut && onBreak && (
-                              <button onClick={() => punch(e.id, "BREAK_END")} className={`${btn} border-brand-200 bg-brand-50 text-brand-700`}>End break</button>
+                              <button onClick={() => punch(e.id, "BREAK_END")} className={`${btn} border-brand-400/30 bg-brand-400/10 text-brand-300`}>End break</button>
                             )}
-                            <button onClick={() => openEdit(e)} className={`${btn} border-slate-200 text-slate-500 hover:bg-slate-50`} title="Manually set / fix times (works for past dates)">Edit</button>
+                            <button onClick={() => openEdit(e)} className={`${btn} border-line text-fg-faint hover:bg-paper-2`} title="Manually set / fix times (works for past dates)">Edit</button>
                           </div>
                         </td>
                       )}
@@ -216,31 +216,31 @@ export default function AttendancePage() {
         </div>
       </Card>
 
-      <p className="mt-4 text-xs text-slate-400">
+      <p className="mt-4 text-xs text-fg-faint">
         Flow: <b>Clock in</b> → optionally <b>Start break</b> then <b>End break</b> → <b>Clock out</b>.
         Break time is subtracted from the day&apos;s working hours. Use <b>Edit</b> to fix or
         back-date a record if someone forgot to punch.
       </p>
 
       {editEmp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setEditEmp(null)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(ev) => ev.stopPropagation()}>
-            <h3 className="font-semibold text-slate-900">Edit attendance</h3>
-            <p className="mt-0.5 text-sm text-slate-500">{editEmp.full_name} · {day} · times in {timeZone}</p>
+        <div className="mise-fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setEditEmp(null)}>
+          <div className="mise-pop w-full max-w-sm rounded-2xl border border-white/10 bg-ink-900/95 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl" onClick={(ev) => ev.stopPropagation()}>
+            <h3 className="font-semibold text-fg">Edit attendance</h3>
+            <p className="mt-0.5 text-sm text-fg-faint">{editEmp.full_name} · {day} · times in {timeZone}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="text-sm text-slate-600">Clock in
-                <input type="time" value={ci} onChange={(ev) => setCi(ev.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <label className="text-sm text-fg-soft">Clock in
+                <input type="time" value={ci} onChange={(ev) => setCi(ev.target.value)} className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
               </label>
-              <label className="text-sm text-slate-600">Clock out
-                <input type="time" value={co} onChange={(ev) => setCo(ev.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <label className="text-sm text-fg-soft">Clock out
+                <input type="time" value={co} onChange={(ev) => setCo(ev.target.value)} className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
               </label>
-              <label className="col-span-2 text-sm text-slate-600">Break (minutes)
-                <input type="number" min="0" value={brk} onChange={(ev) => setBrk(ev.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <label className="col-span-2 text-sm text-fg-soft">Break (minutes)
+                <input type="number" min="0" value={brk} onChange={(ev) => setBrk(ev.target.value)} className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
               </label>
             </div>
-            <p className="mt-2 text-xs text-slate-400">Leave clock-in empty to mark the day absent.</p>
+            <p className="mt-2 text-xs text-fg-faint">Leave clock-in empty to mark the day absent.</p>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setEditEmp(null)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button onClick={() => setEditEmp(null)} className="rounded-lg border border-line-2 px-3 py-1.5 text-sm text-fg-soft hover:bg-paper-2">Cancel</button>
               <button onClick={saveEdit} disabled={savingEdit} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {savingEdit ? "Saving…" : "Save"}
               </button>

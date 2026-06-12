@@ -143,12 +143,12 @@ export default function SalesPage() {
       <PageHeader title="Sales & Cash" subtitle="Daily takings by channel, commissions, and the till." />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium text-slate-700">Date</label>
+        <label className="text-sm font-medium text-fg-soft">Date</label>
         <input
           type="date"
           value={day}
           onChange={(e) => changeDay(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
+          className="rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500"
         />
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {canWrite && (
@@ -156,14 +156,14 @@ export default function SalesPage() {
               <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={onImportFile} />
               <button
                 onClick={() => fileRef.current?.click()}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
                 title="Upload a day's sales from Excel (Channel, Gross, Method)"
               >
                 ⬆ Import Excel
               </button>
               <button
                 onClick={() => downloadFile("/sales/sales-template.xlsx", "mise-sales-template.xlsx")}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
               >
                 ⬇ Template
               </button>
@@ -171,16 +171,16 @@ export default function SalesPage() {
           )}
           <button
             onClick={() => downloadFile(`/sales/days/${day}/sheet.pdf`, `sales-${day}.pdf`)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
           >
             ⬇ PDF
           </button>
         </div>
       </div>
-      {notice && <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{notice}</p>}
-      {error && <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+      {notice && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
+      {error && <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Gross sales" value={format(summary.totals.gross)} />
         <StatCard label="Commission" value={format(summary.totals.commission)} accent="rose" />
         <StatCard label="Net received" value={format(summary.totals.net)} accent="brand" />
@@ -199,11 +199,11 @@ export default function SalesPage() {
             <Card className="mb-4">
               <form onSubmit={addLine} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-700">Channel</label>
+                  <label className="block text-sm font-medium text-fg-soft">Channel</label>
                   <select
                     value={channelId}
                     onChange={(e) => setChannelId(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
                   >
                     {channels.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -213,22 +213,22 @@ export default function SalesPage() {
                   </select>
                 </div>
                 <div className="w-full sm:w-32">
-                  <label className="block text-sm font-medium text-slate-700">Gross</label>
+                  <label className="block text-sm font-medium text-fg-soft">Gross</label>
                   <input
                     value={gross}
                     onChange={(e) => setGross(e.target.value)}
                     inputMode="decimal"
                     required
                     placeholder="0.00"
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
                   />
                 </div>
                 <div className="w-full sm:w-32">
-                  <label className="block text-sm font-medium text-slate-700">Method</label>
+                  <label className="block text-sm font-medium text-fg-soft">Method</label>
                   <select
                     value={method}
                     onChange={(e) => setMethod(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
                   >
                     {METHODS.map((m) => (
                       <option key={m} value={m}>
@@ -244,7 +244,7 @@ export default function SalesPage() {
                   Add
                 </button>
               </form>
-              {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+              {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
             </Card>
           )}
 
@@ -252,7 +252,7 @@ export default function SalesPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+                  <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                     <th className="px-5 py-3 font-medium">Channel</th>
                     <th className="px-5 py-3 font-medium">Method</th>
                     <th className="px-5 py-3 text-right font-medium">Gross</th>
@@ -264,23 +264,23 @@ export default function SalesPage() {
                 <tbody>
                   {summary.lines.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                      <td colSpan={6} className="px-5 py-8 text-center text-fg-faint">
                         No sales entered for this day yet.
                       </td>
                     </tr>
                   ) : (
                     summary.lines.map((l) => (
-                      <tr key={l.id} className="border-b border-slate-100">
-                        <td className="px-5 py-3 font-medium text-slate-800">{l.channel_name}</td>
-                        <td className="px-5 py-3 text-slate-500">{l.payment_method}</td>
-                        <td className="px-5 py-3 text-right text-slate-700">{format(l.gross_amount)}</td>
-                        <td className="px-5 py-3 text-right text-rose-600">{format(l.commission)}</td>
-                        <td className="px-5 py-3 text-right font-medium text-slate-900">{format(l.net_amount)}</td>
+                      <tr key={l.id} className="border-b border-line">
+                        <td className="px-5 py-3 font-medium text-fg">{l.channel_name}</td>
+                        <td className="px-5 py-3 text-fg-faint">{l.payment_method}</td>
+                        <td className="px-5 py-3 text-right text-fg-soft">{format(l.gross_amount)}</td>
+                        <td className="px-5 py-3 text-right text-rose-400">{format(l.commission)}</td>
+                        <td className="px-5 py-3 text-right font-medium text-fg">{format(l.net_amount)}</td>
                         <td className="px-5 py-3 text-right">
                           {canWrite && (
                             <button
                               onClick={() => removeLine(l.id)}
-                              className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                              className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2"
                             >
                               Remove
                             </button>
@@ -297,43 +297,43 @@ export default function SalesPage() {
 
         {/* Cash reconciliation */}
         <Card>
-          <h3 className="font-semibold text-slate-900">Cash drawer</h3>
+          <h3 className="font-semibold text-fg">Cash drawer</h3>
           <div className="mt-4 space-y-3 text-sm">
             <div>
-              <label className="block text-slate-500">Opening cash</label>
+              <label className="block text-fg-faint">Opening cash</label>
               <input
                 value={opening}
                 onChange={(e) => setOpening(e.target.value)}
                 inputMode="decimal"
                 disabled={!canWrite}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2"
               />
             </div>
-            <div className="flex justify-between border-t border-slate-100 pt-3 text-slate-600">
+            <div className="flex justify-between border-t border-line pt-3 text-fg-soft">
               <span>+ Cash sales</span>
               <span>{format(summary.totals.cash_sales)}</span>
             </div>
-            <div className="flex justify-between font-medium text-slate-800">
+            <div className="flex justify-between font-medium text-fg">
               <span>= Expected in drawer</span>
               <span>{format(summary.expected_cash)}</span>
             </div>
             <div>
-              <label className="block text-slate-500">Counted at close</label>
+              <label className="block text-fg-faint">Counted at close</label>
               <input
                 value={counted}
                 onChange={(e) => setCounted(e.target.value)}
                 inputMode="decimal"
                 disabled={!canWrite}
                 placeholder="physical count"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2"
               />
             </div>
             {varianceNum != null && (
               <div
                 className={`rounded-lg px-3 py-2 text-sm font-medium ${
                   varianceNum === 0
-                    ? "bg-brand-50 text-brand-700"
-                    : "bg-amber-50 text-amber-700"
+                    ? "bg-brand-400/10 text-brand-300"
+                    : "bg-amber-400/10 text-amber-300"
                 }`}
               >
                 Variance: {format(variance)} {varianceNum === 0 ? "✓ balanced" : "— please check"}
@@ -342,7 +342,7 @@ export default function SalesPage() {
             {canWrite && (
               <button
                 onClick={saveCash}
-                className="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900"
+                className="w-full rounded-lg bg-white/10 ring-1 ring-white/15 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
               >
                 Save cash
               </button>
@@ -388,46 +388,46 @@ function ChannelManager({
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between text-left"
       >
-        <h3 className="font-semibold text-slate-900">Channels &amp; commission rates</h3>
-        <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+        <h3 className="font-semibold text-fg">Channels &amp; commission rates</h3>
+        <span className="text-fg-faint">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
         <div className="mt-4 space-y-3">
           <div className="grid gap-2 sm:grid-cols-2">
             {channels.map((c) => (
-              <div key={c.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                <span className="font-medium text-slate-700">{c.name}</span>
+              <div key={c.id} className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-sm">
+                <span className="font-medium text-fg-soft">{c.name}</span>
                 <span className="flex items-center gap-1">
                   <input
                     defaultValue={c.commission_pct}
                     onBlur={(e) => setCommission(c.id, e.target.value)}
                     inputMode="decimal"
-                    className="w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm"
+                    className="w-16 rounded border border-line-2 px-2 py-1 text-right text-sm"
                   />
-                  <span className="text-slate-400">%</span>
+                  <span className="text-fg-faint">%</span>
                 </span>
               </div>
             ))}
           </div>
-          <form onSubmit={add} className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-end">
+          <form onSubmit={add} className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-slate-700">New channel</label>
+              <label className="block text-sm font-medium text-fg-soft">New channel</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
                 placeholder="e.g. Hungry Panda"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
               />
             </div>
             <div className="w-full sm:w-28">
-              <label className="block text-sm font-medium text-slate-700">Commission %</label>
+              <label className="block text-sm font-medium text-fg-soft">Commission %</label>
               <input
                 value={pct}
                 onChange={(e) => setPct(e.target.value)}
                 inputMode="decimal"
                 placeholder="0"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
               />
             </div>
             <button className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">

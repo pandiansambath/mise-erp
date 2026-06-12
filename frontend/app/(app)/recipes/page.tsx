@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
+import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -25,31 +26,39 @@ function CostDetail({ recipeId }: { recipeId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mise-stagger grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
-          <p className="text-xs uppercase text-slate-500">Cost / serving</p>
-          <p className="text-lg font-semibold text-slate-900">{format(data.cost_per_serving)}</p>
+          <p className="text-xs uppercase text-fg-faint">Cost / serving</p>
+          <p className="text-lg font-semibold text-fg">{format(data.cost_per_serving)}</p>
         </div>
         <div>
-          <p className="text-xs uppercase text-slate-500">Sells at</p>
-          <p className="text-lg font-semibold text-slate-900">
+          <p className="text-xs uppercase text-fg-faint">Sells at</p>
+          <p className="text-lg font-semibold text-fg">
             {data.selling_price ? format(data.selling_price) : "—"}
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase text-slate-500">Margin</p>
-          <p className="text-lg font-semibold text-brand-600">
+          <p className="text-xs uppercase text-fg-faint">Margin</p>
+          <p
+            className={`text-lg font-semibold ${
+              data.profit_margin_pct == null
+                ? "text-fg"
+                : { green: "text-brand-400", amber: "text-amber-400", red: "text-rose-400" }[
+                    marginTone(parseFloat(data.profit_margin_pct))
+                  ]
+            }`}
+          >
             {data.profit_margin_pct ? `${data.profit_margin_pct}%` : "—"}
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase text-slate-500">Batch ({data.servings})</p>
-          <p className="text-lg font-semibold text-slate-900">{format(data.total_cost)}</p>
+          <p className="text-xs uppercase text-fg-faint">Batch ({data.servings})</p>
+          <p className="text-lg font-semibold text-fg">{format(data.total_cost)}</p>
         </div>
       </div>
 
       {data.has_missing_prices && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+        <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">
           Some ingredients have no price yet — margin may be understated.
         </p>
       )}
@@ -57,7 +66,7 @@ function CostDetail({ recipeId }: { recipeId: string }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+            <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
               <th className="py-2 pr-4 font-medium">Ingredient</th>
               <th className="py-2 pr-4 text-right font-medium">Qty</th>
               <th className="py-2 pr-4 text-right font-medium">Unit price</th>
@@ -67,16 +76,16 @@ function CostDetail({ recipeId }: { recipeId: string }) {
           </thead>
           <tbody>
             {data.ingredients.map((ing) => (
-              <tr key={ing.item_id} className="border-b border-slate-100">
-                <td className="py-2 pr-4 text-slate-800">{ing.item_name}</td>
-                <td className="py-2 pr-4 text-right text-slate-600">
+              <tr key={ing.item_id} className="border-b border-line">
+                <td className="py-2 pr-4 text-fg">{ing.item_name}</td>
+                <td className="py-2 pr-4 text-right text-fg-soft">
                   {ing.quantity} {ing.unit}
                 </td>
-                <td className="py-2 pr-4 text-right text-slate-600">{format(ing.unit_price)}</td>
-                <td className="py-2 pr-4 text-right font-medium text-slate-800">
+                <td className="py-2 pr-4 text-right text-fg-soft">{format(ing.unit_price)}</td>
+                <td className="py-2 pr-4 text-right font-medium text-fg">
                   {format(ing.line_cost)}
                 </td>
-                <td className="py-2 text-slate-500">
+                <td className="py-2 text-fg-faint">
                   {ing.price_source === "preferred"
                     ? `★ ${ing.vendor_name}`
                     : ing.price_source === "cheapest"
@@ -92,7 +101,7 @@ function CostDetail({ recipeId }: { recipeId: string }) {
   );
 }
 
-type IngLine = { item_id: string; qty: string };
+type IngLine = PickedLine;
 type IngredientOut = { item_id: string; quantity: string; unit: string };
 
 const DEFAULT_CATEGORIES = [
@@ -115,7 +124,7 @@ export default function RecipesPage() {
   const [category, setCategory] = useState("");
   const [servings, setServings] = useState("1");
   const [price, setPrice] = useState("");
-  const [ings, setIngs] = useState<IngLine[]>([{ item_id: "", qty: "" }]);
+  const [ings, setIngs] = useState<IngLine[]>([]);
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,10 +136,7 @@ export default function RecipesPage() {
   useEffect(() => {
     Promise.all([
       reload(),
-      api.get<Item[]>("/inventory/items").then((i) => {
-        setItems(i);
-        setIngs([{ item_id: i[0]?.id ?? "", qty: "" }]);
-      }),
+      api.get<Item[]>("/inventory/items").then(setItems),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -163,7 +169,7 @@ export default function RecipesPage() {
     setCategory("");
     setServings("1");
     setPrice("");
-    setIngs([{ item_id: items[0]?.id ?? "", qty: "" }]);
+    setIngs([]);
     setCopiedFrom(null);
     setError(null);
     setShowForm(false);
@@ -180,11 +186,7 @@ export default function RecipesPage() {
     const list = await api
       .get<IngredientOut[]>(`/recipes/${r.id}/ingredients`)
       .catch(() => [] as IngredientOut[]);
-    setIngs(
-      list.length
-        ? list.map((i) => ({ item_id: i.item_id, qty: String(i.quantity) }))
-        : [{ item_id: items[0]?.id ?? "", qty: "" }]
-    );
+    setIngs(list.map((i) => ({ item_id: i.item_id, qty: String(i.quantity) })));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -251,7 +253,7 @@ export default function RecipesPage() {
   if (loading) return <Spinner />;
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500";
+    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500";
   const categoryOptions = [
     ...new Set([...DEFAULT_CATEGORIES, ...(recipes.map((r) => r.category).filter(Boolean) as string[])]),
   ];
@@ -280,13 +282,13 @@ export default function RecipesPage() {
             </button>
           ) : (
             <Card>
-              <p className="mb-3 text-sm font-medium text-slate-700">
+              <p className="mb-3 text-sm font-medium text-fg-soft">
                 {editId ? "Edit recipe" : "New recipe"}
               </p>
               <form onSubmit={createRecipe} className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700">Dish name</label>
+                    <label className="block text-sm font-medium text-fg-soft">Dish name</label>
                     <div className="mt-1">
                       <ComboBox
                         value={name}
@@ -295,12 +297,12 @@ export default function RecipesPage() {
                         placeholder="Search a dish or type a new one…"
                       />
                     </div>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-xs text-fg-faint">
                       Same dish at different serves? Pick the existing name to keep spelling consistent.
                     </p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Category</label>
+                    <label className="block text-sm font-medium text-fg-soft">Category</label>
                     <div className="mt-1">
                       <ComboBox
                         value={category}
@@ -312,69 +314,33 @@ export default function RecipesPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Serves</label>
+                    <label className="block text-sm font-medium text-fg-soft">Serves</label>
                     <input value={servings} onChange={(e) => setServings(e.target.value)} inputMode="numeric" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Selling price (optional)</label>
+                    <label className="block text-sm font-medium text-fg-soft">Selling price (optional)</label>
                     <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="per serving" className={inputCls} />
                   </div>
                 </div>
 
-                <p className="pt-1 text-sm font-medium text-slate-700">Ingredients</p>
-                {ings.map((l, idx) => {
-                  const lineItem = items.find((x) => x.id === l.item_id);
-                  const isKg = (lineItem?.unit ?? "").toLowerCase() === "kg";
-                  const qnum = parseFloat(l.qty) || 0;
-                  const kgPart = Math.floor(qnum);
-                  const gPart = Math.round((qnum - kgPart) * 1000);
-                  const setQty = (v: string) => setIngs(ings.map((x, i) => (i === idx ? { ...x, qty: v } : x)));
-                  const combine = (kg: number, g: number) => String(Math.round((kg + g / 1000) * 1000) / 1000);
-                  return (
-                    <div key={idx} className="flex gap-2">
-                      <select
-                        value={l.item_id}
-                        onChange={(e) => setIngs(ings.map((x, i) => (i === idx ? { ...x, item_id: e.target.value } : x)))}
-                        className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      >
-                        {items.map((it) => (
-                          <option key={it.id} value={it.id}>{it.name} ({it.unit})</option>
-                        ))}
-                      </select>
-                      {isKg ? (
-                        <>
-                          <input inputMode="numeric" value={kgPart ? String(kgPart) : ""} onChange={(e) => setQty(combine(parseInt(e.target.value) || 0, gPart))} placeholder="kg" title="kilograms" className="w-16 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                          <input inputMode="numeric" value={gPart ? String(gPart) : ""} onChange={(e) => setQty(combine(kgPart, parseInt(e.target.value) || 0))} placeholder="g" title="grams" className="w-16 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                        </>
-                      ) : (
-                        <input
-                          value={l.qty}
-                          onChange={(e) => setQty(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="qty"
-                          className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        />
-                      )}
-                      {ings.length > 1 && (
-                        <button type="button" onClick={() => setIngs(ings.filter((_, i) => i !== idx))} className="rounded-lg border border-slate-200 px-2 text-slate-400 hover:bg-slate-50">×</button>
-                      )}
-                    </div>
-                  );
-                })}
+                <p className="pt-1 text-sm font-medium text-fg-soft">Ingredients</p>
+                <ItemPicker
+                  items={items}
+                  lines={ings}
+                  onChange={setIngs}
+                  emptyHint="No inventory items yet — add ingredients in Inventory first."
+                />
 
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setIngs([...ings, { item_id: items[0]?.id ?? "", qty: "" }])} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
-                    + Add ingredient
-                  </button>
                   <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                     {saving ? "Saving…" : editId ? "Save changes" : "Save recipe"}
                   </button>
-                  <button type="button" onClick={resetForm} className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                  <button type="button" onClick={resetForm} className="rounded-lg border border-line-2 px-4 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2">
                     Cancel
                   </button>
                 </div>
-                {error && <p className="text-sm text-rose-600">{error}</p>}
-                <p className="text-xs text-slate-400">
+                {error && <p className="text-sm text-rose-400">{error}</p>}
+                <p className="text-xs text-fg-faint">
                   Cost/serving &amp; margin are calculated automatically from current vendor prices.
                 </p>
               </form>
@@ -385,7 +351,7 @@ export default function RecipesPage() {
 
       {recipes.length === 0 ? (
         <Card>
-          <p className="py-6 text-center text-sm text-slate-400">No recipes yet.</p>
+          <p className="py-6 text-center text-sm text-fg-faint">No recipes yet.</p>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -396,13 +362,13 @@ export default function RecipesPage() {
             return (
               <Card key={dishName}>
                 <div className="mb-1">
-                  <p className="font-semibold text-slate-900">{dishName}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="font-semibold text-fg">{dishName}</p>
+                  <p className="text-sm text-fg-faint">
                     {sorted[0].category || "Dish"}
                     {sorted.length > 1 && ` · ${sorted.length} serving sizes`}
                   </p>
                 </div>
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-line">
                   {sorted.map((r) => {
                     const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
                     const open = openId === r.id;
@@ -413,25 +379,25 @@ export default function RecipesPage() {
                             onClick={() => setOpenId(open ? null : r.id)}
                             className="flex flex-1 items-center justify-between text-left"
                           >
-                            <span className="text-sm font-medium text-slate-700">
+                            <span className="text-sm font-medium text-fg-soft">
                               serves {r.servings_default}
                             </span>
                             <span className="flex items-center gap-3">
                               {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
-                              <span className="text-slate-400">{open ? "▲" : "▼"}</span>
+                              <span className="text-fg-faint">{open ? "▲" : "▼"}</span>
                             </span>
                           </button>
                           {canWrite && (
                             <button
                               onClick={() => startEdit(r)}
-                              className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                              className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
                             >
                               Edit
                             </button>
                           )}
                         </div>
                         {open && (
-                          <div className="border-t border-slate-100 pb-2 pt-3">
+                          <div className="border-t border-line pb-2 pt-3">
                             <CostDetail recipeId={r.id} />
                           </div>
                         )}

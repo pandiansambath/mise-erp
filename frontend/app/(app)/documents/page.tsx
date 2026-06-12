@@ -173,7 +173,7 @@ export default function DocumentsPage() {
   if (loading) return <Spinner />;
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
+    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
 
   return (
     <div>
@@ -181,9 +181,9 @@ export default function DocumentsPage() {
       <input ref={reqFileRef} type="file" className="hidden" onChange={onReqFileChosen} />
 
       {expiring.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-800">⚠️ Expiring soon</p>
-          <ul className="mt-1 text-sm text-amber-700">
+        <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
+          <p className="text-sm font-semibold text-amber-200">⚠️ Expiring soon</p>
+          <ul className="mt-1 text-sm text-amber-300">
             {expiring.map((d) => (
               <li key={d.id}>
                 {d.title} — {d.days_left < 0 ? `expired ${-d.days_left}d ago` : `in ${d.days_left}d`} ({d.expiry_date})
@@ -195,31 +195,31 @@ export default function DocumentsPage() {
 
       {canWrite && (
         <Card className="mb-6">
-          <p className="mb-3 text-sm font-medium text-slate-700">Upload a document</p>
+          <p className="mb-3 text-sm font-medium text-fg-soft">Upload a document</p>
           <form onSubmit={upload} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">File</label>
+              <label className="block text-sm font-medium text-fg-soft">File</label>
               <input ref={fileRef} type="file" className="mt-1 w-full text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Type</label>
+              <label className="block text-sm font-medium text-fg-soft">Type</label>
               <select value={docType} onChange={(e) => setDocType(e.target.value)} className={inputCls}>
                 {TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Expiry (optional)</label>
+              <label className="block text-sm font-medium text-fg-soft">Expiry (optional)</label>
               <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className={inputCls} />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">Title (optional)</label>
+              <label className="block text-sm font-medium text-fg-soft">Title (optional)</label>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="defaults to filename" className={inputCls} />
             </div>
             <div className="flex items-end sm:col-span-4">
               <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {saving ? "Uploading…" : "Upload"}
               </button>
-              {error && <span className="ml-3 text-sm text-rose-600">{error}</span>}
+              {error && <span className="ml-3 text-sm text-rose-400">{error}</span>}
             </div>
           </form>
         </Card>
@@ -227,13 +227,13 @@ export default function DocumentsPage() {
 
       {canWrite && (
         <Card className="mb-6">
-          <p className="mb-1 text-sm font-medium text-slate-700">Request a document from staff</p>
-          <p className="mb-3 text-xs text-slate-400">
+          <p className="mb-1 text-sm font-medium text-fg-soft">Request a document from staff</p>
+          <p className="mb-3 text-xs text-fg-faint">
             They&apos;ll see it in their <b>My Space</b> as pending, upload it, then you approve.
           </p>
           <form onSubmit={createRequest} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Staff member</label>
+              <label className="block text-sm font-medium text-fg-soft">Staff member</label>
               <select value={reqEmpId} onChange={(e) => setReqEmpId(e.target.value)} className={inputCls}>
                 <option value="">Select…</option>
                 {employees.map((emp) => (
@@ -244,13 +244,13 @@ export default function DocumentsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Type</label>
+              <label className="block text-sm font-medium text-fg-soft">Type</label>
               <select value={reqType} onChange={(e) => setReqType(e.target.value)} className={inputCls}>
                 {TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">What to provide</label>
+              <label className="block text-sm font-medium text-fg-soft">What to provide</label>
               <input value={reqTitle} onChange={(e) => setReqTitle(e.target.value)} placeholder="e.g. Passport, Right-to-work" className={inputCls} />
             </div>
             <div className="sm:col-span-4">
@@ -264,7 +264,7 @@ export default function DocumentsPage() {
             <div className="mt-5 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-y border-slate-200 text-left text-xs uppercase text-slate-500">
+                  <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
                     <th className="px-3 py-2 font-medium">Staff</th>
                     <th className="px-3 py-2 font-medium">Document</th>
                     <th className="px-3 py-2 font-medium">Status</th>
@@ -273,9 +273,9 @@ export default function DocumentsPage() {
                 </thead>
                 <tbody>
                   {requests.map((r) => (
-                    <tr key={r.id} className="border-b border-slate-100">
-                      <td className="px-3 py-2 text-slate-700">{r.employee_name}</td>
-                      <td className="px-3 py-2 font-medium text-slate-800">{r.title}</td>
+                    <tr key={r.id} className="border-b border-line">
+                      <td className="px-3 py-2 text-fg-soft">{r.employee_name}</td>
+                      <td className="px-3 py-2 font-medium text-fg">{r.title}</td>
                       <td className="px-3 py-2">
                         <Badge tone={r.status === "APPROVED" ? "green" : r.status === "UPLOADED" ? "amber" : "slate"}>
                           {r.status.toLowerCase()}
@@ -284,13 +284,13 @@ export default function DocumentsPage() {
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1">
                           {r.document_id && (
-                            <button onClick={() => downloadFile(`/documents/${r.document_id}/download`, docName(r.employee_name, r.doc_type, docs.find((x) => x.id === r.document_id)?.filename))} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">View</button>
+                            <button onClick={() => downloadFile(`/documents/${r.document_id}/download`, docName(r.employee_name, r.doc_type, docs.find((x) => x.id === r.document_id)?.filename))} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">View</button>
                           )}
                           {r.status === "PENDING" && (
-                            <button onClick={() => pickReqFile(r.id)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" title="Upload this document for the staff member">Upload for them</button>
+                            <button onClick={() => pickReqFile(r.id)} className="rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2" title="Upload this document for the staff member">Upload for them</button>
                           )}
                           {r.status === "UPLOADED" && (
-                            <button onClick={() => approveRequest(r.id)} className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700">Approve</button>
+                            <button onClick={() => approveRequest(r.id)} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Approve</button>
                           )}
                         </div>
                       </td>
@@ -304,16 +304,16 @@ export default function DocumentsPage() {
       )}
 
       <Card className="p-0">
-        <div className="border-b border-slate-100 px-5 pt-4">
-          <h3 className="font-semibold text-slate-900">Restaurant documents</h3>
-          <p className="mb-3 mt-0.5 text-xs text-slate-400">
+        <div className="border-b border-line px-5 pt-4">
+          <h3 className="font-semibold text-fg">Restaurant documents</h3>
+          <p className="mb-3 mt-0.5 text-xs text-fg-faint">
             Your venue&apos;s own files — licences, insurance, contracts, bills. Staff documents live under their request above, not here.
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                 <th className="px-5 py-3 font-medium">Title</th>
                 <th className="px-5 py-3 font-medium">Type</th>
                 <th className="px-5 py-3 font-medium">Expiry</th>
@@ -323,18 +323,18 @@ export default function DocumentsPage() {
             </thead>
             <tbody>
               {docs.filter((d) => d.related_entity_type !== "EMPLOYEE").length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">No restaurant documents yet.</td></tr>
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-fg-faint">No restaurant documents yet.</td></tr>
               ) : docs.filter((d) => d.related_entity_type !== "EMPLOYEE").map((d) => (
-                <tr key={d.id} className="border-b border-slate-100">
-                  <td className="px-5 py-3 font-medium text-slate-800">{d.title}</td>
-                  <td className="px-5 py-3 text-slate-500">{typeLabel(d.doc_type)}</td>
-                  <td className="px-5 py-3 text-slate-500">{d.expiry_date || "—"}</td>
-                  <td className="px-5 py-3 text-right text-slate-400">{fmtSize(d.file_size)}</td>
+                <tr key={d.id} className="border-b border-line">
+                  <td className="px-5 py-3 font-medium text-fg">{d.title}</td>
+                  <td className="px-5 py-3 text-fg-faint">{typeLabel(d.doc_type)}</td>
+                  <td className="px-5 py-3 text-fg-faint">{d.expiry_date || "—"}</td>
+                  <td className="px-5 py-3 text-right text-fg-faint">{fmtSize(d.file_size)}</td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-1">
-                      <button onClick={() => downloadFile(`/documents/${d.id}/download`, d.filename)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-brand-700 hover:bg-brand-50">Download</button>
+                      <button onClick={() => downloadFile(`/documents/${d.id}/download`, d.filename)} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">Download</button>
                       {canWrite && (
-                        <button onClick={() => remove(d.id)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-400 hover:bg-slate-50">Delete</button>
+                        <button onClick={() => remove(d.id)} className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2">Delete</button>
                       )}
                     </div>
                   </td>
