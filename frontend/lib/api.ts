@@ -465,6 +465,10 @@ export interface BreakEven {
   break_even_per_day: string | null;
   days_elapsed: number;
 }
+export interface WasteSummary {
+  total: string;
+  entry_count: number;
+}
 export interface MoneyCentre {
   date_from: string;
   date_to: string;
@@ -474,9 +478,28 @@ export interface MoneyCentre {
   gross_margin_pct: string;
   net_margin_pct: string;
   stock_value: StockValue;
+  waste: WasteSummary;
   break_even: BreakEven;
   dish_margins: DishMargins;
   price_alerts: PriceAlert[];
+}
+
+// ── Waste log (GET/POST /inventory/waste) ────────────────────────────────────
+export interface WasteRow {
+  id: string;
+  item_id: string;
+  item_name: string;
+  unit: string;
+  quantity: string;
+  unit_cost: string | null;
+  value: string;
+  reason: string | null;
+  created_at: string;
+}
+export interface WasteListResponse {
+  total_value: string;
+  entry_count: number;
+  rows: WasteRow[];
 }
 
 export interface ExpenseCategory {

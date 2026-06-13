@@ -118,3 +118,28 @@ async def test_money_centre_payload_validates(db, hotel):
     assert model.stock_value.total == Decimal("0.00")
     assert model.dish_margins.total_count == 0
     assert model.price_alerts == []
+    assert model.waste.total == Decimal("0.00")
+    assert model.waste.entry_count == 0
+
+
+@pytest.mark.asyncio
+async def test_waste_decrements_stock_and_values_at_avg_cost(db, hotel):
+    item = await inv.create_item(db, hotel.id, name="Milk", unit="litre")
+    # 10 litre in @ £1.50 → avg cost 1.50, stock 10
+    await inv.record_movement(db, item, "PURCHASE_IN", Decimal("10"), unit_cost=Decimal("1.50"))
+
+    mv = await inv.record_waste(db, item, Decimal("4"), "spoiled", created_by=None)
+    assert item.current_stock == Decimal("6.000")  # 10 − 4 wasted
+    assert mv.unit_cost == Decimal("1.50")  # stamped at weighted-avg cost
+
+    rows = await inv.list_waste(db, hotel.id)
+    assert len(rows) == 1
+    assert rows[0]["quantity"] == Decimal("4.000")  # positive magnitude
+    assert rows[0]["value"] == Decimal("6.00")  # 4 × £1.50
+    assert rows[0]["reason"] == "spoiled"
+
+    # …and it shows up as a £ leak on the Money page
+    today = datetime.now(UTC).date()
+    wc = await insights.waste_cost(db, hotel.id, today, today)
+    assert wc["total"] == Decimal("6.00")
+    assert wc["entry_count"] == 1

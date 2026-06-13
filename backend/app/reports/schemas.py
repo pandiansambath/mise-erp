@@ -81,6 +81,11 @@ class PriceAlert(BaseModel):
     last_ordered: date_type
 
 
+class WasteSummary(BaseModel):
+    total: Decimal
+    entry_count: int
+
+
 class BreakEven(BaseModel):
     fixed_costs: Decimal
     contribution_margin_pct: Decimal
@@ -100,6 +105,7 @@ class MoneyCentre(BaseModel):
     gross_margin_pct: Decimal
     net_margin_pct: Decimal
     stock_value: StockValue
+    waste: WasteSummary
     break_even: BreakEven
     dish_margins: DishMargins
     price_alerts: list[PriceAlert]

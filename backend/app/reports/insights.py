@@ -15,12 +15,13 @@ manual dish-count entry — out of scope here. These all need zero new data entr
 import uuid
 from collections import defaultdict
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.inventory.models import Item
+from app.inventory.models import Item, MovementType, StockMovement
 from app.recipes import service as recipe_service
 from app.reports import service as reports_service
 
@@ -141,6 +142,28 @@ async def price_alerts(
     return alerts[:limit]
 
 
+async def waste_cost(
+    db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
+) -> dict:
+    """£ value of stock logged as waste in the period (qty × cost at time of waste)."""
+    value_expr = func.abs(StockMovement.quantity) * func.coalesce(StockMovement.unit_cost, 0)
+    row = await db.execute(
+        select(
+            func.coalesce(func.sum(value_expr), 0),
+            func.count(),
+        )
+        .join(Item, Item.id == StockMovement.item_id)
+        .where(
+            Item.hotel_id == hotel_id,
+            StockMovement.movement_type == MovementType.WASTE.value,
+            StockMovement.created_at >= date_from,
+            StockMovement.created_at < date_to + timedelta(days=1),
+        )
+    )
+    total, count = row.one()
+    return {"total": _q2(total), "entry_count": count}
+
+
 async def money_centre(
     db: AsyncSession,
     hotel_id: uuid.UUID,
@@ -155,6 +178,7 @@ async def money_centre(
     stock = await stock_value(db, hotel_id)
     dishes = await dish_margins(db, hotel_id)
     alerts = await price_alerts(db, hotel_id)
+    waste = await waste_cost(db, hotel_id, start, today)
 
     # Break-even: fixed costs ÷ contribution-margin ratio (= gross margin ratio).
     fixed = pnl["operating_expenses"]
@@ -178,6 +202,7 @@ async def money_centre(
         "gross_margin_pct": pnl["gross_margin_pct"],
         "net_margin_pct": pnl["net_margin_pct"],
         "stock_value": stock,
+        "waste": waste,
         "break_even": {
             "fixed_costs": fixed,
             "contribution_margin_pct": contribution_pct,

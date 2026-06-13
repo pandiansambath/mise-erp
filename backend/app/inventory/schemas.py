@@ -90,3 +90,27 @@ class LowStockAlert(BaseModel):
     current_stock: Decimal
     min_stock_level: Decimal
     shortfall: Decimal
+
+
+class WasteCreate(BaseModel):
+    item_id: uuid.UUID
+    quantity: Decimal = Field(gt=0)  # positive magnitude wasted (sign handled server-side)
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class WasteRow(BaseModel):
+    id: uuid.UUID
+    item_id: uuid.UUID
+    item_name: str
+    unit: str
+    quantity: Decimal  # positive magnitude wasted
+    unit_cost: Decimal | None
+    value: Decimal  # quantity × unit_cost (what the waste cost you)
+    reason: str | None
+    created_at: datetime
+
+
+class WasteList(BaseModel):
+    total_value: Decimal
+    entry_count: int
+    rows: list[WasteRow]

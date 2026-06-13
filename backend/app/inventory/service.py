@@ -221,6 +221,73 @@ async def list_movements(db: AsyncSession, item_id: uuid.UUID) -> list[StockMove
     return list(result.scalars().all())
 
 
+# ── Waste ────────────────────────────────────────────────────────────────────
+async def record_waste(
+    db: AsyncSession,
+    item: Item,
+    quantity: Decimal,
+    reason: str,
+    created_by: uuid.UUID | None = None,
+) -> StockMovement:
+    """Log spoilage/spillage/over-prep. Decrements stock and stamps the item's
+    weighted-average cost, so the £ value of the waste is captured for the Money
+    page. `quantity` is a positive magnitude; the WASTE type makes it an outflow."""
+    return await record_movement(
+        db,
+        item,
+        MovementType.WASTE.value,
+        quantity,
+        unit_cost=item.average_cost,
+        notes=reason,
+        created_by=created_by,
+    )
+
+
+async def list_waste(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    date_from=None,
+    date_to=None,
+    limit: int = 200,
+) -> list[dict]:
+    """Waste movements (newest first) with item name/unit and £ value."""
+    stmt = (
+        select(StockMovement, Item.name, Item.unit)
+        .join(Item, Item.id == StockMovement.item_id)
+        .where(
+            Item.hotel_id == hotel_id,
+            StockMovement.movement_type == MovementType.WASTE.value,
+        )
+        .order_by(StockMovement.created_at.desc())
+        .limit(limit)
+    )
+    if date_from is not None:
+        stmt = stmt.where(StockMovement.created_at >= date_from)
+    if date_to is not None:
+        from datetime import timedelta
+
+        stmt = stmt.where(StockMovement.created_at < date_to + timedelta(days=1))
+
+    rows: list[dict] = []
+    for mv, name, unit in (await db.execute(stmt)).all():
+        qty = abs(mv.quantity)
+        cost = mv.unit_cost or Decimal("0")
+        rows.append(
+            {
+                "id": mv.id,
+                "item_id": mv.item_id,
+                "item_name": name,
+                "unit": unit,
+                "quantity": qty,
+                "unit_cost": mv.unit_cost,
+                "value": (qty * cost).quantize(Decimal("0.01"), ROUND_HALF_UP),
+                "reason": mv.notes,
+                "created_at": mv.created_at,
+            }
+        )
+    return rows
+
+
 async def low_stock_items(db: AsyncSession, hotel_id: uuid.UUID) -> list[Item]:
     """Active items whose current stock is at or below their minimum level."""
     result = await db.execute(

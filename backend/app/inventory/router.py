@@ -1,5 +1,7 @@
-"""Inventory endpoints: items, stock movements, low-stock alerts. Hotel-scoped."""
+"""Inventory endpoints: items, stock movements, low-stock alerts, waste. Hotel-scoped."""
 import uuid
+from datetime import date as date_type
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,9 @@ from app.inventory.schemas import (
     LowStockAlert,
     StockMovementCreate,
     StockMovementOut,
+    WasteCreate,
+    WasteList,
+    WasteRow,
 )
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -145,3 +150,48 @@ async def list_movements(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     movements = await service.list_movements(db, item_id)
     return [StockMovementOut.model_validate(m) for m in movements]
+
+
+# ── Waste ────────────────────────────────────────────────────────────────────
+@router.post("/waste", response_model=WasteRow, status_code=status.HTTP_201_CREATED)
+async def log_waste(
+    payload: WasteCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> WasteRow:
+    """Log spoilage/spillage/over-prep — decrements stock and records the £ value
+    at weighted-average cost (so the Money page can show the leak)."""
+    item = await service.get_item(db, payload.item_id, user.hotel_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    try:
+        mv = await service.record_waste(
+            db, item, payload.quantity, payload.reason, created_by=user.id
+        )
+    except service.InsufficientStockError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    qty = abs(mv.quantity)
+    return WasteRow(
+        id=mv.id,
+        item_id=item.id,
+        item_name=item.name,
+        unit=item.unit,
+        quantity=qty,
+        unit_cost=mv.unit_cost,
+        value=qty * (mv.unit_cost or 0),
+        reason=mv.notes,
+        created_at=mv.created_at,
+    )
+
+
+@router.get("/waste", response_model=WasteList)
+async def list_waste(
+    date_from: date_type | None = Query(default=None),
+    date_to: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> WasteList:
+    rows = await service.list_waste(db, user.hotel_id, date_from, date_to)
+    out = [WasteRow.model_validate(r) for r in rows]
+    total = sum((r.value for r in out), start=Decimal("0"))
+    return WasteList(total_value=total, entry_count=len(out), rows=out)

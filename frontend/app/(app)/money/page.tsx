@@ -148,6 +148,32 @@ export default function MoneyPage() {
         )}
       </Card>
 
+      {/* Waste — a pure profit leak */}
+      <Card className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-fg">🗑️ Waste this period</h3>
+          <p className="text-xs text-fg-faint">
+            Stock logged as spoiled / spilled / over-prepped — straight off your profit.
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className={`text-2xl font-semibold ${parseFloat(data.waste.total) > 0 ? "text-rose-400" : "text-fg"}`}>
+              {format(data.waste.total)}
+            </p>
+            <p className="text-xs text-fg-faint">
+              {data.waste.entry_count} entr{data.waste.entry_count === 1 ? "y" : "ies"}
+            </p>
+          </div>
+          <Link
+            href="/waste"
+            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+          >
+            Log waste →
+          </Link>
+        </div>
+      </Card>
+
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Stock value by category */}
         <Card>
