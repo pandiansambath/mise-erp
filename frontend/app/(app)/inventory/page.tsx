@@ -385,9 +385,19 @@ export default function InventoryPage() {
                           </td>
                           <td className="px-5 py-3">
                             {item.best_vendor ? (
-                              <span className="text-fg-soft" title="Chosen (★) or cheapest supplier — pick per order on Purchasing">
-                                ★ {item.best_vendor}
-                              </span>
+                              item.best_vendor_chosen ? (
+                                <span className="text-fg-soft" title="Chosen supplier — recipes & purchase orders use this one">
+                                  <span className="text-brand-400">★</span> {item.best_vendor}
+                                </span>
+                              ) : (
+                                <span
+                                  className="text-fg-faint"
+                                  title="No supplier chosen yet — this is just the cheapest. Pick the ★ chosen supplier on Price Comparison so recipes & POs use the one you trust."
+                                >
+                                  {item.best_vendor}{" "}
+                                  <span className="text-amber-400">· cheapest, choose ★</span>
+                                </span>
+                              )
                             ) : (
                               <span title="No vendor sells this yet — add a price on the Vendors page to order it">
                                 <Badge tone="amber">no supplier</Badge>

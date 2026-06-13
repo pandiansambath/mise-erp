@@ -15,25 +15,31 @@ function marginTone(pct: number): "green" | "amber" | "red" {
   return "red";
 }
 
-/** Chefs think in grams: show kg quantities as "1 kg 500 g" (or "500 g"). */
+/** Chefs think in grams / millilitres, not decimals. Show "1 kg 500 g" / "500 g"
+    and "1 litre 200 ml" / "200 ml"; anything else stays as-is (e.g. "3 piece"). */
 function fmtQty(quantity: string, unit: string): string {
-  if (unit.toLowerCase() !== "kg") return `${quantity} ${unit}`;
+  const u = unit.toLowerCase();
+  const sub = u === "kg" ? "g" : u === "litre" || u === "l" ? "ml" : null;
+  if (!sub) return `${quantity} ${unit}`;
+  const big = u === "kg" ? "kg" : "litre";
   const q = parseFloat(quantity) || 0;
-  const kg = Math.floor(q);
-  const g = Math.round((q - kg) * 1000);
-  if (kg && g) return `${kg} kg ${g} g`;
-  if (kg) return `${kg} kg`;
-  return `${g} g`;
+  const whole = Math.floor(q);
+  const small = Math.round((q - whole) * 1000);
+  if (whole && small) return `${whole} ${big} ${small} ${sub}`;
+  if (whole) return `${whole} ${big}`;
+  return `${small} ${sub}`;
 }
 
-/** Where the price came from — as a readable chip. */
+/** Where the price came from — as a readable chip. A ★ means the admin actually
+    chose this supplier; "cheapest" is only a provisional and nudges them to pick
+    one so costing uses the vendor they trust (not a random low price). */
 function SourceChip({ source, vendor }: { source: string; vendor: string | null }) {
   if (source === "preferred")
-    return <Badge tone="amber">★ {vendor ?? "chosen"}</Badge>;
+    return <Badge tone="green">★ {vendor ?? "chosen"}</Badge>;
   if (source === "cheapest")
-    return <Badge tone="slate">cheapest · {vendor ?? "?"}</Badge>;
+    return <Badge tone="amber">⚠ {vendor ?? "?"} · choose ★</Badge>;
   if (source === "average_cost")
-    return <Badge tone="green">avg cost</Badge>;
+    return <Badge tone="slate">avg cost</Badge>;
   return <Badge tone="red">no price</Badge>;
 }
 

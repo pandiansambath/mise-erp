@@ -49,7 +49,16 @@ function groupKey(it: Item): string {
   return it.category?.trim() || OTHER;
 }
 
-/* kg items get kg + g fields (chefs think in grams); everything else a plain qty. */
+/* Units chefs enter as two boxes (whole + sub-unit): kg→g, litre→ml. Chefs say
+   "200 g" / "200 ml", not "0.2 kg" / "0.2 litre", so we split the field. */
+export function weighedParts(unit: string): { big: string; sub: string } | null {
+  const u = unit.toLowerCase();
+  if (u === "kg") return { big: "kg", sub: "g" };
+  if (u === "litre" || u === "l") return { big: "litre", sub: "ml" };
+  return null;
+}
+
+/* Weighed/poured items get whole + sub-unit fields; everything else a plain qty. */
 function QtyFields({
   item,
   qty,
@@ -59,8 +68,8 @@ function QtyFields({
   qty: string;
   onQty: (v: string) => void;
 }) {
-  const isKg = item.unit.toLowerCase() === "kg";
-  if (!isKg) {
+  const parts = weighedParts(item.unit);
+  if (!parts) {
     return (
       <input
         value={qty}
@@ -72,30 +81,31 @@ function QtyFields({
       />
     );
   }
+  const { big, sub } = parts;
   const qnum = parseFloat(qty) || 0;
-  const kgPart = Math.floor(qnum);
-  const gPart = Math.round((qnum - kgPart) * 1000);
-  const combine = (kg: number, g: number) => String(Math.round((kg + g / 1000) * 1000) / 1000);
+  const wholePart = Math.floor(qnum);
+  const subPart = Math.round((qnum - wholePart) * 1000);
+  const combine = (w: number, s: number) => String(Math.round((w + s / 1000) * 1000) / 1000);
   return (
     <span className="flex items-center gap-1">
       <input
         inputMode="numeric"
-        value={kgPart ? String(kgPart) : ""}
-        onChange={(e) => onQty(combine(parseInt(e.target.value) || 0, gPart))}
-        placeholder="kg"
-        aria-label={`${item.name} kilograms`}
+        value={wholePart ? String(wholePart) : ""}
+        onChange={(e) => onQty(combine(parseInt(e.target.value) || 0, subPart))}
+        placeholder={big}
+        aria-label={`${item.name} ${big}`}
         className="w-14 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
       />
-      <span className="text-xs text-fg-faint">kg</span>
+      <span className="text-xs text-fg-faint">{big}</span>
       <input
         inputMode="numeric"
-        value={gPart ? String(gPart) : ""}
-        onChange={(e) => onQty(combine(kgPart, parseInt(e.target.value) || 0))}
-        placeholder="g"
-        aria-label={`${item.name} grams`}
+        value={subPart ? String(subPart) : ""}
+        onChange={(e) => onQty(combine(wholePart, parseInt(e.target.value) || 0))}
+        placeholder={sub}
+        aria-label={`${item.name} ${sub}`}
         className="w-14 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
       />
-      <span className="text-xs text-fg-faint">g</span>
+      <span className="text-xs text-fg-faint">{sub}</span>
     </span>
   );
 }
@@ -266,7 +276,7 @@ export function ItemPicker({
                     </span>
                   </span>
                   <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
-                  {item.unit.toLowerCase() !== "kg" && (
+                  {!weighedParts(item.unit) && (
                     <span className="text-xs text-fg-faint">{item.unit}</span>
                   )}
                   <button
@@ -402,7 +412,11 @@ export function ItemPickerSingle({
                 {it.unit} · have {it.current_stock}
               </span>
               {it.best_vendor ? (
-                <span className="mt-1 block truncate text-xs text-brand-300">★ {it.best_vendor}</span>
+                it.best_vendor_chosen ? (
+                  <span className="mt-1 block truncate text-xs text-brand-300">★ {it.best_vendor}</span>
+                ) : (
+                  <span className="mt-1 block truncate text-xs text-amber-300">{it.best_vendor} · cheapest</span>
+                )
               ) : (
                 <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>
               )}

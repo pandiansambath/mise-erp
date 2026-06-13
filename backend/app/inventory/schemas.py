@@ -43,7 +43,10 @@ class ItemOut(BaseModel):
     average_cost: Decimal
     is_active: bool
     vendor_count: int = 0  # active vendors pricing this item (0 = not orderable yet)
-    best_vendor: str | None = None  # preferred-or-cheapest vendor name (None = no vendor)
+    # chosen (★) vendor name, else cheapest provisional (None = no vendor sells it)
+    best_vendor: str | None = None
+    # True only when a supplier was actually picked (★ preferred), not a cheapest fallback
+    best_vendor_chosen: bool = False
 
 
 class StockMovementCreate(BaseModel):

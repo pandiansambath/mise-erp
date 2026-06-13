@@ -49,7 +49,9 @@ async def list_items(
     for i in items:
         row = ItemOut.model_validate(i)
         row.vendor_count = counts.get(i.id, 0)
-        row.best_vendor = best.get(i.id)
+        chosen = best.get(i.id)
+        if chosen:
+            row.best_vendor, row.best_vendor_chosen = chosen
         out.append(row)
     return out
 
