@@ -9,7 +9,7 @@ import {
   type WasteRow,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
-import { ItemPickerSingle } from "@/components/ItemPicker";
+import { fmtQty, ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -90,15 +90,16 @@ export default function WastePage() {
               <label className="block">
                 <span className="block text-xs font-medium text-fg-faint">Quantity wasted</span>
                 <span className="mt-1 flex items-center gap-2">
-                  <input
+                  <QtyInput
+                    unit={chosen?.unit ?? ""}
                     value={qty}
-                    onChange={(e) => setQty(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="qty"
-                    aria-label="Quantity wasted"
-                    className="w-28 rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500"
+                    onChange={setQty}
+                    label="Quantity wasted"
+                    plainClassName="w-28 rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500"
                   />
-                  <span className="text-sm text-fg-faint">{chosen?.unit ?? ""}</span>
+                  {!chosen || !["kg", "litre", "l"].includes(chosen.unit.toLowerCase()) ? (
+                    <span className="text-sm text-fg-faint">{chosen?.unit ?? ""}</span>
+                  ) : null}
                 </span>
               </label>
               <label className="block">
@@ -153,7 +154,7 @@ export default function WastePage() {
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-fg">{w.item_name}</span>
                   <span className="block text-xs text-fg-faint">
-                    {w.quantity} {w.unit}
+                    {fmtQty(w.quantity, w.unit)}
                     {w.reason ? ` · ${w.reason}` : ""} · {w.created_at.slice(0, 10)}
                   </span>
                 </span>

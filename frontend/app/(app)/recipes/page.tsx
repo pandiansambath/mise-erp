@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
-import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
+import { fmtQty, ItemPicker, type PickedLine } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -13,21 +13,6 @@ function marginTone(pct: number): "green" | "amber" | "red" {
   if (pct >= 65) return "green";
   if (pct >= 40) return "amber";
   return "red";
-}
-
-/** Chefs think in grams / millilitres, not decimals. Show "1 kg 500 g" / "500 g"
-    and "1 litre 200 ml" / "200 ml"; anything else stays as-is (e.g. "3 piece"). */
-function fmtQty(quantity: string, unit: string): string {
-  const u = unit.toLowerCase();
-  const sub = u === "kg" ? "g" : u === "litre" || u === "l" ? "ml" : null;
-  if (!sub) return `${quantity} ${unit}`;
-  const big = u === "kg" ? "kg" : "litre";
-  const q = parseFloat(quantity) || 0;
-  const whole = Math.floor(q);
-  const small = Math.round((q - whole) * 1000);
-  if (whole && small) return `${whole} ${big} ${small} ${sub}`;
-  if (whole) return `${whole} ${big}`;
-  return `${small} ${sub}`;
 }
 
 /** Where the price came from — as a readable chip. A ★ means the admin actually

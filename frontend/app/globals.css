@@ -336,6 +336,15 @@ html:has(.mise-app) { background: #04120d; }
   color-scheme: dark;
 }
 
+/* The <select> dropdown popup is painted natively; without an explicit surface +
+   full-contrast text its unselected options render as a low-contrast smudge on
+   the dark themes. Theme-aware (paper-2/fg are set per theme), so the Light theme
+   stays readable too. */
+.mise-app option {
+  background-color: var(--color-paper-2);
+  color: var(--color-fg);
+}
+
 /* Micro-interactions: every button in the app gets a soft transition + press. */
 .mise-app button {
   transition:

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, type Item, type Vendor } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
-import { categoryEmoji, stockState } from "@/components/ItemPicker";
+import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useCurrency } from "@/lib/currency";
 
@@ -230,15 +230,17 @@ export default function InventoryPage() {
                 />
               </div>
             </div>
-            <div className="w-full sm:w-28">
+            <div className="w-full sm:w-auto">
               <label className="block text-sm font-medium text-fg-soft">Min stock</label>
-              <input
-                value={form.min}
-                onChange={(e) => setForm({ ...form, min: e.target.value })}
-                inputMode="decimal"
-                placeholder="optional"
-                className={inputCls}
-              />
+              <div className="mt-1">
+                <QtyInput
+                  unit={form.unit}
+                  value={form.min}
+                  onChange={(v) => setForm({ ...form, min: v })}
+                  label="Minimum stock level"
+                  plainClassName={inputCls}
+                />
+              </div>
             </div>
           </div>
 
@@ -405,8 +407,8 @@ export default function InventoryPage() {
                             )}
                           </td>
                           <td className="px-5 py-3 text-right">
-                            <p className="text-fg-soft">{item.current_stock} {item.unit}</p>
-                            <p className="text-xs text-fg-faint">{item.min_stock_level ? `min ${item.min_stock_level}` : "no min"}</p>
+                            <p className="text-fg-soft">{fmtQty(item.current_stock, item.unit)}</p>
+                            <p className="text-xs text-fg-faint">{item.min_stock_level ? `min ${fmtQty(item.min_stock_level, item.unit)}` : "no min"}</p>
                           </td>
                           <td className="px-5 py-3 text-right text-fg-soft">{format(item.average_cost)}</td>
                           <td className="px-5 py-3">

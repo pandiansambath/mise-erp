@@ -58,31 +58,57 @@ export function weighedParts(unit: string): { big: string; sub: string } | null 
   return null;
 }
 
-/* Weighed/poured items get whole + sub-unit fields; everything else a plain qty. */
-function QtyFields({
-  item,
-  qty,
-  onQty,
+/** Friendly display of a weighed/poured quantity: "1 kg 500 g" / "500 g",
+    "1 litre 200 ml" / "200 ml"; anything else stays as-is ("3 piece"). Shared so
+    inventory, recipes etc. all read the same way. */
+export function fmtQty(quantity: string | number, unit: string): string {
+  const parts = weighedParts(unit);
+  if (!parts) return `${quantity} ${unit}`;
+  const { big, sub } = parts;
+  const q = typeof quantity === "number" ? quantity : parseFloat(quantity) || 0;
+  const whole = Math.floor(q);
+  const small = Math.round((q - whole) * 1000);
+  if (whole && small) return `${whole} ${big} ${small} ${sub}`;
+  if (whole) return `${whole} ${big}`;
+  return `${small} ${sub}`;
+}
+
+/** Reusable quantity entry: weighed/poured units (kg→g, litre→ml) get two boxes
+    so chefs type "200 g" / "200 ml"; everything else gets a plain decimal field.
+    Used by the picker tray, the waste log, inventory min-stock, etc. */
+export function QtyInput({
+  unit,
+  value,
+  onChange,
+  label,
+  plainClassName,
 }: {
-  item: Item;
-  qty: string;
-  onQty: (v: string) => void;
+  unit: string;
+  value: string;
+  onChange: (v: string) => void;
+  label?: string;
+  /** Override the single-field className (split fields keep their own sizing). */
+  plainClassName?: string;
 }) {
-  const parts = weighedParts(item.unit);
+  const parts = weighedParts(unit);
+  const aria = label ?? "Quantity";
   if (!parts) {
     return (
       <input
-        value={qty}
-        onChange={(e) => onQty(e.target.value)}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         inputMode="decimal"
         placeholder="qty"
-        aria-label={`Quantity of ${item.name} (${item.unit})`}
-        className="w-20 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
+        aria-label={aria}
+        className={
+          plainClassName ??
+          "w-20 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
+        }
       />
     );
   }
   const { big, sub } = parts;
-  const qnum = parseFloat(qty) || 0;
+  const qnum = parseFloat(value) || 0;
   const wholePart = Math.floor(qnum);
   const subPart = Math.round((qnum - wholePart) * 1000);
   const combine = (w: number, s: number) => String(Math.round((w + s / 1000) * 1000) / 1000);
@@ -91,22 +117,34 @@ function QtyFields({
       <input
         inputMode="numeric"
         value={wholePart ? String(wholePart) : ""}
-        onChange={(e) => onQty(combine(parseInt(e.target.value) || 0, subPart))}
+        onChange={(e) => onChange(combine(parseInt(e.target.value) || 0, subPart))}
         placeholder={big}
-        aria-label={`${item.name} ${big}`}
+        aria-label={`${aria} ${big}`}
         className="w-14 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
       />
       <span className="text-xs text-fg-faint">{big}</span>
       <input
         inputMode="numeric"
         value={subPart ? String(subPart) : ""}
-        onChange={(e) => onQty(combine(wholePart, parseInt(e.target.value) || 0))}
+        onChange={(e) => onChange(combine(wholePart, parseInt(e.target.value) || 0))}
         placeholder={sub}
-        aria-label={`${item.name} ${sub}`}
+        aria-label={`${aria} ${sub}`}
         className="w-14 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
       />
       <span className="text-xs text-fg-faint">{sub}</span>
     </span>
+  );
+}
+
+/* Picker tray row uses the shared QtyInput. */
+function QtyFields({ item, qty, onQty }: { item: Item; qty: string; onQty: (v: string) => void }) {
+  return (
+    <QtyInput
+      unit={item.unit}
+      value={qty}
+      onChange={onQty}
+      label={`Quantity of ${item.name} (${item.unit})`}
+    />
   );
 }
 
@@ -247,7 +285,7 @@ export function ItemPicker({
                 {st.dot} {st.label}
               </span>
               <span className="mt-0.5 block text-xs text-fg-faint">
-                have {it.current_stock} {it.unit}
+                have {fmtQty(it.current_stock, it.unit)}
               </span>
             </button>
           );
@@ -272,7 +310,7 @@ export function ItemPicker({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-fg">{item.name}</span>
                     <span className="block text-xs text-fg-faint">
-                      {stockState(item).dot} have {item.current_stock} {item.unit}
+                      {stockState(item).dot} have {fmtQty(item.current_stock, item.unit)}
                     </span>
                   </span>
                   <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
@@ -409,7 +447,7 @@ export function ItemPickerSingle({
                 {st.dot} {st.label}
               </span>
               <span className="mt-0.5 block text-xs text-fg-faint">
-                {it.unit} · have {it.current_stock}
+                have {fmtQty(it.current_stock, it.unit)}
               </span>
               {it.best_vendor ? (
                 it.best_vendor_chosen ? (
