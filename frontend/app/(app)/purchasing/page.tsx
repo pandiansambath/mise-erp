@@ -10,6 +10,7 @@ import {
   type ItemSuppliers,
   type POOut,
   type POSummary,
+  type ReorderSuggestion,
   type SupplierOption,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
@@ -219,6 +220,28 @@ export default function PurchasingPage() {
     }
   }
 
+  // One-click: pull every orderable below-min item, topped up to par, into the
+  // indent form for review (non-destructive — keeps lines you've already added).
+  async function orderAllLow() {
+    setMsg(null);
+    try {
+      const sug = await api.get<ReorderSuggestion[]>("/purchasing/reorder-suggestions");
+      if (sug.length === 0) {
+        setMsg("Nothing to reorder — no orderable item is below its minimum. 👍");
+        return;
+      }
+      setLines((prev) => {
+        const map = new Map(prev.map((l) => [l.item_id, l]));
+        for (const s of sug) map.set(s.item_id, { item_id: s.item_id, qty: s.suggested_qty });
+        return [...map.values()];
+      });
+      setMsg(`Loaded ${sug.length} low-stock item${sug.length === 1 ? "" : "s"} (topped up to par) — review the quantities and submit the indent.`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      setMsg("Could not load reorder suggestions.");
+    }
+  }
+
   if (loading) return <Spinner />;
 
   // Only items a vendor actually prices can be ordered — keeps the chain honest.
@@ -231,7 +254,17 @@ export default function PurchasingPage() {
 
       {canWrite && (
         <Card className="mb-6">
-          <p className="mb-1 text-sm font-medium text-fg-soft">New kitchen indent</p>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-fg-soft">New kitchen indent</p>
+            <button
+              type="button"
+              onClick={orderAllLow}
+              title="Pull every low-stock item (topped up to par) into the indent"
+              className="rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
+            >
+              🛒 Order all low-stock
+            </button>
+          </div>
           <p className="mb-3 text-xs text-fg-faint">
             Only items a vendor supplies appear here. New item? Add it in <b>Inventory</b>, then set its price on the <b>Vendors</b> page.
           </p>

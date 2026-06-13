@@ -282,3 +282,36 @@ async def receive_po(db: AsyncSession, po: PurchaseOrder, *, created_by: uuid.UU
     await db.commit()
     await db.refresh(po)
     return po
+
+
+_Q3 = Decimal("0.001")
+
+
+async def reorder_suggestions(db: AsyncSession, hotel_id: uuid.UUID) -> list[dict]:
+    """One-click reorder: orderable items at/below their minimum, with a suggested
+    quantity that tops them back up to their PAR level (max_stock_level) — or to
+    2× minimum if no par is set. Only items a vendor prices (orderable) are included."""
+    low = await inventory_service.low_stock_items(db, hotel_id)
+    counts = await inventory_service.vendor_counts(db, hotel_id)
+    out: list[dict] = []
+    for it in low:
+        if counts.get(it.id, 0) == 0:
+            continue  # no vendor prices it yet — can't generate a PO
+        cur = it.current_stock
+        if it.max_stock_level and it.max_stock_level > cur:
+            target = it.max_stock_level
+        else:
+            target = (it.min_stock_level or Decimal("0")) * 2
+        qty = target - cur
+        if qty <= 0:
+            qty = it.min_stock_level or Decimal("1")
+        out.append(
+            {
+                "item_id": it.id,
+                "item_name": it.name,
+                "unit": it.unit,
+                "current_stock": cur,
+                "suggested_qty": qty.quantize(_Q3),
+            }
+        )
+    return out

@@ -81,3 +81,11 @@ class SupplierOption(BaseModel):
 class ItemSuppliers(BaseModel):
     item_id: uuid.UUID
     vendors: list[SupplierOption]
+
+
+class ReorderSuggestion(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    unit: str
+    current_stock: Decimal
+    suggested_qty: Decimal  # tops stock back up to par (max), else 2× minimum

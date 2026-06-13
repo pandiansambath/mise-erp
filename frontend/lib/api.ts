@@ -329,6 +329,15 @@ export interface POItemOut {
   line_total: string;
 }
 
+// GET /purchasing/reorder-suggestions — orderable items below min, topped up to par.
+export interface ReorderSuggestion {
+  item_id: string;
+  item_name: string;
+  unit: string;
+  current_stock: string;
+  suggested_qty: string;
+}
+
 // Full purchase order with its lines — GET /purchasing/purchase-orders/{id}.
 export interface POOut {
   id: string;

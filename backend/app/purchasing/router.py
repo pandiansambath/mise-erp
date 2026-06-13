@@ -21,6 +21,7 @@ from app.purchasing.schemas import (
     ItemSuppliers,
     POOut,
     POSummary,
+    ReorderSuggestion,
 )
 from app.vendors.models import Vendor
 
@@ -111,6 +112,17 @@ async def list_item_suppliers(
 ) -> list[ItemSuppliers]:
     by_item = await service.item_suppliers(db, user.hotel_id)
     return [ItemSuppliers(item_id=k, vendors=v) for k, v in by_item.items()]
+
+
+@router.get("/reorder-suggestions", response_model=list[ReorderSuggestion])
+async def reorder_suggestions(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:write")),
+) -> list[ReorderSuggestion]:
+    """Orderable items at/below minimum, with a suggested top-up-to-par quantity.
+    Powers the Purchasing 'Order all low-stock' one-click."""
+    rows = await service.reorder_suggestions(db, user.hotel_id)
+    return [ReorderSuggestion.model_validate(r) for r in rows]
 
 
 # ── Purchase orders ───────────────────────────────────────────────────────────

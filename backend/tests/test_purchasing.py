@@ -152,3 +152,24 @@ async def test_full_flow_and_po_pdf_via_api(client, make_user, auth_header, db, 
     recv = await client.post(f"/api/purchasing/purchase-orders/{po_id}/receive", headers=h)
     assert recv.status_code == 200
     assert recv.json()["status"] == "RECEIVED"
+
+
+@pytest.mark.asyncio
+async def test_reorder_suggestions_tops_up_to_par(db, hotel):
+    # Orderable item below min with a par (max) level → suggested = par − stock
+    tomato = await inv.create_item(
+        db, hotel.id, name="Tomato", unit="kg",
+        min_stock_level=Decimal("10"), max_stock_level=Decimal("25"),
+    )
+    v = await ven.create_vendor(db, hotel.id, name="SK")
+    await ven.upsert_vendor_item(db, v.id, tomato.id, Decimal("2.00"))
+    await inv.record_movement(db, tomato, "PURCHASE_IN", Decimal("4"), unit_cost=Decimal("2.00"))
+
+    # Below min but NO vendor prices it → excluded (can't generate a PO)
+    salt = await inv.create_item(db, hotel.id, name="Salt", unit="kg", min_stock_level=Decimal("5"))
+    assert salt.current_stock == Decimal("0")  # below min, but unorderable
+
+    sug = {s["item_name"]: s for s in await service.reorder_suggestions(db, hotel.id)}
+    assert "Tomato" in sug
+    assert sug["Tomato"]["suggested_qty"] == Decimal("21.000")  # 25 par − 4 on hand
+    assert "Salt" not in sug
