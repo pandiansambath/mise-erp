@@ -319,6 +319,26 @@ export interface POSummary {
   total_amount: string;
 }
 
+export interface POItemOut {
+  item_id: string;
+  item_name: string;
+  ordered_qty: string;
+  received_qty: string;
+  unit_price: string;
+  line_total: string;
+}
+
+// Full purchase order with its lines — GET /purchasing/purchase-orders/{id}.
+export interface POOut {
+  id: string;
+  vendor_id: string;
+  vendor_name: string;
+  po_number: string;
+  status: string;
+  total_amount: string;
+  items: POItemOut[];
+}
+
 export interface PayrollRow {
   id: string;
   employee_id: string;

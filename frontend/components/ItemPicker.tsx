@@ -218,23 +218,21 @@ export function ItemPicker({
               type="button"
               aria-pressed={sel}
               onClick={() => toggle(it)}
-              className={`rounded-xl border p-3 text-left transition duration-200 ${
+              className={`relative rounded-xl border p-3 text-left transition duration-200 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
                   : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
               }`}
             >
-              <span className="flex items-start justify-between gap-1">
-                <span className="text-sm font-medium text-fg">{it.name}</span>
-                <span
-                  aria-hidden
-                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs transition ${
-                    sel ? "bg-brand-500 text-white" : "border border-line-2 text-transparent"
-                  }`}
-                >
-                  ✓
-                </span>
+              <span
+                aria-hidden
+                className={`absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full text-[11px] leading-none transition ${
+                  sel ? "bg-brand-500 text-white" : "border border-line-2 text-transparent"
+                }`}
+              >
+                ✓
               </span>
+              <span className="block pr-6 text-sm font-medium text-fg">{it.name}</span>
               <span className={`mt-1.5 block text-xs ${st.cls}`}>
                 {st.dot} {st.label}
               </span>
@@ -366,7 +364,7 @@ export function ItemPickerSingle({
       )}
       <div
         key={query ? `q:${query}` : tab}
-        className="mise-stagger grid max-h-64 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4"
+        className="mise-stagger grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
       >
         {visible.length === 0 && (
           <p className="col-span-full py-6 text-center text-sm text-fg-faint">
@@ -382,23 +380,21 @@ export function ItemPickerSingle({
               type="button"
               aria-pressed={sel}
               onClick={() => onChange(it.id)}
-              className={`rounded-xl border p-3 text-left transition duration-200 ${
+              className={`relative rounded-xl border p-3 text-left transition duration-200 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
                   : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
               }`}
             >
-              <span className="flex items-start justify-between gap-1">
-                <span className="text-sm font-medium text-fg">{it.name}</span>
-                <span
-                  aria-hidden
-                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs transition ${
-                    sel ? "bg-brand-500 text-white" : "border border-line-2 text-transparent"
-                  }`}
-                >
-                  ✓
-                </span>
+              <span
+                aria-hidden
+                className={`absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full text-[11px] leading-none transition ${
+                  sel ? "bg-brand-500 text-white" : "border border-line-2 text-transparent"
+                }`}
+              >
+                ✓
               </span>
+              <span className="block pr-6 text-sm font-medium text-fg">{it.name}</span>
               <span className={`mt-1.5 block text-xs ${st.cls}`}>
                 {st.dot} {st.label}
               </span>

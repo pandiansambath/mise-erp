@@ -8,6 +8,7 @@ import {
   type Indent,
   type Item,
   type ItemSuppliers,
+  type POOut,
   type POSummary,
   type SupplierOption,
 } from "@/lib/api";
@@ -50,6 +51,11 @@ export default function PurchasingPage() {
   // item_id -> the vendor PICKED for this order ("" / missing = automatic)
   const [vendorPick, setVendorPick] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<string | null>(null);
+  // Tap-to-expand: which indent / PO row is open, plus a cache of fetched PO lines.
+  const [openIndent, setOpenIndent] = useState<string | null>(null);
+  const [openPo, setOpenPo] = useState<string | null>(null);
+  const [poDetail, setPoDetail] = useState<Record<string, POOut>>({});
+  const [poBusy, setPoBusy] = useState<string | null>(null);
 
   async function load() {
     const [ind, p] = await Promise.all([
@@ -151,6 +157,26 @@ export default function PurchasingPage() {
     );
   }
 
+  // Open a PO row and lazy-load its line items the first time (cached after).
+  async function togglePo(id: string) {
+    if (openPo === id) {
+      setOpenPo(null);
+      return;
+    }
+    setOpenPo(id);
+    if (!poDetail[id]) {
+      setPoBusy(id);
+      try {
+        const d = await api.get<POOut>(`/purchasing/purchase-orders/${id}`);
+        setPoDetail((p) => ({ ...p, [id]: d }));
+      } catch {
+        /* keep the row usable — actions below still work without the line list */
+      } finally {
+        setPoBusy(null);
+      }
+    }
+  }
+
   async function generate(id: string) {
     const ok = await confirm({
       title: "Approve & generate purchase orders?",
@@ -182,6 +208,11 @@ export default function PurchasingPage() {
     setMsg(null);
     try {
       await api.post(`/purchasing/purchase-orders/${poId}/receive`);
+      setPoDetail((p) => {
+        const next = { ...p };
+        delete next[poId]; // drop the stale copy so re-open shows received qty/status
+        return next;
+      });
       await load();
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not receive PO");
@@ -225,81 +256,136 @@ export default function PurchasingPage() {
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="p-0">
-          <h3 className="px-5 pt-4 font-semibold text-fg">Indents</h3>
-          <div className="mt-2 max-h-[60vh] overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
-                  <th className="px-5 py-2 font-medium">Date</th>
-                  <th className="px-5 py-2 font-medium">Items</th>
-                  <th className="px-5 py-2 font-medium">Status</th>
-                  <th className="px-5 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {indents.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-6 text-center text-fg-faint">No indents yet.</td></tr>
-                ) : indents.map((ind) => (
-                  <tr key={ind.id} className="border-b border-line">
-                    <td className="px-5 py-2 text-fg-faint">{ind.date}</td>
-                    <td
-                      className="px-5 py-2 text-fg-soft"
-                      title={ind.items
-                        .map((it) => `${it.item_name} × ${it.required_qty}${it.vendor_name ? ` ← ${it.vendor_name}` : ""}`)
-                        .join("\n")}
+        {/* Indents — tap a row to see its items, suppliers and the approve action. */}
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-line px-5 py-4">
+            <h3 className="font-semibold text-fg">Indents</h3>
+            <span className="text-xs text-fg-faint">{indents.length} total</span>
+          </div>
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
+            {indents.length === 0 ? (
+              <p className="py-10 text-center text-sm text-fg-faint">No indents yet.</p>
+            ) : (
+              indents.map((ind) => {
+                const open = openIndent === ind.id;
+                return (
+                  <div key={ind.id} className="overflow-hidden rounded-xl border border-line bg-glass/5 transition hover:border-line-2">
+                    <button
+                      type="button"
+                      onClick={() => setOpenIndent(open ? null : ind.id)}
+                      aria-expanded={open}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left"
                     >
-                      {ind.items.length}
-                    </td>
-                    <td className="px-5 py-2"><Badge tone={indentTone[ind.status] ?? "slate"}>{ind.status}</Badge></td>
-                    <td className="px-5 py-2 text-right">
-                      {canApprove && ind.status !== "ORDERED" && (
-                        <button onClick={() => generate(ind.id)} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">
-                          Generate POs
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <span aria-hidden className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>›</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-fg">{ind.date}</span>
+                        <span className="block text-xs text-fg-faint">{ind.items.length} item{ind.items.length === 1 ? "" : "s"}</span>
+                      </span>
+                      <Badge tone={indentTone[ind.status] ?? "slate"}>{ind.status}</Badge>
+                    </button>
+                    {open && (
+                      <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
+                        <ul className="space-y-1.5">
+                          {ind.items.map((it) => (
+                            <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
+                              <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
+                              <span className="shrink-0 text-right">
+                                <span className="text-fg">{it.required_qty} {it.unit}</span>
+                                {it.vendor_name && <span className="ml-2 text-xs text-brand-300">→ {it.vendor_name}</span>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        {canApprove && ind.status !== "ORDERED" && (
+                          <button
+                            onClick={() => generate(ind.id)}
+                            className="w-full rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-2 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
+                          >
+                            ✓ Approve &amp; generate purchase orders
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </Card>
 
-        <Card className="p-0">
-          <h3 className="px-5 pt-4 font-semibold text-fg">Purchase orders</h3>
-          <div className="mt-2 max-h-[60vh] overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
-                  <th className="px-5 py-2 font-medium">PO</th>
-                  <th className="px-5 py-2 font-medium">Supplier</th>
-                  <th className="px-5 py-2 text-right font-medium">Total</th>
-                  <th className="px-5 py-2 font-medium">Status</th>
-                  <th className="px-5 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pos.length === 0 ? (
-                  <tr><td colSpan={5} className="px-5 py-6 text-center text-fg-faint">No purchase orders yet.</td></tr>
-                ) : pos.map((po) => (
-                  <tr key={po.id} className="border-b border-line">
-                    <td className="px-5 py-2 font-medium text-fg">{po.po_number}</td>
-                    <td className="px-5 py-2 text-fg-soft">{po.vendor_name || "—"}</td>
-                    <td className="px-5 py-2 text-right text-fg-soft">{format(po.total_amount)}</td>
-                    <td className="px-5 py-2"><Badge tone={poTone[po.status] ?? "slate"}>{po.status}</Badge></td>
-                    <td className="px-5 py-2 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf`, `${po.po_number}.pdf`)} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">PDF</button>
-                        {canApprove && po.status !== "RECEIVED" && (
-                          <button onClick={() => receive(po.id)} className="rounded-md border border-line-2 px-2 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2">Receive</button>
+        {/* Purchase orders — same tap-to-expand; line items load on open, no side-scroll. */}
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-line px-5 py-4">
+            <h3 className="font-semibold text-fg">Purchase orders</h3>
+            <span className="text-xs text-fg-faint">{pos.length} total</span>
+          </div>
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
+            {pos.length === 0 ? (
+              <p className="py-10 text-center text-sm text-fg-faint">No purchase orders yet.</p>
+            ) : (
+              pos.map((po) => {
+                const open = openPo === po.id;
+                const detail = poDetail[po.id];
+                const busy = poBusy === po.id;
+                return (
+                  <div key={po.id} className="overflow-hidden rounded-xl border border-line bg-glass/5 transition hover:border-line-2">
+                    <button
+                      type="button"
+                      onClick={() => togglePo(po.id)}
+                      aria-expanded={open}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                    >
+                      <span aria-hidden className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>›</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-fg">{po.po_number}</span>
+                        <span className="block truncate text-xs text-fg-faint">{po.vendor_name || "—"}</span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-sm font-semibold text-fg">{format(po.total_amount)}</span>
+                        <Badge tone={poTone[po.status] ?? "slate"}>{po.status}</Badge>
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
+                        {busy && !detail ? (
+                          <p className="py-1 text-center text-sm text-fg-faint">Loading items…</p>
+                        ) : detail && detail.items.length > 0 ? (
+                          <ul className="space-y-1.5">
+                            {detail.items.map((it) => (
+                              <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
+                                <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
+                                <span className="shrink-0 text-fg-faint">
+                                  {it.ordered_qty} × {format(it.unit_price)}
+                                  <span className="ml-2 font-medium text-fg">{format(it.line_total)}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="py-1 text-center text-sm text-fg-faint">No line items.</p>
                         )}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf`, `${po.po_number}.pdf`)}
+                            className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/10"
+                          >
+                            ⬇ PDF
+                          </button>
+                          {canApprove && po.status !== "RECEIVED" && (
+                            <button
+                              onClick={() => receive(po.id)}
+                              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft transition hover:bg-paper-2"
+                            >
+                              ✓ Receive into stock
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </Card>
       </div>
