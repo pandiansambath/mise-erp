@@ -193,3 +193,29 @@ async def test_cashier_cannot_read_recipes(client, make_user, auth_header):
     cashier = await make_user("cash@nirai.com", Role.CASHIER.value)
     resp = await client.get("/api/recipes", headers=auth_header(cashier))
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_archive_and_reactivate_recipe(client, make_user, auth_header):
+    admin = await make_user("admin@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    rid = (
+        await client.post(
+            "/api/recipes", headers=h, json={"name": "Idli", "servings_default": 1}
+        )
+    ).json()["id"]
+
+    # archive -> hidden from the default list, but visible with include_inactive
+    assert (
+        await client.patch(f"/api/recipes/{rid}", headers=h, json={"is_active": False})
+    ).status_code == 200
+    active = (await client.get("/api/recipes", headers=h)).json()
+    assert all(r["id"] != rid for r in active)
+    archived = (await client.get("/api/recipes?include_inactive=true", headers=h)).json()
+    assert any(r["id"] == rid and r["is_active"] is False for r in archived)
+
+    # reactivate -> back in the default list
+    assert (
+        await client.patch(f"/api/recipes/{rid}", headers=h, json={"is_active": True})
+    ).status_code == 200
+    assert any(r["id"] == rid for r in (await client.get("/api/recipes", headers=h)).json())

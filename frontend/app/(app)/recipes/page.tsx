@@ -5,6 +5,7 @@ import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from 
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { fmtQty, ItemPicker, type PickedLine } from "@/components/ItemPicker";
+import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -128,8 +129,30 @@ export default function RecipesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function reload() {
-    return api.get<Recipe[]>("/recipes").then(setRecipes);
+  const [showArchived, setShowArchived] = useState(false);
+  const confirm = useConfirm();
+
+  function reload(includeInactive = showArchived) {
+    return api
+      .get<Recipe[]>(`/recipes${includeInactive ? "?include_inactive=true" : ""}`)
+      .then(setRecipes);
+  }
+
+  async function archiveRecipe(r: Recipe) {
+    const ok = await confirm({
+      title: `Archive “${r.name}”?`,
+      message:
+        "It will be hidden from recipes and costing. You can bring it back anytime via “Show archived”.",
+      confirmText: "Archive",
+    });
+    if (!ok) return;
+    await api.patch(`/recipes/${r.id}`, { is_active: false });
+    await reload();
+  }
+
+  async function reactivateRecipe(r: Recipe) {
+    await api.patch(`/recipes/${r.id}`, { is_active: true });
+    await reload();
   }
 
   useEffect(() => {
@@ -137,6 +160,7 @@ export default function RecipesPage() {
       reload(),
       api.get<Item[]>("/inventory/items").then(setItems),
     ]).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Autofill: typing a dish name that already exists copies its ingredients in
@@ -348,6 +372,22 @@ export default function RecipesPage() {
         </div>
       )}
 
+      <div className="mb-3 flex justify-end">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-fg-faint">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={() => {
+              const next = !showArchived;
+              setShowArchived(next);
+              reload(next);
+            }}
+            className="h-4 w-4 accent-brand-500"
+          />
+          Show archived
+        </label>
+      </div>
+
       {recipes.length === 0 ? (
         <Card>
           <p className="py-6 text-center text-sm text-fg-faint">No recipes yet.</p>
@@ -372,28 +412,46 @@ export default function RecipesPage() {
                     const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
                     const open = openId === r.id;
                     return (
-                      <div key={r.id}>
+                      <div key={r.id} className={r.is_active ? "" : "opacity-60"}>
                         <div className="flex items-center gap-2 py-2.5">
                           <button
                             onClick={() => setOpenId(open ? null : r.id)}
                             className="flex flex-1 items-center justify-between text-left"
                           >
-                            <span className="text-sm font-medium text-fg-soft">
+                            <span className="flex items-center gap-2 text-sm font-medium text-fg-soft">
                               serves {r.servings_default}
+                              {!r.is_active && <Badge tone="slate">archived</Badge>}
                             </span>
                             <span className="flex items-center gap-3">
                               {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
                               <span className="text-fg-faint">{open ? "▲" : "▼"}</span>
                             </span>
                           </button>
-                          {canWrite && (
-                            <button
-                              onClick={() => startEdit(r)}
-                              className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
-                            >
-                              Edit
-                            </button>
-                          )}
+                          {canWrite &&
+                            (r.is_active ? (
+                              <>
+                                <button
+                                  onClick={() => startEdit(r)}
+                                  className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => archiveRecipe(r)}
+                                  title="Archive (hide from recipes & costing)"
+                                  className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                                >
+                                  Archive
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => reactivateRecipe(r)}
+                                className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/20"
+                              >
+                                Reactivate
+                              </button>
+                            ))}
                         </div>
                         {open && (
                           <div className="border-t border-line pb-2 pt-3">

@@ -38,10 +38,13 @@ async def create_recipe(
 
 @router.get("", response_model=list[RecipeOut])
 async def list_recipes(
+    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("recipes:read")),
 ) -> list[RecipeOut]:
-    recipes = await service.list_recipes(db, user.hotel_id)
+    recipes = await service.list_recipes(
+        db, user.hotel_id, active_only=not include_inactive
+    )
     return [RecipeOut.model_validate(r) for r in recipes]
 
 
