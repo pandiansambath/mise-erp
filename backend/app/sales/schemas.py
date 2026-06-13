@@ -102,3 +102,18 @@ class DayCreatedOut(BaseModel):
     cash_counted: Decimal | None
     notes: str | None
     created_at: datetime
+
+
+# ── Dish sales (menu-engineering bridge) ──────────────────────────────────────
+class DishCount(BaseModel):
+    recipe_id: uuid.UUID
+    qty: int = Field(ge=0)
+
+
+class DishSalesIn(BaseModel):
+    counts: list[DishCount]
+
+
+class DishSalesOut(BaseModel):
+    date: date_type
+    counts: list[DishCount]

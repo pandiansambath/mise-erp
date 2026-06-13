@@ -22,6 +22,9 @@ from app.sales.schemas import (
     DayCreatedOut,
     DaySummary,
     DayUpsert,
+    DishCount,
+    DishSalesIn,
+    DishSalesOut,
     LineCreate,
     RangeSummary,
 )
@@ -255,3 +258,28 @@ async def summary(
     return RangeSummary.model_validate(
         await service.range_summary(db, user.hotel_id, date_from, date_to)
     )
+
+
+# ── Dish sales (menu-engineering bridge) ──────────────────────────────────────
+@router.get("/dishes/{day}", response_model=DishSalesOut)
+async def get_dish_sales(
+    day: date_type,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:read")),
+) -> DishSalesOut:
+    counts = await service.list_dish_sales(db, user.hotel_id, day)
+    return DishSalesOut(date=day, counts=[DishCount(recipe_id=k, qty=v) for k, v in counts.items()])
+
+
+@router.post("/dishes/{day}", response_model=DishSalesOut)
+async def set_dish_sales(
+    day: date_type,
+    payload: DishSalesIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:write")),
+) -> DishSalesOut:
+    await service.upsert_dish_sales(
+        db, user.hotel_id, day, {c.recipe_id: c.qty for c in payload.counts}
+    )
+    counts = await service.list_dish_sales(db, user.hotel_id, day)
+    return DishSalesOut(date=day, counts=[DishCount(recipe_id=k, qty=v) for k, v in counts.items()])

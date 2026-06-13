@@ -6,7 +6,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.sales.models import DailySales, PaymentMethod, SalesChannel, SalesLine
+from app.sales.models import DailySales, DishSale, PaymentMethod, SalesChannel, SalesLine
 
 _Q2 = Decimal("0.01")
 
@@ -244,3 +244,35 @@ async def range_summary(
         "net": net.quantize(_Q2),
         "days": len(days),
     }
+
+
+# ── Dish sales (menu-engineering bridge) ──────────────────────────────────────
+async def list_dish_sales(
+    db: AsyncSession, hotel_id: uuid.UUID, day: date_type
+) -> dict[uuid.UUID, int]:
+    rows = await db.execute(
+        select(DishSale.recipe_id, DishSale.qty_sold).where(
+            DishSale.hotel_id == hotel_id, DishSale.date == day
+        )
+    )
+    return {rid: int(qty) for rid, qty in rows.all()}
+
+
+async def upsert_dish_sales(
+    db: AsyncSession, hotel_id: uuid.UUID, day: date_type, counts: dict[uuid.UUID, int]
+) -> int:
+    """Set qty_sold per recipe for a date (upsert). Zero clears nothing extra — it
+    just records 0. Returns the number of recipes touched."""
+    existing = await db.execute(
+        select(DishSale).where(DishSale.hotel_id == hotel_id, DishSale.date == day)
+    )
+    by_recipe = {ds.recipe_id: ds for ds in existing.scalars().all()}
+    for recipe_id, qty in counts.items():
+        q = max(0, int(qty or 0))
+        ds = by_recipe.get(recipe_id)
+        if ds is not None:
+            ds.qty_sold = q
+        elif q > 0:
+            db.add(DishSale(hotel_id=hotel_id, recipe_id=recipe_id, date=day, qty_sold=q))
+    await db.commit()
+    return len(counts)

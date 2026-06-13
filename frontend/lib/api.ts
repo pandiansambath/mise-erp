@@ -477,6 +477,36 @@ export interface WasteSummary {
   total: string;
   entry_count: number;
 }
+// Menu engineering (GET /reports/menu-engineering) + dish-sales entry (/sales/dishes/{day})
+export interface DishCount {
+  recipe_id: string;
+  qty: number;
+}
+export interface DishSalesOut {
+  date: string;
+  counts: DishCount[];
+}
+export interface MenuDish {
+  recipe_id: string;
+  name: string;
+  qty_sold: number;
+  margin_pct: string | null;
+  selling_price: string | null;
+  cost_per_serving: string | null;
+  revenue: string;
+  klass: string; // star | plowhorse | puzzle | dog | none
+}
+export interface MenuEngineering {
+  date_from: string;
+  date_to: string;
+  has_data: boolean;
+  total_units: number;
+  revenue: string;
+  theoretical_food_cost: string;
+  theoretical_food_cost_pct: string;
+  dishes: MenuDish[];
+}
+
 export interface MoneyCentre {
   date_from: string;
   date_to: string;

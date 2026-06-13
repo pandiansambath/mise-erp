@@ -143,3 +143,30 @@ async def test_waste_decrements_stock_and_values_at_avg_cost(db, hotel):
     wc = await insights.waste_cost(db, hotel.id, today, today)
     assert wc["total"] == Decimal("6.00")
     assert wc["entry_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_menu_engineering_classifies(db, hotel):
+    from app.sales import service as sales_svc
+
+    flour = await inv.create_item(db, hotel.id, name="Flour", unit="kg")
+    v = await ven.create_vendor(db, hotel.id, name="SK")
+    await ven.upsert_vendor_item(db, v.id, flour.id, Decimal("1.00"))
+    # Star: sells £20, ~£1 cost (high margin). Dog: sells £5, ~£4 cost (low margin).
+    star = await rec.create_recipe(db, hotel.id, name="Star Dish", servings_default=1, selling_price=Decimal("20.00"))
+    await rec.upsert_ingredient(db, star.id, flour.id, Decimal("1"), "kg")
+    dog = await rec.create_recipe(db, hotel.id, name="Dog Dish", servings_default=1, selling_price=Decimal("5.00"))
+    await rec.upsert_ingredient(db, dog.id, flour.id, Decimal("4"), "kg")
+    for r in (star, dog):
+        await rec.calculate_recipe_cost(db, r.id, hotel.id)
+
+    day = datetime.now(UTC).date()
+    # Star sells a lot; Dog sells few → popularity + margin both split them
+    await sales_svc.upsert_dish_sales(db, hotel.id, day, {star.id: 30, dog.id: 2})
+
+    me = await insights.menu_engineering(db, hotel.id, day, day)
+    assert me["has_data"] is True
+    assert me["total_units"] == 32
+    klass = {d["name"]: d["klass"] for d in me["dishes"]}
+    assert klass["Star Dish"] == "star"
+    assert klass["Dog Dish"] == "dog"

@@ -163,6 +163,77 @@ async def waste_cost(
     return {"total": _q2(total), "entry_count": count}
 
 
+async def menu_engineering(
+    db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
+) -> dict:
+    """Classic menu-engineering matrix: every priced dish placed by popularity
+    (units sold, from the manual dish-sales counts) × margin. Star / Plowhorse /
+    Puzzle / Dog, split at the median of each. Also the theoretical food cost."""
+    import statistics
+
+    from app.sales.models import DishSale
+
+    rows = await db.execute(
+        select(DishSale.recipe_id, func.coalesce(func.sum(DishSale.qty_sold), 0))
+        .where(
+            DishSale.hotel_id == hotel_id,
+            DishSale.date >= date_from,
+            DishSale.date <= date_to,
+        )
+        .group_by(DishSale.recipe_id)
+    )
+    qty_by = {rid: int(q) for rid, q in rows.all()}
+    recipes = await recipe_service.list_recipes(db, hotel_id)
+
+    dishes: list[dict] = []
+    total_units = 0
+    revenue = Decimal("0")
+    food_cost = Decimal("0")
+    for r in recipes:
+        if not r.selling_price or r.profit_margin is None:
+            continue
+        qty = qty_by.get(r.id, 0)
+        rev = (r.selling_price * qty).quantize(_Q2)
+        fc = (r.calculated_cost * qty).quantize(_Q2)
+        total_units += qty
+        revenue += rev
+        food_cost += fc
+        dishes.append(
+            {
+                "recipe_id": r.id,
+                "name": r.name,
+                "qty_sold": qty,
+                "margin_pct": r.profit_margin,
+                "selling_price": r.selling_price,
+                "cost_per_serving": _q2(r.calculated_cost),
+                "revenue": rev,
+                "klass": "none",
+            }
+        )
+
+    sold = [d for d in dishes if d["qty_sold"] > 0]
+    if sold:
+        med_qty = statistics.median([d["qty_sold"] for d in sold])
+        med_margin = statistics.median([float(d["margin_pct"]) for d in sold])
+        for d in sold:
+            hp = d["qty_sold"] >= med_qty
+            hm = float(d["margin_pct"]) >= med_margin
+            d["klass"] = "star" if (hp and hm) else "plowhorse" if hp else "puzzle" if hm else "dog"
+
+    dishes.sort(key=lambda d: d["qty_sold"], reverse=True)
+    fc_pct = (food_cost / revenue * 100).quantize(_Q2) if revenue > 0 else Decimal("0.00")
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "has_data": bool(sold),
+        "total_units": total_units,
+        "revenue": revenue.quantize(_Q2),
+        "theoretical_food_cost": food_cost.quantize(_Q2),
+        "theoretical_food_cost_pct": fc_pct,
+        "dishes": dishes,
+    }
+
+
 async def money_centre(
     db: AsyncSession,
     hotel_id: uuid.UUID,

@@ -8,7 +8,7 @@ from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
 from app.reports import export, insights, service
-from app.reports.schemas import Dashboard, MoneyCentre, PnL
+from app.reports.schemas import Dashboard, MenuEngineering, MoneyCentre, PnL
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -44,6 +44,22 @@ async def money_centre(
     leaders/laggards and vendor price-rise alerts. Defaults to month-to-date."""
     data = await insights.money_centre(db, user.hotel_id, date_from, date_to)
     return MoneyCentre.model_validate(data)
+
+
+@router.get("/menu-engineering", response_model=MenuEngineering)
+async def menu_engineering(
+    date_from: date_type | None = Query(default=None),
+    date_to: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("reports:read")),
+) -> MenuEngineering:
+    """Menu-engineering matrix (popularity × margin) + theoretical food cost.
+    Defaults to month-to-date. Needs dish-sales counts entered on Sales."""
+    today = date_to or date_type.today()
+    start = date_from or today.replace(day=1)
+    return MenuEngineering.model_validate(
+        await insights.menu_engineering(db, user.hotel_id, start, today)
+    )
 
 
 @router.get("/pnl.csv")

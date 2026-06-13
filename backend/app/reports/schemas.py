@@ -95,6 +95,28 @@ class BreakEven(BaseModel):
     days_elapsed: int
 
 
+class MenuDish(BaseModel):
+    recipe_id: uuid.UUID
+    name: str
+    qty_sold: int
+    margin_pct: Decimal | None
+    selling_price: Decimal | None
+    cost_per_serving: Decimal | None
+    revenue: Decimal
+    klass: str  # star | plowhorse | puzzle | dog | none
+
+
+class MenuEngineering(BaseModel):
+    date_from: date_type
+    date_to: date_type
+    has_data: bool
+    total_units: int
+    revenue: Decimal
+    theoretical_food_cost: Decimal
+    theoretical_food_cost_pct: Decimal
+    dishes: list[MenuDish]
+
+
 class MoneyCentre(BaseModel):
     date_from: date_type
     date_to: date_type

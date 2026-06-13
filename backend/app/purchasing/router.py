@@ -172,7 +172,7 @@ async def receive_po(
     await publish(user.hotel_id, {"type": "purchasing", "action": "po_received"})
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="po.received",
-        summary=f"Received PO {po.po_number} ({po.vendor_name}) — {po.total_amount} into stock",
+        summary=f"Received PO {po.po_number} — {po.total_amount} into stock",
         entity_type="purchase_order", entity_id=po.id,
     )
     return await _po_out(db, po)

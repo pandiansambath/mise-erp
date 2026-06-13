@@ -2,9 +2,155 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type DishMarginRow, type MoneyCentre } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type DishMarginRow,
+  type DishSalesOut,
+  type MenuEngineering,
+  type MoneyCentre,
+} from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
+import { can } from "@/lib/permissions";
+
+const CLASS_META: Record<string, { emoji: string; label: string; tone: "green" | "amber" | "slate" | "red" }> = {
+  star: { emoji: "⭐", label: "Star", tone: "green" },
+  plowhorse: { emoji: "🐎", label: "Plowhorse", tone: "amber" },
+  puzzle: { emoji: "🧩", label: "Puzzle", tone: "slate" },
+  dog: { emoji: "🐕", label: "Dog", tone: "red" },
+  none: { emoji: "·", label: "—", tone: "slate" },
+};
+
+/** Menu engineering (popularity × margin) + a today's-dishes-sold quick entry. */
+function MenuEngineeringCard() {
+  const { format } = useCurrency();
+  const { user } = useAuth();
+  const canWrite = can(user?.role, "sales:write");
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [me, setMe] = useState<MenuEngineering | null>(null);
+  const [counts, setCounts] = useState<Record<string, string>>({});
+  const [entry, setEntry] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function loadMe() {
+    setMe(await api.get<MenuEngineering>("/reports/menu-engineering"));
+  }
+  async function loadToday() {
+    const d = await api.get<DishSalesOut>(`/sales/dishes/${today}`);
+    setCounts(Object.fromEntries(d.counts.map((c) => [c.recipe_id, String(c.qty)])));
+  }
+  useEffect(() => {
+    loadMe().catch(() => {});
+    loadToday().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const payload = {
+        counts: Object.entries(counts)
+          .map(([recipe_id, q]) => ({ recipe_id, qty: parseInt(q) || 0 }))
+          .filter((c) => c.qty >= 0),
+      };
+      await api.post(`/sales/dishes/${today}`, payload);
+      await loadMe();
+      setMsg("Saved today's dishes sold.");
+      setEntry(false);
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!me) return null;
+
+  return (
+    <Card className="mt-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-semibold text-fg">Menu engineering</h3>
+          <p className="text-xs text-fg-faint">
+            Popularity × margin — what to promote (⭐), re-price (🐎), reposition (🧩) or cut (🐕).
+            {me.has_data &&
+              ` · ${me.total_units} sold · theoretical food cost ${me.theoretical_food_cost_pct}%`}
+          </p>
+        </div>
+        {canWrite && (
+          <button
+            type="button"
+            onClick={() => setEntry((v) => !v)}
+            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+          >
+            {entry ? "Close" : "✎ Record dishes sold (today)"}
+          </button>
+        )}
+      </div>
+
+      {msg && <p className="mt-2 text-sm text-brand-400">{msg}</p>}
+
+      {entry && (
+        <div className="mise-pop mt-3 rounded-xl border border-line bg-paper-2/60 p-3">
+          <p className="mb-2 text-xs text-fg-faint">How many of each dish sold today ({today})?</p>
+          <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+            {me.dishes.map((d) => (
+              <label key={d.recipe_id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate text-fg-soft">{d.name}</span>
+                <input
+                  inputMode="numeric"
+                  value={counts[d.recipe_id] ?? ""}
+                  onChange={(e) => setCounts({ ...counts, [d.recipe_id]: e.target.value })}
+                  placeholder="0"
+                  className="w-16 rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-center text-sm outline-none focus:border-brand-500"
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={save}
+            disabled={busy}
+            className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </div>
+      )}
+
+      {!me.has_data ? (
+        <p className="mt-3 rounded-lg bg-glass/5 px-3 py-3 text-sm text-fg-soft">
+          No dishes-sold recorded for this month yet. {canWrite ? "Tap “Record dishes sold” above" : "Ask a manager to record dishes sold"} to
+          unlock the matrix (which dishes are Stars vs Dogs) and your theoretical food cost.
+        </p>
+      ) : (
+        <ul className="mt-3 max-h-[26rem] space-y-0.5 overflow-y-auto pr-1">
+          {me.dishes.filter((d) => d.qty_sold > 0).map((d) => {
+            const c = CLASS_META[d.klass] ?? CLASS_META.none;
+            return (
+              <li key={d.recipe_id} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-0">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-fg">
+                    {c.emoji} {d.name}
+                  </span>
+                  <span className="block text-xs text-fg-faint">
+                    {d.qty_sold} sold · {format(d.revenue)} revenue · {d.margin_pct}% margin
+                  </span>
+                </span>
+                <Badge tone={c.tone}>{c.label}</Badge>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 /** GP% colour: healthy ≥ 65, watch 45–65, thin < 45 (rough kitchen rule of thumb). */
 function marginCls(pct: number): string {
@@ -264,6 +410,9 @@ export default function MoneyPage() {
           </ul>
         )}
       </Card>
+
+      {/* Menu engineering (popularity × margin) + dishes-sold entry */}
+      <MenuEngineeringCard />
     </div>
   );
 }
