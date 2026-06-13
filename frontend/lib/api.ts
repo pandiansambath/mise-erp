@@ -492,6 +492,16 @@ export interface MoneyCentre {
   price_alerts: PriceAlert[];
 }
 
+// ── Audit log (GET /audit) ───────────────────────────────────────────────────
+export interface AuditEvent {
+  id: string;
+  user_email: string;
+  action: string;
+  summary: string;
+  entity_type: string | null;
+  created_at: string;
+}
+
 // ── Waste log (GET/POST /inventory/waste) ────────────────────────────────────
 export interface WasteRow {
   id: string;

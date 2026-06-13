@@ -6,6 +6,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
@@ -185,6 +186,11 @@ async def log_waste(
     except service.InsufficientStockError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     qty = abs(mv.quantity)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="stock.waste",
+        summary=f"Logged waste: {qty} {item.unit} {item.name} ({payload.reason})",
+        entity_type="item", entity_id=item.id,
+    )
     return WasteRow(
         id=mv.id,
         item_id=item.id,

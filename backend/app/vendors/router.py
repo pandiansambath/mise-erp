@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.config import settings
@@ -104,6 +105,14 @@ async def set_preferred(
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor does not supply this item")
     result = await service.compare_vendor_prices(db, item_id, user.hotel_id)
+    vendor = await service.get_vendor(db, payload.vendor_id, user.hotel_id)
+    item = await get_item(db, item_id, user.hotel_id)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="vendor.chosen",
+        summary=f"Chose {vendor.name if vendor else 'a supplier'} as supplier for "
+        f"{item.name if item else 'an item'}",
+        entity_type="item", entity_id=item_id,
+    )
     return PriceComparison.model_validate(result)
 
 
@@ -145,7 +154,8 @@ async def upsert_vendor_item(
     vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
     if vendor is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
-    if await get_item(db, payload.item_id, user.hotel_id) is None:
+    item = await get_item(db, payload.item_id, user.hotel_id)
+    if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     vi = await service.upsert_vendor_item(
         db,
@@ -154,6 +164,11 @@ async def upsert_vendor_item(
         payload.price_per_unit,
         is_preferred=payload.is_preferred,
         notes=payload.notes,
+    )
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="vendor.price",
+        summary=f"Set {vendor.name} price for {item.name} → {payload.price_per_unit}",
+        entity_type="item", entity_id=item.id,
     )
     return VendorItemOut.model_validate(vi)
 

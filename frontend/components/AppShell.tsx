@@ -32,6 +32,7 @@ const NAV: NavItem[] = [
   { href: "/payroll", label: "Payroll", icon: "💷", perm: "payroll:read" },
   { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
+  { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read" },
   { href: "/profile", label: "Profile", icon: "👤" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
