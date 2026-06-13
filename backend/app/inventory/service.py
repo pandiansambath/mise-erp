@@ -6,7 +6,7 @@ and the P&L later — float rounding here would corrupt the whole product).
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.inventory.models import _INFLOW, _OUTFLOW, Item, MovementType, StockMovement
@@ -286,6 +286,19 @@ async def list_waste(
             }
         )
     return rows
+
+
+async def rename_category(db: AsyncSession, hotel_id: uuid.UUID, old: str, new: str) -> int:
+    """Re-tag every item in `old` to `new` (hotel-scoped). If `new` already exists,
+    the two categories merge. Returns how many items moved."""
+    new_val = (new or "").strip() or None
+    result = await db.execute(
+        update(Item)
+        .where(Item.hotel_id == hotel_id, Item.category == old)
+        .values(category=new_val)
+    )
+    await db.commit()
+    return result.rowcount or 0
 
 
 async def low_stock_items(db: AsyncSession, hotel_id: uuid.UUID) -> list[Item]:

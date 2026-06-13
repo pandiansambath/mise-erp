@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.inventory import export, service
 from app.inventory.models import MovementType
 from app.inventory.schemas import (
+    CategoryRename,
     ItemCreate,
     ItemOut,
     ItemUpdate,
@@ -108,6 +109,17 @@ async def update_item(
     except service.DuplicateItemError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return ItemOut.model_validate(item)
+
+
+@router.post("/categories/rename")
+async def rename_category(
+    payload: CategoryRename,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """Rename a category across all its items; renaming into an existing name merges them."""
+    moved = await service.rename_category(db, user.hotel_id, payload.from_name, payload.to_name)
+    return {"updated": moved}
 
 
 @router.post(

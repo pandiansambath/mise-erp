@@ -45,10 +45,27 @@ export default function InventoryPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [catFilter, setCatFilter] = useState<string>("all");
+  const [catMgr, setCatMgr] = useState(false);
+  const [catFrom, setCatFrom] = useState("");
+  const [catTo, setCatTo] = useState("");
   const { format } = useCurrency();
 
   function load() {
     return api.get<Item[]>("/inventory/items").then(setItems);
+  }
+
+  async function renameCategory() {
+    if (!catFrom || !catTo.trim()) return;
+    try {
+      await api.post("/inventory/categories/rename", { from_name: catFrom, to_name: catTo.trim() });
+      if (catFilter === catFrom) setCatFilter("all");
+      setCatMgr(false);
+      setCatFrom("");
+      setCatTo("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not rename category");
+    }
   }
 
   useEffect(() => {
@@ -301,6 +318,44 @@ export default function InventoryPage() {
                   {categoryEmoji(c)} {c}
                 </button>
               ))}
+            </div>
+            {/* Rename / merge a category across all its items */}
+            <div className="mt-2">
+              {!catMgr ? (
+                <button type="button" onClick={() => setCatMgr(true)} className="text-xs text-fg-faint hover:text-fg-soft">
+                  ✎ Rename / merge a category
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-paper-2/60 p-3">
+                  <div>
+                    <label className="block text-xs font-medium text-fg-faint">Rename</label>
+                    <select value={catFrom} onChange={(e) => setCatFrom(e.target.value)} className={inputCls}>
+                      <option value="">Pick category…</option>
+                      {categories.filter((c) => c !== "Other").map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-fg-faint">to</label>
+                    <div className="mt-1">
+                      <ComboBox value={catTo} onChange={setCatTo} options={categoryOptions} placeholder="New or existing…" className="w-48" />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={renameCategory}
+                    disabled={!catFrom || !catTo.trim()}
+                    className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    Apply
+                  </button>
+                  <button type="button" onClick={() => setCatMgr(false)} className="rounded-lg border border-line-2 px-3 py-2 text-sm text-fg-soft hover:bg-paper-2">
+                    Cancel
+                  </button>
+                  <span className="text-xs text-fg-faint">Renaming into an existing category merges them.</span>
+                </div>
+              )}
             </div>
           </div>
 

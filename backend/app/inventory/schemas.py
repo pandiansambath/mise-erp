@@ -114,3 +114,8 @@ class WasteList(BaseModel):
     total_value: Decimal
     entry_count: int
     rows: list[WasteRow]
+
+
+class CategoryRename(BaseModel):
+    from_name: str = Field(min_length=1, max_length=60)
+    to_name: str = Field(min_length=1, max_length=60)

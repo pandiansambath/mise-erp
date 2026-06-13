@@ -220,3 +220,21 @@ async def test_exports_render(client, make_user, auth_header):
     wx = await client.get("/api/inventory/waste.xlsx", headers=h)
     assert wx.status_code == 200
     assert wx.headers["content-type"].startswith(_XLSX)
+
+
+@pytest.mark.asyncio
+async def test_rename_category_merges(client, make_user, auth_header):
+    admin = await make_user("admin@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    await client.post("/api/inventory/items", headers=h, json={"name": "Tomato", "unit": "kg", "category": "Veg"})
+    await client.post("/api/inventory/items", headers=h, json={"name": "Onion", "unit": "kg", "category": "Veggies"})
+
+    # rename "Veg" into the existing "Veggies" → they merge
+    resp = await client.post(
+        "/api/inventory/categories/rename", headers=h, json={"from_name": "Veg", "to_name": "Veggies"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["updated"] == 1
+    cats = {i["name"]: i["category"] for i in (await client.get("/api/inventory/items", headers=h)).json()}
+    assert cats["Tomato"] == "Veggies"
+    assert cats["Onion"] == "Veggies"
