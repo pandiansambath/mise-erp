@@ -57,8 +57,8 @@ async def test_dish_margins_ranks_and_flags_unpriced(db, hotel):
     dm = await insights.dish_margins(db, hotel.id)
     assert dm["total_count"] == 3
     assert dm["priced_count"] == 2
-    assert dm["leaders"][0]["name"] == "Gold"
-    assert dm["laggards"][0]["name"] == "Thin"
+    # every priced dish is listed, ranked best margin → thinnest
+    assert [d["name"] for d in dm["ranked"]] == ["Gold", "Thin"]
     assert [d["name"] for d in dm["no_price"]] == ["Unpriced"]
 
 

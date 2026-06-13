@@ -214,21 +214,14 @@ export default function MoneyPage() {
           </div>
           <p className="text-xs text-fg-faint">
             {dm.priced_count} of {dm.total_count} dishes priced
-            {dm.avg_margin_pct != null && ` · avg ${dm.avg_margin_pct}%`}
+            {dm.avg_margin_pct != null && ` · avg ${dm.avg_margin_pct}%`} · best margin → thinnest
           </p>
           {dm.priced_count === 0 ? (
             <p className="mt-3 text-sm text-fg-faint">Set a selling price on your recipes to see margins.</p>
           ) : (
-            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-brand-400">★ Best margin</p>
-                <ul>{dm.leaders.map((d) => <DishRow key={d.recipe_id} d={d} />)}</ul>
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-rose-400">⚠ Thinnest margin</p>
-                <ul>{dm.laggards.map((d) => <DishRow key={d.recipe_id} d={d} />)}</ul>
-              </div>
-            </div>
+            <ul className="mt-3 max-h-[24rem] overflow-y-auto pr-1">
+              {dm.ranked.map((d) => <DishRow key={d.recipe_id} d={d} />)}
+            </ul>
           )}
           {dm.no_price.length > 0 && (
             <p className="mt-3 rounded-lg bg-amber-400/10 px-3 py-2 text-xs text-amber-300">

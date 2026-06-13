@@ -66,8 +66,7 @@ class DishMargins(BaseModel):
     avg_margin_pct: Decimal | None
     priced_count: int
     total_count: int
-    leaders: list[DishMarginRow]
-    laggards: list[DishMarginRow]
+    ranked: list[DishMarginRow]  # every priced dish, best margin → thinnest
     no_price: list[DishMarginRow]
 
 

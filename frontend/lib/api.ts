@@ -443,8 +443,7 @@ export interface DishMargins {
   avg_margin_pct: string | null;
   priced_count: number;
   total_count: number;
-  leaders: DishMarginRow[];
-  laggards: DishMarginRow[];
+  ranked: DishMarginRow[]; // every priced dish, best margin → thinnest
   no_price: DishMarginRow[];
 }
 export interface PriceAlert {

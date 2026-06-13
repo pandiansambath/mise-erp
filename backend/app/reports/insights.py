@@ -55,9 +55,9 @@ async def stock_value(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
     return {"total": _q2(total), "by_category": by_category, "item_count": item_count}
 
 
-async def dish_margins(db: AsyncSession, hotel_id: uuid.UUID, *, top: int = 5) -> dict:
-    """Rank dishes by stored gross margin %. Leaders to push, laggards to fix,
-    and dishes with no selling price (margin can't be known)."""
+async def dish_margins(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
+    """Every priced dish ranked by gross margin % (best → thinnest) so the whole
+    menu is visible, plus dishes with no selling price (margin can't be known)."""
     recipes = await recipe_service.list_recipes(db, hotel_id)
 
     def row(r) -> dict:
@@ -71,7 +71,7 @@ async def dish_margins(db: AsyncSession, hotel_id: uuid.UUID, *, top: int = 5) -
 
     priced = [r for r in recipes if r.selling_price and r.profit_margin is not None]
     no_price = [row(r) for r in recipes if not r.selling_price]
-    priced_sorted = sorted(priced, key=lambda r: r.profit_margin, reverse=True)
+    ranked = sorted(priced, key=lambda r: r.profit_margin, reverse=True)
     margins = [reports_service.parse_pct(r.profit_margin) for r in priced]
     avg_margin = (sum(margins) / len(margins)).quantize(_Q2) if margins else None
 
@@ -79,8 +79,7 @@ async def dish_margins(db: AsyncSession, hotel_id: uuid.UUID, *, top: int = 5) -
         "avg_margin_pct": avg_margin,
         "priced_count": len(priced),
         "total_count": len(recipes),
-        "leaders": [row(r) for r in priced_sorted[:top]],
-        "laggards": [row(r) for r in priced_sorted[-top:][::-1]] if priced_sorted else [],
+        "ranked": [row(r) for r in ranked],
         "no_price": no_price,
     }
 
