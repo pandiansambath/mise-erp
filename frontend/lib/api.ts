@@ -422,6 +422,63 @@ export interface DashboardKpis {
   avg_recipe_margin_pct: string;
 }
 
+// ── Money Intelligence (GET /reports/money) ──────────────────────────────────
+export interface StockByCategory {
+  category: string;
+  value: string;
+}
+export interface StockValue {
+  total: string;
+  item_count: number;
+  by_category: StockByCategory[];
+}
+export interface DishMarginRow {
+  recipe_id: string;
+  name: string;
+  selling_price: string | null;
+  cost_per_serving: string | null;
+  margin_pct: string | null;
+}
+export interface DishMargins {
+  avg_margin_pct: string | null;
+  priced_count: number;
+  total_count: number;
+  leaders: DishMarginRow[];
+  laggards: DishMarginRow[];
+  no_price: DishMarginRow[];
+}
+export interface PriceAlert {
+  item_id: string;
+  item_name: string;
+  prev_price: string;
+  latest_price: string;
+  change_pct: string;
+  vendor_name: string | null;
+  last_ordered: string;
+}
+export interface BreakEven {
+  fixed_costs: string;
+  contribution_margin_pct: string;
+  break_even_sales: string | null;
+  net_sales: string;
+  gap: string | null;
+  break_even_per_day: string | null;
+  days_elapsed: number;
+}
+export interface MoneyCentre {
+  date_from: string;
+  date_to: string;
+  net_sales: string;
+  net_profit: string;
+  food_cost_pct: string;
+  gross_margin_pct: string;
+  net_margin_pct: string;
+  stock_value: StockValue;
+  break_even: BreakEven;
+  dish_margins: DishMargins;
+  price_alerts: PriceAlert[];
+}
+
 export interface ExpenseCategory {
   id: string;
   name: string;

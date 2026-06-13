@@ -40,3 +40,66 @@ class Dashboard(BaseModel):
     low_stock_count: int
     recipe_count: int
     avg_recipe_margin_pct: Decimal
+
+
+# ── Money Intelligence ───────────────────────────────────────────────────────
+class StockByCategory(BaseModel):
+    category: str
+    value: Decimal
+
+
+class StockValue(BaseModel):
+    total: Decimal
+    item_count: int
+    by_category: list[StockByCategory]
+
+
+class DishMarginRow(BaseModel):
+    recipe_id: uuid.UUID
+    name: str
+    selling_price: Decimal | None
+    cost_per_serving: Decimal | None
+    margin_pct: Decimal | None
+
+
+class DishMargins(BaseModel):
+    avg_margin_pct: Decimal | None
+    priced_count: int
+    total_count: int
+    leaders: list[DishMarginRow]
+    laggards: list[DishMarginRow]
+    no_price: list[DishMarginRow]
+
+
+class PriceAlert(BaseModel):
+    item_id: uuid.UUID
+    item_name: str
+    prev_price: Decimal
+    latest_price: Decimal
+    change_pct: Decimal
+    vendor_name: str | None
+    last_ordered: date_type
+
+
+class BreakEven(BaseModel):
+    fixed_costs: Decimal
+    contribution_margin_pct: Decimal
+    break_even_sales: Decimal | None
+    net_sales: Decimal
+    gap: Decimal | None
+    break_even_per_day: Decimal | None
+    days_elapsed: int
+
+
+class MoneyCentre(BaseModel):
+    date_from: date_type
+    date_to: date_type
+    net_sales: Decimal
+    net_profit: Decimal
+    food_cost_pct: Decimal
+    gross_margin_pct: Decimal
+    net_margin_pct: Decimal
+    stock_value: StockValue
+    break_even: BreakEven
+    dish_margins: DishMargins
+    price_alerts: list[PriceAlert]
