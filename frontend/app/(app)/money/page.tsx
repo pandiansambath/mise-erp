@@ -23,17 +23,23 @@ function DishRow({ d }: { d: DishMarginRow }) {
   const { format } = useCurrency();
   const m = pctNum(d.margin_pct);
   return (
-    <li className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-0">
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-medium text-fg">{d.name}</span>
-        <span className="block text-xs text-fg-faint">
-          {d.selling_price ? format(d.selling_price) : "—"} sell ·{" "}
-          {d.cost_per_serving ? format(d.cost_per_serving) : "—"} cost
+    <li className="border-b border-line last:border-0">
+      <Link
+        href={`/recipes?open=${d.recipe_id}`}
+        title={`Open ${d.name}`}
+        className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition hover:bg-glass/5"
+      >
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-fg">{d.name}</span>
+          <span className="block text-xs text-fg-faint">
+            {d.selling_price ? format(d.selling_price) : "—"} sell ·{" "}
+            {d.cost_per_serving ? format(d.cost_per_serving) : "—"} cost
+          </span>
         </span>
-      </span>
-      <span className={`shrink-0 text-sm font-semibold ${m == null ? "text-fg-faint" : marginCls(m)}`}>
-        {m == null ? "—" : `${d.margin_pct}%`}
-      </span>
+        <span className={`shrink-0 text-sm font-semibold ${m == null ? "text-fg-faint" : marginCls(m)}`}>
+          {m == null ? "—" : `${d.margin_pct}%`}
+        </span>
+      </Link>
     </li>
   );
 }
@@ -219,7 +225,7 @@ export default function MoneyPage() {
           {dm.priced_count === 0 ? (
             <p className="mt-3 text-sm text-fg-faint">Set a selling price on your recipes to see margins.</p>
           ) : (
-            <ul className="mt-3 max-h-[24rem] overflow-y-auto pr-1">
+            <ul className="mt-3 max-h-[24rem] space-y-0.5 overflow-y-auto pr-2">
               {dm.ranked.map((d) => <DishRow key={d.recipe_id} d={d} />)}
             </ul>
           )}

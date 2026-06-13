@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
@@ -162,6 +162,21 @@ export default function RecipesPage() {
     ]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Deep link: /recipes?open=<id> (e.g. tapping a dish on the Money page) opens
+  // that recipe's cost breakdown and scrolls to it. One-shot.
+  const didDeepLink = useRef(false);
+  useEffect(() => {
+    if (didDeepLink.current || recipes.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (!id || !recipes.some((r) => r.id === id)) return;
+    didDeepLink.current = true;
+    setOpenId(id);
+    setTimeout(
+      () => document.getElementById(`recipe-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      120,
+    );
+  }, [recipes]);
 
   // Autofill: typing a dish name that already exists copies its ingredients in
   // (editable) — so the same dish at a new serve-size doesn't need re-entry.
@@ -412,7 +427,7 @@ export default function RecipesPage() {
                     const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
                     const open = openId === r.id;
                     return (
-                      <div key={r.id} className={r.is_active ? "" : "opacity-60"}>
+                      <div key={r.id} id={`recipe-${r.id}`} className={r.is_active ? "" : "opacity-60"}>
                         <div className="flex items-center gap-2 py-2.5">
                           <button
                             onClick={() => setOpenId(open ? null : r.id)}

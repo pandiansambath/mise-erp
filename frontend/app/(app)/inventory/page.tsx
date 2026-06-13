@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, ApiError, downloadFile, type Item, type Vendor } from "@/lib/api";
+import { api, ApiError, downloadFile, type Item } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
@@ -30,18 +31,16 @@ function statusOf(item: Item): "ok" | "low" | "out" {
   return "ok";
 }
 
-const EMPTY = { name: "", category: "", unit: "kg", min: "", vendorId: "", price: "", preferred: true };
+const EMPTY = { name: "", category: "", unit: "kg", min: "" };
 
 export default function InventoryPage() {
   const router = useRouter();
   const confirm = useConfirm();
   const [items, setItems] = useState<Item[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -53,10 +52,7 @@ export default function InventoryPage() {
   }
 
   useEffect(() => {
-    Promise.all([
-      load(),
-      api.get<Vendor[]>("/vendors").then(setVendors).catch(() => {}),
-    ]).finally(() => setLoading(false));
+    load().finally(() => setLoading(false));
     // Deep link: /inventory?filter=low (dashboard "Low stock" KPI)
     const want = new URLSearchParams(window.location.search).get("filter");
     if (want === "low" || want === "out" || want === "ok") setStatusFilter(want);
@@ -69,9 +65,6 @@ export default function InventoryPage() {
       category: item.category ?? "",
       unit: item.unit,
       min: item.min_stock_level ?? "",
-      vendorId: "",
-      price: "",
-      preferred: false,
     });
     setError(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -87,7 +80,6 @@ export default function InventoryPage() {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    setNotice(null);
     const payload = {
       name: form.name,
       unit: form.unit,
@@ -95,24 +87,10 @@ export default function InventoryPage() {
       min_stock_level: form.min || null,
     };
     try {
-      let item: Item;
       if (editingId) {
-        item = await api.patch<Item>(`/inventory/items/${editingId}`, payload);
+        await api.patch<Item>(`/inventory/items/${editingId}`, payload);
       } else {
-        item = await api.post<Item>("/inventory/items", payload);
-      }
-      // Optional one-stop supplier setup: price the item with a vendor (and
-      // mark them the chosen supplier) right from the add form.
-      if (!editingId && form.vendorId && form.price) {
-        await api.post(`/vendors/${form.vendorId}/items`, {
-          item_id: item.id,
-          price_per_unit: form.price,
-        });
-        if (form.preferred) {
-          await api.post(`/vendors/items/${item.id}/preferred`, { vendor_id: form.vendorId });
-        }
-        const vname = vendors.find((v) => v.id === form.vendorId)?.name ?? "supplier";
-        setNotice(`${item.name} added and priced with ${vname}${form.preferred ? " (chosen supplier)" : ""} — ready to order.`);
+        await api.post<Item>("/inventory/items", payload);
       }
       cancelEdit();
       await load();
@@ -152,7 +130,6 @@ export default function InventoryPage() {
     ...new Set([...STD_CATEGORIES, ...(items.map((i) => i.category).filter(Boolean) as string[])]),
   ];
   const unitOptions = [...new Set([...STD_UNITS, ...items.map((i) => i.unit)])];
-  const activeVendors = vendors.filter((v) => v.is_active);
 
   const counts = {
     all: items.length,
@@ -262,51 +239,13 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* One-stop supplier setup (new items): price it now, order it today. */}
-          {!editingId && activeVendors.length > 0 && (
-            <div className="rounded-xl border border-line bg-paper-2/60 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                Supplier (optional) — set who sells this & their price, so it&apos;s orderable right away
-              </p>
-              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="w-full sm:w-56">
-                  <label className="block text-sm font-medium text-fg-soft">Vendor</label>
-                  <select
-                    value={form.vendorId}
-                    onChange={(e) => setForm({ ...form, vendorId: e.target.value })}
-                    className={inputCls}
-                  >
-                    <option value="">No supplier yet</option>
-                    {activeVendors.map((v) => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-full sm:w-36">
-                  <label className="block text-sm font-medium text-fg-soft">Price / unit</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.price}
-                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    placeholder="e.g. 4.50"
-                    className={inputCls}
-                    disabled={!form.vendorId}
-                  />
-                </div>
-                <label className="flex items-center gap-2 pb-2 text-sm text-fg-soft">
-                  <input
-                    type="checkbox"
-                    checked={form.preferred}
-                    onChange={(e) => setForm({ ...form, preferred: e.target.checked })}
-                    disabled={!form.vendorId}
-                    className="h-4 w-4 accent-[var(--color-brand-500)]"
-                  />
-                  Make them the ★ chosen supplier
-                </label>
-              </div>
-            </div>
+          {!editingId && (
+            <p className="rounded-xl border border-line bg-paper-2/60 px-3 py-2.5 text-xs text-fg-faint">
+              Tip: set this item&apos;s supplier &amp; price on the{" "}
+              <Link href="/vendors" className="font-medium text-brand-400 hover:underline">Vendors</Link>{" "}
+              page after adding — the price lives with the vendor, so it stays consistent everywhere
+              (no double-entry).
+            </p>
           )}
 
           <div className="flex gap-2">
@@ -329,7 +268,6 @@ export default function InventoryPage() {
           </div>
         </form>
         {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-        {notice && <p className="mt-2 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
       </Card>
 
       {loading ? (
