@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   api,
   ApiError,
+  downloadFile,
   type Item,
   type WasteListResponse,
   type WasteRow,
@@ -135,13 +136,33 @@ export default function WastePage() {
       )}
 
       <Card className="p-0">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
           <h3 className="font-semibold text-fg">Recent waste</h3>
-          {data && (
-            <span className="text-sm text-fg-soft">
-              {format(data.total_value)} · {data.entry_count} entr{data.entry_count === 1 ? "y" : "ies"}
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {data && (
+              <span className="text-sm text-fg-soft">
+                {format(data.total_value)} · {data.entry_count} entr{data.entry_count === 1 ? "y" : "ies"}
+              </span>
+            )}
+            {data && data.rows.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => downloadFile("/inventory/waste.xlsx", "mise-waste-log.xlsx")}
+                  title="Download waste log (Excel)"
+                  className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                >
+                  ⬇ Excel
+                </button>
+                <button
+                  onClick={() => downloadFile("/inventory/waste.csv", "mise-waste-log.csv")}
+                  title="Download waste log (CSV)"
+                  className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                >
+                  CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         {!data || data.rows.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-fg-faint">

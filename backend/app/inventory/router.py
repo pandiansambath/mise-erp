@@ -3,13 +3,13 @@ import uuid
 from datetime import date as date_type
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
-from app.inventory import service
+from app.inventory import export, service
 from app.inventory.models import MovementType
 from app.inventory.schemas import (
     ItemCreate,
@@ -22,6 +22,8 @@ from app.inventory.schemas import (
     WasteList,
     WasteRow,
 )
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -195,3 +197,54 @@ async def list_waste(
     out = [WasteRow.model_validate(r) for r in rows]
     total = sum((r.value for r in out), start=Decimal("0"))
     return WasteList(total_value=total, entry_count=len(out), rows=out)
+
+
+# ── Exports (stock valuation + waste log) ────────────────────────────────────
+def _file(content: bytes, media_type: str, filename: str) -> Response:
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/items.csv")
+async def items_csv(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> Response:
+    items = await service.list_items(db, user.hotel_id)
+    suppliers = await service.best_vendors(db, user.hotel_id)
+    return _file(export.items_to_csv(items, suppliers), "text/csv", "mise-stock-valuation.csv")
+
+
+@router.get("/items.xlsx")
+async def items_xlsx(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> Response:
+    items = await service.list_items(db, user.hotel_id)
+    suppliers = await service.best_vendors(db, user.hotel_id)
+    return _file(export.items_to_xlsx(items, suppliers), XLSX_MIME, "mise-stock-valuation.xlsx")
+
+
+@router.get("/waste.csv")
+async def waste_csv(
+    date_from: date_type | None = Query(default=None),
+    date_to: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> Response:
+    rows = await service.list_waste(db, user.hotel_id, date_from, date_to)
+    return _file(export.waste_to_csv(rows, date_from, date_to), "text/csv", "mise-waste-log.csv")
+
+
+@router.get("/waste.xlsx")
+async def waste_xlsx(
+    date_from: date_type | None = Query(default=None),
+    date_to: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> Response:
+    rows = await service.list_waste(db, user.hotel_id, date_from, date_to)
+    return _file(export.waste_to_xlsx(rows, date_from, date_to), XLSX_MIME, "mise-waste-log.xlsx")

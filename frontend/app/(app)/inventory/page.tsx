@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiError, type Item, type Vendor } from "@/lib/api";
+import { api, ApiError, downloadFile, type Item, type Vendor } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
@@ -188,7 +188,25 @@ export default function InventoryPage() {
 
   return (
     <div>
-      <PageHeader title="Inventory" subtitle="Items, stock levels, suppliers and weighted-average cost." />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader title="Inventory" subtitle="Items, stock levels, suppliers and weighted-average cost." />
+        <div className="flex gap-2">
+          <button
+            onClick={() => downloadFile("/inventory/items.xlsx", "mise-stock-valuation.xlsx")}
+            title="Download stock valuation (Excel)"
+            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+          >
+            ⬇ Excel
+          </button>
+          <button
+            onClick={() => downloadFile("/inventory/items.csv", "mise-stock-valuation.csv")}
+            title="Download stock valuation (CSV)"
+            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+          >
+            CSV
+          </button>
+        </div>
+      </div>
 
       <Card className="mb-6">
         <p className="mb-3 text-sm font-medium text-fg-soft">

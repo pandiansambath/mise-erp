@@ -183,3 +183,40 @@ async def test_low_stock_endpoint(client, make_user, auth_header):
     assert resp.status_code == 200
     names = [a["name"] for a in resp.json()]
     assert "Cardamom" in names
+
+
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@pytest.mark.asyncio
+async def test_exports_render(client, make_user, auth_header):
+    """Stock-valuation + waste exports return real files (catches openpyxl 500s)."""
+    admin = await make_user("admin@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    item_id = (
+        await client.post(
+            "/api/inventory/items", headers=h, json={"name": "Rice", "unit": "kg"}
+        )
+    ).json()["id"]
+    await client.post(
+        f"/api/inventory/items/{item_id}/movements",
+        headers=h,
+        json={"movement_type": "PURCHASE_IN", "quantity": "10", "unit_cost": "2.00"},
+    )
+    await client.post(
+        "/api/inventory/waste", headers=h, json={"item_id": item_id, "quantity": "2", "reason": "spoiled"}
+    )
+
+    xlsx = await client.get("/api/inventory/items.xlsx", headers=h)
+    assert xlsx.status_code == 200
+    assert xlsx.headers["content-type"].startswith(_XLSX)
+    assert len(xlsx.content) > 0
+
+    for path in ("/api/inventory/items.csv", "/api/inventory/waste.csv"):
+        resp = await client.get(path, headers=h)
+        assert resp.status_code == 200
+        assert "text/csv" in resp.headers["content-type"]
+
+    wx = await client.get("/api/inventory/waste.xlsx", headers=h)
+    assert wx.status_code == 200
+    assert wx.headers["content-type"].startswith(_XLSX)
