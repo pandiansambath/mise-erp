@@ -178,6 +178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
+      data-mode={THEMES[theme].light ? "light" : "dark"}
       style={{ ...themeVars(theme), colorScheme: THEMES[theme].light ? "light" : "dark" }}
       className="mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden"
     >

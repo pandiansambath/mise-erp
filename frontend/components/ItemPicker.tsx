@@ -364,7 +364,7 @@ export function ItemPickerSingle({
       )}
       <div
         key={query ? `q:${query}` : tab}
-        className="mise-stagger grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+        className="mise-stagger grid max-h-[30rem] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4"
       >
         {visible.length === 0 && (
           <p className="col-span-full py-6 text-center text-sm text-fg-faint">

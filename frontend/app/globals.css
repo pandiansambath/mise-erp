@@ -445,3 +445,36 @@ html:has(.mise-app) { background: #04120d; }
   .mise-magnetic { transition: none; }
   .mise-cursor-glow { display: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   LIGHT THEME LEGIBILITY — the dashboard's accent text uses pale 200/300/400
+   tints tuned to glow on the dark "midnight" surfaces. On the Daylight (Light)
+   theme those wash out to a faint, low-contrast smudge. Within
+   [data-mode="light"] we re-point the accent *text* to darker, AA-legible
+   shades. We touch only `color` (not the colour variables), so the soft alpha
+   backgrounds/borders (bg-*-400/10 etc.) keep their tint untouched. These
+   rules are unlayered, so they win over Tailwind's layered utilities. One
+   central block → every dashboard page becomes readable on light.
+   ════════════════════════════════════════════════════════════════════════ */
+.mise-app[data-mode="light"] .text-brand-200,
+.mise-app[data-mode="light"] .text-brand-300,
+.mise-app[data-mode="light"] .text-brand-400 { color: var(--color-brand-700); }
+
+.mise-app[data-mode="light"] .text-rose-200,
+.mise-app[data-mode="light"] .text-rose-300,
+.mise-app[data-mode="light"] .text-rose-400,
+.mise-app[data-mode="light"] .hover\:text-rose-300:hover { color: #be123c; }
+
+.mise-app[data-mode="light"] .text-amber-200,
+.mise-app[data-mode="light"] .text-amber-300,
+.mise-app[data-mode="light"] .text-amber-400 { color: #b45309; }
+
+.mise-app[data-mode="light"] .text-copper-200,
+.mise-app[data-mode="light"] .text-copper-300 { color: #9a5a2b; }
+
+/* Native form controls + overscroll backdrop follow the light scheme too
+   (the dark defaults above would render dark dropdowns on a light page). */
+.mise-app[data-mode="light"] input,
+.mise-app[data-mode="light"] select,
+.mise-app[data-mode="light"] textarea { color-scheme: light; }
+html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
