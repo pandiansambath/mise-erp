@@ -30,6 +30,18 @@ async def authenticate(db: AsyncSession, email: str, password: str) -> User | No
     return user
 
 
+async def change_password(
+    db: AsyncSession, user: User, current_password: str, new_password: str
+) -> bool:
+    """Verify the current password, then set the new one. Returns False if the
+    current password is wrong (caller 400s without leaking which field failed)."""
+    if not verify_password(current_password, user.password_hash):
+        return False
+    user.password_hash = hash_password(new_password)
+    await db.commit()
+    return True
+
+
 async def create_user(
     db: AsyncSession, email: str, password: str, role: str, hotel_id: uuid.UUID
 ) -> User:

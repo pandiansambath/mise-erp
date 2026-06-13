@@ -8,6 +8,7 @@ from app.auth import service
 from app.auth.deps import get_current_user, require
 from app.auth.models import Role, User
 from app.auth.schemas import (
+    ChangePassword,
     HotelOut,
     LoginRequest,
     MeResponse,
@@ -84,6 +85,20 @@ async def me(
 ) -> MeResponse:
     hotel = await _hotel_or_404(db, current.hotel_id)
     return MeResponse(user=UserOut.model_validate(current), hotel=HotelOut.model_validate(hotel))
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    payload: ChangePassword,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Change your own password (requires the current one). No email/infra needed."""
+    if payload.new_password == payload.current_password:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "New password must be different")
+    ok = await service.change_password(db, current, payload.current_password, payload.new_password)
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)

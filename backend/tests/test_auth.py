@@ -98,3 +98,51 @@ async def test_me_requires_token(client):
 async def test_me_rejects_garbage_token(client):
     resp = await client.get("/api/auth/me", headers={"Authorization": "Bearer not.a.jwt"})
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_password_flow(client, make_user, auth_header):
+    user = await make_user("owner@nirai.com", Role.SUPER_ADMIN.value, password="password123")
+    h = auth_header(user)
+
+    # wrong current password -> 400
+    bad = await client.post(
+        "/api/auth/change-password",
+        headers=h,
+        json={"current_password": "WRONG", "new_password": "newpass456"},
+    )
+    assert bad.status_code == 400
+
+    # same as current -> 400
+    same = await client.post(
+        "/api/auth/change-password",
+        headers=h,
+        json={"current_password": "password123", "new_password": "password123"},
+    )
+    assert same.status_code == 400
+
+    # correct current -> 204, and the new password works while the old one fails
+    ok = await client.post(
+        "/api/auth/change-password",
+        headers=h,
+        json={"current_password": "password123", "new_password": "newpass456"},
+    )
+    assert ok.status_code == 204
+
+    old = await client.post(
+        "/api/auth/login", json={"email": "owner@nirai.com", "password": "password123"}
+    )
+    assert old.status_code == 401
+    new = await client.post(
+        "/api/auth/login", json={"email": "owner@nirai.com", "password": "newpass456"}
+    )
+    assert new.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_change_password_requires_token(client):
+    resp = await client.post(
+        "/api/auth/change-password",
+        json={"current_password": "x", "new_password": "newpass456"},
+    )
+    assert resp.status_code in (401, 403)

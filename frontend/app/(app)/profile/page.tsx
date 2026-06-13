@@ -24,6 +24,34 @@ export default function ProfilePage() {
   const [posting, setPosting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // ── Change password ────────────────────────────────────────────────────────
+  const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwMsg(null);
+    if (pw.next.length < 8) {
+      setPwMsg({ ok: false, text: "New password must be at least 8 characters." });
+      return;
+    }
+    if (pw.next !== pw.confirm) {
+      setPwMsg({ ok: false, text: "New passwords don't match." });
+      return;
+    }
+    setPwBusy(true);
+    try {
+      await api.post("/auth/change-password", { current_password: pw.current, new_password: pw.next });
+      setPw({ current: "", next: "", confirm: "" });
+      setPwMsg({ ok: true, text: "✓ Password changed — use it next time you log in." });
+    } catch (err) {
+      setPwMsg({ ok: false, text: err instanceof ApiError ? err.message : "Could not change password" });
+    } finally {
+      setPwBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!canExpenses) return;
     const from = new Date();
@@ -188,16 +216,55 @@ export default function ProfilePage() {
       )}
 
       <Card className="mt-6">
-        <h3 className="font-semibold text-fg">Security</h3>
+        <h3 className="font-semibold text-fg">Change password</h3>
         <p className="mt-1 text-sm text-fg-faint">
-          Change-password, two-factor, and Google sign-in are on the roadmap.
+          Enter your current password and choose a new one (at least 8 characters).
         </p>
-        <button
-          disabled
-          className="mt-3 cursor-not-allowed rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg-faint"
-        >
-          Change password (coming soon)
-        </button>
+        <form onSubmit={changePassword} className="mt-4 max-w-sm space-y-3">
+          <label className="block">
+            <span className="block text-xs font-medium text-fg-faint">Current password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={pw.current}
+              onChange={(e) => setPw({ ...pw, current: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-fg-faint">New password</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={pw.next}
+              onChange={(e) => setPw({ ...pw, next: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-fg-faint">Confirm new password</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={pw.confirm}
+              onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+            />
+          </label>
+          {pwMsg && (
+            <p className={`text-sm ${pwMsg.ok ? "text-brand-400" : "text-rose-400"}`}>{pwMsg.text}</p>
+          )}
+          <button
+            type="submit"
+            disabled={pwBusy || !pw.current || !pw.next}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {pwBusy ? "Updating…" : "Update password"}
+          </button>
+        </form>
+        <p className="mt-4 border-t border-line pt-3 text-xs text-fg-faint">
+          Two-factor and Google sign-in are on the roadmap.
+        </p>
       </Card>
     </div>
   );

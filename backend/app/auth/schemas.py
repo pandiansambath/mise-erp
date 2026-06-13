@@ -14,6 +14,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ChangePassword(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=72)  # bcrypt hard limit is 72 bytes
+
+
 class RegisterHotel(BaseModel):
     """Public self-signup: creates a new hotel + its first Super Admin."""
     hotel_name: str = Field(min_length=1, max_length=120)
