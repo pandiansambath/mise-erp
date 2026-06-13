@@ -60,6 +60,9 @@
   --color-fg: #eef6f1; /* primary text */
   --color-fg-soft: #bdd0c6; /* secondary text */
   --color-fg-faint: #87a294; /* muted text / labels */
+  /* Glass tint for alpha overlays (border-glass/10, bg-glass/[0.04]…). White on
+     dark themes (unchanged look); themeVars flips it dark for the Light theme. */
+  --color-glass: #ffffff;
 }
 
 html {

@@ -9,7 +9,15 @@ import { createContext, useCallback, useContext, useEffect, useState, type CSSPr
 // affected. Tailwind utilities reference these vars (non-inline @theme in
 // globals.css), so every corner of every page follows the chosen theme.
 
-export type ThemeKey = "emerald" | "ocean" | "violet" | "sunset" | "rose" | "graphite";
+export type ThemeKey =
+  | "light"
+  | "dark"
+  | "emerald"
+  | "ocean"
+  | "violet"
+  | "sunset"
+  | "rose"
+  | "graphite";
 
 type Scale = Record<string, string>; // shade -> hex
 
@@ -22,9 +30,34 @@ type ThemeDef = {
   fg: [string, string, string];
   /** the three aurora blob colours */
   aurora: [string, string, string];
+  /** hairline + stronger border. Optional — dark themes use the white-alpha
+      defaults in globals.css; light themes must supply dark-alpha lines. */
+  lines?: [string, string];
+  /** true = light mode → AppShell sets color-scheme:light for native controls */
+  light?: boolean;
+  /** base colour for alpha "glass" overlays (border-glass/α, bg-glass/α).
+      Defaults to white (dark themes); the Light theme sets a dark tint. */
+  glass?: string;
 };
 
 export const THEMES: Record<ThemeKey, ThemeDef> = {
+  light: {
+    label: "Daylight (Light)",
+    brand: { "50": "#ecfdf5", "100": "#d1fae5", "200": "#a7f3d0", "300": "#6ee7b7", "400": "#34d399", "500": "#10b981", "600": "#059669", "700": "#047857", "800": "#065f46", "900": "#064e3b", "950": "#022c22" },
+    surfaces: ["#eef2f6", "#ffffff", "#f6f8fb", "#e8edf3"],
+    fg: ["#0f172a", "#334155", "#64748b"],
+    aurora: ["#a7f3d0", "#bae6fd", "#99f6e4"],
+    lines: ["rgba(15,23,42,0.10)", "rgba(15,23,42,0.18)"],
+    glass: "#0f172a",
+    light: true,
+  },
+  dark: {
+    label: "Carbon (Dark)",
+    brand: { "50": "#ecfdf5", "100": "#d1fae5", "200": "#a7f3d0", "300": "#6ee7b7", "400": "#34d399", "500": "#10b981", "600": "#059669", "700": "#047857", "800": "#065f46", "900": "#064e3b", "950": "#022c22" },
+    surfaces: ["#0a0c10", "#14181f", "#1a1f28", "#242b36"],
+    fg: ["#f1f5f9", "#cbd5e1", "#94a3b8"],
+    aurora: ["#10b981", "#0ea5e9", "#14b8a6"],
+  },
   emerald: {
     label: "Emerald Midnight",
     brand: { "50": "#ecfdf5", "100": "#d1fae5", "200": "#a7f3d0", "300": "#6ee7b7", "400": "#34d399", "500": "#10b981", "600": "#059669", "700": "#047857", "800": "#065f46", "900": "#064e3b", "950": "#022c22" },
@@ -84,6 +117,11 @@ export function themeVars(key: ThemeKey): CSSProperties {
   out["--color-paper"] = paper;
   out["--color-paper-2"] = paper2;
   out["--color-paper-3"] = paper3;
+  if (t.lines) {
+    out["--color-line"] = t.lines[0];
+    out["--color-line-2"] = t.lines[1];
+  }
+  if (t.glass) out["--color-glass"] = t.glass;
   const [fg, soft, faint] = t.fg;
   out["--color-fg"] = fg;
   out["--color-fg-soft"] = soft;

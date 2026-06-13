@@ -68,7 +68,7 @@ function QtyFields({
         inputMode="decimal"
         placeholder="qty"
         aria-label={`Quantity of ${item.name} (${item.unit})`}
-        className="w-20 rounded-lg border border-line-2 bg-white/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
+        className="w-20 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
       />
     );
   }
@@ -84,7 +84,7 @@ function QtyFields({
         onChange={(e) => onQty(combine(parseInt(e.target.value) || 0, gPart))}
         placeholder="kg"
         aria-label={`${item.name} kilograms`}
-        className="w-14 rounded-lg border border-line-2 bg-white/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
+        className="w-14 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
       />
       <span className="text-xs text-fg-faint">kg</span>
       <input
@@ -93,7 +93,7 @@ function QtyFields({
         onChange={(e) => onQty(combine(kgPart, parseInt(e.target.value) || 0))}
         placeholder="g"
         aria-label={`${item.name} grams`}
-        className="w-14 rounded-lg border border-line-2 bg-white/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
+        className="w-14 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
       />
       <span className="text-xs text-fg-faint">g</span>
     </span>
@@ -160,7 +160,7 @@ export function ItemPicker({
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search any item…"
           aria-label="Search items"
-          className="w-full rounded-xl border border-line-2 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+          className="w-full rounded-xl border border-line-2 bg-glass/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
         />
       </div>
 
@@ -175,7 +175,7 @@ export function ItemPicker({
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
               tab === "ALL"
                 ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                : "border border-line-2 text-fg-soft hover:bg-white/5"
+                : "border border-line-2 text-fg-soft hover:bg-glass/5"
             }`}
           >
             🧑‍🍳 All ({items.length})
@@ -190,7 +190,7 @@ export function ItemPicker({
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
                 tab === c.name
                   ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                  : "border border-line-2 text-fg-soft hover:bg-white/5"
+                  : "border border-line-2 text-fg-soft hover:bg-glass/5"
               }`}
             >
               {categoryEmoji(c.name)} {c.name} ({c.count})
@@ -221,7 +221,7 @@ export function ItemPicker({
               className={`rounded-xl border p-3 text-left transition duration-200 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
-                  : "border-line bg-white/5 hover:border-line-2 hover:bg-white/10"
+                  : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
               }`}
             >
               <span className="flex items-start justify-between gap-1">
@@ -328,7 +328,7 @@ export function ItemPickerSingle({
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search any item…"
           aria-label="Search items"
-          className="w-full rounded-xl border border-line-2 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+          className="w-full rounded-xl border border-line-2 bg-glass/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
         />
       </div>
       {!query && (
@@ -341,7 +341,7 @@ export function ItemPickerSingle({
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
               tab === "ALL"
                 ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                : "border border-line-2 text-fg-soft hover:bg-white/5"
+                : "border border-line-2 text-fg-soft hover:bg-glass/5"
             }`}
           >
             🧑‍🍳 All ({items.length})
@@ -356,7 +356,7 @@ export function ItemPickerSingle({
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
                 tab === c.name
                   ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                  : "border border-line-2 text-fg-soft hover:bg-white/5"
+                  : "border border-line-2 text-fg-soft hover:bg-glass/5"
               }`}
             >
               {categoryEmoji(c.name)} {c.name} ({c.count})
@@ -385,7 +385,7 @@ export function ItemPickerSingle({
               className={`rounded-xl border p-3 text-left transition duration-200 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
-                  : "border-line bg-white/5 hover:border-line-2 hover:bg-white/10"
+                  : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
               }`}
             >
               <span className="flex items-start justify-between gap-1">

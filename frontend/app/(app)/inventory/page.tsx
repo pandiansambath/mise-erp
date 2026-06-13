@@ -183,7 +183,7 @@ export default function InventoryPage() {
     `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
       active
         ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-        : "border border-line-2 text-fg-soft hover:bg-white/5"
+        : "border border-line-2 text-fg-soft hover:bg-glass/5"
     }`;
 
   return (
@@ -325,7 +325,7 @@ export default function InventoryPage() {
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search items…"
                 aria-label="Search items"
-                className="w-full rounded-xl border border-line-2 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+                className="w-full rounded-xl border border-line-2 bg-glass/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -334,7 +334,7 @@ export default function InventoryPage() {
                   {s.label}
                 </button>
               ))}
-              <span aria-hidden className="my-auto h-5 w-px shrink-0 bg-white/10" />
+              <span aria-hidden className="my-auto h-5 w-px shrink-0 bg-glass/10" />
               <button type="button" onClick={() => setCatFilter("all")} className={chip(catFilter === "all")}>
                 All categories
               </button>
@@ -370,7 +370,7 @@ export default function InventoryPage() {
                     visible.map((item) => {
                       const st = stockState(item);
                       return (
-                        <tr key={item.id} className="border-b border-line transition hover:bg-white/[0.03]">
+                        <tr key={item.id} className="border-b border-line transition hover:bg-glass/[0.03]">
                           <td className="px-5 py-3">
                             <p className="font-medium text-fg">
                               <span aria-hidden className="mr-1.5">{categoryEmoji(item.category?.trim() || "Other")}</span>
@@ -379,7 +379,7 @@ export default function InventoryPage() {
                             <p className="mt-0.5 text-xs text-fg-faint">{item.category || "Uncategorised"}</p>
                           </td>
                           <td className="px-5 py-3">
-                            <span className={`inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-xs font-medium ${st.cls}`}>
+                            <span className={`inline-flex items-center gap-1 rounded-full bg-glass/5 px-2 py-0.5 text-xs font-medium ${st.cls}`}>
                               {st.dot} {st.label}
                             </span>
                           </td>

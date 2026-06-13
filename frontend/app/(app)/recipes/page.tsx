@@ -88,7 +88,7 @@ function CostDetail({ recipeId }: { recipeId: string }) {
           </thead>
           <tbody>
             {data.ingredients.map((ing) => (
-              <tr key={ing.item_id} className="border-b border-line transition hover:bg-white/[0.03]">
+              <tr key={ing.item_id} className="border-b border-line transition hover:bg-glass/[0.03]">
                 <td className="px-3 py-2 text-fg">{ing.item_name}</td>
                 <td className="px-3 py-2 text-right text-fg-soft" title={`${ing.quantity} ${ing.unit}`}>
                   {fmtQty(ing.quantity, ing.unit)}

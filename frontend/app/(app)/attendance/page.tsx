@@ -224,7 +224,7 @@ export default function AttendancePage() {
 
       {editEmp && (
         <div className="mise-fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setEditEmp(null)}>
-          <div className="mise-pop w-full max-w-sm rounded-2xl border border-white/10 bg-paper-2/95 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl" onClick={(ev) => ev.stopPropagation()}>
+          <div className="mise-pop w-full max-w-sm rounded-2xl border border-glass/10 bg-paper-2/95 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl" onClick={(ev) => ev.stopPropagation()}>
             <h3 className="font-semibold text-fg">Edit attendance</h3>
             <p className="mt-0.5 text-sm text-fg-faint">{editEmp.full_name} · {day} · times in {timeZone}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">

@@ -50,7 +50,7 @@ export function ComboBox({
   }
 
   const base =
-    "w-full rounded-lg border border-line-2 bg-white/5 px-3 py-2 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+    "w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
 
   return (
     <div ref={ref} className={`relative ${className}`}>
@@ -82,7 +82,7 @@ export function ComboBox({
         autoComplete="off"
       />
       {open && (matches.length > 0 || showAddNew) && (
-        <ul className="mise-pop absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-white/10 bg-paper-2/95 py-1 text-sm shadow-2xl shadow-black/40 backdrop-blur-xl">
+        <ul className="mise-pop absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-glass/10 bg-paper-2/95 py-1 text-sm shadow-2xl shadow-black/40 backdrop-blur-xl">
           {matches.map((o, i) => (
             <li key={o}>
               <button
@@ -93,7 +93,7 @@ export function ComboBox({
                 }}
                 onMouseEnter={() => setActive(i)}
                 className={`block w-full px-3 py-2 text-left ${
-                  i === active ? "bg-brand-500/15 text-brand-300" : "text-fg-soft hover:bg-white/5"
+                  i === active ? "bg-brand-500/15 text-brand-300" : "text-fg-soft hover:bg-glass/5"
                 }`}
               >
                 {o}
@@ -101,7 +101,7 @@ export function ComboBox({
             </li>
           ))}
           {showAddNew && (
-            <li className="border-t border-white/10">
+            <li className="border-t border-glass/10">
               <button
                 type="button"
                 onMouseDown={(e) => {

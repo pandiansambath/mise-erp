@@ -212,7 +212,7 @@ export default function VendorsPage() {
                     className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                       vCat === c
                         ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                        : "border border-line-2 text-fg-soft hover:bg-white/5"
+                        : "border border-line-2 text-fg-soft hover:bg-glass/5"
                     }`}
                   >
                     {TYPE_EMOJI[c]} {c.toLowerCase()}
@@ -311,7 +311,7 @@ export default function VendorsPage() {
                     {vendorItems.length === 0 ? (
                       <tr><td colSpan={3} className="px-4 py-6 text-center text-fg-faint">No prices yet — add one on the right.</td></tr>
                     ) : vendorItems.map((vi) => (
-                      <tr key={vi.id} className="border-b border-line transition hover:bg-white/[0.03]">
+                      <tr key={vi.id} className="border-b border-line transition hover:bg-glass/[0.03]">
                         <td className="px-4 py-2 font-medium text-fg">{itemName(vi.item_id)}</td>
                         <td className="px-4 py-2 text-right text-fg-soft">{format(vi.price_per_unit)}</td>
                         <td className="px-4 py-2 text-right">{vi.is_preferred && <Badge tone="amber">★ chosen</Badge>}</td>

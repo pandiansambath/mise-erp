@@ -74,7 +74,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => settle(false)}
           />
-          <div className="mise-pop relative w-full max-w-sm rounded-2xl border border-white/10 bg-paper-2/95 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="mise-pop relative w-full max-w-sm rounded-2xl border border-glass/10 bg-paper-2/95 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <h3 className="text-base font-semibold text-fg">
               {opts.title ?? "Are you sure?"}
             </h3>
@@ -82,7 +82,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => settle(false)}
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-white/5"
+                className="rounded-lg border border-glass/15 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-glass/5"
               >
                 {opts.cancelText ?? "Cancel"}
               </button>

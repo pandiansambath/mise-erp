@@ -43,7 +43,7 @@ function CurrencySwitcher() {
         aria-label="Display currency"
         value={currency}
         onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-        className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-fg-soft outline-none transition focus:border-brand-500"
+        className="rounded-lg border border-glass/15 bg-glass/5 px-2 py-1.5 text-sm text-fg-soft outline-none transition focus:border-brand-500"
       >
         {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
           <option key={code} value={code}>
@@ -65,25 +65,25 @@ function ThemeSwitcher() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Change theme"
         title="Theme"
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 hover:bg-white/5"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-glass/15 hover:bg-glass/5"
       >
-        <span className="h-4 w-4 rounded-full ring-1 ring-white/25" style={{ background: THEMES[theme].brand["500"] }} />
+        <span className="h-4 w-4 rounded-full ring-1 ring-glass/25" style={{ background: THEMES[theme].brand["500"] }} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
-          <div className="mise-pop absolute right-0 z-40 mt-2 w-52 rounded-xl border border-white/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div className="mise-pop absolute right-0 z-40 mt-2 w-52 rounded-xl border border-glass/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
             <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-fg-faint">Theme</p>
             {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
               <button
                 key={k}
                 type="button"
                 onClick={() => { setTheme(k); setOpen(false); }}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-white/5 ${theme === k ? "font-semibold text-fg" : "text-fg-soft"}`}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-glass/5 ${theme === k ? "font-semibold text-fg" : "text-fg-soft"}`}
               >
                 {/* two-tone swatch: the theme's surface with its accent inside */}
                 <span
-                  className="grid h-5 w-5 shrink-0 place-items-center rounded-md ring-1 ring-white/25"
+                  className="grid h-5 w-5 shrink-0 place-items-center rounded-md ring-1 ring-glass/25"
                   style={{ background: THEMES[k].surfaces[1] }}
                 >
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: THEMES[k].brand["500"] }} />
@@ -129,7 +129,7 @@ function NavLinks({
             className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition duration-200 ${
               active
                 ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                : "text-fg-faint hover:translate-x-0.5 hover:bg-white/5 hover:text-fg"
+                : "text-fg-faint hover:translate-x-0.5 hover:bg-glass/5 hover:text-fg"
             }`}
           >
             <span aria-hidden className="text-base">
@@ -178,16 +178,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      style={themeVars(theme)}
+      style={{ ...themeVars(theme), colorScheme: THEMES[theme].light ? "light" : "dark" }}
       className="mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden"
     >
       <ShellAurora />
 
       {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
-      <aside className="relative hidden border-r border-white/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
+      <aside className="relative hidden border-r border-glass/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
         <Brand />
         <NavLinks items={navItems} pathname={pathname} />
-        <div className="mt-auto border-t border-white/10 p-4 text-xs text-fg-faint">
+        <div className="mt-auto border-t border-glass/10 p-4 text-xs text-fg-faint">
           {hotel && (
             <p className="truncate text-sm font-semibold text-fg">
               {hotel.name}
@@ -207,7 +207,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col border-r border-white/10 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col border-r border-glass/10 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <Brand />
             <NavLinks items={navItems} pathname={pathname} onClick={() => setOpen(false)} />
           </aside>
@@ -216,12 +216,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-white/10 bg-shell/70 px-4 py-3 backdrop-blur-xl lg:px-8">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-glass/10 bg-shell/70 px-4 py-3 backdrop-blur-xl lg:px-8">
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setOpen(true)}
-            className="rounded-lg p-2 text-fg-soft hover:bg-white/5 lg:hidden"
+            className="rounded-lg p-2 text-fg-soft hover:bg-glass/5 lg:hidden"
           >
             <span className="block h-0.5 w-5 bg-current" />
             <span className="mt-1 block h-0.5 w-5 bg-current" />
@@ -234,7 +234,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="hidden text-sm text-fg-faint lg:inline">{user?.email}</span>
             <button
               onClick={logout}
-              className="rounded-lg border border-white/15 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-white/5"
+              className="rounded-lg border border-glass/15 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-glass/5"
             >
               Log out
             </button>

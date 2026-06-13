@@ -79,7 +79,7 @@ export function Badge({
   tone?: "slate" | "green" | "red" | "amber";
 }) {
   const tones: Record<string, string> = {
-    slate: "bg-white/10 text-fg-soft",
+    slate: "bg-glass/10 text-fg-soft",
     green: "bg-brand-400/15 text-brand-300",
     red: "bg-rose-400/15 text-rose-300",
     amber: "bg-amber-400/15 text-amber-200",
@@ -94,7 +94,7 @@ export function Badge({
 export function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/15 border-t-brand-400" />
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-glass/15 border-t-brand-400" />
     </div>
   );
 }

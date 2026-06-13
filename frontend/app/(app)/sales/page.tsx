@@ -342,7 +342,7 @@ export default function SalesPage() {
             {canWrite && (
               <button
                 onClick={saveCash}
-                className="w-full rounded-lg bg-white/10 ring-1 ring-white/15 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                className="w-full rounded-lg bg-glass/10 ring-1 ring-glass/15 px-4 py-2 text-sm font-semibold text-white hover:bg-glass/15"
               >
                 Save cash
               </button>

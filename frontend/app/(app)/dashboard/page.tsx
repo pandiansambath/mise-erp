@@ -95,7 +95,7 @@ export default function DashboardPage() {
                     <Link
                       href={`/purchasing?item=${l.item_id}`}
                       title="Order this item — opens Purchasing with it picked"
-                      className="group flex items-center justify-between gap-2 py-2.5 text-sm transition hover:bg-white/[0.03]"
+                      className="group flex items-center justify-between gap-2 py-2.5 text-sm transition hover:bg-glass/[0.03]"
                     >
                       <span className="font-medium text-fg-soft group-hover:text-fg">{l.name}</span>
                       <span className="flex items-center gap-2">
