@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, ApiError, downloadFile, type Item } from "@/lib/api";
+import { api, ApiError, downloadFile, type Item, type ItemSuppliers, type Vendor } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
@@ -48,6 +48,11 @@ export default function InventoryPage() {
   const [catMgr, setCatMgr] = useState(false);
   const [catFrom, setCatFrom] = useState("");
   const [catTo, setCatTo] = useState("");
+  // Add-item supplier preview: pick a vendor → see its price for this item (read-only)
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [addVendor, setAddVendor] = useState("");
+  // item_id -> { vendor_id -> price } (so the add form can show the chosen vendor's price)
+  const [suppliers, setSuppliers] = useState<Record<string, Record<string, string>>>({});
   const { format } = useCurrency();
 
   function load() {
@@ -70,6 +75,20 @@ export default function InventoryPage() {
 
   useEffect(() => {
     load().finally(() => setLoading(false));
+    api.get<Vendor[]>("/vendors").then(setVendors).catch(() => {});
+    api
+      .get<ItemSuppliers[]>("/purchasing/item-suppliers")
+      .then((rows) =>
+        setSuppliers(
+          Object.fromEntries(
+            rows.map((r) => [
+              r.item_id,
+              Object.fromEntries(r.vendors.map((v) => [v.vendor_id, v.price_per_unit])),
+            ]),
+          ),
+        ),
+      )
+      .catch(() => {});
     // Deep link: /inventory?filter=low (dashboard "Low stock" KPI)
     const want = new URLSearchParams(window.location.search).get("filter");
     if (want === "low" || want === "out" || want === "ok") setStatusFilter(want);
@@ -90,6 +109,7 @@ export default function InventoryPage() {
   function cancelEdit() {
     setEditingId(null);
     setForm(EMPTY);
+    setAddVendor("");
     setError(null);
   }
 
@@ -165,6 +185,15 @@ export default function InventoryPage() {
     if (catFilter !== "all" && (i.category?.trim() || "Other") !== catFilter) return false;
     return true;
   });
+
+  // Add-item supplier preview: the chosen vendor's price for this item (if it
+  // already prices a same-named item) — read-only, no double-entry.
+  const activeVendors = vendors.filter((v) => v.is_active);
+  const matchedItem = items.find(
+    (i) => i.name.trim().toLowerCase() === form.name.trim().toLowerCase()
+  );
+  const addVendorPrice =
+    matchedItem && addVendor ? suppliers[matchedItem.id]?.[addVendor] : undefined;
 
   const statusChips: { key: StatusFilter; label: string }[] = [
     { key: "all", label: `🧺 All (${counts.all})` },
@@ -257,12 +286,36 @@ export default function InventoryPage() {
           </div>
 
           {!editingId && (
-            <p className="rounded-xl border border-line bg-paper-2/60 px-3 py-2.5 text-xs text-fg-faint">
-              Tip: set this item&apos;s supplier &amp; price on the{" "}
-              <Link href="/vendors" className="font-medium text-brand-400 hover:underline">Vendors</Link>{" "}
-              page after adding — the price lives with the vendor, so it stays consistent everywhere
-              (no double-entry).
-            </p>
+            <div className="rounded-xl border border-line bg-paper-2/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                Supplier (optional)
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <select
+                  value={addVendor}
+                  onChange={(e) => setAddVendor(e.target.value)}
+                  className={`${inputCls} sm:w-56`}
+                >
+                  <option value="">Choose a supplier…</option>
+                  {activeVendors.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+                {addVendor &&
+                  (addVendorPrice ? (
+                    <span className="text-sm text-brand-300">
+                      Price: <b>{format(addVendorPrice)}</b>{" "}
+                      <span className="text-fg-faint">— this supplier&apos;s price (read-only)</span>
+                    </span>
+                  ) : (
+                    <span className="text-sm text-amber-300">
+                      🆕 No supplier price yet — set it on the{" "}
+                      <Link href="/vendors" className="font-medium text-brand-400 hover:underline">Vendors</Link>{" "}
+                      page (the price lives with the vendor — no double-entry).
+                    </span>
+                  ))}
+              </div>
+            </div>
           )}
 
           <div className="flex gap-2">

@@ -61,6 +61,18 @@ function CostDetail({ recipeId }: { recipeId: string }) {
         ))}
       </div>
 
+      {(() => {
+        const cps = parseFloat(data.cost_per_serving) || 0;
+        if (cps <= 0) return null;
+        const at = (gp: number) => format(String(Math.round((cps / (1 - gp)) * 100) / 100));
+        return (
+          <p className="rounded-lg bg-glass/5 px-3 py-2 text-sm text-fg-soft">
+            💡 Suggested price — for <b className="text-brand-400">70% GP</b> sell at{" "}
+            <b className="text-fg">{at(0.7)}</b> · 65% → {at(0.65)} · 60% → {at(0.6)}
+          </p>
+        );
+      })()}
+
       {data.has_missing_prices && (
         <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">
           Some ingredients have no price yet — margin may be understated.
