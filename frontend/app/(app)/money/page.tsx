@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
   api,
   ApiError,
+  type BudgetTargets,
+  type BudgetVsActual,
   type DishMarginRow,
   type DishSalesOut,
   type MenuEngineering,
@@ -22,6 +24,126 @@ const CLASS_META: Record<string, { emoji: string; label: string; tone: "green" |
   dog: { emoji: "🐕", label: "Dog", tone: "red" },
   none: { emoji: "·", label: "—", tone: "slate" },
 };
+
+/** Budget vs actual (this month): targets you set vs live actuals, with on-track ticks. */
+function BudgetCard() {
+  const { format } = useCurrency();
+  const { user } = useAuth();
+  const canWrite = can(user?.role, "reports:write");
+  const [b, setB] = useState<BudgetVsActual | null>(null);
+  const [edit, setEdit] = useState(false);
+  const [form, setForm] = useState<BudgetTargets>({
+    monthly_sales: null,
+    food_cost_pct: null,
+    labour_pct: null,
+    net_margin_pct: null,
+  });
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const r = await api.get<BudgetVsActual>("/reports/budget");
+    setB(r);
+    setForm(r.targets);
+  }
+  useEffect(() => {
+    load().catch(() => {});
+  }, []);
+
+  async function save() {
+    setBusy(true);
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(form).map(([k, v]) => [k, v === "" || v == null ? null : v]),
+      );
+      const r = await api.put<BudgetVsActual>("/reports/budget", payload);
+      setB(r);
+      setForm(r.targets);
+      setEdit(false);
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!b) return null;
+  const ROWS: { key: keyof BudgetTargets; label: string; money?: boolean; higherBetter: boolean }[] = [
+    { key: "monthly_sales", label: "Sales (this month)", money: true, higherBetter: true },
+    { key: "food_cost_pct", label: "Food cost %", higherBetter: false },
+    { key: "labour_pct", label: "Labour %", higherBetter: false },
+    { key: "net_margin_pct", label: "Net margin %", higherBetter: true },
+  ];
+  const show = (v: string | null, money?: boolean) =>
+    v == null ? "—" : money ? format(v) : `${v}%`;
+
+  return (
+    <Card className="mt-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold text-fg">Budget vs actual — this month</h3>
+        {canWrite && (
+          <button
+            type="button"
+            onClick={() => setEdit((v) => !v)}
+            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+          >
+            {edit ? "Close" : "✎ Set targets"}
+          </button>
+        )}
+      </div>
+
+      {edit && (
+        <div className="mise-pop mt-3 grid grid-cols-2 gap-3 rounded-xl border border-line bg-paper-2/60 p-3 sm:grid-cols-4">
+          {ROWS.map((r) => (
+            <label key={r.key} className="block">
+              <span className="block text-xs text-fg-faint">{r.label}{r.money ? "" : " %"}</span>
+              <input
+                inputMode="decimal"
+                value={form[r.key] ?? ""}
+                onChange={(e) => setForm({ ...form, [r.key]: e.target.value })}
+                placeholder="—"
+                className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-sm text-fg outline-none focus:border-brand-500"
+              />
+            </label>
+          ))}
+          <div className="col-span-2 sm:col-span-4">
+            <button
+              type="button"
+              onClick={save}
+              disabled={busy}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              {busy ? "Saving…" : "Save targets"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ul className="mt-3 divide-y divide-line">
+        {ROWS.map((r) => {
+          const target = b.targets[r.key];
+          const actual = b.actual[r.key];
+          const a = parseFloat(actual);
+          const t = target == null ? null : parseFloat(target);
+          const onTrack = t == null ? null : r.higherBetter ? a >= t : a <= t;
+          return (
+            <li key={r.key} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="text-fg-soft">{r.label}</span>
+              <span className="flex items-center gap-3">
+                <span className="text-fg">{show(actual, r.money)}</span>
+                <span className="text-xs text-fg-faint">target {show(target, r.money)}</span>
+                {onTrack == null ? (
+                  <span className="text-xs text-fg-faint">set a target</span>
+                ) : (
+                  <Badge tone={onTrack ? "green" : "red"}>{onTrack ? "✓ on track" : "off track"}</Badge>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
 
 /** Menu engineering (popularity × margin) + a today's-dishes-sold quick entry. */
 function MenuEngineeringCard() {
@@ -460,6 +582,9 @@ export default function MoneyPage() {
           </ul>
         )}
       </Card>
+
+      {/* Budget vs actual — targets vs live month-to-date */}
+      <BudgetCard />
 
       {/* Menu engineering (popularity × margin) + dishes-sold entry */}
       <MenuEngineeringCard />

@@ -8,8 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
-from app.reports import export, insights, service
-from app.reports.schemas import Dashboard, MenuEngineering, MoneyCentre, PnL, PricePoint
+from app.reports import budget, export, insights, service
+from app.reports.schemas import (
+    BudgetTargets,
+    BudgetVsActual,
+    Dashboard,
+    MenuEngineering,
+    MoneyCentre,
+    PnL,
+    PricePoint,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -56,6 +64,24 @@ async def price_history(
     """What was actually paid for an item over time (PO receipts), oldest first."""
     rows = await insights.price_history(db, user.hotel_id, item_id)
     return [PricePoint.model_validate(r) for r in rows]
+
+
+@router.get("/budget", response_model=BudgetVsActual)
+async def get_budget(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("reports:read")),
+) -> BudgetVsActual:
+    return BudgetVsActual.model_validate(await budget.budget_vs_actual(db, user.hotel_id))
+
+
+@router.put("/budget", response_model=BudgetVsActual)
+async def put_budget(
+    payload: BudgetTargets,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("reports:write")),
+) -> BudgetVsActual:
+    await budget.set_targets(db, user.hotel_id, **payload.model_dump(exclude_unset=True))
+    return BudgetVsActual.model_validate(await budget.budget_vs_actual(db, user.hotel_id))
 
 
 @router.get("/menu-engineering", response_model=MenuEngineering)

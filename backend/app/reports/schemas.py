@@ -110,6 +110,27 @@ class PricePoint(BaseModel):
     vendor_name: str | None
 
 
+class BudgetTargets(BaseModel):
+    monthly_sales: Decimal | None = None
+    food_cost_pct: Decimal | None = None
+    labour_pct: Decimal | None = None
+    net_margin_pct: Decimal | None = None
+
+
+class BudgetActual(BaseModel):
+    monthly_sales: Decimal
+    food_cost_pct: Decimal
+    labour_pct: Decimal
+    net_margin_pct: Decimal
+
+
+class BudgetVsActual(BaseModel):
+    month_start: date_type
+    today: date_type
+    targets: BudgetTargets
+    actual: BudgetActual
+
+
 class MenuDish(BaseModel):
     recipe_id: uuid.UUID
     name: str

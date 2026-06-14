@@ -102,6 +102,8 @@ export const api = {
     request<T>(path, { method: "POST", body: data ? JSON.stringify(data) : undefined }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: "PATCH", body: data ? JSON.stringify(data) : undefined }),
+  put: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: "PUT", body: data ? JSON.stringify(data) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
@@ -531,6 +533,20 @@ export interface MoneyCentre {
   break_even: BreakEven;
   dish_margins: DishMargins;
   price_alerts: PriceAlert[];
+}
+
+// Budget vs actual (GET/PUT /reports/budget)
+export interface BudgetTargets {
+  monthly_sales: string | null;
+  food_cost_pct: string | null;
+  labour_pct: string | null;
+  net_margin_pct: string | null;
+}
+export interface BudgetVsActual {
+  month_start: string;
+  today: string;
+  targets: BudgetTargets;
+  actual: { monthly_sales: string; food_cost_pct: string; labour_pct: string; net_margin_pct: string };
 }
 
 // Rota (GET/POST/DELETE /rota/shifts, GET /rota/labour)

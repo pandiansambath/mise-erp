@@ -25,7 +25,7 @@ PERMISSIONS: dict[str, list[str]] = {
         "sales:config",
         "expenses:write",
         "documents:write",
-        "reports:read",
+        "reports:write",
     ],
     Role.KITCHEN_MANAGER.value: [
         "inventory:read",
