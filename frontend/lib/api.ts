@@ -533,6 +533,34 @@ export interface MoneyCentre {
   price_alerts: PriceAlert[];
 }
 
+// Rota (GET/POST/DELETE /rota/shifts, GET /rota/labour)
+export interface Shift {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  hours: string;
+  cost: string;
+  notes: string | null;
+}
+export interface LabourByEmployee {
+  employee_id: string;
+  employee_name: string;
+  hours: string;
+  cost: string;
+}
+export interface LabourSummary {
+  date_from: string;
+  date_to: string;
+  total_hours: string;
+  total_cost: string;
+  net_sales: string;
+  labour_pct: string;
+  by_employee: LabourByEmployee[];
+}
+
 // Food safety (GET/POST /safety/logs)
 export interface SafetyLog {
   id: string;

@@ -20,6 +20,7 @@ from app.payroll.router import router as payroll_router
 from app.purchasing.router import router as purchasing_router
 from app.recipes.router import router as recipes_router
 from app.reports.router import router as reports_router
+from app.rota.router import router as rota_router
 from app.safety.router import router as safety_router
 from app.sales.router import router as sales_router
 from app.selfservice.router import router as selfservice_router
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(expenses_router, prefix="/api")
     app.include_router(reports_router, prefix="/api")
     app.include_router(safety_router, prefix="/api")
+    app.include_router(rota_router, prefix="/api")
     app.include_router(employees_router, prefix="/api")
     app.include_router(attendance_router, prefix="/api")
     app.include_router(payroll_router, prefix="/api")
