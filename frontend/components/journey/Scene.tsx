@@ -1,4 +1,8 @@
 "use client";
+/* eslint-disable react-hooks/immutability -- react-three-fiber's useFrame loop
+   mutates three.js objects (camera, fog, materials, geometry) every frame BY
+   DESIGN; that is the correct, performant R3F pattern, not a React state bug.
+   The React-Compiler immutability rule doesn't model the imperative render loop. */
 
 // The WebGL world for the landing journey. One long flight path; scroll drives
 // the camera forward through a series of "stations" (hills → the one tree →

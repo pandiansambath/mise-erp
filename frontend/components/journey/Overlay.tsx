@@ -5,7 +5,8 @@
 // typography + real product examples, so by the end of the flight a visitor
 // understands exactly why Mise matters. Opacity/translate are written straight
 // to the DOM from a rAF loop (never React state) so the words stay glued to the
-// camera with zero re-render jank.
+// camera with zero re-render jank. Beats are found once via a single container
+// ref + data-beat indices (no per-node ref callbacks).
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
@@ -41,16 +42,21 @@ function Kicker({ children }: { children: React.ReactNode }) {
   );
 }
 
+const beatClass = (i: number) =>
+  `pointer-events-none fixed inset-0 z-20 flex flex-col justify-center px-7 sm:px-16 lg:px-24 ${alignCls[BEATS[i].align]}`;
+
 export default function Overlay() {
-  const refs = useRef<(HTMLDivElement | null)[]>([]);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const els = Array.from(root.querySelectorAll<HTMLElement>("[data-beat]"));
     let raf = 0;
     const tick = () => {
       const p = journeySmooth.value;
-      for (let i = 0; i < BEATS.length; i++) {
-        const el = refs.current[i];
-        if (!el) continue;
+      for (const el of els) {
+        const i = Number(el.dataset.beat);
         const o = windowOpacity(p, BEATS[i].start, BEATS[i].end, 0.035);
         el.style.opacity = String(o);
         el.style.transform = `translateY(${(1 - o) * 26}px)`;
@@ -63,17 +69,10 @@ export default function Overlay() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const setRef = (i: number) => (el: HTMLDivElement | null) => {
-    refs.current[i] = el;
-  };
-
-  const beatClass = (i: number) =>
-    `pointer-events-none fixed inset-0 z-20 flex flex-col justify-center px-7 sm:px-16 lg:px-24 ${alignCls[BEATS[i].align]}`;
-
   return (
-    <div aria-hidden={false}>
+    <div ref={rootRef}>
       {/* 0 — HERO */}
-      <div ref={setRef(0)} className={beatClass(0)} style={{ willChange: "opacity, transform" }}>
+      <div data-beat={0} className={beatClass(0)} style={{ willChange: "opacity, transform" }}>
         <div className="max-w-3xl">
           <Kicker>EVERY PLATE · EVERY PENNY</Kicker>
           <h1 className="mt-5 font-display text-5xl leading-[1.03] tracking-tight text-white drop-shadow-[0_2px_30px_rgba(0,0,0,0.6)] sm:text-7xl xl:text-8xl">
@@ -89,7 +88,7 @@ export default function Overlay() {
       </div>
 
       {/* 1 — CALM / MISE EN PLACE */}
-      <div ref={setRef(1)} className={beatClass(1)}>
+      <div data-beat={1} className={beatClass(1)}>
         <div className="max-w-xl">
           <Kicker>FROM THE KITCHEN</Kicker>
           <h2 className="mt-4 font-display text-4xl text-white drop-shadow sm:text-6xl">
@@ -104,7 +103,7 @@ export default function Overlay() {
       </div>
 
       {/* 2 — ONE TREE, EVERY HARVEST */}
-      <div ref={setRef(2)} className={beatClass(2)}>
+      <div data-beat={2} className={beatClass(2)}>
         <div className="max-w-xl">
           <Kicker>ONE PLATFORM</Kicker>
           <h2 className="mt-4 font-display text-4xl text-white drop-shadow sm:text-6xl">
@@ -119,7 +118,7 @@ export default function Overlay() {
       </div>
 
       {/* 3 — COST TO THE GRAM */}
-      <div ref={setRef(3)} className={beatClass(3)}>
+      <div data-beat={3} className={beatClass(3)}>
         <div className="max-w-xl">
           <Kicker>COST INTELLIGENCE</Kicker>
           <h2 className="mt-4 font-display text-4xl text-white drop-shadow sm:text-6xl">
@@ -138,7 +137,7 @@ export default function Overlay() {
       </div>
 
       {/* 4 — COOKING IN THE DARK */}
-      <div ref={setRef(4)} className={beatClass(4)}>
+      <div data-beat={4} className={beatClass(4)}>
         <div className="max-w-2xl">
           <Kicker>THE PROBLEM</Kicker>
           <h2 className="mt-4 font-display text-4xl text-white drop-shadow sm:text-6xl">
@@ -152,7 +151,7 @@ export default function Overlay() {
       </div>
 
       {/* 5 — OUR HOTEL CAN SEE */}
-      <div ref={setRef(5)} className={beatClass(5)}>
+      <div data-beat={5} className={beatClass(5)}>
         <div className="max-w-xl">
           <Kicker>WITH MISE</Kicker>
           <h2 className="mt-4 font-display text-4xl text-white drop-shadow sm:text-6xl">
@@ -177,7 +176,7 @@ export default function Overlay() {
       </div>
 
       {/* 6 — STEP INSIDE */}
-      <div ref={setRef(6)} className={beatClass(6)}>
+      <div data-beat={6} className={beatClass(6)}>
         <div className="max-w-xl">
           <Kicker>WELCOME</Kicker>
           <h2 className="mt-4 font-display text-5xl text-white drop-shadow sm:text-7xl">
@@ -190,7 +189,7 @@ export default function Overlay() {
       </div>
 
       {/* 7 — THE MONEY LOOP */}
-      <div ref={setRef(7)} className={beatClass(7)}>
+      <div data-beat={7} className={beatClass(7)}>
         <div className="max-w-xl">
           <Kicker>THE MONEY LOOP</Kicker>
           <h2 className="mt-4 font-display text-4xl text-white drop-shadow sm:text-6xl">
@@ -216,7 +215,7 @@ export default function Overlay() {
       </div>
 
       {/* 8 — CTA */}
-      <div ref={setRef(8)} className={beatClass(8)}>
+      <div data-beat={8} className={beatClass(8)}>
         <div className="max-w-2xl">
           <Kicker>YOUR TURN</Kicker>
           <h2 className="mt-4 font-display text-5xl leading-[1.05] text-white drop-shadow sm:text-7xl">
