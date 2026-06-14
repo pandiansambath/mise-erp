@@ -533,6 +533,18 @@ export interface MoneyCentre {
   price_alerts: PriceAlert[];
 }
 
+// Food safety (GET/POST /safety/logs)
+export interface SafetyLog {
+  id: string;
+  date: string;
+  kind: string; // TEMP | CHECK
+  label: string;
+  reading: string | null;
+  status: string; // OK | FAIL | DONE
+  notes: string | null;
+  created_at: string;
+}
+
 // GET /recipes/allergen-matrix — per-dish allergens (Natasha's Law)
 export interface AllergenRow {
   recipe_id: string;
