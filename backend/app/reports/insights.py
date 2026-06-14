@@ -272,6 +272,21 @@ async def money_centre(
     dishes = await dish_margins(db, hotel_id)
     alerts = await price_alerts(db, hotel_id)
     waste = await waste_cost(db, hotel_id, start, today)
+    menu = await menu_engineering(db, hotel_id, start, today)
+
+    # Food-cost variance: the menu's IDEAL food cost % (theoretical, from dishes sold ×
+    # recipe cost) vs the ACTUAL from the books (variable food expenses ÷ net sales).
+    # The gap is the money leaking to waste / over-portioning / theft / mis-pricing.
+    ideal_pct = menu["theoretical_food_cost_pct"]
+    actual_pct = pnl["food_cost_pct"]
+    food_cost_variance = {
+        "has_data": menu["has_data"],
+        "ideal_pct": ideal_pct,
+        "actual_pct": actual_pct,
+        "gap_points": (actual_pct - ideal_pct).quantize(_Q2),
+        "theoretical_cost": menu["theoretical_food_cost"],
+        "actual_cost": pnl["cost_of_sales"],
+    }
 
     # Break-even: fixed costs ÷ contribution-margin ratio (= gross margin ratio).
     fixed = pnl["operating_expenses"]
@@ -296,6 +311,7 @@ async def money_centre(
         "net_margin_pct": pnl["net_margin_pct"],
         "stock_value": stock,
         "waste": waste,
+        "food_cost_variance": food_cost_variance,
         "break_even": {
             "fixed_costs": fixed,
             "contribution_margin_pct": contribution_pct,

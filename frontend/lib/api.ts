@@ -478,6 +478,14 @@ export interface WasteSummary {
   total: string;
   entry_count: number;
 }
+export interface FoodCostVariance {
+  has_data: boolean;
+  ideal_pct: string;
+  actual_pct: string;
+  gap_points: string;
+  theoretical_cost: string;
+  actual_cost: string;
+}
 // Menu engineering (GET /reports/menu-engineering) + dish-sales entry (/sales/dishes/{day})
 export interface DishCount {
   recipe_id: string;
@@ -518,6 +526,7 @@ export interface MoneyCentre {
   net_margin_pct: string;
   stock_value: StockValue;
   waste: WasteSummary;
+  food_cost_variance: FoodCostVariance;
   break_even: BreakEven;
   dish_margins: DishMargins;
   price_alerts: PriceAlert[];

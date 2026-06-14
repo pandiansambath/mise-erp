@@ -120,6 +120,7 @@ async def test_money_centre_payload_validates(db, hotel):
     assert model.price_alerts == []
     assert model.waste.total == Decimal("0.00")
     assert model.waste.entry_count == 0
+    assert model.food_cost_variance.has_data is False  # no dish sales yet
 
 
 @pytest.mark.asyncio

@@ -300,6 +300,56 @@ export default function MoneyPage() {
         )}
       </Card>
 
+      {/* Food-cost variance — ideal (menu) vs actual (books) */}
+      {(() => {
+        const fcv = data.food_cost_variance;
+        const gap = parseFloat(fcv.gap_points);
+        const gapTone = gap <= 2 ? "text-brand-400" : gap <= 5 ? "text-amber-400" : "text-rose-400";
+        const note =
+          gap < 0
+            ? "Actual is below your menu's ideal — you may be running down existing stock, or dish-sales counts are incomplete for the period."
+            : gap <= 2
+              ? "✅ Tight — actual food cost closely matches what your menu implies."
+              : gap <= 5
+                ? "⚠ A few points of leak — check portion sizes and waste."
+                : "🔴 Big leak — well above ideal. Likely over-portioning, waste, theft, or under-priced dishes.";
+        return (
+          <Card className="mt-6">
+            <h3 className="font-semibold text-fg">Food-cost variance — ideal vs actual</h3>
+            <p className="text-xs text-fg-faint">
+              What your menu <i>should</i> cost (dishes sold × recipe) vs what your books <i>actually</i> show
+              (food expenses ÷ sales).
+            </p>
+            {!fcv.has_data ? (
+              <p className="mt-3 rounded-lg bg-glass/5 px-3 py-3 text-sm text-fg-soft">
+                Record <b>dishes sold</b> (Menu engineering, below) to unlock this — the gap is the single
+                clearest sign of money leaking to waste, over-portioning or theft.
+              </p>
+            ) : (
+              <>
+                <div className="mt-3 grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-fg-faint">Ideal (menu)</p>
+                    <p className="mt-1 text-2xl font-semibold text-fg">{fcv.ideal_pct}%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-fg-faint">Actual (books)</p>
+                    <p className="mt-1 text-2xl font-semibold text-fg">{fcv.actual_pct}%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-fg-faint">Gap</p>
+                    <p className={`mt-1 text-2xl font-semibold ${gapTone}`}>
+                      {gap >= 0 ? "+" : ""}{fcv.gap_points} pts
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-fg-soft">{note}</p>
+              </>
+            )}
+          </Card>
+        );
+      })()}
+
       {/* Waste — a pure profit leak */}
       <Card className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div>

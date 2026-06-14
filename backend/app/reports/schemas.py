@@ -85,6 +85,15 @@ class WasteSummary(BaseModel):
     entry_count: int
 
 
+class FoodCostVariance(BaseModel):
+    has_data: bool
+    ideal_pct: Decimal  # theoretical food cost % (dishes sold × recipe cost ÷ revenue)
+    actual_pct: Decimal  # actual food cost % (variable food expenses ÷ net sales)
+    gap_points: Decimal  # actual − ideal (percentage points; +ve = leaking)
+    theoretical_cost: Decimal
+    actual_cost: Decimal
+
+
 class BreakEven(BaseModel):
     fixed_costs: Decimal
     contribution_margin_pct: Decimal
@@ -133,6 +142,7 @@ class MoneyCentre(BaseModel):
     net_margin_pct: Decimal
     stock_value: StockValue
     waste: WasteSummary
+    food_cost_variance: FoodCostVariance
     break_even: BreakEven
     dish_margins: DishMargins
     price_alerts: list[PriceAlert]
