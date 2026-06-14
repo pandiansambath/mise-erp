@@ -19,7 +19,7 @@ def _supplier(item, suppliers: dict | None) -> str:
     chosen = (suppliers or {}).get(item.id)
     if not chosen:
         return ""
-    name, is_chosen = chosen
+    name, is_chosen = chosen[0], chosen[1]
     return f"{'★ ' if is_chosen else ''}{name}"
 
 

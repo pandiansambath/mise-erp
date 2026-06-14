@@ -149,6 +149,7 @@ export interface Item {
   vendor_count?: number; // active vendors pricing this item (0 = not orderable yet)
   best_vendor?: string | null; // chosen (★) vendor, else cheapest provisional (null = no vendor)
   best_vendor_chosen?: boolean; // true only when a supplier was actually picked (★ preferred)
+  best_vendor_price?: string | null; // that vendor's price for this item
 }
 
 export interface Vendor {

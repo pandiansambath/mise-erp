@@ -8,6 +8,7 @@
 // single-select mode — Price Comparison.
 import { useMemo, useState, type ReactNode } from "react";
 import type { Item } from "@/lib/api";
+import { useCurrency } from "@/lib/currency";
 
 export type PickedLine = { item_id: string; qty: string };
 
@@ -280,7 +281,7 @@ export function ItemPicker({
               >
                 ✓
               </span>
-              <span className="block pr-6 text-sm font-medium text-fg">{it.name}</span>
+              <span className="block pr-8 text-sm font-medium leading-snug text-fg">{it.name}</span>
               <span className={`mt-1.5 block text-xs ${st.cls}`}>
                 {st.dot} {st.label}
               </span>
@@ -347,6 +348,7 @@ export function ItemPickerSingle({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const { format } = useCurrency();
   const [tab, setTab] = useState<string>("ALL");
   const [q, setQ] = useState("");
 
@@ -442,7 +444,7 @@ export function ItemPickerSingle({
               >
                 ✓
               </span>
-              <span className="block pr-6 text-sm font-medium text-fg">{it.name}</span>
+              <span className="block pr-8 text-sm font-medium leading-snug text-fg">{it.name}</span>
               <span className={`mt-1.5 block text-xs ${st.cls}`}>
                 {st.dot} {st.label}
               </span>
@@ -450,11 +452,13 @@ export function ItemPickerSingle({
                 have {fmtQty(it.current_stock, it.unit)}
               </span>
               {it.best_vendor ? (
-                it.best_vendor_chosen ? (
-                  <span className="mt-1 block truncate text-xs text-brand-300">★ {it.best_vendor}</span>
-                ) : (
-                  <span className="mt-1 block truncate text-xs text-amber-300">{it.best_vendor} · cheapest</span>
-                )
+                <span
+                  className={`mt-1 block truncate text-xs ${it.best_vendor_chosen ? "text-brand-300" : "text-amber-300"}`}
+                >
+                  {it.best_vendor_chosen ? "★ " : ""}
+                  {it.best_vendor}
+                  {it.best_vendor_price ? ` · ${format(it.best_vendor_price)}` : ""}
+                </span>
               ) : (
                 <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>
               )}

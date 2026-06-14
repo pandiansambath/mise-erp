@@ -47,6 +47,7 @@ class ItemOut(BaseModel):
     best_vendor: str | None = None
     # True only when a supplier was actually picked (★ preferred), not a cheapest fallback
     best_vendor_chosen: bool = False
+    best_vendor_price: Decimal | None = None  # that vendor's price for this item
 
 
 class StockMovementCreate(BaseModel):

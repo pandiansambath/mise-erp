@@ -60,7 +60,7 @@ async def list_items(
         row.vendor_count = counts.get(i.id, 0)
         chosen = best.get(i.id)
         if chosen:
-            row.best_vendor, row.best_vendor_chosen = chosen
+            row.best_vendor, row.best_vendor_chosen, row.best_vendor_price = chosen
         out.append(row)
     return out
 
