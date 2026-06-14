@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     aws_region: str = "eu-west-2"
     max_upload_mb: int = 10
 
+    # Email alerts (optional). Set RESEND_API_KEY to activate; otherwise alerts are
+    # logged and no-op'd, so the app runs fine without a provider configured.
+    resend_api_key: str = ""
+    email_from: str = "Mise <alerts@mise.local>"
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

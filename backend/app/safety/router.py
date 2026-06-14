@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import notify
 from app.core.database import get_db
 from app.safety import service
 from app.safety.schemas import SafetyLogCreate, SafetyLogOut
@@ -30,6 +31,15 @@ async def create_log(
         on=payload.date,
         logged_by=user.id,
     )
+    # Alert owners/managers on an out-of-range temperature (no-ops without a provider key).
+    if payload.kind == "TEMP" and payload.status == "FAIL":
+        await notify.email_hotel_admins(
+            db,
+            user.hotel_id,
+            f"⚠ Temperature alert — {payload.label}",
+            f"{payload.label} read {payload.reading}°C, outside the safe range. "
+            f"Logged by {user.email}. Please check the appliance.",
+        )
     return SafetyLogOut.model_validate(log)
 
 
