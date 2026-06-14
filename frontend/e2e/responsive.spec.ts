@@ -135,6 +135,41 @@ test("purchasing page fits the viewport", async ({ page }) => {
   await assertNoHorizontalOverflow(page);
 });
 
+test("money page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/money");
+  await expect(page.getByRole("heading", { name: "Money", exact: true })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("stock-take page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/stock-take");
+  await expect(page.getByRole("heading", { name: "Stock-take" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("allergens page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/allergens");
+  await expect(page.getByRole("heading", { name: "Allergens" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("food-safety page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/food-safety");
+  await expect(page.getByRole("heading", { name: "Food safety" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
+test("rota page fits the viewport", async ({ page }) => {
+  await login(page);
+  await page.goto("/rota");
+  await expect(page.getByRole("heading", { name: "Rota" })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
+
 test("confirmation dialog gates a destructive action", async ({ page }) => {
   // Use a unique future date per viewport so parallel workers don't share rows.
   const byProject: Record<string, string> = {
