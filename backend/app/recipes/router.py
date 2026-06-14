@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.inventory.service import get_item
 from app.recipes import service
 from app.recipes.schemas import (
+    AllergenRow,
     IngredientOut,
     IngredientUpsert,
     RecipeCostBreakdown,
@@ -46,6 +47,17 @@ async def list_recipes(
         db, user.hotel_id, active_only=not include_inactive
     )
     return [RecipeOut.model_validate(r) for r in recipes]
+
+
+# Defined before /{recipe_id} so the literal path isn't captured as a recipe id.
+@router.get("/allergen-matrix", response_model=list[AllergenRow])
+async def allergen_matrix(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:read")),
+) -> list[AllergenRow]:
+    """Per-dish allergen matrix (Natasha's Law) — allergens derived from ingredients."""
+    rows = await service.allergen_matrix(db, user.hotel_id)
+    return [AllergenRow.model_validate(r) for r in rows]
 
 
 @router.get("/{recipe_id}", response_model=RecipeOut)

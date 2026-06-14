@@ -42,6 +42,8 @@ class Item(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     category: Mapped[str | None] = mapped_column(String(60))
     unit: Mapped[str] = mapped_column(String(20), nullable=False)  # kg, litre, piece, box, bag
+    # Comma-separated allergen codes (Natasha's Law). NULL = not reviewed; "" = none.
+    allergens: Mapped[str | None] = mapped_column(String(200))
     current_stock: Mapped[Decimal] = mapped_column(
         Numeric(12, 3), nullable=False, default=Decimal("0")
     )

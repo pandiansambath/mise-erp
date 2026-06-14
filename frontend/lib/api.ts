@@ -150,6 +150,7 @@ export interface Item {
   best_vendor?: string | null; // chosen (★) vendor, else cheapest provisional (null = no vendor)
   best_vendor_chosen?: boolean; // true only when a supplier was actually picked (★ preferred)
   best_vendor_price?: string | null; // that vendor's price for this item
+  allergens?: string | null; // CSV of allergen codes; null = not reviewed, "" = none
 }
 
 export interface Vendor {
@@ -530,6 +531,14 @@ export interface MoneyCentre {
   break_even: BreakEven;
   dish_margins: DishMargins;
   price_alerts: PriceAlert[];
+}
+
+// GET /recipes/allergen-matrix — per-dish allergens (Natasha's Law)
+export interface AllergenRow {
+  recipe_id: string;
+  name: string;
+  allergens: string[];
+  unreviewed: string[];
 }
 
 // GET /reports/price-history/{item_id} — what you actually paid over time

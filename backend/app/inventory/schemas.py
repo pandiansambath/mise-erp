@@ -27,6 +27,7 @@ class ItemUpdate(BaseModel):
     max_stock_level: Decimal | None = Field(default=None, ge=0)
     cost_price: Decimal | None = Field(default=None, ge=0)
     is_active: bool | None = None
+    allergens: str | None = Field(default=None, max_length=200)  # CSV of codes; "" = reviewed none
 
 
 class ItemOut(BaseModel):
@@ -42,6 +43,7 @@ class ItemOut(BaseModel):
     cost_price: Decimal | None
     average_cost: Decimal
     is_active: bool
+    allergens: str | None = None  # CSV of allergen codes; None = not reviewed, "" = none
     vendor_count: int = 0  # active vendors pricing this item (0 = not orderable yet)
     # chosen (★) vendor name, else cheapest provisional (None = no vendor sells it)
     best_vendor: str | None = None

@@ -207,3 +207,38 @@ async def calculate_recipe_cost(
         "has_missing_prices": has_missing,
         "ingredients": breakdown,
     }
+
+
+async def allergen_matrix(db: AsyncSession, hotel_id: uuid.UUID) -> list[dict]:
+    """Per-dish allergens (Natasha's Law): the union of each active recipe's
+    ingredient allergens, plus any ingredients not yet reviewed (allergens=NULL)."""
+    items = {
+        i.id: i
+        for i in (await db.execute(select(Item).where(Item.hotel_id == hotel_id))).scalars()
+    }
+    recipes = await list_recipes(db, hotel_id)
+    out: list[dict] = []
+    for r in recipes:
+        ings = await list_ingredients(db, r.id)
+        allergens: set[str] = set()
+        unreviewed: list[str] = []
+        for ing in ings:
+            item = items.get(ing.item_id)
+            if item is None:
+                continue
+            if item.allergens is None:
+                unreviewed.append(item.name)  # not yet reviewed
+            else:
+                for code in item.allergens.split(","):
+                    code = code.strip()
+                    if code:
+                        allergens.add(code)
+        out.append(
+            {
+                "recipe_id": r.id,
+                "name": r.name,
+                "allergens": sorted(allergens),
+                "unreviewed": unreviewed,
+            }
+        )
+    return out

@@ -7,6 +7,7 @@ import { api, ApiError, downloadFile, type Item, type ItemSuppliers, type Vendor
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
+import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { useConfirm } from "@/components/confirm";
 import { useCurrency } from "@/lib/currency";
 
@@ -31,7 +32,7 @@ function statusOf(item: Item): "ok" | "low" | "out" {
   return "ok";
 }
 
-const EMPTY = { name: "", category: "", unit: "kg", min: "" };
+const EMPTY = { name: "", category: "", unit: "kg", min: "", allergens: "" };
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -53,6 +54,7 @@ export default function InventoryPage() {
   const [addVendor, setAddVendor] = useState("");
   // item_id -> { vendor_id -> price } (so the add form can show the chosen vendor's price)
   const [suppliers, setSuppliers] = useState<Record<string, Record<string, string>>>({});
+  const [allergensTouched, setAllergensTouched] = useState(false);
   const { format } = useCurrency();
 
   function load() {
@@ -101,7 +103,9 @@ export default function InventoryPage() {
       category: item.category ?? "",
       unit: item.unit,
       min: item.min_stock_level ?? "",
+      allergens: item.allergens ?? "",
     });
+    setAllergensTouched(false);
     setError(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -110,19 +114,31 @@ export default function InventoryPage() {
     setEditingId(null);
     setForm(EMPTY);
     setAddVendor("");
+    setAllergensTouched(false);
     setError(null);
+  }
+
+  function toggleAllergen(code: string) {
+    const set = new Set(parseAllergens(form.allergens));
+    if (set.has(code)) set.delete(code);
+    else set.add(code);
+    setForm({ ...form, allergens: [...set].join(",") });
+    setAllergensTouched(true);
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const payload = {
+    const payload: Record<string, unknown> = {
       name: form.name,
       unit: form.unit,
       category: form.category || null,
       min_stock_level: form.min || null,
     };
+    // Only write allergens when the user actually touched them (preserves the
+    // "not reviewed" state for items edited for other reasons).
+    if (editingId && allergensTouched) payload.allergens = form.allergens;
     try {
       if (editingId) {
         await api.patch<Item>(`/inventory/items/${editingId}`, payload);
@@ -315,6 +331,40 @@ export default function InventoryPage() {
                     </span>
                   ))}
               </div>
+            </div>
+          )}
+
+          {editingId && (
+            <div className="rounded-xl border border-line bg-paper-2/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                Allergens (Natasha&apos;s Law)
+              </p>
+              <p className="mb-2 text-xs text-fg-faint">
+                Tag what this ingredient contains — every dish that uses it inherits these
+                automatically on the Allergens sheet.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {ALLERGENS.map((a) => {
+                  const on = parseAllergens(form.allergens).includes(a.code);
+                  return (
+                    <button
+                      key={a.code}
+                      type="button"
+                      onClick={() => toggleAllergen(a.code)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                        on
+                          ? "bg-rose-500 text-white shadow-lg shadow-rose-600/20"
+                          : "border border-line-2 text-fg-soft hover:bg-glass/5"
+                      }`}
+                    >
+                      {a.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-fg-faint">
+                None selected + saved = &ldquo;contains none&rdquo; (marks it reviewed).
+              </p>
             </div>
           )}
 

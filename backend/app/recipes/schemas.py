@@ -33,6 +33,13 @@ class RecipeOut(BaseModel):
     is_active: bool
 
 
+class AllergenRow(BaseModel):
+    recipe_id: uuid.UUID
+    name: str
+    allergens: list[str]  # codes present across the dish's ingredients
+    unreviewed: list[str]  # ingredient names with no allergen info yet
+
+
 class IngredientUpsert(BaseModel):
     item_id: uuid.UUID
     quantity: Decimal = Field(gt=0)

@@ -219,3 +219,32 @@ async def test_archive_and_reactivate_recipe(client, make_user, auth_header):
         await client.patch(f"/api/recipes/{rid}", headers=h, json={"is_active": True})
     ).status_code == 200
     assert any(r["id"] == rid for r in (await client.get("/api/recipes", headers=h)).json())
+
+
+@pytest.mark.asyncio
+async def test_allergen_matrix(client, make_user, auth_header):
+    admin = await make_user("admin@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    milk = (
+        await client.post("/api/inventory/items", headers=h, json={"name": "Milk", "unit": "litre"})
+    ).json()["id"]
+    rice = (
+        await client.post("/api/inventory/items", headers=h, json={"name": "Rice", "unit": "kg"})
+    ).json()["id"]
+    # Milk is reviewed (contains milk + gluten); Rice is left un-reviewed (allergens NULL)
+    await client.patch(f"/api/inventory/items/{milk}", headers=h, json={"allergens": "milk,gluten"})
+
+    rid = (
+        await client.post("/api/recipes", headers=h, json={"name": "Kheer", "servings_default": 1})
+    ).json()["id"]
+    for item_id, unit in ((milk, "litre"), (rice, "kg")):
+        await client.post(
+            f"/api/recipes/{rid}/ingredients",
+            headers=h,
+            json={"item_id": item_id, "quantity": "1", "unit": unit},
+        )
+
+    matrix = (await client.get("/api/recipes/allergen-matrix", headers=h)).json()
+    row = next(r for r in matrix if r["recipe_id"] == rid)
+    assert sorted(row["allergens"]) == ["gluten", "milk"]
+    assert "Rice" in row["unreviewed"]
