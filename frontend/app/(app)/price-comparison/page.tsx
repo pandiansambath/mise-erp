@@ -1,12 +1,54 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type Item, type PriceComparison, type Vendor } from "@/lib/api";
+import { api, ApiError, type Item, type PriceComparison, type PricePoint, type Vendor } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+
+/** Hand-rolled bar chart of what you actually paid over time (no chart lib). */
+function PriceHistoryChart({ points }: { points: PricePoint[] }) {
+  const { format } = useCurrency();
+  if (points.length < 2) {
+    return (
+      <p className="text-sm text-fg-faint">
+        Not enough order history yet — prices you pay on Purchasing will plot here.
+      </p>
+    );
+  }
+  const prices = points.map((p) => parseFloat(p.price) || 0);
+  const max = Math.max(...prices);
+  const first = prices[0];
+  const last = prices[prices.length - 1];
+  const change = first > 0 ? ((last - first) / first) * 100 : 0;
+  return (
+    <div>
+      <div className="flex items-end gap-1.5" style={{ height: 120 }}>
+        {points.map((p, i) => {
+          const h = max > 0 ? Math.max(4, (prices[i] / max) * 110) : 4;
+          const rising = i > 0 && prices[i] > prices[i - 1];
+          return (
+            <div key={i} className="flex flex-1 flex-col items-center justify-end" title={`${p.date}: ${format(p.price)}${p.vendor_name ? ` · ${p.vendor_name}` : ""}`}>
+              <span className="mb-1 text-[10px] text-fg-faint">{format(p.price)}</span>
+              <div
+                className={`w-full rounded-t ${rising ? "bg-rose-400/70" : "bg-brand-500/70"}`}
+                style={{ height: `${h}px` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-xs text-fg-faint">
+        {points.length} orders · {points[0].date} → {points[points.length - 1].date} ·{" "}
+        <span className={change > 0 ? "text-rose-400" : change < 0 ? "text-brand-400" : ""}>
+          {change > 0 ? "▲" : change < 0 ? "▼" : "→"} {Math.abs(change).toFixed(0)}% overall
+        </span>
+      </p>
+    </div>
+  );
+}
 
 export default function PriceComparisonPage() {
   const { user } = useAuth();
@@ -20,6 +62,7 @@ export default function PriceComparisonPage() {
   const [addVendorId, setAddVendorId] = useState("");
   const [addPrice, setAddPrice] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+  const [history, setHistory] = useState<PricePoint[]>([]);
   const { format } = useCurrency();
 
   async function setPreferred(vendorId: string | null) {
@@ -71,6 +114,7 @@ export default function PriceComparisonPage() {
       .get<PriceComparison>(`/vendors/items/${selected}/price-comparison`)
       .then(setData)
       .finally(() => setLoadingCompare(false));
+    api.get<PricePoint[]>(`/reports/price-history/${selected}`).then(setHistory).catch(() => setHistory([]));
   }, [selected]);
 
   if (loadingItems) return <Spinner />;
@@ -131,6 +175,14 @@ export default function PriceComparisonPage() {
             </div>
             <ItemPickerSingle items={items} value={selected} onChange={setSelected} />
           </div>
+
+          <Card className="mb-5">
+            <h3 className="font-semibold text-fg">Price history — what you&apos;ve paid</h3>
+            <p className="mb-3 text-xs text-fg-faint">
+              From your received purchase orders. Red bars = a rise vs the order before.
+            </p>
+            <PriceHistoryChart points={history} />
+          </Card>
 
           {loadingCompare || !data ? (
             <Spinner />

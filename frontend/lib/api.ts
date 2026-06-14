@@ -523,6 +523,13 @@ export interface MoneyCentre {
   price_alerts: PriceAlert[];
 }
 
+// GET /reports/price-history/{item_id} — what you actually paid over time
+export interface PricePoint {
+  date: string;
+  price: string;
+  vendor_name: string | null;
+}
+
 // ── Audit log (GET /audit) ───────────────────────────────────────────────────
 export interface AuditEvent {
   id: string;

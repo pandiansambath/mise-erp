@@ -163,6 +163,29 @@ async def waste_cost(
     return {"total": _q2(total), "entry_count": count}
 
 
+async def price_history(db: AsyncSession, hotel_id: uuid.UUID, item_id: uuid.UUID) -> list[dict]:
+    """What you actually paid for an item over time (from PO receipts), oldest first —
+    powers the supplier price-history chart so cost-creep is visible."""
+    from app.purchasing.models import POItem, PurchaseOrder
+    from app.vendors.models import Vendor
+
+    rows = await db.execute(
+        select(PurchaseOrder.created_at, POItem.unit_price, Vendor.name)
+        .join(PurchaseOrder, PurchaseOrder.id == POItem.po_id)
+        .join(Vendor, Vendor.id == PurchaseOrder.vendor_id, isouter=True)
+        .where(
+            PurchaseOrder.hotel_id == hotel_id,
+            POItem.item_id == item_id,
+            POItem.unit_price > 0,
+        )
+        .order_by(PurchaseOrder.created_at)
+    )
+    return [
+        {"date": created.date(), "price": price, "vendor_name": name}
+        for created, price, name in rows.all()
+    ]
+
+
 async def menu_engineering(
     db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
 ) -> dict:

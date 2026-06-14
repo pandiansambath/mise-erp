@@ -95,6 +95,12 @@ class BreakEven(BaseModel):
     days_elapsed: int
 
 
+class PricePoint(BaseModel):
+    date: date_type
+    price: Decimal
+    vendor_name: str | None
+
+
 class MenuDish(BaseModel):
     recipe_id: uuid.UUID
     name: str

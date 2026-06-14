@@ -1,4 +1,5 @@
 """Reporting endpoints: P&L, dashboard KPIs, and CSV/Excel export. Hotel-scoped."""
+import uuid
 from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -8,7 +9,7 @@ from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
 from app.reports import export, insights, service
-from app.reports.schemas import Dashboard, MenuEngineering, MoneyCentre, PnL
+from app.reports.schemas import Dashboard, MenuEngineering, MoneyCentre, PnL, PricePoint
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -44,6 +45,17 @@ async def money_centre(
     leaders/laggards and vendor price-rise alerts. Defaults to month-to-date."""
     data = await insights.money_centre(db, user.hotel_id, date_from, date_to)
     return MoneyCentre.model_validate(data)
+
+
+@router.get("/price-history/{item_id}", response_model=list[PricePoint])
+async def price_history(
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> list[PricePoint]:
+    """What was actually paid for an item over time (PO receipts), oldest first."""
+    rows = await insights.price_history(db, user.hotel_id, item_id)
+    return [PricePoint.model_validate(r) for r in rows]
 
 
 @router.get("/menu-engineering", response_model=MenuEngineering)
