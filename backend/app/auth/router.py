@@ -18,6 +18,7 @@ from app.auth.schemas import (
     UserOut,
     UserUpdate,
 )
+from app.core import notify
 from app.core.database import get_db
 from app.core.security import create_access_token
 from app.hotels.models import Hotel
@@ -71,6 +72,29 @@ async def register_hotel(
         db, payload.email, payload.password, Role.SUPER_ADMIN.value, hotel.id
     )
     await db.refresh(hotel)  # create_user committed; reload before serialising
+    # Welcome email (styled). No-ops without a provider key; on the free Resend tier
+    # it only reaches your own verified address until a sending domain is verified.
+    await notify.send_email(
+        payload.email,
+        f"Welcome to Mise, {hotel.name}! 🎉",
+        f"Your restaurant '{hotel.name}' is set up on Mise. Sign in to start tracking "
+        "every plate and every penny.",
+        html=notify.render_email(
+            heading=f"Welcome aboard, {hotel.name}! 🎉",
+            intro=(
+                "Your account is ready. Mise gives you live food-cost, menu margins, "
+                "stock, purchasing and UK-compliance tools — all in one place. "
+                "Sign in and add your first items to see the money picture light up."
+            ),
+            rows=[
+                ("Restaurant", hotel.name),
+                ("Owner login", payload.email),
+                ("Currency", hotel.base_currency),
+            ],
+            cta_label="Open Mise",
+            cta_url="http://18.133.95.137/login",
+        ),
+    )
     token = create_access_token(subject=str(user.id), role=user.role)
     return TokenResponse(
         access_token=token,

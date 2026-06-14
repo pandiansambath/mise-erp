@@ -215,9 +215,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col border-r border-glass/10 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col overflow-hidden border-r border-glass/10 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <Brand />
-            <NavLinks items={navItems} pathname={pathname} onClick={() => setOpen(false)} />
+            <div className="flex-1 overflow-y-auto overscroll-contain pb-6">
+              <NavLinks items={navItems} pathname={pathname} onClick={() => setOpen(false)} />
+            </div>
           </aside>
         </div>
       )}

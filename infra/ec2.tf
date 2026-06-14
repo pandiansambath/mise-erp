@@ -39,6 +39,8 @@ resource "aws_instance" "app" {
     db_password    = var.db_password
     app_secret_key = var.app_secret_key
     s3_bucket      = aws_s3_bucket.uploads.bucket
+    resend_api_key = var.resend_api_key
+    email_from     = var.email_from
   })
   # Re-run cloud-init (pull new images + restart) whenever the images change.
   user_data_replace_on_change = true

@@ -24,6 +24,8 @@ ignore = ["B008"]  # FastAPI uses function calls (Depends()) in defaults by desi
 "alembic/versions/*" = ["E501"]
 "app/scripts/*" = ["E501"]
 "tests/*" = ["E501"]
+# Inline-styled HTML email template — long style lines are expected.
+"app/core/notify.py" = ["E501"]
 
 [tool.coverage.run]
 source = ["app"]

@@ -33,12 +33,30 @@ async def create_log(
     )
     # Alert owners/managers on an out-of-range temperature (no-ops without a provider key).
     if payload.kind == "TEMP" and payload.status == "FAIL":
+        text = (
+            f"{payload.label} read {payload.reading}°C, outside the safe range. "
+            f"Logged by {user.email}. Please check the appliance."
+        )
         await notify.email_hotel_admins(
             db,
             user.hotel_id,
             f"⚠ Temperature alert — {payload.label}",
-            f"{payload.label} read {payload.reading}°C, outside the safe range. "
-            f"Logged by {user.email}. Please check the appliance.",
+            text,
+            html=notify.render_email(
+                heading="⚠ Temperature out of range",
+                intro=(
+                    "A food-safety temperature reading just failed its safe range. "
+                    "Please check the appliance and take corrective action."
+                ),
+                rows=[
+                    ("Appliance", payload.label),
+                    ("Reading", f"{payload.reading}°C"),
+                    ("Logged by", user.email),
+                ],
+                cta_label="Open Food Safety",
+                cta_url="http://18.133.95.137/food-safety",
+                accent="#e11d48",
+            ),
         )
     return SafetyLogOut.model_validate(log)
 

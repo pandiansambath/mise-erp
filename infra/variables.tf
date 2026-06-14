@@ -18,6 +18,18 @@ variable "app_secret_key" {
   sensitive = true
 }
 
+# Optional email-alert provider (Resend). Empty = alerts log + no-op (app runs fine).
+variable "resend_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "email_from" {
+  type    = string
+  default = "Mise <onboarding@resend.dev>"
+}
+
 # Full ECR image URIs (with tag), supplied by the CI workflow.
 variable "backend_image" {
   type = string
