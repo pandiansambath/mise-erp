@@ -487,3 +487,16 @@ html:has(.mise-app) { background: #04120d; }
 .mise-app[data-mode="light"] select,
 .mise-app[data-mode="light"] textarea { color-scheme: light; }
 html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
+
+/* ── Landing journey (WebGL) ──────────────────────────────────────────────── */
+/* Gently bobbing "scroll" chevron under the hero. */
+@keyframes mise-scroll-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+.mise-scroll-chevron {
+  display: inline-block;
+  font-size: 20px;
+  line-height: 1;
+  animation: mise-scroll-bob 1.6s ease-in-out infinite;
+}
