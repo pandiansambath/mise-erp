@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type DashboardKpis } from "@/lib/api";
+import { api, type DashboardKpis, type PnL } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -13,6 +13,40 @@ interface LowStock {
   name: string;
   current_stock: string;
   min_stock_level: string;
+}
+
+/** One week-over-week metric with a ▲▼ delta coloured by whether the move is good. */
+function WowStat({
+  label,
+  cur,
+  prev,
+  fmt,
+  pct = false,
+  higherBetter = true,
+}: {
+  label: string;
+  cur: string;
+  prev: string;
+  fmt: (v: string) => string;
+  pct?: boolean;
+  higherBetter?: boolean;
+}) {
+  const c = parseFloat(cur) || 0;
+  const p = parseFloat(prev) || 0;
+  const diff = c - p;
+  const pctChange = p !== 0 ? (diff / Math.abs(p)) * 100 : c !== 0 ? 100 : 0;
+  const good = higherBetter ? diff >= 0 : diff <= 0;
+  const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "→";
+  const show = (v: string) => (pct ? `${v}%` : fmt(v));
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-fg-faint">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-fg">{show(cur)}</p>
+      <p className={`text-xs ${diff === 0 ? "text-fg-faint" : good ? "text-brand-400" : "text-rose-400"}`}>
+        {arrow} {Math.abs(pctChange).toFixed(0)}% vs {show(prev)} last week
+      </p>
+    </div>
+  );
 }
 
 const ACTIONS = [
@@ -32,12 +66,28 @@ export default function DashboardPage() {
 
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [low, setLow] = useState<LowStock[]>([]);
+  const [wow, setWow] = useState<{ cur: PnL; prev: PnL } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const jobs: Promise<unknown>[] = [];
-    if (seeFinance)
+    if (seeFinance) {
       jobs.push(api.get<DashboardKpis>("/reports/dashboard").then(setKpis).catch(() => {}));
+      const iso = (d: Date) => d.toISOString().slice(0, 10);
+      const ago = (n: number) => {
+        const x = new Date();
+        x.setDate(x.getDate() - n);
+        return iso(x);
+      };
+      jobs.push(
+        Promise.all([
+          api.get<PnL>(`/reports/pnl?date_from=${ago(6)}&date_to=${iso(new Date())}`),
+          api.get<PnL>(`/reports/pnl?date_from=${ago(13)}&date_to=${ago(7)}`),
+        ])
+          .then(([cur, prev]) => setWow({ cur, prev }))
+          .catch(() => {}),
+      );
+    }
     if (seeInventory)
       jobs.push(api.get<LowStock[]>("/inventory/alerts/low-stock").then(setLow).catch(() => {}));
     Promise.all(jobs).finally(() => setLoading(false));
@@ -73,6 +123,27 @@ export default function DashboardPage() {
             href="/inventory?filter=low"
           />
         </div>
+      )}
+
+      {seeFinance && wow && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-fg">This week vs last week</h3>
+            <span className="text-xs text-fg-faint">rolling 7 days</span>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <WowStat label="Net sales" cur={wow.cur.net_sales} prev={wow.prev.net_sales} fmt={format} />
+            <WowStat label="Net profit" cur={wow.cur.net_profit} prev={wow.prev.net_profit} fmt={format} />
+            <WowStat
+              label="Food cost"
+              cur={wow.cur.food_cost_pct}
+              prev={wow.prev.food_cost_pct}
+              fmt={format}
+              pct
+              higherBetter={false}
+            />
+          </div>
+        </Card>
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
