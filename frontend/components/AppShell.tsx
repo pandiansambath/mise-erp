@@ -22,6 +22,7 @@ const NAV: NavItem[] = [
   { href: "/vendors", label: "Vendors", icon: "🤝", perm: "vendors:read" },
   { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read" },
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
+  { href: "/stock-take", label: "Stock-take", icon: "📋", perm: "inventory:read" },
   { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },
   { href: "/waste", label: "Waste", icon: "🗑️", perm: "inventory:read" },
   { href: "/purchasing", label: "Purchasing", icon: "🛒", perm: "indent:read" },
