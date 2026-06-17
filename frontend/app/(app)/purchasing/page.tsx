@@ -220,6 +220,47 @@ export default function PurchasingPage() {
     }
   }
 
+  async function deleteIndent(id: string) {
+    const ok = await confirm({
+      title: "Delete this indent?",
+      message:
+        "Removes the indent and any draft purchase orders it created. (Blocked if a PO from it was already received.)",
+      confirmText: "Delete indent",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setMsg(null);
+    try {
+      await api.delete(`/purchasing/indents/${id}`);
+      if (openIndent === id) setOpenIndent(null);
+      await load();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not delete indent");
+    }
+  }
+
+  async function revertPo(po: POSummary) {
+    const ok = await confirm({
+      title: `Revert ${po.po_number} to indent?`,
+      message:
+        "Discards this purchase order (and any sibling POs from the same indent) and re-opens the indent so you can edit or regenerate it. Stock isn't affected.",
+      confirmText: "Revert to indent",
+    });
+    if (!ok) return;
+    setMsg(null);
+    try {
+      await api.post(`/purchasing/purchase-orders/${po.id}/revert`);
+      setPoDetail((p) => {
+        const next = { ...p };
+        delete next[po.id];
+        return next;
+      });
+      await load();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not revert purchase order");
+    }
+  }
+
   // One-click: pull every orderable below-min item, topped up to par, into the
   // indent form for review (non-destructive — keeps lines you've already added).
   async function orderAllLow() {
@@ -329,14 +370,25 @@ export default function PurchasingPage() {
                             </li>
                           ))}
                         </ul>
-                        {canApprove && ind.status !== "ORDERED" && (
-                          <button
-                            onClick={() => generate(ind.id)}
-                            className="w-full rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-2 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
-                          >
-                            ✓ Approve &amp; generate purchase orders
-                          </button>
-                        )}
+                        <div className="flex gap-2">
+                          {canApprove && ind.status !== "ORDERED" && (
+                            <button
+                              onClick={() => generate(ind.id)}
+                              className="flex-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-2 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
+                            >
+                              ✓ Approve &amp; generate purchase orders
+                            </button>
+                          )}
+                          {canApprove && (
+                            <button
+                              onClick={() => deleteIndent(ind.id)}
+                              title="Delete this indent"
+                              className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-fg-faint transition hover:bg-rose-400/10 hover:text-rose-300"
+                            >
+                              🗑 Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -410,6 +462,15 @@ export default function PurchasingPage() {
                               className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft transition hover:bg-paper-2"
                             >
                               ✓ Receive into stock
+                            </button>
+                          )}
+                          {canApprove && po.status !== "RECEIVED" && (
+                            <button
+                              onClick={() => revertPo(po)}
+                              title="Send this PO back to its indent (re-opens it to edit/regenerate)"
+                              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-faint transition hover:bg-amber-400/10 hover:text-amber-300"
+                            >
+                              ↩ Revert to indent
                             </button>
                           )}
                         </div>

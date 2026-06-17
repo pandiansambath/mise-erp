@@ -14,7 +14,7 @@ from app.hotels.models import Hotel
 from app.inventory.service import get_item
 from app.purchasing import pdf as pdf_gen
 from app.purchasing import service
-from app.purchasing.models import IndentStatus
+from app.purchasing.models import IndentStatus, POStatus
 from app.purchasing.schemas import (
     GenerateResult,
     IndentCreate,
@@ -105,6 +105,28 @@ async def generate_pos(
     )
 
 
+@router.delete("/indents/{indent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_indent(
+    indent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:write")),
+) -> Response:
+    """Delete an indent (and any draft POs it produced). Blocked once a PO from
+    it has been received — that stock is already in."""
+    indent = await service.get_indent(db, indent_id, user.hotel_id)
+    if indent is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Indent not found")
+    if await service.indent_has_received_po(db, indent.id):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This indent has a received purchase order — its stock is already in, "
+            "so it can't be deleted.",
+        )
+    await service.delete_indent(db, indent)
+    await publish(user.hotel_id, {"type": "purchasing", "action": "indent_deleted"})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ── Supplier options (for the per-line picker in the UI) ─────────────────────
 @router.get("/item-suppliers", response_model=list[ItemSuppliers])
 async def list_item_suppliers(
@@ -176,6 +198,36 @@ async def receive_po(
         entity_type="purchase_order", entity_id=po.id,
     )
     return await _po_out(db, po)
+
+
+@router.post("/purchase-orders/{po_id}/revert", response_model=IndentOut)
+async def revert_po(
+    po_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:approve")),
+) -> IndentOut:
+    """Send a purchase order back to its indent: discards the PO batch and
+    re-opens the indent (APPROVED) so it can be edited/regenerated. Blocked once
+    received."""
+    po = await service.get_po(db, po_id, user.hotel_id)
+    if po is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
+    if po.status == POStatus.RECEIVED.value or (
+        po.indent_id and await service.indent_has_received_po(db, po.indent_id)
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This order has been received — stock has moved, so it can't be reverted to an indent.",
+        )
+    if po.indent_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "This purchase order has no indent to revert to."
+        )
+    indent = await service.revert_po(db, po)
+    await publish(user.hotel_id, {"type": "purchasing", "action": "po_reverted"})
+    if indent is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Indent not found")
+    return await _indent_out(db, indent)
 
 
 @router.get("/purchase-orders/{po_id}/pdf")

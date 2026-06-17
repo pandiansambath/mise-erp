@@ -96,6 +96,57 @@ async def set_indent_status(db: AsyncSession, indent: Indent, status: str) -> In
     return indent
 
 
+async def indent_has_received_po(db: AsyncSession, indent_id: uuid.UUID) -> bool:
+    """True if any PO generated from this indent has already been received (stock
+    moved) — those can't be safely deleted or reverted."""
+    n = (
+        await db.execute(
+            select(func.count(PurchaseOrder.id)).where(
+                PurchaseOrder.indent_id == indent_id,
+                PurchaseOrder.status == POStatus.RECEIVED.value,
+            )
+        )
+    ).scalar_one()
+    return (n or 0) > 0
+
+
+async def delete_indent(db: AsyncSession, indent: Indent) -> None:
+    """Delete an indent + its lines, and any (non-received) POs it produced."""
+    pos = (
+        await db.execute(select(PurchaseOrder).where(PurchaseOrder.indent_id == indent.id))
+    ).scalars().all()
+    for po in pos:
+        await db.execute(POItem.__table__.delete().where(POItem.po_id == po.id))
+        await db.delete(po)
+    await db.execute(IndentItem.__table__.delete().where(IndentItem.indent_id == indent.id))
+    await db.delete(indent)
+    await db.commit()
+
+
+async def revert_po(db: AsyncSession, po: PurchaseOrder) -> Indent | None:
+    """Undo PO generation: delete ALL (non-received) POs of this PO's indent and
+    set the indent back to APPROVED so it can be edited / re-generated. Returns
+    the re-opened indent (or None if the PO had no parent indent)."""
+    indent_id = po.indent_id
+    pos = (
+        [po]
+        if indent_id is None
+        else (
+            await db.execute(select(PurchaseOrder).where(PurchaseOrder.indent_id == indent_id))
+        ).scalars().all()
+    )
+    for p in pos:
+        await db.execute(POItem.__table__.delete().where(POItem.po_id == p.id))
+        await db.delete(p)
+    indent = await db.get(Indent, indent_id) if indent_id is not None else None
+    if indent is not None:
+        indent.status = IndentStatus.APPROVED.value
+    await db.commit()
+    if indent is not None:
+        await db.refresh(indent)
+    return indent
+
+
 # ── Supplier resolution: picked (per line) > preferred > cheapest ────────────
 async def _resolve_supplier(
     db: AsyncSession,
