@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -67,6 +67,10 @@ export default function InventoryPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [breakdown, setBreakdown] = useState<Record<string, PurchaseByVendorRow[]>>({});
   const [bdLoading, setBdLoading] = useState<string | null>(null);
+  // Edit affordance: scroll to + briefly highlight the form when editing starts.
+  const formRef = useRef<HTMLDivElement>(null);
+  const [flash, setFlash] = useState(false);
+  const flashTimer = useRef<number | null>(null);
   const { format } = useCurrency();
 
   function load() {
@@ -119,7 +123,15 @@ export default function InventoryPage() {
     });
     setAllergensTouched(false);
     setError(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Smoothly bring the edit form into view (the real scroll container is
+    // <main>, so window.scrollTo did nothing — scrollIntoView always works) and
+    // pulse it so the click clearly "lands" up top.
+    requestAnimationFrame(() =>
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+    setFlash(true);
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlash(false), 1200);
   }
 
   function cancelEdit() {
@@ -280,7 +292,8 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <Card className="mb-6">
+      <div ref={formRef} className="scroll-mt-4">
+      <Card className={`mb-6 ${flash ? "mise-flash" : ""}`}>
         <p className="mb-3 text-sm font-medium text-fg-soft">
           {editingId ? "Edit item" : "Add a new item"}
         </p>
@@ -422,6 +435,7 @@ export default function InventoryPage() {
         </form>
         {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
       </Card>
+      </div>
 
       {loading ? (
         <Spinner />
@@ -634,14 +648,23 @@ export default function InventoryPage() {
                                       {rows.map((r, idx) => (
                                         <div
                                           key={idx}
-                                          className="flex items-center justify-between rounded-xl border border-line bg-paper-3 px-3.5 py-2.5"
+                                          role={r.vendor ? "button" : undefined}
+                                          tabIndex={r.vendor ? 0 : undefined}
+                                          onClick={r.vendor && r.vendor_id ? () => router.push(`/vendors?focus=${r.vendor_id}`) : undefined}
+                                          title={r.vendor ? `View ${r.vendor} on the Vendors page` : undefined}
+                                          className={`flex items-center justify-between rounded-xl border border-line bg-paper-3 px-3.5 py-2.5 ${
+                                            r.vendor ? "cursor-pointer transition hover:border-brand-400/60 hover:bg-paper-2" : ""
+                                          }`}
                                         >
                                           <div className="flex min-w-0 items-center gap-3">
                                             <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500/15 text-base text-brand-300">🏷</span>
                                             <div className="min-w-0">
-                                              <p className="truncate font-medium text-fg">{r.vendor ?? "No supplier recorded"}</p>
+                                              <p className="truncate font-medium text-fg">
+                                                {r.vendor ?? "No supplier recorded"}
+                                                {r.vendor && <span aria-hidden className="ml-1 text-brand-300">›</span>}
+                                              </p>
                                               <p className="text-xs text-fg-faint">
-                                                {new Date(r.received_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                                                {new Date(r.received_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                                               </p>
                                             </div>
                                           </div>

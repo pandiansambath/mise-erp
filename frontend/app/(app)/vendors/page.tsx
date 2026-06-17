@@ -58,7 +58,13 @@ export default function VendorsPage() {
   }
 
   useEffect(() => {
-    load().finally(() => setLoading(false));
+    load().finally(() => {
+      setLoading(false);
+      // Deep link from Inventory's "purchases by supplier": /vendors?focus=<id>
+      // opens that vendor straight away.
+      const focus = new URLSearchParams(window.location.search).get("focus");
+      if (focus) selectVendor(focus);
+    });
   }, []);
 
   function selectVendor(id: string) {

@@ -510,3 +510,10 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   to { opacity: 1; }
 }
 .mise-panel-in { animation: mise-panel-in 0.2s ease-out both; }
+
+/* Brief brand-ring pulse to confirm a click "landed" (e.g. Edit → form). */
+@keyframes mise-flash {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand-500) 55%, transparent); }
+  100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-brand-500) 0%, transparent); }
+}
+.mise-flash { animation: mise-flash 1.1s ease-out; }
