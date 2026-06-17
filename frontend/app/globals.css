@@ -502,10 +502,11 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 }
 
 /* ── Expandable detail panels (inventory rows, etc.) ──────────────────────── */
-/* A clean, quick fade — opacity only (no transform), so it never looks blurry
-   mid-animation and every card is sharp the instant it appears. */
-@keyframes mise-reveal {
+/* A clean, quick fade — opacity only (no transform/filter). NOTE: must NOT be
+   named `mise-reveal` (that scroll-reveal class sets filter: blur(5px) until an
+   IntersectionObserver adds .is-visible — a non-Reveal element stays blurred). */
+@keyframes mise-panel-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.mise-reveal { animation: mise-reveal 0.2s ease-out both; }
+.mise-panel-in { animation: mise-panel-in 0.2s ease-out both; }

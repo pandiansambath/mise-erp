@@ -615,7 +615,7 @@ export default function InventoryPage() {
                         {isOpen && (
                           <tr className="border-b border-line bg-paper-2">
                             <td colSpan={6} className="px-5 pb-4 pt-1">
-                              <div className="mise-reveal rounded-2xl border border-line bg-paper-2 p-4">
+                              <div className="mise-panel-in rounded-2xl border border-line bg-paper-2 p-4">
                                 <div className="flex items-center justify-between">
                                   <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
                                     🏷 Purchases by supplier
