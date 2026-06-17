@@ -502,14 +502,10 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 }
 
 /* ── Expandable detail panels (inventory rows, etc.) ──────────────────────── */
+/* A clean, quick fade — opacity only (no transform), so it never looks blurry
+   mid-animation and every card is sharp the instant it appears. */
 @keyframes mise-reveal {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.mise-reveal { animation: mise-reveal 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
-/* staggered children (supplier cards fade in one after another) */
-.mise-reveal-stagger > * { animation: mise-reveal 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.mise-reveal-stagger > *:nth-child(2) { animation-delay: 0.05s; }
-.mise-reveal-stagger > *:nth-child(3) { animation-delay: 0.1s; }
-.mise-reveal-stagger > *:nth-child(4) { animation-delay: 0.15s; }
-.mise-reveal-stagger > *:nth-child(n + 5) { animation-delay: 0.2s; }
+.mise-reveal { animation: mise-reveal 0.2s ease-out both; }

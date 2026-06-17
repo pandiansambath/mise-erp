@@ -630,7 +630,7 @@ export default function InventoryPage() {
                                   <p className="mt-3 text-xs text-fg-faint">Loading…</p>
                                 ) : rows && rows.length > 0 ? (
                                   <>
-                                    <div className="mise-reveal-stagger mt-3 grid gap-2 sm:grid-cols-2">
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                       {rows.map((r, idx) => (
                                         <div
                                           key={idx}
