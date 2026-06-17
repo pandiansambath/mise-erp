@@ -9,6 +9,7 @@ import {
   type ExpenseSummary,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -142,13 +143,15 @@ export default function ExpensesPage() {
               <form onSubmit={addExpense} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-fg-soft">Category</label>
-                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} · {c.kind === "FIXED" ? "Fixed" : "Variable"}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    value={categoryId}
+                    onChange={setCategoryId}
+                    className="mt-1"
+                    options={categories.map((c) => ({
+                      value: c.id,
+                      label: `${c.name} · ${c.kind === "FIXED" ? "Fixed" : "Variable"}`,
+                    }))}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Date</label>
@@ -156,11 +159,12 @@ export default function ExpensesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Payment</label>
-                  <select value={method} onChange={(e) => setMethod(e.target.value)} className={inputCls}>
-                    {METHODS.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
+                  <Select
+                    value={method}
+                    onChange={setMethod}
+                    className="mt-1"
+                    options={METHODS.map((m) => ({ value: m, label: m }))}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Amount (incl VAT)</label>

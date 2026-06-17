@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -200,17 +201,15 @@ export default function SalesPage() {
               <form onSubmit={addLine} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-fg-soft">Channel</label>
-                  <select
+                  <Select
                     value={channelId}
-                    onChange={(e) => setChannelId(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
-                  >
-                    {channels.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.commission_pct}%)
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setChannelId}
+                    className="mt-1"
+                    options={channels.map((c) => ({
+                      value: c.id,
+                      label: `${c.name} (${c.commission_pct}%)`,
+                    }))}
+                  />
                 </div>
                 <div className="w-full sm:w-32">
                   <label className="block text-sm font-medium text-fg-soft">Gross</label>
@@ -225,17 +224,12 @@ export default function SalesPage() {
                 </div>
                 <div className="w-full sm:w-32">
                   <label className="block text-sm font-medium text-fg-soft">Method</label>
-                  <select
+                  <Select
                     value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
-                  >
-                    {METHODS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setMethod}
+                    className="mt-1"
+                    options={METHODS.map((m) => ({ value: m, label: m }))}
+                  />
                 </div>
                 <button
                   type="submit"

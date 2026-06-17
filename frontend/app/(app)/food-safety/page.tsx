@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type SafetyLog } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 
@@ -144,15 +145,12 @@ export default function FoodSafetyPage() {
                 className="w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500"
               />
               <div className="flex flex-wrap items-center gap-2">
-                <select
+                <Select
                   value={ttype}
-                  onChange={(e) => setTtype(e.target.value)}
-                  className="rounded-lg border border-line-2 bg-paper px-3 py-2 text-sm text-fg-soft outline-none focus:border-brand-500"
-                >
-                  {TEMP_TYPES.map((t) => (
-                    <option key={t.key} value={t.key}>{t.label}</option>
-                  ))}
-                </select>
+                  onChange={setTtype}
+                  className="w-48"
+                  options={TEMP_TYPES.map((t) => ({ value: t.key, label: t.label }))}
+                />
                 <input
                   value={temp}
                   onChange={(e) => setTemp(e.target.value)}

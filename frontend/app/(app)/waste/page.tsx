@@ -10,6 +10,7 @@ import {
   type WasteRow,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { fmtQty, ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -105,17 +106,12 @@ export default function WastePage() {
               </label>
               <label className="block">
                 <span className="block text-xs font-medium text-fg-faint">Reason</span>
-                <select
+                <Select
                   value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="mt-1 rounded-lg border border-line-2 bg-paper px-3 py-2 text-sm text-fg-soft outline-none focus:border-brand-500"
-                >
-                  {REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setReason}
+                  className="mt-1"
+                  options={REASONS.map((r) => ({ value: r, label: r }))}
+                />
               </label>
               <button
                 type="submit"

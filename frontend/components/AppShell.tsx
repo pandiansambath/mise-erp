@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
+import { Select } from "@/components/Select";
 import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
 
 // `hideIfPerm`: hide the item when the user ALSO has this permission — used so
@@ -44,21 +45,15 @@ const NAV: NavItem[] = [
 function CurrencySwitcher() {
   const { currency, setCurrency } = useCurrency();
   return (
-    <label className="flex items-center gap-1.5">
-      <span className="sr-only">Display currency</span>
-      <select
-        aria-label="Display currency"
-        value={currency}
-        onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-        className="rounded-lg border border-glass/15 bg-glass/5 px-2 py-1.5 text-sm text-fg-soft outline-none transition focus:border-brand-500"
-      >
-        {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
-          <option key={code} value={code}>
-            {CURRENCIES[code].symbol} {code}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      value={currency}
+      onChange={(v) => setCurrency(v as CurrencyCode)}
+      className="w-28"
+      options={(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => ({
+        value: code,
+        label: `${CURRENCIES[code].symbol} ${code}`,
+      }))}
+    />
   );
 }
 

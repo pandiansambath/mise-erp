@@ -345,6 +345,19 @@ html:has(.mise-app) { background: #04120d; }
   color: var(--color-fg);
 }
 
+/* Polish every native <select>: drop the OS arrow for a consistent custom
+   chevron + room for it. Only touches the arrow/appearance (not colours), so
+   each select keeps whatever bg/border utility classes it already has. */
+.mise-app select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 0.7rem;
+  padding-right: 1.9rem;
+}
+
 /* Micro-interactions: every button in the app gets a soft transition + press. */
 .mise-app button {
   transition:
