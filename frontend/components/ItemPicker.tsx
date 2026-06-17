@@ -34,14 +34,22 @@ export function categoryEmoji(name: string): string {
   return "🧺";
 }
 
-type StockState = { dot: string; label: string; cls: string };
+type StockState = { dot: ReactNode; label: string; cls: string };
+
+/** A clean status dot (replaces the cartoonish 🟢🟡🔴 emoji) — a small solid
+    dot with a soft colour halo, used everywhere stock status is shown. */
+function statusDot(cls: string): ReactNode {
+  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full align-middle ${cls}`} />;
+}
 
 export function stockState(it: Item): StockState {
   const qty = parseFloat(it.current_stock || "0");
   const min = parseFloat(it.min_stock_level || "0");
-  if (qty <= 0) return { dot: "🔴", label: "out of stock", cls: "text-rose-300" };
-  if (min > 0 && qty <= min) return { dot: "🟡", label: "running low", cls: "text-amber-200" };
-  return { dot: "🟢", label: "in stock", cls: "text-brand-300" };
+  if (qty <= 0)
+    return { dot: statusDot("bg-rose-400 ring-2 ring-rose-400/20"), label: "out of stock", cls: "text-rose-300" };
+  if (min > 0 && qty <= min)
+    return { dot: statusDot("bg-amber-300 ring-2 ring-amber-300/20"), label: "running low", cls: "text-amber-200" };
+  return { dot: statusDot("bg-brand-400 ring-2 ring-brand-400/20"), label: "in stock", cls: "text-brand-300" };
 }
 
 const OTHER = "Other";

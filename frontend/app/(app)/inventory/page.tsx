@@ -256,11 +256,11 @@ export default function InventoryPage() {
   const addVendorPrice =
     matchedItem && addVendor ? suppliers[matchedItem.id]?.[addVendor] : undefined;
 
-  const statusChips: { key: StatusFilter; label: string }[] = [
+  const statusChips: { key: StatusFilter; label: string; dot?: string }[] = [
     { key: "all", label: `🧺 All (${counts.all})` },
-    { key: "ok", label: `🟢 In stock (${counts.ok})` },
-    { key: "low", label: `🟡 Low (${counts.low})` },
-    { key: "out", label: `🔴 Out (${counts.out})` },
+    { key: "ok", label: `In stock (${counts.ok})`, dot: "bg-brand-400 ring-2 ring-brand-400/20" },
+    { key: "low", label: `Low (${counts.low})`, dot: "bg-amber-300 ring-2 ring-amber-300/20" },
+    { key: "out", label: `Out (${counts.out})`, dot: "bg-rose-400 ring-2 ring-rose-400/20" },
   ];
 
   const chip = (active: boolean) =>
@@ -456,6 +456,7 @@ export default function InventoryPage() {
             <div className="flex gap-2 overflow-x-auto pb-1">
               {statusChips.map((s) => (
                 <button key={s.key} type="button" onClick={() => setStatusFilter(s.key)} className={chip(statusFilter === s.key)}>
+                  {s.dot && <span aria-hidden className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${s.dot}`} />}
                   {s.label}
                 </button>
               ))}
