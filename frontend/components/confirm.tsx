@@ -13,6 +13,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { THEMES, themeVars, useTheme } from "@/lib/theme";
 
 export type ConfirmOptions = {
   title?: string;
@@ -60,13 +61,20 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   }, [opts, settle]);
 
   const danger = opts?.tone === "danger";
+  // The dialog renders outside the AppShell's themed container, so re-apply the
+  // current theme here — otherwise it always shows the default (dark) palette,
+  // even in light mode.
+  const { theme } = useTheme();
+  const light = THEMES[theme].light;
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
       {opts && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="mise-app fixed inset-0 z-50 flex items-center justify-center p-4"
+          data-mode={light ? "light" : "dark"}
+          style={{ ...themeVars(theme), colorScheme: light ? "light" : "dark" }}
           role="dialog"
           aria-modal="true"
         >

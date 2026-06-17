@@ -28,8 +28,16 @@ class VendorCreate(BaseModel):
     @field_validator("category")
     @classmethod
     def valid_category(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_CATEGORIES:
-            raise ValueError(f"category must be one of {sorted(_VALID_CATEGORIES)}")
+        # Superadmins can add their OWN vendor types, not just the built-ins —
+        # accept any non-empty label (the built-ins in _VALID_CATEGORIES just
+        # seed the UI chips + drive the emoji map).
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
+        if len(v) > 40:
+            raise ValueError("category must be 40 characters or fewer")
         return v
 
 

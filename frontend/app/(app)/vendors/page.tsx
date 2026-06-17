@@ -43,6 +43,9 @@ export default function VendorsPage() {
   // add-vendor form
   const [vName, setVName] = useState("");
   const [vCat, setVCat] = useState("FOOD");
+  const [extraCats, setExtraCats] = useState<string[]>([]); // superadmin-added types
+  const [addingCat, setAddingCat] = useState(false);
+  const [newCat, setNewCat] = useState("");
   const [vContact, setVContact] = useState("");
   const [vMobile, setVMobile] = useState("");
 
@@ -172,6 +175,22 @@ export default function VendorsPage() {
   const selectedVendor = vendors.find((v) => v.id === selected);
   const pricedCount = (vid: string) => (vid === selected ? vendorItems.length : null);
 
+  // Built-in types + any custom ones already used by vendors + ones added this
+  // session — so superadmins aren't limited to the six built-ins.
+  const usedCats = vendors
+    .map((v) => (v.category || "").toUpperCase())
+    .filter((c) => c && !CATEGORIES.includes(c));
+  const allCats = [...new Set([...CATEGORIES, ...usedCats, ...extraCats])];
+
+  function addCustomCat() {
+    const c = newCat.trim().toUpperCase().slice(0, 40);
+    if (!c) return;
+    if (!allCats.includes(c)) setExtraCats((p) => [...p, c]);
+    setVCat(c);
+    setNewCat("");
+    setAddingCat(false);
+  }
+
   return (
     <div>
       <PageHeader
@@ -207,8 +226,8 @@ export default function VendorsPage() {
             </div>
             <div className="sm:col-span-3">
               <label className="block text-sm font-medium text-fg-soft">Type</label>
-              <div className="mt-1 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Vendor type">
-                {CATEGORIES.map((c) => (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Vendor type">
+                {allCats.map((c) => (
                   <button
                     key={c}
                     type="button"
@@ -221,9 +240,41 @@ export default function VendorsPage() {
                         : "border border-line-2 text-fg-soft hover:bg-glass/5"
                     }`}
                   >
-                    {TYPE_EMOJI[c]} {c.toLowerCase()}
+                    {TYPE_EMOJI[c] ?? "🏷"} {c.toLowerCase()}
                   </button>
                 ))}
+                {addingCat ? (
+                  <span className="inline-flex items-center gap-1">
+                    <input
+                      autoFocus
+                      value={newCat}
+                      onChange={(e) => setNewCat(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); addCustomCat(); }
+                        if (e.key === "Escape") { setAddingCat(false); setNewCat(""); }
+                      }}
+                      placeholder="new type…"
+                      maxLength={40}
+                      className="w-28 rounded-full border border-brand-500 bg-glass/5 px-3 py-1.5 text-xs outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomCat}
+                      className="rounded-full bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+                    >
+                      Add
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingCat(true)}
+                    title="Add a custom vendor type"
+                    className="rounded-full border border-dashed border-line-2 px-3 py-1.5 text-xs font-medium text-fg-faint transition hover:border-brand-400/50 hover:text-brand-300"
+                  >
+                    ✛ Add type
+                  </button>
+                )}
               </div>
             </div>
             <div className="sm:col-span-3">
