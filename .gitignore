@@ -78,3 +78,13 @@ Thumbs.db
 # Resend API key (local only)
 docs/resend_key.txt
 *resend_key*
+
+# Stock-media + AI API keys (local only)
+docs/pixabay_api_and_doc.txt
+docs/pexels_api_key_and_documentation_link.txt
+docs/falai_for_image.txt
+*pixabay*api*
+*pexels*api*
+*falai*
+docs/journey-promy.txt
+previous_fable_chat.txt

@@ -2,9 +2,9 @@
 
 // Landing entry point. Picks the experience and gets out of the way:
 //   • logged-in visitors → straight to the dashboard
-//   • capable browsers (WebGL + motion allowed) → the immersive 3D journey
-//   • everyone else (no WebGL / reduced-motion / a WebGL crash) → the classic
-//     polished landing page, which stays as a always-works fallback.
+//   • motion-OK visitors → the cinematic real-footage journey
+//   • reduced-motion visitors (or a runtime error) → the classic polished
+//     landing page, which stays as an always-works fallback.
 
 import dynamic from "next/dynamic";
 import { Component, useEffect, useState, type ReactNode } from "react";
@@ -14,7 +14,7 @@ import { Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import ClassicLanding from "@/components/landing/ClassicLanding";
 
-// three.js can't run on the server — load the journey only in the browser.
+// Uses video + window APIs — load the journey only in the browser.
 const JourneyExperience = dynamic(() => import("@/components/journey/JourneyExperience"), {
   ssr: false,
   loading: () => <DarkSplash />,
@@ -22,7 +22,7 @@ const JourneyExperience = dynamic(() => import("@/components/journey/JourneyExpe
 
 function DarkSplash() {
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0b1026]">
+    <div className="grid min-h-screen place-items-center bg-[#04080e]">
       <div className="flex flex-col items-center">
         <Logo size={48} />
         <p className="mt-4 font-display text-3xl text-white">Mise</p>
@@ -31,20 +31,8 @@ function DarkSplash() {
   );
 }
 
-function hasWebGL(): boolean {
-  try {
-    const c = document.createElement("canvas");
-    return !!(
-      window.WebGLRenderingContext &&
-      (c.getContext("webgl") || c.getContext("experimental-webgl"))
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** If the 3D journey ever throws at runtime, fall back to the classic page
-    instead of showing a blank canvas. */
+/** If the journey ever throws at runtime, fall back to the classic page
+    instead of showing a blank screen. */
 class JourneyBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
@@ -64,7 +52,7 @@ export default function Landing() {
 
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    setMode(!reduced && hasWebGL() ? "journey" : "classic");
+    setMode(reduced ? "classic" : "journey");
   }, []);
 
   useEffect(() => {
@@ -73,7 +61,7 @@ export default function Landing() {
 
   if (loading || user) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0b1026]">
+      <div className="grid min-h-screen place-items-center bg-[#04080e]">
         <Spinner />
       </div>
     );

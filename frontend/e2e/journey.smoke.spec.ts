@@ -16,7 +16,7 @@ test("landing journey mounts, scrolls and reaches the CTA without errors", async
   await page.goto("/");
   await page.waitForTimeout(1600); // let the intro veil lift
 
-  const path = (await page.locator("canvas").count()) > 0 ? "JOURNEY (webgl)" : "CLASSIC (fallback)";
+  const path = (await page.locator("video").count()) > 0 ? "JOURNEY (film)" : "CLASSIC (fallback)";
   console.log(`[${testInfo.project.name}] rendered path: ${path}`);
 
   // Hero copy is shared by both the journey overlay and the classic fallback.

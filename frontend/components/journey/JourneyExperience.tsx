@@ -1,18 +1,17 @@
 "use client";
 
-// Top-level orchestrator for the WebGL landing journey:
+// Top-level orchestrator for the cinematic landing journey:
 //   • a tall invisible scroll-track drives `journeyProgress.value` (0→1)
-//   • a FIXED full-screen <Canvas> renders the world behind everything
+//   • <FilmBackdrop/> renders the real-footage world behind everything
 //   • <Overlay/> floats the crossfading story beats on top
 //   • light chrome: nav, a scroll-progress hairline, a "scroll" cue, intro veil
-// The canvas never re-renders from React; scroll only writes a plain number.
+// Nothing re-renders from React on scroll; scroll only writes a plain number.
 
-import { Canvas } from "@react-three/fiber";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/Logo";
+import FilmBackdrop from "./FilmBackdrop";
 import Overlay from "./Overlay";
-import Scene from "./Scene";
 import { journeyProgress } from "./progress";
 
 const PAGES = 9; // ~100vh of scroll per story beat → a long, unhurried journey
@@ -22,23 +21,19 @@ export default function JourneyExperience() {
   const [scrolled, setScrolled] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
 
-  // Pick a quality tier once: coarse pointers / small / few-core devices run lean.
-  const quality = useMemo<"low" | "high">(() => {
-    if (typeof window === "undefined") return "high";
-    const coarse = window.matchMedia("(pointer: coarse)").matches;
-    const small = window.innerWidth < 820;
-    const fewCores = (navigator.hardwareConcurrency || 8) <= 4;
-    return coarse || small || fewCores ? "low" : "high";
-  }, []);
-
   // Scroll → progress (0..1). Direct write, no React state in the hot path.
   useEffect(() => {
+    let last = false;
     const onScroll = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       const p = max > 0 ? window.scrollY / max : 0;
       journeyProgress.value = p;
       if (barRef.current) barRef.current.style.transform = `scaleX(${p})`;
-      if (p > 0.01 !== scrolled) setScrolled(p > 0.01);
+      const s = p > 0.01;
+      if (s !== last) {
+        last = s;
+        setScrolled(s);
+      }
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -47,9 +42,9 @@ export default function JourneyExperience() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, [scrolled]);
+  }, []);
 
-  // Lift the intro veil shortly after mount (the world is ready by then).
+  // Lift the intro veil shortly after mount.
   useEffect(() => {
     const t = setTimeout(() => setIntro(false), 900);
     return () => clearTimeout(t);
@@ -61,8 +56,8 @@ export default function JourneyExperience() {
     const body = document.body;
     const prevRoot = root.style.background;
     const prevBody = body.style.background;
-    root.style.background = "#0b1026";
-    body.style.background = "#0b1026";
+    root.style.background = "#04080e";
+    body.style.background = "#04080e";
     return () => {
       root.style.background = prevRoot;
       body.style.background = prevBody;
@@ -70,32 +65,17 @@ export default function JourneyExperience() {
   }, []);
 
   return (
-    <div className="relative bg-[#0b1026] text-white">
-      {/* fixed world — sits behind all the HTML */}
-      <div className="fixed inset-0 z-0">
-        <Canvas
-          frameloop="always"
-          dpr={quality === "high" ? [1, 1.75] : [1, 1.25]}
-          camera={{ fov: 62, near: 0.1, far: 400, position: [0, 3.2, 16] }}
-          gl={{ antialias: quality === "high", powerPreference: "high-performance", alpha: false }}
-          onCreated={({ gl }) => gl.setClearColor("#0b1026")}
-        >
-          <Scene quality={quality} />
-        </Canvas>
-      </div>
-
-      {/* story beats */}
+    <div className="relative bg-black text-white">
+      <FilmBackdrop />
       <Overlay />
 
       {/* ── chrome ── */}
-      {/* scroll-progress hairline */}
       <div
         ref={barRef}
         className="fixed inset-x-0 top-0 z-40 h-[2px] origin-left bg-gradient-to-r from-emerald-400 via-emerald-300 to-amber-300"
         style={{ transform: "scaleX(0)" }}
       />
 
-      {/* nav */}
       <header className="fixed inset-x-0 top-0 z-40 flex items-center justify-between px-5 py-4 sm:px-8">
         <div className="flex items-center gap-2.5">
           <Logo size={30} />
@@ -104,7 +84,7 @@ export default function JourneyExperience() {
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/login"
-            className="rounded-lg px-2.5 py-2 text-sm font-medium text-slate-200 transition hover:text-white sm:px-3"
+            className="rounded-lg px-2.5 py-2 text-sm font-medium text-slate-100 drop-shadow transition hover:text-white sm:px-3"
           >
             Sign in
           </Link>
@@ -122,13 +102,15 @@ export default function JourneyExperience() {
         className="pointer-events-none fixed inset-x-0 bottom-7 z-30 flex flex-col items-center gap-2 transition-opacity duration-500"
         style={{ opacity: scrolled ? 0 : 1 }}
       >
-        <span className="font-mono text-[10px] tracking-[0.35em] text-white/70">SCROLL TO EXPLORE</span>
-        <span className="mise-scroll-chevron text-white/70">↓</span>
+        <span className="font-mono text-[10px] tracking-[0.35em] text-white/80 drop-shadow">
+          SCROLL TO EXPLORE
+        </span>
+        <span className="mise-scroll-chevron text-white/80">↓</span>
       </div>
 
       {/* intro veil — a quick branded fade so the first frame never flashes */}
       <div
-        className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-[#0b1026] transition-opacity duration-700"
+        className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-[#04080e] transition-opacity duration-700"
         style={{ opacity: intro ? 1 : 0, visibility: intro ? "visible" : "hidden" }}
       >
         <div className="flex flex-col items-center">

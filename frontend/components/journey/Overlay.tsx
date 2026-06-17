@@ -10,7 +10,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { journeySmooth, windowOpacity } from "./progress";
+import { journeyProgress, windowOpacity } from "./progress";
 
 type Align = "center" | "left" | "right";
 
@@ -54,7 +54,7 @@ export default function Overlay() {
     const els = Array.from(root.querySelectorAll<HTMLElement>("[data-beat]"));
     let raf = 0;
     const tick = () => {
-      const p = journeySmooth.value;
+      const p = journeyProgress.value;
       for (const el of els) {
         const i = Number(el.dataset.beat);
         const o = windowOpacity(p, BEATS[i].start, BEATS[i].end, 0.035);
