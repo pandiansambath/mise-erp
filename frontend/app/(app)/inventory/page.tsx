@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
+import { Select } from "@/components/Select";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { useConfirm } from "@/components/confirm";
@@ -31,6 +32,7 @@ const STD_CATEGORIES = [
 ];
 
 type StatusFilter = "all" | "ok" | "low" | "out";
+type SortKey = "name" | "status" | "supplier" | "stock" | "cost";
 
 function statusOf(item: Item): "ok" | "low" | "out" {
   const qty = parseFloat(item.current_stock || "0");
@@ -53,6 +55,8 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [catMgr, setCatMgr] = useState(false);
   const [catFrom, setCatFrom] = useState("");
@@ -240,11 +244,36 @@ export default function InventoryPage() {
   );
 
   const query = q.trim().toLowerCase();
-  const visible = items.filter((i) => {
+  const filtered = items.filter((i) => {
     if (query && !i.name.toLowerCase().includes(query)) return false;
     if (statusFilter !== "all" && statusOf(i) !== statusFilter) return false;
     if (catFilter !== "all" && (i.category?.trim() || "Other") !== catFilter) return false;
     return true;
+  });
+
+  // Column sorting. Status sorts by severity (out → low → ok) so problems
+  // surface first; supplier is alphabetical (items with no supplier go last).
+  const statusRank = { out: 0, low: 1, ok: 2 } as const;
+  const visible = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    switch (sortKey) {
+      case "name":
+        cmp = a.name.localeCompare(b.name);
+        break;
+      case "status":
+        cmp = statusRank[statusOf(a)] - statusRank[statusOf(b)];
+        break;
+      case "supplier":
+        cmp = (a.best_vendor || "￿").localeCompare(b.best_vendor || "￿");
+        break;
+      case "stock":
+        cmp = parseFloat(a.current_stock || "0") - parseFloat(b.current_stock || "0");
+        break;
+      case "cost":
+        cmp = parseFloat(a.average_cost || "0") - parseFloat(b.average_cost || "0");
+        break;
+    }
+    return sortDir === "asc" ? cmp : -cmp;
   });
 
   // Add-item supplier preview: the chosen vendor's price for this item (if it
@@ -269,6 +298,31 @@ export default function InventoryPage() {
         ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
         : "border border-line-2 text-fg-soft hover:bg-glass/5"
     }`;
+
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  }
+
+  // A sortable column header: click to sort, arrow shows direction.
+  const sortTh = (k: SortKey, label: string, right = false) => (
+    <th className={`px-5 py-3 font-medium ${right ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className={`inline-flex items-center gap-1 transition hover:text-fg ${right ? "flex-row-reverse" : ""} ${sortKey === k ? "text-fg" : ""}`}
+        title={`Sort by ${label.toLowerCase()}`}
+      >
+        {label}
+        <span aria-hidden className={`text-[9px] ${sortKey === k ? "text-brand-300" : "text-fg-faint/50"}`}>
+          {sortKey === k ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
 
   return (
     <div>
@@ -353,16 +407,16 @@ export default function InventoryPage() {
                 Supplier (optional)
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
-                <select
+                <Select
                   value={addVendor}
-                  onChange={(e) => setAddVendor(e.target.value)}
-                  className={`${inputCls} sm:w-56`}
-                >
-                  <option value="">Choose a supplier…</option>
-                  {activeVendors.map((v) => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
+                  onChange={setAddVendor}
+                  placeholder="Choose a supplier…"
+                  className="w-full sm:w-56"
+                  options={[
+                    { value: "", label: "Choose a supplier…" },
+                    ...activeVendors.map((v) => ({ value: v.id, label: v.name })),
+                  ]}
+                />
                 {addVendor &&
                   (addVendorPrice ? (
                     <span className="text-sm text-brand-300">
@@ -515,11 +569,11 @@ export default function InventoryPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-paper">
                   <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-faint">
-                    <th className="px-5 py-3 font-medium">Item</th>
-                    <th className="px-5 py-3 font-medium">Status</th>
-                    <th className="px-5 py-3 font-medium">Supplier</th>
-                    <th className="px-5 py-3 text-right font-medium">Stock</th>
-                    <th className="px-5 py-3 text-right font-medium">Avg cost</th>
+                    {sortTh("name", "Item")}
+                    {sortTh("status", "Status")}
+                    {sortTh("supplier", "Supplier")}
+                    {sortTh("stock", "Stock", true)}
+                    {sortTh("cost", "Avg cost", true)}
                     <th className="px-5 py-3 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
@@ -556,7 +610,7 @@ export default function InventoryPage() {
                             <p className="mt-0.5 text-xs text-fg-faint">{item.category || "Uncategorised"}</p>
                           </td>
                           <td className="px-5 py-3">
-                            <span className={`inline-flex items-center gap-1 rounded-full bg-glass/5 px-2 py-0.5 text-xs font-medium ${st.cls}`}>
+                            <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${st.cls}`}>
                               {st.dot} {st.label}
                             </span>
                           </td>
@@ -567,18 +621,33 @@ export default function InventoryPage() {
                                   <span className="text-brand-400">★</span> {item.best_vendor}
                                 </span>
                               ) : (
-                                <span
-                                  className="text-fg-faint"
-                                  title="No supplier chosen yet — this is just the cheapest. Pick the ★ chosen supplier on Price Comparison so recipes & POs use the one you trust."
-                                >
-                                  {item.best_vendor}{" "}
-                                  <span className="text-amber-400">· cheapest, choose ★</span>
+                                <span className="text-fg-soft">
+                                  {item.best_vendor}
+                                  <span
+                                    className="ml-1 text-amber-400"
+                                    title="Cheapest vendor — used automatically until you pick a preferred (★) supplier"
+                                  >
+                                    · cheapest
+                                  </span>{" "}
+                                  <Link
+                                    href="/price-comparison"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-brand-300 hover:underline"
+                                    title="Pick the ★ preferred supplier recipes & purchase orders should use"
+                                  >
+                                    choose ★
+                                  </Link>
                                 </span>
                               )
                             ) : (
-                              <span title="No vendor sells this yet — add a price on the Vendors page to order it">
-                                <Badge tone="amber">no supplier</Badge>
-                              </span>
+                              <Link
+                                href="/vendors"
+                                onClick={(e) => e.stopPropagation()}
+                                title="No vendor sells this yet — add a price for it on the Vendors page"
+                                className="inline-flex transition hover:opacity-80"
+                              >
+                                <Badge tone="amber">+ add supplier</Badge>
+                              </Link>
                             )}
                             {multiVendor && (
                               <span className="ml-2 inline-flex items-center rounded-full border border-brand-400/30 bg-brand-400/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
