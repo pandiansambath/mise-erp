@@ -613,9 +613,9 @@ export default function InventoryPage() {
                           </td>
                         </tr>
                         {isOpen && (
-                          <tr className="border-b border-line bg-paper-2/30">
+                          <tr className="border-b border-line bg-paper-2">
                             <td colSpan={6} className="px-5 pb-4 pt-1">
-                              <div className="mise-reveal rounded-2xl border border-line bg-glass/[0.03] p-4">
+                              <div className="mise-reveal rounded-2xl border border-line bg-paper-2 p-4">
                                 <div className="flex items-center justify-between">
                                   <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
                                     🏷 Purchases by supplier
@@ -634,7 +634,7 @@ export default function InventoryPage() {
                                       {rows.map((r, idx) => (
                                         <div
                                           key={idx}
-                                          className="flex items-center justify-between rounded-xl border border-line bg-paper-2/70 px-3.5 py-2.5"
+                                          className="flex items-center justify-between rounded-xl border border-line bg-paper-3 px-3.5 py-2.5"
                                         >
                                           <div className="flex min-w-0 items-center gap-3">
                                             <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500/15 text-base text-brand-300">🏷</span>
