@@ -14,7 +14,7 @@ import FilmBackdrop from "./FilmBackdrop";
 import Overlay from "./Overlay";
 import { journeyProgress } from "./progress";
 
-const PAGES = 9; // ~100vh of scroll per story beat → a long, unhurried journey
+const PAGES = 13; // ~1.2 screens of scroll per scene → a long, unhurried journey
 
 export default function JourneyExperience() {
   const [intro, setIntro] = useState(true);

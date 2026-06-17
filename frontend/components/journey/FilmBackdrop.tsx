@@ -9,7 +9,7 @@
 
 import { useEffect, useRef } from "react";
 import { journeyProgress } from "./progress";
-import { SCENES, sceneOpacities } from "./scenes";
+import { SCENES, sceneLocalProgress, sceneOpacities } from "./scenes";
 
 export default function FilmBackdrop() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -22,7 +22,8 @@ export default function FilmBackdrop() {
     const op = new Array(SCENES.length).fill(0);
     let raf = 0;
     const tick = () => {
-      sceneOpacities(journeyProgress.value, op);
+      const p = journeyProgress.value;
+      sceneOpacities(p, op);
       for (let i = 0; i < layers.length; i++) {
         const o = op[i];
         layers[i].style.opacity = String(o);
@@ -31,6 +32,9 @@ export default function FilmBackdrop() {
         if (o > 0.02) {
           if (!v.getAttribute("src")) v.setAttribute("src", v.dataset.src || "");
           if (v.paused) v.play().catch(() => {});
+          // slow forward push + drift while you travel through this scene
+          const local = sceneLocalProgress(p, i);
+          v.style.transform = `scale(${1.06 + local * 0.13}) translateY(${(local - 0.5) * 3}%)`;
         } else if (!v.paused) {
           v.pause();
         }
@@ -58,8 +62,8 @@ export default function FilmBackdrop() {
             playsInline
             preload="none"
             disablePictureInPicture
-            className="h-full w-full scale-[1.06] object-cover"
-            style={{ objectPosition: s.pos }}
+            className="h-full w-full object-cover will-change-transform"
+            style={{ objectPosition: s.pos, transform: "scale(1.06)" }}
           />
         </div>
       ))}

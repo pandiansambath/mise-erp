@@ -21,23 +21,29 @@ ROOT = Path(__file__).resolve().parents[1]
 KEY_FILE = ROOT / "docs" / "pixabay_api_and_doc.txt"
 OUT = ROOT / "frontend" / "public" / "journey"
 
-# scene name -> ordered search terms (first that yields a good hit wins)
+# A LONG, travel-through journey. Order = the order you scroll. Terms favour
+# AERIAL / DRONE / MOVING footage so it feels like travelling through a world.
 SCENES: list[tuple[str, list[str]]] = [
-    ("hills-dawn", ["misty mountains morning", "mountain sunrise fog", "sunrise valley nature"]),
-    ("prep-calm", ["chef preparing ingredients", "chef cutting vegetables", "cooking preparation hands"]),
-    ("harvest", ["fresh vegetables market", "vegetables harvest", "fresh produce farm"]),
-    ("cooking", ["fire flames cooking food", "wok stir fry fire", "grill flames food", "flambe cooking fire"]),
-    ("dark-street", ["city street night rain", "city lights night", "rainy street night"]),
-    ("dining-warm", ["fine dining restaurant", "restaurant interior evening", "busy restaurant ambiance"]),
-    ("entrance", ["hotel lobby luxury", "restaurant interior warm lights", "corridor walking lights", "elegant interior chandelier"]),
-    ("tablet", ["person using tablet cafe", "tablet restaurant", "laptop coffee work"]),
-    ("plated", ["gourmet plated dish", "chef plating food", "fine dining plate"]),
+    ("mountains-clouds", ["aerial mountains clouds", "drone mountains sunrise clouds", "clouds mountains time lapse"]),
+    ("hills-dawn", ["misty mountains morning", "drone green hills", "sunrise valley fog"]),
+    ("market", ["vegetable market stall", "farmers market fruit vegetables", "fresh produce grocery"]),
+    ("prep", ["chef preparing ingredients", "chef cutting vegetables", "mortar pestle spices"]),
+    ("flames", ["fire flames cooking food", "wok stir fry fire", "flambe fire cooking"]),
+    ("plating", ["indian food curry dish", "delicious food close up", "gourmet food restaurant plate"]),
+    ("kitchen-busy", ["chef cooking pan stove", "restaurant kitchen chef cooking", "cooking food frying pan"]),
+    ("night-city", ["city street night rain", "drone city night", "city lights night traffic"]),
+    ("restaurant-night", ["bar interior night lights", "restaurant neon sign night", "pub counter night"]),
+    ("dining-warm", ["fine dining restaurant", "restaurant interior evening", "candle dinner table"]),
+    ("interior-walk", ["hotel lobby luxury", "elegant banquet hall flowers", "luxury interior chandelier"]),
+    ("screen-data", ["data graph chart screen", "financial chart trading screen", "business graph monitor"]),
+    ("celebrate", ["people eating restaurant", "happy friends dinner table", "restaurant diners eating"]),
+    ("sunrise-finale", ["aerial golden sunrise landscape", "drone sunrise nature", "golden hour drone"]),
 ]
 
-# Pick the highest-resolution clip whose file fits this budget (keeps the page
-# fast + the repo lean). No transcoding tools are available locally, so we let
-# Pixabay's own size variants do the compression.
-BUDGET = 2_600_000
+# Pick the highest-resolution clip whose file fits this budget. Bumped so we get
+# 540p/720p (the 360p tier looked soft). No local transcoder, so we rely on
+# Pixabay's own size variants; lazy-loading keeps the page fast despite the bump.
+BUDGET = 4_200_000
 UA = {"User-Agent": "Mozilla/5.0 (MiseERP journey media fetcher)"}
 
 
