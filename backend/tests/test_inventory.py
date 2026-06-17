@@ -240,8 +240,8 @@ async def test_rename_category_merges(client, make_user, auth_header):
     assert cats["Onion"] == "Veggies"
 
 
-# ── Per-vendor stock lots (the "which vendor / what price" breakdown) ─────────
-async def test_stock_by_vendor_fifo_breakdown(db, hotel):
+# ── Purchases by supplier (a factual record, not a split of mixed stock) ──────
+async def test_purchases_by_vendor_record(db, hotel):
     from app.vendors.models import Vendor
 
     rudra = Vendor(hotel_id=hotel.id, name="Rudra Foods")
@@ -258,13 +258,21 @@ async def test_stock_by_vendor_fifo_breakdown(db, hotel):
         db, item, "PURCHASE_IN", Decimal("2"), unit_cost=Decimal("4.55"), vendor_id=farm.id
     )
 
-    rows = await service.stock_by_vendor(db, item)  # 5kg on hand
+    # Two distinct vendors → breakdown should be offered.
+    counts = await service.purchase_vendor_counts(db, hotel.id)
+    assert counts[item.id] == 2
+
+    # The record shows what was BOUGHT (received qty), newest first.
+    rows = await service.purchases_by_vendor(db, item)
     assert [(r["vendor"], r["quantity"]) for r in rows] == [
-        ("Farm2Land", Decimal("2.000")),  # newest first (FIFO leaves newest on shelf)
+        ("Farm2Land", Decimal("2.000")),
         ("Rudra Foods", Decimal("3.000")),
     ]
 
-    # Use 4kg → FIFO consumes the oldest (Rudra) first, leaving 1kg of Farm2Land.
+    # Consuming stock does NOT change the purchase record (it's history, not a split).
     await service.record_movement(db, item, "CONSUMPTION", Decimal("4"))
-    rows = await service.stock_by_vendor(db, item)
-    assert [(r["vendor"], r["quantity"]) for r in rows] == [("Farm2Land", Decimal("1.000"))]
+    rows2 = await service.purchases_by_vendor(db, item)
+    assert [(r["vendor"], r["quantity"]) for r in rows2] == [
+        ("Farm2Land", Decimal("2.000")),
+        ("Rudra Foods", Decimal("3.000")),
+    ]

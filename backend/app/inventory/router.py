@@ -18,7 +18,7 @@ from app.inventory.schemas import (
     ItemOut,
     ItemUpdate,
     LowStockAlert,
-    StockByVendorRow,
+    PurchaseByVendorRow,
     StockMovementCreate,
     StockMovementOut,
     WasteCreate,
@@ -54,11 +54,13 @@ async def list_items(
 ) -> list[ItemOut]:
     items = await service.list_items(db, user.hotel_id, category=category)
     counts = await service.vendor_counts(db, user.hotel_id)
+    pv_counts = await service.purchase_vendor_counts(db, user.hotel_id)
     best = await service.best_vendors(db, user.hotel_id)
     out = []
     for i in items:
         row = ItemOut.model_validate(i)
         row.vendor_count = counts.get(i.id, 0)
+        row.purchase_vendor_count = pv_counts.get(i.id, 0)
         chosen = best.get(i.id)
         if chosen:
             row.best_vendor, row.best_vendor_chosen, row.best_vendor_price = chosen
@@ -155,18 +157,19 @@ async def record_movement(
     return StockMovementOut.model_validate(movement)
 
 
-@router.get("/items/{item_id}/stock-by-vendor", response_model=list[StockByVendorRow])
-async def stock_by_vendor(
+@router.get("/items/{item_id}/purchases-by-vendor", response_model=list[PurchaseByVendorRow])
+async def purchases_by_vendor(
     item_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("inventory:read")),
-) -> list[StockByVendorRow]:
-    """Current stock broken down by the vendor (and price) it came from."""
+) -> list[PurchaseByVendorRow]:
+    """A record of recent purchases of this item, per supplier (what you bought
+    + at what price). Current stock stays one pool at weighted-average cost."""
     item = await service.get_item(db, item_id, user.hotel_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
-    rows = await service.stock_by_vendor(db, item)
-    return [StockByVendorRow(**r) for r in rows]
+    rows = await service.purchases_by_vendor(db, item)
+    return [PurchaseByVendorRow(**r) for r in rows]
 
 
 @router.get("/items/{item_id}/movements", response_model=list[StockMovementOut])

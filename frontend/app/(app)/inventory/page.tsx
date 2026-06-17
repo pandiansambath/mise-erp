@@ -9,7 +9,7 @@ import {
   downloadFile,
   type Item,
   type ItemSuppliers,
-  type StockByVendorRow,
+  type PurchaseByVendorRow,
   type Vendor,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
@@ -63,9 +63,9 @@ export default function InventoryPage() {
   // item_id -> { vendor_id -> price } (so the add form can show the chosen vendor's price)
   const [suppliers, setSuppliers] = useState<Record<string, Record<string, string>>>({});
   const [allergensTouched, setAllergensTouched] = useState(false);
-  // Per-item "stock by supplier" breakdown (expand a row to load + show it).
+  // Per-item "purchases by supplier" record (expand a row to load + show it).
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [breakdown, setBreakdown] = useState<Record<string, StockByVendorRow[]>>({});
+  const [breakdown, setBreakdown] = useState<Record<string, PurchaseByVendorRow[]>>({});
   const [bdLoading, setBdLoading] = useState<string | null>(null);
   const { format } = useCurrency();
 
@@ -197,8 +197,8 @@ export default function InventoryPage() {
     if (!breakdown[item.id]) {
       setBdLoading(item.id);
       try {
-        const rows = await api.get<StockByVendorRow[]>(
-          `/inventory/items/${item.id}/stock-by-vendor`,
+        const rows = await api.get<PurchaseByVendorRow[]>(
+          `/inventory/items/${item.id}/purchases-by-vendor`,
         );
         setBreakdown((b) => ({ ...b, [item.id]: rows }));
       } catch {
@@ -518,7 +518,10 @@ export default function InventoryPage() {
                   ) : (
                     visible.map((item) => {
                       const st = stockState(item);
-                      const hasStock = parseFloat(item.current_stock || "0") > 0;
+                      // Only offer a per-supplier breakdown when the item was
+                      // actually bought from MORE THAN ONE vendor (else there's
+                      // nothing to compare — keep the row simple).
+                      const multiVendor = (item.purchase_vendor_count ?? 0) > 1;
                       const isOpen = expanded === item.id;
                       const rows = breakdown[item.id];
                       return (
@@ -558,11 +561,11 @@ export default function InventoryPage() {
                             )}
                           </td>
                           <td className="px-5 py-3 text-right">
-                            {hasStock ? (
+                            {multiVendor ? (
                               <button
                                 type="button"
                                 onClick={() => toggleBreakdown(item)}
-                                title="Show which supplier this stock came from"
+                                title="Bought from more than one supplier — tap to see the purchases"
                                 className="ml-auto flex items-center gap-1 text-fg-soft hover:text-brand-300"
                               >
                                 <span aria-hidden className={`text-[10px] transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
@@ -604,7 +607,7 @@ export default function InventoryPage() {
                           <tr className="border-b border-line bg-glass/[0.02]">
                             <td colSpan={6} className="px-5 py-3">
                               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                                Stock by supplier
+                                Purchases by supplier
                               </p>
                               {bdLoading === item.id ? (
                                 <p className="text-xs text-fg-faint">Loading…</p>
@@ -615,25 +618,24 @@ export default function InventoryPage() {
                                       key={idx}
                                       className="inline-flex items-center gap-2 rounded-lg border border-line bg-paper-2/60 px-3 py-1.5 text-sm"
                                     >
-                                      <span className="font-medium text-fg">
-                                        {r.vendor ?? "Opening / adjustment"}
-                                      </span>
+                                      <span className="font-medium text-fg">{r.vendor ?? "No supplier recorded"}</span>
                                       <span className="text-fg-soft">{fmtQty(r.quantity, item.unit)}</span>
                                       {r.unit_cost != null && (
                                         <span className="font-mono text-xs text-brand-300">
                                           {format(r.unit_cost)}/{item.unit}
                                         </span>
                                       )}
+                                      <span className="text-xs text-fg-faint">
+                                        {new Date(r.received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                      </span>
                                     </span>
                                   ))}
                                 </div>
                               ) : (
-                                <p className="text-xs text-fg-faint">
-                                  No purchase history yet — stock will show its supplier once you receive a purchase order.
-                                </p>
+                                <p className="text-xs text-fg-faint">No purchase history yet.</p>
                               )}
                               <p className="mt-2 text-xs text-fg-faint">
-                                Newest purchases shown first (kitchens use oldest stock first). Weighted-average cost: {format(item.average_cost)}/{item.unit}.
+                                What you&apos;ve bought from each supplier (newest first). Your {fmtQty(item.current_stock, item.unit)} on hand is one mixed pool valued at a weighted-average {format(item.average_cost)}/{item.unit}.
                               </p>
                             </td>
                           </tr>

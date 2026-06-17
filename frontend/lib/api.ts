@@ -149,18 +149,20 @@ export interface Item {
   average_cost: string;
   is_active: boolean;
   vendor_count?: number; // active vendors pricing this item (0 = not orderable yet)
+  purchase_vendor_count?: number; // DISTINCT vendors actually bought from (>1 ⇒ show breakdown)
   best_vendor?: string | null; // chosen (★) vendor, else cheapest provisional (null = no vendor)
   best_vendor_chosen?: boolean; // true only when a supplier was actually picked (★ preferred)
   best_vendor_price?: string | null; // that vendor's price for this item
   allergens?: string | null; // CSV of allergen codes; null = not reviewed, "" = none
 }
 
-// A slice of an item's current stock attributed to the vendor it came from.
-export interface StockByVendorRow {
+// One past purchase of an item: what was bought from a vendor, and when.
+export interface PurchaseByVendorRow {
   vendor_id: string | null;
-  vendor: string | null; // null = opening balance / manual adjustment
+  vendor: string | null; // null = no supplier recorded on that purchase
   quantity: string;
   unit_cost: string | null;
+  received_at: string;
 }
 
 export interface Vendor {

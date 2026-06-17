@@ -45,6 +45,7 @@ class ItemOut(BaseModel):
     is_active: bool
     allergens: str | None = None  # CSV of allergen codes; None = not reviewed, "" = none
     vendor_count: int = 0  # active vendors pricing this item (0 = not orderable yet)
+    purchase_vendor_count: int = 0  # DISTINCT vendors actually bought from (>1 ⇒ show breakdown)
     # chosen (★) vendor name, else cheapest provisional (None = no vendor sells it)
     best_vendor: str | None = None
     # True only when a supplier was actually picked (★ preferred), not a cheapest fallback
@@ -87,13 +88,14 @@ class StockMovementOut(BaseModel):
     created_at: datetime
 
 
-class StockByVendorRow(BaseModel):
-    """A slice of the item's current stock attributed to one vendor + price."""
+class PurchaseByVendorRow(BaseModel):
+    """One past purchase of an item: what was bought from a vendor, and when."""
 
     vendor_id: uuid.UUID | None = None
-    vendor: str | None = None  # None = opening balance / manual adjustment
+    vendor: str | None = None  # None = no supplier recorded on that purchase
     quantity: Decimal
     unit_cost: Decimal | None = None
+    received_at: datetime
 
 
 class LowStockAlert(BaseModel):
