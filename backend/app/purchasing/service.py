@@ -275,7 +275,7 @@ async def receive_po(db: AsyncSession, po: PurchaseOrder, *, created_by: uuid.UU
         await inventory_service.record_movement(
             db, item, "PURCHASE_IN", outstanding,
             unit_cost=pi.unit_price, reference_id=po.id, reference_type="PURCHASE_ORDER",
-            created_by=created_by,
+            vendor_id=po.vendor_id, created_by=created_by,
         )
         pi.received_qty = pi.ordered_qty
     po.status = POStatus.RECEIVED.value

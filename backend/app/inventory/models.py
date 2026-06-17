@@ -71,6 +71,10 @@ class StockMovement(Base):
     # Signed: positive = into stock, negative = out of stock (so SUM = net change).
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # Which vendor this lot came from (set on PURCHASE_IN). NULL = unknown/legacy.
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("vendors.id"), nullable=True, index=True
+    )
     reference_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     reference_type: Mapped[str | None] = mapped_column(String(30))
     notes: Mapped[str | None] = mapped_column(Text)

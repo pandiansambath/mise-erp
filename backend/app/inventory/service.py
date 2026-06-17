@@ -181,6 +181,7 @@ async def record_movement(
     notes: str | None = None,
     reference_id: uuid.UUID | None = None,
     reference_type: str | None = None,
+    vendor_id: uuid.UUID | None = None,
     created_by: uuid.UUID | None = None,
 ) -> StockMovement:
     delta = signed_delta(movement_type, quantity)
@@ -206,6 +207,7 @@ async def record_movement(
         notes=notes,
         reference_id=reference_id,
         reference_type=reference_type,
+        vendor_id=vendor_id,
         created_by=created_by,
     )
     db.add(movement)
@@ -221,6 +223,82 @@ async def list_movements(db: AsyncSession, item_id: uuid.UUID) -> list[StockMove
         .order_by(StockMovement.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def stock_by_vendor(db: AsyncSession, item: Item) -> list[dict]:
+    """Break the item's CURRENT stock down by the vendor it came from.
+
+    Each priced PURCHASE_IN is a lot (vendor + qty + price + date). Kitchens run
+    FIFO — oldest stock is used first — so what's still on the shelf is the most
+    RECENT lots. We allocate `current_stock` across purchase lots newest-first
+    and group the result by vendor + price, e.g. "3 kg · Rudra @ £4.20 + 2 kg ·
+    Farm2Land @ £4.55". Anything not explained by purchases (opening balance or
+    manual adjustments) is returned as an 'Unattributed' remainder.
+    Read-only: nothing here mutates stock, so the consumption flow is untouched.
+    """
+    from app.vendors.models import Vendor  # local import avoids a cycle
+
+    rows = (
+        await db.execute(
+            select(
+                StockMovement.vendor_id,
+                StockMovement.unit_cost,
+                StockMovement.quantity,
+            )
+            .where(
+                StockMovement.item_id == item.id,
+                StockMovement.movement_type == MovementType.PURCHASE_IN.value,
+            )
+            .order_by(StockMovement.created_at.desc())
+        )
+    ).all()
+
+    remaining = item.current_stock or Decimal("0")
+    # Preserve newest-first order while merging same (vendor, price) lots.
+    order: list[tuple[uuid.UUID | None, Decimal | None]] = []
+    qty_by_key: dict[tuple[uuid.UUID | None, Decimal | None], Decimal] = {}
+    for vendor_id, unit_cost, qty in rows:
+        if remaining <= 0:
+            break
+        take = min(qty, remaining)
+        if take <= 0:
+            continue
+        key = (vendor_id, unit_cost)
+        if key not in qty_by_key:
+            qty_by_key[key] = Decimal("0")
+            order.append(key)
+        qty_by_key[key] += take
+        remaining -= take
+
+    # resolve vendor names in one query
+    vendor_ids = {k[0] for k in order if k[0] is not None}
+    names: dict[uuid.UUID, str] = {}
+    if vendor_ids:
+        vrows = (
+            await db.execute(select(Vendor.id, Vendor.name).where(Vendor.id.in_(vendor_ids)))
+        ).all()
+        names = {vid: name for vid, name in vrows}
+
+    out: list[dict] = []
+    for vendor_id, unit_cost in order:
+        out.append(
+            {
+                "vendor_id": vendor_id,
+                "vendor": names.get(vendor_id) if vendor_id else None,
+                "quantity": qty_by_key[(vendor_id, unit_cost)].quantize(Decimal("0.001")),
+                "unit_cost": unit_cost,
+            }
+        )
+    if remaining > 0:  # opening balance / manual adjustments, no purchase lot
+        out.append(
+            {
+                "vendor_id": None,
+                "vendor": None,
+                "quantity": remaining.quantize(Decimal("0.001")),
+                "unit_cost": None,
+            }
+        )
+    return out
 
 
 # ── Waste ────────────────────────────────────────────────────────────────────

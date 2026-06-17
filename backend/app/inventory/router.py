@@ -18,6 +18,7 @@ from app.inventory.schemas import (
     ItemOut,
     ItemUpdate,
     LowStockAlert,
+    StockByVendorRow,
     StockMovementCreate,
     StockMovementOut,
     WasteCreate,
@@ -152,6 +153,20 @@ async def record_movement(
     except service.InsufficientStockError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return StockMovementOut.model_validate(movement)
+
+
+@router.get("/items/{item_id}/stock-by-vendor", response_model=list[StockByVendorRow])
+async def stock_by_vendor(
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> list[StockByVendorRow]:
+    """Current stock broken down by the vendor (and price) it came from."""
+    item = await service.get_item(db, item_id, user.hotel_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    rows = await service.stock_by_vendor(db, item)
+    return [StockByVendorRow(**r) for r in rows]
 
 
 @router.get("/items/{item_id}/movements", response_model=list[StockMovementOut])

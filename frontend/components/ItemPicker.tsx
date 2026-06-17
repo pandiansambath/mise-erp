@@ -306,26 +306,31 @@ export function ItemPicker({
           <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
             {chosen.map(({ line, item }) => (
               <li key={item.id} className="mise-pop rounded-lg border border-line bg-paper/80 px-3 py-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span aria-hidden>{categoryEmoji(groupKey(item))}</span>
+                {/* Row 1: name + remove. Row 2: quantity controls. Stacking the
+                    qty inputs onto their own row keeps them usable on the
+                    narrowest phones (no cramping the kg/g fields). */}
+                <div className="flex items-start gap-2">
+                  <span aria-hidden className="mt-0.5">{categoryEmoji(groupKey(item))}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-fg">{item.name}</span>
                     <span className="block text-xs text-fg-faint">
                       {stockState(item).dot} have {fmtQty(item.current_stock, item.unit)}
                     </span>
                   </span>
-                  <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
-                  {!weighedParts(item.unit) && (
-                    <span className="text-xs text-fg-faint">{item.unit}</span>
-                  )}
                   <button
                     type="button"
                     onClick={() => toggle(item)}
                     aria-label={`Remove ${item.name}`}
-                    className="rounded-lg border border-line px-2 py-1 text-sm text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                    className="shrink-0 rounded-lg border border-line px-2 py-1 text-sm text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
                   >
                     ✕
                   </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
+                  <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
+                  {!weighedParts(item.unit) && (
+                    <span className="text-xs text-fg-faint">{item.unit}</span>
+                  )}
                 </div>
                 {lineExtra && <div className="mt-1.5 pl-7">{lineExtra(line, item)}</div>}
               </li>

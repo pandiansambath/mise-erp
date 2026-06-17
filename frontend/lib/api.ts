@@ -155,6 +155,14 @@ export interface Item {
   allergens?: string | null; // CSV of allergen codes; null = not reviewed, "" = none
 }
 
+// A slice of an item's current stock attributed to the vendor it came from.
+export interface StockByVendorRow {
+  vendor_id: string | null;
+  vendor: string | null; // null = opening balance / manual adjustment
+  quantity: string;
+  unit_cost: string | null;
+}
+
 export interface Vendor {
   id: string;
   name: string;

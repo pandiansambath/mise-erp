@@ -238,3 +238,33 @@ async def test_rename_category_merges(client, make_user, auth_header):
     cats = {i["name"]: i["category"] for i in (await client.get("/api/inventory/items", headers=h)).json()}
     assert cats["Tomato"] == "Veggies"
     assert cats["Onion"] == "Veggies"
+
+
+# ── Per-vendor stock lots (the "which vendor / what price" breakdown) ─────────
+async def test_stock_by_vendor_fifo_breakdown(db, hotel):
+    from app.vendors.models import Vendor
+
+    rudra = Vendor(hotel_id=hotel.id, name="Rudra Foods")
+    farm = Vendor(hotel_id=hotel.id, name="Farm2Land")
+    db.add_all([rudra, farm])
+    await db.flush()
+
+    item = await service.create_item(db, hotel.id, name="Basmati Rice", unit="kg")
+    # oldest → newest
+    await service.record_movement(
+        db, item, "PURCHASE_IN", Decimal("3"), unit_cost=Decimal("4.20"), vendor_id=rudra.id
+    )
+    await service.record_movement(
+        db, item, "PURCHASE_IN", Decimal("2"), unit_cost=Decimal("4.55"), vendor_id=farm.id
+    )
+
+    rows = await service.stock_by_vendor(db, item)  # 5kg on hand
+    assert [(r["vendor"], r["quantity"]) for r in rows] == [
+        ("Farm2Land", Decimal("2.000")),  # newest first (FIFO leaves newest on shelf)
+        ("Rudra Foods", Decimal("3.000")),
+    ]
+
+    # Use 4kg → FIFO consumes the oldest (Rudra) first, leaving 1kg of Farm2Land.
+    await service.record_movement(db, item, "CONSUMPTION", Decimal("4"))
+    rows = await service.stock_by_vendor(db, item)
+    assert [(r["vendor"], r["quantity"]) for r in rows] == [("Farm2Land", Decimal("1.000"))]

@@ -87,6 +87,15 @@ class StockMovementOut(BaseModel):
     created_at: datetime
 
 
+class StockByVendorRow(BaseModel):
+    """A slice of the item's current stock attributed to one vendor + price."""
+
+    vendor_id: uuid.UUID | None = None
+    vendor: str | None = None  # None = opening balance / manual adjustment
+    quantity: Decimal
+    unit_cost: Decimal | None = None
+
+
 class LowStockAlert(BaseModel):
     item_id: uuid.UUID
     name: str
