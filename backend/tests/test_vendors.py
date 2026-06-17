@@ -109,12 +109,25 @@ async def test_price_comparison_via_api(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
-async def test_create_vendor_invalid_category_422(client, make_user, auth_header):
+async def test_create_vendor_custom_category_allowed(client, make_user, auth_header):
+    # Superadmins can add their own vendor types — any non-empty label is OK.
     admin = await make_user("admin@nirai.com", Role.SUPER_ADMIN.value)
     resp = await client.post(
         "/api/vendors",
         headers=auth_header(admin),
         json={"name": "X", "category": "SPACESHIP"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["category"] == "SPACESHIP"
+
+
+@pytest.mark.asyncio
+async def test_create_vendor_overlong_category_422(client, make_user, auth_header):
+    admin = await make_user("admin2@nirai.com", Role.SUPER_ADMIN.value)
+    resp = await client.post(
+        "/api/vendors",
+        headers=auth_header(admin),
+        json={"name": "X", "category": "Z" * 41},
     )
     assert resp.status_code == 422
 
