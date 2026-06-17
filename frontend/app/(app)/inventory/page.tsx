@@ -526,7 +526,13 @@ export default function InventoryPage() {
                       const rows = breakdown[item.id];
                       return (
                         <Fragment key={item.id}>
-                        <tr className="border-b border-line transition hover:bg-glass/[0.03]">
+                        <tr
+                          className={`border-b border-line transition hover:bg-glass/[0.04] ${
+                            multiVendor ? "cursor-pointer" : ""
+                          } ${isOpen ? "bg-glass/[0.04]" : ""}`}
+                          onClick={multiVendor ? () => toggleBreakdown(item) : undefined}
+                          aria-expanded={multiVendor ? isOpen : undefined}
+                        >
                           <td className="px-5 py-3">
                             <p className="font-medium text-fg">
                               <span aria-hidden className="mr-1.5">{categoryEmoji(item.category?.trim() || "Other")}</span>
@@ -559,28 +565,31 @@ export default function InventoryPage() {
                                 <Badge tone="amber">no supplier</Badge>
                               </span>
                             )}
+                            {multiVendor && (
+                              <span className="ml-2 inline-flex items-center rounded-full border border-brand-400/30 bg-brand-400/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
+                                {item.purchase_vendor_count} suppliers
+                              </span>
+                            )}
                           </td>
                           <td className="px-5 py-3 text-right">
-                            {multiVendor ? (
-                              <button
-                                type="button"
-                                onClick={() => toggleBreakdown(item)}
-                                title="Bought from more than one supplier — tap to see the purchases"
-                                className="ml-auto flex items-center gap-1 text-fg-soft hover:text-brand-300"
-                              >
-                                <span aria-hidden className={`text-[10px] transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
-                                {fmtQty(item.current_stock, item.unit)}
-                              </button>
-                            ) : (
-                              <p className="text-fg-soft">{fmtQty(item.current_stock, item.unit)}</p>
-                            )}
+                            <span className="flex items-center justify-end gap-1 text-fg-soft">
+                              {multiVendor && (
+                                <span
+                                  aria-hidden
+                                  className={`text-[10px] text-brand-300 transition-transform duration-300 ${isOpen ? "rotate-90" : ""}`}
+                                >
+                                  ▶
+                                </span>
+                              )}
+                              {fmtQty(item.current_stock, item.unit)}
+                            </span>
                             <p className="text-xs text-fg-faint">{item.min_stock_level ? `min ${fmtQty(item.min_stock_level, item.unit)}` : "no min"}</p>
                           </td>
                           <td className="px-5 py-3 text-right text-fg-soft">{format(item.average_cost)}</td>
                           <td className="px-5 py-3">
                             <div className="flex justify-end gap-1.5">
                               <button
-                                onClick={() => orderItem(item)}
+                                onClick={(e) => { e.stopPropagation(); orderItem(item); }}
                                 disabled={(item.vendor_count ?? 0) === 0}
                                 title={(item.vendor_count ?? 0) === 0 ? "Add a vendor price first (Vendors page)" : "Order this item — opens Purchasing with it picked"}
                                 className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/20 disabled:cursor-not-allowed disabled:opacity-40"
@@ -588,13 +597,13 @@ export default function InventoryPage() {
                                 🛒 Order
                               </button>
                               <button
-                                onClick={() => startEdit(item)}
+                                onClick={(e) => { e.stopPropagation(); startEdit(item); }}
                                 className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
                               >
                                 Edit
                               </button>
                               <button
-                                onClick={() => removeItem(item)}
+                                onClick={(e) => { e.stopPropagation(); removeItem(item); }}
                                 title="Remove from inventory"
                                 className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
                               >
@@ -604,39 +613,61 @@ export default function InventoryPage() {
                           </td>
                         </tr>
                         {isOpen && (
-                          <tr className="border-b border-line bg-glass/[0.02]">
-                            <td colSpan={6} className="px-5 py-3">
-                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                                Purchases by supplier
-                              </p>
-                              {bdLoading === item.id ? (
-                                <p className="text-xs text-fg-faint">Loading…</p>
-                              ) : rows && rows.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                  {rows.map((r, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="inline-flex items-center gap-2 rounded-lg border border-line bg-paper-2/60 px-3 py-1.5 text-sm"
-                                    >
-                                      <span className="font-medium text-fg">{r.vendor ?? "No supplier recorded"}</span>
-                                      <span className="text-fg-soft">{fmtQty(r.quantity, item.unit)}</span>
-                                      {r.unit_cost != null && (
-                                        <span className="font-mono text-xs text-brand-300">
-                                          {format(r.unit_cost)}/{item.unit}
-                                        </span>
-                                      )}
-                                      <span className="text-xs text-fg-faint">
-                                        {new Date(r.received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                                      </span>
+                          <tr className="border-b border-line bg-paper-2/30">
+                            <td colSpan={6} className="px-5 pb-4 pt-1">
+                              <div className="mise-reveal rounded-2xl border border-line bg-glass/[0.03] p-4">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                                    🏷 Purchases by supplier
+                                  </p>
+                                  {rows && rows.length > 0 && (
+                                    <span className="text-xs text-fg-faint">
+                                      {rows.length} recent purchase{rows.length === 1 ? "" : "s"}
                                     </span>
-                                  ))}
+                                  )}
                                 </div>
-                              ) : (
-                                <p className="text-xs text-fg-faint">No purchase history yet.</p>
-                              )}
-                              <p className="mt-2 text-xs text-fg-faint">
-                                What you&apos;ve bought from each supplier (newest first). Your {fmtQty(item.current_stock, item.unit)} on hand is one mixed pool valued at a weighted-average {format(item.average_cost)}/{item.unit}.
-                              </p>
+                                {bdLoading === item.id ? (
+                                  <p className="mt-3 text-xs text-fg-faint">Loading…</p>
+                                ) : rows && rows.length > 0 ? (
+                                  <>
+                                    <div className="mise-reveal-stagger mt-3 grid gap-2 sm:grid-cols-2">
+                                      {rows.map((r, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center justify-between rounded-xl border border-line bg-paper-2/70 px-3.5 py-2.5"
+                                        >
+                                          <div className="flex min-w-0 items-center gap-3">
+                                            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500/15 text-base text-brand-300">🏷</span>
+                                            <div className="min-w-0">
+                                              <p className="truncate font-medium text-fg">{r.vendor ?? "No supplier recorded"}</p>
+                                              <p className="text-xs text-fg-faint">
+                                                {new Date(r.received_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="shrink-0 pl-2 text-right">
+                                            <p className="font-semibold text-fg">{fmtQty(r.quantity, item.unit)}</p>
+                                            {r.unit_cost != null && (
+                                              <p className="font-mono text-xs text-brand-300">{format(r.unit_cost)}/{item.unit}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-xs text-fg-faint">
+                                      <span>On hand <b className="font-semibold text-fg-soft">{fmtQty(item.current_stock, item.unit)}</b></span>
+                                      <span>Avg cost <b className="font-semibold text-fg-soft">{format(item.average_cost)}/{item.unit}</b></span>
+                                      <span>Bought (recent) <b className="font-semibold text-fg-soft">{fmtQty(rows.reduce((s, r) => s + parseFloat(r.quantity || "0"), 0), item.unit)}</b></span>
+                                      <span>Last received <b className="font-semibold text-fg-soft">{new Date(rows[0].received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</b></span>
+                                    </div>
+                                    <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
+                                      Stock from different suppliers mixes into one pool — so Mise values your {fmtQty(item.current_stock, item.unit)} on hand at the weighted-average {format(item.average_cost)}/{item.unit} rather than guessing whose stock is left.
+                                    </p>
+                                  </>
+                                ) : (
+                                  <p className="mt-3 text-xs text-fg-faint">No purchase history yet.</p>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )}
