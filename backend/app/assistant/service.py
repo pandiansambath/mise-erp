@@ -9,8 +9,8 @@ from app.core.rbac import has_permission
 
 from . import provider
 from .knowledge import PAGES, PERSONA, glossary_lookup, knowledge_brief
-from .schemas import Action, ChatRequest, ChatResponse
-from .tools import EXECUTORS, TOOLS
+from .schemas import Action, ChatRequest, ChatResponse, ProposedAction
+from .tools import EXECUTORS, tools_for
 
 
 def _can(user: User):
@@ -50,6 +50,7 @@ def _dedupe(actions: list[dict]) -> list[Action]:
 async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse:
     history = [{"role": m.role, "content": m.content} for m in req.messages]
     collected: list[dict] = []
+    proposals: list[dict] = []
 
     async def execute(name: str, args: dict) -> dict:
         fn = EXECUTORS.get(name)
@@ -57,6 +58,8 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
             return {"error": f"unknown tool {name}"}
         result = await fn(db, user, args)
         collected.extend(result.get("actions") or [])
+        if result.get("proposal"):
+            proposals.append(result["proposal"])
         return result
 
     if provider.is_configured():
@@ -64,11 +67,16 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
             reply, used = await provider.generate(
                 system=_build_system(user, req.route),
                 history=history,
-                tools=TOOLS,
+                tools=tools_for(user),
                 execute=execute,
+                attachment=req.attachment.model_dump() if req.attachment else None,
             )
             return ChatResponse(
-                reply=reply, actions=_dedupe(collected), used_tools=used, configured=True
+                reply=reply,
+                actions=_dedupe(collected),
+                pending_actions=[ProposedAction(**p) for p in proposals],
+                used_tools=used,
+                configured=True,
             )
         except provider.ProviderError:
             # fall through to the deterministic answer below

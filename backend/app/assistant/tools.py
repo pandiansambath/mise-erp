@@ -18,6 +18,7 @@ from app.core.rbac import has_permission
 from app.inventory import service as inventory_service
 from app.reports import service as reports_service
 
+from . import actions as action_mod
 from .knowledge import PAGES, glossary_lookup
 
 Executor = Callable[[AsyncSession, User, dict], Coroutine[Any, Any, dict]]
@@ -131,6 +132,39 @@ async def explain_term(db: AsyncSession, user: User, args: dict) -> dict:
     }
 
 
+# ── Write proposals (never execute here; the user confirms in the UI) ─────────
+async def _propose(kind: str, user: User, args: dict) -> dict:
+    spec = action_mod.SPECS[kind]
+    if not has_permission(user.role, spec["perm"]):
+        return {"error": f"You don't have permission to add a {spec['label']}."}
+    p = action_mod.build_proposal(kind, args or {})
+    if not p.get("ok"):
+        if p.get("missing"):
+            return {"need_more": p["missing"],
+                    "note": f"Ask the user for {', '.join(p['missing'])} before proposing."}
+        return {"error": p.get("error", "Could not build that action.")}
+    # 'proposal' is harvested by the service into pending_actions (the confirm card)
+    return {"proposed": p["summary"],
+            "proposal": {"kind": p["kind"], "label": p["label"],
+                         "summary": p["summary"], "fields": p["fields"]}}
+
+
+async def propose_expense(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("expense", user, args)
+
+
+async def propose_sale(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("sale", user, args)
+
+
+async def propose_item(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("item", user, args)
+
+
+async def propose_vendor(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("vendor", user, args)
+
+
 # ── Registry: schema (for the model) + executor (server-side) ─────────────────
 _QUERY = {"type": "string"}
 TOOLS: list[dict] = [
@@ -195,6 +229,77 @@ TOOLS: list[dict] = [
             "required": ["term"],
         },
     },
+    # ── Write proposals — gather every required field (ASK if missing) before
+    # calling these. They DON'T save; they raise a confirmation card for the user.
+    {
+        "name": "propose_expense",
+        "description": (
+            "Propose recording a business expense (e.g. a bill, a utility, a purchase). "
+            "Gather the amount first; category/date/description are helpful. Does not "
+            "save until the user confirms."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "amount": {"type": "number", "description": "Total amount in £"},
+                "category": {"type": "string", "description": "e.g. Utilities, Rent, Food"},
+                "description": {"type": "string"},
+                "date": {"type": "string", "description": "YYYY-MM-DD, or 'today'/'yesterday'"},
+                "kind": {"type": "string", "description": "fixed or variable"},
+                "payment_method": {"type": "string", "description": "CASH, CARD or BANK"},
+            },
+            "required": ["amount"],
+        },
+    },
+    {
+        "name": "propose_sale",
+        "description": (
+            "Propose recording a sale / takings (e.g. from a delivery app or the till). "
+            "Gather the amount; channel/date help. Does not save until confirmed."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "amount": {"type": "number", "description": "Gross sale amount in £"},
+                "channel": {"type": "string", "description": "e.g. Dine-in, Just Eat, Uber Eats"},
+                "date": {"type": "string", "description": "YYYY-MM-DD, or 'today'/'yesterday'"},
+                "payment_method": {"type": "string", "description": "CASH or CARD"},
+            },
+            "required": ["amount"],
+        },
+    },
+    {
+        "name": "propose_item",
+        "description": (
+            "Propose adding ONE stock item. Needs name + unit. Saves only on confirm."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "unit": {"type": "string", "description": "kg, g, l, ml, each, pack…"},
+                "category": {"type": "string"},
+                "current_stock": {"type": "number"},
+                "cost_price": {"type": "number", "description": "cost per unit in £"},
+            },
+            "required": ["name", "unit"],
+        },
+    },
+    {
+        "name": "propose_vendor",
+        "description": "Propose adding ONE supplier. Needs a name. Does not save until confirmed.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "category": {"type": "string", "description": "what they supply"},
+                "contact_person": {"type": "string"},
+                "mobile": {"type": "string"},
+                "email": {"type": "string"},
+            },
+            "required": ["name"],
+        },
+    },
 ]
 
 EXECUTORS: dict[str, Executor] = {
@@ -203,4 +308,25 @@ EXECUTORS: dict[str, Executor] = {
     "money_snapshot": money_snapshot,
     "navigate": navigate,
     "explain_term": explain_term,
+    "propose_expense": propose_expense,
+    "propose_sale": propose_sale,
+    "propose_item": propose_item,
+    "propose_vendor": propose_vendor,
 }
+
+# Tools gated by a write permission — filtered out for roles that lack it so the
+# model is never even offered an action the user can't take.
+TOOL_PERMS: dict[str, str] = {
+    "propose_expense": "expenses:write",
+    "propose_sale": "sales:write",
+    "propose_item": "inventory:write",
+    "propose_vendor": "vendors:write",
+}
+
+
+def tools_for(user: User) -> list[dict]:
+    """The tool schemas this user's role may use."""
+    return [
+        t for t in TOOLS
+        if t["name"] not in TOOL_PERMS or has_permission(user.role, TOOL_PERMS[t["name"]])
+    ]

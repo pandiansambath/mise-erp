@@ -41,9 +41,13 @@ def _to_contents(history: list[dict]) -> list[dict]:
 
 
 async def generate(
-    *, system: str, history: list[dict], tools: list[dict], execute: ExecuteFn
+    *, system: str, history: list[dict], tools: list[dict], execute: ExecuteFn,
+    attachment: dict | None = None,
 ) -> tuple[str, list[str]]:
-    """Run one assistant turn (with tool calls) and return (reply_text, used_tools)."""
+    """Run one assistant turn (with tool calls) and return (reply_text, used_tools).
+
+    `attachment` (a {mime, data} bill/receipt/photo) is added to the latest user
+    message so the model can read it and propose the right action."""
     if not is_configured():
         raise ProviderError("no api key")
 
@@ -51,9 +55,14 @@ async def generate(
 
     url = _ENDPOINT.format(model=settings.assistant_model)
     params = {"key": settings.gemini_api_key}
+    contents = _to_contents(history)
+    if attachment and contents:
+        contents[-1]["parts"].append(
+            {"inline_data": {"mime_type": attachment["mime"], "data": attachment["data"]}}
+        )
     body: dict[str, Any] = {
         "system_instruction": {"parts": [{"text": system}]},
-        "contents": _to_contents(history),
+        "contents": contents,
         "tools": [{"function_declarations": tools}],
         "generationConfig": {"temperature": 0.3, "maxOutputTokens": 900},
     }

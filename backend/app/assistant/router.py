@@ -3,14 +3,17 @@ permission + hotel scope, so answers never leak across roles or tenants."""
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assistant import ingest, provider, service
+from app.assistant import actions, ingest, provider, service
 from app.assistant.provider import ProviderError
 from app.assistant.schemas import (
+    ActRequest,
+    ActResult,
     ChatRequest,
     ChatResponse,
     IngestCommit,
     IngestPreview,
     IngestResult,
+    UndoRequest,
 )
 from app.auth.deps import get_current_user
 from app.auth.models import User
@@ -41,6 +44,8 @@ async def chat(
         req.messages = req.messages[-_MAX_MESSAGES:]
     if any(len(m.content) > _MAX_CHARS for m in req.messages):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Message too long")
+    if req.attachment and len(req.attachment.data) > 20_000_000:  # ~15MB of base64
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Attachment too large")
     return await service.answer(db, user, req)
 
 
@@ -86,3 +91,30 @@ async def ingest_commit(
     if result.get("error"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, result["error"])
     return IngestResult(**result)
+
+
+# ── Write actions (confirmed by the user, then executed) ──────────────────────
+@router.post("/act", response_model=ActResult)
+async def act(
+    payload: ActRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ActResult:
+    """Execute a confirmed proposal (add expense/sale/item/vendor)."""
+    result = await actions.execute(db, user, payload.kind, payload.fields)
+    if not result.get("ok"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, result.get("error", "Could not do that"))
+    return ActResult(ok=True, summary=result["summary"], undo=result.get("undo"))
+
+
+@router.post("/undo", response_model=ActResult)
+async def undo(
+    payload: UndoRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ActResult:
+    """Reverse a just-performed AI action."""
+    result = await actions.undo(db, user, payload.type, payload.id)
+    if not result.get("ok"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, result.get("error", "Nothing to undo"))
+    return ActResult(ok=True, summary=result["summary"])

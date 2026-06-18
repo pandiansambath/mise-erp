@@ -4,17 +4,21 @@ These exercise the assistant WITHOUT a live LLM key (CI has none): the
 deterministic fallback must still answer glossary, live-data and navigation
 questions, scoped to the user's role.
 """
+from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from app.assistant import ingest
+from app.assistant import actions, ingest
 from app.assistant import service as copilot
 from app.assistant.knowledge import GLOSSARY, glossary_lookup, knowledge_brief
 from app.assistant.schemas import ChatMessage, ChatRequest
+from app.assistant.tools import tools_for
 from app.auth.models import Role
 from app.core.rbac import has_permission
+from app.expenses import service as exp_service
 from app.inventory import service as inv
+from app.sales import service as sales_service
 
 
 # ── Knowledge (pure) ──────────────────────────────────────────────────────────
@@ -152,3 +156,50 @@ async def test_ingest_commit_creates_vendors(db, make_user):
     rows = [{"name": "Fresh Farms", "category": "Vegetables", "mobile": "07123", "email": "a@b.com"}]
     res = await ingest.commit(db, user, "vendors", rows)
     assert res["created"] == ["Fresh Farms"]
+
+
+# ── Write actions: propose → execute → undo ────────────────────────────────────
+def test_build_proposal_validates_and_summarises():
+    assert actions.build_proposal("expense", {})["ok"] is False
+    assert "amount" in actions.build_proposal("expense", {})["missing"]
+    p = actions.build_proposal("expense", {"amount": 50, "description": "gas", "category": "Utilities"})
+    assert p["ok"] and "£50" in p["summary"]
+
+
+def test_tools_filtered_by_role():
+    admin_user = type("U", (), {"role": Role.SUPER_ADMIN.value})()
+    staff_user = type("U", (), {"role": Role.STAFF.value})()
+    assert "propose_expense" in [t["name"] for t in tools_for(admin_user)]
+    staff_tools = [t["name"] for t in tools_for(staff_user)]
+    assert "propose_expense" not in staff_tools  # no write perm
+    assert "explain_term" in staff_tools  # read tools always offered
+
+
+@pytest.mark.asyncio
+async def test_act_expense_then_undo(db, make_user):
+    user = await make_user("ax1@x.com", Role.SUPER_ADMIN.value)
+    res = await actions.execute(db, user, "expense", {"amount": 50, "category": "Utilities", "description": "gas"})
+    assert res["ok"] and res["undo"]["type"] == "expense"
+    assert len(await exp_service.list_expenses(db, user.hotel_id)) == 1
+    u = await actions.undo(db, user, "expense", res["undo"]["id"])
+    assert u["ok"]
+    assert len(await exp_service.list_expenses(db, user.hotel_id)) == 0
+
+
+@pytest.mark.asyncio
+async def test_act_sale_then_undo(db, make_user):
+    user = await make_user("ax2@x.com", Role.SUPER_ADMIN.value)
+    res = await actions.execute(db, user, "sale", {"amount": 120, "channel": "Dine-in"})
+    assert res["ok"] and res["undo"]["type"] == "sale_line"
+    today = date.today()
+    assert len((await sales_service.day_summary(db, user.hotel_id, today))["lines"]) == 1
+    u = await actions.undo(db, user, "sale_line", res["undo"]["id"])
+    assert u["ok"]
+    assert len((await sales_service.day_summary(db, user.hotel_id, today))["lines"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_act_enforces_rbac(db, make_user):
+    cashier = await make_user("ax3@x.com", Role.CASHIER.value)  # sales yes, expenses no
+    assert (await actions.execute(db, cashier, "expense", {"amount": 10}))["ok"] is False
+    assert (await actions.execute(db, cashier, "sale", {"amount": 10}))["ok"] is True
