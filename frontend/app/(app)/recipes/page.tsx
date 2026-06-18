@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { ComboBox } from "@/components/ComboBox";
 import { fmtQty, ItemPicker, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
@@ -142,6 +143,7 @@ export default function RecipesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [showArchived, setShowArchived] = useState(false);
+  const [sort, setSort] = useState<"name" | "margin-desc" | "margin-asc">("name");
   const confirm = useConfirm();
 
   function reload(includeInactive = showArchived) {
@@ -321,6 +323,19 @@ export default function RecipesPage() {
     map.set(r.name, g);
   }
 
+  // A dish's margin = its best variant's margin; used for the margin sort.
+  const dishMargin = (variants: Recipe[]) =>
+    Math.max(...variants.map((v) => (v.profit_margin ? parseFloat(v.profit_margin) : -Infinity)));
+  const sortEntries = (entries: [string, Recipe[]][]) => {
+    const arr = [...entries];
+    if (sort === "name") arr.sort((a, b) => a[0].localeCompare(b[0]));
+    else
+      arr.sort((a, b) =>
+        sort === "margin-desc" ? dishMargin(b[1]) - dishMargin(a[1]) : dishMargin(a[1]) - dishMargin(b[1]),
+      );
+    return arr;
+  };
+
   const dishCard = (dishName: string, variants: Recipe[]) => {
     const sorted = [...variants].sort((a, b) => a.servings_default - b.servings_default);
     return (
@@ -473,7 +488,20 @@ export default function RecipesPage() {
         </div>
       )}
 
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-fg-faint">
+          Sort by
+          <Select
+            value={sort}
+            onChange={(v) => setSort(v as typeof sort)}
+            className="w-52"
+            options={[
+              { value: "name", label: "Name (A–Z)" },
+              { value: "margin-desc", label: "Margin — highest first" },
+              { value: "margin-asc", label: "Margin — lowest first" },
+            ]}
+          />
+        </label>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-fg-faint">
           <input
             type="checkbox"
@@ -495,7 +523,7 @@ export default function RecipesPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {[...activeGroups.entries()].map(([dishName, variants]) => dishCard(dishName, variants))}
+          {sortEntries([...activeGroups.entries()]).map(([dishName, variants]) => dishCard(dishName, variants))}
           {activeGroups.size === 0 && (
             <Card>
               <p className="py-6 text-center text-sm text-fg-faint">
@@ -515,7 +543,7 @@ export default function RecipesPage() {
             </span>
           </div>
           <div className="space-y-3 rounded-2xl border border-dashed border-line-2 bg-glass/[0.02] p-3">
-            {[...archivedGroups.entries()].map(([dishName, variants]) => dishCard(dishName, variants))}
+            {sortEntries([...archivedGroups.entries()]).map(([dishName, variants]) => dishCard(dishName, variants))}
           </div>
         </div>
       )}
