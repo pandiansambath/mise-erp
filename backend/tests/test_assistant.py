@@ -203,3 +203,18 @@ async def test_act_enforces_rbac(db, make_user):
     cashier = await make_user("ax3@x.com", Role.CASHIER.value)  # sales yes, expenses no
     assert (await actions.execute(db, cashier, "expense", {"amount": 10}))["ok"] is False
     assert (await actions.execute(db, cashier, "sale", {"amount": 10}))["ok"] is True
+
+
+# ── Accurate counts (no hallucinated numbers) ──────────────────────────────────
+@pytest.mark.asyncio
+async def test_business_overview_returns_real_recipe_count(db, make_user):
+    from app.assistant.tools import business_overview, list_recipes
+    from app.recipes import service as rec
+    user = await make_user("cnt@x.com", Role.SUPER_ADMIN.value)
+    await rec.create_recipe(db, user.hotel_id, name="Dosa", servings_default=1)
+    await rec.create_recipe(db, user.hotel_id, name="Idli", servings_default=1)
+    overview = await business_overview(db, user, {})
+    assert overview["recipe_count"] == 2
+    listing = await list_recipes(db, user, {})
+    assert listing["recipe_count"] == 2
+    assert {r["name"] for r in listing["recipes"]} == {"Dosa", "Idli"}

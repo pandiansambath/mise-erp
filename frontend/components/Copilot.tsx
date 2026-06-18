@@ -233,7 +233,7 @@ export function Copilot() {
 
       {open && (
         <div
-          className="mise-copilot-in fixed inset-x-0 bottom-0 z-50 flex h-[82vh] flex-col overflow-hidden rounded-t-2xl border border-glass/10 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl sm:inset-x-auto sm:bottom-24 sm:right-6 sm:h-[620px] sm:w-[410px] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl"
+          className="mise-copilot-in fixed inset-x-0 bottom-0 z-50 flex h-[85dvh] flex-col overflow-hidden rounded-t-2xl border border-glass/10 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[620px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[410px] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl"
           role="dialog"
           aria-label="Mise Copilot"
         >

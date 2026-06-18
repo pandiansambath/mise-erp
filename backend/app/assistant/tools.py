@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.models import User
 from app.core.rbac import has_permission
 from app.inventory import service as inventory_service
+from app.recipes import service as recipe_service
 from app.reports import service as reports_service
+from app.vendors import service as vendor_service
 
 from . import actions as action_mod
 from .knowledge import PAGES, glossary_lookup
@@ -97,6 +99,38 @@ async def money_snapshot(db: AsyncSession, user: User, args: dict) -> dict:
             {"label": "Open Money", "href": "/money"},
             {"label": "Open Reports (P&L)", "href": "/reports"},
         ],
+    }
+
+
+async def business_overview(db: AsyncSession, user: User, args: dict) -> dict:
+    """Exact totals across the business — how many recipes, stock items, suppliers,
+    and how many items are low. Use for any 'how many X do I have' question."""
+    out: dict = {}
+    if has_permission(user.role, "recipes:read"):
+        out["recipe_count"] = len(await recipe_service.list_recipes(db, user.hotel_id))
+    if has_permission(user.role, "inventory:read"):
+        out["item_count"] = len(await inventory_service.list_items(db, user.hotel_id))
+        out["low_stock_count"] = len(await inventory_service.low_stock_items(db, user.hotel_id))
+    if has_permission(user.role, "vendors:read"):
+        out["vendor_count"] = len(await vendor_service.list_vendors(db, user.hotel_id))
+    return out or {"note": "You don't have read access to those areas."}
+
+
+async def list_recipes(db: AsyncSession, user: User, args: dict) -> dict:
+    """The actual recipes (name + margin), and the exact count. Use for 'list my
+    recipes', 'how many recipes', 'which dishes have thin margins'."""
+    if not has_permission(user.role, "recipes:read"):
+        return {"error": "You don't have access to recipes."}
+    recipes = await recipe_service.list_recipes(db, user.hotel_id)
+    rows = [{
+        "name": r.name,
+        "margin_pct": _s(r.profit_margin),
+        "selling_price": _s(r.selling_price),
+    } for r in recipes[:60]]
+    return {
+        "recipe_count": len(recipes),
+        "recipes": rows,
+        "actions": [{"label": "Open Recipes", "href": "/recipes"}],
     }
 
 
@@ -197,6 +231,23 @@ TOOLS: list[dict] = [
             "Get today's and this month's headline figures: net sales, net profit, "
             "net margin %, low-stock count, average dish margin. Use for 'how are we "
             "doing', 'today's sales', 'this month's profit'."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "business_overview",
+        "description": (
+            "Exact totals: how many recipes, stock items, suppliers, and how many "
+            "items are low. ALWAYS use this for any 'how many X' / counts question — "
+            "never estimate a count yourself."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_recipes",
+        "description": (
+            "The actual list of recipes (name + margin) and the exact recipe count. "
+            "Use for 'list/show my recipes', 'how many recipes', 'thinnest margins'."
         ),
         "parameters": {"type": "object", "properties": {}},
     },
@@ -306,6 +357,8 @@ EXECUTORS: dict[str, Executor] = {
     "search_items": search_items,
     "low_stock": low_stock,
     "money_snapshot": money_snapshot,
+    "business_overview": business_overview,
+    "list_recipes": list_recipes,
     "navigate": navigate,
     "explain_term": explain_term,
     "propose_expense": propose_expense,
