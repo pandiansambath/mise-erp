@@ -8,6 +8,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.assistant import ingest
 from app.assistant import service as copilot
 from app.assistant.knowledge import GLOSSARY, glossary_lookup, knowledge_brief
 from app.assistant.schemas import ChatMessage, ChatRequest
@@ -111,3 +112,43 @@ async def test_status_endpoint(client, make_user, auth_header):
     r = await client.get("/api/assistant/status", headers=auth_header(user))
     assert r.status_code == 200
     assert r.json()["configured"] is False
+
+
+# ── Document onboarding (commit path; extraction needs a live key) ─────────────
+@pytest.mark.asyncio
+async def test_ingest_commit_creates_items(db, make_user):
+    user = await make_user("onb@x.com", Role.SUPER_ADMIN.value)
+    rows = [
+        {"name": "Tomato", "unit": "kg", "category": "Vegetables", "current_stock": 5, "cost_price": 1.2},
+        {"name": "Paneer", "unit": "kg"},
+        {"name": "", "unit": "kg"},  # no name → skipped silently
+    ]
+    res = await ingest.commit(db, user, "items", rows)
+    assert set(res["created"]) == {"Tomato", "Paneer"}
+    items = {i.name: i for i in await inv.list_items(db, user.hotel_id)}
+    assert "Tomato" in items and "Paneer" in items
+    # cost seeds the weighted-average so stock is valued from day one
+    assert items["Tomato"].average_cost == Decimal("1.2")
+
+
+@pytest.mark.asyncio
+async def test_ingest_commit_skips_duplicates(db, make_user):
+    user = await make_user("onb2@x.com", Role.SUPER_ADMIN.value)
+    await inv.create_item(db, user.hotel_id, name="Onion", unit="kg")
+    res = await ingest.commit(db, user, "items", [{"name": "Onion", "unit": "kg"}])
+    assert res["created"] == [] and res["skipped"] == ["Onion"]
+
+
+@pytest.mark.asyncio
+async def test_ingest_commit_enforces_rbac(db, make_user):
+    user = await make_user("onb3@x.com", Role.CASHIER.value)  # no inventory:write
+    res = await ingest.commit(db, user, "items", [{"name": "X", "unit": "kg"}])
+    assert "error" in res
+
+
+@pytest.mark.asyncio
+async def test_ingest_commit_creates_vendors(db, make_user):
+    user = await make_user("onb4@x.com", Role.SUPER_ADMIN.value)
+    rows = [{"name": "Fresh Farms", "category": "Vegetables", "mobile": "07123", "email": "a@b.com"}]
+    res = await ingest.commit(db, user, "vendors", rows)
+    assert res["created"] == ["Fresh Farms"]

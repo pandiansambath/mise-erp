@@ -24,3 +24,20 @@ class ChatResponse(BaseModel):
     actions: list[Action] = Field(default_factory=list)
     used_tools: list[str] = Field(default_factory=list)
     configured: bool = True  # False ⇒ running the no-LLM fallback
+
+
+# ── Document onboarding ────────────────────────────────────────────────────────
+class IngestPreview(BaseModel):
+    kind: str
+    rows: list[dict] = Field(default_factory=list)  # proposed records (nothing written)
+
+
+class IngestCommit(BaseModel):
+    kind: str
+    rows: list[dict] = Field(default_factory=list)
+
+
+class IngestResult(BaseModel):
+    kind: str
+    created: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
