@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -129,10 +130,15 @@ export default function EmployeesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-fg-soft">Salary type</label>
-              <select value={form.salary_type} onChange={(e) => setForm({ ...form, salary_type: e.target.value })} className={inputCls}>
-                <option value="MONTHLY">Monthly</option>
-                <option value="HOURLY">Hourly</option>
-              </select>
+              <Select
+                value={form.salary_type}
+                onChange={(v) => setForm({ ...form, salary_type: v })}
+                className="mt-1"
+                options={[
+                  { value: "MONTHLY", label: "Monthly" },
+                  { value: "HOURLY", label: "Hourly" },
+                ]}
+              />
             </div>
             {form.salary_type === "MONTHLY" ? (
               <div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Item, type PriceComparison, type PricePoint, type Vendor } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -123,16 +124,15 @@ export default function PriceComparisonPage() {
     <Card className="mt-4">
       <p className="mb-2 text-sm font-medium text-fg-soft">Add a vendor price for this item</p>
       <form onSubmit={addVendorPrice} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto]">
-        <select
+        <Select
           value={addVendorId}
-          onChange={(e) => setAddVendorId(e.target.value)}
-          className="rounded-lg border border-line-2 bg-paper px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
-        >
-          <option value="">Select vendor…</option>
-          {vendors.filter((v) => v.is_active).map((v) => (
-            <option key={v.id} value={v.id}>{v.name}</option>
-          ))}
-        </select>
+          onChange={setAddVendorId}
+          placeholder="Select vendor…"
+          options={[
+            { value: "", label: "Select vendor…" },
+            ...vendors.filter((v) => v.is_active).map((v) => ({ value: v.id, label: v.name })),
+          ]}
+        />
         <input
           type="number"
           step="0.01"

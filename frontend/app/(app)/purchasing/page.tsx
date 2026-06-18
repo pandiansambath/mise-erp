@@ -14,6 +14,7 @@ import {
   type SupplierOption,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -141,19 +142,18 @@ export default function PurchasingPage() {
     return (
       <label className="flex flex-wrap items-center gap-1.5 text-xs text-fg-faint">
         Supplier
-        <select
+        <Select
           value={vendorPick[item.id] ?? ""}
-          onChange={(e) => setVendorPick({ ...vendorPick, [item.id]: e.target.value })}
-          className="rounded-md border border-line-2 bg-paper px-2 py-1 text-xs text-fg-soft outline-none focus:border-brand-500"
-        >
-          <option value="">{autoLabel}</option>
-          {options.map((o) => (
-            <option key={o.vendor_id} value={o.vendor_id}>
-              {o.vendor_name} · {format(o.price_per_unit)}/{item.unit}
-              {o.is_preferred ? " ★" : ""}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setVendorPick({ ...vendorPick, [item.id]: v })}
+          className="w-64"
+          options={[
+            { value: "", label: autoLabel },
+            ...options.map((o) => ({
+              value: o.vendor_id,
+              label: `${o.vendor_name} · ${format(o.price_per_unit)}/${item.unit}${o.is_preferred ? " ★" : ""}`,
+            })),
+          ]}
+        />
       </label>
     );
   }

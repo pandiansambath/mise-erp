@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { can, ROLE_LABELS, ROLES } from "@/lib/permissions";
@@ -117,20 +118,21 @@ export default function StaffPage() {
           <form onSubmit={addUser} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="w-full sm:w-52">
               <label className="block text-sm font-medium text-fg-soft">Employee (optional)</label>
-              <select
+              <Select
                 value={linkEmpId}
-                onChange={(e) => setLinkEmpId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">— Standalone login —</option>
-                {employees
-                  .filter((emp) => !emp.user_id)
-                  .map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.full_name} ({emp.employee_code})
-                    </option>
-                  ))}
-              </select>
+                onChange={setLinkEmpId}
+                placeholder="— Standalone login —"
+                className="mt-1"
+                options={[
+                  { value: "", label: "— Standalone login —" },
+                  ...employees
+                    .filter((emp) => !emp.user_id)
+                    .map((emp) => ({
+                      value: emp.id,
+                      label: `${emp.full_name} (${emp.employee_code})`,
+                    })),
+                ]}
+              />
             </div>
             <div className="flex-1 sm:min-w-[14rem]">
               <label className="block text-sm font-medium text-fg-soft">Email</label>
@@ -156,13 +158,12 @@ export default function StaffPage() {
             </div>
             <div className="w-full sm:w-48">
               <label className="block text-sm font-medium text-fg-soft">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls}>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABELS[r]}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={role}
+                onChange={setRole}
+                className="mt-1"
+                options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+              />
             </div>
             <button
               type="submit"
@@ -206,17 +207,12 @@ export default function StaffPage() {
                       </td>
                       <td className="px-5 py-3">
                         {canWrite && !isSelf ? (
-                          <select
+                          <Select
                             value={u.role}
-                            onChange={(e) => changeRole(u.id, e.target.value)}
-                            className="rounded-md border border-line px-2 py-1 text-xs"
-                          >
-                            {ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {ROLE_LABELS[r]}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(v) => changeRole(u.id, v)}
+                            className="w-40"
+                            options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+                          />
                         ) : (
                           <span className="text-fg-soft">{ROLE_LABELS[u.role] ?? u.role}</span>
                         )}

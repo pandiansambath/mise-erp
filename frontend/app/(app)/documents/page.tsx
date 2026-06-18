@@ -12,6 +12,7 @@ import {
   type ExpiringDoc,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -203,9 +204,12 @@ export default function DocumentsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-fg-soft">Type</label>
-              <select value={docType} onChange={(e) => setDocType(e.target.value)} className={inputCls}>
-                {TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
-              </select>
+              <Select
+                value={docType}
+                onChange={setDocType}
+                className="mt-1"
+                options={TYPES.map((t) => ({ value: t, label: typeLabel(t) }))}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-fg-soft">Expiry (optional)</label>
@@ -234,20 +238,28 @@ export default function DocumentsPage() {
           <form onSubmit={createRequest} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div>
               <label className="block text-sm font-medium text-fg-soft">Staff member</label>
-              <select value={reqEmpId} onChange={(e) => setReqEmpId(e.target.value)} className={inputCls}>
-                <option value="">Select…</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.full_name} ({emp.employee_code})
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={reqEmpId}
+                onChange={setReqEmpId}
+                placeholder="Select…"
+                className="mt-1"
+                options={[
+                  { value: "", label: "Select…" },
+                  ...employees.map((emp) => ({
+                    value: emp.id,
+                    label: `${emp.full_name} (${emp.employee_code})`,
+                  })),
+                ]}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-fg-soft">Type</label>
-              <select value={reqType} onChange={(e) => setReqType(e.target.value)} className={inputCls}>
-                {TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
-              </select>
+              <Select
+                value={reqType}
+                onChange={setReqType}
+                className="mt-1"
+                options={TYPES.map((t) => ({ value: t, label: typeLabel(t) }))}
+              />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-fg-soft">What to provide</label>

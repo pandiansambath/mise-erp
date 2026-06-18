@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -131,16 +132,28 @@ export default function RotaPage() {
           <form onSubmit={addShift} className="flex flex-wrap items-end gap-3">
             <label className="block">
               <span className="block text-xs font-medium text-fg-faint">Employee</span>
-              <select value={emp} onChange={(e) => setEmp(e.target.value)} className="mt-1 rounded-lg border border-line-2 bg-paper px-3 py-2 text-sm text-fg-soft outline-none focus:border-brand-500">
-                <option value="">Choose…</option>
-                {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
-              </select>
+              <Select
+                value={emp}
+                onChange={setEmp}
+                placeholder="Choose…"
+                className="mt-1 w-44"
+                options={[
+                  { value: "", label: "Choose…" },
+                  ...employees.map((x) => ({ value: x.id, label: x.full_name })),
+                ]}
+              />
             </label>
             <label className="block">
               <span className="block text-xs font-medium text-fg-faint">Day</span>
-              <select value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 rounded-lg border border-line-2 bg-paper px-3 py-2 text-sm text-fg-soft outline-none focus:border-brand-500">
-                {weekDates.map((d, i) => <option key={i} value={iso(d)}>{DAYS[i]} {d.getDate()}/{d.getMonth() + 1}</option>)}
-              </select>
+              <Select
+                value={day}
+                onChange={setDay}
+                className="mt-1 w-44"
+                options={weekDates.map((d, i) => ({
+                  value: iso(d),
+                  label: `${DAYS[i]} ${d.getDate()}/${d.getMonth() + 1}`,
+                }))}
+              />
             </label>
             <label className="block">
               <span className="block text-xs font-medium text-fg-faint">Start</span>
