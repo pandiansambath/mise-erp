@@ -1,7 +1,7 @@
-// The ordered film scenes for the landing journey — real clips that flow into
-// one another as you scroll, so it feels like TRAVELLING through a world:
-// peaceful mountains → misty hills → the market → prep → the craft → the heat →
-// the dark city → a kitchen that can see → step inside → the numbers → sunrise.
+// The peaceful landing journey, in HD: nature settles you (mountains → sea →
+// forest), then the restaurant story unfolds (produce → cooking → dining →
+// sharing) and ends on a sunrise. Real Pexels footage; scroll flows one scene
+// into the next so it feels like travelling, calmly, through it.
 
 import { clamp01, smoothstep } from "./progress";
 
@@ -15,17 +15,14 @@ export type Scene = {
 };
 
 export const SCENES: Scene[] = [
-  { name: "mountains-clouds", center: 0.0, pos: "center 55%" },
-  { name: "hills-dawn", center: 0.1, pos: "center 55%" },
-  { name: "market", center: 0.2, pos: "center 50%" },
-  { name: "prep", center: 0.3, pos: "center 50%" },
-  { name: "plating", center: 0.4, pos: "center 55%" },
-  { name: "flames", center: 0.5, pos: "center 50%" },
-  { name: "night-city", center: 0.6, pos: "center 60%" },
-  { name: "dining-warm", center: 0.7, pos: "center 50%" },
-  { name: "interior-walk", center: 0.8, pos: "center 45%" },
-  { name: "screen-data", center: 0.9, pos: "center 50%" },
-  { name: "sunrise-finale", center: 1.0, pos: "center 55%" },
+  { name: "mountains", center: 0.0, pos: "center 50%" },
+  { name: "sea", center: 0.143, pos: "center 55%" },
+  { name: "forest", center: 0.286, pos: "center 55%" },
+  { name: "produce", center: 0.429, pos: "center 55%" },
+  { name: "cooking", center: 0.571, pos: "center 50%" },
+  { name: "dining", center: 0.714, pos: "center 50%" },
+  { name: "sharing", center: 0.857, pos: "center 50%" },
+  { name: "sunrise", center: 1.0, pos: "center 55%" },
 ];
 
 /** Opacity for every scene at scroll progress `p`. Adjacent scenes crossfade
@@ -56,8 +53,8 @@ export function sceneOpacities(p: number, out: number[]): number[] {
   return out;
 }
 
-/** Local 0→1 progress WITHIN a scene's own segment (used to drive a slow
-    forward push so each scene feels travelled-through, not just shown). */
+/** Local 0→1 progress WITHIN a scene's own segment (drives a slow forward push
+    so each scene feels travelled-through, not just shown). */
 export function sceneLocalProgress(p: number, i: number): number {
   const n = SCENES.length;
   const a = i > 0 ? SCENES[i - 1].center : SCENES[0].center - 0.1;

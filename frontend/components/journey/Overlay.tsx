@@ -1,10 +1,9 @@
 "use client";
 
-// The narrative layer that floats over the travelling footage. One beat per
-// scene, in scroll order, each pinned full-screen and crossfading as the camera
-// reaches its scene. Opacity/translate are written straight to the DOM from a
-// rAF loop (never React state) so the words stay glued to the footage with zero
-// re-render jank. Windows are GAPPED so only one beat is on screen at a time.
+// The narrative layer over the peaceful HD footage. One beat per scene, in
+// scroll order; each crossfades as the camera reaches its scene. Opacity is
+// written straight to the DOM from a rAF loop (no React state) so the words stay
+// glued to the footage. Windows are GAPPED so only one beat shows at a time.
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
@@ -13,17 +12,14 @@ import { journeyProgress, windowOpacity } from "./progress";
 type Align = "center" | "left" | "right";
 
 const BEATS: { start: number; end: number; align: Align }[] = [
-  { start: -0.1, end: 0.04, align: "center" }, // 0 hero — mountains
-  { start: 0.065, end: 0.135, align: "left" }, // 1 calm — hills
-  { start: 0.165, end: 0.235, align: "right" }, // 2 one platform — market
-  { start: 0.265, end: 0.335, align: "left" }, // 3 mise en place — prep
-  { start: 0.365, end: 0.435, align: "left" }, // 4 cost to the gram — knife
-  { start: 0.465, end: 0.535, align: "center" }, // 5 the margin — flames
-  { start: 0.565, end: 0.635, align: "center" }, // 6 the problem — night city
-  { start: 0.665, end: 0.735, align: "right" }, // 7 with Mise — dining
-  { start: 0.765, end: 0.835, align: "center" }, // 8 step inside — interior
-  { start: 0.865, end: 0.935, align: "left" }, // 9 money loop — screen
-  { start: 0.96, end: 1.2, align: "center" }, // 10 CTA — sunrise
+  { start: -0.1, end: 0.06, align: "center" }, // 0 hero — mountains
+  { start: 0.1, end: 0.185, align: "left" }, // 1 calm — sea
+  { start: 0.245, end: 0.327, align: "right" }, // 2 one platform — forest
+  { start: 0.388, end: 0.47, align: "left" }, // 3 cost to the gram — produce
+  { start: 0.53, end: 0.612, align: "center" }, // 4 the margin — cooking
+  { start: 0.673, end: 0.755, align: "right" }, // 5 with Mise — dining
+  { start: 0.815, end: 0.897, align: "center" }, // 6 the payoff — sharing
+  { start: 0.95, end: 1.2, align: "center" }, // 7 CTA — sunrise
 ];
 
 const alignCls: Record<Align, string> = {
@@ -58,7 +54,7 @@ export default function Overlay() {
       const p = journeyProgress.value;
       for (const el of els) {
         const i = Number(el.dataset.beat);
-        const o = windowOpacity(p, BEATS[i].start, BEATS[i].end, 0.022);
+        const o = windowOpacity(p, BEATS[i].start, BEATS[i].end, 0.03);
         el.style.opacity = String(o);
         el.style.transform = `translateY(${(1 - o) * 26}px)`;
         el.style.pointerEvents = o > 0.6 ? "auto" : "none";
@@ -88,58 +84,45 @@ export default function Overlay() {
         </div>
       </div>
 
-      {/* 1 — CALM (hills) */}
+      {/* 1 — CALM (sea) */}
       <div data-beat={1} className={beatClass(1)}>
         <div className="max-w-xl">
-          <Kicker>FROM THE KITCHEN</Kicker>
+          <Kicker>MISE EN PLACE</Kicker>
           <h2 className={h2}>
-            Every great kitchen <em className="not-italic text-emerald-300">begins calm.</em>
+            Calm comes from <em className="not-italic text-emerald-300">control.</em>
           </h2>
           <p className={body}>
-            Before the rush, everything is prepped, weighed and in its place. The French call it{" "}
-            <span className="italic text-amber-200">mise en place</span> — and it&apos;s the whole idea.
+            Before the rush, every cost, order and shift is in its place. The French call it
+            <span className="italic text-amber-200"> mise en place</span> — we applied it to the
+            whole business.
           </p>
         </div>
       </div>
 
-      {/* 2 — ONE PLATFORM (market) */}
+      {/* 2 — ONE PLATFORM (forest) */}
       <div data-beat={2} className={beatClass(2)}>
         <div className="max-w-xl">
           <Kicker>ONE PLATFORM</Kicker>
           <h2 className={h2}>
-            One source <em className="not-italic text-emerald-300">of truth.</em>
+            It all grows from <em className="not-italic text-emerald-300">one source.</em>
           </h2>
           <p className={body}>
-            Recipes, inventory, purchasing, staff, sales and profit don&apos;t live in eight
-            spreadsheets here. They flow from one platform — so a price change in the morning
-            re-costs every dish before lunch.
+            Recipes, inventory, purchasing, staff, sales and profit aren&apos;t eight spreadsheets
+            here. They grow from one source of truth — so a price change in the morning re-costs
+            every dish before lunch.
           </p>
         </div>
       </div>
 
-      {/* 3 — MISE EN PLACE (prep) */}
+      {/* 3 — COST TO THE GRAM (produce) */}
       <div data-beat={3} className={beatClass(3)}>
-        <div className="max-w-xl">
-          <Kicker>MISE EN PLACE</Kicker>
-          <h2 className={h2}>
-            Everything, <em className="not-italic text-emerald-300">weighed and ready.</em>
-          </h2>
-          <p className={body}>
-            We applied the kitchen&apos;s discipline to the whole business — every cost, order, shift
-            and sale in its place before you open the books.
-          </p>
-        </div>
-      </div>
-
-      {/* 4 — COST TO THE GRAM (knife) */}
-      <div data-beat={4} className={beatClass(4)}>
         <div className="max-w-xl">
           <Kicker>COST INTELLIGENCE</Kicker>
           <h2 className={h2}>
             Cost every dish <em className="not-italic text-amber-200">to the gram.</em>
           </h2>
           <p className={body}>
-            A delivery arrives and the cost blends into a weighted average automatically. Every
+            A delivery arrives and its cost blends into a weighted average automatically. Every
             recipe that uses it re-prices itself the moment it moves.
           </p>
           <div className="mt-6 inline-block rounded-2xl border border-white/15 bg-black/40 p-4 text-left backdrop-blur-md">
@@ -150,8 +133,8 @@ export default function Overlay() {
         </div>
       </div>
 
-      {/* 5 — THE MARGIN (flames) */}
-      <div data-beat={5} className={beatClass(5)}>
+      {/* 4 — THE MARGIN (cooking) */}
+      <div data-beat={4} className={beatClass(4)}>
         <div className="max-w-2xl">
           <Kicker>THE MARGIN</Kicker>
           <h2 className={h2}>
@@ -164,26 +147,12 @@ export default function Overlay() {
         </div>
       </div>
 
-      {/* 6 — THE PROBLEM (night city) */}
-      <div data-beat={6} className={beatClass(6)}>
-        <div className="max-w-2xl">
-          <Kicker>THE PROBLEM</Kicker>
-          <h2 className={h2}>
-            Most kitchens cook <em className="not-italic text-rose-300">in the dark.</em>
-          </h2>
-          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg">
-            Busy every night and still losing money — because no one can see which dish, which
-            vendor or which shift is quietly eating the profit.
-          </p>
-        </div>
-      </div>
-
-      {/* 7 — WITH MISE (dining) */}
-      <div data-beat={7} className={beatClass(7)}>
+      {/* 5 — WITH MISE (dining) */}
+      <div data-beat={5} className={beatClass(5)}>
         <div className="max-w-xl">
           <Kicker>WITH MISE</Kicker>
           <h2 className={h2}>
-            This one can see <em className="not-italic text-emerald-300">every penny.</em>
+            See <em className="not-italic text-emerald-300">every penny.</em>
           </h2>
           <p className={body}>The lights are on. Money in, money out, and exactly what&apos;s left — live.</p>
           <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -201,47 +170,21 @@ export default function Overlay() {
         </div>
       </div>
 
-      {/* 8 — STEP INSIDE (interior) */}
-      <div data-beat={8} className={beatClass(8)}>
-        <div className="max-w-xl">
-          <Kicker>WELCOME</Kicker>
-          <h2 className="mt-4 font-display text-5xl text-white drop-shadow sm:text-7xl">
-            So step <em className="not-italic text-amber-200">inside.</em>
+      {/* 6 — THE PAYOFF (sharing) */}
+      <div data-beat={6} className={beatClass(6)}>
+        <div className="max-w-2xl">
+          <Kicker>THE PAYOFF</Kicker>
+          <h2 className={h2}>
+            Full tables. <em className="not-italic text-emerald-300">Profit in the open.</em>
           </h2>
-          <p className="mx-auto mt-5 max-w-md text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg">
-            This is what your restaurant looks like with the lights on.
+          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg">
+            When the numbers work, everyone eats — and you keep what you earned.
           </p>
         </div>
       </div>
 
-      {/* 9 — THE MONEY LOOP (screen) */}
-      <div data-beat={9} className={beatClass(9)}>
-        <div className="max-w-xl">
-          <Kicker>THE MONEY LOOP</Kicker>
-          <h2 className={h2}>
-            Watch a pound move <em className="not-italic text-emerald-300">through your kitchen.</em>
-          </h2>
-          <ol className="mt-6 space-y-2.5">
-            {[
-              ["01", "Stock comes in", "cost blends to a weighted average"],
-              ["02", "Every dish is costed", "to the gram, the second prices move"],
-              ["03", "You sell", "commissions off, till balanced"],
-              ["04", "Profit, in the open", "a live P&L of what you actually kept"],
-            ].map(([n, t, d]) => (
-              <li key={n} className="flex items-baseline gap-3">
-                <span className="font-mono text-sm text-emerald-300">{n}</span>
-                <span className="text-base text-white drop-shadow sm:text-lg">
-                  <span className="font-semibold">{t}</span>
-                  <span className="text-slate-300"> — {d}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </div>
-
-      {/* 10 — CTA (sunrise) */}
-      <div data-beat={10} className={beatClass(10)}>
+      {/* 7 — CTA (sunrise) */}
+      <div data-beat={7} className={beatClass(7)}>
         <div className="max-w-2xl">
           <Kicker>YOUR TURN</Kicker>
           <h2 className="mt-4 font-display text-5xl leading-[1.05] text-white drop-shadow sm:text-7xl">
