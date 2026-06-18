@@ -216,14 +216,20 @@ export function Copilot() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Ask Mise Copilot"
-        className={`fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-2xl text-white transition hover:scale-105 active:scale-95 lg:bottom-6 lg:right-6 ${open ? "" : "mise-copilot-glow"}`}
-      >
-        <span aria-hidden>{open ? "✕" : "✨"}</span>
-      </button>
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Ask Mise Copilot"
+          className="group fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-brand-500 hover:shadow-xl active:scale-95 lg:bottom-6 lg:right-6"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+            <path d="M12 2.5l1.7 5.3a3 3 0 0 0 1.9 1.9L21 11.4l-5.3 1.7a3 3 0 0 0-1.9 1.9L12 20.3l-1.7-5.3a3 3 0 0 0-1.9-1.9L3 11.4l5.3-1.7a3 3 0 0 0 1.9-1.9z" />
+            <circle cx="18.5" cy="5" r="1.4" />
+          </svg>
+          <span className="hidden text-sm font-semibold sm:inline">Ask Mise</span>
+        </button>
+      )}
 
       {open && (
         <div
@@ -245,11 +251,14 @@ export function Copilot() {
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.map((m, i) => (
-              <div key={i} className={`mise-msg-in ${m.role === "user" ? "flex justify-end" : "flex justify-start"}`}>
-                <div className="max-w-[88%]">
+              <div key={i} className={`mise-msg-in flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "assistant" && (
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-[13px] text-white shadow-sm" aria-hidden>✨</span>
+                )}
+                <div className="max-w-[80%]">
                   {/* eslint-disable-next-line @next/next/no-img-element -- data-URL thumbnail, nothing for next/image to optimise */}
                   {m.image && <img src={m.image} alt="attachment" className="mb-1.5 max-h-40 rounded-xl border border-glass/15 object-cover" />}
-                  <div className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "rounded-br-md bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-md shadow-brand-600/20" : "rounded-bl-md border border-glass/10 bg-paper-3 text-fg-soft"}`}>
+                  <div className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "rounded-br-md bg-brand-600 text-white shadow-sm" : "rounded-bl-md border border-glass/10 bg-paper-3 text-fg"}`}>
                     {m.content}
                   </div>
 
@@ -307,8 +316,9 @@ export function Copilot() {
             ))}
 
             {loading && (
-              <div className="flex justify-start">
-                <div className="flex items-end gap-1.5 rounded-2xl rounded-bl-md border border-glass/10 bg-paper-3 px-4 py-3.5">
+              <div className="flex justify-start gap-2">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-[13px] text-white shadow-sm" aria-hidden>✨</span>
+                <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-glass/10 bg-paper-3 px-4 py-3.5">
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" />
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" style={{ animationDelay: "0.2s" }} />
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" style={{ animationDelay: "0.4s" }} />

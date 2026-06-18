@@ -51,7 +51,10 @@ async def generate(
     if not is_configured():
         raise ProviderError("no api key")
 
-    import httpx
+    try:
+        import httpx
+    except ImportError as exc:  # never 500 — degrade to the deterministic fallback
+        raise ProviderError("httpx not installed") from exc
 
     url = _ENDPOINT.format(model=settings.assistant_model)
     params = {"key": settings.gemini_api_key}

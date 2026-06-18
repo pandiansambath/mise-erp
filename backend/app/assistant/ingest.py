@@ -104,7 +104,10 @@ async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
         raise ProviderError("no api key")
     cfg = KINDS[kind]
 
-    import httpx
+    try:
+        import httpx
+    except ImportError as exc:
+        raise ProviderError("httpx not installed") from exc
 
     url = _ENDPOINT.format(model=settings.assistant_model)
     body = {
