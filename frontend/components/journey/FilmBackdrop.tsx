@@ -29,7 +29,7 @@ export default function FilmBackdrop() {
 
     const tick = () => {
       sceneOpacities(journeyProgress.value, op);
-      // most-visible scene — used to preload its neighbours
+      // most-visible scene — everything is staged relative to it
       let active = 0;
       for (let i = 1; i < op.length; i++) if (op[i] > op[active]) active = i;
 
@@ -41,9 +41,17 @@ export default function FilmBackdrop() {
         }
         const v = videos[i];
         if (!v) continue;
-        const near = Math.abs(i - active) <= 1; // preload current + neighbours
-        if (near && !v.getAttribute("src")) v.setAttribute("src", v.dataset.src || "");
-        if (o > 0.02) {
+        const dist = i - active; // <0 behind, >0 ahead in scroll order
+        // Buffer the current clip + the next TWO ahead (and the one behind, for
+        // scroll-back) well before they're needed — this is what kills the
+        // "video only starts when I reach it" stutter.
+        if (dist >= -1 && dist <= 2 && !v.getAttribute("src")) {
+          v.setAttribute("src", v.dataset.src || "");
+          v.load();
+        }
+        // Keep the current + immediate neighbours actually PLAYING (muted), even
+        // while still faded out, so a crossfade reveals a clip already in motion.
+        if (dist >= -1 && dist <= 1) {
           if (v.paused) v.play().catch(() => {});
         } else if (!v.paused) {
           v.pause();
@@ -66,11 +74,12 @@ export default function FilmBackdrop() {
         >
           <video
             data-src={`/journey/${s.name}.mp4`}
+            src={i === 0 ? `/journey/${s.name}.mp4` : undefined}
             poster={`/journey/${s.name}.jpg`}
             muted
             loop
             playsInline
-            preload="none"
+            preload="auto"
             disablePictureInPicture
             className="h-full w-full object-cover"
             style={{ objectPosition: s.pos, transform: "translateZ(0) scale(1.03)" }}
