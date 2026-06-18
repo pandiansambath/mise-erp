@@ -49,12 +49,15 @@ export default function Overlay() {
     const root = rootRef.current;
     if (!root) return;
     const els = Array.from(root.querySelectorAll<HTMLElement>("[data-beat]"));
+    const last = new Array(els.length).fill(-1);
     let raf = 0;
     const tick = () => {
       const p = journeyProgress.value;
       for (const el of els) {
         const i = Number(el.dataset.beat);
         const o = windowOpacity(p, BEATS[i].start, BEATS[i].end, 0.03);
+        if (Math.abs(o - last[i]) < 0.002) continue; // skip redundant writes
+        last[i] = o;
         el.style.opacity = String(o);
         el.style.transform = `translateY(${(1 - o) * 26}px)`;
         el.style.pointerEvents = o > 0.6 ? "auto" : "none";

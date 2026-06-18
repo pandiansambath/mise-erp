@@ -22,10 +22,10 @@ KEY_FILE = ROOT / "docs" / "pexels_api_key_and_documentation_link.txt"
 OUT = ROOT / "frontend" / "public" / "journey"
 
 SCENES: list[tuple[str, list[str]]] = [
-    ("mountains", ["aerial mountains clouds", "mountain lake landscape", "misty mountains valley"]),
+    ("mountains", ["drone flying over mountain peaks", "aerial snow mountains sunrise", "epic mountain range drone"]),
     ("sea", ["turquoise ocean aerial", "blue sea waves aerial", "tropical ocean drone"]),
     ("forest", ["aerial forest sunlight", "green forest trees", "sunlight through forest"]),
-    ("produce", ["fresh vegetables market", "farmers market produce", "vegetables on table"]),
+    ("produce", ["fresh vegetables wooden table", "organic vegetables close up", "colourful fresh vegetables"]),
     ("cooking", ["chef cooking restaurant kitchen", "chef plating food", "flames cooking pan"]),
     ("dining", ["fine dining restaurant interior", "cozy restaurant evening", "restaurant table candle"]),
     ("sharing", ["friends sharing food at table", "people eating together restaurant", "family dinner table"]),

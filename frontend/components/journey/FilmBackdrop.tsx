@@ -1,15 +1,19 @@
 "use client";
 
-// The cinematic layer: one real video clip per story beat, stacked full-screen
-// and crossfaded by scroll. Clips lazy-load only as you approach them (so the
-// first paint is just the hero poster + its ~1.8MB clip), play only while
-// visible (battery/CPU), and sit under a legibility scrim + vignette so the
-// oversized white type always reads. No WebGL — just video + opacity, which is
-// why it stays buttery on a phone.
+// The cinematic layer: one real HD clip per beat, stacked full-screen and
+// crossfaded by scroll. Tuned for SMOOTHNESS on a phone:
+//   • no per-frame transforms (motion comes from the clips themselves) — a
+//     continuously-scaled <video> layer was the source of the scroll jank,
+//     flicker, and the "zooms more and more" on mobile;
+//   • opacity is written only when it actually changes (idle frames are free);
+//   • the current clip + its immediate neighbours preload so a crossfade never
+//     flashes a black/empty frame;
+//   • only visible clips play (battery/CPU).
+// A static, tiny scale just hides sub-pixel edges during a dissolve.
 
 import { useEffect, useRef } from "react";
 import { journeyProgress } from "./progress";
-import { SCENES, sceneLocalProgress, sceneOpacities } from "./scenes";
+import { SCENES, sceneOpacities } from "./scenes";
 
 export default function FilmBackdrop() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -20,21 +24,27 @@ export default function FilmBackdrop() {
     const layers = Array.from(root.querySelectorAll<HTMLDivElement>("[data-scene]"));
     const videos = layers.map((l) => l.querySelector("video") as HTMLVideoElement);
     const op = new Array(SCENES.length).fill(0);
+    const lastOp = new Array(SCENES.length).fill(-1);
     let raf = 0;
+
     const tick = () => {
-      const p = journeyProgress.value;
-      sceneOpacities(p, op);
+      sceneOpacities(journeyProgress.value, op);
+      // most-visible scene — used to preload its neighbours
+      let active = 0;
+      for (let i = 1; i < op.length; i++) if (op[i] > op[active]) active = i;
+
       for (let i = 0; i < layers.length; i++) {
         const o = op[i];
-        layers[i].style.opacity = String(o);
+        if (Math.abs(o - lastOp[i]) > 0.003) {
+          layers[i].style.opacity = String(o);
+          lastOp[i] = o;
+        }
         const v = videos[i];
         if (!v) continue;
+        const near = Math.abs(i - active) <= 1; // preload current + neighbours
+        if (near && !v.getAttribute("src")) v.setAttribute("src", v.dataset.src || "");
         if (o > 0.02) {
-          if (!v.getAttribute("src")) v.setAttribute("src", v.dataset.src || "");
           if (v.paused) v.play().catch(() => {});
-          // slow forward push + drift while you travel through this scene
-          const local = sceneLocalProgress(p, i);
-          v.style.transform = `scale(${1.06 + local * 0.13}) translateY(${(local - 0.5) * 3}%)`;
         } else if (!v.paused) {
           v.pause();
         }
@@ -62,8 +72,8 @@ export default function FilmBackdrop() {
             playsInline
             preload="none"
             disablePictureInPicture
-            className="h-full w-full object-cover will-change-transform"
-            style={{ objectPosition: s.pos, transform: "scale(1.06)" }}
+            className="h-full w-full object-cover"
+            style={{ objectPosition: s.pos, transform: "translateZ(0) scale(1.03)" }}
           />
         </div>
       ))}
