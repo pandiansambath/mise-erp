@@ -9,15 +9,19 @@ clickable buttons/links AND shown to the model so it can reference them.
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
+from datetime import date as date_type
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
 from app.core.rbac import has_permission
+from app.expenses import service as expense_service
 from app.inventory import service as inventory_service
 from app.recipes import service as recipe_service
 from app.reports import service as reports_service
+from app.sales import service as sales_service
 from app.vendors import service as vendor_service
 
 from . import actions as action_mod
@@ -132,6 +136,68 @@ async def list_recipes(db: AsyncSession, user: User, args: dict) -> dict:
         "recipes": rows,
         "actions": [{"label": "Open Recipes", "href": "/recipes"}],
     }
+
+
+async def stock_value(db: AsyncSession, user: User, args: dict) -> dict:
+    """Total money tied up in stock (weighted-average cost), broken down by category."""
+    if not has_permission(user.role, "inventory:read"):
+        return {"error": "You don't have access to inventory."}
+    items = await inventory_service.list_items(db, user.hotel_id)
+    by_cat: dict[str, Decimal] = {}
+    total = Decimal("0")
+    for i in items:
+        val = (i.current_stock or Decimal("0")) * (i.average_cost or Decimal("0"))
+        total += val
+        cat = i.category or "Uncategorised"
+        by_cat[cat] = by_cat.get(cat, Decimal("0")) + val
+    q = Decimal("0.01")
+    return {
+        "total_stock_value": _s(total.quantize(q)),
+        "item_count": len(items),
+        "by_category": [
+            {"category": k, "value": _s(v.quantize(q))}
+            for k, v in sorted(by_cat.items(), key=lambda kv: kv[1], reverse=True)
+        ],
+        "actions": [{"label": "Open Inventory", "href": "/inventory"}],
+    }
+
+
+async def list_vendors(db: AsyncSession, user: User, args: dict) -> dict:
+    """The suppliers (name + what they supply) and the exact count."""
+    if not has_permission(user.role, "vendors:read"):
+        return {"error": "You don't have access to suppliers."}
+    vendors = await vendor_service.list_vendors(db, user.hotel_id)
+    rows = [{"name": v.name, "category": v.category} for v in vendors[:60]]
+    return {"vendor_count": len(vendors), "vendors": rows,
+            "actions": [{"label": "Open Vendors", "href": "/vendors"}]}
+
+
+async def expenses_summary(db: AsyncSession, user: User, args: dict) -> dict:
+    """This month's expenses: total, fixed vs variable, and top categories."""
+    if not has_permission(user.role, "expenses:read"):
+        return {"error": "You don't have access to expenses."}
+    today = date_type.today()
+    s = await expense_service.summary(db, user.hotel_id, today.replace(day=1), today)
+    return {
+        "period": "this month",
+        "total": _s(s["grand_total"]),
+        "fixed": _s(s["fixed_total"]),
+        "variable": _s(s["variable_total"]),
+        "top_categories": [
+            {"category": c["category_name"], "total": _s(c["total"])} for c in s["by_category"][:6]
+        ],
+        "actions": [{"label": "Open Expenses", "href": "/expenses"}],
+    }
+
+
+async def sales_summary(db: AsyncSession, user: User, args: dict) -> dict:
+    """This month's sales: gross, delivery commission, and net takings."""
+    if not has_permission(user.role, "sales:read"):
+        return {"error": "You don't have access to sales."}
+    today = date_type.today()
+    r = await sales_service.range_summary(db, user.hotel_id, today.replace(day=1), today)
+    return {"period": "this month", "gross": _s(r["gross"]), "commission": _s(r["commission"]),
+            "net": _s(r["net"]), "actions": [{"label": "Open Sales & Cash", "href": "/sales"}]}
 
 
 async def navigate(db: AsyncSession, user: User, args: dict) -> dict:
@@ -252,6 +318,35 @@ TOOLS: list[dict] = [
         "parameters": {"type": "object", "properties": {}},
     },
     {
+        "name": "stock_value",
+        "description": (
+            "Total money tied up in stock (at weighted-average cost), by category. "
+            "Use for 'what's my stock worth', 'inventory value'."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_vendors",
+        "description": "The suppliers (name + category) and the exact supplier count.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "expenses_summary",
+        "description": (
+            "This month's expenses: total, fixed vs variable, and top categories. "
+            "Use for 'what did I spend this month', 'my costs'."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "sales_summary",
+        "description": (
+            "This month's sales: gross, delivery commission and net takings. Use for "
+            "'this month's sales/takings'."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
         "name": "navigate",
         "description": (
             "Find the right Mise page for what the user wants to do, and return a "
@@ -359,6 +454,10 @@ EXECUTORS: dict[str, Executor] = {
     "money_snapshot": money_snapshot,
     "business_overview": business_overview,
     "list_recipes": list_recipes,
+    "stock_value": stock_value,
+    "list_vendors": list_vendors,
+    "expenses_summary": expenses_summary,
+    "sales_summary": sales_summary,
     "navigate": navigate,
     "explain_term": explain_term,
     "propose_expense": propose_expense,
