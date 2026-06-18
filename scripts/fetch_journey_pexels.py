@@ -32,8 +32,27 @@ SCENES: list[tuple[str, list[str]]] = [
     ("sunrise", ["golden sunrise aerial landscape", "sunrise drone nature", "golden hour fields aerial"]),
 ]
 
-TARGET_W = 1280  # prefer an HD file about this wide
-MAX_W = 1920
+TARGET_W = 1920  # prefer a file about this wide (1080p — sharp on portrait phones)
+MAX_W = 2100     # allow 2048-wide "1080p" encodes (e.g. forest)
+
+# Per-scene width cap, for clips whose 1080p file is too heavy to preload on
+# mobile before the user scrolls to it. The sea clip is long; 720p water hides
+# the softness fine and keeps it light.
+SCENE_CAP_W: dict[str, int] = {"sea": 1280}
+
+# Once a clip is approved we PIN it by Pexels id so a re-fetch keeps the exact
+# footage (and only upgrades resolution) instead of re-searching. Edit a term
+# above + remove the pin here to deliberately swap a scene.
+PINNED: dict[str, int] = {
+    "mountains": 26835570,  # drone aerial over peak, golden sun flare
+    "sea": 26341148,        # turquoise ocean aerial
+    "forest": 8744961,      # green forest + lake
+    "produce": 5906562,     # clean ingredients on wooden board
+    "cooking": 7008577,     # chef at griddle
+    "dining": 31631562,     # warm ristorante interior
+    "sharing": 3970179,     # sharing platter + drinks
+    "sunrise": 26555448,    # golden sunrise over clouds
+}
 
 
 def read_key() -> str:
@@ -44,10 +63,16 @@ def read_key() -> str:
     return m.group(1)
 
 
-def req(url: str, key: str) -> bytes:
+def req(url: str, key: str, tries: int = 3) -> bytes:
     r = urllib.request.Request(url, headers={"Authorization": key, "User-Agent": "Mise/1.0"})
-    with urllib.request.urlopen(r, timeout=90) as resp:
-        return resp.read()
+    last: Exception | None = None
+    for _ in range(tries):
+        try:
+            with urllib.request.urlopen(r, timeout=120) as resp:
+                return resp.read()
+        except Exception as e:  # noqa: BLE001 — retry transient network errors
+            last = e
+    raise last  # type: ignore[misc]
 
 
 def search(key: str, q: str) -> list[dict]:
@@ -56,14 +81,17 @@ def search(key: str, q: str) -> list[dict]:
     return data.get("videos", [])
 
 
-def pick_file(v: dict) -> dict | None:
+def get_video(key: str, vid: int) -> dict:
+    return json.loads(req(f"https://api.pexels.com/videos/videos/{vid}", key).decode("utf-8"))
+
+
+def pick_file(v: dict, cap_w: int = MAX_W, target_w: int = TARGET_W) -> dict | None:
     files = [f for f in v.get("video_files", []) if f.get("link")]
     if not files:
         return None
-    # HD files no wider than MAX_W, closest to TARGET_W (sharp but lean)
-    hd = [f for f in files if f.get("quality") == "hd" and (f.get("width") or 0) <= MAX_W]
-    pool = hd or [f for f in files if (f.get("width") or 0) <= MAX_W] or files
-    pool.sort(key=lambda f: abs((f.get("width") or 0) - TARGET_W))
+    # files no wider than cap_w, closest to target_w (sharp but lean)
+    pool = [f for f in files if (f.get("width") or 0) <= cap_w] or files
+    pool.sort(key=lambda f: abs((f.get("width") or 0) - target_w))
     return pool[0]
 
 
@@ -78,7 +106,17 @@ def main() -> None:
         if only and name not in only:
             continue
         chosen = None
-        for term in terms:
+        cap = SCENE_CAP_W.get(name, MAX_W)
+        # Pinned scene: re-fetch the exact approved clip by id (upgrade res only).
+        if name in PINNED:
+            try:
+                v = get_video(key, PINNED[name])
+                f = pick_file(v, cap_w=cap, target_w=min(TARGET_W, cap))
+                if f:
+                    chosen = (f"id:{PINNED[name]}", v, f)
+            except Exception as e:  # noqa: BLE001
+                print(f"  ! pinned id {PINNED[name]}: {e}")
+        for term in [] if chosen else terms:
             try:
                 vids = search(key, term)
             except Exception as e:  # noqa: BLE001
@@ -89,7 +127,7 @@ def main() -> None:
             short = [v for v in vids if 4 <= (v.get("duration") or 0) <= 16] or vids
             short.sort(key=lambda v: v.get("duration") or 999)
             for v in short:
-                f = pick_file(v)
+                f = pick_file(v, cap_w=cap, target_w=min(TARGET_W, cap))
                 if f:
                     chosen = (term, v, f)
                     break
