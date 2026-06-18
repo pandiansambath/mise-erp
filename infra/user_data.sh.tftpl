@@ -24,14 +24,7 @@ aws ecr get-login-password --region ${region} | docker login --username AWS --pa
 mkdir -p /opt/mise
 
 cat > /opt/mise/Caddyfile <<'CADDY'
-:80 {
-	handle /api/* {
-		reverse_proxy backend:8000
-	}
-	handle {
-		reverse_proxy frontend:3000
-	}
-}
+${caddyfile}
 CADDY
 
 cat > /opt/mise/docker-compose.yml <<'COMPOSE'
@@ -41,8 +34,11 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - /opt/mise/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - backend
       - frontend
@@ -64,6 +60,10 @@ services:
   frontend:
     image: ${frontend_image}
     restart: always
+
+volumes:
+  caddy_data:
+  caddy_config:
 COMPOSE
 
 cd /opt/mise

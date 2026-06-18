@@ -8,6 +8,12 @@ data "aws_ssm_parameter" "al2023" {
 
 locals {
   registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com"
+
+  # Caddy site address: a real domain (+ www) turns on automatic HTTPS via
+  # Let's Encrypt; empty domain falls back to plain HTTP on :80 by IP.
+  caddy_site   = var.domain != "" ? "${var.domain}, www.${var.domain}" : ":80"
+  caddy_global = (var.domain != "" && var.acme_email != "") ? "{\n\temail ${var.acme_email}\n}\n\n" : ""
+  caddyfile    = "${local.caddy_global}${local.caddy_site} {\n\thandle /api/* {\n\t\treverse_proxy backend:8000\n\t}\n\thandle {\n\t\treverse_proxy frontend:3000\n\t}\n}\n"
 }
 
 resource "aws_instance" "app" {
@@ -42,6 +48,7 @@ resource "aws_instance" "app" {
     resend_api_key = var.resend_api_key
     email_from     = var.email_from
     gemini_api_key = var.gemini_api_key
+    caddyfile      = local.caddyfile
   })
   # Re-run cloud-init (pull new images + restart) whenever the images change.
   user_data_replace_on_change = true

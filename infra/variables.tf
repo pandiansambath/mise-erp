@@ -38,6 +38,20 @@ variable "gemini_api_key" {
   default   = ""
 }
 
+# Custom domain for HTTPS. Empty = serve plain HTTP on :80 by IP (current).
+# When set, Caddy auto-provisions a Let's Encrypt cert for it + www. (DNS must
+# point at the box's Elastic IP FIRST, or the ACME challenge fails.)
+variable "domain" {
+  type    = string
+  default = ""
+}
+
+# Email Let's Encrypt uses for expiry notices (recommended once a domain is set).
+variable "acme_email" {
+  type    = string
+  default = ""
+}
+
 # Full ECR image URIs (with tag), supplied by the CI workflow.
 variable "backend_image" {
   type = string

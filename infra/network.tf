@@ -45,7 +45,7 @@ resource "aws_subnet" "private" {
   tags              = { Name = "${var.project}-private-${count.index}" }
 }
 
-# EC2 box: HTTP (80) open to the world; SSH (22) too (key-less, for emergencies).
+# EC2 box: HTTP (80) + HTTPS (443) open to the world; SSH (22) too (key-less, emergencies).
 resource "aws_security_group" "ec2" {
   name        = "${var.project}-ec2"
   description = "Mise app server"
@@ -54,6 +54,13 @@ resource "aws_security_group" "ec2" {
     description = "HTTP"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
