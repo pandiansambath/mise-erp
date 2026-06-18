@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type PayrollRow } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -25,6 +26,7 @@ export default function PayrollPage() {
   const [period, setPeriod] = useState(thisMonth());
   const [workingDays, setWorkingDays] = useState("26");
   const [rows, setRows] = useState<PayrollRow[]>([]);
+  const sort = useSort<"employee" | "gross" | "deductions" | "net">("employee");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +82,16 @@ export default function PayrollPage() {
     await load(period);
   }
 
+  const sortedRows = sort.sortRows(rows, (r, k) =>
+    k === "employee"
+      ? r.employee_name
+      : k === "gross"
+        ? parseFloat(r.gross_pay)
+        : k === "deductions"
+          ? parseFloat(r.advance_deduction) + parseFloat(r.other_deductions)
+          : parseFloat(r.net_pay),
+  );
+
   if (loading) return <Spinner />;
 
   const totalNet = rows.reduce((sum, r) => sum + parseFloat(r.net_pay), 0);
@@ -119,10 +131,10 @@ export default function PayrollPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                <th className="px-5 py-3 font-medium">Employee</th>
-                <th className="px-5 py-3 text-right font-medium">Gross</th>
-                <th className="px-5 py-3 text-right font-medium">Deductions</th>
-                <th className="px-5 py-3 text-right font-medium">Net</th>
+                <SortTh k="employee" label="Employee" sort={sort} />
+                <SortTh k="gross" label="Gross" sort={sort} right />
+                <SortTh k="deductions" label="Deductions" sort={sort} right />
+                <SortTh k="net" label="Net" sort={sort} right />
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 text-right font-medium">Payslip</th>
                 {canWrite && <th className="px-5 py-3"></th>}
@@ -134,7 +146,7 @@ export default function PayrollPage() {
                   No payroll for this period yet. {canWrite ? "Click “Run payroll”." : ""}
                 </td></tr>
               ) : (
-                rows.map((r) => (
+                sortedRows.map((r) => (
                   <tr key={r.id} className="border-b border-line">
                     <td className="px-5 py-3 font-medium text-fg">{r.employee_name}</td>
                     <td className="px-5 py-3 text-right text-fg-soft">{format(r.gross_pay)}</td>

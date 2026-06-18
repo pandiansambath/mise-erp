@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { Select } from "@/components/Select";
+import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -33,6 +34,7 @@ export default function ExpensesPage() {
   const [to, setTo] = useState(today());
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const sort = useSort<"date" | "category" | "amount">("date", "desc");
   const [summary, setSummary] = useState<ExpenseSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +112,10 @@ export default function ExpensesPage() {
 
   const inputCls =
     "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+
+  const sortedExpenses = sort.sortRows(expenses, (x, k) =>
+    k === "amount" ? parseFloat(x.amount || "0") : k === "category" ? x.category_name : x.date,
+  );
 
   return (
     <div>
@@ -193,9 +199,9 @@ export default function ExpensesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                    <th className="px-5 py-3 font-medium">Date</th>
-                    <th className="px-5 py-3 font-medium">Category</th>
-                    <th className="px-5 py-3 text-right font-medium">Amount</th>
+                    <SortTh k="date" label="Date" sort={sort} />
+                    <SortTh k="category" label="Category" sort={sort} />
+                    <SortTh k="amount" label="Amount" sort={sort} right />
                     <th className="px-5 py-3"></th>
                   </tr>
                 </thead>
@@ -207,7 +213,7 @@ export default function ExpensesPage() {
                       </td>
                     </tr>
                   ) : (
-                    expenses.map((x) => (
+                    sortedExpenses.map((x) => (
                       <tr key={x.id} className="border-b border-line">
                         <td className="px-5 py-3 text-fg-faint">{x.date}</td>
                         <td className="px-5 py-3">

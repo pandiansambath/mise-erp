@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
+import { SortTh, useSort } from "@/components/sortable";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -32,6 +33,7 @@ export default function EmployeesPage() {
   const canWrite = can(user?.role, "employees:write");
 
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const sort = useSort<"code" | "name" | "title" | "pay">("name");
   const [alerts, setAlerts] = useState<VisaAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
@@ -91,6 +93,16 @@ export default function EmployeesPage() {
       setSaving(false);
     }
   }
+
+  const sortedEmployees = sort.sortRows(employees, (e, k) =>
+    k === "code"
+      ? e.employee_code
+      : k === "name"
+        ? e.full_name
+        : k === "title"
+          ? e.job_title || ""
+          : parseFloat((e.salary_type === "MONTHLY" ? e.monthly_salary : e.hourly_rate) || "0"),
+  );
 
   if (loading) return <Spinner />;
 
@@ -191,10 +203,10 @@ export default function EmployeesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                <th className="px-5 py-3 font-medium">Code</th>
-                <th className="px-5 py-3 font-medium">Name</th>
-                <th className="px-5 py-3 font-medium">Job title</th>
-                <th className="px-5 py-3 text-right font-medium">Pay</th>
+                <SortTh k="code" label="Code" sort={sort} />
+                <SortTh k="name" label="Name" sort={sort} />
+                <SortTh k="title" label="Job title" sort={sort} />
+                <SortTh k="pay" label="Pay" sort={sort} right />
                 <th className="px-5 py-3 font-medium">Visa</th>
                 <th className="px-5 py-3"></th>
               </tr>
@@ -203,7 +215,7 @@ export default function EmployeesPage() {
               {employees.length === 0 ? (
                 <tr><td colSpan={6} className="px-5 py-8 text-center text-fg-faint">No employees yet.</td></tr>
               ) : (
-                employees.map((e) => {
+                sortedEmployees.map((e) => {
                   const alert = alerts.find((a) => a.employee_id === e.id);
                   return (
                     <tr key={e.id} className="border-b border-line">
