@@ -129,72 +129,80 @@ export default function RotaPage() {
       {canWrite && (
         <Card className="mb-6">
           <p className="mb-3 text-sm font-medium text-fg-soft">Add a shift</p>
-          <form onSubmit={addShift} className="flex flex-wrap items-end gap-3">
-            <label className="block">
+          <form onSubmit={addShift} className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end">
+            <label className="block sm:w-48">
               <span className="block text-xs font-medium text-fg-faint">Employee</span>
               <Select
                 value={emp}
                 onChange={setEmp}
                 placeholder="Choose…"
-                className="mt-1 w-44"
+                className="mt-1 w-full"
                 options={[
                   { value: "", label: "Choose…" },
                   ...employees.map((x) => ({ value: x.id, label: x.full_name })),
                 ]}
               />
             </label>
-            <label className="block">
+            <label className="block sm:w-48">
               <span className="block text-xs font-medium text-fg-faint">Day</span>
               <Select
                 value={day}
                 onChange={setDay}
-                className="mt-1 w-44"
+                className="mt-1 w-full"
                 options={weekDates.map((d, i) => ({
                   value: iso(d),
                   label: `${DAYS[i]} ${d.getDate()}/${d.getMonth() + 1}`,
                 }))}
               />
             </label>
-            <label className="block">
+            <label className="block sm:w-auto">
               <span className="block text-xs font-medium text-fg-faint">Start</span>
-              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 rounded-lg border border-line-2 bg-glass/5 px-2 py-2 text-sm text-fg outline-none focus:border-brand-500" />
+              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-32" />
             </label>
-            <label className="block">
+            <label className="block sm:w-auto">
               <span className="block text-xs font-medium text-fg-faint">End</span>
-              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 rounded-lg border border-line-2 bg-glass/5 px-2 py-2 text-sm text-fg outline-none focus:border-brand-500" />
+              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-32" />
             </label>
-            <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-              {busy ? "Adding…" : "Add"}
+            <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              {busy ? "Adding…" : "Add shift"}
             </button>
           </form>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
-        {weekDates.map((d, i) => (
-          <Card key={i} className="p-3">
-            <p className="mb-2 text-sm font-semibold text-fg">{DAYS[i]} <span className="text-fg-faint">{d.getDate()}/{d.getMonth() + 1}</span></p>
-            {byDay(d).length === 0 ? (
-              <p className="py-2 text-xs text-fg-faint">—</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {byDay(d).map((s) => (
-                  <li key={s.id} className="rounded-lg border border-line bg-glass/5 px-2 py-1.5 text-xs">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="min-w-0 truncate font-medium text-fg">{s.employee_name}</span>
-                      {canWrite && (
-                        <button onClick={() => removeShift(s.id)} aria-label="Remove shift" className="text-fg-faint hover:text-rose-300">✕</button>
-                      )}
-                    </div>
-                    <div className="text-fg-faint">
-                      {hhmm(s.start_time)}–{hhmm(s.end_time)} · {s.hours}h · {format(s.cost)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        ))}
+      {/* A horizontal week strip: each day is at least 170px so the shift cards
+          never get crushed — on narrow screens it scrolls instead. */}
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {weekDates.map((d, i) => {
+          const shifts = byDay(d);
+          const isToday = iso(d) === iso(new Date());
+          return (
+            <Card key={i} className={`min-w-[170px] flex-1 p-3 ${isToday ? "ring-1 ring-brand-500/40" : ""}`}>
+              <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-fg">
+                <span>{DAYS[i]} <span className="text-fg-faint">{d.getDate()}/{d.getMonth() + 1}</span></span>
+                {shifts.length > 0 && <span className="text-[10px] font-normal text-fg-faint">{shifts.length}</span>}
+              </p>
+              {shifts.length === 0 ? (
+                <p className="py-3 text-center text-xs text-fg-faint">—</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {shifts.map((s) => (
+                    <li key={s.id} className="rounded-lg border border-line bg-glass/5 p-2 text-xs">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="min-w-0 truncate font-medium text-fg">{s.employee_name}</span>
+                        {canWrite && (
+                          <button onClick={() => removeShift(s.id)} aria-label="Remove shift" className="shrink-0 text-fg-faint hover:text-rose-300">✕</button>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-fg-soft">{hhmm(s.start_time)}–{hhmm(s.end_time)}</div>
+                      <div className="text-fg-faint">{s.hours}h · {format(s.cost)}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          );
+        })}
       </div>
 
       {labour && labour.by_employee.length > 0 && (

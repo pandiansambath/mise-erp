@@ -309,13 +309,87 @@ export default function RecipesPage() {
   ];
   const recipeNames = [...new Set(recipes.map((r) => r.name))].sort();
 
-  // group recipes by name so a dish with several serves-variants shows as one card
-  const groups = new Map<string, Recipe[]>();
+  // group recipes by name so a dish with several serves-variants shows as one
+  // card — and keep ACTIVE and ARCHIVED in separate maps so the page can show
+  // archived dishes in their own clearly-labelled section (not mixed in).
+  const activeGroups = new Map<string, Recipe[]>();
+  const archivedGroups = new Map<string, Recipe[]>();
   for (const r of recipes) {
-    const g = groups.get(r.name) ?? [];
+    const map = r.is_active ? activeGroups : archivedGroups;
+    const g = map.get(r.name) ?? [];
     g.push(r);
-    groups.set(r.name, g);
+    map.set(r.name, g);
   }
+
+  const dishCard = (dishName: string, variants: Recipe[]) => {
+    const sorted = [...variants].sort((a, b) => a.servings_default - b.servings_default);
+    return (
+      <Card key={dishName}>
+        <div className="mb-1">
+          <p className="font-semibold text-fg">{dishName}</p>
+          <p className="text-sm text-fg-faint">
+            {sorted[0].category || "Dish"}
+            {sorted.length > 1 && ` · ${sorted.length} serving sizes`}
+          </p>
+        </div>
+        <div className="divide-y divide-line">
+          {sorted.map((r) => {
+            const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
+            const open = openId === r.id;
+            return (
+              <div key={r.id} id={`recipe-${r.id}`} className={r.is_active ? "" : "opacity-70"}>
+                <div className="flex items-center gap-2 py-2.5">
+                  <button
+                    onClick={() => setOpenId(open ? null : r.id)}
+                    className="flex flex-1 items-center justify-between text-left"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-medium text-fg-soft">
+                      serves {r.servings_default}
+                    </span>
+                    <span className="flex items-center gap-3">
+                      {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
+                      <span className="text-fg-faint">{open ? "▲" : "▼"}</span>
+                    </span>
+                  </button>
+                  {canWrite &&
+                    (r.is_active ? (
+                      <>
+                        <button
+                          onClick={() => startEdit(r)}
+                          className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => archiveRecipe(r)}
+                          title="Archive (hide from recipes & costing)"
+                          className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                        >
+                          Archive
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => reactivateRecipe(r)}
+                        title="Restore this recipe to your active list + costing"
+                        className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/20"
+                      >
+                        ↩ Restore
+                      </button>
+                    ))}
+                </div>
+                {open && (
+                  <div className="border-t border-line pb-2 pt-3">
+                    <CostDetail recipeId={r.id} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <div>
@@ -415,83 +489,34 @@ export default function RecipesPage() {
         </label>
       </div>
 
-      {recipes.length === 0 ? (
+      {activeGroups.size === 0 && archivedGroups.size === 0 ? (
         <Card>
           <p className="py-6 text-center text-sm text-fg-faint">No recipes yet.</p>
         </Card>
       ) : (
         <div className="space-y-3">
-          {[...groups.entries()].map(([dishName, variants]) => {
-            const sorted = [...variants].sort(
-              (a, b) => a.servings_default - b.servings_default
-            );
-            return (
-              <Card key={dishName}>
-                <div className="mb-1">
-                  <p className="font-semibold text-fg">{dishName}</p>
-                  <p className="text-sm text-fg-faint">
-                    {sorted[0].category || "Dish"}
-                    {sorted.length > 1 && ` · ${sorted.length} serving sizes`}
-                  </p>
-                </div>
-                <div className="divide-y divide-line">
-                  {sorted.map((r) => {
-                    const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
-                    const open = openId === r.id;
-                    return (
-                      <div key={r.id} id={`recipe-${r.id}`} className={r.is_active ? "" : "opacity-60"}>
-                        <div className="flex items-center gap-2 py-2.5">
-                          <button
-                            onClick={() => setOpenId(open ? null : r.id)}
-                            className="flex flex-1 items-center justify-between text-left"
-                          >
-                            <span className="flex items-center gap-2 text-sm font-medium text-fg-soft">
-                              serves {r.servings_default}
-                              {!r.is_active && <Badge tone="slate">archived</Badge>}
-                            </span>
-                            <span className="flex items-center gap-3">
-                              {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
-                              <span className="text-fg-faint">{open ? "▲" : "▼"}</span>
-                            </span>
-                          </button>
-                          {canWrite &&
-                            (r.is_active ? (
-                              <>
-                                <button
-                                  onClick={() => startEdit(r)}
-                                  className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => archiveRecipe(r)}
-                                  title="Archive (hide from recipes & costing)"
-                                  className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
-                                >
-                                  Archive
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                onClick={() => reactivateRecipe(r)}
-                                className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/20"
-                              >
-                                Reactivate
-                              </button>
-                            ))}
-                        </div>
-                        {open && (
-                          <div className="border-t border-line pb-2 pt-3">
-                            <CostDetail recipeId={r.id} />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            );
-          })}
+          {[...activeGroups.entries()].map(([dishName, variants]) => dishCard(dishName, variants))}
+          {activeGroups.size === 0 && (
+            <Card>
+              <p className="py-6 text-center text-sm text-fg-faint">
+                No active recipes{showArchived ? " — your archived ones are below." : "."}
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {showArchived && archivedGroups.size > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-center gap-2">
+            <h3 className="font-display text-lg font-semibold text-fg">📦 Archived</h3>
+            <span className="text-xs text-fg-faint">
+              {archivedGroups.size} dish{archivedGroups.size === 1 ? "" : "es"} · hidden from costing &amp; the menu — Restore to bring back
+            </span>
+          </div>
+          <div className="space-y-3 rounded-2xl border border-dashed border-line-2 bg-glass/[0.02] p-3">
+            {[...archivedGroups.entries()].map(([dishName, variants]) => dishCard(dishName, variants))}
+          </div>
         </div>
       )}
     </div>
