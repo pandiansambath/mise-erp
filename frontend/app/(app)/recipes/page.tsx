@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
+import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { ComboBox } from "@/components/ComboBox";
 import { fmtQty, ItemPicker, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
@@ -30,12 +31,31 @@ function SourceChip({ source, vendor }: { source: string; vendor: string | null 
   return <Badge tone="red">no price</Badge>;
 }
 
-function CostDetail({ recipeId }: { recipeId: string }) {
+function CostDetail({
+  recipeId,
+  items,
+  onTag,
+}: {
+  recipeId: string;
+  items: Item[];
+  onTag: (itemId: string, csv: string) => void;
+}) {
   const [data, setData] = useState<RecipeCostBreakdown | null>(null);
   const { format } = useCurrency();
   useEffect(() => {
     api.get<RecipeCostBreakdown>(`/recipes/${recipeId}/cost`).then(setData);
   }, [recipeId]);
+
+  // Tag an ingredient's allergens right here (saves instantly to the Inventory
+  // item; the Allergens sheet inherits it). code=null marks "reviewed, none".
+  const toggleAllergen = (item: Item | undefined, code: string | null) => {
+    if (!item) return;
+    if (code === null) return onTag(item.id, "");
+    const set = new Set(parseAllergens(item.allergens));
+    if (set.has(code)) set.delete(code);
+    else set.add(code);
+    onTag(item.id, [...set].join(","));
+  };
 
   if (!data) return <Spinner />;
 
@@ -110,6 +130,57 @@ function CostDetail({ recipeId }: { recipeId: string }) {
           </tbody>
         </table>
       </div>
+
+      {/* Allergens — tag each ingredient straight from the dish (Natasha's Law).
+          Saves instantly to the Inventory item; the Allergens sheet inherits it. */}
+      <div className="rounded-xl border border-line bg-paper-2/40 p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
+          🥜 Allergens — tag each ingredient
+        </p>
+        <ul className="space-y-2.5">
+          {data.ingredients.map((ing) => {
+            const item = items.find((it) => it.id === ing.item_id);
+            const reviewed = item?.allergens != null;
+            const current = new Set(parseAllergens(item?.allergens));
+            return (
+              <li key={ing.item_id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="w-36 shrink-0 truncate text-sm text-fg">{ing.item_name}</span>
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleAllergen(item, null)}
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+                      reviewed && current.size === 0
+                        ? "bg-brand-600 text-white"
+                        : "border border-line-2 text-fg-faint hover:bg-glass/5"
+                    }`}
+                  >
+                    none
+                  </button>
+                  {ALLERGENS.map((a) => {
+                    const on = current.has(a.code);
+                    return (
+                      <button
+                        key={a.code}
+                        type="button"
+                        onClick={() => toggleAllergen(item, a.code)}
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+                          on
+                            ? "bg-rose-500 text-white"
+                            : "border border-line-2 text-fg-soft hover:bg-glass/5"
+                        }`}
+                      >
+                        {a.label}
+                      </button>
+                    );
+                  })}
+                  {!reviewed && <span className="self-center text-[11px] text-amber-300">not reviewed</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -167,6 +238,13 @@ export default function RecipesPage() {
   async function reactivateRecipe(r: Recipe) {
     await api.patch(`/recipes/${r.id}`, { is_active: true });
     await reload();
+  }
+
+  // Tag an ingredient's allergens from the recipe view (updates the Inventory
+  // item; every dish using it inherits the change on the Allergens sheet).
+  async function tagAllergens(itemId: string, csv: string) {
+    setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, allergens: csv } : it)));
+    await api.patch(`/inventory/items/${itemId}`, { allergens: csv }).catch(() => {});
   }
 
   useEffect(() => {
@@ -395,7 +473,7 @@ export default function RecipesPage() {
                 </div>
                 {open && (
                   <div className="border-t border-line pb-2 pt-3">
-                    <CostDetail recipeId={r.id} />
+                    <CostDetail recipeId={r.id} items={items} onTag={tagAllergens} />
                   </div>
                 )}
               </div>
