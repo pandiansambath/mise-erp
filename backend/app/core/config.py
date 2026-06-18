@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "Mise <alerts@mise.local>"
 
+    # Mise Copilot — the in-app AI assistant. A free Google AI Studio key activates
+    # the LLM (Gemini Flash: free tier, 1M context, native tools). With no key the
+    # assistant degrades gracefully to deterministic glossary + navigation answers,
+    # so the app (and CI) run fine without it. Provider-agnostic by design.
+    gemini_api_key: str = ""
+    assistant_model: str = "gemini-2.5-flash"
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

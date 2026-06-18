@@ -30,6 +30,14 @@ variable "email_from" {
   default = "Mise <onboarding@resend.dev>"
 }
 
+# Optional Mise Copilot LLM (Google Gemini, free tier). Empty = the assistant
+# runs in deterministic fallback mode (glossary + navigation), app fine without it.
+variable "gemini_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 # Full ECR image URIs (with tag), supplied by the CI workflow.
 variable "backend_image" {
   type = string

@@ -1,0 +1,99 @@
+"""The LLM call — Google Gemini, via its REST API (no SDK dependency).
+
+Kept deliberately model-agnostic: ``generate()`` takes a system prompt, the chat
+history, the tool schemas and an ``execute`` callback, runs the tool-calling
+loop, and returns the final text + which tools fired. Swapping to Groq/OpenAI
+later means writing one more ``generate`` variant — nothing else changes.
+
+httpx is imported lazily so the dependency is only needed when a key is set.
+"""
+from __future__ import annotations
+
+import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from app.core.config import settings
+
+log = logging.getLogger("mise.assistant")
+
+_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+_MAX_HOPS = 5  # cap tool-call round-trips so we can never loop forever
+
+ExecuteFn = Callable[[str, dict], Awaitable[dict]]
+
+
+class ProviderError(RuntimeError):
+    """Raised on any LLM transport/parse failure so the caller can fall back."""
+
+
+def is_configured() -> bool:
+    return bool(settings.gemini_api_key)
+
+
+def _to_contents(history: list[dict]) -> list[dict]:
+    """Map our {role, content} messages to Gemini contents."""
+    out = []
+    for m in history:
+        role = "model" if m["role"] == "assistant" else "user"
+        out.append({"role": role, "parts": [{"text": m["content"]}]})
+    return out
+
+
+async def generate(
+    *, system: str, history: list[dict], tools: list[dict], execute: ExecuteFn
+) -> tuple[str, list[str]]:
+    """Run one assistant turn (with tool calls) and return (reply_text, used_tools)."""
+    if not is_configured():
+        raise ProviderError("no api key")
+
+    import httpx
+
+    url = _ENDPOINT.format(model=settings.assistant_model)
+    params = {"key": settings.gemini_api_key}
+    body: dict[str, Any] = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": _to_contents(history),
+        "tools": [{"function_declarations": tools}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 900},
+    }
+
+    used: list[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            for _ in range(_MAX_HOPS):
+                resp = await client.post(url, params=params, json=body)
+                if resp.status_code >= 300:
+                    raise ProviderError(f"gemini {resp.status_code}: {resp.text[:300]}")
+                data = resp.json()
+                candidates = data.get("candidates") or []
+                if not candidates:
+                    raise ProviderError("no candidates in response")
+                content = candidates[0].get("content") or {}
+                parts = content.get("parts") or []
+
+                calls = [p["functionCall"] for p in parts if "functionCall" in p]
+                if calls:
+                    # record the model's tool-call turn, then answer each call
+                    body["contents"].append(content)
+                    fr_parts = []
+                    for call in calls:
+                        name = call.get("name", "")
+                        args = call.get("args", {}) or {}
+                        result = await execute(name, args)
+                        used.append(name)
+                        fr_parts.append(
+                            {"functionResponse": {"name": name, "response": result}}
+                        )
+                    body["contents"].append({"role": "user", "parts": fr_parts})
+                    continue
+
+                text = "".join(p.get("text", "") for p in parts).strip()
+                if not text:
+                    raise ProviderError("empty text in response")
+                return text, used
+        raise ProviderError("exceeded tool-call hops")
+    except ProviderError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — network/JSON errors → fall back
+        raise ProviderError(str(exc)) from exc

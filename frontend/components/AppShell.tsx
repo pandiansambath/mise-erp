@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
+import { Copilot } from "@/components/Copilot";
 import { Select } from "@/components/Select";
 import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
 
@@ -248,6 +249,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>
+
+      {/* Project-aware AI assistant — floats on every page */}
+      <Copilot />
     </div>
   );
 }
