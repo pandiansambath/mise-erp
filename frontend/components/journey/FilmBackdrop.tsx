@@ -46,11 +46,18 @@ export default function FilmBackdrop({ onProgress, onReady }: Props) {
       if (n >= REVEAL) finish();
     };
 
+    // Phones get small 540p clips (<scene>-m.mp4) — far lighter to download and
+    // decode; desktop keeps the crisp 1080p. Chosen here (client-only) so we never
+    // fetch the wrong size. The poster (set in JSX) shows until the clip is ready.
+    const isMobile =
+      typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches;
+
     videos.forEach((v, i) => {
-      if (!v || v.readyState >= 2) {
+      if (!v) {
         ready.add(i);
         return;
       }
+      v.src = `/journey/${SCENES[i].name}${isMobile ? "-m" : ""}.mp4`;
       const h = () => {
         ready.add(i);
         check();
@@ -111,8 +118,8 @@ export default function FilmBackdrop({ onProgress, onReady }: Props) {
           className="absolute inset-0"
           style={{ opacity: i === 0 ? 1 : 0, willChange: "opacity" }}
         >
+          {/* src is set in the effect (mobile → 540p -m.mp4, desktop → 1080p) */}
           <video
-            src={`/journey/${s.name}.mp4`}
             poster={`/journey/${s.name}.jpg`}
             muted
             loop

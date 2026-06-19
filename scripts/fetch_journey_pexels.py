@@ -95,10 +95,18 @@ def pick_file(v: dict, cap_w: int = MAX_W, target_w: int = TARGET_W) -> dict | N
     return pool[0]
 
 
+# Mobile tier: small, low-decode clips for phones (saved as <scene>-m.mp4).
+# Phones download/decode these; desktop keeps the crisp 1080p.
+MOBILE_W = 960  # ~540p — light to decode, fine behind the scrim on a small screen
+
+
 def main() -> None:
     key = read_key()
     OUT.mkdir(parents=True, exist_ok=True)
-    only = set(sys.argv[1:])
+    args = sys.argv[1:]
+    mobile = "mobile" in args
+    only = {a for a in args if a != "mobile"}
+    suffix = "-m" if mobile else ""
     cfile = OUT / "pexels_credits.json"
     credits = {c["scene"]: c for c in json.loads(cfile.read_text())} if cfile.exists() else {}
 
@@ -106,12 +114,13 @@ def main() -> None:
         if only and name not in only:
             continue
         chosen = None
-        cap = SCENE_CAP_W.get(name, MAX_W)
+        cap = MOBILE_W if mobile else SCENE_CAP_W.get(name, MAX_W)
+        tgt = MOBILE_W if mobile else min(TARGET_W, cap)
         # Pinned scene: re-fetch the exact approved clip by id (upgrade res only).
         if name in PINNED:
             try:
                 v = get_video(key, PINNED[name])
-                f = pick_file(v, cap_w=cap, target_w=min(TARGET_W, cap))
+                f = pick_file(v, cap_w=cap, target_w=tgt)
                 if f:
                     chosen = (f"id:{PINNED[name]}", v, f)
             except Exception as e:  # noqa: BLE001
@@ -127,7 +136,7 @@ def main() -> None:
             short = [v for v in vids if 4 <= (v.get("duration") or 0) <= 16] or vids
             short.sort(key=lambda v: v.get("duration") or 999)
             for v in short:
-                f = pick_file(v, cap_w=cap, target_w=min(TARGET_W, cap))
+                f = pick_file(v, cap_w=cap, target_w=tgt)
                 if f:
                     chosen = (term, v, f)
                     break
@@ -137,21 +146,25 @@ def main() -> None:
             print(f"[{name}] NO RESULT")
             continue
         term, v, f = chosen
-        (OUT / f"{name}.mp4").write_bytes(req(f["link"], key))
-        poster = v.get("image")
-        if poster:
-            try:
-                (OUT / f"{name}.jpg").write_bytes(req(poster, key))
-            except Exception:  # noqa: BLE001
-                poster = None
-        mb = (OUT / f"{name}.mp4").stat().st_size / 1_000_000
-        print(f"[{name}] '{term}' id={v['id']} {f.get('width')}x{f.get('height')} {f.get('quality')} {mb:.1f}MB")
-        credits[name] = {
-            "scene": name, "term": term, "id": v["id"], "width": f.get("width"),
-            "height": f.get("height"), "user": v.get("user", {}).get("name"), "url": v.get("url"),
-        }
-    cfile.write_text(json.dumps(list(credits.values()), indent=2), encoding="utf-8")
-    total = sum((OUT / f"{n}.mp4").stat().st_size for n, _ in SCENES if (OUT / f"{n}.mp4").exists())
+        (OUT / f"{name}{suffix}.mp4").write_bytes(req(f["link"], key))
+        if not mobile:  # desktop fetch also grabs the poster; mobile reuses it
+            poster = v.get("image")
+            if poster:
+                try:
+                    (OUT / f"{name}.jpg").write_bytes(req(poster, key))
+                except Exception:  # noqa: BLE001
+                    poster = None
+            credits[name] = {
+                "scene": name, "term": term, "id": v["id"], "width": f.get("width"),
+                "height": f.get("height"), "user": v.get("user", {}).get("name"), "url": v.get("url"),
+            }
+        mb = (OUT / f"{name}{suffix}.mp4").stat().st_size / 1_000_000
+        print(f"[{name}{suffix}] '{term}' id={v['id']} {f.get('width')}x{f.get('height')} {f.get('quality')} {mb:.1f}MB")
+    if not mobile:
+        cfile.write_text(json.dumps(list(credits.values()), indent=2), encoding="utf-8")
+    total = sum(
+        (OUT / f"{n}{suffix}.mp4").stat().st_size for n, _ in SCENES if (OUT / f"{n}{suffix}.mp4").exists()
+    )
     print(f"\nDONE -> {OUT} · total {total/1_000_000:.1f}MB")
 
 
