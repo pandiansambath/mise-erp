@@ -8,7 +8,7 @@
 // Nothing re-renders from React on scroll; scroll only writes a plain number.
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/Logo";
 import FilmBackdrop from "./FilmBackdrop";
 import Overlay from "./Overlay";
@@ -17,9 +17,22 @@ import { journeyProgress } from "./progress";
 const PAGES = 12; // ~1.5 screens of scroll per scene → a long, unhurried journey
 
 export default function JourneyExperience() {
-  const [intro, setIntro] = useState(true);
+  const [ready, setReady] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
+
+  // Stable callbacks so FilmBackdrop's preload effect runs exactly once.
+  const onProgress = useCallback((f: number) => setProgress(f), []);
+  const onReady = useCallback(() => setReady(true), []);
+
+  // Lock scrolling until every clip is loaded — no scrolling into black gaps.
+  useEffect(() => {
+    document.body.style.overflow = ready ? "" : "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [ready]);
 
   // Scroll → progress (0..1). Direct write, no React state in the hot path.
   useEffect(() => {
@@ -44,12 +57,6 @@ export default function JourneyExperience() {
     };
   }, []);
 
-  // Lift the intro veil shortly after mount.
-  useEffect(() => {
-    const t = setTimeout(() => setIntro(false), 900);
-    return () => clearTimeout(t);
-  }, []);
-
   // Paint the document dark so rubber-band overscroll never flashes white.
   useEffect(() => {
     const root = document.documentElement;
@@ -66,7 +73,7 @@ export default function JourneyExperience() {
 
   return (
     <div className="relative bg-black text-white">
-      <FilmBackdrop />
+      <FilmBackdrop onProgress={onProgress} onReady={onReady} />
       <Overlay />
 
       {/* ── chrome ── */}
@@ -108,16 +115,28 @@ export default function JourneyExperience() {
         <span className="mise-scroll-chevron text-white/80">↓</span>
       </div>
 
-      {/* intro veil — a quick branded fade so the first frame never flashes */}
+      {/* Preloader — holds the journey until every clip is buffered, so playback
+          is instant and never stalls mid-scroll (especially on mobile). */}
       <div
-        className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-[#04080e] transition-opacity duration-700"
-        style={{ opacity: intro ? 1 : 0, visibility: intro ? "visible" : "hidden" }}
+        className="fixed inset-0 z-[60] grid place-items-center bg-[#04080e] transition-opacity duration-700"
+        style={{ opacity: ready ? 0 : 1, visibility: ready ? "hidden" : "visible" }}
       >
-        <div className="flex flex-col items-center">
-          <Logo size={52} />
+        <div className="flex w-64 max-w-[78vw] flex-col items-center">
+          <span className="mise-bob inline-block">
+            <Logo size={52} />
+          </span>
           <p className="mt-5 font-display text-4xl text-white sm:text-5xl">Mise</p>
           <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.3em] text-emerald-200/80">
             Every plate · Every penny
+          </p>
+          <div className="mt-7 h-[3px] w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-amber-300 transition-[width] duration-300"
+              style={{ width: `${Math.max(6, Math.round(progress * 100))}%` }}
+            />
+          </div>
+          <p className="mt-3 font-mono text-[10px] tracking-[0.25em] text-white/55">
+            {progress < 1 ? "PREPARING YOUR JOURNEY…" : "READY"}
           </p>
         </div>
       </div>

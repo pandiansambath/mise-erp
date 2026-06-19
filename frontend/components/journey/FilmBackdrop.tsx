@@ -1,21 +1,19 @@
 "use client";
 
 // The cinematic layer: one real HD clip per beat, stacked full-screen and
-// crossfaded by scroll. Tuned for SMOOTHNESS on a phone:
-//   • no per-frame transforms (motion comes from the clips themselves) — a
-//     continuously-scaled <video> layer was the source of the scroll jank,
-//     flicker, and the "zooms more and more" on mobile;
-//   • opacity is written only when it actually changes (idle frames are free);
-//   • the current clip + its immediate neighbours preload so a crossfade never
-//     flashes a black/empty frame;
-//   • only visible clips play (battery/CPU).
-// A static, tiny scale just hides sub-pixel edges during a dissolve.
+// crossfaded by scroll. To kill the "video doesn't move for a few seconds / never
+// moves on mobile" problem we PRELOAD EVERY clip up front (reporting progress to a
+// loading screen), then autoplay them all. Each frame we also re-kick whichever
+// clip is currently visible — so even if a phone pauses background videos, the one
+// you're looking at is already buffered and starts instantly.
 
 import { useEffect, useRef } from "react";
 import { journeyProgress } from "./progress";
 import { SCENES, sceneOpacities } from "./scenes";
 
-export default function FilmBackdrop() {
+type Props = { onProgress?: (frac: number) => void; onReady?: () => void };
+
+export default function FilmBackdrop({ onProgress, onReady }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,14 +23,53 @@ export default function FilmBackdrop() {
     const videos = layers.map((l) => l.querySelector("video") as HTMLVideoElement);
     const op = new Array(SCENES.length).fill(0);
     const lastOp = new Array(SCENES.length).fill(-1);
-    let raf = 0;
 
+    // ── Preload phase: count clips that are ready to play, then reveal + play ──
+    const total = videos.length;
+    const seen = new Set<number>();
+    let done = false;
+    const cleanups: Array<() => void> = [];
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      onProgress?.(1);
+      for (const v of videos) v?.play?.().catch(() => {});
+      onReady?.();
+    };
+    const bump = (i: number) => {
+      if (seen.has(i)) return;
+      seen.add(i);
+      onProgress?.(seen.size / total);
+      if (seen.size >= total) finish();
+    };
+
+    videos.forEach((v, i) => {
+      if (!v || v.readyState >= 3) {
+        bump(i);
+        return;
+      }
+      const h = () => bump(i);
+      v.addEventListener("canplay", h);
+      v.addEventListener("loadeddata", h);
+      v.addEventListener("error", h); // count errors too, so we never hang
+      cleanups.push(() => {
+        v.removeEventListener("canplay", h);
+        v.removeEventListener("loadeddata", h);
+        v.removeEventListener("error", h);
+      });
+      try {
+        v.load();
+      } catch {
+        /* ignore */
+      }
+    });
+    // Safety: never trap the visitor on the loader if the network is slow/flaky.
+    const timeout = window.setTimeout(finish, 12000);
+
+    let raf = 0;
     const tick = () => {
       sceneOpacities(journeyProgress.value, op);
-      // most-visible scene — everything is staged relative to it
-      let active = 0;
-      for (let i = 1; i < op.length; i++) if (op[i] > op[active]) active = i;
-
       for (let i = 0; i < layers.length; i++) {
         const o = op[i];
         if (Math.abs(o - lastOp[i]) > 0.003) {
@@ -40,28 +77,19 @@ export default function FilmBackdrop() {
           lastOp[i] = o;
         }
         const v = videos[i];
-        if (!v) continue;
-        const dist = i - active; // <0 behind, >0 ahead in scroll order
-        // Buffer the current clip + the next TWO ahead (and the one behind, for
-        // scroll-back) well before they're needed — this is what kills the
-        // "video only starts when I reach it" stutter.
-        if (dist >= -1 && dist <= 2 && !v.getAttribute("src")) {
-          v.setAttribute("src", v.dataset.src || "");
-          v.load();
-        }
-        // Keep the current + immediate neighbours actually PLAYING (muted), even
-        // while still faded out, so a crossfade reveals a clip already in motion.
-        if (dist >= -1 && dist <= 1) {
-          if (v.paused) v.play().catch(() => {});
-        } else if (!v.paused) {
-          v.pause();
-        }
+        // keep the clip you're actually looking at running (it's preloaded → instant)
+        if (v && o > 0.02 && v.paused) v.play().catch(() => {});
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timeout);
+      cleanups.forEach((fn) => fn());
+    };
+  }, [onProgress, onReady]);
 
   return (
     <div ref={rootRef} className="fixed inset-0 z-0 overflow-hidden bg-black" aria-hidden>
@@ -73,9 +101,9 @@ export default function FilmBackdrop() {
           style={{ opacity: i === 0 ? 1 : 0, willChange: "opacity" }}
         >
           <video
-            data-src={`/journey/${s.name}.mp4`}
-            src={i === 0 ? `/journey/${s.name}.mp4` : undefined}
+            src={`/journey/${s.name}.mp4`}
             poster={`/journey/${s.name}.jpg`}
+            autoPlay
             muted
             loop
             playsInline
