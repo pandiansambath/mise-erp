@@ -24,9 +24,12 @@ export default function FilmBackdrop({ onProgress, onReady }: Props) {
     const op = new Array(SCENES.length).fill(0);
     const lastOp = new Array(SCENES.length).fill(-1);
 
-    // ── Preload phase: count clips that are ready to play, then reveal + play ──
+    // ── Preload: reveal as soon as the FIRST few clips are ready; the rest keep
+    // streaming in the background (preload=auto). We never play more than the
+    // visible clip, so revealing early is safe and the loader stays quick. ──
     const total = videos.length;
-    const seen = new Set<number>();
+    const REVEAL = Math.min(3, total); // first scenes the visitor will actually see
+    const ready = new Set<number>();
     let done = false;
     const cleanups: Array<() => void> = [];
 
@@ -34,28 +37,30 @@ export default function FilmBackdrop({ onProgress, onReady }: Props) {
       if (done) return;
       done = true;
       onProgress?.(1);
-      for (const v of videos) v?.play?.().catch(() => {});
-      onReady?.();
+      onReady?.(); // the tick below plays ONLY the visible clip
     };
-    const bump = (i: number) => {
-      if (seen.has(i)) return;
-      seen.add(i);
-      onProgress?.(seen.size / total);
-      if (seen.size >= total) finish();
+    const check = () => {
+      let n = 0;
+      for (let k = 0; k < REVEAL; k++) if (ready.has(k)) n++;
+      onProgress?.(n / REVEAL);
+      if (n >= REVEAL) finish();
     };
 
     videos.forEach((v, i) => {
-      if (!v || v.readyState >= 3) {
-        bump(i);
+      if (!v || v.readyState >= 2) {
+        ready.add(i);
         return;
       }
-      const h = () => bump(i);
-      v.addEventListener("canplay", h);
+      const h = () => {
+        ready.add(i);
+        check();
+      };
       v.addEventListener("loadeddata", h);
+      v.addEventListener("canplay", h);
       v.addEventListener("error", h); // count errors too, so we never hang
       cleanups.push(() => {
-        v.removeEventListener("canplay", h);
         v.removeEventListener("loadeddata", h);
+        v.removeEventListener("canplay", h);
         v.removeEventListener("error", h);
       });
       try {
@@ -64,8 +69,9 @@ export default function FilmBackdrop({ onProgress, onReady }: Props) {
         /* ignore */
       }
     });
+    check(); // some may already be ready on mount
     // Safety: never trap the visitor on the loader if the network is slow/flaky.
-    const timeout = window.setTimeout(finish, 12000);
+    const timeout = window.setTimeout(finish, 9000);
 
     let raf = 0;
     const tick = () => {
@@ -77,8 +83,13 @@ export default function FilmBackdrop({ onProgress, onReady }: Props) {
           lastOp[i] = o;
         }
         const v = videos[i];
-        // keep the clip you're actually looking at running (it's preloaded → instant)
-        if (v && o > 0.02 && v.paused) v.play().catch(() => {});
+        if (!v) continue;
+        // ONLY the visible clip (1–2 during a crossfade) decodes — keeps it smooth.
+        if (o > 0.015) {
+          if (v.paused) v.play().catch(() => {});
+        } else if (!v.paused) {
+          v.pause();
+        }
       }
       raf = requestAnimationFrame(tick);
     };
@@ -103,7 +114,6 @@ export default function FilmBackdrop({ onProgress, onReady }: Props) {
           <video
             src={`/journey/${s.name}.mp4`}
             poster={`/journey/${s.name}.jpg`}
-            autoPlay
             muted
             loop
             playsInline
