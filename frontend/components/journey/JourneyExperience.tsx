@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/Logo";
-import FilmParallax from "./FilmParallax";
+import QuantumJourney from "./QuantumJourney";
 import Overlay from "./Overlay";
 import { journeyProgress } from "./progress";
 
@@ -73,7 +73,7 @@ export default function JourneyExperience() {
 
   return (
     <div className="relative bg-black text-white">
-      <FilmParallax onProgress={onProgress} onReady={onReady} />
+      <QuantumJourney onProgress={onProgress} onReady={onReady} />
       <Overlay />
 
       {/* ── chrome ── */}

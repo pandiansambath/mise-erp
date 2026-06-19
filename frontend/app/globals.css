@@ -572,3 +572,11 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 @media (prefers-reduced-motion: reduce) {
   .mise-copilot-glow, .mise-msg-in, .mise-bob, .mise-copilot-in { animation: none; }
 }
+
+/* Quantum journey CSS fallback (only when WebGL is unavailable) — keeps it alive */
+@keyframes mise-quantum-drift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.mise-quantum-fallback { animation: mise-quantum-drift 22s ease-in-out infinite; }
