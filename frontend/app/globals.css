@@ -580,3 +580,18 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   100% { background-position: 0% 50%; }
 }
 .mise-quantum-fallback { animation: mise-quantum-drift 22s ease-in-out infinite; }
+
+/* ── Premium Experience journey (cinematic AI scenes) ─────────────────────── */
+/* Each scene image breathes slowly so the page is ALIVE even when still; scroll
+   then crossfades scene to scene. transform-only → GPU-composited, buttery. */
+@keyframes mise-exp-drift {
+  0%   { transform: scale(1.06) translate(0, 0); }
+  50%  { transform: scale(1.13) translate(-1.6%, -1.1%); }
+  100% { transform: scale(1.06) translate(0, 0); }
+}
+.mise-exp-drift { animation: mise-exp-drift 30s ease-in-out infinite; will-change: transform; }
+
+@keyframes mise-exp-in { from { opacity: 0; } to { opacity: 1; } }
+.mise-exp-in { animation: mise-exp-in 1s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) { .mise-exp-drift { animation: none; } }

@@ -14,8 +14,8 @@ import { Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import ClassicLanding from "@/components/landing/ClassicLanding";
 
-// Uses video + window APIs — load the journey only in the browser.
-const JourneyExperience = dynamic(() => import("@/components/journey/JourneyExperience"), {
+// The premium cinematic journey (Lenis + bespoke AI scenes). Browser-only.
+const JourneyExperience = dynamic(() => import("@/components/experience/ExperienceJourney"), {
   ssr: false,
   loading: () => <DarkSplash />,
 });

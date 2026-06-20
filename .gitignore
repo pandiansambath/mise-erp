@@ -90,3 +90,7 @@ docs/gemini_api_key.txt
 *gemini*api*key*
 docs/journey-promy.txt
 previous_fable_chat.txt
+
+# Local AI asset originals (web-optimized copies live in frontend/public/experience)
+generated_assets/
+ui_ideas/
