@@ -96,7 +96,9 @@ export default function ExperienceJourney() {
     const bgs = Array.from(stage.querySelectorAll<HTMLDivElement>("[data-bg]"));
     const texts = Array.from(stage.querySelectorAll<HTMLDivElement>("[data-text]"));
     const op = new Array(N).fill(0);
+    const sc = new Array(N).fill(1);
     const lastBg = new Array(N).fill(-1);
+    const lastSc = new Array(N).fill(-1);
     const lastTx = new Array(N).fill(-1);
 
     // paint the document dark so overscroll never flashes white
@@ -120,15 +122,28 @@ export default function ExperienceJourney() {
       const a = Math.min(N - 1, Math.floor(seg));
       const frac = seg - a;
       const fade = smoothstep(0.6, 1.0, frac); // hold the scene, then crossfade late
-      for (let i = 0; i < N; i++) op[i] = 0;
+      for (let i = 0; i < N; i++) {
+        op[i] = 0;
+        sc[i] = 1;
+      }
+      // "fly into the next dimension": current scene slowly zooms in (you travel
+      // into it), the next arrives from depth — not a flat crossfade.
       op[a] = 1 - fade;
-      if (a + 1 < N) op[a + 1] = fade;
+      sc[a] = 1 + frac * 0.14;
+      if (a + 1 < N) {
+        op[a + 1] = fade;
+        sc[a + 1] = 1.12 - frac * 0.12;
+      }
 
       for (let i = 0; i < N; i++) {
         const o = op[i];
         if (Math.abs(o - lastBg[i]) > 0.003) {
           bgs[i].style.opacity = String(o);
           lastBg[i] = o;
+        }
+        if (Math.abs(sc[i] - lastSc[i]) > 0.002) {
+          bgs[i].style.transform = `scale(${sc[i].toFixed(4)})`;
+          lastSc[i] = sc[i];
         }
         // text only when its scene is clearly dominant
         const t = clamp01((o - 0.5) * 2.4);
@@ -200,7 +215,7 @@ export default function ExperienceJourney() {
               key={s.img}
               data-bg={i}
               className="absolute inset-0"
-              style={{ opacity: i === 0 ? 1 : 0, willChange: "opacity" }}
+              style={{ opacity: i === 0 ? 1 : 0, willChange: "opacity, transform" }}
             >
               <div
                 className="mise-exp-drift absolute inset-0 bg-cover bg-center"
