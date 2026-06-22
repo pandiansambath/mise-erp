@@ -128,11 +128,12 @@ export default function ExperienceJourney() {
     if (!wrap || !stage) return;
     const bgs = Array.from(stage.querySelectorAll<HTMLDivElement>("[data-bg]"));
     const texts = Array.from(stage.querySelectorAll<HTMLDivElement>("[data-text]"));
-    const op = new Array(N).fill(0);
-    const sc = new Array(N).fill(1);
+    const vids = Array.from(stage.querySelectorAll<HTMLVideoElement>("[data-morph]"));
+    const imgOp = new Array(N).fill(0);
     const lastBg = new Array(N).fill(-1);
-    const lastSc = new Array(N).fill(-1);
     const lastTx = new Array(N).fill(-1);
+    const lastVid = new Array(vids.length).fill(-1);
+    const vidOn = new Array(vids.length).fill(false);
 
     // paint the document dark so overscroll never flashes white
     const rootEl = document.documentElement;
@@ -154,37 +155,54 @@ export default function ExperienceJourney() {
       const seg = scrolled * (N - 1);
       const a = Math.min(N - 1, Math.floor(seg));
       const frac = seg - a;
-      const fade = smoothstep(0.6, 1.0, frac); // hold the scene, then crossfade late
-      for (let i = 0; i < N; i++) {
-        op[i] = 0;
-        sc[i] = 1;
-      }
-      // "fly into the next dimension": current scene slowly zooms in (you travel
-      // into it), the next arrives from depth — not a flat crossfade.
-      op[a] = 1 - fade;
-      sc[a] = 1 + frac * 0.14;
-      if (a + 1 < N) {
-        op[a + 1] = fade;
-        sc[a + 1] = 1.12 - frac * 0.12;
-      }
+      // Hold the scene, then over the latter part of its segment, the morph video
+      // for a→(a+1) flies you across: image A → (video) → image B.
+      const fade = smoothstep(0.45, 1.0, frac);
+
+      for (let i = 0; i < N; i++) imgOp[i] = 0;
+      imgOp[a] = 1 - smoothstep(0.0, 0.3, fade); // A fades as the flight starts
+      if (a + 1 < N) imgOp[a + 1] = smoothstep(0.7, 1.0, fade); // B arrives as it lands
+      // the flythrough video is fully visible in the MIDDLE of the band
+      const vOpA =
+        a + 1 < N
+          ? clamp01(Math.min(smoothstep(0.0, 0.3, fade), 1 - smoothstep(0.7, 1.0, fade)))
+          : 0;
 
       for (let i = 0; i < N; i++) {
-        const o = op[i];
-        if (Math.abs(o - lastBg[i]) > 0.003) {
-          bgs[i].style.opacity = String(o);
-          lastBg[i] = o;
+        if (Math.abs(imgOp[i] - lastBg[i]) > 0.003) {
+          bgs[i].style.opacity = String(imgOp[i]);
+          lastBg[i] = imgOp[i];
         }
-        if (Math.abs(sc[i] - lastSc[i]) > 0.002) {
-          bgs[i].style.transform = `scale(${sc[i].toFixed(4)})`;
-          lastSc[i] = sc[i];
-        }
-        // text only when its scene is clearly dominant
-        const t = clamp01((o - 0.5) * 2.4);
+        const t = clamp01((imgOp[i] - 0.5) * 2.4); // text only when its scene is dominant
         if (Math.abs(t - lastTx[i]) > 0.004) {
           texts[i].style.opacity = String(t);
           texts[i].style.transform = `translateY(${((1 - t) * 26).toFixed(1)}px)`;
           texts[i].style.pointerEvents = t > 0.6 ? "auto" : "none";
           lastTx[i] = t;
+        }
+      }
+
+      // only the active transition's video plays (forward) — one decode at a time
+      for (let t = 0; t < vids.length; t++) {
+        const vo = t === a ? vOpA : 0;
+        const v = vids[t];
+        if (Math.abs(vo - lastVid[t]) > 0.003) {
+          v.style.opacity = String(vo);
+          lastVid[t] = vo;
+        }
+        if (vo > 0.02) {
+          if (!vidOn[t]) {
+            vidOn[t] = true;
+            try {
+              v.currentTime = 0;
+            } catch {
+              /* not seekable yet */
+            }
+          }
+          if (v.paused) v.play().catch(() => {});
+        } else {
+          vidOn[t] = false;
+          if (!v.paused) v.pause();
         }
       }
     };
@@ -258,6 +276,20 @@ export default function ExperienceJourney() {
                 }}
               />
             </div>
+          ))}
+
+          {/* morph videos — one per transition, fly you from scene i into scene i+1 */}
+          {SCENES.slice(0, N - 1).map((s, i) => (
+            <video
+              key={`morph-${i}`}
+              data-morph={i}
+              src={`/experience/morphs/${SCENES[i].img}-to-${SCENES[i + 1].img}.mp4`}
+              muted
+              playsInline
+              preload="auto"
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ opacity: 0, willChange: "opacity" }}
+            />
           ))}
 
           {/* legibility scrim + vignette */}
