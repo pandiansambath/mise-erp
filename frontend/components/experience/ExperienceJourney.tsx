@@ -1,12 +1,11 @@
 "use client";
 
-// The premium scroll-SCRUBBED cinematic journey.
-// The whole thing is driven by your scroll — nothing autoplays:
-//   • a scene HOLDS (still image + headline you can read) for a stretch of scroll
-//   • then as you keep scrolling, the transition video SCRUBS frame-by-frame with
-//     your scroll — scroll down = fly forward, scroll up = fly back.
-// Videos are all-intra (every frame a keyframe) so seeking is instant + smooth.
-// Posters = the start still, so there is never a black gap. Lenis smooths scroll.
+// The premium scroll-film — Apple-style. Everything is drawn to ONE <canvas>:
+//   • a scene HOLDS (still + headline) while you read,
+//   • then as you scroll, the transition's pre-extracted FRAMES are drawn in
+//     sequence (cross-blended between frames) → the flythrough scrubs with your
+//     scroll, butter-smooth, with no video decoding and no photo↔video seam.
+// Lenis smooths the scroll. Frame sets lazy-load near you and free when far.
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -38,6 +37,7 @@ const SCENES: Scene[] = [
 ];
 
 const N = SCENES.length;
+const FRAMES_PER = 60; // frames per transition (matches extraction)
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const smoothstep = (a: number, b: number, x: number) => {
   const t = clamp01((x - a) / (b - a));
@@ -48,10 +48,11 @@ const alignCls: Record<Scene["align"], string> = {
   center: "items-center text-center",
   right: "items-end text-right",
 };
+const transName = (t: number) => `${SCENES[t].img}-to-${SCENES[t + 1].img}`;
 
-// Timeline of "beats": hold scene 0, transition 0→1, hold scene 1, … hold scene N-1.
-const HOLD_W = 0.62; // scroll length of a scene hold (read the headline)
-const TRANS_W = 0.85; // scroll length of a flythrough (room to scrub smoothly)
+// Timeline: hold s, trans s, hold s+1, … hold N-1.
+const HOLD_W = 0.6;
+const TRANS_W = 0.95;
 type Beat = { type: "hold" | "trans"; i: number; start: number; end: number };
 const BEATS: Beat[] = (() => {
   const raw: { type: "hold" | "trans"; i: number; w: number }[] = [];
@@ -71,6 +72,7 @@ const TOTAL_W = N * HOLD_W + (N - 1) * TRANS_W;
 
 export default function ExperienceJourney() {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const cueRef = useRef<HTMLDivElement>(null);
@@ -78,7 +80,6 @@ export default function ExperienceJourney() {
   const [progress, setProgress] = useState(0);
   const onReady = useCallback(() => setReady(true), []);
 
-  // Lock scroll until the first scenes are loaded.
   useEffect(() => {
     document.body.style.overflow = ready ? "" : "hidden";
     return () => {
@@ -88,15 +89,13 @@ export default function ExperienceJourney() {
 
   useEffect(() => {
     const wrap = wrapRef.current;
+    const canvas = canvasRef.current;
     const stage = stageRef.current;
-    if (!wrap || !stage) return;
-    const bgs = Array.from(stage.querySelectorAll<HTMLDivElement>("[data-bg]"));
+    if (!wrap || !canvas || !stage) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     const texts = Array.from(stage.querySelectorAll<HTMLDivElement>("[data-text]"));
-    const vids = Array.from(stage.querySelectorAll<HTMLVideoElement>("[data-morph]"));
-    const lastBg = new Array(N).fill(-1);
     const lastTx = new Array(N).fill(-1);
-    const lastVid = new Array(vids.length).fill(-1);
-    const lastSeek = new Array(vids.length).fill(-1);
 
     const rootEl = document.documentElement;
     const bodyEl = document.body;
@@ -105,7 +104,12 @@ export default function ExperienceJourney() {
     rootEl.style.background = "#04060c";
     bodyEl.style.background = "#04060c";
 
-    // ── preload the first scene images, then reveal ──
+    // ── scene stills (all preloaded — small) ──
+    const stills: HTMLImageElement[] = SCENES.map((s) => {
+      const im = new Image();
+      im.src = `/experience/${s.img}.jpg`;
+      return im;
+    });
     let loaded = 0;
     const REVEAL = Math.min(2, N);
     const bump = () => {
@@ -114,19 +118,55 @@ export default function ExperienceJourney() {
       if (loaded >= REVEAL) onReady();
     };
     for (let i = 0; i < REVEAL; i++) {
-      const im = new Image();
-      im.onload = bump;
-      im.onerror = bump;
-      im.src = `/experience/${SCENES[i].img}.jpg`;
+      if (stills[i].complete) bump();
+      else {
+        stills[i].onload = bump;
+        stills[i].onerror = bump;
+      }
     }
     const revealTimeout = window.setTimeout(onReady, 7000);
 
-    const setBg = (i: number, o: number) => {
-      if (Math.abs(o - lastBg[i]) > 0.004) {
-        bgs[i].style.opacity = String(o);
-        lastBg[i] = o;
+    // ── transition frame sets, lazy-loaded near the viewer ──
+    const sets: (HTMLImageElement[] | null)[] = new Array(N - 1).fill(null);
+    const loadSet = (t: number) => {
+      if (t < 0 || t >= N - 1 || sets[t]) return;
+      const arr: HTMLImageElement[] = [];
+      for (let f = 0; f < FRAMES_PER; f++) {
+        const im = new Image();
+        im.src = `/experience/frames/${transName(t)}/${String(f + 1).padStart(2, "0")}.jpg`;
+        arr.push(im);
       }
+      sets[t] = arr;
     };
+    const releaseSet = (t: number) => {
+      if (t < 0 || t >= N - 1 || !sets[t]) return;
+      for (const im of sets[t]!) im.src = "";
+      sets[t] = null;
+    };
+
+    // ── canvas sizing (DPR-capped) ──
+    let cw = 0;
+    let ch = 0;
+    const isMobile = window.matchMedia("(max-width: 640px)").matches;
+    const resize = () => {
+      const dpr = Math.min(isMobile ? 1.4 : 2, window.devicePixelRatio || 1);
+      cw = Math.round(window.innerWidth * dpr);
+      ch = Math.round(window.innerHeight * dpr);
+      canvas.width = cw;
+      canvas.height = ch;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    const drawCover = (img: HTMLImageElement | undefined, scale = 1) => {
+      if (!img || !img.complete || !img.naturalWidth) return false;
+      const s = Math.max(cw / img.naturalWidth, ch / img.naturalHeight) * scale;
+      const w = img.naturalWidth * s;
+      const h = img.naturalHeight * s;
+      ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
+      return true;
+    };
+
     const setTx = (i: number, o: number) => {
       if (Math.abs(o - lastTx[i]) > 0.004) {
         texts[i].style.opacity = String(o);
@@ -135,23 +175,15 @@ export default function ExperienceJourney() {
         lastTx[i] = o;
       }
     };
-    const setVid = (t: number, o: number) => {
-      if (Math.abs(o - lastVid[t]) > 0.004) {
-        vids[t].style.opacity = String(o);
-        lastVid[t] = o;
-      }
-    };
 
     let lenis: { raf: (t: number) => void; destroy: () => void } | null = null;
     let raf = 0;
-
     const render = () => {
       const total = wrap.offsetHeight - window.innerHeight;
       const p = clamp01(total > 0 ? -wrap.getBoundingClientRect().top / total : 0);
       if (barRef.current) barRef.current.style.transform = `scaleX(${p})`;
       if (cueRef.current) cueRef.current.style.opacity = p > 0.01 ? "0" : "1";
 
-      // find the active beat
       let b = BEATS[BEATS.length - 1];
       for (let k = 0; k < BEATS.length; k++) {
         if (p < BEATS[k].end) {
@@ -160,49 +192,57 @@ export default function ExperienceJourney() {
         }
       }
       const lp = clamp01((p - b.start) / (b.end - b.start));
+      const now = performance.now();
 
-      // reset all
-      for (let i = 0; i < N; i++) {
-        setBg(i, 0);
-        setTx(i, 0);
-      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#04060c";
+      ctx.fillRect(0, 0, cw, ch);
 
       if (b.type === "hold") {
         const s = b.i;
-        setBg(s, 1);
-        // headline visible across the middle of the hold
-        const tOp = clamp01(Math.min(smoothstep(0.04, 0.2, lp), 1 - smoothstep(0.82, 0.98, lp)) * 1.05);
-        setTx(s, tOp);
-        for (let t = 0; t < vids.length; t++) setVid(t, 0);
+        const amb = 1.015 + 0.02 * (0.5 + 0.5 * Math.sin(now * 0.0002)); // gentle breathing
+        drawCover(stills[s], amb);
+        const tOp = clamp01(Math.min(smoothstep(0.04, 0.2, lp), 1 - smoothstep(0.82, 0.98, lp)) * 1.06);
+        for (let i = 0; i < N; i++) setTx(i, i === s ? tOp : 0);
       } else {
         const t = b.i;
-        const vIn = smoothstep(0.0, 0.12, lp);
-        const vOut = smoothstep(0.88, 1.0, lp);
-        setBg(t, 1 - vIn); // start scene fades out as the flight begins
-        setBg(t + 1, vOut); // end scene fades in as it lands
-        const vo = clamp01(Math.min(vIn, 1 - vOut));
-        for (let k = 0; k < vids.length; k++) setVid(k, k === t ? vo : 0);
-        // SCRUB the flythrough to scroll
-        const v = vids[t];
-        const dur = v.duration && isFinite(v.duration) ? v.duration : 5;
-        const target = lp * dur;
-        if (v.readyState >= 1 && Math.abs(target - lastSeek[t]) > 0.04) {
-          try {
-            v.currentTime = target;
-          } catch {
-            /* not seekable yet */
+        for (let i = 0; i < N; i++) setTx(i, 0);
+        const set = sets[t];
+        // frame index with cross-blend for sub-frame smoothness
+        const f = lp * (FRAMES_PER - 1);
+        const i0 = Math.floor(f);
+        const i1 = Math.min(FRAMES_PER - 1, i0 + 1);
+        const frac = f - i0;
+        let drew = false;
+        if (set) {
+          ctx.globalAlpha = 1;
+          drew = drawCover(set[i0]);
+          if (frac > 0.01) {
+            ctx.globalAlpha = frac;
+            drawCover(set[i1]);
+            ctx.globalAlpha = 1;
           }
-          lastSeek[t] = target;
+        }
+        if (!drew) drawCover(stills[t]); // fallback until frames arrive
+        // seamless blend with the still scenes at the very edges
+        if (lp < 0.06) {
+          ctx.globalAlpha = 1 - lp / 0.06;
+          drawCover(stills[t]);
+          ctx.globalAlpha = 1;
+        } else if (lp > 0.94) {
+          ctx.globalAlpha = (lp - 0.94) / 0.06;
+          drawCover(stills[t + 1]);
+          ctx.globalAlpha = 1;
         }
       }
 
-      // lazy-load the current + neighbouring transition videos
+      // lazy-load near, free far
       const at = b.type === "trans" ? b.i : Math.min(b.i, N - 2);
-      for (let t = 0; t < vids.length; t++) {
-        if ((t === at || t === at + 1 || t === at - 1) && !vids[t].getAttribute("src")) {
-          vids[t].setAttribute("src", vids[t].dataset.src || "");
-          vids[t].load();
-        }
+      loadSet(at);
+      loadSet(at + 1);
+      loadSet(at - 1);
+      for (let t = 0; t < N - 1; t++) {
+        if (t < at - 1 || t > at + 1) releaseSet(t);
       }
     };
 
@@ -224,6 +264,7 @@ export default function ExperienceJourney() {
       cancelled = true;
       cancelAnimationFrame(raf);
       clearTimeout(revealTimeout);
+      window.removeEventListener("resize", resize);
       window.removeEventListener("resize", render);
       lenis?.destroy();
       rootEl.style.background = prevRoot;
@@ -233,7 +274,7 @@ export default function ExperienceJourney() {
 
   return (
     <div className="relative bg-[#04060c] text-white">
-      {/* Loader — holds until the first scenes are ready (no black flash) */}
+      {/* Loader */}
       <div
         className="fixed inset-0 z-[60] grid place-items-center bg-[#04060c] transition-opacity duration-700"
         style={{ opacity: ready ? 0 : 1, visibility: ready ? "hidden" : "visible" }}
@@ -259,29 +300,9 @@ export default function ExperienceJourney() {
 
       <section ref={wrapRef} className="relative" style={{ height: `${Math.round(TOTAL_W * 100)}vh` }}>
         <div ref={stageRef} className="sticky top-0 h-screen w-full overflow-hidden">
-          {/* scene stills */}
-          {SCENES.map((s, i) => (
-            <div key={s.img} data-bg={i} className="absolute inset-0" style={{ opacity: i === 0 ? 1 : 0, willChange: "opacity" }}>
-              <div className="mise-exp-drift absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(/experience/${s.img}.jpg)`, animationDelay: `${i * -5}s` }} />
-            </div>
-          ))}
+          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
-          {/* flythrough videos — scrubbed by scroll; poster = start still (no black) */}
-          {SCENES.slice(0, N - 1).map((s, i) => (
-            <video
-              key={`morph-${i}`}
-              data-morph={i}
-              data-src={`/experience/morphs/${SCENES[i].img}-to-${SCENES[i + 1].img}.mp4`}
-              poster={`/experience/${SCENES[i].img}.jpg`}
-              muted
-              playsInline
-              preload="none"
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{ opacity: 0, willChange: "opacity" }}
-            />
-          ))}
-
-          <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(4,6,12,0.55) 0%, rgba(4,6,12,0.20) 30%, rgba(4,6,12,0.35) 62%, rgba(4,6,12,0.80) 100%)" }} />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(4,6,12,0.55) 0%, rgba(4,6,12,0.18) 30%, rgba(4,6,12,0.32) 62%, rgba(4,6,12,0.80) 100%)" }} />
           <div className="absolute inset-0" style={{ boxShadow: "inset 0 0 260px 80px rgba(0,0,0,0.6)" }} />
 
           {/* scene texts */}
@@ -312,7 +333,6 @@ export default function ExperienceJourney() {
             </div>
           ))}
 
-          {/* scroll cue */}
           <div ref={cueRef} className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex flex-col items-center gap-2 transition-opacity duration-500">
             <span className="font-mono text-[10px] tracking-[0.35em] text-white/80 drop-shadow">SCROLL TO EXPLORE</span>
             <span className="mise-scroll-chevron text-white/80">↓</span>
