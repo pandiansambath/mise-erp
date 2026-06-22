@@ -95,7 +95,7 @@ export default function ExperienceJourney() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const texts = Array.from(stage.querySelectorAll<HTMLDivElement>("[data-text]"));
-    const lastTx = new Array(N).fill(-1);
+    let lastActiveHold = -2;
 
     const rootEl = document.documentElement;
     const bodyEl = document.body;
@@ -167,15 +167,6 @@ export default function ExperienceJourney() {
       return true;
     };
 
-    const setTx = (i: number, o: number) => {
-      if (Math.abs(o - lastTx[i]) > 0.004) {
-        texts[i].style.opacity = String(o);
-        texts[i].style.transform = `translateY(${((1 - o) * 24).toFixed(1)}px)`;
-        texts[i].style.pointerEvents = o > 0.6 ? "auto" : "none";
-        lastTx[i] = o;
-      }
-    };
-
     let lenis: { raf: (t: number) => void; destroy: () => void } | null = null;
     let raf = 0;
     const render = () => {
@@ -198,42 +189,53 @@ export default function ExperienceJourney() {
       ctx.fillStyle = "#04060c";
       ctx.fillRect(0, 0, cw, ch);
 
+      let activeHold = -1;
       if (b.type === "hold") {
         const s = b.i;
-        const amb = 1.015 + 0.02 * (0.5 + 0.5 * Math.sin(now * 0.0002)); // gentle breathing
-        drawCover(stills[s], amb);
-        const tOp = clamp01(Math.min(smoothstep(0.04, 0.2, lp), 1 - smoothstep(0.82, 0.98, lp)) * 1.06);
-        for (let i = 0; i < N; i++) setTx(i, i === s ? tOp : 0);
+        const amb = 1.02 + 0.03 * (0.5 + 0.5 * Math.sin(now * 0.00018)); // gentle breathing
+        // Continuity: the hold STARTS on the exact frame the last flythrough ended
+        // on, and ENDS on the exact frame the next flythrough begins on — blending
+        // to the crisp still only while you read. No photo↔video pop.
+        const inLast = s > 0 && sets[s - 1] ? sets[s - 1]![FRAMES_PER - 1] : null;
+        const outFirst = sets[s] ? sets[s]![0] : null;
+        if (lp < 0.2 && inLast && inLast.complete && inLast.naturalWidth) {
+          drawCover(inLast, amb);
+          ctx.globalAlpha = smoothstep(0, 0.2, lp);
+          drawCover(stills[s], amb);
+          ctx.globalAlpha = 1;
+        } else if (lp > 0.8 && outFirst && outFirst.complete && outFirst.naturalWidth) {
+          drawCover(stills[s], amb);
+          ctx.globalAlpha = smoothstep(0.8, 1, lp);
+          drawCover(outFirst, amb);
+          ctx.globalAlpha = 1;
+        } else {
+          drawCover(stills[s], amb);
+        }
+        activeHold = s;
       } else {
         const t = b.i;
-        for (let i = 0; i < N; i++) setTx(i, 0);
         const set = sets[t];
-        // frame index with cross-blend for sub-frame smoothness
         const f = lp * (FRAMES_PER - 1);
         const i0 = Math.floor(f);
         const i1 = Math.min(FRAMES_PER - 1, i0 + 1);
         const frac = f - i0;
         let drew = false;
         if (set) {
-          ctx.globalAlpha = 1;
           drew = drawCover(set[i0]);
           if (frac > 0.01) {
-            ctx.globalAlpha = frac;
+            ctx.globalAlpha = frac; // cross-blend adjacent frames → sub-frame smooth
             drawCover(set[i1]);
             ctx.globalAlpha = 1;
           }
         }
-        if (!drew) drawCover(stills[t]); // fallback until frames arrive
-        // seamless blend with the still scenes at the very edges
-        if (lp < 0.06) {
-          ctx.globalAlpha = 1 - lp / 0.06;
-          drawCover(stills[t]);
-          ctx.globalAlpha = 1;
-        } else if (lp > 0.94) {
-          ctx.globalAlpha = (lp - 0.94) / 0.06;
-          drawCover(stills[t + 1]);
-          ctx.globalAlpha = 1;
-        }
+        if (!drew) drawCover(lp < 0.5 ? stills[t] : stills[t + 1]); // fallback until frames load
+      }
+
+      // text: only the active hold scene, with its staggered rise-in animation
+      if (activeHold !== lastActiveHold) {
+        if (lastActiveHold >= 0) texts[lastActiveHold].classList.remove("is-active");
+        if (activeHold >= 0) texts[activeHold].classList.add("is-active");
+        lastActiveHold = activeHold;
       }
 
       // lazy-load near, free far
@@ -307,24 +309,24 @@ export default function ExperienceJourney() {
 
           {/* scene texts */}
           {SCENES.map((s, i) => (
-            <div key={s.img} data-text={i} className={`absolute inset-0 z-20 flex flex-col justify-center px-7 sm:px-16 lg:px-28 ${alignCls[s.align]}`} style={{ opacity: i === 0 ? 1 : 0 }}>
+            <div key={s.img} data-text={i} className={`absolute inset-0 z-20 flex flex-col justify-center px-7 sm:px-16 lg:px-28 ${alignCls[s.align]}`}>
               <div className="max-w-3xl">
-                <span className="font-mono text-[11px] tracking-[0.4em] text-amber-300/90 sm:text-xs">{s.kicker}</span>
-                <h2 className="mt-5 font-display text-5xl leading-[1.04] tracking-tight drop-shadow-[0_2px_30px_rgba(0,0,0,0.65)] sm:text-7xl xl:text-8xl">
+                <span className="mise-reveal-item font-mono text-[11px] tracking-[0.4em] text-amber-300/90 sm:text-xs" style={{ animationDelay: "0.05s" }}>{s.kicker}</span>
+                <h2 className="mise-reveal-item mt-5 font-display text-5xl leading-[1.04] tracking-tight drop-shadow-[0_2px_30px_rgba(0,0,0,0.65)] sm:text-7xl xl:text-8xl" style={{ animationDelay: "0.16s" }}>
                   {s.title[0]}
                   <span className="block">{s.title[1]}</span>
                   {s.em ? <span className="mt-1 block bg-gradient-to-r from-amber-200 to-emerald-200 bg-clip-text italic text-transparent">{s.em}</span> : null}
                 </h2>
-                {s.body ? <p className={`mt-6 text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg ${s.align === "center" ? "mx-auto max-w-xl" : "max-w-xl"}`}>{s.body}</p> : null}
+                {s.body ? <p className={`mise-reveal-item mt-6 text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg ${s.align === "center" ? "mx-auto max-w-xl" : "max-w-xl"}`} style={{ animationDelay: "0.3s" }}>{s.body}</p> : null}
                 {s.chip ? (
-                  <div className={`mt-7 inline-block rounded-2xl border border-white/15 bg-black/40 p-4 text-left backdrop-blur-md ${s.align === "center" ? "mx-auto" : ""}`}>
+                  <div className={`mise-reveal-item mt-7 inline-block rounded-2xl border border-white/15 bg-black/40 p-4 text-left backdrop-blur-md ${s.align === "center" ? "mx-auto" : ""}`} style={{ animationDelay: "0.42s" }}>
                     <p className="text-[11px] uppercase tracking-wide text-slate-400">{s.chip.label}</p>
                     <p className="mt-1 font-mono text-xl font-semibold text-amber-200">{s.chip.value}</p>
                     {s.chip.sub ? <p className="mt-0.5 font-mono text-[11px] text-emerald-300/90">{s.chip.sub}</p> : null}
                   </div>
                 ) : null}
                 {s.cta ? (
-                  <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+                  <div className="mise-reveal-item mt-9 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: "0.42s" }}>
                     <Link href="/signup" className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-amber-300 to-amber-200 px-7 py-3.5 text-base font-semibold text-black shadow-xl shadow-amber-500/25 transition hover:shadow-2xl">Register your hotel</Link>
                     <Link href="/login" className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-white/5 px-7 py-3.5 text-base font-semibold text-white backdrop-blur-md transition hover:bg-white/10">Sign in</Link>
                   </div>

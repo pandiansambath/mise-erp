@@ -595,3 +595,17 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 .mise-exp-in { animation: mise-exp-in 1s ease-out both; }
 
 @media (prefers-reduced-motion: reduce) { .mise-exp-drift { animation: none; } }
+
+/* ── Experience: animated scene text (staggered rise-in) ──────────────────── */
+@keyframes mise-text-rise {
+  from { opacity: 0; transform: translateY(34px); filter: blur(10px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+[data-text] { opacity: 0; pointer-events: none; transition: opacity 0.45s ease; }
+[data-text].is-active { opacity: 1; pointer-events: auto; }
+[data-text].is-active .mise-reveal-item {
+  animation: mise-text-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-text].is-active .mise-reveal-item { animation: none; }
+}
