@@ -50,8 +50,9 @@ resource "aws_instance" "app" {
     s3_bucket      = aws_s3_bucket.uploads.bucket
     resend_api_key = var.resend_api_key
     email_from     = var.email_from
-    gemini_api_key = var.gemini_api_key
-    caddyfile      = local.caddyfile
+    gemini_api_key   = var.gemini_api_key
+    gemini_api_key_2 = var.gemini_api_key_2
+    caddyfile        = local.caddyfile
   })
   # Re-run cloud-init (pull new images + restart) whenever the images change.
   user_data_replace_on_change = true

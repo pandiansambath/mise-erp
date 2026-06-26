@@ -71,9 +71,15 @@ async def ingest_extract(
     try:
         rows = await ingest.extract(data, mime, kind)
     except ProviderError:
+        if not provider.is_configured():
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "The AI isn't switched on yet (no Gemini key), so I can't read documents.",
+            ) from None
+        # The AI IS on — this was a transient failure (usually a rate limit).
         raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "The AI isn't switched on yet (no Gemini key), so I can't read documents.",
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "The AI is busy right now (rate limit) — please try that again in a moment.",
         ) from None
     return IngestPreview(kind=kind, rows=rows)
 

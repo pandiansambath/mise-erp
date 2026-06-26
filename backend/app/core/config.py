@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # assistant degrades gracefully to deterministic glossary + navigation answers,
     # so the app (and CI) run fine without it. Provider-agnostic by design.
     gemini_api_key: str = ""
+    # Optional 2nd key — the assistant rotates to it when the 1st hits the free-tier
+    # rate limit (429), so a busy minute doesn't take the Copilot offline.
+    gemini_api_key_2: str = ""
     assistant_model: str = "gemini-2.5-flash"
 
     @property

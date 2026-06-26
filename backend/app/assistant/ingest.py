@@ -23,7 +23,7 @@ from app.core.rbac import has_permission
 from app.inventory import service as inventory_service
 from app.vendors import service as vendor_service
 
-from .provider import ProviderError, is_configured
+from .provider import ProviderError, is_configured, post_gemini
 
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -124,7 +124,7 @@ async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
     }
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(url, params={"key": settings.gemini_api_key}, json=body)
+            resp = await post_gemini(client, url, body)  # rotates keys on 429
             if resp.status_code >= 300:
                 raise ProviderError(f"gemini {resp.status_code}: {resp.text[:300]}")
             data = resp.json()

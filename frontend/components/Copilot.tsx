@@ -159,7 +159,7 @@ export function Copilot() {
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
     } catch (err) {
-      push({ role: "assistant", content: err instanceof ApiError && err.status === 503 ? "Reading documents needs the AI switched on." : "Sorry — I couldn't read that. Please try again." });
+      push({ role: "assistant", content: ingestError(err) });
     } finally {
       setLoading(false);
     }
@@ -167,8 +167,9 @@ export function Copilot() {
 
   const ingestError = (err: unknown) =>
     err instanceof ApiError && err.status === 503 ? "Document reading needs the AI switched on (a Gemini key)."
-      : err instanceof ApiError && err.status === 403 ? "You don't have permission to add those records."
-        : "Sorry — I couldn't read that file. Please try again.";
+      : err instanceof ApiError && err.status === 429 ? "The AI is busy right now (rate limit) — please try that again in a moment."
+        : err instanceof ApiError && err.status === 403 ? "You don't have permission to add those records."
+          : "Sorry — I couldn't read that file. Please try again.";
 
   async function commitIngest(index: number) {
     const msg = messages[index];

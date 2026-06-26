@@ -27,8 +27,30 @@ class ProviderError(RuntimeError):
     """Raised on any LLM transport/parse failure so the caller can fall back."""
 
 
+def _keys() -> list[str]:
+    """All configured Gemini keys, in fallback order (primary first)."""
+    return [k for k in (settings.gemini_api_key, settings.gemini_api_key_2) if k]
+
+
 def is_configured() -> bool:
-    return bool(settings.gemini_api_key)
+    return bool(_keys())
+
+
+async def post_gemini(client, url: str, body: dict):
+    """POST to Gemini, rotating through configured keys on a 429 (rate limit) so a
+    busy key falls back to the next. Returns the httpx response (the last 429 if
+    every key is rate-limited). Shared by the chat loop and the document reader."""
+    keys = _keys()
+    if not keys:
+        raise ProviderError("no api key")
+    last = None
+    for key in keys:
+        resp = await client.post(url, params={"key": key}, json=body)
+        if resp.status_code == 429:  # this key is rate-limited — try the next
+            last = resp
+            continue
+        return resp
+    return last
 
 
 def _to_contents(history: list[dict]) -> list[dict]:
@@ -57,7 +79,6 @@ async def generate(
         raise ProviderError("httpx not installed") from exc
 
     url = _ENDPOINT.format(model=settings.assistant_model)
-    params = {"key": settings.gemini_api_key}
     contents = _to_contents(history)
     if attachment and contents:
         contents[-1]["parts"].append(
@@ -74,7 +95,7 @@ async def generate(
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             for _ in range(_MAX_HOPS):
-                resp = await client.post(url, params=params, json=body)
+                resp = await post_gemini(client, url, body)
                 if resp.status_code >= 300:
                     raise ProviderError(f"gemini {resp.status_code}: {resp.text[:300]}")
                 data = resp.json()

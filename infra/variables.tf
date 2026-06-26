@@ -38,6 +38,13 @@ variable "gemini_api_key" {
   default   = ""
 }
 
+# Optional 2nd Gemini key — the Copilot rotates to it on a 429 (rate limit).
+variable "gemini_api_key_2" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 # Custom domain for HTTPS. Empty = serve plain HTTP on :80 by IP (current).
 # When set, Caddy auto-provisions a Let's Encrypt cert for it + www. (DNS must
 # point at the box's Elastic IP FIRST, or the ACME challenge fails.)
