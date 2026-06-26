@@ -65,6 +65,24 @@ async def test_upsert_vendor_item_is_idempotent(db, hotel):
 
 
 @pytest.mark.asyncio
+async def test_price_edit_keeps_preferred_supplier(db, hotel):
+    """Regression: a plain price edit must NOT un-choose the ★ preferred supplier
+    (was defaulting is_preferred=False → Inventory dropped to the cheapest vendor)."""
+    item = await inv_service.create_item(db, hotel.id, name="Basmati Rice", unit="kg")
+    cheap = await vendor_service.create_vendor(db, hotel.id, name="Cheap Co")
+    chosen = await vendor_service.create_vendor(db, hotel.id, name="Chosen Co")
+    await vendor_service.upsert_vendor_item(db, cheap.id, item.id, Decimal("4.50"))
+    await vendor_service.upsert_vendor_item(db, chosen.id, item.id, Decimal("5.00"))
+    # pick the (pricier) chosen supplier, then edit ITS price the way the UI does (price only)
+    assert await vendor_service.set_preferred_vendor(db, hotel.id, item.id, chosen.id)
+    await vendor_service.upsert_vendor_item(db, chosen.id, item.id, Decimal("5.25"))
+
+    vi = next(v for v in await vendor_service.list_vendor_items(db, chosen.id) if v.item_id == item.id)
+    assert vi.is_preferred is True            # chosen flag survived the price edit
+    assert vi.price_per_unit == Decimal("5.25")
+
+
+@pytest.mark.asyncio
 async def test_inactive_vendor_excluded_from_comparison(db, hotel):
     item = await inv_service.create_item(db, hotel.id, name="Ginger", unit="kg")
     active = await vendor_service.create_vendor(db, hotel.id, name="Active Co")

@@ -73,10 +73,14 @@ async def upsert_vendor_item(
     item_id: uuid.UUID,
     price_per_unit: Decimal,
     *,
-    is_preferred: bool = False,
+    is_preferred: bool | None = None,
     notes: str | None = None,
 ) -> VendorItem:
-    """Set (or update) a vendor's price for an item."""
+    """Set (or update) a vendor's price for an item.
+
+    `is_preferred`/`notes` are left UNCHANGED when not supplied (None) — so a plain
+    price edit never silently un-chooses the ★ preferred supplier or wipes its notes.
+    (New rows default to not-preferred.)"""
     result = await db.execute(
         select(VendorItem).where(
             VendorItem.vendor_id == vendor_id, VendorItem.item_id == item_id
@@ -84,11 +88,13 @@ async def upsert_vendor_item(
     )
     vi = result.scalar_one_or_none()
     if vi is None:
-        vi = VendorItem(vendor_id=vendor_id, item_id=item_id)
+        vi = VendorItem(vendor_id=vendor_id, item_id=item_id, is_preferred=bool(is_preferred))
         db.add(vi)
+    elif is_preferred is not None:
+        vi.is_preferred = is_preferred
     vi.price_per_unit = price_per_unit
-    vi.is_preferred = is_preferred
-    vi.notes = notes
+    if notes is not None:
+        vi.notes = notes
     vi.last_updated = date.today()
     await db.commit()
     await db.refresh(vi)

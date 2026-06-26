@@ -80,7 +80,8 @@ class VendorOut(BaseModel):
 class VendorItemUpsert(BaseModel):
     item_id: uuid.UUID
     price_per_unit: Decimal = Field(gt=0)
-    is_preferred: bool = False
+    # None = leave as-is (a price edit must NOT un-choose the ★ preferred supplier).
+    is_preferred: bool | None = None
     notes: str | None = None
 
 
