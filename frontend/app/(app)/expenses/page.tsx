@@ -7,6 +7,7 @@ import {
   type Expense,
   type ExpenseCategory,
   type ExpenseSummary,
+  type Item,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { Select } from "@/components/Select";
@@ -49,6 +50,8 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const sort = useSort<"date" | "category" | "amount">("date", "desc");
   const [summary, setSummary] = useState<ExpenseSummary | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +81,7 @@ export default function ExpensesPage() {
         setCategories(c);
         if (c.length) setCategoryId(c[0].id);
       }),
+      api.get<Item[]>("/inventory/items").then(setItems).catch(() => setItems([])),
       loadData(from, to),
     ]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,6 +90,34 @@ export default function ExpensesPage() {
   async function applyRange() {
     setLoading(true);
     await loadData(from, to).finally(() => setLoading(false));
+  }
+
+  function toggleCat(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Petty cash = small ad-hoc cash spends (cash to staff, bought something outside).
+  // It's just a cash expense in a "Petty cash" category, so it flows into the P&L.
+  async function startPettyCash() {
+    setError(null);
+    let cat = categories.find((c) => c.name.toLowerCase() === "petty cash");
+    if (!cat) {
+      try {
+        cat = await api.post<ExpenseCategory>("/expenses/categories", { name: "Petty cash", kind: "VARIABLE" });
+        setCategories((prev) => [...prev, cat as ExpenseCategory]);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Could not set up petty cash");
+        return;
+      }
+    }
+    setCategoryId(cat.id);
+    setMethod("CASH");
+    setDescription((d) => d || "Petty cash");
   }
 
   async function addExpense(e: React.FormEvent) {
@@ -197,13 +229,88 @@ export default function ExpensesPage() {
                   <label className="block text-sm font-medium text-fg-soft">Description</label>
                   <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
                 </div>
-                <div className="sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
                   <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
                     Add expense
                   </button>
-                  {error && <span className="ml-3 text-sm text-rose-400">{error}</span>}
+                  <button type="button" onClick={startPettyCash} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2" title="Cash to staff, or something bought outside">
+                    ＋ Petty cash
+                  </button>
+                  {error && <span className="text-sm text-rose-400">{error}</span>}
                 </div>
               </form>
+            </Card>
+          )}
+
+          {summary && summary.by_category.length > 0 && (
+            <Card className="p-0">
+              <div className="border-b border-line px-5 py-3">
+                <h2 className="text-sm font-semibold text-fg">By category</h2>
+                <p className="text-xs text-fg-faint">Click a category to see its entries and the stock items it covers.</p>
+              </div>
+              <div>
+                {summary.by_category.map((c) => {
+                  const open = expanded.has(c.category_id);
+                  const entries = expenses.filter((e) => e.category_id === c.category_id);
+                  const stock = items.filter(
+                    (i) => (i.category || "").toLowerCase() === c.category_name.toLowerCase()
+                  );
+                  return (
+                    <div key={c.category_id} className="border-b border-line last:border-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleCat(c.category_id)}
+                        className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-paper-2"
+                      >
+                        <span className={`text-fg-faint transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
+                        <span className="font-medium text-fg">{c.category_name}</span>
+                        <Badge tone={c.kind === "FIXED" ? "slate" : "amber"}>
+                          {c.kind === "FIXED" ? "Fixed" : "Variable"}
+                        </Badge>
+                        <span className="ml-auto font-semibold text-fg">{format(c.total)}</span>
+                      </button>
+                      {open && (
+                        <div className="bg-paper-2/40 px-5 pb-4 pt-1 text-sm">
+                          <p className="mb-1 mt-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                            Entries ({entries.length})
+                          </p>
+                          {entries.length === 0 ? (
+                            <p className="text-fg-faint">No entries in this range.</p>
+                          ) : (
+                            entries.map((e) => (
+                              <div key={e.id} className="flex justify-between gap-3 border-b border-line/40 py-1 last:border-0">
+                                <span className="text-fg-soft">
+                                  {e.date}
+                                  {e.description ? ` · ${e.description}` : ""}{" "}
+                                  <span className="text-fg-faint">({METHOD_LABEL[e.payment_method] ?? e.payment_method})</span>
+                                </span>
+                                <span className="text-fg">{format(e.amount)}</span>
+                              </div>
+                            ))
+                          )}
+                          <p className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                            Stock items ({stock.length})
+                          </p>
+                          {stock.length === 0 ? (
+                            <p className="text-fg-faint">No stock items in a matching category.</p>
+                          ) : (
+                            stock.map((i) => (
+                              <div key={i.id} className="flex justify-between gap-3 border-b border-line/40 py-1 last:border-0">
+                                <span className="text-fg-soft">
+                                  {i.name} <span className="text-fg-faint">· {i.current_stock} {i.unit}</span>
+                                </span>
+                                <span className="text-fg">
+                                  {i.average_cost && Number(i.average_cost) > 0 ? `${format(i.average_cost)}/${i.unit}` : "—"}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </Card>
           )}
 
