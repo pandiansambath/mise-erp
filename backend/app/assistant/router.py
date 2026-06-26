@@ -22,7 +22,7 @@ from app.core.rbac import has_permission
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
-_MAX_MESSAGES = 24
+_MAX_MESSAGES = 40  # keep more of the conversation so the assistant doesn't "forget"
 _MAX_CHARS = 4000
 
 
