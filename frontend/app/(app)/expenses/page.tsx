@@ -16,7 +16,20 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 
-const METHODS = ["BANK", "CARD", "CASH", "ONLINE"];
+// Payment methods the owner actually uses. Stored as the value; shown as the label.
+const METHODS: { value: string; label: string }[] = [
+  { value: "CASH", label: "Cash" },
+  { value: "CARD_ONLINE", label: "Card – online" },
+  { value: "CARD_SHOP", label: "Card – in shop" },
+  { value: "GIFTCARD", label: "Gift card" },
+  { value: "BANK", label: "Bank transfer" },
+];
+// Label any stored code (incl. older BANK/CARD/ONLINE) for display.
+const METHOD_LABEL: Record<string, string> = {
+  ...Object.fromEntries(METHODS.map((m) => [m.value, m.label])),
+  CARD: "Card",
+  ONLINE: "Online",
+};
 const monthStart = () => {
   const d = new Date();
   d.setDate(1);
@@ -44,7 +57,7 @@ export default function ExpensesPage() {
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState("");
   const [vat, setVat] = useState("");
-  const [method, setMethod] = useState("BANK");
+  const [method, setMethod] = useState("CASH");
   const [description, setDescription] = useState("");
 
   const loadData = useCallback(
@@ -169,7 +182,7 @@ export default function ExpensesPage() {
                     value={method}
                     onChange={setMethod}
                     className="mt-1"
-                    options={METHODS.map((m) => ({ value: m, label: m }))}
+                    options={METHODS}
                   />
                 </div>
                 <div>
@@ -222,6 +235,9 @@ export default function ExpensesPage() {
                           <Badge tone={x.kind === "FIXED" ? "slate" : "amber"}>
                             {x.kind === "FIXED" ? "Fixed" : "Variable"}
                           </Badge>
+                          {x.payment_method && (
+                            <Badge tone="slate">{METHOD_LABEL[x.payment_method] ?? x.payment_method}</Badge>
+                          )}
                         </td>
                         <td className="px-5 py-3 text-right font-medium text-fg">{format(x.amount)}</td>
                         <td className="px-5 py-3 text-right">
