@@ -8,6 +8,7 @@ import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
 import { Copilot } from "@/components/Copilot";
+import NotificationBell from "@/components/NotificationBell";
 import { Select } from "@/components/Select";
 import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
 
@@ -235,6 +236,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <h1 className="font-display text-sm font-semibold text-fg lg:hidden">Mise</h1>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <NotificationBell />
             <ThemeSwitcher />
             <CurrencySwitcher />
             <span className="hidden text-sm text-fg-faint lg:inline">{user?.email}</span>
