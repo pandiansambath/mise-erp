@@ -94,3 +94,12 @@ previous_fable_chat.txt
 # Local AI asset originals (web-optimized copies live in frontend/public/experience)
 generated_assets/
 ui_ideas/
+
+# Database backups — CLIENT DATA, never commit (kept locally + in S3 db-backups/)
+backups/
+*.sql
+*.sql.gz
+ssm_backup.json
+
+# Real client data drops (used for AI autofill testing) — never commit
+real_hotel_datas/
