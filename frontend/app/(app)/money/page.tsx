@@ -11,6 +11,7 @@ import {
   type DishSalesOut,
   type MenuEngineering,
   type MoneyCentre,
+  type PnL,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
@@ -315,12 +316,18 @@ function DishRow({ d }: { d: DishMarginRow }) {
 export default function MoneyPage() {
   const { format } = useCurrency();
   const [data, setData] = useState<MoneyCentre | null>(null);
+  const [pnl, setPnl] = useState<PnL | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .get<MoneyCentre>("/reports/money")
-      .then(setData)
+      .then((m) => {
+        setData(m);
+        // Same month-to-date range → the full in−out−profit waterfall.
+        return api.get<PnL>(`/reports/pnl?date_from=${m.date_from}&date_to=${m.date_to}`);
+      })
+      .then(setPnl)
       .catch(() => setErr("Could not load money insights — refresh to retry."));
   }, []);
 
@@ -362,6 +369,57 @@ export default function MoneyPage() {
           accent={parseFloat(data.net_profit) >= 0 ? "brand" : "rose"}
         />
       </div>
+
+      {/* Profit after everything — the plain in − out = profit picture */}
+      {pnl && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-fg">Profit — after everything</h3>
+            <span className="text-xs text-fg-faint">month to date</span>
+          </div>
+          <p className="mt-1 text-xs text-fg-faint">
+            Everything you took in, minus everything you spent (food, running costs and petty cash).
+          </p>
+          <div className="mt-4 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-fg-soft">Sales in <span className="text-fg-faint">(after delivery commission)</span></span>
+              <span className="font-medium text-fg">{format(pnl.net_sales)}</span>
+            </div>
+            <div className="flex items-center justify-between text-fg-soft">
+              <span>− Cost of food / ingredients sold</span>
+              <span>−{format(pnl.cost_of_sales)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-line pt-2">
+              <span className="font-medium text-fg">= Gross profit</span>
+              <span className="font-semibold text-fg">{format(pnl.gross_profit)}</span>
+            </div>
+            <div className="flex items-center justify-between text-fg-soft">
+              <span>− Running costs (rent, utilities, petty cash…)</span>
+              <span>−{format(pnl.operating_expenses)}</span>
+            </div>
+            {pnl.expense_breakdown.length > 0 && (
+              <div className="ml-4 space-y-1 border-l border-line pl-3">
+                {pnl.expense_breakdown.map((c) => (
+                  <div key={c.category_id} className="flex items-center justify-between text-xs text-fg-faint">
+                    <span>{c.category_name}</span>
+                    <span>−{format(c.total)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-between border-t-2 border-line pt-2">
+              <span className="font-semibold text-fg">= Net profit (what you keep)</span>
+              <span className={`text-lg font-bold ${parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}`}>
+                {format(pnl.net_profit)}
+              </span>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-fg-faint">
+            Record takings on <Link href="/sales" className="text-brand-400 underline">Sales</Link> and spends on{" "}
+            <Link href="/expenses" className="text-brand-400 underline">Expenses</Link>; this updates automatically.
+          </p>
+        </Card>
+      )}
 
       {/* Break-even */}
       <Card className="mt-6">
