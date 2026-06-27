@@ -96,6 +96,38 @@ def kind_perm(kind: str) -> str | None:
     return cfg["perm"] if cfg else None
 
 
+_EXCEL_MIMES = {
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+    "application/vnd.ms-excel",  # .xls (older; openpyxl reads xlsx, best-effort here)
+}
+
+
+def _is_excel(mime: str) -> bool:
+    return (mime or "").split(";")[0].strip() in _EXCEL_MIMES
+
+
+def _xlsx_to_csv(file_bytes: bytes, max_rows: int = 500) -> str:
+    """Flatten the first worksheet to CSV text so the model can read it. Best-effort:
+    if openpyxl/the file fails, returns '' (the model then sees an empty sheet)."""
+    import csv
+    import io
+
+    try:
+        from openpyxl import load_workbook
+
+        wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+        ws = wb.active
+        out = io.StringIO()
+        w = csv.writer(out)
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            if i >= max_rows:
+                break
+            w.writerow(["" if c is None else c for c in row])
+        return out.getvalue()
+    except Exception:  # noqa: BLE001 — bad/unsupported file → let the model see nothing
+        return ""
+
+
 async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
     """Read the uploaded document and return proposed rows (writes nothing)."""
     if kind not in KINDS:
@@ -110,11 +142,17 @@ async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
         raise ProviderError("httpx not installed") from exc
 
     url = _ENDPOINT.format(model=settings.assistant_model)
-    body = {
-        "contents": [{"role": "user", "parts": [
+    # Gemini can't read an .xlsx binary, so convert spreadsheets to CSV text first.
+    if _is_excel(mime):
+        sheet = _xlsx_to_csv(file_bytes)
+        parts = [{"text": cfg["prompt"] + "\n\nSPREADSHEET CONTENTS (CSV):\n" + sheet}]
+    else:
+        parts = [
             {"text": cfg["prompt"]},
             {"inline_data": {"mime_type": mime, "data": base64.b64encode(file_bytes).decode()}},
-        ]}],
+        ]
+    body = {
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {
             "responseMimeType": "application/json",
             "responseSchema": cfg["schema"],

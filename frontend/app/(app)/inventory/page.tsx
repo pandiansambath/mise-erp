@@ -7,6 +7,7 @@ import {
   api,
   ApiError,
   downloadFile,
+  postForm,
   type Item,
   type ItemSuppliers,
   type PurchaseByVendorRow,
@@ -79,6 +80,56 @@ export default function InventoryPage() {
 
   function load() {
     return api.get<Item[]>("/inventory/items").then(setItems);
+  }
+
+  // ── AI bulk-import: upload a PDF / Excel / CSV / photo of an item list ──────
+  const importInput = useRef<HTMLInputElement>(null);
+  const [importRows, setImportRows] = useState<Record<string, unknown>[] | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setImportMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("kind", "items");
+      fd.append("file", file);
+      const res = await postForm<{ kind: string; rows: Record<string, unknown>[] }>("/assistant/ingest", fd);
+      if (!res.rows.length) setImportMsg("I couldn't find any items in that file.");
+      else setImportRows(res.rows);
+    } catch (err) {
+      setImportMsg(
+        err instanceof ApiError && err.status === 503 ? "Reading files needs the AI switched on (a Gemini key)."
+          : err instanceof ApiError && err.status === 429 ? "The AI is busy right now — please try again in a moment."
+            : err instanceof ApiError && err.status === 403 ? "You don't have permission to add stock items."
+              : "Sorry — I couldn't read that file. Please try again."
+      );
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function commitImport() {
+    if (!importRows) return;
+    setImportBusy(true);
+    try {
+      const res = await api.post<{ created: string[]; skipped: string[] }>(
+        "/assistant/ingest/commit",
+        { kind: "items", rows: importRows }
+      );
+      setImportRows(null);
+      const skip = res.skipped.length ? `, skipped ${res.skipped.length} (already there)` : "";
+      setImportMsg(`Added ${res.created.length} item${res.created.length === 1 ? "" : "s"}${skip}.`);
+      await load();
+    } catch (err) {
+      setImportMsg(err instanceof ApiError ? err.message : "Could not add those items.");
+    } finally {
+      setImportBusy(false);
+    }
   }
 
   async function renameCategory() {
@@ -329,6 +380,21 @@ export default function InventoryPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Inventory" subtitle="Items, stock levels, suppliers and weighted-average cost." />
         <div className="flex gap-2">
+          <input
+            ref={importInput}
+            type="file"
+            accept=".pdf,.csv,.xlsx,.xls,image/*,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          <button
+            onClick={() => importInput.current?.click()}
+            disabled={importBusy}
+            title="Upload a PDF, Excel, CSV or photo of your item list — the AI reads it and adds the items"
+            className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+          >
+            {importBusy ? "Reading…" : "✨ Import (AI)"}
+          </button>
           <button
             onClick={() => downloadFile("/inventory/items.xlsx", "mise-stock-valuation.xlsx")}
             title="Download stock valuation (Excel)"
@@ -345,6 +411,65 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      {importMsg && (
+        <div className="mt-3 flex items-center justify-between rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-200">
+          <span>{importMsg}</span>
+          <button onClick={() => setImportMsg(null)} className="text-fg-faint hover:text-fg" aria-label="Dismiss">✕</button>
+        </div>
+      )}
+
+      {importRows && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !importBusy && setImportRows(null)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-line px-5 py-3">
+              <h3 className="font-semibold text-fg">
+                Review {importRows.length} item{importRows.length === 1 ? "" : "s"} from your file
+              </h3>
+              <button onClick={() => setImportRows(null)} disabled={importBusy} className="text-fg-faint hover:text-fg" aria-label="Close">✕</button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto px-5 py-3">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase text-fg-faint">
+                    <th className="py-1">Name</th>
+                    <th>Unit</th>
+                    <th>Category</th>
+                    <th className="text-right">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importRows.map((r, i) => (
+                    <tr key={i} className="border-t border-line/50">
+                      <td className="py-1.5 font-medium text-fg">{String(r.name ?? "")}</td>
+                      <td className="text-fg-soft">{String(r.unit ?? "")}</td>
+                      <td className="text-fg-soft">{String(r.category ?? "")}</td>
+                      <td className="text-right text-fg-soft">
+                        {r.cost_price != null && r.cost_price !== "" ? format(String(r.cost_price)) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-line px-5 py-3">
+              <p className="mr-auto text-xs text-fg-faint">Nothing is saved until you add them. Duplicates are skipped.</p>
+              <button onClick={() => setImportRows(null)} disabled={importBusy} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2">
+                Cancel
+              </button>
+              <button onClick={commitImport} disabled={importBusy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
+                {importBusy ? "Adding…" : `Add ${importRows.length} item${importRows.length === 1 ? "" : "s"}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div ref={formRef} className="scroll-mt-4">
       <Card className={`mb-6 ${flash ? "mise-flash" : ""}`}>
