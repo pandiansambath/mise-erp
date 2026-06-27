@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, postForm } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCurrency } from "@/lib/currency";
 import { Logo } from "@/components/Logo";
 
 type Row = Record<string, unknown>;
@@ -17,6 +18,7 @@ const STEPS = [
   { key: "recipes", title: "Your menu" },
   { key: "staff", title: "Your team" },
   { key: "costs", title: "Your monthly costs" },
+  { key: "review", title: "Review" },
   { key: "done", title: "All set" },
 ] as const;
 
@@ -53,6 +55,7 @@ export default function OnboardingPage() {
     next();
   }
   function finish() {
+    try { localStorage.setItem("mise.setup.done", "1"); } catch { /* ignore */ }
     router.replace("/dashboard");
   }
 
@@ -147,7 +150,8 @@ export default function OnboardingPage() {
             />
           )}
           {step === 5 && <CostsStep onNext={next} />}
-          {step === 6 && <Done name={first} onFinish={finish} />}
+          {step === 6 && <ReviewStep onNext={next} />}
+          {step === 7 && <Done name={first} onFinish={finish} />}
         </div>
       </div>
     </div>
@@ -375,6 +379,99 @@ function CostsStep({ onNext }: { onNext: () => void }) {
         <button onClick={save} disabled={busy} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
           {busy ? "Saving…" : "Save & continue →"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ReviewStep({ onNext }: { onNext: () => void }) {
+  const { format } = useCurrency();
+  const [pages, setPages] = useState<{ icon: string; title: string; rows: { main: string; sub: string }[] }[] | null>(null);
+  const [pg, setPg] = useState(0);
+
+  useEffect(() => {
+    const g = (path: string) =>
+      api.get<Record<string, unknown>[]>(path).catch(() => [] as Record<string, unknown>[]);
+    Promise.all([g("/inventory/items"), g("/vendors"), g("/recipes"), g("/employees")]).then(
+      ([items, vendors, recipes, staff]) => {
+        setPages([
+          {
+            icon: "📦", title: "Stock items",
+            rows: items.map((r) => ({
+              main: String(r.name ?? ""),
+              sub: `${r.current_stock ?? 0} ${r.unit ?? ""}${r.average_cost && Number(r.average_cost) > 0 ? ` · ${format(String(r.average_cost))}/${r.unit ?? "unit"}` : ""}`,
+            })),
+          },
+          { icon: "🤝", title: "Suppliers", rows: vendors.map((r) => ({ main: String(r.name ?? ""), sub: String(r.category ?? "") })) },
+          {
+            icon: "🍲", title: "Menu",
+            rows: recipes.map((r) => ({
+              main: String(r.name ?? ""),
+              sub: r.selling_price ? `${format(String(r.selling_price))}/plate` : "no price set",
+            })),
+          },
+          { icon: "🧑‍🍳", title: "Team", rows: staff.map((r) => ({ main: String(r.full_name ?? r.name ?? ""), sub: String(r.job_title ?? "") })) },
+        ]);
+      }
+    );
+  }, [format]);
+
+  if (!pages) {
+    return <p className="text-white/60">Loading your data…</p>;
+  }
+
+  const p = pages[pg];
+  const last = pg === pages.length - 1;
+
+  return (
+    <div>
+      <h2 className="font-display text-2xl font-semibold sm:text-3xl">Quick review</h2>
+      <p className="mt-2 text-white/70">
+        Here&apos;s what went in. Flick through and make sure it looks right.
+      </p>
+
+      <div className="mt-5 rounded-2xl border border-white/15 bg-white/5 p-4">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-white">{p.icon} {p.title}</span>
+          <span className="text-xs text-white/45">{p.rows.length} total · {pg + 1}/{pages.length}</span>
+        </div>
+        <div key={pg} className="mise-slide-stagger mt-3 max-h-64 space-y-1 overflow-y-auto pr-1 text-sm">
+          {p.rows.length === 0 ? (
+            <p className="py-6 text-center text-white/40">Nothing added here — you can add it anytime.</p>
+          ) : (
+            p.rows.slice(0, 80).map((r, i) => (
+              <div key={i} className="flex justify-between gap-3 border-b border-white/5 py-1.5 last:border-0">
+                <span className="truncate text-white/90">{r.main}</span>
+                <span className="shrink-0 text-white/45">{r.sub}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <p className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100/90">
+        ✨ Something not right? Once you&apos;re in, tap <span className="font-semibold">Ask Mise</span> (bottom-right of
+        any page) and just tell it — e.g. <span className="italic">&quot;change the price of Tomato to £2&quot;</span> — and
+        it&apos;ll fix it on the spot.
+      </p>
+
+      <div className="mt-7 flex items-center justify-between">
+        <button
+          onClick={() => setPg((x) => Math.max(0, x - 1))}
+          disabled={pg === 0}
+          className="rounded-xl border border-white/15 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 disabled:opacity-30"
+        >
+          ← Back
+        </button>
+        {last ? (
+          <button onClick={onNext} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110">
+            Looks right →
+          </button>
+        ) : (
+          <button onClick={() => setPg((x) => Math.min(pages.length - 1, x + 1))} className="rounded-xl bg-white/10 px-6 py-3 text-sm font-semibold text-white hover:bg-white/15">
+            Next →
+          </button>
+        )}
       </div>
     </div>
   );
