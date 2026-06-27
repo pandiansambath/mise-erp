@@ -12,10 +12,10 @@ locals {
   # Caddy site address: a real domain (+ www) turns on automatic HTTPS via
   # Let's Encrypt; empty domain falls back to plain HTTP on :80 by IP.
   caddy_site = var.domain != "" ? "${var.domain}, www.${var.domain}" : ":80"
-  # When a domain is set: get a Let's Encrypt cert BUT keep HTTP serving (disable
-  # the auto http→https redirect) so the site is never unreachable if a future
-  # deploy can't re-issue the cert. (Re-enable the redirect once certs persist.)
-  caddy_global = var.domain == "" ? "" : "{\n${var.acme_email != "" ? "\temail ${var.acme_email}\n" : ""}\tauto_https disable_redirects\n}\n\n"
+  # When a domain is set: automatic HTTPS + the normal http→https redirect. Certs now
+  # persist across box replacement (restored from S3 in user_data), so deploys don't
+  # re-issue → no rate-limit risk → the redirect is safe.
+  caddy_global = var.domain == "" ? "" : "{\n${var.acme_email != "" ? "\temail ${var.acme_email}\n" : ""}}\n\n"
   caddyfile    = "${local.caddy_global}${local.caddy_site} {\n\thandle /api/* {\n\t\treverse_proxy backend:8000\n\t}\n\thandle {\n\t\treverse_proxy frontend:3000\n\t}\n}\n"
 }
 

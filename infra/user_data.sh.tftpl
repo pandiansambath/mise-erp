@@ -37,7 +37,7 @@ services:
       - "443:443"
     volumes:
       - /opt/mise/Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
+      - /opt/mise/caddy-data:/data
       - caddy_config:/config
     depends_on:
       - backend
@@ -63,10 +63,40 @@ services:
     restart: always
 
 volumes:
-  caddy_data:
   caddy_config:
 COMPOSE
+
+# Restore Caddy's TLS certs from S3 so they SURVIVE box replacement — no LE/ZeroSSL
+# re-issue every deploy (no rate-limit risk; the http->https redirect stays safe).
+mkdir -p /opt/mise/caddy-data
+aws s3 sync "s3://${s3_bucket}/caddy-data" /opt/mise/caddy-data --region ${region} || true
 
 cd /opt/mise
 docker compose pull
 docker compose up -d
+
+# Back the certs up to S3 shortly after boot + every 15 min (captures first issue + renewals).
+cat > /usr/local/bin/mise-cert-backup.sh <<'BK'
+#!/bin/bash
+aws s3 sync /opt/mise/caddy-data "s3://${s3_bucket}/caddy-data" --region ${region}
+BK
+chmod +x /usr/local/bin/mise-cert-backup.sh
+cat > /etc/systemd/system/mise-cert-backup.service <<'SVC'
+[Unit]
+Description=Backup Caddy certs to S3
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mise-cert-backup.sh
+SVC
+cat > /etc/systemd/system/mise-cert-backup.timer <<'TMR'
+[Unit]
+Description=Periodic Caddy cert backup to S3
+[Timer]
+OnBootSec=180
+OnUnitActiveSec=900
+Persistent=true
+[Install]
+WantedBy=timers.target
+TMR
+systemctl daemon-reload || true
+systemctl enable --now mise-cert-backup.timer || true
