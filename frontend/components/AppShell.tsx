@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
   { href: "/stock-take", label: "Stock-take", icon: "📋", perm: "inventory:read" },
   { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },
+  { href: "/party-order", label: "Party Order", icon: "🎉", perm: "recipes:read" },
   { href: "/allergens", label: "Allergens", icon: "⚠️", perm: "recipes:read" },
   { href: "/food-safety", label: "Food Safety", icon: "🌡️", perm: "inventory:read" },
   { href: "/waste", label: "Waste", icon: "🗑️", perm: "inventory:read" },
