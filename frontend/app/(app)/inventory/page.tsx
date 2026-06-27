@@ -9,7 +9,6 @@ import {
   downloadFile,
   postForm,
   type Item,
-  type ItemSuppliers,
   type PurchaseByVendorRow,
   type Vendor,
 } from "@/lib/api";
@@ -65,8 +64,8 @@ export default function InventoryPage() {
   // Add-item supplier preview: pick a vendor → see its price for this item (read-only)
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [addVendor, setAddVendor] = useState("");
+  const [addPrice, setAddPrice] = useState("");
   // item_id -> { vendor_id -> price } (so the add form can show the chosen vendor's price)
-  const [suppliers, setSuppliers] = useState<Record<string, Record<string, string>>>({});
   const [allergensTouched, setAllergensTouched] = useState(false);
   // Per-item "purchases by supplier" record (expand a row to load + show it).
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -149,19 +148,6 @@ export default function InventoryPage() {
   useEffect(() => {
     load().finally(() => setLoading(false));
     api.get<Vendor[]>("/vendors").then(setVendors).catch(() => {});
-    api
-      .get<ItemSuppliers[]>("/purchasing/item-suppliers")
-      .then((rows) =>
-        setSuppliers(
-          Object.fromEntries(
-            rows.map((r) => [
-              r.item_id,
-              Object.fromEntries(r.vendors.map((v) => [v.vendor_id, v.price_per_unit])),
-            ]),
-          ),
-        ),
-      )
-      .catch(() => {});
     // Deep link: /inventory?filter=low (dashboard "Low stock" KPI)
     const want = new URLSearchParams(window.location.search).get("filter");
     if (want === "low" || want === "out" || want === "ok") setStatusFilter(want);
@@ -193,6 +179,7 @@ export default function InventoryPage() {
     setEditingId(null);
     setForm(EMPTY);
     setAddVendor("");
+    setAddPrice("");
     setAllergensTouched(false);
     setError(null);
   }
@@ -207,6 +194,11 @@ export default function InventoryPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // Adding a NEW item: a supplier + its price are mandatory (no cheapest auto-pick).
+    if (!editingId && (!addVendor || !addPrice || Number(addPrice) <= 0)) {
+      setError("Pick a supplier and enter its price — every item needs a chosen supplier.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload: Record<string, unknown> = {
@@ -222,7 +214,13 @@ export default function InventoryPage() {
       if (editingId) {
         await api.patch<Item>(`/inventory/items/${editingId}`, payload);
       } else {
-        await api.post<Item>("/inventory/items", payload);
+        const item = await api.post<Item>("/inventory/items", payload);
+        // Set the picked supplier's price AND mark it the chosen (★) supplier.
+        await api.post(`/vendors/${addVendor}/items`, {
+          item_id: item.id,
+          price_per_unit: addPrice,
+          is_preferred: true,
+        });
       }
       cancelEdit();
       await load();
@@ -330,11 +328,6 @@ export default function InventoryPage() {
   // Add-item supplier preview: the chosen vendor's price for this item (if it
   // already prices a same-named item) — read-only, no double-entry.
   const activeVendors = vendors.filter((v) => v.is_active);
-  const matchedItem = items.find(
-    (i) => i.name.trim().toLowerCase() === form.name.trim().toLowerCase()
-  );
-  const addVendorPrice =
-    matchedItem && addVendor ? suppliers[matchedItem.id]?.[addVendor] : undefined;
 
   const statusChips: { key: StatusFilter; label: string; dot?: string }[] = [
     { key: "all", label: `🧺 All (${counts.all})` },
@@ -529,9 +522,13 @@ export default function InventoryPage() {
           {!editingId && (
             <div className="rounded-xl border border-line bg-paper-2/60 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                Supplier (optional)
+                Supplier &amp; price <span className="text-rose-400">*</span>
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
+              <p className="mb-2 mt-0.5 text-xs text-fg-faint">
+                Every item needs one chosen (★) supplier — no cheapest auto-pick. You can add more
+                suppliers later on the Vendors page.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
                 <Select
                   value={addVendor}
                   onChange={setAddVendor}
@@ -542,19 +539,23 @@ export default function InventoryPage() {
                     ...activeVendors.map((v) => ({ value: v.id, label: v.name })),
                   ]}
                 />
-                {addVendor &&
-                  (addVendorPrice ? (
-                    <span className="text-sm text-brand-300">
-                      Price: <b>{format(addVendorPrice)}</b>{" "}
-                      <span className="text-fg-faint">— this supplier&apos;s price (read-only)</span>
-                    </span>
-                  ) : (
-                    <span className="text-sm text-amber-300">
-                      🆕 No supplier price yet — set it on the{" "}
-                      <Link href="/vendors" className="font-medium text-brand-400 hover:underline">Vendors</Link>{" "}
-                      page (the price lives with the vendor — no double-entry).
-                    </span>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-fg-faint">£</span>
+                  <input
+                    value={addPrice}
+                    onChange={(e) => setAddPrice(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="price"
+                    className="w-28 rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500"
+                  />
+                  <span className="text-sm text-fg-faint">/ {form.unit || "unit"}</span>
+                </div>
+                {activeVendors.length === 0 && (
+                  <span className="text-sm text-amber-300">
+                    No suppliers yet — add one on the{" "}
+                    <Link href="/vendors" className="font-medium text-brand-400 hover:underline">Vendors</Link> page first.
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -712,9 +713,10 @@ export default function InventoryPage() {
                   ) : (
                     visible.map((item) => {
                       const st = stockState(item);
-                      // Only offer a per-supplier breakdown when the item was
-                      // actually bought from MORE THAN ONE vendor (else there's
-                      // nothing to compare — keep the row simple).
+                      // Click-to-open the purchase history whenever the item has EVER
+                      // been bought — even from a single vendor (to show price changes
+                      // over time). The "N suppliers" badge only shows for >1 vendor.
+                      const hasHistory = (item.purchase_vendor_count ?? 0) > 0;
                       const multiVendor = (item.purchase_vendor_count ?? 0) > 1;
                       const isOpen = expanded === item.id;
                       const rows = breakdown[item.id];
@@ -722,10 +724,10 @@ export default function InventoryPage() {
                         <Fragment key={item.id}>
                         <tr
                           className={`border-b border-line transition hover:bg-glass/[0.04] ${
-                            multiVendor ? "cursor-pointer" : ""
+                            hasHistory ? "cursor-pointer" : ""
                           } ${isOpen ? "bg-glass/[0.04]" : ""}`}
-                          onClick={multiVendor ? () => toggleBreakdown(item) : undefined}
-                          aria-expanded={multiVendor ? isOpen : undefined}
+                          onClick={hasHistory ? () => toggleBreakdown(item) : undefined}
+                          aria-expanded={hasHistory ? isOpen : undefined}
                         >
                           <td className="px-5 py-3">
                             <p className="font-medium text-fg">
@@ -741,29 +743,18 @@ export default function InventoryPage() {
                           </td>
                           <td className="px-5 py-3">
                             {item.best_vendor ? (
-                              item.best_vendor_chosen ? (
-                                <span className="text-fg-soft" title="Chosen supplier — recipes & purchase orders use this one">
-                                  <span className="text-brand-400">★</span> {item.best_vendor}
-                                </span>
-                              ) : (
-                                <span className="text-fg-soft">
-                                  {item.best_vendor}
-                                  <span
-                                    className="ml-1 text-amber-400"
-                                    title="Cheapest vendor — used automatically until you pick a preferred (★) supplier"
-                                  >
-                                    · cheapest
-                                  </span>{" "}
-                                  <Link
-                                    href="/price-comparison"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-brand-300 hover:underline"
-                                    title="Pick the ★ preferred supplier recipes & purchase orders should use"
-                                  >
-                                    choose ★
-                                  </Link>
-                                </span>
-                              )
+                              <span className="text-fg-soft" title="Chosen supplier — recipes & purchase orders use this one">
+                                <span className="text-brand-400">★</span> {item.best_vendor}
+                              </span>
+                            ) : (item.vendor_count ?? 0) > 0 ? (
+                              <Link
+                                href="/price-comparison"
+                                onClick={(e) => e.stopPropagation()}
+                                title="This item has suppliers but none is chosen — pick which one to use"
+                                className="inline-flex transition hover:opacity-80"
+                              >
+                                <Badge tone="amber">★ choose supplier</Badge>
+                              </Link>
                             ) : (
                               <Link
                                 href="/vendors"
@@ -782,9 +773,10 @@ export default function InventoryPage() {
                           </td>
                           <td className="px-5 py-3 text-right">
                             <span className="flex items-center justify-end gap-1 text-fg-soft">
-                              {multiVendor && (
+                              {hasHistory && (
                                 <span
                                   aria-hidden
+                                  title="Click the row to see purchase history"
                                   className={`text-[10px] text-brand-300 transition-transform duration-300 ${isOpen ? "rotate-90" : ""}`}
                                 >
                                   ▶
@@ -881,6 +873,15 @@ export default function InventoryPage() {
                                     <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
                                       Stock from different suppliers mixes into one pool — so Mise values your {fmtQty(item.current_stock, item.unit)} on hand at the weighted-average {format(item.average_cost)}/{item.unit} rather than guessing whose stock is left.
                                     </p>
+                                    <div className="mt-3">
+                                      <Link
+                                        href={`/purchasing?item=${item.id}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-brand-400/20"
+                                      >
+                                        🛒 Order / view in Purchasing →
+                                      </Link>
+                                    </div>
                                   </>
                                 ) : (
                                   <p className="mt-3 text-xs text-fg-faint">No purchase history yet.</p>

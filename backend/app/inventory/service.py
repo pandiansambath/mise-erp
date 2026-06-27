@@ -132,27 +132,25 @@ async def vendor_counts(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID
 async def best_vendors(
     db: AsyncSession, hotel_id: uuid.UUID
 ) -> dict[uuid.UUID, tuple[str, bool, Decimal]]:
-    """Map item_id -> (vendor_name, is_chosen, price). The CHOSEN (★ preferred)
-    vendor if one was set, otherwise the cheapest as a provisional. `is_chosen`
-    lets the UI be honest (★ only when actually picked); `price` is that vendor's
-    price for the item. Mirrors recipe costing."""
+    """Map item_id -> (vendor_name, is_chosen, price) for the CHOSEN (★ preferred)
+    supplier ONLY. We deliberately do NOT auto-pick the cheapest as a provisional
+    anymore (the user must pick a supplier per item) — items with no chosen supplier
+    are simply absent here, so the UI prompts the user to choose one."""
     from app.vendors.models import Vendor, VendorItem  # local import avoids cycle
 
     stmt = (
-        select(VendorItem.item_id, Vendor.name, VendorItem.is_preferred, VendorItem.price_per_unit)
+        select(VendorItem.item_id, Vendor.name, VendorItem.price_per_unit)
         .join(Vendor, Vendor.id == VendorItem.vendor_id)
-        .where(Vendor.hotel_id == hotel_id, Vendor.is_active.is_(True))
-        # per item: preferred first, then cheapest — first row per item wins
-        .order_by(
-            VendorItem.item_id,
-            VendorItem.is_preferred.desc(),
-            VendorItem.price_per_unit.asc(),
+        .where(
+            Vendor.hotel_id == hotel_id,
+            Vendor.is_active.is_(True),
+            VendorItem.is_preferred.is_(True),
         )
     )
     best: dict[uuid.UUID, tuple[str, bool, Decimal]] = {}
-    for item_id, name, pref, price in (await db.execute(stmt)).all():
+    for item_id, name, price in (await db.execute(stmt)).all():
         if item_id not in best:
-            best[item_id] = (name, bool(pref), price)
+            best[item_id] = (name, True, price)
     return best
 
 

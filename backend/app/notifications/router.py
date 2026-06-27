@@ -26,9 +26,14 @@ async def list_notifications(
     first, with a total count for the badge."""
     items: list[dict] = []
 
-    # Supplier price rises — only if the user can see costs/inventory.
+    # Supplier price rises — only if the user can see costs/inventory. Newest change
+    # first (so a price you just raised is at the TOP, not sorted by % size).
     if has_permission(user.role, "inventory:read") or has_permission(user.role, "reports:read"):
-        for a in await insights.price_alerts(db, user.hotel_id):
+        alerts = sorted(
+            await insights.price_alerts(db, user.hotel_id),
+            key=lambda a: a["last_ordered"], reverse=True,
+        )
+        for a in alerts:
             vendor = a.get("vendor_name") or "a supplier"
             body = f"{vendor}: £{a['prev_price']} → £{a['latest_price']} (+{a['change_pct']}%)"
             items.append({
