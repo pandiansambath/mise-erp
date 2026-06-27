@@ -66,10 +66,10 @@ export default function OnboardingPage() {
         className="mise-onb-bg pointer-events-none absolute inset-0 opacity-90"
         style={{
           background:
-            "radial-gradient(900px 600px at 15% 10%, rgba(16,185,129,0.22), transparent 60%)," +
-            "radial-gradient(800px 600px at 85% 20%, rgba(56,189,248,0.18), transparent 60%)," +
-            "radial-gradient(900px 700px at 50% 100%, rgba(244,114,182,0.14), transparent 60%)," +
-            "linear-gradient(120deg, #0b1220, #0e1627, #0b1220)",
+            "radial-gradient(900px 600px at 15% 10%, rgba(16,185,129,0.24), transparent 60%)," +
+            "radial-gradient(800px 600px at 85% 20%, rgba(20,184,166,0.18), transparent 60%)," +
+            "radial-gradient(900px 700px at 50% 100%, rgba(5,150,105,0.16), transparent 60%)," +
+            "linear-gradient(120deg, #04120d, #07160f, #04120d)",
         }}
       />
       <div className="pointer-events-none absolute inset-0 opacity-[0.05] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" />
@@ -84,7 +84,7 @@ export default function OnboardingPage() {
         </div>
         <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-sky-400 transition-[width] duration-700 ease-out"
+            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-[width] duration-700 ease-out"
             style={{ width: `${Math.max(pct, 6)}%` }}
           />
         </div>
@@ -141,7 +141,7 @@ function Welcome({
 }) {
   return (
     <div>
-      <span className="mise-pop inline-block text-5xl">👋</span>
+      <span className="mise-pop-lg inline-block text-5xl">👋</span>
       <h1 className="mt-4 font-display text-3xl font-semibold sm:text-4xl">
         Welcome{hotelName ? ` to ${hotelName}` : ""}.
       </h1>
@@ -159,7 +159,7 @@ function Welcome({
       />
       <button
         onClick={onContinue}
-        className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-sky-500 px-5 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:brightness-110"
+        className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:brightness-110"
       >
         {name.trim() ? `Nice to meet you, ${name.trim().split(/\s+/)[0]} →` : "Continue →"}
       </button>
@@ -234,14 +234,14 @@ function ImportStep({
       <p className="mt-3 text-white/70">{blurb}</p>
 
       {done !== null ? (
-        <div className="mise-pop mt-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-5">
+        <div className="mise-pop-lg mt-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-5">
           <p className="text-lg font-semibold text-emerald-300">✓ Added {done} {kind === "items" ? "items" : "suppliers"}, {greetingName}!</p>
           <p className="mt-1 text-sm text-white/60">You can always add more later from the app.</p>
         </div>
       ) : rows ? (
         <div className="mt-6 rounded-2xl border border-white/15 bg-white/5 p-4">
           <p className="text-sm text-white/70">I found <span className="font-semibold text-white">{rows.length}</span> {kind === "items" ? "items" : "suppliers"}. Review and add:</p>
-          <div className="mt-3 max-h-52 space-y-1 overflow-y-auto pr-1 text-sm">
+          <div className="mise-slide-stagger mt-3 max-h-52 space-y-1 overflow-y-auto pr-1 text-sm">
             {rows.slice(0, 60).map((r, i) => (
               <div key={i} className="flex justify-between gap-3 border-b border-white/5 py-1 last:border-0">
                 <span className="truncate text-white/85">{String(r.name ?? "")}</span>
@@ -251,7 +251,7 @@ function ImportStep({
           </div>
           <div className="mt-4 flex gap-3">
             <button onClick={() => setRows(null)} disabled={busy} className="rounded-xl border border-white/15 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5">Choose another</button>
-            <button onClick={commit} disabled={busy} className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
+            <button onClick={commit} disabled={busy} className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
               {busy ? "Adding…" : `Add all ${rows.length}`}
             </button>
           </div>
@@ -332,7 +332,7 @@ function CostsStep({ onNext }: { onNext: () => void }) {
       <p className="mt-3 text-white/70">
         A few fixed costs so your profit &amp; break-even are real from the start. Leave blank to skip any.
       </p>
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mise-slide-stagger mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label className="block"><span className="text-sm text-white/60">Rent (£/mo)</span>
           <input value={rent} onChange={(e) => setRent(e.target.value)} inputMode="decimal" placeholder="0.00" className={field} /></label>
         <label className="block"><span className="text-sm text-white/60">Gas (£/mo)</span>
@@ -341,10 +341,10 @@ function CostsStep({ onNext }: { onNext: () => void }) {
           <input value={power} onChange={(e) => setPower(e.target.value)} inputMode="decimal" placeholder="0.00" className={field} /></label>
       </div>
       {err && <p className="mt-3 text-sm text-rose-300">{err}</p>}
-      {saved && <p className="mise-pop mt-3 text-sm font-medium text-emerald-300">✓ Saved</p>}
+      {saved && <p className="mise-pop-lg mt-3 text-sm font-medium text-emerald-300">✓ Saved</p>}
       <div className="mt-8 flex items-center justify-between">
         <button onClick={onNext} className="text-sm text-white/50 transition hover:text-white/80">Skip →</button>
-        <button onClick={save} disabled={busy} className="rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
+        <button onClick={save} disabled={busy} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
           {busy ? "Saving…" : "Save & continue →"}
         </button>
       </div>
@@ -355,7 +355,7 @@ function CostsStep({ onNext }: { onNext: () => void }) {
 function Done({ name, onFinish }: { name: string; onFinish: () => void }) {
   return (
     <div className="flex flex-col items-center text-center">
-      <span className="mise-pop text-6xl">🎉</span>
+      <span className="mise-pop-lg text-6xl">🎉</span>
       <h2 className="mt-4 font-display text-3xl font-semibold sm:text-4xl">You&apos;re all set, {name}!</h2>
       <p className="mt-3 max-w-md text-white/70">
         Your dashboard is ready. You can add recipes, staff and past sales anytime — just ask the Copilot, or
@@ -363,7 +363,7 @@ function Done({ name, onFinish }: { name: string; onFinish: () => void }) {
       </p>
       <button
         onClick={onFinish}
-        className="mt-8 rounded-2xl bg-gradient-to-r from-emerald-500 to-sky-500 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:brightness-110"
+        className="mt-8 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:brightness-110"
       >
         Go to my dashboard →
       </button>

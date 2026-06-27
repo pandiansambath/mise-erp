@@ -9,6 +9,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Logo } from "@/components/Logo";
+import { Brand } from "@/components/Brand";
 
 type Chip = { label: string; value: string; sub?: string };
 type Scene = {
@@ -282,21 +284,22 @@ export default function ExperienceJourney() {
         style={{ opacity: ready ? 0 : 1, visibility: ready ? "hidden" : "visible" }}
       >
         <div className="flex w-56 max-w-[70vw] flex-col items-center">
-          <p className="font-display text-5xl tracking-tight">Mise</p>
-          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.3em] text-amber-200/80">Every plate · Every penny</p>
+          <Logo size={52} className="mb-3 mise-pop-lg" />
+          <p className="font-display text-4xl tracking-tight">Mise</p>
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.3em] text-emerald-200/80">Every plate · Every penny</p>
           <div className="mt-6 h-[3px] w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-emerald-300 transition-[width] duration-300" style={{ width: `${Math.max(8, Math.round(progress * 100))}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-teal-300 transition-[width] duration-300" style={{ width: `${Math.max(8, Math.round(progress * 100))}%` }} />
           </div>
         </div>
       </div>
 
-      <div ref={barRef} className="fixed inset-x-0 top-0 z-50 h-[2px] origin-left bg-gradient-to-r from-amber-300 via-amber-200 to-emerald-300" style={{ transform: "scaleX(0)" }} />
+      <div ref={barRef} className="fixed inset-x-0 top-0 z-50 h-[2px] origin-left bg-gradient-to-r from-emerald-300 via-emerald-200 to-teal-300" style={{ transform: "scaleX(0)" }} />
 
       <header className="fixed inset-x-0 top-0 z-40 flex items-center justify-between px-6 py-5 sm:px-10">
-        <span className="font-display text-xl font-semibold tracking-tight drop-shadow">Mise</span>
+        <Brand size={26} wordClassName="text-xl drop-shadow" />
         <nav className="flex items-center gap-3">
           <Link href="/login" className="text-sm font-medium text-white/80 transition hover:text-white">Sign in</Link>
-          <Link href="/signup" className="rounded-full bg-gradient-to-r from-amber-300 to-amber-200 px-4 py-2 text-[13px] font-semibold text-black shadow-lg shadow-amber-500/20 transition hover:shadow-xl">Register your hotel</Link>
+          <Link href="/signup" className="rounded-full bg-gradient-to-r from-emerald-300 to-emerald-200 px-4 py-2 text-[13px] font-semibold text-emerald-950 shadow-lg shadow-emerald-500/25 transition hover:shadow-xl">Register your hotel</Link>
         </nav>
       </header>
 
@@ -311,23 +314,23 @@ export default function ExperienceJourney() {
           {SCENES.map((s, i) => (
             <div key={s.img} data-text={i} className={`absolute inset-0 z-20 flex flex-col justify-center px-7 sm:px-16 lg:px-28 ${alignCls[s.align]}`}>
               <div className="max-w-3xl">
-                <span className="mise-reveal-item font-mono text-[11px] tracking-[0.4em] text-amber-300/90 sm:text-xs" style={{ animationDelay: "0.05s" }}>{s.kicker}</span>
+                <span className="mise-reveal-item font-mono text-[11px] tracking-[0.4em] text-emerald-300/90 sm:text-xs" style={{ animationDelay: "0.05s" }}>{s.kicker}</span>
                 <h2 className="mise-reveal-item mt-5 font-display text-5xl leading-[1.04] tracking-tight drop-shadow-[0_2px_30px_rgba(0,0,0,0.65)] sm:text-7xl xl:text-8xl" style={{ animationDelay: "0.16s" }}>
                   {s.title[0]}
                   <span className="block">{s.title[1]}</span>
-                  {s.em ? <span className="mt-1 block bg-gradient-to-r from-amber-200 to-emerald-200 bg-clip-text italic text-transparent">{s.em}</span> : null}
+                  {s.em ? <span className="mt-1 block bg-gradient-to-r from-emerald-200 to-teal-200 bg-clip-text italic text-transparent">{s.em}</span> : null}
                 </h2>
                 {s.body ? <p className={`mise-reveal-item mt-6 text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg ${s.align === "center" ? "mx-auto max-w-xl" : "max-w-xl"}`} style={{ animationDelay: "0.3s" }}>{s.body}</p> : null}
                 {s.chip ? (
                   <div className={`mise-reveal-item mt-7 inline-block rounded-2xl border border-white/15 bg-black/40 p-4 text-left backdrop-blur-md ${s.align === "center" ? "mx-auto" : ""}`} style={{ animationDelay: "0.42s" }}>
                     <p className="text-[11px] uppercase tracking-wide text-slate-400">{s.chip.label}</p>
-                    <p className="mt-1 font-mono text-xl font-semibold text-amber-200">{s.chip.value}</p>
+                    <p className="mt-1 font-mono text-xl font-semibold text-emerald-200">{s.chip.value}</p>
                     {s.chip.sub ? <p className="mt-0.5 font-mono text-[11px] text-emerald-300/90">{s.chip.sub}</p> : null}
                   </div>
                 ) : null}
                 {s.cta ? (
                   <div className="mise-reveal-item mt-9 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: "0.42s" }}>
-                    <Link href="/signup" className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-amber-300 to-amber-200 px-7 py-3.5 text-base font-semibold text-black shadow-xl shadow-amber-500/25 transition hover:shadow-2xl">Register your hotel</Link>
+                    <Link href="/signup" className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-300 to-emerald-200 px-7 py-3.5 text-base font-semibold text-emerald-950 shadow-xl shadow-emerald-500/25 transition hover:shadow-2xl">Register your hotel</Link>
                     <Link href="/login" className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-white/5 px-7 py-3.5 text-base font-semibold text-white backdrop-blur-md transition hover:bg-white/10">Sign in</Link>
                   </div>
                 ) : null}
