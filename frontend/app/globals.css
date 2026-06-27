@@ -567,10 +567,23 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   from { opacity: 0; transform: translateY(16px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.mise-copilot-in { animation: mise-copilot-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mise-copilot-in { animation: mise-copilot-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: bottom right; }
+
+@keyframes mise-copilot-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(14px) scale(0.96); }
+}
+.mise-copilot-out { animation: mise-copilot-out 0.2s cubic-bezier(0.4, 0, 1, 1) both; transform-origin: bottom right; }
+
+@keyframes mise-launcher-in {
+  from { opacity: 0; transform: scale(0.55) translateY(10px); }
+  60%  { transform: scale(1.08); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.mise-launcher-in { animation: mise-launcher-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .mise-copilot-glow, .mise-msg-in, .mise-bob, .mise-copilot-in { animation: none; }
+  .mise-copilot-glow, .mise-msg-in, .mise-bob, .mise-copilot-in, .mise-copilot-out, .mise-launcher-in { animation: none; }
 }
 
 /* Quantum journey CSS fallback (only when WebGL is unavailable) — keeps it alive */

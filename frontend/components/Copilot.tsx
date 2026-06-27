@@ -70,6 +70,7 @@ const readAsBase64 = (file: File) =>
 
 export function Copilot() {
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -222,7 +223,12 @@ export function Copilot() {
     }
   }
 
-  function go(href: string) { setOpen(false); router.push(href); }
+  // Animate the panel out, then unmount.
+  function closePanel() {
+    setClosing(true);
+    window.setTimeout(() => { setOpen(false); setClosing(false); }, 200);
+  }
+  function go(href: string) { setOpen(false); setClosing(false); router.push(href); }
 
   return (
     <>
@@ -231,7 +237,7 @@ export function Copilot() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Ask Mise Copilot"
-          className="group fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-brand-500 hover:shadow-xl active:scale-95 lg:bottom-6 lg:right-6"
+          className="mise-launcher-in group fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-brand-500 hover:shadow-xl active:scale-95 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
             <path d="M12 2.5l1.7 5.3a3 3 0 0 0 1.9 1.9L21 11.4l-5.3 1.7a3 3 0 0 0-1.9 1.9L12 20.3l-1.7-5.3a3 3 0 0 0-1.9-1.9L3 11.4l5.3-1.7a3 3 0 0 0 1.9-1.9z" />
@@ -243,7 +249,7 @@ export function Copilot() {
 
       {open && (
         <div
-          className="mise-copilot-in fixed inset-x-0 bottom-0 z-50 flex h-[85dvh] flex-col overflow-hidden rounded-t-2xl border border-glass/10 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[620px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[410px] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl"
+          className={`${closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-2 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
           role="dialog"
           aria-label="Mise Copilot"
         >
@@ -255,7 +261,7 @@ export function Copilot() {
               <p className="text-sm font-semibold text-fg">Mise Copilot</p>
               <p className="text-[11px] text-fg-faint">{configured === false ? "Quick help & navigation" : "One place for every plate & penny"}</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="relative ml-auto rounded-lg p-1.5 text-fg-faint hover:bg-glass/5 hover:text-fg">✕</button>
+            <button type="button" onClick={closePanel} aria-label="Close" className="relative ml-auto rounded-lg p-1.5 text-fg-faint hover:bg-glass/5 hover:text-fg">✕</button>
           </div>
 
           {/* Messages */}
