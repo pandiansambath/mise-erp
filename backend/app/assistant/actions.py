@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit
 from app.auth.models import User
 from app.core.rbac import has_permission
+from app.employees import service as employee_service
+from app.employees.models import Employee
 from app.expenses import service as expense_service
 from app.expenses.models import Expense
 from app.inventory import service as inventory_service
@@ -71,6 +73,25 @@ SPECS: dict[str, dict] = {
             + (f" ({f['category']})" if f.get("category") else "")
         ),
     },
+    "employee": {
+        "perm": "employees:write",
+        "label": "staff member",
+        "required": ["name"],
+        "summary": lambda f: (
+            f"Add staff member “{f['name']}”"
+            + (f" — {f['job_title']}" if f.get("job_title") else "")
+            + (f", £{f['monthly_salary']}/mo" if f.get("monthly_salary") else "")
+        ),
+    },
+    "waste": {
+        "perm": "inventory:write",
+        "label": "waste entry",
+        "required": ["item", "quantity"],
+        "summary": lambda f: (
+            f"Log {f['quantity']} of “{f['item']}” as waste"
+            + (f" — {f['reason']}" if f.get("reason") else "")
+        ),
+    },
 }
 
 
@@ -102,14 +123,15 @@ def build_proposal(kind: str, fields: dict) -> dict:
         return {"ok": False, "error": f"I can't do '{kind}' yet."}
     clean: dict[str, Any] = {}
     # numeric-ish fields
-    for f in ("amount", "current_stock", "cost_price"):
+    for f in ("amount", "current_stock", "cost_price", "quantity", "monthly_salary", "hourly_rate"):
         if fields.get(f) is not None:
             d = _dec(fields[f])
             if d is not None:
                 clean[f] = d
     # text fields
     for f in ("name", "unit", "category", "description", "channel", "kind",
-              "payment_method", "date", "contact_person", "mobile", "email"):
+              "payment_method", "date", "contact_person", "mobile", "email",
+              "item", "job_title", "reason"):
         v = fields.get(f)
         if isinstance(v, str) and v.strip():
             clean[f] = v.strip()
@@ -150,6 +172,20 @@ async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict
     elif kind == "vendor":
         vendor = await vendor_service.create_vendor(db, hotel, **_vendor_fields(f))
         undo = {"type": "vendor", "id": str(vendor.id)}
+    elif kind == "employee":
+        emp = await employee_service.create_employee(db, hotel, **_employee_fields(f))
+        undo = {"type": "employee", "id": str(emp.id)}
+    elif kind == "waste":
+        item = await inventory_service.get_item_by_name(db, hotel, f["item"])
+        if item is None:
+            items = await inventory_service.list_items(db, hotel)
+            item = next((i for i in items if f["item"].lower() in (i.name or "").lower()), None)
+        if item is None:
+            return {"ok": False, "error": f"No stock item matches '{f['item']}'."}
+        await inventory_service.record_waste(
+            db, item, Decimal(f["quantity"]), f.get("reason") or "Waste", created_by=user.id
+        )
+        undo = {}  # reversing a stock movement isn't offered yet — adjust on the Waste page
     else:  # pragma: no cover
         return {"ok": False, "error": f"Unknown action '{kind}'"}
 
@@ -170,6 +206,14 @@ def _item_fields(f: dict) -> dict:
 
 def _vendor_fields(f: dict) -> dict:
     return {k: f[k] for k in ("name", "category", "contact_person", "mobile", "email") if k in f}
+
+
+def _employee_fields(f: dict) -> dict:
+    out: dict[str, Any] = {"full_name": f["name"]}
+    for k in ("job_title", "mobile", "monthly_salary", "hourly_rate"):
+        if k in f:
+            out[k] = f[k]
+    return out
 
 
 async def _do_expense(db: AsyncSession, user: User, f: dict) -> dict:
@@ -247,4 +291,10 @@ async def undo(db: AsyncSession, user: User, kind: str, entity_id: str) -> dict:
             vendor.is_active = False
             await db.commit()
             return {"ok": True, "summary": "Archived that supplier."}
+    elif kind == "employee":
+        emp = await db.get(Employee, eid)
+        if emp and emp.hotel_id == hotel:
+            emp.is_active = False
+            await db.commit()
+            return {"ok": True, "summary": "Archived that staff member."}
     return {"ok": False, "error": "Nothing to undo (already removed?)."}

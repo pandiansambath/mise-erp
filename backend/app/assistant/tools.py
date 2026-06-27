@@ -354,6 +354,14 @@ async def propose_vendor(db: AsyncSession, user: User, args: dict) -> dict:
     return await _propose("vendor", user, args)
 
 
+async def propose_employee(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("employee", user, args)
+
+
+async def propose_waste(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("waste", user, args)
+
+
 # ── Registry: schema (for the model) + executor (server-side) ─────────────────
 _QUERY = {"type": "string"}
 TOOLS: list[dict] = [
@@ -576,6 +584,41 @@ TOOLS: list[dict] = [
             "required": ["name"],
         },
     },
+    {
+        "name": "propose_employee",
+        "description": (
+            "Propose adding ONE staff member. Needs a name; job_title and pay help. "
+            "Does not save until the user confirms."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "full name"},
+                "job_title": {"type": "string", "description": "Chef, Waiter, Cashier, Manager…"},
+                "monthly_salary": {"type": "number", "description": "£ per month, if salaried"},
+                "hourly_rate": {"type": "number", "description": "£ per hour, if hourly"},
+                "mobile": {"type": "string"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "propose_waste",
+        "description": (
+            "Propose logging WASTE (spoilage/spillage/over-prep) for a stock item. Needs "
+            "the item name + quantity; a reason helps. Decrements stock at avg cost. Does "
+            "not save until confirmed."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item": {"type": "string", "description": "the stock item's name"},
+                "quantity": {"type": "number", "description": "amount wasted (in the item's unit)"},
+                "reason": {"type": "string", "description": "e.g. spoiled, spilled, over-prep"},
+            },
+            "required": ["item", "quantity"],
+        },
+    },
 ]
 
 EXECUTORS: dict[str, Executor] = {
@@ -597,6 +640,8 @@ EXECUTORS: dict[str, Executor] = {
     "propose_sale": propose_sale,
     "propose_item": propose_item,
     "propose_vendor": propose_vendor,
+    "propose_employee": propose_employee,
+    "propose_waste": propose_waste,
 }
 
 # Tools gated by a write permission — filtered out for roles that lack it so the
@@ -606,6 +651,8 @@ TOOL_PERMS: dict[str, str] = {
     "propose_sale": "sales:write",
     "propose_item": "inventory:write",
     "propose_vendor": "vendors:write",
+    "propose_employee": "employees:write",
+    "propose_waste": "inventory:write",
 }
 
 
