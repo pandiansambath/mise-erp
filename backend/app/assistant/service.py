@@ -26,10 +26,14 @@ def _route_context(route: str | None) -> str:
     return f"\nThe user is currently on {route}."
 
 
-def _build_system(user: User, route: str | None) -> str:
+def _build_system(user: User, route: str | None, user_name: str | None = None) -> str:
+    name_line = ""
+    if user_name and user_name.strip():
+        clean = user_name.strip()[:60]
+        name_line = f"\nThe user prefers to be called {clean}. Address them warmly by that name."
     return (
         f"{PERSONA}\n\n{knowledge_brief(_can(user))}"
-        f"{_route_context(route)}\n\n"
+        f"{_route_context(route)}{name_line}\n\n"
         f"The current user's role is {user.role}."
     )
 
@@ -65,7 +69,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     if provider.is_configured():
         try:
             reply, used = await provider.generate(
-                system=_build_system(user, req.route),
+                system=_build_system(user, req.route, req.user_name),
                 history=history,
                 tools=tools_for(user),
                 execute=execute,

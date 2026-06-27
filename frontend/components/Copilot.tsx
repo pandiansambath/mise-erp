@@ -27,6 +27,15 @@ type Msg = {
 
 const STARTERS = ["What's low on stock?", "How's this month's profit?", "Add a £40 gas expense", "What is slow stock?"];
 
+// The name the user gave at onboarding — so the Copilot addresses them by it.
+const userName = (): string | undefined => {
+  try {
+    return localStorage.getItem("mise.user.name") || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const ATTACH = [
   { mode: "ingest:items", icon: "📦", label: "Items / stock list" },
   { mode: "ingest:vendors", icon: "🤝", label: "Suppliers list" },
@@ -102,7 +111,7 @@ export function Copilot() {
     setInput("");
     setLoading(true);
     try {
-      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname });
+      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, user_name: userName() });
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
     } catch (e) {
@@ -155,7 +164,7 @@ export function Copilot() {
       const history = [...messages, userMsg];
       setMessages(history);
       setInput("");
-      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64 } });
+      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64 }, user_name: userName() });
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
     } catch (err) {

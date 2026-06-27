@@ -82,7 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(res.access_token);
       setUser(res.user);
       setHotel(res.hotel);
-      await sweepThenGo("/dashboard");
+      // New hotel → guided onboarding (import data → prefilled dashboard).
+      await sweepThenGo("/onboarding");
     },
     [sweepThenGo]
   );

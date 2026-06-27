@@ -18,6 +18,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(default_factory=list)
     route: str | None = None  # the page the user is currently on, for context
     attachment: Attachment | None = None  # a bill/receipt/photo to read
+    user_name: str | None = None  # what the user asked to be called (set at onboarding)
 
 
 class Action(BaseModel):

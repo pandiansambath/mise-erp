@@ -609,3 +609,30 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 @media (prefers-reduced-motion: reduce) {
   [data-text].is-active .mise-reveal-item { animation: none; }
 }
+
+/* ── Onboarding wizard ─────────────────────────────────────────────────────── */
+@keyframes mise-step-in {
+  from { opacity: 0; transform: translateY(26px) scale(0.985); filter: blur(7px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+.mise-step { animation: mise-step-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mise-step-1 { animation-delay: 0.06s; }
+.mise-step-2 { animation-delay: 0.12s; }
+.mise-step-3 { animation-delay: 0.18s; }
+@keyframes mise-onb-bg {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.mise-onb-bg {
+  background-size: 220% 220%;
+  animation: mise-onb-bg 22s ease-in-out infinite;
+}
+@keyframes mise-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.mise-pop { animation: mise-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .mise-step, .mise-onb-bg, .mise-pop { animation: none; }
+}
