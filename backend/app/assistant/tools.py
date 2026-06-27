@@ -200,6 +200,95 @@ async def sales_summary(db: AsyncSession, user: User, args: dict) -> dict:
             "net": _s(r["net"]), "actions": [{"label": "Open Sales & Cash", "href": "/sales"}]}
 
 
+def _d(v: Any, fallback: date_type) -> date_type:
+    try:
+        return date_type.fromisoformat(str(v)[:10])
+    except (ValueError, TypeError):
+        return fallback
+
+
+async def item_detail(db: AsyncSession, user: User, args: dict) -> dict:
+    """One stock item in full: stock on hand, weighted-average cost, stock value, min
+    level, and the suppliers that price it (cheapest + chosen ★)."""
+    if not has_permission(user.role, "inventory:read"):
+        return {"error": "You don't have access to inventory."}
+    name = (args.get("name") or "").strip()
+    if not name:
+        return {"error": "Which item?"}
+    item = await inventory_service.get_item_by_name(db, user.hotel_id, name)
+    if item is None:
+        items = await inventory_service.list_items(db, user.hotel_id)
+        item = next((i for i in items if name.lower() in (i.name or "").lower()), None)
+    if item is None:
+        return {"note": f"No stock item matches '{name}'."}
+    zero = Decimal("0")
+    value = ((item.current_stock or zero) * (item.average_cost or zero)).quantize(Decimal("0.01"))
+    suppliers: list[dict] = []
+    if has_permission(user.role, "vendors:read"):
+        cmp = await vendor_service.compare_vendor_prices(db, item.id, user.hotel_id)
+        if cmp and cmp.get("vendors"):
+            suppliers = [
+                {"vendor": v["vendor_name"], "price": _s(v["price_per_unit"]),
+                 "chosen": bool(v.get("is_preferred"))}
+                for v in cmp["vendors"][:8]
+            ]
+    return {
+        "name": item.name, "category": item.category, "unit": item.unit,
+        "in_stock": _s(item.current_stock), "min_level": _s(item.min_stock_level),
+        "average_cost": _s(item.average_cost), "stock_value": _s(value),
+        "suppliers": suppliers,
+        "actions": [{"label": "Open Inventory", "href": "/inventory"}],
+    }
+
+
+async def recipe_detail(db: AsyncSession, user: User, args: dict) -> dict:
+    """One dish in full: cost per serving, selling price, profit margin and the
+    ingredient breakdown."""
+    if not has_permission(user.role, "recipes:read"):
+        return {"error": "You don't have access to recipes."}
+    name = (args.get("name") or "").strip()
+    if not name:
+        return {"error": "Which dish?"}
+    recipes = await recipe_service.list_recipes(db, user.hotel_id)
+    rec = next((r for r in recipes if name.lower() in (r.name or "").lower()), None)
+    if rec is None:
+        return {"note": f"No dish matches '{name}'."}
+    cost = await recipe_service.calculate_recipe_cost(db, rec.id, user.hotel_id)
+    if cost is None:
+        return {"name": rec.name, "note": "No cost breakdown available."}
+    ings = [
+        {"item": b["item_name"], "qty": _s(b["quantity"]), "unit": b.get("unit"),
+         "line_cost": _s(b["line_cost"])}
+        for b in cost.get("ingredients", [])[:25]
+    ]
+    return {
+        "name": cost["recipe_name"],
+        "cost_per_serving": _s(cost["cost_per_serving"]),
+        "selling_price": _s(cost["selling_price"]),
+        "margin_pct": _s(cost["profit_margin_pct"]),
+        "missing_prices": cost["has_missing_prices"],
+        "ingredients": ings,
+        "actions": [{"label": "Open Recipes", "href": "/recipes"}],
+    }
+
+
+async def profit_for_range(db: AsyncSession, user: User, args: dict) -> dict:
+    """Profit & loss for a date range (defaults to this month)."""
+    if not has_permission(user.role, "reports:read"):
+        return {"error": "You don't have access to reports."}
+    today = date_type.today()
+    dt = _d(args.get("date_to"), today)
+    df = _d(args.get("date_from"), today.replace(day=1))
+    r = await reports_service.pnl(db, user.hotel_id, df, dt)
+    return {
+        "date_from": str(df), "date_to": str(dt),
+        "net_sales": _s(r["net_sales"]), "cost_of_sales": _s(r["cost_of_sales"]),
+        "gross_profit": _s(r["gross_profit"]), "operating_expenses": _s(r["operating_expenses"]),
+        "net_profit": _s(r["net_profit"]), "net_margin_pct": _s(r["net_margin_pct"]),
+        "actions": [{"label": "Open Reports", "href": "/reports"}],
+    }
+
+
 async def navigate(db: AsyncSession, user: User, args: dict) -> dict:
     """Resolve a free-text intent ('reorder', 'where do I add a supplier') to the
     best Mise page the user can reach, with a direct link."""
@@ -375,6 +464,47 @@ TOOLS: list[dict] = [
             "required": ["term"],
         },
     },
+    {
+        "name": "item_detail",
+        "description": (
+            "Full detail on ONE stock item: stock on hand, weighted-avg cost, stock "
+            "value, min level, and its suppliers (cheapest + chosen ★). Use for 'tell "
+            "me about <item>', 'how much <item> do I have', 'who supplies <item>'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "recipe_detail",
+        "description": (
+            "Full detail on ONE dish: cost per serving, selling price, profit margin and "
+            "the ingredient breakdown. Use for 'margin on <dish>', 'what does <dish> "
+            "cost', 'is <dish> profitable'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "profit_for_range",
+        "description": (
+            "Profit & loss for a date range (defaults to this month): net sales, cost of "
+            "sales, gross/net profit and net margin. Use for 'profit last month', 'P&L "
+            "for a period', 'how did we do'. Pass date_from/date_to as YYYY-MM-DD."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date_from": {"type": "string", "description": "YYYY-MM-DD"},
+                "date_to": {"type": "string", "description": "YYYY-MM-DD"},
+            },
+        },
+    },
     # ── Write proposals — gather every required field (ASK if missing) before
     # calling these. They DON'T save; they raise a confirmation card for the user.
     {
@@ -458,6 +588,9 @@ EXECUTORS: dict[str, Executor] = {
     "list_vendors": list_vendors,
     "expenses_summary": expenses_summary,
     "sales_summary": sales_summary,
+    "item_detail": item_detail,
+    "recipe_detail": recipe_detail,
+    "profit_for_range": profit_for_range,
     "navigate": navigate,
     "explain_term": explain_term,
     "propose_expense": propose_expense,
