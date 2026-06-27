@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, type Employee, type LabourSummary, type Shift } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
@@ -93,6 +93,30 @@ export default function RotaPage() {
     await reload();
   }
 
+  // ── Excel export / template / upload ───────────────────────────────────────
+  const importInput = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  async function onImportRota(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await postForm<{ created: number; skipped: string[]; rows: number }>("/rota/import", fd);
+      const skip = res.skipped.length ? `, skipped ${res.skipped.length} (name not found)` : "";
+      setMsg(`Added ${res.created} shift${res.created === 1 ? "" : "s"} from the file${skip}.`);
+      await reload();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not read that file.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   if (loading && !labour) return <Spinner />;
 
   const byDay = (d: Date) => shifts.filter((s) => s.date === iso(d));
@@ -123,6 +147,41 @@ export default function RotaPage() {
               {parseFloat(labour.net_sales) > 0 ? `${labour.labour_pct}% of sales` : "no sales yet"}
             </span>
           </div>
+        )}
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        <input ref={importInput} type="file" accept=".xlsx" className="hidden" onChange={onImportRota} />
+        <button
+          onClick={() => downloadFile(`/rota/export.xlsx?date_from=${from}&date_to=${to}`, `mise-rota-${from}.xlsx`)}
+          className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+        >
+          ⬇ Excel
+        </button>
+        <button
+          onClick={() => window.print()}
+          className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+        >
+          🖨 PDF / Print
+        </button>
+        {canWrite && (
+          <>
+            <button
+              onClick={() => downloadFile("/rota/template.xlsx", "mise-rota-template.xlsx")}
+              title="Download a blank Excel template to fill in offline"
+              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            >
+              ⬇ Template
+            </button>
+            <button
+              onClick={() => importInput.current?.click()}
+              disabled={importing}
+              title="Upload a filled template to add the shifts"
+              className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+            >
+              {importing ? "Reading…" : "⬆ Upload rota"}
+            </button>
+          </>
         )}
       </div>
 
