@@ -109,6 +109,12 @@ GLOSSARY: dict[str, str] = {
     "min level": "The reorder trigger — when an item drops to its minimum it counts as low stock and should be bought.",
     "channel": "A way you sell — dine-in, takeaway, or a delivery app. Sales are entered per channel; delivery channels carry a commission cut.",
     "average spend": "Average sales value per customer/cover — total sales ÷ covers. A lever for revenue alongside footfall.",
+    "contribution margin": "The % of each sale left after variable (food) costs — it pays your fixed costs and then profit. Higher = you reach break-even sooner. Shown on the Money page.",
+    "theoretical food cost": "What your dishes SHOULD cost based on recipes (costed to the gram). Compared to ACTUAL food cost (what you really spent) to reveal variance — waste, over-portioning or theft.",
+    "vat": "Value Added Tax (UK, usually 20% on eligible sales). Expense amounts in Mise are gross (incl VAT); you can note a VAT amount on an expense.",
+    "petty cash": "Small ad-hoc cash spends — cash given to staff, or something bought outside. Log it as a cash Expense (there's a one-tap 'Petty cash' button) so it reduces your profit correctly.",
+    "gross profit margin": "Gross profit ÷ net sales, as a %. What's left after food/variable costs, before fixed costs. Watched alongside food-cost %.",
+    "party order": "A bulk/catering order priced from your recipes — see the Party Order page: enter dishes + quantities and it shows the total price, cost, profit and margin.",
 }
 
 # ── How-to map — common tasks → where/how (so the AI guides AND can offer to do it) ──
@@ -126,6 +132,11 @@ HOWTOS: dict[str, str] = {
     "add a staff login / user": "Staff (users) — create a login and set their role and permissions.",
     "run payroll": "Payroll — builds gross, overtime, deductions and net pay from hours/salary, with payslips.",
     "upload a bill or document to me": "Tap the 📎 in this chat and attach a photo/PDF/spreadsheet (even handwritten) — I'll read it and prepare the right action for you.",
+    "record petty cash": "Expenses → tap '＋ Petty cash' (auto-creates the category + sets Cash). Or tell me e.g. 'petty cash £20 for veg' and I'll prepare it.",
+    "quote a party order": "Party Order — add dishes + quantities to see the full price, cost and profit. Tell me the order and I'll point you there.",
+    "bulk-import a list with AI": "On Inventory tap '✨ Import (AI)' (or 📎 here) and drop a PDF/Excel/CSV/photo — I read it and add the items. Same for suppliers, menu, staff and past sales.",
+    "see this month's profit": "Money page (live net profit, food-cost %, break-even) or ask me 'how's this month's profit?' and I'll fetch it.",
+    "choose a supplier for an item": "Inventory shows '★ choose supplier' on items without one; pick on Price Comparison. Every item should have one chosen (★) supplier — no cheapest auto-pick.",
 }
 
 PERSONA = (
@@ -136,6 +147,15 @@ PERSONA = (
     "• You work for exactly ONE restaurant — the signed-in user's. Every number you "
     "fetch and every action you take is automatically limited to their restaurant. "
     "Never mention or imply any other business's data.\n\n"
+    "Be human — you have a heart, not just answers:\n"
+    "• You're a trusted partner who genuinely wants THIS restaurant to thrive. Warm, "
+    "calm, on their side. Use the owner's name naturally when you know it.\n"
+    "• Celebrate good news briefly and sincerely (profit up, food cost down, a "
+    "strong-margin dish). When numbers are poor, be reassuring and solution-focused — "
+    "never alarmist or preachy: name the likely cause and the next step they can take.\n"
+    "• Gently nudge when something useful is clearly undone (e.g. no sales logged today, "
+    "an item with no chosen supplier) — once, kindly, never naggy.\n"
+    "• Match their energy: quick question → quick answer; worried → steady and helpful.\n\n"
     "How to answer:\n"
     "• Be concise and warm. Lead with the answer. Prefer 2–4 short bullets or a couple "
     "of sentences — never a wall of text or a jargon dump. British English, £ sign.\n"
