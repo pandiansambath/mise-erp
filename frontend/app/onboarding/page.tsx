@@ -14,6 +14,8 @@ const STEPS = [
   { key: "welcome", title: "Welcome to Mise" },
   { key: "items", title: "Your stock items" },
   { key: "vendors", title: "Your suppliers" },
+  { key: "recipes", title: "Your menu" },
+  { key: "staff", title: "Your team" },
   { key: "costs", title: "Your monthly costs" },
   { key: "done", title: "All set" },
 ] as const;
@@ -103,6 +105,7 @@ export default function OnboardingPage() {
           {step === 1 && (
             <ImportStep
               kind="items"
+              noun="items"
               greetingName={first}
               heading="Add your stock items"
               blurb="Upload a list of what you keep in stock — a spreadsheet, a PDF, even a photo of a handwritten list. I'll read it and add everything, so your inventory isn't empty on day one."
@@ -113,6 +116,7 @@ export default function OnboardingPage() {
           {step === 2 && (
             <ImportStep
               kind="vendors"
+              noun="suppliers"
               greetingName={first}
               heading="Add your suppliers"
               blurb="Now your suppliers and the prices they charge. Upload your supplier list and I'll set them up — then price comparison and recipe costing just work."
@@ -120,8 +124,30 @@ export default function OnboardingPage() {
               onNext={next}
             />
           )}
-          {step === 3 && <CostsStep onNext={next} />}
-          {step === 4 && <Done name={first} onFinish={finish} />}
+          {step === 3 && (
+            <ImportStep
+              kind="recipes"
+              noun="dishes"
+              greetingName={first}
+              heading="Add your menu"
+              blurb="Upload your menu and I'll add each dish with its selling price — so your margins and Party Order pricing work straight away. (Add ingredients later to cost them to the gram.)"
+              accept=".pdf,.csv,.xlsx,.xls,image/*"
+              onNext={next}
+            />
+          )}
+          {step === 4 && (
+            <ImportStep
+              kind="employees"
+              noun="team members"
+              greetingName={first}
+              heading="Add your team"
+              blurb="Upload your staff list — names, roles and pay. I'll add them so Rota, Attendance and Payroll are ready to go."
+              accept=".pdf,.csv,.xlsx,.xls,image/*"
+              onNext={next}
+            />
+          )}
+          {step === 5 && <CostsStep onNext={next} />}
+          {step === 6 && <Done name={first} onFinish={finish} />}
         </div>
       </div>
     </div>
@@ -169,13 +195,15 @@ function Welcome({
 
 function ImportStep({
   kind,
+  noun,
   greetingName,
   heading,
   blurb,
   accept,
   onNext,
 }: {
-  kind: "items" | "vendors";
+  kind: string;
+  noun: string;
   greetingName: string;
   heading: string;
   blurb: string;
@@ -235,12 +263,12 @@ function ImportStep({
 
       {done !== null ? (
         <div className="mise-pop-lg mt-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-5">
-          <p className="text-lg font-semibold text-emerald-300">✓ Added {done} {kind === "items" ? "items" : "suppliers"}, {greetingName}!</p>
+          <p className="text-lg font-semibold text-emerald-300">✓ Added {done} {noun}, {greetingName}!</p>
           <p className="mt-1 text-sm text-white/60">You can always add more later from the app.</p>
         </div>
       ) : rows ? (
         <div className="mt-6 rounded-2xl border border-white/15 bg-white/5 p-4">
-          <p className="text-sm text-white/70">I found <span className="font-semibold text-white">{rows.length}</span> {kind === "items" ? "items" : "suppliers"}. Review and add:</p>
+          <p className="text-sm text-white/70">I found <span className="font-semibold text-white">{rows.length}</span> {noun}. Review and add:</p>
           <div className="mise-slide-stagger mt-3 max-h-52 space-y-1 overflow-y-auto pr-1 text-sm">
             {rows.slice(0, 60).map((r, i) => (
               <div key={i} className="flex justify-between gap-3 border-b border-white/5 py-1 last:border-0">

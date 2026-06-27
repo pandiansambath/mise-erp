@@ -105,7 +105,7 @@ export default function DashboardPage() {
       />
 
       {seeFinance && kpis && (
-        <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mise-slide-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard label="Today's net sales" value={format(kpis.today_net_sales)} href="/sales" />
           <StatCard label="Month net sales" value={format(kpis.month_net_sales)} href="/reports" />
           <StatCard
