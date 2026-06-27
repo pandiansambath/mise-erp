@@ -18,6 +18,7 @@ const STEPS = [
   { key: "recipes", title: "Your menu" },
   { key: "staff", title: "Your team" },
   { key: "costs", title: "Your monthly costs" },
+  { key: "sales", title: "Sales so far" },
   { key: "review", title: "Review" },
   { key: "done", title: "All set" },
 ] as const;
@@ -150,8 +151,19 @@ export default function OnboardingPage() {
             />
           )}
           {step === 5 && <CostsStep onNext={next} />}
-          {step === 6 && <ReviewStep onNext={next} />}
-          {step === 7 && <Done name={first} onFinish={finish} />}
+          {step === 6 && (
+            <ImportStep
+              kind="sales"
+              noun="sales entries"
+              greetingName={first}
+              heading="Your recent sales"
+              blurb="Upload a recent sales/takings report (spreadsheet, PDF, or a photo) and I'll log it — so your dashboard, profit and break-even show real numbers, not zero."
+              accept=".pdf,.csv,.xlsx,.xls,image/*"
+              onNext={next}
+            />
+          )}
+          {step === 7 && <ReviewStep onNext={next} />}
+          {step === 8 && <Done name={first} onFinish={finish} />}
         </div>
       </div>
     </div>
@@ -276,8 +288,14 @@ function ImportStep({
           <div className="mise-slide-stagger mt-3 max-h-52 space-y-1 overflow-y-auto pr-1 text-sm">
             {rows.slice(0, 60).map((r, i) => (
               <div key={i} className="flex justify-between gap-3 border-b border-white/5 py-1 last:border-0">
-                <span className="truncate text-white/85">{String(r.name ?? "")}</span>
-                <span className="shrink-0 text-white/45">{String(r.category ?? r.unit ?? "")}</span>
+                <span className="truncate text-white/85">{String(r.name ?? r.full_name ?? r.date ?? "")}</span>
+                <span className="shrink-0 text-white/45">
+                  {r.amount != null
+                    ? `£${r.amount}${r.channel ? ` · ${r.channel}` : ""}`
+                    : r.selling_price != null
+                      ? `£${r.selling_price}`
+                      : String(r.category ?? r.unit ?? r.job_title ?? "")}
+                </span>
               </div>
             ))}
           </div>

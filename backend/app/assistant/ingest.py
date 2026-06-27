@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -23,6 +25,7 @@ from app.core.rbac import has_permission
 from app.employees import service as employee_service
 from app.inventory import service as inventory_service
 from app.recipes import service as recipe_service
+from app.sales import service as sales_service
 from app.vendors import service as vendor_service
 
 from .provider import ProviderError, is_configured, post_gemini
@@ -84,6 +87,18 @@ _EMPLOYEE_SCHEMA = {
         "required": ["name"],
     },
 }
+_SALES_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string"},
+            "channel": {"type": "string"},
+            "amount": {"type": "number"},
+        },
+        "required": ["amount"],
+    },
+}
 
 # kind -> how to extract + how to write it
 KINDS: dict[str, dict] = {
@@ -139,6 +154,20 @@ KINDS: dict[str, dict] = {
             "For each: name (full name), job_title (e.g. Chef, Waiter, Cashier, Manager, "
             "Kitchen Porter), monthly_salary as a number if shown, hourly_rate as a number "
             "if shown, mobile (phone number). Skip headers and totals. Omit absent fields."
+        ),
+    },
+    "sales": {
+        "perm": "sales:write",
+        "label": "sales entries",
+        "schema": _SALES_SCHEMA,
+        "str_fields": ["date", "channel"],
+        "num_fields": ["amount"],
+        "prompt": (
+            "You are reading a restaurant's past SALES / takings / revenue report. Extract "
+            "the takings as rows: date (the day, any format shown), channel (e.g. Dine-in, "
+            "Takeaway, Uber Eats, Deliveroo, Just Eat — use 'Dine-in' if not specified), and "
+            "amount (the takings for that day/channel, as a number). One row per day per "
+            "channel. Skip totals, subtotals, headers and any non-sales lines."
         ),
     },
 }
@@ -227,7 +256,8 @@ async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
         rows = json.loads(text)
         if not isinstance(rows, list):
             return []
-        return [r for r in rows if isinstance(r, dict) and r.get("name")]
+        key = "amount" if kind == "sales" else "name"
+        return [r for r in rows if isinstance(r, dict) and r.get(key) is not None]
     except ProviderError:
         raise
     except Exception as exc:  # noqa: BLE001 — network/JSON → caller decides
@@ -241,6 +271,53 @@ def _dec(v: Any) -> str | None:
         return None
 
 
+def _resolve_date(v: Any) -> date_type:
+    """Parse a date cell from a report. UK-first (DD/MM). Falls back to today."""
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date_type):
+        return v
+    s = str(v or "").strip()
+    if not s or s.lower() in ("today", "now"):
+        return date_type.today()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d %b %Y", "%d %B %Y", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(s[:11].strip(), fmt).date()
+        except ValueError:
+            continue
+    return date_type.today()
+
+
+async def _commit_sales(db: AsyncSession, user: User, rows: list[dict]) -> dict:
+    """Bulk-import past takings: each row {date, channel, amount} → resolve/create the
+    channel, upsert that day, add a line. Date-keyed (no 'name'), so it has its own path."""
+    hotel = user.hotel_id
+    created: list[str] = []
+    skipped: list[str] = []
+    for row in rows:
+        amt = _dec(row.get("amount"))
+        if amt is None or Decimal(amt) <= 0:
+            continue
+        d = _resolve_date(row.get("date"))
+        ch_name = (row.get("channel") or "").strip() or "Dine-in"
+        try:
+            ch = await sales_service.get_channel_by_name(db, hotel, ch_name)
+            if ch is None:
+                ch = await sales_service.create_channel(db, hotel, ch_name, Decimal("0"))
+            day = await sales_service.upsert_day(db, hotel, d, entered_by=user.id)
+            await sales_service.add_line(db, day, ch.id, Decimal(amt), "CARD")
+            created.append(f"{d} {ch_name}: {amt}")
+        except Exception:  # noqa: BLE001 — bad row → skip, keep going
+            skipped.append(str(row.get("date")))
+    if created:
+        await audit.record(
+            db, hotel_id=hotel, user=user, action="assistant.onboard.sales",
+            summary=f"Copilot onboarding imported {len(created)} sales entries",
+            entity_type="sales",
+        )
+    return {"kind": "sales", "created": created, "skipped": skipped}
+
+
 async def commit(db: AsyncSession, user: User, kind: str, rows: list[dict]) -> dict:
     """Create the confirmed rows. Skips duplicates/invalid; audit-logged."""
     cfg = KINDS.get(kind)
@@ -248,6 +325,9 @@ async def commit(db: AsyncSession, user: User, kind: str, rows: list[dict]) -> d
         return {"error": f"Unknown document kind '{kind}'"}
     if not has_permission(user.role, cfg["perm"]):
         return {"error": f"You don't have permission to add {cfg['label']}."}
+
+    if kind == "sales":  # date-keyed, not name-keyed → dedicated path
+        return await _commit_sales(db, user, rows)
 
     created: list[str] = []
     skipped: list[str] = []
