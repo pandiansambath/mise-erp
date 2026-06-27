@@ -29,6 +29,10 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # What the user likes to be called — the Copilot greets/addresses them by it.
+    # Cross-device (stored here, not the browser). Set at onboarding (owner) or from
+    # the linked employee's first name for staff logins.
+    preferred_name: Mapped[str | None] = mapped_column(String(60))
     role: Mapped[str] = mapped_column(String(50), nullable=False, default=Role.STAFF.value)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(

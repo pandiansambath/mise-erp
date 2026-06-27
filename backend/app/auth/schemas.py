@@ -35,6 +35,12 @@ class UserOut(BaseModel):
     email: EmailStr
     role: str
     is_active: bool
+    preferred_name: str | None = None
+
+
+class MeUpdate(BaseModel):
+    """A user setting what the Copilot should call them (cross-device)."""
+    preferred_name: str = Field(min_length=1, max_length=60)
 
 
 class HotelOut(BaseModel):
@@ -73,6 +79,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)  # bcrypt hard limit is 72 bytes
     role: str
+    name: str | None = Field(default=None, max_length=60)  # what to call them (optional)
 
     @field_validator("role")
     @classmethod

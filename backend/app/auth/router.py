@@ -12,6 +12,7 @@ from app.auth.schemas import (
     HotelOut,
     LoginRequest,
     MeResponse,
+    MeUpdate,
     RegisterHotel,
     TokenResponse,
     UserCreate,
@@ -111,6 +112,20 @@ async def me(
     return MeResponse(user=UserOut.model_validate(current), hotel=HotelOut.model_validate(hotel))
 
 
+@router.patch("/me", response_model=MeResponse)
+async def update_me(
+    payload: MeUpdate,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MeResponse:
+    """Set what the Copilot should call you (stored server-side → cross-device)."""
+    current.preferred_name = payload.preferred_name.strip()[:60]
+    await db.commit()
+    await db.refresh(current)
+    hotel = await _hotel_or_404(db, current.hotel_id)
+    return MeResponse(user=UserOut.model_validate(current), hotel=HotelOut.model_validate(hotel))
+
+
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
     payload: ChangePassword,
@@ -135,7 +150,8 @@ async def create_user(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
     # New users join the admin's hotel.
     user = await service.create_user(
-        db, payload.email, payload.password, payload.role, admin.hotel_id
+        db, payload.email, payload.password, payload.role, admin.hotel_id,
+        preferred_name=payload.name,
     )
     return UserOut.model_validate(user)
 

@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, postForm } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
+import { themeVars, useTheme } from "@/lib/theme";
 import { Logo } from "@/components/Logo";
+import { Copilot } from "@/components/Copilot";
 
 type Row = Record<string, unknown>;
 const NAME_KEY = "mise.user.name";
@@ -26,6 +28,7 @@ const STEPS = [
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, hotel, loading } = useAuth();
+  const { theme } = useTheme();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
 
@@ -53,6 +56,8 @@ export default function OnboardingPage() {
     } catch {
       /* ignore */
     }
+    // Persist server-side too so the Copilot greets you by name on any device.
+    if (clean) api.patch("/auth/me", { preferred_name: clean }).catch(() => {});
     next();
   }
   function finish() {
@@ -162,10 +167,18 @@ export default function OnboardingPage() {
               onNext={next}
             />
           )}
-          {step === 7 && <ReviewStep onNext={next} />}
+          {step === 7 && <ReviewStep onNext={next} onRestart={() => setStep(1)} />}
           {step === 8 && <Done name={first} onFinish={finish} />}
         </div>
       </div>
+
+      {/* The Copilot, themed, so you can fix anything on the spot during setup
+          (e.g. "change the saffron price to £30") without leaving onboarding. */}
+      {step >= 1 && (
+        <div style={themeVars(theme)}>
+          <Copilot />
+        </div>
+      )}
     </div>
   );
 }
@@ -402,7 +415,7 @@ function CostsStep({ onNext }: { onNext: () => void }) {
   );
 }
 
-function ReviewStep({ onNext }: { onNext: () => void }) {
+function ReviewStep({ onNext, onRestart }: { onNext: () => void; onRestart: () => void }) {
   const { format } = useCurrency();
   const [pages, setPages] = useState<{ icon: string; title: string; rows: { main: string; sub: string }[] }[] | null>(null);
   const [pg, setPg] = useState(0);
@@ -438,6 +451,29 @@ function ReviewStep({ onNext }: { onNext: () => void }) {
     return <p className="text-white/60">Loading your data…</p>;
   }
 
+  // If everything was skipped, don't show empty pages — show a tailored prompt.
+  const totalRows = pages.reduce((s, x) => s + x.rows.length, 0);
+  if (totalRows === 0) {
+    return (
+      <div>
+        <span className="mise-pop-lg inline-block text-5xl">🌱</span>
+        <h2 className="mt-4 font-display text-2xl font-semibold sm:text-3xl">Nothing imported yet — and that&apos;s OK</h2>
+        <p className="mt-3 text-white/70">
+          You skipped the imports. You can add your items, suppliers, menu and team anytime — upload a
+          file on each page, or just tell <b>Ask Mise</b> (bottom-right). Want to import now?
+        </p>
+        <div className="mt-7 flex items-center justify-between">
+          <button onClick={onNext} className="text-sm text-white/50 transition hover:text-white/80">
+            I&apos;ll do it later →
+          </button>
+          <button onClick={onRestart} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110">
+            Import now →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const p = pages[pg];
   const last = pg === pages.length - 1;
 
@@ -468,9 +504,9 @@ function ReviewStep({ onNext }: { onNext: () => void }) {
       </div>
 
       <p className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100/90">
-        ✨ Something not right? Once you&apos;re in, tap <span className="font-semibold">Ask Mise</span> (bottom-right of
-        any page) and just tell it — e.g. <span className="italic">&quot;change the price of Tomato to £2&quot;</span> — and
-        it&apos;ll fix it on the spot.
+        ✨ Something not right? Tap <span className="font-semibold">Ask Mise</span> (bottom-right) <b>right now</b>
+        and just tell it — e.g. <span className="italic">&quot;change the price of Tomato to £2&quot;</span> — and it&apos;ll
+        fix it on the spot, here in setup.
       </p>
 
       <div className="mt-7 flex items-center justify-between">

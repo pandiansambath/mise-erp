@@ -113,6 +113,7 @@ export interface UserOut {
   email: string;
   role: string;
   is_active: boolean;
+  preferred_name?: string | null;
 }
 
 export interface Hotel {

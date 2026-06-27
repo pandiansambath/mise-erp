@@ -72,8 +72,11 @@ async def create_account_for_employee(
         raise AccountError(f"role must be one of {sorted(valid_roles)}")
     if await auth_service.get_user_by_email(db, email) is not None:
         raise AccountError("That email already has an account")
+    # Greet staff by their first name (from their employee record) on any device.
+    first_name = (emp.full_name or "").strip().split(" ")[0] or None
     user = await auth_service.create_user(
-        db, email=email, password=password, role=role, hotel_id=emp.hotel_id
+        db, email=email, password=password, role=role, hotel_id=emp.hotel_id,
+        preferred_name=first_name,
     )
     emp.user_id = user.id
     await db.commit()

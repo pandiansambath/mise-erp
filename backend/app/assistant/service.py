@@ -27,10 +27,15 @@ def _route_context(route: str | None) -> str:
 
 
 def _build_system(user: User, route: str | None, user_name: str | None = None) -> str:
+    # Prefer the name the client passed (fresh edit); fall back to the one stored on
+    # the account (server-side → works on any device, incl. staff logins).
+    name = (user_name or "").strip() or (getattr(user, "preferred_name", None) or "").strip()
     name_line = ""
-    if user_name and user_name.strip():
-        clean = user_name.strip()[:60]
-        name_line = f"\nThe user prefers to be called {clean}. Address them warmly by that name."
+    if name:
+        name_line = (
+            f"\nThe user prefers to be called {name[:60]}. "
+            "Address them warmly by that name."
+        )
     return (
         f"{PERSONA}\n\n{knowledge_brief(_can(user))}"
         f"{_route_context(route)}{name_line}\n\n"

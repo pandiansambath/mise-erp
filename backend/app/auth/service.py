@@ -43,10 +43,13 @@ async def change_password(
 
 
 async def create_user(
-    db: AsyncSession, email: str, password: str, role: str, hotel_id: uuid.UUID
+    db: AsyncSession, email: str, password: str, role: str, hotel_id: uuid.UUID,
+    preferred_name: str | None = None,
 ) -> User:
+    name = preferred_name.strip()[:60] if preferred_name and preferred_name.strip() else None
     user = User(
-        email=email, password_hash=hash_password(password), role=role, hotel_id=hotel_id
+        email=email, password_hash=hash_password(password), role=role,
+        hotel_id=hotel_id, preferred_name=name,
     )
     db.add(user)
     await db.commit()
