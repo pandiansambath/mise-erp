@@ -35,6 +35,7 @@ class CategoryOut(BaseModel):
     name: str
     kind: str
     is_active: bool
+    usage_count: int = 0  # how many expenses use it (for the safe-archive warning)
 
 
 class ExpenseCreate(BaseModel):

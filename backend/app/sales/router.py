@@ -42,7 +42,14 @@ async def list_channels(
 ) -> list[ChannelOut]:
     await service.ensure_default_channels(db, user.hotel_id)  # idempotent
     channels = await service.list_channels(db, user.hotel_id, active_only=False)
-    return [ChannelOut.model_validate(c) for c in channels]
+    counts = await service.channel_usage_counts(db, user.hotel_id)
+    return [
+        ChannelOut(
+            id=c.id, name=c.name, commission_pct=c.commission_pct, is_active=c.is_active,
+            usage_count=counts.get(c.id, 0),
+        )
+        for c in channels
+    ]
 
 
 @router.post("/channels", response_model=ChannelOut, status_code=status.HTTP_201_CREATED)

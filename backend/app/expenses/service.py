@@ -3,7 +3,7 @@ import uuid
 from datetime import date as date_type
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.expenses.models import Expense, ExpenseCategory, ExpenseKind
@@ -41,6 +41,16 @@ async def list_categories(
         stmt = stmt.where(ExpenseCategory.is_active.is_(True))
     result = await db.execute(stmt.order_by(ExpenseCategory.kind, ExpenseCategory.name))
     return list(result.scalars().all())
+
+
+async def category_usage_counts(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID, int]:
+    """category_id -> number of expenses using it (drives the safe-archive warning)."""
+    rows = await db.execute(
+        select(Expense.category_id, func.count())
+        .where(Expense.hotel_id == hotel_id)
+        .group_by(Expense.category_id)
+    )
+    return {cid: n for cid, n in rows.all()}
 
 
 async def get_category(

@@ -18,6 +18,7 @@ from app.expenses.router import router as expenses_router
 from app.hotels.router import router as hotels_router
 from app.inventory.router import router as inventory_router
 from app.notifications.router import router as notifications_router
+from app.party.router import router as party_router
 from app.payroll.router import router as payroll_router
 from app.purchasing.router import router as purchasing_router
 from app.recipes.router import router as recipes_router
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(inventory_router, prefix="/api")
     app.include_router(vendors_router, prefix="/api")
     app.include_router(recipes_router, prefix="/api")
+    app.include_router(party_router, prefix="/api")
     app.include_router(sales_router, prefix="/api")
     app.include_router(expenses_router, prefix="/api")
     app.include_router(reports_router, prefix="/api")

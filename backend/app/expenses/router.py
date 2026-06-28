@@ -30,7 +30,14 @@ async def list_categories(
 ) -> list[CategoryOut]:
     await service.ensure_default_categories(db, user.hotel_id)
     cats = await service.list_categories(db, user.hotel_id, active_only=False)
-    return [CategoryOut.model_validate(c) for c in cats]
+    counts = await service.category_usage_counts(db, user.hotel_id)
+    return [
+        CategoryOut(
+            id=c.id, name=c.name, kind=c.kind, is_active=c.is_active,
+            usage_count=counts.get(c.id, 0),
+        )
+        for c in cats
+    ]
 
 
 @router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)

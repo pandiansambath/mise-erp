@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
+import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -17,7 +18,11 @@ export default function SalesPage() {
   const { format } = useCurrency();
   const confirm = useConfirm();
   const canWrite = can(user?.role, "sales:write");
-  const canConfig = can(user?.role, "sales:config");
+  const isSuper = user?.role === "SUPER_ADMIN";
+
+  const reloadChannels = async () => {
+    setChannels(await api.get<SalesChannel[]>("/sales/channels"));
+  };
 
   const [day, setDay] = useState(today());
   const [summary, setSummary] = useState<DaySummary | null>(null);
@@ -37,12 +42,12 @@ export default function SalesPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const loadDay = useCallback(async (d: string) => {
+  const loadDay = async (d: string) => {
     const s = await api.get<DaySummary>(`/sales/days/${d}`);
     setSummary(s);
     setOpening(s.opening_cash ?? "");
     setCounted(s.cash_counted ?? "");
-  }, []);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -205,10 +210,12 @@ export default function SalesPage() {
                     value={channelId}
                     onChange={setChannelId}
                     className="mt-1"
-                    options={channels.map((c) => ({
-                      value: c.id,
-                      label: `${c.name} (${c.commission_pct}%)`,
-                    }))}
+                    options={channels
+                      .filter((c) => c.is_active)
+                      .map((c) => ({
+                        value: c.id,
+                        label: `${c.name} (${c.commission_pct}%)`,
+                      }))}
                   />
                 </div>
                 <div className="w-full sm:w-32">
@@ -345,91 +352,49 @@ export default function SalesPage() {
         </Card>
       </div>
 
-      {canConfig && <ChannelManager channels={channels} onChange={setChannels} />}
-    </div>
-  );
-}
-
-function ChannelManager({
-  channels,
-  onChange,
-}: {
-  channels: SalesChannel[];
-  onChange: (c: SalesChannel[]) => void;
-}) {
-  const [name, setName] = useState("");
-  const [pct, setPct] = useState("");
-  const [open, setOpen] = useState(false);
-
-  async function reload() {
-    onChange(await api.get<SalesChannel[]>("/sales/channels"));
-  }
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    await api.post("/sales/channels", { name, commission_pct: pct || "0" });
-    setName("");
-    setPct("");
-    await reload();
-  }
-  async function setCommission(id: string, value: string) {
-    await api.patch(`/sales/channels/${id}`, { commission_pct: value || "0" });
-    await reload();
-  }
-
-  return (
-    <Card className="mt-6">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between text-left"
-      >
-        <h3 className="font-semibold text-fg">Channels &amp; commission rates</h3>
-        <span className="text-fg-faint">{open ? "▲" : "▼"}</span>
-      </button>
-      {open && (
-        <div className="mt-4 space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {channels.map((c) => (
-              <div key={c.id} className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-sm">
-                <span className="font-medium text-fg-soft">{c.name}</span>
-                <span className="flex items-center gap-1">
-                  <input
-                    defaultValue={c.commission_pct}
-                    onBlur={(e) => setCommission(c.id, e.target.value)}
-                    inputMode="decimal"
-                    className="w-16 rounded border border-line-2 px-2 py-1 text-right text-sm"
-                  />
-                  <span className="text-fg-faint">%</span>
-                </span>
-              </div>
-            ))}
-          </div>
-          <form onSubmit={add} className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-fg-soft">New channel</label>
+      {isSuper && (
+        <ListManager
+          title="Manage sales channels & commission"
+          noun="channel"
+          usageNoun="sales line"
+          items={channels.map((c) => ({
+            id: c.id,
+            name: c.name,
+            is_active: c.is_active,
+            usage_count: c.usage_count ?? 0,
+          }))}
+          addFields={[
+            { key: "commission_pct", label: "Commission %", type: "number", placeholder: "0", default: "" },
+          ]}
+          onAdd={async (name, extra) => {
+            await api.post("/sales/channels", { name, commission_pct: extra.commission_pct || "0" });
+          }}
+          onRename={async (id, name) => {
+            await api.patch(`/sales/channels/${id}`, { name });
+          }}
+          onSetActive={async (id, active) => {
+            await api.patch(`/sales/channels/${id}`, { is_active: active });
+          }}
+          reload={reloadChannels}
+          renderRowExtra={(item) => (
+            <span className="flex shrink-0 items-center gap-1">
               <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="e.g. Hungry Panda"
-                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="w-full sm:w-28">
-              <label className="block text-sm font-medium text-fg-soft">Commission %</label>
-              <input
-                value={pct}
-                onChange={(e) => setPct(e.target.value)}
+                defaultValue={channels.find((c) => c.id === item.id)?.commission_pct}
+                onBlur={async (e) => {
+                  await api.patch(`/sales/channels/${item.id}`, {
+                    commission_pct: e.target.value || "0",
+                  });
+                  await reloadChannels();
+                }}
                 inputMode="decimal"
-                placeholder="0"
-                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
+                className="w-14 rounded border border-line-2 bg-transparent px-2 py-1 text-right text-xs"
+                title="Commission %"
               />
-            </div>
-            <button className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-              Add
-            </button>
-          </form>
-        </div>
+              <span className="text-xs text-fg-faint">%</span>
+            </span>
+          )}
+        />
       )}
-    </Card>
+    </div>
   );
 }

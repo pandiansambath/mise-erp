@@ -13,6 +13,7 @@ import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
+import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -43,6 +44,11 @@ export default function ExpensesPage() {
   const { format } = useCurrency();
   const confirm = useConfirm();
   const canWrite = can(user?.role, "expenses:write");
+  const isSuper = user?.role === "SUPER_ADMIN";
+
+  const reloadCategories = async () => {
+    setCategories(await api.get<ExpenseCategory[]>("/expenses/categories"));
+  };
 
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
@@ -198,11 +204,18 @@ export default function ExpensesPage() {
                     value={categoryId}
                     onChange={setCategoryId}
                     className="mt-1"
-                    options={categories.map((c) => ({
-                      value: c.id,
-                      label: `${c.name} · ${c.kind === "FIXED" ? "Fixed" : "Variable"}`,
-                    }))}
+                    options={categories
+                      .filter((c) => c.is_active)
+                      .map((c) => ({
+                        value: c.id,
+                        label: `${c.name} · ${c.kind === "FIXED" ? "Fixed" : "Variable"}`,
+                      }))}
                   />
+                  {isSuper && (
+                    <p className="mt-1 text-xs text-fg-faint">
+                      Need a new category? Add &amp; manage them below.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Date</label>
@@ -240,6 +253,43 @@ export default function ExpensesPage() {
                 </div>
               </form>
             </Card>
+          )}
+
+          {isSuper && (
+            <ListManager
+              title="Manage expense categories"
+              noun="category"
+              usageNoun="expense"
+              items={categories.map((c) => ({
+                id: c.id,
+                name: c.name,
+                is_active: c.is_active,
+                usage_count: c.usage_count ?? 0,
+                badge: c.kind === "FIXED" ? "Fixed" : "Variable",
+              }))}
+              addFields={[
+                {
+                  key: "kind",
+                  label: "Type",
+                  type: "select",
+                  default: "VARIABLE",
+                  options: [
+                    { value: "VARIABLE", label: "Variable cost" },
+                    { value: "FIXED", label: "Fixed cost" },
+                  ],
+                },
+              ]}
+              onAdd={async (name, extra) => {
+                await api.post("/expenses/categories", { name, kind: extra.kind });
+              }}
+              onRename={async (id, name) => {
+                await api.patch(`/expenses/categories/${id}`, { name });
+              }}
+              onSetActive={async (id, active) => {
+                await api.patch(`/expenses/categories/${id}`, { is_active: active });
+              }}
+              reload={reloadCategories}
+            />
           )}
 
           {summary && summary.by_category.length > 0 && (

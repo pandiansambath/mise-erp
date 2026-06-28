@@ -29,6 +29,7 @@ class ChannelOut(BaseModel):
     name: str
     commission_pct: Decimal
     is_active: bool
+    usage_count: int = 0  # how many sales lines use it (for the safe-archive warning)
 
 
 class DayUpsert(BaseModel):

@@ -246,6 +246,29 @@ export interface Recipe {
   is_active: boolean;
 }
 
+export interface PartyQuoteLine {
+  recipe_id: string | null;
+  name: string;
+  qty: number;
+  unit_price: number | null;
+  unit_cost: number;
+}
+
+export interface PartyQuote {
+  id: string;
+  customer: string | null;
+  event_date: string | null;
+  valid_until: string | null;
+  currency: string;
+  total_price: number;
+  total_cost: number;
+  profit: number;
+  margin: number;
+  is_expired: boolean;
+  created_at: string;
+  lines: PartyQuoteLine[];
+}
+
 export interface IngredientCost {
   item_id: string;
   item_name: string;
@@ -262,6 +285,7 @@ export interface SalesChannel {
   name: string;
   commission_pct: string;
   is_active: boolean;
+  usage_count?: number;
 }
 
 export interface SalesLine {
@@ -676,6 +700,7 @@ export interface ExpenseCategory {
   name: string;
   kind: string;
   is_active: boolean;
+  usage_count?: number;
 }
 
 export interface Expense {

@@ -36,6 +36,17 @@ async def list_channels(
     return list(result.scalars().all())
 
 
+async def channel_usage_counts(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID, int]:
+    """channel_id -> number of sales lines using it (drives the safe-archive warning)."""
+    rows = await db.execute(
+        select(SalesLine.channel_id, func.count())
+        .join(DailySales, SalesLine.daily_sales_id == DailySales.id)
+        .where(DailySales.hotel_id == hotel_id)
+        .group_by(SalesLine.channel_id)
+    )
+    return {cid: n for cid, n in rows.all()}
+
+
 async def get_channel(
     db: AsyncSession, channel_id: uuid.UUID, hotel_id: uuid.UUID
 ) -> SalesChannel | None:
