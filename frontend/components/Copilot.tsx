@@ -9,6 +9,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, postForm } from "@/lib/api";
+import { speak, speechOutputSupported, stopSpeaking, useVoiceInput } from "@/lib/useVoice";
 
 type Action = { label: string; href: string };
 type Row = Record<string, unknown>;
@@ -76,6 +77,12 @@ export function Copilot() {
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [speakOn, setSpeakOn] = useState(false);
+  const speechBase = useRef("");
+  const voice = useVoiceInput((t) =>
+    setInput((speechBase.current ? speechBase.current + " " : "") + t)
+  );
+  const ttsSupported = speechOutputSupported();
   const pathname = usePathname();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -104,6 +111,21 @@ export function Copilot() {
     return history.filter((m) => m !== GREETING).map((m) => ({ role: m.role, content: m.content }));
   }
 
+  function toggleMic() {
+    if (!voice.listening) speechBase.current = input;
+    voice.toggle();
+  }
+  function toggleSpeak() {
+    setSpeakOn((on) => {
+      if (on) stopSpeaking();
+      return !on;
+    });
+  }
+  // Read a reply aloud when the user has turned on "speak answers".
+  function maybeSpeak(text: string) {
+    if (speakOn) speak(text);
+  }
+
   async function send(text: string) {
     const q = text.trim();
     if (!q || loading) return;
@@ -115,6 +137,7 @@ export function Copilot() {
       const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, user_name: userName() });
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
+      maybeSpeak(res.reply);
     } catch (e) {
       push({ role: "assistant", content: e instanceof ApiError && e.status === 401 ? "Please sign in again." : "Sorry — I couldn't reach the assistant. Please try again." });
     } finally {
@@ -168,6 +191,7 @@ export function Copilot() {
       const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64 }, user_name: userName() });
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
+      maybeSpeak(res.reply);
     } catch (err) {
       push({ role: "assistant", content: ingestError(err) });
     } finally {
@@ -225,10 +249,12 @@ export function Copilot() {
 
   // Animate the panel out, then unmount.
   function closePanel() {
+    voice.stop();
+    stopSpeaking();
     setClosing(true);
     window.setTimeout(() => { setOpen(false); setClosing(false); }, 200);
   }
-  function go(href: string) { setOpen(false); setClosing(false); router.push(href); }
+  function go(href: string) { voice.stop(); stopSpeaking(); setOpen(false); setClosing(false); router.push(href); }
 
   return (
     <>
@@ -380,7 +406,30 @@ export function Copilot() {
               </>
             )}
             <button type="button" onClick={() => setAttachOpen((o) => !o)} aria-label="Attach a document" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-glass/15 text-lg text-fg-soft transition hover:bg-glass/5">📎</button>
-            <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask, or tell me to add something…" className="min-w-0 flex-1 rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none" />
+            {voice.supported && (
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-label={voice.listening ? "Stop listening" : "Speak your message"}
+                aria-pressed={voice.listening}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-lg transition ${voice.listening ? "animate-pulse border-rose-500/50 bg-rose-500/10 text-rose-300" : "border-glass/15 text-fg-soft hover:bg-glass/5"}`}
+              >
+                🎤
+              </button>
+            )}
+            <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={voice.listening ? "Listening…" : "Ask, or tell me to add something…"} className="min-w-0 flex-1 rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none" />
+            {ttsSupported && (
+              <button
+                type="button"
+                onClick={toggleSpeak}
+                aria-label={speakOn ? "Turn off read-aloud" : "Read answers aloud"}
+                aria-pressed={speakOn}
+                title={speakOn ? "Read answers aloud: on" : "Read answers aloud: off"}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-lg transition ${speakOn ? "border-brand-500/50 bg-brand-500/10 text-brand-300" : "border-glass/15 text-fg-soft hover:bg-glass/5"}`}
+              >
+                {speakOn ? "🔊" : "🔈"}
+              </button>
+            )}
             <button type="submit" disabled={loading || !input.trim()} aria-label="Send" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-500 disabled:opacity-40">↑</button>
           </form>
         </div>
