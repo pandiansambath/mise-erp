@@ -4,6 +4,7 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
@@ -324,6 +325,14 @@ async def items_template_csv(user: User = Depends(require("inventory:read"))) ->
     )
 
 
+@router.get("/template.pdf")
+async def items_template_pdf(user: User = Depends(require("inventory:read"))) -> Response:
+    """A printable reference of the template (fill the Excel/CSV to actually import)."""
+    return _file(
+        template_io.template_pdf(ITEMS_TEMPLATE), "application/pdf", "mise-inventory-template.pdf"
+    )
+
+
 @router.post("/import-template")
 async def import_template(
     file: UploadFile = File(...),
@@ -331,7 +340,7 @@ async def import_template(
 ) -> dict:
     """Validate a filled Excel/CSV template STRICTLY. On a mismatch, return the exact
     problems (422) so the user can fix + re-upload. On success, return the parsed rows
-    (writes nothing) — the client previews then commits via /assistant/ingest/commit."""
+    (writes nothing) — the client previews, then commits via /import-template/commit."""
     data = await file.read()
     if len(data) > settings.max_upload_mb * 1024 * 1024:
         raise HTTPException(
@@ -343,3 +352,40 @@ async def import_template(
     if errors:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": errors})
     return {"kind": "items", "rows": rows}
+
+
+class _ImportCommit(BaseModel):
+    rows: list[dict]
+
+
+@router.post("/import-template/commit")
+async def import_template_commit(
+    payload: _ImportCommit,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """Create the validated rows (no AI). Existing items (same name) are skipped, so a
+    re-upload is safe. Returns what was added vs skipped."""
+    created: list[str] = []
+    skipped: list[str] = []
+    for row in payload.rows:
+        name = str(row.get("name") or "").strip()
+        if not name:
+            continue
+        fields = {
+            k: row[k] for k in ("name", "unit", "category", "current_stock", "cost_price")
+            if row.get(k) not in (None, "")
+        }
+        if fields.get("cost_price"):
+            fields["average_cost"] = fields["cost_price"]
+        try:
+            await service.create_item(db, user.hotel_id, **fields)
+            created.append(name)
+        except service.DuplicateItemError:
+            skipped.append(name)
+    if created:
+        await audit.record(
+            db, hotel_id=user.hotel_id, user=user, action="inventory.import",
+            summary=f"Imported {len(created)} items from a template", entity_type="items",
+        )
+    return {"created": created, "skipped": skipped}

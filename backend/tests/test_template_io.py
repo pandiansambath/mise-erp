@@ -93,3 +93,26 @@ async def test_inventory_import_template_valid_and_invalid(client, make_user, au
     )
     assert res.status_code == 422
     assert res.json()["detail"]["errors"]  # exact problems returned
+
+
+@pytest.mark.asyncio
+async def test_inventory_import_template_commit_creates_items(client, make_user, auth_header):
+    h = auth_header(await make_user("tpl3@x.com", Role.SUPER_ADMIN.value))
+    good = b"Name,Unit,Category,Opening stock,Cost price\nBasmati Rice,kg,Dry Goods,25,1.20\n"
+    prev = await client.post(
+        "/api/inventory/import-template", headers=h,
+        files={"file": ("i.csv", good, "text/csv")},
+    )
+    rows = prev.json()["rows"]
+    res = await client.post("/api/inventory/import-template/commit", headers=h, json={"rows": rows})
+    assert res.status_code == 200 and "Basmati Rice" in res.json()["created"]
+    items = (await client.get("/api/inventory/items", headers=h)).json()
+    assert any("basmati" in i["name"].lower() for i in items)
+
+
+@pytest.mark.asyncio
+async def test_inventory_template_pdf(client, make_user, auth_header):
+    h = auth_header(await make_user("tpl4@x.com", Role.SUPER_ADMIN.value))
+    r = await client.get("/api/inventory/template.pdf", headers=h)
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"

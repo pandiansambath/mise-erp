@@ -82,6 +82,41 @@ def template_csv(spec: TemplateSpec) -> bytes:
     return buf.getvalue().encode("utf-8-sig")  # BOM so Excel opens it cleanly
 
 
+def template_pdf(spec: TemplateSpec) -> bytes:
+    """A printable REFERENCE of the template (columns + examples). PDFs can't be
+    uploaded back (no fixed grid) — fill the Excel/CSV to import. fpdf2 (prod) only."""
+    from fpdf.enums import XPos, YPos
+
+    from app.core.pdf import DARK, ZEBRA, branded_pdf, footer, ps, table_header
+
+    pdf = branded_pdf(f"{spec.name} template", "Reference only — fill the Excel or CSV to import.")
+    avail = pdf.w - 28
+    cols = spec.columns
+    w_each = avail / max(len(cols), 1)
+    req = set(spec.required_headers())
+    table_header(pdf, [(f"{c.header}{' *' if c.header in req else ''}", w_each, "L") for c in cols])
+    pdf.set_font("Helvetica", "", 8)
+    for i, row in enumerate(spec.sample_rows):
+        pdf.set_x(14)
+        pdf.set_fill_color(*ZEBRA)
+        for j in range(len(cols)):
+            val = row[j] if j < len(row) else ""
+            pdf.cell(w_each, 8, text=ps(str(val)), border="B", fill=i % 2 == 1)
+        pdf.ln(8)
+    pdf.ln(4)
+    pdf.set_text_color(*DARK)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_x(14)
+    pdf.multi_cell(
+        0, 5,
+        text=ps("* = required. To import: download the Excel or CSV template, fill one row "
+                "per record keeping the headers, and upload it on the page."),
+        new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+    )
+    footer(pdf)
+    return bytes(pdf.output())
+
+
 # ── Validation ────────────────────────────────────────────────────────────────
 def _read_rows(file_bytes: bytes, filename: str, mime: str) -> list[list] | None:
     """Return the sheet as a list of rows, or None if it isn't a readable .xlsx/.csv."""
