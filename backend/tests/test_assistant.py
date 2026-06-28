@@ -265,6 +265,51 @@ async def test_set_supplier_without_price_is_blocked(db, make_user):
     assert res["ok"] is False  # they don't supply it yet
 
 
+# ── Multi-line proposal: recipe ingredients ────────────────────────────────────
+def test_recipe_ingredients_proposal_validates():
+    assert actions.build_proposal("recipe_ingredients", {"recipe": "Dosa"})["ok"] is False
+    assert "lines" in actions.build_proposal("recipe_ingredients", {"recipe": "Dosa"})["missing"]
+    p = actions.build_proposal(
+        "recipe_ingredients",
+        {"recipe": "Dosa", "lines": [{"item": "Rice", "quantity": 2, "unit": "kg"}]},
+    )
+    assert p["ok"] and "Dosa" in p["summary"] and "Rice" in p["summary"]
+
+
+@pytest.mark.asyncio
+async def test_act_recipe_ingredients_adds_lines(db, make_user):
+    from app.recipes import service as rec
+    user = await make_user("hv2ing@x.com", Role.SUPER_ADMIN.value)
+    dish = await rec.create_recipe(db, user.hotel_id, name="Dosa", servings_default=1)
+    await inv.create_item(db, user.hotel_id, name="Rice", unit="kg")
+    res = await actions.execute(
+        db, user, "recipe_ingredients",
+        {
+            "recipe": "Dosa",
+            "lines": [
+                {"item": "Rice", "quantity": 0.1, "unit": "kg"},
+                {"item": "Urad Dal", "quantity": 50, "unit": "g"},  # not in stock → auto-created
+            ],
+        },
+    )
+    assert res["ok"]
+    ings = await rec.list_ingredients(db, dish.id)
+    assert len(ings) == 2
+    # the auto-created ingredient now exists as a stock item
+    items = {i.name for i in await inv.list_items(db, user.hotel_id)}
+    assert "Urad Dal" in items
+
+
+@pytest.mark.asyncio
+async def test_recipe_ingredients_unknown_dish_errors(db, make_user):
+    user = await make_user("hv2ing2@x.com", Role.SUPER_ADMIN.value)
+    res = await actions.execute(
+        db, user, "recipe_ingredients",
+        {"recipe": "Ghost Dish", "lines": [{"item": "Rice", "quantity": 1, "unit": "kg"}]},
+    )
+    assert res["ok"] is False
+
+
 # ── Accurate counts (no hallucinated numbers) ──────────────────────────────────
 @pytest.mark.asyncio
 async def test_business_overview_returns_real_recipe_count(db, make_user):

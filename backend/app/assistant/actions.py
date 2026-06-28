@@ -122,6 +122,22 @@ SPECS: dict[str, dict] = {
             + (f", sells at £{f['selling_price']}" if f.get("selling_price") else "")
         ),
     },
+    # Multi-line action: a recipe + a LIST of ingredient rows (item/quantity/unit).
+    "recipe_ingredients": {
+        "perm": "recipes:write",
+        "label": "recipe ingredients",
+        "required": ["recipe", "lines"],  # validated specially (see build_proposal)
+        "summary": lambda f: (
+            f"Add {len(f['lines'])} ingredient"
+            + ("" if len(f["lines"]) == 1 else "s")
+            + f" to “{f['recipe']}”: "
+            + ", ".join(
+                f"{ln['quantity']}{(' ' + ln['unit']) if ln.get('unit') else ''} {ln['item']}"
+                for ln in f["lines"][:6]
+            )
+            + ("…" if len(f["lines"]) > 6 else "")
+        ),
+    },
 }
 
 
@@ -144,6 +160,20 @@ def _resolve_date(v: Any) -> date_type:
         return date_type.today()
 
 
+def _build_lines(fields: dict) -> list[dict]:
+    """Normalise a list of {item, quantity, unit} rows (for multi-line actions)."""
+    out: list[dict] = []
+    for ln in fields.get("lines") or []:
+        if not isinstance(ln, dict):
+            continue
+        item = str(ln.get("item") or "").strip()
+        qty = _dec(ln.get("quantity"))
+        unit = str(ln.get("unit") or "").strip()
+        if item and qty is not None and Decimal(qty) > 0:
+            out.append({"item": item, "quantity": qty, "unit": unit})
+    return out
+
+
 def build_proposal(kind: str, fields: dict) -> dict:
     """Validate + normalise a requested action WITHOUT writing. Returns either
     {ok:true, ...} ready to confirm, or {ok:false, missing:[...]} so the model
@@ -151,6 +181,20 @@ def build_proposal(kind: str, fields: dict) -> dict:
     spec = SPECS.get(kind)
     if not spec:
         return {"ok": False, "error": f"I can't do '{kind}' yet."}
+
+    # Multi-line proposals carry a list of rows (e.g. recipe ingredients).
+    if kind == "recipe_ingredients":
+        recipe = str(fields.get("recipe") or "").strip()
+        lines = _build_lines(fields)
+        missing = [m for m, ok in (("recipe", recipe), ("lines", lines)) if not ok]
+        if missing:
+            return {"ok": False, "kind": kind, "missing": missing}
+        clean_ml = {"recipe": recipe, "lines": lines}
+        return {
+            "ok": True, "kind": kind, "label": spec["label"],
+            "fields": clean_ml, "summary": spec["summary"](clean_ml),
+        }
+
     clean: dict[str, Any] = {}
     # numeric-ish fields
     for f in ("amount", "current_stock", "cost_price", "quantity", "monthly_salary",
@@ -258,6 +302,27 @@ async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict
         except recipe_service.DuplicateRecipeError as exc:
             return {"ok": False, "error": str(exc)}
         undo = {"type": "recipe", "id": str(rec.id)}
+    elif kind == "recipe_ingredients":
+        rec = await _find_recipe(db, hotel, f["recipe"])
+        if rec is None:
+            return {
+                "ok": False,
+                "error": f"No dish called '{f['recipe']}' — create the dish first, "
+                "then I'll add its ingredients.",
+            }
+        added: list[str] = []
+        for ln in f["lines"]:
+            item = await _find_item(db, hotel, ln["item"])
+            if item is None:  # ingredient not in stock yet → create a basic item
+                item = await inventory_service.create_item(
+                    db, hotel, name=ln["item"], unit=(ln["unit"] or "g")
+                )
+            await recipe_service.upsert_ingredient(
+                db, rec.id, item.id, Decimal(ln["quantity"]), ln["unit"] or item.unit
+            )
+            added.append(item.name)
+        # No single-token undo for a batch; edit on the Recipes page if needed.
+        undo = {}
     else:  # pragma: no cover
         return {"ok": False, "error": f"Unknown action '{kind}'"}
 
@@ -311,6 +376,16 @@ async def _find_vendor(db: AsyncSession, hotel: uuid.UUID, name: str) -> Vendor 
     vendors = await vendor_service.list_vendors(db, hotel)
     return next(
         (v for v in vendors if v.name and (nl == v.name.lower() or nl in v.name.lower())),
+        None,
+    )
+
+
+async def _find_recipe(db: AsyncSession, hotel: uuid.UUID, name: str) -> Recipe | None:
+    """Resolve an active dish by exact name, else a loose contains-match."""
+    nl = name.lower()
+    recipes = await recipe_service.list_recipes(db, hotel, active_only=True)
+    return next(
+        (r for r in recipes if r.name and (nl == r.name.lower() or nl in r.name.lower())),
         None,
     )
 

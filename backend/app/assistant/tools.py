@@ -378,6 +378,10 @@ async def propose_recipe(db: AsyncSession, user: User, args: dict) -> dict:
     return await _propose("recipe", user, args)
 
 
+async def propose_recipe_ingredients(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("recipe_ingredients", user, args)
+
+
 # ── Registry: schema (for the model) + executor (server-side) ─────────────────
 _QUERY = {"type": "string"}
 TOOLS: list[dict] = [
@@ -723,6 +727,36 @@ TOOLS: list[dict] = [
             "required": ["name"],
         },
     },
+    {
+        "name": "propose_recipe_ingredients",
+        "description": (
+            "Propose adding/updating the INGREDIENTS of an existing dish — this is what "
+            "drives its cost and margin. Give the dish name and a LIST of ingredients, each "
+            "with item, quantity and unit (e.g. 100 g rice, 50 g urad dal, 20 ml oil). The "
+            "dish must already exist (use propose_recipe first if it doesn't). An ingredient "
+            "that isn't in stock yet is created. Saves only on confirm."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipe": {"type": "string", "description": "the existing dish's name"},
+                "lines": {
+                    "type": "array",
+                    "description": "the ingredients used to make ONE serving of the dish",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "item": {"type": "string", "description": "ingredient / stock item"},
+                            "quantity": {"type": "number", "description": "amount used per dish"},
+                            "unit": {"type": "string", "description": "g, kg, ml, l, each…"},
+                        },
+                        "required": ["item", "quantity"],
+                    },
+                },
+            },
+            "required": ["recipe", "lines"],
+        },
+    },
 ]
 
 EXECUTORS: dict[str, Executor] = {
@@ -750,6 +784,7 @@ EXECUTORS: dict[str, Executor] = {
     "propose_vendor_price": propose_vendor_price,
     "propose_stock_count": propose_stock_count,
     "propose_recipe": propose_recipe,
+    "propose_recipe_ingredients": propose_recipe_ingredients,
 }
 
 # Tools gated by a write permission — filtered out for roles that lack it so the
@@ -765,6 +800,7 @@ TOOL_PERMS: dict[str, str] = {
     "propose_vendor_price": "vendors:write",
     "propose_stock_count": "inventory:write",
     "propose_recipe": "recipes:write",
+    "propose_recipe_ingredients": "recipes:write",
 }
 
 

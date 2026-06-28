@@ -309,6 +309,54 @@ export function Copilot() {
                     <div key={k} className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-300/90">Confirm · {p.label}</p>
                       <p className="mt-1 text-sm text-fg">{p.summary}</p>
+                      {!p.done && Array.isArray(p.fields?.lines) && (
+                        <div className="mt-2 space-y-1.5">
+                          {(p.fields.lines as Row[]).map((l, li) => (
+                            <div key={li} className="flex items-center gap-1.5">
+                              <input
+                                value={String(l.item ?? "")}
+                                onChange={(e) => {
+                                  const lines = [...(p.fields.lines as Row[])];
+                                  lines[li] = { ...lines[li], item: e.target.value };
+                                  patchPending(i, k, { fields: { ...p.fields, lines } });
+                                }}
+                                className="min-w-0 flex-1 rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg outline-none focus:border-brand-500"
+                              />
+                              <input
+                                value={String(l.quantity ?? "")}
+                                inputMode="decimal"
+                                onChange={(e) => {
+                                  const lines = [...(p.fields.lines as Row[])];
+                                  lines[li] = { ...lines[li], quantity: e.target.value };
+                                  patchPending(i, k, { fields: { ...p.fields, lines } });
+                                }}
+                                className="w-14 rounded-md border border-line-2 bg-transparent px-2 py-1 text-right text-xs text-fg outline-none focus:border-brand-500"
+                              />
+                              <input
+                                value={String(l.unit ?? "")}
+                                placeholder="unit"
+                                onChange={(e) => {
+                                  const lines = [...(p.fields.lines as Row[])];
+                                  lines[li] = { ...lines[li], unit: e.target.value };
+                                  patchPending(i, k, { fields: { ...p.fields, lines } });
+                                }}
+                                className="w-12 rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg outline-none focus:border-brand-500"
+                              />
+                              <button
+                                type="button"
+                                aria-label="Remove line"
+                                onClick={() => {
+                                  const lines = (p.fields.lines as Row[]).filter((_, x) => x !== li);
+                                  patchPending(i, k, { fields: { ...p.fields, lines } });
+                                }}
+                                className="shrink-0 px-1 text-fg-faint hover:text-rose-300"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {!p.done && p.fields?.amount != null && (
                         <label className="mt-2 flex items-center gap-2 text-xs text-fg-soft">
                           <span className="whitespace-nowrap font-medium">Amount £</span>
