@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.party.models import PartyQuote, PartyQuoteLine
 from app.party.schemas import PartyQuoteCreate
@@ -105,6 +106,7 @@ async def create_quote(
 async def list_quotes(db: AsyncSession, hotel_id: uuid.UUID) -> list[PartyQuote]:
     rows = await db.execute(
         select(PartyQuote)
+        .options(selectinload(PartyQuote.lines))
         .where(PartyQuote.hotel_id == hotel_id)
         .order_by(PartyQuote.created_at.desc())
     )
@@ -114,8 +116,14 @@ async def list_quotes(db: AsyncSession, hotel_id: uuid.UUID) -> list[PartyQuote]
 async def get_quote(
     db: AsyncSession, quote_id: uuid.UUID, hotel_id: uuid.UUID
 ) -> PartyQuote | None:
-    q = await db.get(PartyQuote, quote_id)
-    return q if q is not None and q.hotel_id == hotel_id else None
+    # A select() with selectinload eagerly loads `lines` — db.get() would return the
+    # identity-map row without it and trip MissingGreenlet on async lazy access.
+    rows = await db.execute(
+        select(PartyQuote)
+        .options(selectinload(PartyQuote.lines))
+        .where(PartyQuote.id == quote_id, PartyQuote.hotel_id == hotel_id)
+    )
+    return rows.scalar_one_or_none()
 
 
 async def update_quote(
