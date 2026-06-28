@@ -89,11 +89,24 @@ export function Copilot() {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const modeRef = useRef<string>("ingest:items");
+  const sendRef = useRef<(t: string) => void>(() => {});
 
   useEffect(() => {
     if (!open || configured !== null) return;
     api.get<{ configured: boolean }>("/assistant/status").then((r) => setConfigured(r.configured)).catch(() => setConfigured(false));
   }, [open, configured]);
+
+  // Let any page open the Copilot and ask a question (e.g. the How-it-works hub).
+  useEffect(() => {
+    function onAsk(e: Event) {
+      setOpen(true);
+      setClosing(false);
+      const prompt = (e as CustomEvent<{ prompt?: string }>).detail?.prompt;
+      if (prompt) setTimeout(() => sendRef.current(prompt), 0);
+    }
+    window.addEventListener("mise:ask", onAsk);
+    return () => window.removeEventListener("mise:ask", onAsk);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -144,6 +157,9 @@ export function Copilot() {
       setLoading(false);
     }
   }
+  useEffect(() => {
+    sendRef.current = send;
+  });
 
   function chooseAttach(mode: string) {
     modeRef.current = mode;
