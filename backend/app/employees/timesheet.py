@@ -4,7 +4,8 @@ import io
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from openpyxl import Workbook
-from openpyxl.styles import Font
+
+from app.core.xlsx_style import style_table
 
 BRAND = (16, 185, 129)
 DARK = (15, 23, 42)
@@ -90,11 +91,6 @@ def generate_timesheet_xlsx(rows: list[dict], hotel, day) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Timesheet"
-    title = ws.cell(row=1, column=1, value=f"{hotel.name} — Attendance {day}")
-    title.font = Font(bold=True, size=14)
-    headers = ["Employee", "Clock in", "Clock out", "Hours", "Status"]
-    for col, h in enumerate(headers, start=1):
-        ws.cell(row=3, column=col, value=h).font = Font(bold=True)
     r = 4
     for row in rows:
         name, cin, cout, hours, status = _cols(row)
@@ -104,9 +100,11 @@ def generate_timesheet_xlsx(rows: list[dict], hotel, day) -> bytes:
         ws.cell(row=r, column=4, value=str(row.get("working_hours") or ""))
         ws.cell(row=r, column=5, value=status)
         r += 1
-    ws.column_dimensions["A"].width = 28
-    for c in ("B", "C", "D", "E"):
-        ws.column_dimensions[c].width = 14
+    style_table(
+        ws, title=f"{hotel.name} — Attendance", subtitle=str(day),
+        headers=["Employee", "Clock in", "Clock out", "Hours", "Status"],
+        n_rows=len(rows), widths=[28, 14, 14, 12, 14], right_cols={4},
+    )
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()

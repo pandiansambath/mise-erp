@@ -121,13 +121,22 @@ async def sales_template(user: User = Depends(require("sales:read"))) -> Respons
     """A sample Excel for the daily-sales import (Channel, Gross, Method)."""
     from openpyxl import Workbook
 
+    from app.core.xlsx_style import style_table
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Sales"
-    ws.append(["Channel", "Gross", "Method"])
-    ws.append(["Dine-in", 240.00, "CARD"])
-    ws.append(["Deliveroo", 86.50, "CARD"])
-    ws.append(["Cash counter", 120.00, "CASH"])
+    rows = [
+        ["Dine-in", 240.00, "CARD"], ["Deliveroo", 86.50, "CARD"], ["Cash counter", 120.00, "CASH"],
+    ]
+    for i, row in enumerate(rows):
+        for c, v in enumerate(row, start=1):
+            ws.cell(row=4 + i, column=c, value=v)
+    style_table(
+        ws, title="Mise — Sales import template", headers=["Channel", "Gross", "Method"],
+        n_rows=len(rows), subtitle="One row per channel for a day, then upload on Sales & Cash",
+        widths=[22, 14, 12], right_cols={2},
+    )
     buf = io.BytesIO()
     wb.save(buf)
     fname = "mise-sales-template.xlsx"

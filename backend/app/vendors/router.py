@@ -63,13 +63,22 @@ async def price_list_template(
     """A sample Excel super admins can send to vendors so everyone uses one format."""
     from openpyxl import Workbook
 
+    from app.core.xlsx_style import style_table
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Price list"
-    ws.append(["Item", "Price", "Unit"])
-    ws.append(["Basmati Rice", 5.00, "kg"])
-    ws.append(["Ghee", 6.80, "kg"])
-    ws.append(["Carry Bags (Large)", 3.55, "pack"])
+    rows = [
+        ["Basmati Rice", 5.00, "kg"], ["Ghee", 6.80, "kg"], ["Carry Bags (Large)", 3.55, "pack"],
+    ]
+    for i, row in enumerate(rows):
+        for c, v in enumerate(row, start=1):
+            ws.cell(row=4 + i, column=c, value=v)
+    style_table(
+        ws, title="Mise — Vendor price-list template", headers=["Item", "Price", "Unit"],
+        n_rows=len(rows), subtitle="Send to a supplier; fill prices, then upload on Vendors",
+        widths=[26, 14, 12], right_cols={2},
+    )
     buf = io.BytesIO()
     wb.save(buf)
     fname = "mise-vendor-price-list-template.xlsx"
