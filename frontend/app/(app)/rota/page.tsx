@@ -159,10 +159,10 @@ export default function RotaPage() {
           ⬇ Excel
         </button>
         <button
-          onClick={() => window.print()}
+          onClick={() => downloadFile(`/rota/export.pdf?date_from=${from}&date_to=${to}`, `mise-rota-${from}.pdf`)}
           className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
         >
-          🖨 PDF / Print
+          ⬇ PDF
         </button>
         {canWrite && (
           <>

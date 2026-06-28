@@ -3,7 +3,11 @@ import csv
 import io
 
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font, PatternFill
+
+_TITLE = "065F46"      # emerald-900
+_HEADER_BG = "047857"  # emerald-700
+_KEY_BG = "D1FAE5"     # emerald-100 (key lines)
 
 _PNL_LINES = [
     ("Gross sales", "gross_sales"),
@@ -46,18 +50,23 @@ def to_xlsx(pnl: dict) -> bytes:
     ws.title = "Profit & Loss"
 
     title = ws.cell(row=1, column=1, value="Mise — Profit & Loss")
-    title.font = Font(bold=True, size=14)
-    ws.cell(row=2, column=1, value="Period")
-    ws.cell(row=2, column=2, value=f"{pnl['date_from']} to {pnl['date_to']}")
+    title.font = Font(bold=True, size=15, color=_TITLE)
+    ws.cell(row=2, column=1, value=f"Period: {pnl['date_from']} to {pnl['date_to']}").font = Font(
+        size=10, italic=True, color="6B7280"
+    )
 
     r = 4
     for label, key in _PNL_LINES:
-        ws.cell(row=r, column=1, value=label)
+        lc = ws.cell(row=r, column=1, value=label)
         cell = ws.cell(row=r, column=2, value=float(pnl[key]))
         cell.number_format = "#,##0.00"
+        cell.alignment = Alignment(horizontal="right")
         if key in ("net_sales", "gross_profit", "net_profit"):
-            ws.cell(row=r, column=1).font = Font(bold=True)
-            cell.font = Font(bold=True)
+            fill = PatternFill("solid", fgColor=_KEY_BG)
+            lc.font = Font(bold=True, color=_TITLE)
+            lc.fill = fill
+            cell.font = Font(bold=True, color=_TITLE)
+            cell.fill = fill
         r += 1
     r += 1
     for label, key in _PNL_PCTS:
@@ -67,10 +76,12 @@ def to_xlsx(pnl: dict) -> bytes:
 
     r += 1
     hdr = ws.cell(row=r, column=1, value="Expense breakdown")
-    hdr.font = Font(bold=True)
+    hdr.font = Font(bold=True, size=12, color=_TITLE)
     r += 1
     for col, name in enumerate(["Category", "Kind", "Total"], start=1):
-        ws.cell(row=r, column=col, value=name).font = Font(bold=True)
+        c = ws.cell(row=r, column=col, value=name)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor=_HEADER_BG)
     r += 1
     for c in pnl["expense_breakdown"]:
         ws.cell(row=r, column=1, value=c["category_name"])

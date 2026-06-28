@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
+from app.hotels.models import Hotel
 from app.rota import export, service
 from app.rota.schemas import LabourSummary, ShiftCreate, ShiftOut
 
@@ -68,6 +69,23 @@ async def export_rota_xlsx(
 ) -> Response:
     shifts = await service.list_shifts(db, user.hotel_id, date_from, date_to)
     return _xlsx(export.rota_to_xlsx(shifts, date_from, date_to), "mise-rota.xlsx")
+
+
+@router.get("/export.pdf")
+async def export_rota_pdf(
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> Response:
+    hotel = await db.get(Hotel, user.hotel_id)
+    shifts = await service.list_shifts(db, user.hotel_id, date_from, date_to)
+    pdf = export.rota_to_pdf(shifts, hotel.name if hotel else "Rota", date_from, date_to)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="mise-rota-{date_from}.pdf"'},
+    )
 
 
 @router.get("/template.xlsx")
