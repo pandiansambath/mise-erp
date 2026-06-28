@@ -520,12 +520,20 @@ TOOLS: list[dict] = [
         "description": (
             "Propose recording a business expense (e.g. a bill, a utility, a purchase). "
             "Gather the amount first; category/date/description are helpful. Does not "
-            "save until the user confirms."
+            "save until the user confirms. When reading a photographed bill/receipt, copy "
+            "the amount EXACTLY as printed and KEEP the decimal point: £5.99 is 5.99 (never "
+            "599), £12.50 is 12.50. Use the grand TOTAL (incl. VAT), not a line item."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "amount": {"type": "number", "description": "Total amount in £"},
+                "amount": {
+                    "type": "number",
+                    "description": (
+                        "Total amount in £, exactly as printed — keep the decimal point "
+                        "(£5.99 → 5.99, not 599). Amounts almost always have 2 decimals."
+                    ),
+                },
                 "category": {"type": "string", "description": "e.g. Utilities, Rent, Food"},
                 "description": {"type": "string"},
                 "date": {"type": "string", "description": "YYYY-MM-DD, or 'today'/'yesterday'"},
@@ -544,7 +552,13 @@ TOOLS: list[dict] = [
         "parameters": {
             "type": "object",
             "properties": {
-                "amount": {"type": "number", "description": "Gross sale amount in £"},
+                "amount": {
+                    "type": "number",
+                    "description": (
+                        "Gross sale amount in £, exactly as shown — keep the decimal point "
+                        "(£5.99 → 5.99, not 599)."
+                    ),
+                },
                 "channel": {"type": "string", "description": "e.g. Dine-in, Just Eat, Uber Eats"},
                 "date": {"type": "string", "description": "YYYY-MM-DD, or 'today'/'yesterday'"},
                 "payment_method": {"type": "string", "description": "CASH or CARD"},

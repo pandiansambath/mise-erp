@@ -283,6 +283,18 @@ export function Copilot() {
                     <div key={k} className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-300/90">Confirm · {p.label}</p>
                       <p className="mt-1 text-sm text-fg">{p.summary}</p>
+                      {!p.done && p.fields?.amount != null && (
+                        <label className="mt-2 flex items-center gap-2 text-xs text-fg-soft">
+                          <span className="whitespace-nowrap font-medium">Amount £</span>
+                          <input
+                            value={String(p.fields.amount ?? "")}
+                            onChange={(e) => patchPending(i, k, { fields: { ...p.fields, amount: e.target.value } })}
+                            inputMode="decimal"
+                            className="w-24 rounded-md border border-line-2 bg-transparent px-2 py-1 text-right text-fg outline-none focus:border-brand-500"
+                          />
+                          <span className="text-fg-faint">edit if misread</span>
+                        </label>
+                      )}
                       {p.done ? (
                         <div className="mt-2 flex items-center gap-3">
                           <span className="text-xs font-medium text-brand-300">✓ {p.result}</span>
