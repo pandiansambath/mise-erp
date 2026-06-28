@@ -83,9 +83,42 @@ export default function InventoryPage() {
 
   // ── AI bulk-import: upload a PDF / Excel / CSV / photo of an item list ──────
   const importInput = useRef<HTMLInputElement>(null);
+  const templateInput = useRef<HTMLInputElement>(null);
   const [importRows, setImportRows] = useState<Record<string, unknown>[] | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<string[] | null>(null);
+
+  // Strict template upload: validates the Excel/CSV against the exact column spec and
+  // returns the precise problems (so the user fixes the file), or parsed rows to preview.
+  async function onTemplateFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setImportMsg(null);
+    setImportErrors(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await postForm<{ rows: Record<string, unknown>[] }>(
+        "/inventory/import-template", fd
+      );
+      if (!res.rows.length) setImportMsg("No data rows found — fill in at least one row.");
+      else setImportRows(res.rows);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        const d = err.detail as { errors?: string[] } | undefined;
+        setImportErrors(d?.errors ?? ["The file didn't match the template."]);
+      } else if (err instanceof ApiError && err.status === 403) {
+        setImportMsg("You don't have permission to add stock items.");
+      } else {
+        setImportMsg("Sorry — couldn't read that file. Use the Excel/CSV template.");
+      }
+    } finally {
+      setImportBusy(false);
+    }
+  }
 
   async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -380,13 +413,28 @@ export default function InventoryPage() {
             className="hidden"
             onChange={onImportFile}
           />
+          <input
+            ref={templateInput}
+            type="file"
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={onTemplateFile}
+          />
+          <button
+            onClick={() => templateInput.current?.click()}
+            disabled={importBusy}
+            title="Upload a filled Excel/CSV template — checked strictly, with exact errors if anything's off"
+            className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+          >
+            {importBusy ? "Checking…" : "⬆ Import (template)"}
+          </button>
           <button
             onClick={() => importInput.current?.click()}
             disabled={importBusy}
-            title="Upload a PDF, Excel, CSV or photo of your item list — the AI reads it and adds the items"
-            className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+            title="PDF, Word, photo or any non-template document — the AI reads it (less strict)"
+            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2 disabled:opacity-50"
           >
-            {importBusy ? "Reading…" : "✨ Import (AI)"}
+            ✨ AI import
           </button>
           <button
             onClick={() => downloadFile("/inventory/items.xlsx", "mise-stock-valuation.xlsx")}
@@ -404,6 +452,31 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      <p className="mt-2 text-xs text-fg-faint">
+        Importing items? Download the template —{" "}
+        <button onClick={() => downloadFile("/inventory/template.xlsx", "mise-inventory-template.xlsx")} className="text-brand-400 underline hover:text-brand-300">Excel</button>
+        {" · "}
+        <button onClick={() => downloadFile("/inventory/template.csv", "mise-inventory-template.csv")} className="text-brand-400 underline hover:text-brand-300">CSV</button>
+        {" "}— fill it in, then use <b className="text-fg-soft">Import (template)</b>. A PDF, Word doc or photo? Use <b className="text-fg-soft">AI import</b>.
+      </p>
+
+      {importErrors && (
+        <div className="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-rose-200">Your file doesn&apos;t match the template — fix these and re-upload:</p>
+            <button onClick={() => setImportErrors(null)} className="text-fg-faint hover:text-fg" aria-label="Dismiss">✕</button>
+          </div>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-rose-100/90">
+            {importErrors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-fg-faint">
+            Tip: keep the template&apos;s headers exactly, and make number columns (stock, cost) numbers only.
+          </p>
+        </div>
+      )}
 
       {importMsg && (
         <div className="mt-3 flex items-center justify-between rounded-lg bg-brand-500/10 px-3 py-2 text-sm text-brand-200">

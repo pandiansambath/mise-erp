@@ -25,9 +25,11 @@ export function clearToken() {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  detail: unknown; // structured error body (e.g. { errors: [...] }) when present
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -72,8 +74,9 @@ export async function postForm<T>(path: string, form: FormData): Promise<T> {
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    const detail = (body as { detail?: string })?.detail || "Upload failed";
-    throw new ApiError(res.status, typeof detail === "string" ? detail : "Upload failed");
+    const detail = (body as { detail?: unknown })?.detail;
+    const message = typeof detail === "string" ? detail : "Upload failed";
+    throw new ApiError(res.status, message, detail);
   }
   return body as T;
 }

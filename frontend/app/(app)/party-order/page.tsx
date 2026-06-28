@@ -27,6 +27,7 @@ export default function PartyOrderPage() {
 
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [quotes, setQuotes] = useState<PartyQuote[] | null>(null);
+  const [openQuoteId, setOpenQuoteId] = useState<string | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
   const [search, setSearch] = useState("");
   const [customer, setCustomer] = useState("");
@@ -452,6 +453,13 @@ export default function PartyOrderPage() {
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
+                          onClick={() => setOpenQuoteId((id) => (id === q.id ? null : q.id))}
+                          aria-expanded={openQuoteId === q.id}
+                          className="rounded-lg border border-line-2 px-3 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                        >
+                          {openQuoteId === q.id ? "▾ Hide details" : `▸ View details (${dishes})`}
+                        </button>
+                        <button
                           onClick={() => downloadFile(`/party-quotes/${q.id}.pdf`, `party-quote-${q.id.slice(0, 8)}.pdf`)}
                           className="rounded-lg border border-line-2 px-3 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
                         >
@@ -474,6 +482,38 @@ export default function PartyOrderPage() {
                           </>
                         )}
                       </div>
+                      {openQuoteId === q.id && (
+                        <div className="mt-3 overflow-x-auto rounded-lg border border-line">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-line text-left text-fg-faint">
+                                <th className="px-3 py-2">Dish</th>
+                                <th className="px-3 py-2 text-right">Qty</th>
+                                <th className="px-3 py-2 text-right">Unit price</th>
+                                <th className="px-3 py-2 text-right">Line price</th>
+                                <th className="px-3 py-2 text-right">Line cost</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {q.lines.map((l, li) => (
+                                <tr key={li} className="border-b border-line/60 last:border-0">
+                                  <td className="px-3 py-2 font-medium text-fg">{l.name}</td>
+                                  <td className="px-3 py-2 text-right text-fg-soft">{l.qty}</td>
+                                  <td className="px-3 py-2 text-right text-fg-soft">
+                                    {l.unit_price != null ? money(q.currency, l.unit_price) : "—"}
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-fg-soft">
+                                    {l.unit_price != null ? money(q.currency, l.unit_price * l.qty) : "—"}
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-fg-soft">
+                                    {money(q.currency, l.unit_cost * l.qty)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </Card>
                   );
                 })}

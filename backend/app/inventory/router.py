@@ -3,13 +3,16 @@ import uuid
 from datetime import date as date_type
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import template_io
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.template_io import Column, TemplateSpec
 from app.inventory import export, service
 from app.inventory.models import MovementType
 from app.inventory.schemas import (
@@ -284,3 +287,59 @@ async def waste_xlsx(
 ) -> Response:
     rows = await service.list_waste(db, user.hotel_id, date_from, date_to)
     return _file(export.waste_to_xlsx(rows, date_from, date_to), XLSX_MIME, "mise-waste-log.xlsx")
+
+
+# ── Strict import template (Excel/CSV) ────────────────────────────────────────
+ITEMS_TEMPLATE = TemplateSpec(
+    name="Inventory items",
+    subtitle="One row per item. Keep the headers. Name + Unit are required (*).",
+    columns=[
+        Column("name", "Name", required=True, aliases=("item", "product", "ingredient")),
+        Column("unit", "Unit", required=True, aliases=("uom", "units")),
+        Column("category", "Category", aliases=("type", "group")),
+        Column("current_stock", "Opening stock", kind="number",
+               aliases=("stock", "quantity", "qty", "opening")),
+        Column("cost_price", "Cost price", kind="number",
+               aliases=("price", "cost", "unit cost", "cost per unit")),
+    ],
+    sample_rows=[
+        ["Basmati Rice", "kg", "Dry Goods", 25, 1.20],
+        ["Paneer", "kg", "Dairy", 10, 4.50],
+        ["Chicken", "kg", "Meat", 8, 3.80],
+    ],
+)
+
+
+@router.get("/template.xlsx")
+async def items_template_xlsx(user: User = Depends(require("inventory:read"))) -> Response:
+    return _file(
+        template_io.template_xlsx(ITEMS_TEMPLATE), XLSX_MIME, "mise-inventory-template.xlsx"
+    )
+
+
+@router.get("/template.csv")
+async def items_template_csv(user: User = Depends(require("inventory:read"))) -> Response:
+    return _file(
+        template_io.template_csv(ITEMS_TEMPLATE), "text/csv", "mise-inventory-template.csv"
+    )
+
+
+@router.post("/import-template")
+async def import_template(
+    file: UploadFile = File(...),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """Validate a filled Excel/CSV template STRICTLY. On a mismatch, return the exact
+    problems (422) so the user can fix + re-upload. On success, return the parsed rows
+    (writes nothing) — the client previews then commits via /assistant/ingest/commit."""
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"File exceeds {settings.max_upload_mb} MB"
+        )
+    rows, errors = template_io.parse_upload(
+        data, file.filename or "", file.content_type or "", ITEMS_TEMPLATE
+    )
+    if errors:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": errors})
+    return {"kind": "items", "rows": rows}
