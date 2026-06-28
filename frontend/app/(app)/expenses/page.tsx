@@ -194,104 +194,8 @@ export default function ExpensesPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
-          {canWrite && (
-            <Card className="mb-4">
-              <form onSubmit={addExpense} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-fg-soft">Category</label>
-                  <Select
-                    value={categoryId}
-                    onChange={setCategoryId}
-                    className="mt-1"
-                    options={categories
-                      .filter((c) => c.is_active)
-                      .map((c) => ({
-                        value: c.id,
-                        label: `${c.name} · ${c.kind === "FIXED" ? "Fixed" : "Variable"}`,
-                      }))}
-                  />
-                  {isSuper && (
-                    <p className="mt-1 text-xs text-fg-faint">
-                      Need a new category? Add &amp; manage them below.
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Date</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Payment</label>
-                  <Select
-                    value={method}
-                    onChange={setMethod}
-                    className="mt-1"
-                    options={METHODS}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Amount (incl VAT)</label>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" required placeholder="0.00" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">of which VAT</label>
-                  <input value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputCls} />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-fg-soft">Description</label>
-                  <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
-                </div>
-                <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-                  <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                    Add expense
-                  </button>
-                  <button type="button" onClick={startPettyCash} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2" title="Cash to staff, or something bought outside">
-                    ＋ Petty cash
-                  </button>
-                  {error && <span className="text-sm text-rose-400">{error}</span>}
-                </div>
-              </form>
-            </Card>
-          )}
-
-          {isSuper && (
-            <ListManager
-              title="Manage expense categories"
-              noun="category"
-              usageNoun="expense"
-              items={categories.map((c) => ({
-                id: c.id,
-                name: c.name,
-                is_active: c.is_active,
-                usage_count: c.usage_count ?? 0,
-                badge: c.kind === "FIXED" ? "Fixed" : "Variable",
-              }))}
-              addFields={[
-                {
-                  key: "kind",
-                  label: "Type",
-                  type: "select",
-                  default: "VARIABLE",
-                  options: [
-                    { value: "VARIABLE", label: "Variable cost" },
-                    { value: "FIXED", label: "Fixed cost" },
-                  ],
-                },
-              ]}
-              onAdd={async (name, extra) => {
-                await api.post("/expenses/categories", { name, kind: extra.kind });
-              }}
-              onRename={async (id, name) => {
-                await api.patch(`/expenses/categories/${id}`, { name });
-              }}
-              onSetActive={async (id, active) => {
-                await api.patch(`/expenses/categories/${id}`, { is_active: active });
-              }}
-              reload={reloadCategories}
-            />
-          )}
-
+        {/* LEFT — the data (breakdown + entries) */}
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           {summary && summary.by_category.length > 0 && (
             <Card className="p-0">
               <div className="border-b border-line px-5 py-3">
@@ -413,22 +317,96 @@ export default function ExpensesPage() {
           </Card>
         </div>
 
-        {/* Breakdown by category */}
-        <Card>
-          <h3 className="font-semibold text-fg">By category</h3>
-          {summary.by_category.length === 0 ? (
-            <p className="py-6 text-center text-sm text-fg-faint">No spend yet.</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-line">
-              {summary.by_category.map((c) => (
-                <li key={c.category_id} className="flex items-center justify-between py-2 text-sm">
-                  <span className="text-fg-soft">{c.category_name}</span>
-                  <span className="font-medium text-fg">{format(c.total)}</span>
-                </li>
-              ))}
-            </ul>
+        {/* RIGHT — add expense + manage (superadmin), sticky on desktop */}
+        <div className="space-y-4 self-start lg:sticky lg:top-4">
+          {canWrite && (
+            <Card>
+              <h3 className="mb-3 font-semibold text-fg">Add expense</h3>
+              <form onSubmit={addExpense} className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-fg-soft">Category</label>
+                  <Select
+                    value={categoryId}
+                    onChange={setCategoryId}
+                    className="mt-1"
+                    options={categories
+                      .filter((c) => c.is_active)
+                      .map((c) => ({
+                        value: c.id,
+                        label: `${c.name} · ${c.kind === "FIXED" ? "Fixed" : "Variable"}`,
+                      }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Date</label>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Payment</label>
+                  <Select value={method} onChange={setMethod} className="mt-1" options={METHODS} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Amount (incl VAT)</label>
+                  <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" required placeholder="0.00" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">of which VAT</label>
+                  <input value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-fg-soft">Description</label>
+                  <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
+                </div>
+                <div className="col-span-2 flex flex-wrap items-center gap-2">
+                  <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                    Add expense
+                  </button>
+                  <button type="button" onClick={startPettyCash} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2" title="Cash to staff, or something bought outside">
+                    ＋ Petty cash
+                  </button>
+                </div>
+                {error && <p className="col-span-2 text-sm text-rose-400">{error}</p>}
+              </form>
+            </Card>
           )}
-        </Card>
+
+          {isSuper && (
+            <ListManager
+              title="Manage expense categories"
+              noun="category"
+              usageNoun="expense"
+              items={categories.map((c) => ({
+                id: c.id,
+                name: c.name,
+                is_active: c.is_active,
+                usage_count: c.usage_count ?? 0,
+                badge: c.kind === "FIXED" ? "Fixed" : "Variable",
+              }))}
+              addFields={[
+                {
+                  key: "kind",
+                  label: "Type",
+                  type: "select",
+                  default: "VARIABLE",
+                  options: [
+                    { value: "VARIABLE", label: "Variable cost" },
+                    { value: "FIXED", label: "Fixed cost" },
+                  ],
+                },
+              ]}
+              onAdd={async (name, extra) => {
+                await api.post("/expenses/categories", { name, kind: extra.kind });
+              }}
+              onRename={async (id, name) => {
+                await api.patch(`/expenses/categories/${id}`, { name });
+              }}
+              onSetActive={async (id, active) => {
+                await api.patch(`/expenses/categories/${id}`, { is_active: active });
+              }}
+              reload={reloadCategories}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
