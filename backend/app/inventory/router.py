@@ -23,6 +23,7 @@ from app.inventory.schemas import (
     ItemUpdate,
     LowStockAlert,
     PurchaseByVendorRow,
+    ReceiptLine,
     StockMovementCreate,
     StockMovementOut,
     WasteCreate,
@@ -174,6 +175,18 @@ async def purchases_by_vendor(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     rows = await service.purchases_by_vendor(db, item)
     return [PurchaseByVendorRow(**r) for r in rows]
+
+
+@router.get("/receipts/{reference_id}", response_model=list[ReceiptLine])
+async def receipt_lines(
+    reference_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> list[ReceiptLine]:
+    """The CHAIN: every item received on the same delivery/PO as a purchase — open a
+    purchase up into the full receipt it came on. Hotel-scoped."""
+    rows = await service.receipt_lines(db, user.hotel_id, reference_id)
+    return [ReceiptLine(**r) for r in rows]
 
 
 @router.get("/items/{item_id}/movements", response_model=list[StockMovementOut])

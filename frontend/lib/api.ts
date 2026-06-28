@@ -195,6 +195,18 @@ export interface PurchaseByVendorRow {
   quantity: string;
   unit_cost: string | null;
   received_at: string;
+  reference_id: string | null; // the delivery/PO this came on (the "chain")
+  reference_type: string | null;
+}
+
+export interface ReceiptLine {
+  item_name: string;
+  unit: string;
+  quantity: string;
+  unit_cost: string | null;
+  line_total: string | null;
+  vendor: string | null;
+  received_at: string;
 }
 
 export interface Vendor {

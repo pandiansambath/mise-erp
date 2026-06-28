@@ -96,6 +96,20 @@ class PurchaseByVendorRow(BaseModel):
     quantity: Decimal
     unit_cost: Decimal | None = None
     received_at: datetime
+    reference_id: uuid.UUID | None = None  # the delivery/PO this came on (the "chain")
+    reference_type: str | None = None
+
+
+class ReceiptLine(BaseModel):
+    """One item on a delivery/PO receipt — the 'chain' opened from a purchase."""
+
+    item_name: str
+    unit: str
+    quantity: Decimal
+    unit_cost: Decimal | None = None
+    line_total: Decimal | None = None
+    vendor: str | None = None
+    received_at: datetime
 
 
 class LowStockAlert(BaseModel):

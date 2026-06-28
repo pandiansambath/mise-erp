@@ -258,6 +258,8 @@ async def purchases_by_vendor(db: AsyncSession, item: Item) -> list[dict]:
                 StockMovement.unit_cost,
                 StockMovement.quantity,
                 StockMovement.created_at,
+                StockMovement.reference_id,
+                StockMovement.reference_type,
             )
             .where(
                 StockMovement.item_id == item.id,
@@ -283,9 +285,55 @@ async def purchases_by_vendor(db: AsyncSession, item: Item) -> list[dict]:
             "quantity": (qty or Decimal("0")).quantize(Decimal("0.001")),
             "unit_cost": unit_cost,
             "received_at": created_at,
+            # The "chain": other items received on the same delivery share this reference.
+            "reference_id": ref_id,
+            "reference_type": ref_type,
         }
-        for vendor_id, unit_cost, qty, created_at in rows
+        for vendor_id, unit_cost, qty, created_at, ref_id, ref_type in rows
     ]
+
+
+async def receipt_lines(
+    db: AsyncSession, hotel_id: uuid.UUID, reference_id: uuid.UUID
+) -> list[dict]:
+    """The CHAIN: every item brought IN on the same delivery/PO (shared reference_id),
+    so a purchase can be opened up into the full receipt it came on. Hotel-scoped."""
+    from app.vendors.models import Vendor
+
+    rows = (
+        await db.execute(
+            select(
+                Item.name,
+                Item.unit,
+                StockMovement.quantity,
+                StockMovement.unit_cost,
+                Vendor.name,
+                StockMovement.created_at,
+            )
+            .join(Item, Item.id == StockMovement.item_id)
+            .outerjoin(Vendor, Vendor.id == StockMovement.vendor_id)
+            .where(
+                Item.hotel_id == hotel_id,
+                StockMovement.reference_id == reference_id,
+                StockMovement.movement_type == MovementType.PURCHASE_IN.value,
+            )
+            .order_by(Item.name)
+        )
+    ).all()
+    out: list[dict] = []
+    for name, unit, qty, unit_cost, vendor, created_at in rows:
+        q = qty or Decimal("0")
+        total = (q * unit_cost).quantize(Decimal("0.01")) if unit_cost is not None else None
+        out.append({
+            "item_name": name,
+            "unit": unit,
+            "quantity": q.quantize(Decimal("0.001")),
+            "unit_cost": unit_cost,
+            "line_total": total,
+            "vendor": vendor,
+            "received_at": created_at,
+        })
+    return out
 
 
 # ── Waste ────────────────────────────────────────────────────────────────────

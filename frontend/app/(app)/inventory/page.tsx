@@ -10,6 +10,7 @@ import {
   postForm,
   type Item,
   type PurchaseByVendorRow,
+  type ReceiptLine,
   type Vendor,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
@@ -71,6 +72,29 @@ export default function InventoryPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [breakdown, setBreakdown] = useState<Record<string, PurchaseByVendorRow[]>>({});
   const [bdLoading, setBdLoading] = useState<string | null>(null);
+  // The "chain": open a purchase into the full delivery it came on (shared reference).
+  const [receipts, setReceipts] = useState<Record<string, ReceiptLine[]>>({});
+  const [openReceipt, setOpenReceipt] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+
+  async function toggleReceipt(refId: string) {
+    if (openReceipt === refId) {
+      setOpenReceipt(null);
+      return;
+    }
+    setOpenReceipt(refId);
+    if (!receipts[refId]) {
+      setReceiptLoading(true);
+      try {
+        const lines = await api.get<ReceiptLine[]>(`/inventory/receipts/${refId}`);
+        setReceipts((r) => ({ ...r, [refId]: lines }));
+      } catch {
+        setReceipts((r) => ({ ...r, [refId]: [] }));
+      } finally {
+        setReceiptLoading(false);
+      }
+    }
+  }
   // Edit affordance: scroll to + briefly highlight the form when editing starts.
   const formRef = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState(false);
@@ -261,6 +285,7 @@ export default function InventoryPage() {
   }
 
   async function toggleBreakdown(item: Item) {
+    setOpenReceipt(null);
     if (expanded === item.id) {
       setExpanded(null);
       return;
@@ -894,10 +919,51 @@ export default function InventoryPage() {
                                             {r.unit_cost != null && (
                                               <p className="font-mono text-xs text-brand-300">{format(r.unit_cost)}/{item.unit}</p>
                                             )}
+                                            {r.reference_id && (
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); toggleReceipt(r.reference_id!); }}
+                                                className="mt-1 text-[11px] font-medium text-brand-300 hover:underline"
+                                                title="See everything received on this delivery"
+                                              >
+                                                {openReceipt === r.reference_id ? "▾ hide delivery" : "🔗 full delivery"}
+                                              </button>
+                                            )}
                                           </div>
                                         </div>
                                       ))}
                                     </div>
+                                    {openReceipt && (
+                                      <div className="mise-panel-in mt-3 rounded-xl border border-brand-400/30 bg-paper-3 p-3">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                                          📦 The chain — everything received together on this delivery
+                                        </p>
+                                        {receiptLoading && !receipts[openReceipt] ? (
+                                          <p className="mt-2 text-xs text-fg-faint">Loading…</p>
+                                        ) : receipts[openReceipt] && receipts[openReceipt].length > 0 ? (
+                                          <div className="mt-2 divide-y divide-line/50">
+                                            {receipts[openReceipt].map((l, i) => (
+                                              <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                                                <span className="min-w-0 truncate text-fg-soft">
+                                                  {l.item_name}
+                                                  {l.item_name.toLowerCase() === item.name.toLowerCase() && (
+                                                    <span className="ml-1 text-brand-300">(this item)</span>
+                                                  )}
+                                                  {l.vendor && <span className="ml-1 text-fg-faint">· {l.vendor}</span>}
+                                                </span>
+                                                <span className="shrink-0 pl-2 text-right">
+                                                  <b className="text-fg">{fmtQty(l.quantity, l.unit)}</b>
+                                                  {l.unit_cost != null && (
+                                                    <span className="ml-2 font-mono text-xs text-brand-300">{format(l.unit_cost)}/{l.unit}</span>
+                                                  )}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="mt-2 text-xs text-fg-faint">Just this item was on that delivery.</p>
+                                        )}
+                                      </div>
+                                    )}
                                     <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-xs text-fg-faint">
                                       <span>On hand <b className="font-semibold text-fg-soft">{fmtQty(item.current_stock, item.unit)}</b></span>
                                       <span>Avg cost <b className="font-semibold text-fg-soft">{format(item.average_cost)}/{item.unit}</b></span>

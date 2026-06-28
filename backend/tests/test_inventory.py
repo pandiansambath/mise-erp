@@ -276,3 +276,28 @@ async def test_purchases_by_vendor_record(db, hotel):
         ("Farm2Land", Decimal("2.000")),
         ("Rudra Foods", Decimal("3.000")),
     ]
+
+
+@pytest.mark.asyncio
+async def test_purchase_chain_receipt(db, make_user):
+    """A purchase carries its delivery reference, and the receipt returns every item
+    received together on that reference (the 'chain')."""
+    import uuid
+
+    user = await make_user("chain@x.com", Role.SUPER_ADMIN.value)
+    h = user.hotel_id
+    rice = await service.create_item(db, h, name="Rice", unit="kg")
+    oil = await service.create_item(db, h, name="Oil", unit="l")
+    ref = uuid.uuid4()
+    for it, qty, price in ((rice, "10", "2"), (oil, "5", "3")):
+        await service.record_movement(
+            db, it, "PURCHASE_IN", Decimal(qty), unit_cost=Decimal(price),
+            reference_id=ref, reference_type="PURCHASE_ORDER",
+        )
+    # each purchase row carries its delivery reference
+    pv = await service.purchases_by_vendor(db, rice)
+    assert pv and pv[0]["reference_id"] == ref
+    # the chain = both items received on that delivery
+    lines = await service.receipt_lines(db, h, ref)
+    assert {row["item_name"] for row in lines} == {"Rice", "Oil"}
+    assert next(row for row in lines if row["item_name"] == "Rice")["line_total"] == Decimal("20.00")
