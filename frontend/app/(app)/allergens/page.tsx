@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type AllergenRow } from "@/lib/api";
+import { api, downloadFile, type AllergenRow } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ALLERGEN_LABEL } from "@/lib/allergens";
 
@@ -30,10 +30,10 @@ export default function AllergensPage() {
           subtitle="Per-dish allergens (UK Natasha's Law), built from each recipe's ingredients."
         />
         <button
-          onClick={() => window.print()}
+          onClick={() => downloadFile("/recipes/allergen-matrix.pdf", "allergen-matrix.pdf")}
           className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
         >
-          🖨 Print
+          ⬇ Download (PDF)
         </button>
       </div>
 

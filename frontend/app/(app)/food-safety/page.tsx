@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type SafetyLog } from "@/lib/api";
+import { api, ApiError, downloadFile, type SafetyLog } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
@@ -124,10 +124,15 @@ export default function FoodSafetyPage() {
           subtitle="Temperature readings + daily cleaning/opening/closing checks — your EHO audit trail."
         />
         <button
-          onClick={() => window.print()}
+          onClick={() =>
+            downloadFile(
+              `/safety/logs.pdf?date_from=${from}&date_to=${to}`,
+              `food-safety-log-${from}_${to}.pdf`
+            )
+          }
           className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
         >
-          🖨 Print
+          ⬇ Download (PDF)
         </button>
       </div>
 

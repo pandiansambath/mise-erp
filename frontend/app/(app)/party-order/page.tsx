@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api, type Recipe } from "@/lib/api";
+import { api, downloadFilePost, type Recipe } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
-import { useCurrency } from "@/lib/currency";
+import { CURRENCIES, useCurrency } from "@/lib/currency";
 
 type Line = { recipe_id: string; qty: number };
 
 export default function PartyOrderPage() {
-  const { format } = useCurrency();
+  const { format, currency } = useCurrency();
+  const [downloading, setDownloading] = useState(false);
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
   const [pick, setPick] = useState("");
@@ -57,6 +58,29 @@ export default function PartyOrderPage() {
   const totalProfit = totalPrice - totalCost;
   const margin = totalPrice > 0 ? (totalProfit / totalPrice) * 100 : 0;
   const anyUnpriced = rows.some((x) => !x.hasPrice);
+
+  async function downloadQuote() {
+    const c = CURRENCIES[currency];
+    // £/$ are latin-1 safe for the PDF; other symbols fall back to the 3-letter code.
+    const sym = /^[\x00-\xff]+$/.test(c.symbol) ? c.symbol : `${currency} `;
+    setDownloading(true);
+    try {
+      await downloadFilePost("/recipes/party-quote.pdf", "party-order-quote.pdf", {
+        customer,
+        when,
+        currency: sym,
+        lines: rows.map((x) => ({
+          name: x.r?.name ?? "Dish",
+          qty: x.l.qty,
+          unit_price:
+            x.hasPrice && x.r?.selling_price != null ? Number(x.r.selling_price) * c.rate : null,
+          unit_cost: Number(x.r?.calculated_cost ?? 0) * c.rate,
+        })),
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   if (!recipes) return <Spinner />;
 
@@ -233,10 +257,11 @@ export default function PartyOrderPage() {
               )}
               <div className="mt-4">
                 <button
-                  onClick={() => window.print()}
-                  className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                  onClick={downloadQuote}
+                  disabled={downloading}
+                  className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2 disabled:opacity-60"
                 >
-                  🖨 Print quote
+                  {downloading ? "Preparing…" : "⬇ Download quote (PDF)"}
                 </button>
               </div>
             </Card>

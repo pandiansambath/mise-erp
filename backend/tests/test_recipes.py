@@ -248,3 +248,31 @@ async def test_allergen_matrix(client, make_user, auth_header):
     row = next(r for r in matrix if r["recipe_id"] == rid)
     assert sorted(row["allergens"]) == ["gluten", "milk"]
     assert "Rice" in row["unreviewed"]
+
+
+@pytest.mark.asyncio
+async def test_recipe_pdf_exports(client, make_user, auth_header):
+    """Allergen sheet + party-order quote both render real PDF bytes."""
+    admin = await make_user("recipe-pdf@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    await client.post("/api/recipes", headers=h, json={"name": "Biryani", "servings_default": 1})
+
+    ap = await client.get("/api/recipes/allergen-matrix.pdf", headers=h)
+    assert ap.status_code == 200
+    assert ap.headers["content-type"] == "application/pdf"
+    assert ap.content[:4] == b"%PDF"
+
+    pq = await client.post(
+        "/api/recipes/party-quote.pdf",
+        headers=h,
+        json={
+            "customer": "Sharma wedding", "when": "2026-07-01", "currency": "GBP ",
+            "lines": [
+                {"name": "Biryani", "qty": 20, "unit_price": 12.0, "unit_cost": 5.0},
+                {"name": "Naan", "qty": 10, "unit_price": None, "unit_cost": 0.5},
+            ],
+        },
+    )
+    assert pq.status_code == 200
+    assert pq.headers["content-type"] == "application/pdf"
+    assert pq.content[:4] == b"%PDF"

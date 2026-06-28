@@ -68,7 +68,11 @@ async def export_rota_xlsx(
     user: User = Depends(require("employees:read")),
 ) -> Response:
     shifts = await service.list_shifts(db, user.hotel_id, date_from, date_to)
-    return _xlsx(export.rota_to_xlsx(shifts, date_from, date_to), "mise-rota.xlsx")
+    emps = await service._employees(db, user.hotel_id)
+    emp_info = {eid: (e.employee_code, e.job_title) for eid, e in emps.items()}
+    return _xlsx(
+        export.rota_to_xlsx(shifts, date_from, date_to, emp_info), "mise-rota.xlsx"
+    )
 
 
 @router.get("/export.pdf")
@@ -80,7 +84,11 @@ async def export_rota_pdf(
 ) -> Response:
     hotel = await db.get(Hotel, user.hotel_id)
     shifts = await service.list_shifts(db, user.hotel_id, date_from, date_to)
-    pdf = export.rota_to_pdf(shifts, hotel.name if hotel else "Rota", date_from, date_to)
+    emps = await service._employees(db, user.hotel_id)
+    emp_info = {eid: (e.employee_code, e.job_title) for eid, e in emps.items()}
+    pdf = export.rota_to_pdf(
+        shifts, hotel.name if hotel else "Rota", date_from, date_to, emp_info
+    )
     return Response(
         content=pdf,
         media_type="application/pdf",

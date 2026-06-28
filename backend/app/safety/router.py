@@ -1,13 +1,15 @@
 """Food-safety endpoints: temperature readings + daily checks. Hotel-scoped."""
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
 from app.core import notify
 from app.core.database import get_db
+from app.hotels.models import Hotel
+from app.safety import pdf as safety_pdf
 from app.safety import service
 from app.safety.schemas import SafetyLogCreate, SafetyLogOut
 
@@ -70,3 +72,22 @@ async def list_logs(
 ) -> list[SafetyLogOut]:
     logs = await service.list_logs(db, user.hotel_id, date_from, date_to)
     return [SafetyLogOut.model_validate(x) for x in logs]
+
+
+@router.get("/logs.pdf")
+async def export_logs_pdf(
+    date_from: date_type | None = Query(default=None),
+    date_to: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> Response:
+    """The food-safety log as a clean, branded PDF (server-side, not a screen-print)."""
+    hotel = await db.get(Hotel, user.hotel_id)
+    logs = await service.list_logs(db, user.hotel_id, date_from, date_to)
+    data = safety_pdf.safety_log_pdf(
+        hotel.name if hotel else "Mise", date_from or "", date_to or "", logs
+    )
+    return Response(
+        content=data, media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="food-safety-log.pdf"'},
+    )

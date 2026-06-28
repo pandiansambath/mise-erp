@@ -1,13 +1,16 @@
 """Recipe endpoints: CRUD, ingredients, and cost/margin calculation. Hotel-scoped."""
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
+from app.hotels.models import Hotel
 from app.inventory.service import get_item
+from app.recipes import pdf as recipe_pdf
 from app.recipes import service
 from app.recipes.schemas import (
     AllergenRow,
@@ -58,6 +61,53 @@ async def allergen_matrix(
     """Per-dish allergen matrix (Natasha's Law) — allergens derived from ingredients."""
     rows = await service.allergen_matrix(db, user.hotel_id)
     return [AllergenRow.model_validate(r) for r in rows]
+
+
+@router.get("/allergen-matrix.pdf")
+async def export_allergen_pdf(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:read")),
+) -> Response:
+    """The allergen matrix as a clean, branded PDF (server-side, not a screen-print)."""
+    hotel = await db.get(Hotel, user.hotel_id)
+    rows = await service.allergen_matrix(db, user.hotel_id)
+    data = recipe_pdf.allergen_pdf(hotel.name if hotel else "Mise", rows)
+    return Response(
+        content=data, media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="allergen-matrix.pdf"'},
+    )
+
+
+class PartyQuoteLine(BaseModel):
+    name: str
+    qty: int = 0
+    unit_price: float | None = None
+    unit_cost: float = 0.0
+
+
+class PartyQuoteRequest(BaseModel):
+    customer: str = ""
+    when: str = ""
+    currency: str = "GBP "
+    lines: list[PartyQuoteLine]
+
+
+@router.post("/party-quote.pdf")
+async def export_party_quote_pdf(
+    payload: PartyQuoteRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:read")),
+) -> Response:
+    """Render the party-order quote as a clean, branded PDF (not a browser screen-print)."""
+    hotel = await db.get(Hotel, user.hotel_id)
+    data = recipe_pdf.party_quote_pdf(
+        hotel.name if hotel else "Mise", payload.customer, payload.when,
+        payload.currency, [ln.model_dump() for ln in payload.lines],
+    )
+    return Response(
+        content=data, media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="party-order-quote.pdf"'},
+    )
 
 
 @router.get("/{recipe_id}", response_model=RecipeOut)
