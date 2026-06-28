@@ -362,6 +362,22 @@ async def propose_waste(db: AsyncSession, user: User, args: dict) -> dict:
     return await _propose("waste", user, args)
 
 
+async def propose_set_supplier(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("set_supplier", user, args)
+
+
+async def propose_vendor_price(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("vendor_price", user, args)
+
+
+async def propose_stock_count(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("stock_count", user, args)
+
+
+async def propose_recipe(db: AsyncSession, user: User, args: dict) -> dict:
+    return await _propose("recipe", user, args)
+
+
 # ── Registry: schema (for the model) + executor (server-side) ─────────────────
 _QUERY = {"type": "string"}
 TOOLS: list[dict] = [
@@ -633,6 +649,80 @@ TOOLS: list[dict] = [
             "required": ["item", "quantity"],
         },
     },
+    {
+        "name": "propose_set_supplier",
+        "description": (
+            "Propose choosing/changing the CHOSEN (preferred) supplier for a stock item — "
+            "recipe costing then uses that supplier's price. Needs the item name + the "
+            "supplier name; the supplier must already have a price for that item. Saves only "
+            "on confirm."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item": {"type": "string", "description": "the stock item's name"},
+                "vendor": {"type": "string", "description": "the supplier's name"},
+            },
+            "required": ["item", "vendor"],
+        },
+    },
+    {
+        "name": "propose_vendor_price",
+        "description": (
+            "Propose setting/updating a SUPPLIER's price for a stock item (£ per unit). Needs "
+            "item, supplier and price. Saves only on confirm."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item": {"type": "string", "description": "the stock item's name"},
+                "vendor": {"type": "string", "description": "the supplier's name"},
+                "price": {
+                    "type": "number",
+                    "description": "price per unit in £, keep the decimal point (£5.99 → 5.99)",
+                },
+            },
+            "required": ["item", "vendor", "price"],
+        },
+    },
+    {
+        "name": "propose_stock_count",
+        "description": (
+            "Propose a STOCK-TAKE: set a stock item's quantity to a freshly counted figure "
+            "(records an adjustment to match). Needs the item + the counted quantity in its "
+            "unit. Saves only on confirm."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item": {"type": "string", "description": "the stock item's name"},
+                "counted": {
+                    "type": "number",
+                    "description": "the counted quantity, in the item's unit",
+                },
+            },
+            "required": ["item", "counted"],
+        },
+    },
+    {
+        "name": "propose_recipe",
+        "description": (
+            "Propose adding ONE dish / recipe. Needs a name; category and selling_price help. "
+            "(Ingredients are added afterwards on the Recipes page.) Saves only on confirm."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "the dish name"},
+                "category": {
+                    "type": "string",
+                    "description": "e.g. Starters, Mains, Breads, Rice, Desserts, Drinks",
+                },
+                "selling_price": {"type": "number", "description": "menu price in £"},
+            },
+            "required": ["name"],
+        },
+    },
 ]
 
 EXECUTORS: dict[str, Executor] = {
@@ -656,6 +746,10 @@ EXECUTORS: dict[str, Executor] = {
     "propose_vendor": propose_vendor,
     "propose_employee": propose_employee,
     "propose_waste": propose_waste,
+    "propose_set_supplier": propose_set_supplier,
+    "propose_vendor_price": propose_vendor_price,
+    "propose_stock_count": propose_stock_count,
+    "propose_recipe": propose_recipe,
 }
 
 # Tools gated by a write permission — filtered out for roles that lack it so the
@@ -667,6 +761,10 @@ TOOL_PERMS: dict[str, str] = {
     "propose_vendor": "vendors:write",
     "propose_employee": "employees:write",
     "propose_waste": "inventory:write",
+    "propose_set_supplier": "vendors:write",
+    "propose_vendor_price": "vendors:write",
+    "propose_stock_count": "inventory:write",
+    "propose_recipe": "recipes:write",
 }
 
 

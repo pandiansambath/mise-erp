@@ -25,7 +25,9 @@ from app.employees.models import Employee
 from app.expenses import service as expense_service
 from app.expenses.models import Expense
 from app.inventory import service as inventory_service
-from app.inventory.models import Item
+from app.inventory.models import Item, MovementType
+from app.recipes import service as recipe_service
+from app.recipes.models import Recipe
 from app.sales import service as sales_service
 from app.sales.models import DailySales, SalesLine
 from app.vendors import service as vendor_service
@@ -92,6 +94,34 @@ SPECS: dict[str, dict] = {
             + (f" — {f['reason']}" if f.get("reason") else "")
         ),
     },
+    "set_supplier": {
+        "perm": "vendors:write",
+        "label": "chosen supplier",
+        "required": ["item", "vendor"],
+        "summary": lambda f: f"Set {f['vendor']} as the chosen supplier for “{f['item']}”",
+    },
+    "vendor_price": {
+        "perm": "vendors:write",
+        "label": "supplier price",
+        "required": ["item", "vendor", "price"],
+        "summary": lambda f: f"Set {f['vendor']}’s price for “{f['item']}” to £{f['price']}",
+    },
+    "stock_count": {
+        "perm": "inventory:write",
+        "label": "stock-take count",
+        "required": ["item", "counted"],
+        "summary": lambda f: f"Set “{f['item']}” stock to {f['counted']} (stock-take adjustment)",
+    },
+    "recipe": {
+        "perm": "recipes:write",
+        "label": "dish",
+        "required": ["name"],
+        "summary": lambda f: (
+            f"Add dish “{f['name']}”"
+            + (f" in {f['category']}" if f.get("category") else "")
+            + (f", sells at £{f['selling_price']}" if f.get("selling_price") else "")
+        ),
+    },
 }
 
 
@@ -123,7 +153,8 @@ def build_proposal(kind: str, fields: dict) -> dict:
         return {"ok": False, "error": f"I can't do '{kind}' yet."}
     clean: dict[str, Any] = {}
     # numeric-ish fields
-    for f in ("amount", "current_stock", "cost_price", "quantity", "monthly_salary", "hourly_rate"):
+    for f in ("amount", "current_stock", "cost_price", "quantity", "monthly_salary",
+              "hourly_rate", "price", "counted", "selling_price"):
         if fields.get(f) is not None:
             d = _dec(fields[f])
             if d is not None:
@@ -131,7 +162,7 @@ def build_proposal(kind: str, fields: dict) -> dict:
     # text fields
     for f in ("name", "unit", "category", "description", "channel", "kind",
               "payment_method", "date", "contact_person", "mobile", "email",
-              "item", "job_title", "reason"):
+              "item", "vendor", "job_title", "reason"):
         v = fields.get(f)
         if isinstance(v, str) and v.strip():
             clean[f] = v.strip()
@@ -186,6 +217,47 @@ async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict
             db, item, Decimal(f["quantity"]), f.get("reason") or "Waste", created_by=user.id
         )
         undo = {}  # reversing a stock movement isn't offered yet — adjust on the Waste page
+    elif kind == "set_supplier":
+        item = await _find_item(db, hotel, f["item"])
+        if item is None:
+            return {"ok": False, "error": f"No stock item matches '{f['item']}'."}
+        vendor = await _find_vendor(db, hotel, f["vendor"])
+        if vendor is None:
+            return {"ok": False, "error": f"No supplier matches '{f['vendor']}'."}
+        ok = await vendor_service.set_preferred_vendor(db, hotel, item.id, vendor.id)
+        if not ok:
+            return {
+                "ok": False,
+                "error": f"{vendor.name} doesn't supply {item.name} yet — "
+                "set their price for it first, then choose them.",
+            }
+        undo = {}  # the previous choice isn't stored to restore
+    elif kind == "vendor_price":
+        item = await _find_item(db, hotel, f["item"])
+        if item is None:
+            return {"ok": False, "error": f"No stock item matches '{f['item']}'."}
+        vendor = await _find_vendor(db, hotel, f["vendor"])
+        if vendor is None:
+            return {"ok": False, "error": f"No supplier matches '{f['vendor']}'."}
+        await vendor_service.upsert_vendor_item(db, vendor.id, item.id, Decimal(f["price"]))
+        undo = {}
+    elif kind == "stock_count":
+        item = await _find_item(db, hotel, f["item"])
+        if item is None:
+            return {"ok": False, "error": f"No stock item matches '{f['item']}'."}
+        delta = Decimal(f["counted"]) - item.current_stock
+        if delta != 0:
+            await inventory_service.record_movement(
+                db, item, MovementType.ADJUSTMENT.value, delta,
+                notes="Stock-take (Copilot)", created_by=user.id,
+            )
+        undo = {}
+    elif kind == "recipe":
+        try:
+            rec = await recipe_service.create_recipe(db, hotel, **_recipe_fields(f))
+        except recipe_service.DuplicateRecipeError as exc:
+            return {"ok": False, "error": str(exc)}
+        undo = {"type": "recipe", "id": str(rec.id)}
     else:  # pragma: no cover
         return {"ok": False, "error": f"Unknown action '{kind}'"}
 
@@ -214,6 +286,33 @@ def _employee_fields(f: dict) -> dict:
         if k in f:
             out[k] = f[k]
     return out
+
+
+def _recipe_fields(f: dict) -> dict:
+    out: dict[str, Any] = {"name": f["name"]}
+    for k in ("category", "selling_price"):
+        if k in f:
+            out[k] = f[k]
+    return out
+
+
+async def _find_item(db: AsyncSession, hotel: uuid.UUID, name: str) -> Item | None:
+    """Resolve a stock item by exact name, else a loose contains-match."""
+    item = await inventory_service.get_item_by_name(db, hotel, name)
+    if item is None:
+        items = await inventory_service.list_items(db, hotel)
+        item = next((i for i in items if name.lower() in (i.name or "").lower()), None)
+    return item
+
+
+async def _find_vendor(db: AsyncSession, hotel: uuid.UUID, name: str) -> Vendor | None:
+    """Resolve a supplier by exact name, else a loose contains-match."""
+    nl = name.lower()
+    vendors = await vendor_service.list_vendors(db, hotel)
+    return next(
+        (v for v in vendors if v.name and (nl == v.name.lower() or nl in v.name.lower())),
+        None,
+    )
 
 
 async def _do_expense(db: AsyncSession, user: User, f: dict) -> dict:
@@ -297,4 +396,10 @@ async def undo(db: AsyncSession, user: User, kind: str, entity_id: str) -> dict:
             emp.is_active = False
             await db.commit()
             return {"ok": True, "summary": "Archived that staff member."}
+    elif kind == "recipe":
+        rec = await db.get(Recipe, eid)
+        if rec and rec.hotel_id == hotel:
+            rec.is_active = False
+            await db.commit()
+            return {"ok": True, "summary": "Archived that dish."}
     return {"ok": False, "error": "Nothing to undo (already removed?)."}

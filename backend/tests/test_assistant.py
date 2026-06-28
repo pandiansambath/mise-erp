@@ -205,6 +205,66 @@ async def test_act_enforces_rbac(db, make_user):
     assert (await actions.execute(db, cashier, "sale", {"amount": 10}))["ok"] is True
 
 
+# ── Hands v2: recipe, stock-take, supplier price + chosen supplier ─────────────
+@pytest.mark.asyncio
+async def test_act_recipe_then_undo(db, make_user):
+    from app.recipes import service as rec
+    user = await make_user("hv2r@x.com", Role.SUPER_ADMIN.value)
+    res = await actions.execute(db, user, "recipe", {"name": "Masala Dosa", "selling_price": 7.5})
+    assert res["ok"] and res["undo"]["type"] == "recipe"
+    recipes = await rec.list_recipes(db, user.hotel_id)
+    assert any(r.name == "Masala Dosa" for r in recipes)
+    u = await actions.undo(db, user, "recipe", res["undo"]["id"])
+    assert u["ok"]
+    active = await rec.list_recipes(db, user.hotel_id, active_only=True)
+    assert not any(r.name == "Masala Dosa" for r in active)
+
+
+@pytest.mark.asyncio
+async def test_act_stock_count_adjusts_to_counted(db, make_user):
+    user = await make_user("hv2s@x.com", Role.SUPER_ADMIN.value)
+    item = await inv.create_item(db, user.hotel_id, name="Rice", unit="kg")
+    await inv.record_movement(db, item, "PURCHASE_IN", Decimal("10"), unit_cost=Decimal("2"))
+    res = await actions.execute(db, user, "stock_count", {"item": "Rice", "counted": 7})
+    assert res["ok"]
+    refreshed = await inv.get_item(db, item.id, user.hotel_id)
+    assert refreshed.current_stock == Decimal("7")
+
+
+@pytest.mark.asyncio
+async def test_act_vendor_price_then_set_supplier(db, make_user):
+    from app.vendors import service as ven
+    user = await make_user("hv2v@x.com", Role.SUPER_ADMIN.value)
+    await inv.create_item(db, user.hotel_id, name="Paneer", unit="kg")
+    vendor = await ven.create_vendor(db, user.hotel_id, name="Fresh Farms")
+
+    # Unknown supplier/item → friendly error, no write
+    assert (await actions.execute(
+        db, user, "vendor_price", {"item": "Paneer", "vendor": "Nope", "price": 5}
+    ))["ok"] is False
+
+    # Set the price, then choose them as the supplier
+    assert (await actions.execute(
+        db, user, "vendor_price", {"item": "Paneer", "vendor": "Fresh Farms", "price": 5.25}
+    ))["ok"] is True
+    res = await actions.execute(
+        db, user, "set_supplier", {"item": "Paneer", "vendor": "Fresh Farms"}
+    )
+    assert res["ok"]
+    vi = await ven.list_vendor_items(db, vendor.id)
+    assert vi and vi[0].is_preferred is True and vi[0].price_per_unit == Decimal("5.25")
+
+
+@pytest.mark.asyncio
+async def test_set_supplier_without_price_is_blocked(db, make_user):
+    from app.vendors import service as ven
+    user = await make_user("hv2b@x.com", Role.SUPER_ADMIN.value)
+    await inv.create_item(db, user.hotel_id, name="Ghee", unit="kg")
+    await ven.create_vendor(db, user.hotel_id, name="Dairy Co")
+    res = await actions.execute(db, user, "set_supplier", {"item": "Ghee", "vendor": "Dairy Co"})
+    assert res["ok"] is False  # they don't supply it yet
+
+
 # ── Accurate counts (no hallucinated numbers) ──────────────────────────────────
 @pytest.mark.asyncio
 async def test_business_overview_returns_real_recipe_count(db, make_user):
