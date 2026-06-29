@@ -20,6 +20,12 @@ function mondayOf(d: Date): Date {
   return x;
 }
 const hhmm = (t: string) => t.slice(0, 5);
+const fmtDM = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
+const addDays = (d: Date, n: number) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+};
 
 type CopyRow = {
   employee_id: string;
@@ -57,9 +63,11 @@ export default function RotaPage() {
   const [brk, setBrk] = useState("0");
   const [busy, setBusy] = useState(false);
 
-  // Copy last week → this week (editable preview, then 2-click apply)
+  // Copy a chosen week → this week (editable preview, then apply)
   const [copyRows, setCopyRows] = useState<CopyRow[] | null>(null);
   const [copyBusy, setCopyBusy] = useState(false);
+  const [copySource, setCopySource] = useState<Date | null>(null); // Monday of the source week
+  const [copyConflict, setCopyConflict] = useState<"skip" | "replace">("skip");
 
   function reload() {
     return Promise.all([
@@ -110,18 +118,15 @@ export default function RotaPage() {
     await reload();
   }
 
-  async function startCopyLastWeek() {
+  // Load any source week's shifts into the editable preview, mapped onto THIS week's
+  // matching weekdays. Source defaults to last week but can be stepped to any week.
+  async function loadCopyFrom(sourceStart: Date) {
     setMsg(null);
-    const prevStart = new Date(weekStart);
-    prevStart.setDate(prevStart.getDate() - 7);
-    const pEnd = new Date(prevStart);
-    pEnd.setDate(pEnd.getDate() + 6);
+    const sEnd = new Date(sourceStart);
+    sEnd.setDate(sEnd.getDate() + 6);
     try {
-      const prev = await api.get<Shift[]>(`/rota/shifts?date_from=${iso(prevStart)}&date_to=${iso(pEnd)}`);
-      if (!prev.length) {
-        setMsg("Nothing to copy — last week has no shifts.");
-        return;
-      }
+      const prev = await api.get<Shift[]>(`/rota/shifts?date_from=${iso(sourceStart)}&date_to=${iso(sEnd)}`);
+      setCopySource(new Date(sourceStart));
       setCopyRows(
         prev.map((s) => {
           const idx = (new Date(s.date + "T00:00:00").getDay() + 6) % 7; // 0=Mon
@@ -136,29 +141,64 @@ export default function RotaPage() {
         }),
       );
     } catch {
-      setMsg("Could not load last week's rota.");
+      setMsg("Could not load that week's rota.");
     }
+  }
+
+  function startCopy() {
+    const prevStart = new Date(weekStart);
+    prevStart.setDate(prevStart.getDate() - 7);
+    loadCopyFrom(prevStart);
+  }
+
+  function stepCopySource(delta: number) {
+    if (!copySource) return;
+    const d = new Date(copySource);
+    d.setDate(d.getDate() + delta * 7);
+    loadCopyFrom(d);
   }
 
   function updateCopyRow(i: number, patch: Partial<CopyRow>) {
     setCopyRows((rows) => rows && rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   }
 
+  // Rows that clash with a shift already on this week (same person + day).
+  const existingKeys = new Set(shifts.map((s) => `${s.employee_id}|${s.date}`));
+  const copyClashes = (copyRows ?? []).filter((r) => existingKeys.has(`${r.employee_id}|${r.date}`)).length;
+
   async function applyCopy() {
     if (!copyRows || !copyRows.length) return;
     setCopyBusy(true);
     setMsg(null);
     try {
+      let created = 0;
+      let skipped = 0;
+      let replaced = 0;
       for (const r of copyRows) {
+        const clash = existingKeys.has(`${r.employee_id}|${r.date}`);
+        if (clash && copyConflict === "skip") {
+          skipped++;
+          continue;
+        }
+        if (clash && copyConflict === "replace") {
+          for (const s of shifts.filter((s) => s.employee_id === r.employee_id && s.date === r.date)) {
+            await api.delete(`/rota/shifts/${s.id}`).catch(() => {});
+          }
+          replaced++;
+        }
         await api.post("/rota/shifts", {
           employee_id: r.employee_id, date: r.date,
           start_time: r.start_time, end_time: r.end_time, break_minutes: r.break_minutes,
         });
+        created++;
       }
-      const n = copyRows.length;
       setCopyRows(null);
+      setCopySource(null);
       await reload();
-      setMsg(`Copied ${n} shift${n === 1 ? "" : "s"} from last week.`);
+      const bits = [`${created} added`];
+      if (skipped) bits.push(`${skipped} skipped (already scheduled)`);
+      if (replaced) bits.push(`${replaced} replaced`);
+      setMsg("Copied: " + bits.join(", ") + ".");
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not copy the rota.");
     } finally {
@@ -245,12 +285,12 @@ export default function RotaPage() {
         {canWrite && (
           <>
             <button
-              onClick={startCopyLastWeek}
+              onClick={startCopy}
               disabled={!!copyRows}
-              title="Copy last week's shifts into this week — review and tweak before applying"
+              title="Copy a previous week's shifts into this week — pick the week, review, then apply"
               className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
             >
-              ⎘ Copy last week
+              ⎘ Copy a week
             </button>
             <button
               onClick={() => downloadFile("/rota/template.xlsx", "mise-rota-template.xlsx")}
@@ -328,41 +368,77 @@ export default function RotaPage() {
 
       {copyRows && (
         <Card className="mise-card-slide mb-6 ring-1 ring-brand-500/30">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="font-semibold text-fg">⎘ Copy last week → this week</p>
+              <p className="font-semibold text-fg">⎘ Copy a week → this week ({from} → {to})</p>
               <p className="text-xs text-fg-faint">
-                Review and tweak the times, remove any you don&apos;t want, then apply.
+                Pick the week to copy from, tweak times, remove any you don&apos;t want, then apply.
               </p>
             </div>
-            <button onClick={() => setCopyRows(null)} className="text-fg-faint hover:text-fg" aria-label="Cancel">✕</button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-fg-faint">Copy from</span>
+              <button onClick={() => stepCopySource(-1)} disabled={copyBusy} className="rounded-md border border-line-2 px-2 py-1 text-xs text-fg-soft hover:bg-paper-2" aria-label="Earlier week">‹</button>
+              <span className="min-w-[6rem] text-center text-xs font-medium text-fg">
+                {copySource ? `${fmtDM(copySource)} – ${fmtDM(addDays(copySource, 6))}` : ""}
+              </span>
+              <button onClick={() => stepCopySource(1)} disabled={copyBusy} className="rounded-md border border-line-2 px-2 py-1 text-xs text-fg-soft hover:bg-paper-2" aria-label="Later week">›</button>
+              <button onClick={() => { setCopyRows(null); setCopySource(null); }} className="ml-1 text-fg-faint hover:text-fg" aria-label="Cancel">✕</button>
+            </div>
           </div>
+
           {copyRows.length === 0 ? (
-            <p className="py-4 text-center text-sm text-fg-faint">Nothing left to copy.</p>
+            <p className="py-4 text-center text-sm text-fg-faint">No shifts in that week — use ‹ › to pick another.</p>
           ) : (
-            <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
-              {copyRows.map((r, i) => {
-                const dayIdx = weekDates.findIndex((d) => iso(d) === r.date);
-                return (
-                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-glass/5 p-2 text-sm">
-                    <span className="min-w-[7rem] flex-1 truncate font-medium text-fg">{r.employee_name}</span>
-                    <span className="w-20 text-xs text-fg-faint">
-                      {dayIdx >= 0 ? `${DAYS[dayIdx]} ${weekDates[dayIdx].getDate()}/${weekDates[dayIdx].getMonth() + 1}` : r.date}
-                    </span>
-                    <input type="time" value={r.start_time} onChange={(e) => updateCopyRow(i, { start_time: e.target.value })} className="rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
-                    <input type="time" value={r.end_time} onChange={(e) => updateCopyRow(i, { end_time: e.target.value })} className="rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
-                    <input type="number" min={0} step={5} value={r.break_minutes} onChange={(e) => updateCopyRow(i, { break_minutes: parseInt(e.target.value, 10) || 0 })} title="Break (min)" className="w-14 rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
-                    <button onClick={() => setCopyRows((rows) => rows && rows.filter((_, k) => k !== i))} className="text-fg-faint hover:text-rose-300" aria-label="Remove">✕</button>
-                  </div>
-                );
-              })}
+            <>
+              <div className="mt-3 flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+                <span className="min-w-[7rem] flex-1">Employee</span>
+                <span className="w-20">Day</span>
+                <span className="w-[4.6rem] text-center">Start</span>
+                <span className="w-[4.6rem] text-center">End</span>
+                <span className="w-14 text-center">Break (min)</span>
+                <span className="w-4" />
+              </div>
+              <div className="mt-1 max-h-80 space-y-2 overflow-y-auto pr-1">
+                {copyRows.map((r, i) => {
+                  const dayIdx = weekDates.findIndex((d) => iso(d) === r.date);
+                  const clash = existingKeys.has(`${r.employee_id}|${r.date}`);
+                  return (
+                    <div key={i} className={`flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm ${clash ? "border-amber-400/40 bg-amber-400/5" : "border-line bg-glass/5"}`}>
+                      <span className="min-w-[7rem] flex-1 truncate font-medium text-fg">
+                        {r.employee_name}
+                        {clash && <span className="ml-1 text-[10px] font-normal text-amber-300">⚠ already on</span>}
+                      </span>
+                      <span className="w-20 text-xs text-fg-faint">
+                        {dayIdx >= 0 ? `${DAYS[dayIdx]} ${weekDates[dayIdx].getDate()}/${weekDates[dayIdx].getMonth() + 1}` : r.date}
+                      </span>
+                      <input type="time" value={r.start_time} onChange={(e) => updateCopyRow(i, { start_time: e.target.value })} className="w-[4.6rem] rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
+                      <input type="time" value={r.end_time} onChange={(e) => updateCopyRow(i, { end_time: e.target.value })} className="w-[4.6rem] rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
+                      <input type="number" min={0} step={5} value={r.break_minutes} onChange={(e) => updateCopyRow(i, { break_minutes: parseInt(e.target.value, 10) || 0 })} className="w-14 rounded-md border border-line-2 bg-transparent px-2 py-1 text-center text-xs text-fg" />
+                      <button onClick={() => setCopyRows((rows) => rows && rows.filter((_, k) => k !== i))} className="text-fg-faint hover:text-rose-300" aria-label="Remove">✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {copyClashes > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+              <b>{copyClashes}</b> already scheduled this week. When applying:
+              <label className="ml-2 inline-flex items-center gap-1">
+                <input type="radio" name="copyConflict" checked={copyConflict === "skip"} onChange={() => setCopyConflict("skip")} /> Skip (keep existing)
+              </label>
+              <label className="ml-3 inline-flex items-center gap-1">
+                <input type="radio" name="copyConflict" checked={copyConflict === "replace"} onChange={() => setCopyConflict("replace")} /> Replace existing
+              </label>
             </div>
           )}
+
           <div className="mt-3 flex items-center gap-2">
             <button onClick={applyCopy} disabled={copyBusy || copyRows.length === 0} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {copyBusy ? "Copying…" : `Apply ${copyRows.length} shift${copyRows.length === 1 ? "" : "s"}`}
             </button>
-            <button onClick={() => setCopyRows(null)} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2">Cancel</button>
+            <button onClick={() => { setCopyRows(null); setCopySource(null); }} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2">Cancel</button>
           </div>
         </Card>
       )}

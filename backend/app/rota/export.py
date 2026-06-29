@@ -56,6 +56,9 @@ def _pivot(shifts: list[dict]) -> dict:
         d = s["date"]
         iso = d.isoformat() if hasattr(d, "isoformat") else str(d)
         txt = f'{s["start_time"].strftime("%H:%M")}-{s["end_time"].strftime("%H:%M")}'
+        brk = s.get("break_minutes") or 0
+        if brk:
+            txt += f" -{brk}m"  # unpaid break (already excluded from the hours total)
         e["cells"][iso] = f'{e["cells"][iso]} / {txt}' if iso in e["cells"] else txt
         e["day_h"][iso] = e["day_h"].get(iso, Decimal("0")) + s["hours"]
         e["total"] += s["hours"]
