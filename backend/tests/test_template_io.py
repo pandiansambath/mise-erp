@@ -116,3 +116,38 @@ async def test_inventory_template_pdf(client, make_user, auth_header):
     r = await client.get("/api/inventory/template.pdf", headers=h)
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
     assert r.content[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
+async def test_inventory_import_supplier_links_or_tags(client, make_user, auth_header):
+    """The Supplier column links an EXISTING vendor price (sets ★ chosen); a missing
+    vendor or an unpriced item is reported in notes — never types a price."""
+    h = auth_header(await make_user("invsup@x.com", Role.SUPER_ADMIN.value))
+
+    # 1) supplier that doesn't exist → item created, tagged in notes
+    bad = b"Name,Unit,Supplier\nRice,kg,Ghost Farms\n"
+    prev = await client.post(
+        "/api/inventory/import-template", headers=h, files={"file": ("i.csv", bad, "text/csv")}
+    )
+    res = await client.post(
+        "/api/inventory/import-template/commit", headers=h, json={"rows": prev.json()["rows"]}
+    )
+    body = res.json()
+    assert "Rice" in body["created"]
+    assert any("not found" in n.lower() for n in body["notes"])
+
+    # 2) vendor that already prices the item → linked as the chosen ★ supplier
+    paneer = (await client.post("/api/inventory/items", headers=h, json={"name": "Paneer", "unit": "kg"})).json()
+    vendor = (await client.post("/api/vendors", headers=h, json={"name": "Fresh Farms"})).json()
+    await client.post(
+        f"/api/vendors/{vendor['id']}/items", headers=h,
+        json={"item_id": paneer["id"], "price_per_unit": "5.00"},
+    )
+    good = b"Name,Unit,Supplier\nPaneer,kg,fresh farms\n"  # case-insensitive match
+    prev = await client.post(
+        "/api/inventory/import-template", headers=h, files={"file": ("i.csv", good, "text/csv")}
+    )
+    res = await client.post(
+        "/api/inventory/import-template/commit", headers=h, json={"rows": prev.json()["rows"]}
+    )
+    assert "Paneer" in res.json()["linked"]

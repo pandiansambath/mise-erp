@@ -105,6 +105,7 @@ export default function InventoryPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importErrors, setImportErrors] = useState<string[] | null>(null);
+  const [importNotes, setImportNotes] = useState<string[] | null>(null);
 
   // Strict template upload: validates the Excel/CSV against the exact column spec and
   // returns the precise problems (so the user fixes the file), or parsed rows to preview.
@@ -141,13 +142,15 @@ export default function InventoryPage() {
     if (!importRows) return;
     setImportBusy(true);
     try {
-      const res = await api.post<{ created: string[]; skipped: string[] }>(
+      const res = await api.post<{ created: string[]; skipped: string[]; linked?: string[]; notes?: string[] }>(
         "/inventory/import-template/commit",
         { rows: importRows }
       );
       setImportRows(null);
-      const skip = res.skipped.length ? `, skipped ${res.skipped.length} (already there)` : "";
-      setImportMsg(`Added ${res.created.length} item${res.created.length === 1 ? "" : "s"}${skip}.`);
+      const skip = res.skipped.length ? `, ${res.skipped.length} already there` : "";
+      const link = res.linked?.length ? `, ${res.linked.length} linked to a supplier` : "";
+      setImportMsg(`Added ${res.created.length} item${res.created.length === 1 ? "" : "s"}${skip}${link}.`);
+      setImportNotes(res.notes?.length ? res.notes : null);
       await load();
     } catch (err) {
       setImportMsg(err instanceof ApiError ? err.message : "Could not add those items.");
@@ -455,6 +458,23 @@ export default function InventoryPage() {
         </div>
       )}
 
+      {importNotes && (
+        <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-sm">
+          <div className="flex items-center justify-between">
+            <p className="font-medium text-amber-200">Supplier links — a few rows need attention:</p>
+            <button onClick={() => setImportNotes(null)} className="text-fg-faint hover:text-fg" aria-label="Dismiss">✕</button>
+          </div>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-fg-soft">
+            {importNotes.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-fg-faint">
+            Set these prices on the <Link href="/vendors" className="text-brand-400 underline">Vendors</Link> page — the items themselves were added.
+          </p>
+        </div>
+      )}
+
       {importRows && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -478,6 +498,7 @@ export default function InventoryPage() {
                     <th>Unit</th>
                     <th>Category</th>
                     <th className="text-right">Opening stock</th>
+                    <th>Supplier</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -489,6 +510,7 @@ export default function InventoryPage() {
                       <td className="text-right text-fg-soft">
                         {r.current_stock != null && r.current_stock !== "" ? String(r.current_stock) : "—"}
                       </td>
+                      <td className="text-fg-soft">{String(r.supplier ?? "—")}</td>
                     </tr>
                   ))}
                 </tbody>
