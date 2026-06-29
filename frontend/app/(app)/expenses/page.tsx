@@ -45,6 +45,7 @@ export default function ExpensesPage() {
   const confirm = useConfirm();
   const canWrite = can(user?.role, "expenses:write");
   const isSuper = user?.role === "SUPER_ADMIN";
+  const [catModal, setCatModal] = useState(false);
 
   const reloadCategories = async () => {
     setCategories(await api.get<ExpenseCategory[]>("/expenses/categories"));
@@ -371,8 +372,27 @@ export default function ExpensesPage() {
           )}
 
           {isSuper && (
+            <button
+              onClick={() => setCatModal(true)}
+              className="flex w-full items-center justify-between rounded-xl border border-line bg-paper-2/60 px-4 py-3 text-sm text-fg-soft transition hover:border-brand-400/50 hover:bg-paper-2"
+            >
+              <span className="flex items-center gap-2"><span aria-hidden>⚙</span> Manage categories</span>
+              <span className="text-fg-faint">{categories.length} →</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {catModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCatModal(false)} aria-hidden />
+          <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-fg">Manage expense categories</h3>
+              <button onClick={() => setCatModal(false)} className="text-fg-faint hover:text-fg" aria-label="Close">✕</button>
+            </div>
             <ListManager
-              title="Manage expense categories"
+              title=""
               noun="category"
               usageNoun="expense"
               items={categories.map((c) => ({
@@ -405,9 +425,9 @@ export default function ExpensesPage() {
               }}
               reload={reloadCategories}
             />
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
