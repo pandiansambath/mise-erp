@@ -310,15 +310,15 @@ export default function RotaPage() {
               ⎘ Copy a week
             </button>
             <button
-              onClick={() => downloadFile("/rota/template.xlsx", "mise-rota-template.xlsx")}
-              title="Download a blank Excel template to fill in offline"
+              onClick={() => downloadFile(`/rota/template.xlsx?date_from=${from}&date_to=${to}`, "mise-rota-template.xlsx")}
+              title="Download this week as a blank grid (same layout as ⬇ Excel) — fill the cells and upload it back"
               className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
             >
-              ⬇ Template (Excel)
+              ⬇ Blank grid (Excel)
             </button>
             <button
-              onClick={() => downloadFile("/rota/template.csv", "mise-rota-template.csv")}
-              title="Download a blank CSV template"
+              onClick={() => downloadFile(`/rota/template.csv?date_from=${from}&date_to=${to}`, "mise-rota-template.csv")}
+              title="Same blank grid as a CSV"
               className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
             >
               CSV
@@ -326,10 +326,10 @@ export default function RotaPage() {
             <button
               onClick={() => importInput.current?.click()}
               disabled={importing}
-              title="Upload a filled template to add the shifts"
+              title="Upload a filled grid (the same layout you download) — it replaces that week's shifts for the staff in the file"
               className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
             >
-              {importing ? "Reading…" : "⬆ Upload rota"}
+              {importing ? "Reading…" : "⬆ Upload grid"}
             </button>
           </>
         )}

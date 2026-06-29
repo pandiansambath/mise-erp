@@ -17,6 +17,41 @@ const statusTone: Record<string, "slate" | "amber" | "green"> = {
   PAID: "green",
 };
 
+// Small "i" that pops a plain-English explainer — same pattern as the Money page,
+// so a first-time owner can understand every number without training.
+function InfoDot({
+  id,
+  text,
+  open,
+  onToggle,
+}: {
+  id: string;
+  text: React.ReactNode;
+  open: boolean;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <span className="relative inline-block align-middle">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle(id);
+        }}
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-line text-[10px] font-bold leading-none text-fg-faint transition-colors hover:border-brand-400 hover:text-brand-300"
+        aria-label="What does this mean?"
+      >
+        i
+      </button>
+      {open && (
+        <span className="absolute left-1/2 top-6 z-40 w-64 -translate-x-1/2 rounded-lg border border-line bg-paper-2 p-3 text-left text-xs font-normal normal-case leading-relaxed text-fg-soft shadow-xl shadow-black/40">
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function PayrollPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
@@ -25,6 +60,9 @@ export default function PayrollPage() {
 
   const [period, setPeriod] = useState(thisMonth());
   const [workingDays, setWorkingDays] = useState("26");
+  const [helpOpen, setHelpOpen] = useState(true);
+  const [openInfo, setOpenInfo] = useState<string | null>(null);
+  const toggleInfo = (id: string) => setOpenInfo((cur) => (cur === id ? null : id));
   const [rows, setRows] = useState<PayrollRow[]>([]);
   const sort = useSort<"employee" | "gross" | "deductions" | "net">("employee");
   const [loading, setLoading] = useState(true);
@@ -98,7 +136,51 @@ export default function PayrollPage() {
 
   return (
     <div>
+      {/* click-away to close any open info popover */}
+      {openInfo && <div className="fixed inset-0 z-30" onClick={() => setOpenInfo(null)} aria-hidden />}
       <PageHeader title="Payroll" subtitle="Run pay for the period, approve, and issue payslips." />
+
+      {/* Plain-English explainer so a first-time owner understands every number. */}
+      <Card className="mb-6 border-brand-500/20 bg-brand-500/5">
+        <button onClick={() => setHelpOpen(!helpOpen)} className="flex w-full items-center justify-between text-left">
+          <h3 className="font-semibold text-fg">How is this pay worked out?</h3>
+          <span className={`text-fg-faint transition-transform duration-200 ${helpOpen ? "rotate-180" : ""}`}>▼</span>
+        </button>
+        {helpOpen && (
+          <div className="mise-fade mt-3 space-y-3 text-sm text-fg-soft">
+            <p>
+              Pay is built from <b className="text-fg">attendance</b> — the days and hours you record on the{" "}
+              <b className="text-fg">Attendance</b> page for the month. The <b className="text-fg">Rota</b> is only the{" "}
+              <i>plan</i> (it forecasts cost); it doesn&apos;t pay anyone. Actual pay always comes from attendance.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-line bg-paper-2/50 p-3">
+                <p className="font-semibold text-fg">Monthly-salary staff</p>
+                <p className="mt-1">Daily rate = monthly salary ÷ <b className="text-fg">working days</b>.</p>
+                <p>Pay = days present × daily rate <span className="text-fg-faint">(half-days at half)</span> + overtime.</p>
+              </div>
+              <div className="rounded-lg border border-line bg-paper-2/50 p-3">
+                <p className="font-semibold text-fg">Hourly staff</p>
+                <p className="mt-1">Pay = hours worked × hourly rate.</p>
+                <p className="text-fg-faint">Hours come from attendance; rate must be ≥ UK minimum wage.</p>
+              </div>
+            </div>
+            <p>
+              <b className="text-fg">Working days</b> is the divisor that turns a monthly salary into a daily rate — set it to
+              how many days a full month is for you (e.g. <b className="text-fg">26</b> if staff work 6 days/week,{" "}
+              <b className="text-fg">30</b> for every day).
+            </p>
+            <p>
+              <b className="text-fg">Net</b> = Gross − deductions, where deductions = salary advances due this month + any
+              other deductions you enter.
+            </p>
+            <p className="text-fg-faint">
+              Each run starts as a <b className="text-fg">Draft</b> → <b className="text-fg">Approve</b> it →{" "}
+              <b className="text-fg">Mark paid</b> once paid. You can download a payslip PDF for anyone.
+            </p>
+          </div>
+        )}
+      </Card>
 
       <Card className="mb-6">
         <div className="flex flex-wrap items-end gap-3">
@@ -108,8 +190,16 @@ export default function PayrollPage() {
           </div>
           {canWrite && (
             <>
-              <div className="w-28">
-                <label className="block text-xs font-medium text-fg-faint">Working days</label>
+              <div className="w-32">
+                <label className="block text-xs font-medium text-fg-faint">
+                  Working days
+                  <InfoDot
+                    id="wd"
+                    open={openInfo === "wd"}
+                    onToggle={toggleInfo}
+                    text="How many days count as a full month for salaried staff. Daily rate = monthly salary ÷ this. e.g. 26 for a 6-day week, 30 for every day. (Hourly staff ignore this — they're paid per hour.)"
+                  />
+                </label>
                 <input value={workingDays} onChange={(e) => setWorkingDays(e.target.value)} inputMode="numeric" className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
               </div>
               <button onClick={runPayroll} disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">

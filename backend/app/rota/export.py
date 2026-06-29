@@ -3,7 +3,9 @@
 Export: the week's shifts as a styled workbook. Template: an empty sheet with the
 right headers + an example + the valid employee names. Import: parse a filled
 template back into shift dicts (best-effort; never raises on bad cells)."""
+import csv
 import io
+import re
 from datetime import date as date_type
 from datetime import datetime, time, timedelta
 from decimal import Decimal
@@ -248,44 +250,66 @@ def rota_to_xlsx(
     return buf.getvalue()
 
 
-def template_xlsx(employee_names: list[str]) -> bytes:
+def _grid_headers(days: list[date_type]) -> list[str]:
+    return ["Employee", "Emp ID", "Role", *(d.strftime("%a %d/%m") for d in days), "Total h"]
+
+
+def _grid_subtitle(date_from: date_type, date_to: date_type) -> str:
+    # NOTE: the import parser reads the ISO date range from the START of this line.
+    return (
+        f"{date_from} → {date_to}   ·   fill each cell like 09:00-17:00 "
+        "(add -30m for a 30-min unpaid break); leave blank for a day off, then upload"
+    )
+
+
+def template_grid_xlsx(
+    emp_rows: list[tuple[str, str, str]], date_from: date_type, date_to: date_type
+) -> bytes:
+    """A blank weekly-rota GRID that looks exactly like the download — employees down
+    the rows, days across the columns. The owner fills the cells and re-uploads it."""
+    days = _days(date_from, date_to)
+    n_day = len(days)
+    total_col = 3 + n_day + 1
+    rows = emp_rows or [("Staff full name", "", "")]
     wb = Workbook()
     ws = wb.active
     ws.title = "Rota"
-    headers = ["Employee", "Date", "Start", "End", "Break (min)", "Notes"]
-    ws.cell(row=4, column=1, value=employee_names[0] if employee_names else "Staff full name")
-    ws.cell(row=4, column=2, value="2026-06-30")
-    ws.cell(row=4, column=3, value="09:00")
-    ws.cell(row=4, column=4, value="17:00")
-    ws.cell(row=4, column=5, value=30)
-    ws.cell(row=4, column=6, value="(optional)")
+    for i, (name, code, title) in enumerate(rows):
+        r = 4 + i
+        ws.cell(row=r, column=1, value=name)
+        ws.cell(row=r, column=2, value=code or "")
+        ws.cell(row=r, column=3, value=title or "")
     style_table(
-        ws, title="Mise — Rota template", headers=headers, n_rows=1,
-        subtitle="Fill a row per shift, then upload. * Employee/Date/Start/End required.",
-        widths=[26, 14, 10, 10, 12, 30], right_cols={5},
+        ws, title="Mise — Weekly Rota", subtitle=_grid_subtitle(date_from, date_to),
+        headers=_grid_headers(days), n_rows=len(rows),
+        widths=[22, 10, 16, *([17] * n_day), 10], right_cols={total_col},
     )
-    if employee_names:
-        ws2 = wb.create_sheet("Employees")
-        note = "Use these exact names in the Employee column:"
-        ws2.cell(row=1, column=1, value=note).font = Font(bold=True)
-        for i, n in enumerate(employee_names, start=2):
-            ws2.cell(row=i, column=1, value=n)
-        ws2.column_dimensions["A"].width = 28
+    for rr in range(3, 4 + len(rows)):
+        for col in range(4, 4 + n_day):
+            ws.cell(row=rr, column=col).alignment = Alignment(
+                horizontal="center", vertical="center"
+            )
+        ws.cell(row=rr, column=2).alignment = Alignment(horizontal="center")
+        ws.cell(row=rr, column=3).alignment = Alignment(horizontal="center")
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 
-def _parse_date(v) -> date_type | None:
-    if isinstance(v, datetime):
-        return v.date()
-    if isinstance(v, date_type):
-        return v
-    s = str(v or "").strip()[:10]
-    try:
-        return date_type.fromisoformat(s)
-    except ValueError:
-        return None
+def template_grid_csv(
+    emp_rows: list[tuple[str, str, str]], date_from: date_type, date_to: date_type
+) -> bytes:
+    """Same grid as a CSV (title + instruction + header, one row per employee)."""
+    days = _days(date_from, date_to)
+    rows = emp_rows or [("Staff full name", "", "")]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Mise — Weekly Rota"])
+    w.writerow([_grid_subtitle(date_from, date_to)])
+    w.writerow(_grid_headers(days))
+    for name, code, title in rows:
+        w.writerow([name, code or "", title or "", *([""] * len(days)), ""])
+    return buf.getvalue().encode("utf-8-sig")
 
 
 def _parse_time(v) -> time | None:
@@ -302,36 +326,107 @@ def _parse_time(v) -> time | None:
     return None
 
 
-def parse_rota_xlsx(file_bytes: bytes, max_rows: int = 500) -> list[dict]:
-    """Filled template → [{employee_name, date, start_time, end_time, notes}]. Rows
-    missing a name/date/start/end are skipped. Best-effort; bad files → []."""
+_DAY_HDR = re.compile(r"^[A-Za-z]{3}\s+(\d{1,2})/(\d{1,2})$")
+_ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+# A shift cell: '09:00-17:00' with an optional ' -30m' unpaid-break suffix.
+_CELL = re.compile(r"^\s*(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})(?:\s*[-–]?\s*(\d+)\s*m)?\s*$")
+_EMPTY_CELL = {"", "—", "-", "–", "off", "day off", "—/—"}
+
+
+def _read_rows(data: bytes, filename: str, content_type: str) -> list[list]:
+    """Best-effort 2-D rows from an xlsx or csv upload (never raises)."""
+    name = (filename or "").lower()
+    is_csv = name.endswith(".csv") or "csv" in (content_type or "").lower()
     try:
-        wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-        ws = wb.active
-        rows = list(ws.iter_rows(values_only=True))
-    except Exception:  # noqa: BLE001 — unreadable file → nothing parsed
+        if is_csv:
+            text = data.decode("utf-8-sig", errors="replace")
+            return [list(r) for r in csv.reader(io.StringIO(text))]
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        return [list(r) for r in wb.active.iter_rows(values_only=True)]
+    except Exception:  # noqa: BLE001 — unreadable → empty
         return []
 
-    start_idx = 0
-    for i, row in enumerate(rows[:5]):
-        if row and any(str(c or "").strip().lower() == "employee" for c in row):
-            start_idx = i + 1
-            break
 
-    out: list[dict] = []
-    for row in rows[start_idx:start_idx + max_rows]:
-        if not row:
+def parse_rota_grid(
+    data: bytes, filename: str, content_type: str
+) -> tuple[dict | None, list[str]]:
+    """Read a filled weekly-rota GRID (the download/template layout) back into shifts.
+
+    Returns (grid, errors) where grid = {"shifts", "employees", "from", "to"}, or
+    (None, []) when the file is NOT a grid (so the caller can fall back to the older
+    one-row-per-shift template). Cells look like '09:00-17:00' or '09:00-17:00 -30m';
+    a day can hold two shifts split by ' / '. Blank or '—' means a day off."""
+    rows = _read_rows(data, filename, content_type)
+    if not rows:
+        return None, []
+    hr = next(
+        (i for i, row in enumerate(rows[:8])
+         if row and any(str(c or "").strip().lower() == "employee" for c in row)),
+        None,
+    )
+    if hr is None:
+        return None, []
+    header = [str(c or "").strip() for c in rows[hr]]
+    lower = [h.lower() for h in header]
+    if "date" in lower and "start" in lower:
+        return None, []  # the older one-row-per-shift template → let caller fall back
+    emp_col = lower.index("employee")
+    # Year/month come from the ISO date range printed in the subtitle line above.
+    head_text = " ".join(str(c or "") for r in rows[: hr + 1] for c in r)
+    iso = _ISO_DATE.search(head_text)
+    base_year = int(iso.group(1)) if iso else date_type.today().year
+    base_month = int(iso.group(2)) if iso else None
+    day_cols: list[tuple[int, date_type]] = []
+    for ci, h in enumerate(header):
+        dm = _DAY_HDR.match(h)
+        if not dm:
             continue
-        name = str(row[0]).strip() if len(row) > 0 and row[0] else ""
+        dd, mm = int(dm.group(1)), int(dm.group(2))
+        yr = base_year + 1 if (base_month == 12 and mm == 1) else base_year
+        try:
+            day_cols.append((ci, date_type(yr, mm, dd)))
+        except ValueError:
+            continue
+    if not day_cols:
+        return None, []
+    shifts: list[dict] = []
+    employees: list[str] = []
+    errors: list[str] = []
+    for row in rows[hr + 1:]:
+        if not row or emp_col >= len(row):
+            continue
+        name = str(row[emp_col] or "").strip()
         if not name:
             continue
-        d = _parse_date(row[1]) if len(row) > 1 else None
-        st = _parse_time(row[2]) if len(row) > 2 else None
-        en = _parse_time(row[3]) if len(row) > 3 else None
-        if not (d and st and en):
-            continue
-        notes = str(row[4]).strip() if len(row) > 4 and row[4] else None
-        out.append({
-            "employee_name": name, "date": d, "start_time": st, "end_time": en, "notes": notes,
-        })
-    return out
+        if name.lower().startswith("daily total"):
+            break
+        employees.append(name)
+        for ci, d in day_cols:
+            if ci >= len(row):
+                continue
+            text = str(row[ci] or "").strip()
+            if text.lower() in _EMPTY_CELL:
+                continue
+            for part in (p.strip() for p in text.split("/") if p.strip()):
+                cm = _CELL.match(part)
+                st = _parse_time(cm.group(1)) if cm else None
+                en = _parse_time(cm.group(2)) if cm else None
+                if not cm or not st or not en:
+                    errors.append(
+                        f"{name} · {d.strftime('%a %d/%m')}: couldn't read “{part}” "
+                        "(use 09:00-17:00, add -30m for a break)"
+                    )
+                    continue
+                shifts.append({
+                    "employee": name, "date": d, "start": st, "end": en,
+                    "break_minutes": int(cm.group(3) or 0),
+                })
+    return (
+        {
+            "shifts": shifts,
+            "employees": employees,
+            "from": min(d for _, d in day_cols),
+            "to": max(d for _, d in day_cols),
+        },
+        errors,
+    )

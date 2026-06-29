@@ -2,6 +2,7 @@
 import uuid
 from datetime import date as date_type
 from datetime import time as time_type
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +41,25 @@ def _xlsx(content: bytes, filename: str) -> Response:
         content=content,
         media_type=XLSX_MIME,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _week(date_from: date_type | None, date_to: date_type | None) -> tuple[date_type, date_type]:
+    """The week to template. Defaults to the current Mon–Sun if not supplied."""
+    if date_from and date_to:
+        return date_from, date_to
+    today = date_type.today()
+    monday = today - timedelta(days=today.weekday())
+    return monday, monday + timedelta(days=6)
+
+
+async def _emp_rows(db: AsyncSession, hotel_id: uuid.UUID) -> list[tuple[str, str, str]]:
+    """(full name, code, job title) for every employee, sorted by name — the rows of
+    the grid template so the owner just fills cells against real staff."""
+    emps = await service._employees(db, hotel_id)
+    return sorted(
+        ((e.full_name, e.employee_code or "", e.job_title or "") for e in emps.values()),
+        key=lambda r: r[0].lower(),
     )
 
 
@@ -116,20 +136,27 @@ async def export_rota_pdf(
 
 @router.get("/template.xlsx")
 async def rota_template_xlsx(
+    date_from: date_type | None = Query(None),
+    date_to: date_type | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("employees:read")),
 ) -> Response:
-    emps = await service._employees(db, user.hotel_id)
-    names = sorted(e.full_name for e in emps.values())
-    return _xlsx(export.template_xlsx(names), "mise-rota-template.xlsx")
+    df, dt = _week(date_from, date_to)
+    rows = await _emp_rows(db, user.hotel_id)
+    return _xlsx(export.template_grid_xlsx(rows, df, dt), "mise-rota-template.xlsx")
 
 
 @router.get("/template.csv")
 async def rota_template_csv(
+    date_from: date_type | None = Query(None),
+    date_to: date_type | None = Query(None),
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(require("employees:read")),
 ) -> Response:
+    df, dt = _week(date_from, date_to)
+    rows = await _emp_rows(db, user.hotel_id)
     return Response(
-        content=template_io.template_csv(ROTA_TEMPLATE),
+        content=export.template_grid_csv(rows, df, dt),
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="mise-rota-template.csv"'},
     )
@@ -141,14 +168,56 @@ async def import_rota_xlsx(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("employees:write")),
 ) -> dict:
-    """Upload a filled rota template (Excel/CSV). Validated STRICTLY — a mismatch
-    returns the exact problems (422). Employees matched by full name; unknown names
-    are reported (not created)."""
+    """Upload a filled weekly-rota GRID (the same layout you download) — staff down
+    the rows, days across the columns, cells like '09:00-17:00 -30m'. Re-uploading a
+    week REPLACES those staff's shifts for that week (so edit-and-reupload is safe).
+    Employees matched by full name; unknown names are reported (not created). The
+    older one-row-per-shift template is still accepted as a fallback."""
     data = await file.read()
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
     if len(data) > 10 * 1024 * 1024:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large")
+
+    grid, grid_errors = export.parse_rota_grid(
+        data, file.filename or "", file.content_type or ""
+    )
+    if grid is not None:
+        if grid_errors:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": grid_errors}
+            )
+        emps = await service._employees(db, user.hotel_id)
+        by_name = {e.full_name.strip().lower(): e for e in emps.values()}
+        present: list[str] = []
+        seen: set[str] = set()
+        for n in grid["employees"]:
+            k = n.strip().lower()
+            if k not in seen:
+                seen.add(k)
+                present.append(n)
+        skipped = sorted(n for n in present if n.strip().lower() not in by_name)
+        # Replace each present-and-matched employee's week before re-adding (idempotent).
+        for n in present:
+            emp = by_name.get(n.strip().lower())
+            if emp is not None:
+                await service.clear_employee_shifts(
+                    db, user.hotel_id, emp.id, grid["from"], grid["to"]
+                )
+        created = 0
+        for sh in grid["shifts"]:
+            emp = by_name.get(sh["employee"].strip().lower())
+            if emp is None:
+                continue
+            await service.create_shift(
+                db, user.hotel_id, employee_id=emp.id,
+                date=sh["date"], start_time=sh["start"], end_time=sh["end"],
+                break_minutes=sh["break_minutes"], notes=None,
+            )
+            created += 1
+        return {"created": created, "skipped": skipped, "rows": len(grid["shifts"])}
+
+    # Fallback: the older one-row-per-shift template.
     parsed, errors = template_io.parse_upload(
         data, file.filename or "", file.content_type or "", ROTA_TEMPLATE
     )
@@ -157,7 +226,7 @@ async def import_rota_xlsx(
     emps = await service._employees(db, user.hotel_id)
     by_name = {e.full_name.strip().lower(): e for e in emps.values()}
     created = 0
-    skipped: list[str] = []
+    skipped = []
     for row in parsed:
         emp = by_name.get(str(row["employee"]).strip().lower())
         if emp is None:

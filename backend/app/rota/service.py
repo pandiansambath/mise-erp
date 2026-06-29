@@ -4,7 +4,7 @@ from datetime import date as date_type
 from datetime import time
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.employees.models import Employee
@@ -55,6 +55,27 @@ async def get_shift(db: AsyncSession, shift_id: uuid.UUID, hotel_id: uuid.UUID) 
 async def delete_shift(db: AsyncSession, sh: Shift) -> None:
     await db.delete(sh)
     await db.commit()
+
+
+async def clear_employee_shifts(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    employee_id: uuid.UUID,
+    date_from: date_type,
+    date_to: date_type,
+) -> int:
+    """Remove one employee's shifts in a date range. Used by the grid upload so a
+    re-uploaded week REPLACES that employee's shifts instead of duplicating them."""
+    res = await db.execute(
+        delete(Shift).where(
+            Shift.hotel_id == hotel_id,
+            Shift.employee_id == employee_id,
+            Shift.date >= date_from,
+            Shift.date <= date_to,
+        )
+    )
+    await db.commit()
+    return res.rowcount or 0
 
 
 async def list_shifts(
