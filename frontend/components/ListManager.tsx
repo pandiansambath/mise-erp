@@ -35,6 +35,7 @@ export function ListManager({
   onSetActive,
   reload,
   renderRowExtra,
+  embedded = false,
 }: {
   title: string;
   noun: string; // e.g. "category"
@@ -46,6 +47,7 @@ export function ListManager({
   onSetActive: (id: string, active: boolean) => Promise<void>;
   reload: () => Promise<void> | void;
   renderRowExtra?: (item: ManagedItem) => ReactNode;
+  embedded?: boolean; // inside a modal → no Card/toggle chrome, always open
 }) {
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
@@ -109,24 +111,9 @@ export function ListManager({
     await reload();
   }
 
-  return (
-    <Card className="mt-6">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between text-left"
-      >
-        <span className="flex items-center gap-2">
-          <h3 className="font-semibold text-fg">{title}</h3>
-          <Badge tone="green">Superadmin</Badge>
-        </span>
-        <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
-          ▼
-        </span>
-      </button>
-
-      {open && (
-        <div className="mise-fade mt-4 space-y-4">
-          {/* Add */}
+  const inner = (
+    <div className="space-y-4">
+      {/* Add */}
           <form
             onSubmit={add}
             className="flex flex-col gap-2 rounded-xl border border-brand-500/30 bg-brand-500/5 p-3 sm:flex-row sm:items-end"
@@ -176,27 +163,33 @@ export function ListManager({
           {flash && <p className="text-sm text-brand-300">{flash}</p>}
           {err && <p className="text-sm text-rose-400">{err}</p>}
 
-          {/* Active list */}
-          <div className="grid gap-2 sm:grid-cols-2">
+          {/* Active list — one clear row per item (full width so the name is never squeezed) */}
+          <div className="space-y-2">
+            {active.length === 0 && (
+              <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-sm text-fg-faint">
+                No active {noun}s yet — add your first one above.
+              </p>
+            )}
             {active.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm transition-colors hover:border-brand-400"
+                className="flex items-center gap-3 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5 text-sm transition-colors hover:border-brand-400/60"
               >
                 <input
                   defaultValue={item.name}
                   onBlur={(e) => rename(item.id, item.name, e.target.value)}
-                  className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 font-medium text-fg outline-none focus:border-line-2"
+                  title="Click to rename"
+                  className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-2 py-1 font-medium text-fg outline-none hover:border-line focus:border-brand-500 focus:bg-paper focus:ring-2 focus:ring-brand-500/25"
                 />
                 {item.badge && <Badge tone="slate">{item.badge}</Badge>}
                 {renderRowExtra?.(item)}
-                <span className="shrink-0 text-xs text-fg-faint">
+                <span className="shrink-0 whitespace-nowrap text-xs text-fg-faint">
                   {item.usage_count} {usageNoun}
                   {item.usage_count === 1 ? "" : "s"}
                 </span>
                 <button
                   onClick={() => archive(item)}
-                  className="shrink-0 rounded-md border border-line px-2 py-1 text-xs text-fg-faint transition-colors hover:bg-paper-2"
+                  className="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-fg-faint transition-colors hover:border-rose-400/50 hover:bg-rose-500/10 hover:text-rose-300"
                   title={`Hide this ${noun} from new entries`}
                 >
                   Archive
@@ -208,10 +201,10 @@ export function ListManager({
           {/* Archived list */}
           {archived.length > 0 && (
             <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-faint">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
                 Archived (hidden from new entries)
               </p>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-2">
                 {archived.map((item) => (
                   <div
                     key={item.id}
@@ -229,8 +222,28 @@ export function ListManager({
               </div>
             </div>
           )}
-        </div>
-      )}
+    </div>
+  );
+
+  // Embedded (inside a modal that already supplies the title + chrome): show the
+  // body directly — no extra Card, no "Superadmin ▼" collapse to click through.
+  if (embedded) return inner;
+
+  return (
+    <Card className="mt-6">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span className="flex items-center gap-2">
+          <h3 className="font-semibold text-fg">{title}</h3>
+          <Badge tone="green">Superadmin</Badge>
+        </span>
+        <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
+          ▼
+        </span>
+      </button>
+      {open && <div className="mise-fade mt-4">{inner}</div>}
     </Card>
   );
 }

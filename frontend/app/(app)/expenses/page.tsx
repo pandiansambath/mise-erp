@@ -387,11 +387,16 @@ export default function ExpensesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCatModal(false)} aria-hidden />
           <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-1 flex items-start justify-between">
               <h3 className="text-lg font-semibold text-fg">Manage expense categories</h3>
-              <button onClick={() => setCatModal(false)} className="text-fg-faint hover:text-fg" aria-label="Close">✕</button>
+              <button onClick={() => setCatModal(false)} className="-mr-1 -mt-1 rounded-lg p-1 text-fg-faint hover:bg-paper hover:text-fg" aria-label="Close">✕</button>
             </div>
+            <p className="mb-4 text-sm text-fg-faint">
+              Add, rename or archive the categories you sort spending into. Archiving only hides a
+              category from new entries — past records keep it.
+            </p>
             <ListManager
+              embedded
               title=""
               noun="category"
               usageNoun="expense"

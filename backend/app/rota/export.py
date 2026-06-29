@@ -204,9 +204,10 @@ def rota_to_xlsx(
         r += 1
 
     style_table(
-        ws, title="Mise — Weekly Rota", subtitle=f"{date_from} → {date_to}",
+        ws, title="Mise — Weekly Rota",
+        subtitle=f"{date_from} → {date_to}   ·   '-30m' after a shift = 30-min unpaid break",
         headers=headers, n_rows=len(ordered),
-        widths=[22, 10, 16, *([12] * n_day), 10], right_cols={total_col},
+        widths=[22, 10, 16, *([17] * n_day), 10], right_cols={total_col},
     )
 
     if not ordered:

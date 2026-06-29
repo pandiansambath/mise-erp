@@ -251,7 +251,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        {/* pb is generous so the floating "Ask Mise" launcher (bottom-right) never
+            covers a page's last action button. */}
+        <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8">{children}</main>
       </div>
 
       {/* Project-aware AI assistant — floats on every page */}
