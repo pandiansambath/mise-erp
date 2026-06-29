@@ -107,6 +107,7 @@ export default function InventoryPage() {
 
   // ── Strict template import (Excel/CSV only — no AI) ─────────────────────────
   const templateInput = useRef<HTMLInputElement>(null);
+  const [templateModal, setTemplateModal] = useState(false);
   const [importRows, setImportRows] = useState<Record<string, unknown>[] | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -225,9 +226,11 @@ export default function InventoryPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    // Adding a NEW item: a supplier + its price are mandatory (no cheapest auto-pick).
-    if (!editingId && (!addVendor || !addPrice || Number(addPrice) <= 0)) {
-      setError("Pick a supplier and enter its price — every item needs a chosen supplier.");
+    // Supplier + price are OPTIONAL, but go together: if you give one, give the other
+    // (a price needs a vendor to belong to). You can add a supplier later on Vendors.
+    const hasPrice = !!addPrice && Number(addPrice) > 0;
+    if (!editingId && (!!addVendor || hasPrice) && !(addVendor && hasPrice)) {
+      setError("Supplier and price go together — pick a supplier and enter its price, or leave both blank.");
       return;
     }
     setSaving(true);
@@ -246,12 +249,15 @@ export default function InventoryPage() {
         await api.patch<Item>(`/inventory/items/${editingId}`, payload);
       } else {
         const item = await api.post<Item>("/inventory/items", payload);
-        // Set the picked supplier's price AND mark it the chosen (★) supplier.
-        await api.post(`/vendors/${addVendor}/items`, {
-          item_id: item.id,
-          price_per_unit: addPrice,
-          is_preferred: true,
-        });
+        // If a supplier + price were given, set that price AND mark it the chosen (★)
+        // supplier. Otherwise the item starts with no supplier — add one later.
+        if (addVendor && addPrice && Number(addPrice) > 0) {
+          await api.post(`/vendors/${addVendor}/items`, {
+            item_id: item.id,
+            price_per_unit: addPrice,
+            is_preferred: true,
+          });
+        }
       }
       cancelEdit();
       await load();
@@ -413,23 +419,31 @@ export default function InventoryPage() {
             onChange={onTemplateFile}
           />
           <button
+            onClick={() => setTemplateModal(true)}
+            title="Download a blank import template (Excel, CSV or PDF)"
+            className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20"
+          >
+            ⬇ Template
+          </button>
+          <button
             onClick={() => templateInput.current?.click()}
             disabled={importBusy}
             title="Upload a filled Excel/CSV template — checked strictly, with exact errors if anything's off"
-            className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+            className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {importBusy ? "Checking…" : "⬆ Import (template)"}
           </button>
+          <span className="mx-1 hidden w-px self-stretch bg-line sm:block" aria-hidden />
           <button
             onClick={() => downloadFile("/inventory/items.xlsx", "mise-stock-valuation.xlsx")}
-            title="Download stock valuation (Excel)"
+            title="Export your current stock valuation (Excel)"
             className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
           >
-            ⬇ Excel
+            ⬇ Export
           </button>
           <button
             onClick={() => downloadFile("/inventory/items.csv", "mise-stock-valuation.csv")}
-            title="Download stock valuation (CSV)"
+            title="Export your current stock valuation (CSV)"
             className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
           >
             CSV
@@ -437,14 +451,12 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <p className="mt-2 text-xs text-fg-faint">
-        Import items the reliable way: download the template —{" "}
-        <button onClick={() => downloadFile("/inventory/template.xlsx", "mise-inventory-template.xlsx")} className="text-brand-400 underline hover:text-brand-300">Excel</button>
-        {" · "}
-        <button onClick={() => downloadFile("/inventory/template.csv", "mise-inventory-template.csv")} className="text-brand-400 underline hover:text-brand-300">CSV</button>
-        {" · "}
-        <button onClick={() => downloadFile("/inventory/template.pdf", "mise-inventory-template.pdf")} className="text-brand-400 underline hover:text-brand-300">PDF</button>
-        {" "}— fill in the <b className="text-fg-soft">Excel or CSV</b>, then use <b className="text-fg-soft">Import (template)</b>. It&apos;s checked strictly and tells you the exact fix if anything&apos;s off. (PDF is a printable reference.)
+      <p className="mt-3 mb-5 max-w-3xl text-xs leading-relaxed text-fg-faint">
+        Bulk add items the reliable way: tap{" "}
+        <button onClick={() => setTemplateModal(true)} className="font-medium text-brand-400 underline hover:text-brand-300">⬇ Template</button>
+        {" "}to download a blank sheet, fill it in, then{" "}
+        <b className="text-fg-soft">⬆ Import (template)</b> — it&apos;s checked strictly and tells you the exact fix
+        if anything&apos;s off. No AI involved.
       </p>
 
       {importErrors && (
@@ -493,7 +505,8 @@ export default function InventoryPage() {
                     <th className="py-1">Name</th>
                     <th>Unit</th>
                     <th>Category</th>
-                    <th className="text-right">Cost</th>
+                    <th>Supplier</th>
+                    <th className="text-right">Price</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -502,8 +515,9 @@ export default function InventoryPage() {
                       <td className="py-1.5 font-medium text-fg">{String(r.name ?? "")}</td>
                       <td className="text-fg-soft">{String(r.unit ?? "")}</td>
                       <td className="text-fg-soft">{String(r.category ?? "")}</td>
+                      <td className="text-fg-soft">{String(r.supplier ?? "—")}</td>
                       <td className="text-right text-fg-soft">
-                        {r.cost_price != null && r.cost_price !== "" ? format(String(r.cost_price)) : "—"}
+                        {r.price != null && r.price !== "" ? format(String(r.price)) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -581,11 +595,11 @@ export default function InventoryPage() {
           {!editingId && (
             <div className="rounded-xl border border-line bg-paper-2/60 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                Supplier &amp; price <span className="text-rose-400">*</span>
+                Supplier &amp; price <span className="font-normal normal-case text-fg-faint">(optional)</span>
               </p>
               <p className="mb-2 mt-0.5 text-xs text-fg-faint">
-                Every item needs one chosen (★) supplier — no cheapest auto-pick. You can add more
-                suppliers later on the Vendors page.
+                Pick the chosen (★) supplier and the price they charge — they go together. Or leave both
+                blank and add a supplier later on the Vendors page.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <Select
@@ -999,6 +1013,43 @@ export default function InventoryPage() {
             </div>
           </Card>
         </>
+      )}
+
+      {templateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setTemplateModal(false)} aria-hidden />
+          <div className="mise-pop-lg relative w-full max-w-sm rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-fg">Download import template</h3>
+                <p className="mt-0.5 text-xs text-fg-faint">
+                  Fill the Excel or CSV, then use <b className="text-fg-soft">⬆ Import (template)</b>. PDF is a printable reference.
+                </p>
+              </div>
+              <button onClick={() => setTemplateModal(false)} className="shrink-0 text-fg-faint hover:text-fg" aria-label="Close">✕</button>
+            </div>
+            <div className="mt-4 grid gap-2">
+              {[
+                { ext: "xlsx", label: "Excel (.xlsx)", desc: "Best for filling on a computer", icon: "📊" },
+                { ext: "csv", label: "CSV (.csv)", desc: "Universal — opens anywhere", icon: "📄" },
+                { ext: "pdf", label: "PDF (reference)", desc: "Printable — can't be uploaded back", icon: "📑" },
+              ].map((o) => (
+                <button
+                  key={o.ext}
+                  onClick={() => { downloadFile(`/inventory/template.${o.ext}`, `mise-inventory-template.${o.ext}`); setTemplateModal(false); }}
+                  className="flex items-center gap-3 rounded-xl border border-line bg-paper-3 px-3.5 py-3 text-left transition hover:border-brand-400/60 hover:bg-paper-2"
+                >
+                  <span className="text-xl" aria-hidden>{o.icon}</span>
+                  <span className="min-w-0">
+                    <span className="block font-medium text-fg">{o.label}</span>
+                    <span className="block text-xs text-fg-faint">{o.desc}</span>
+                  </span>
+                  <span className="ml-auto text-brand-300" aria-hidden>⬇</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

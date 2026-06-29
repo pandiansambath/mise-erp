@@ -30,6 +30,7 @@ from app.inventory.schemas import (
     WasteList,
     WasteRow,
 )
+from app.vendors import service as vendor_service
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -304,24 +305,51 @@ async def waste_xlsx(
 
 
 # ── Strict import template (Excel/CSV) ────────────────────────────────────────
+# Supplier + Price go TOGETHER (both or neither): the only price you type is the
+# chosen supplier's. Given, it sets that ★ supplier and seeds the opening value.
 ITEMS_TEMPLATE = TemplateSpec(
     name="Inventory items",
-    subtitle="One row per item. Keep the headers. Name + Unit are required (*).",
+    subtitle=(
+        "One row per item. Name + Unit required (*). Supplier + Price go together "
+        "(fill both, or leave both blank and add a supplier later on Vendors)."
+    ),
     columns=[
         Column("name", "Name", required=True, aliases=("item", "product", "ingredient")),
         Column("unit", "Unit", required=True, aliases=("uom", "units")),
         Column("category", "Category", aliases=("type", "group")),
         Column("current_stock", "Opening stock", kind="number",
                aliases=("stock", "quantity", "qty", "opening")),
-        Column("cost_price", "Cost price", kind="number",
-               aliases=("price", "cost", "unit cost", "cost per unit")),
+        Column("supplier", "Supplier", aliases=("vendor", "supplier name")),
+        Column("price", "Price", kind="number",
+               aliases=("cost price", "unit price", "cost", "price per unit")),
     ],
     sample_rows=[
-        ["Basmati Rice", "kg", "Dry Goods", 25, 1.20],
-        ["Paneer", "kg", "Dairy", 10, 4.50],
-        ["Chicken", "kg", "Meat", 8, 3.80],
+        ["Basmati Rice", "kg", "Dry Goods", 25, "Fresh Farms", 1.20],
+        ["Paneer", "kg", "Dairy", 10, "Fresh Farms", 4.50],
+        ["Chicken", "kg", "Meat", 8, "", ""],
     ],
 )
+
+
+def _supplier_price_errors(rows: list[dict]) -> list[str]:
+    """Supplier and Price must be filled together (a price needs a vendor)."""
+    out: list[str] = []
+    for i, r in enumerate(rows, start=1):
+        has_supplier = bool(str(r.get("supplier") or "").strip())
+        has_price = r.get("price") not in (None, "")
+        if has_supplier != has_price:
+            need = "a Price" if has_supplier else "a Supplier"
+            out.append(f"Row {i}: needs {need} too — Supplier and Price go together.")
+    return out
+
+
+async def _resolve_vendor(db: AsyncSession, hotel_id: uuid.UUID, name: str):
+    """Find a vendor by normalised (trim + case-fold) name, else create it once —
+    so 'Fresh Farms', 'fresh farms ' and 'FRESH FARMS' all map to one supplier."""
+    nl = name.strip().casefold()
+    vendors = await vendor_service.list_vendors(db, hotel_id)
+    existing = next((v for v in vendors if v.name and v.name.strip().casefold() == nl), None)
+    return existing or await vendor_service.create_vendor(db, hotel_id, name=name.strip())
 
 
 @router.get("/template.xlsx")
@@ -362,6 +390,7 @@ async def import_template(
     rows, errors = template_io.parse_upload(
         data, file.filename or "", file.content_type or "", ITEMS_TEMPLATE
     )
+    errors = errors or _supplier_price_errors(rows)
     if errors:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": errors})
     return {"kind": "items", "rows": rows}
@@ -378,24 +407,34 @@ async def import_template_commit(
     user: User = Depends(require("inventory:write")),
 ) -> dict:
     """Create the validated rows (no AI). Existing items (same name) are skipped, so a
-    re-upload is safe. Returns what was added vs skipped."""
+    re-upload is safe. If Supplier + Price are given, link that ★ chosen supplier at
+    that price and seed the item's opening value from it."""
     created: list[str] = []
     skipped: list[str] = []
     for row in payload.rows:
         name = str(row.get("name") or "").strip()
         if not name:
             continue
+        supplier = str(row.get("supplier") or "").strip()
+        price = row.get("price")
+        has_price = supplier and price not in (None, "")
         fields = {
-            k: row[k] for k in ("name", "unit", "category", "current_stock", "cost_price")
+            k: row[k] for k in ("name", "unit", "category", "current_stock")
             if row.get(k) not in (None, "")
         }
-        if fields.get("cost_price"):
-            fields["average_cost"] = fields["cost_price"]
+        if has_price:
+            fields["average_cost"] = price  # opening stock valued at the supplier price
         try:
-            await service.create_item(db, user.hotel_id, **fields)
-            created.append(name)
+            item = await service.create_item(db, user.hotel_id, **fields)
         except service.DuplicateItemError:
             skipped.append(name)
+            continue
+        if has_price:
+            vendor = await _resolve_vendor(db, user.hotel_id, supplier)
+            await vendor_service.upsert_vendor_item(
+                db, vendor.id, item.id, Decimal(str(price)), is_preferred=True,
+            )
+        created.append(name)
     if created:
         await audit.record(
             db, hotel_id=user.hotel_id, user=user, action="inventory.import",
