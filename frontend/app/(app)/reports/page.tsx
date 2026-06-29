@@ -136,14 +136,31 @@ export default function ReportsPage() {
               {pnl.expense_breakdown.length === 0 ? (
                 <p className="py-6 text-center text-sm text-fg-faint">No expenses in range.</p>
               ) : (
-                <ul className="mt-3 divide-y divide-line">
-                  {pnl.expense_breakdown.map((c) => (
-                    <li key={c.category_id} className="flex items-center justify-between py-2 text-sm">
-                      <span className="text-fg-soft">{c.category_name}</span>
-                      <span className="font-medium text-fg">{format(c.total)}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-3 space-y-4">
+                  {([
+                    { key: "VARIABLE", title: "Cost of sales (variable)", total: pnl.cost_of_sales },
+                    { key: "FIXED", title: "Operating (fixed)", total: pnl.operating_expenses },
+                  ] as const).map((grp) => {
+                    const rows = pnl.expense_breakdown.filter((c) => c.kind === grp.key);
+                    if (rows.length === 0) return null;
+                    return (
+                      <div key={grp.key}>
+                        <div className="flex items-center justify-between border-b border-line pb-1 text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                          <span>{grp.title}</span>
+                          <span>{format(grp.total)}</span>
+                        </div>
+                        <ul className="mt-1 divide-y divide-line/60">
+                          {rows.map((c) => (
+                            <li key={c.category_id} className="flex items-center justify-between py-1.5 text-sm">
+                              <span className="text-fg-soft">{c.category_name}</span>
+                              <span className="text-fg">{format(c.total)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </Card>
           </div>
