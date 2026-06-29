@@ -386,20 +386,30 @@ export default function MoneyPage() {
               <span className="font-medium text-fg">{format(pnl.net_sales)}</span>
             </div>
             <div className="flex items-center justify-between text-fg-soft">
-              <span>− Cost of food / ingredients sold</span>
+              <span>− Cost of food / ingredients sold <span className="text-fg-faint">(variable costs)</span></span>
               <span>−{format(pnl.cost_of_sales)}</span>
             </div>
+            {pnl.expense_breakdown.filter((c) => c.kind === "VARIABLE").length > 0 && (
+              <div className="ml-4 space-y-1 border-l border-line pl-3">
+                {pnl.expense_breakdown.filter((c) => c.kind === "VARIABLE").map((c) => (
+                  <div key={c.category_id} className="flex items-center justify-between text-xs text-fg-faint">
+                    <span>{c.category_name}</span>
+                    <span>−{format(c.total)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-center justify-between border-t border-line pt-2">
               <span className="font-medium text-fg">= Gross profit</span>
               <span className="font-semibold text-fg">{format(pnl.gross_profit)}</span>
             </div>
             <div className="flex items-center justify-between text-fg-soft">
-              <span>− Running costs (rent, utilities, petty cash…)</span>
+              <span>− Running costs <span className="text-fg-faint">(fixed: rent, utilities…)</span></span>
               <span>−{format(pnl.operating_expenses)}</span>
             </div>
-            {pnl.expense_breakdown.length > 0 && (
+            {pnl.expense_breakdown.filter((c) => c.kind === "FIXED").length > 0 && (
               <div className="ml-4 space-y-1 border-l border-line pl-3">
-                {pnl.expense_breakdown.map((c) => (
+                {pnl.expense_breakdown.filter((c) => c.kind === "FIXED").map((c) => (
                   <div key={c.category_id} className="flex items-center justify-between text-xs text-fg-faint">
                     <span>{c.category_name}</span>
                     <span>−{format(c.total)}</span>
