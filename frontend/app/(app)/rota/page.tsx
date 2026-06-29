@@ -21,6 +21,15 @@ function mondayOf(d: Date): Date {
 }
 const hhmm = (t: string) => t.slice(0, 5);
 
+type CopyRow = {
+  employee_id: string;
+  employee_name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+};
+
 export default function RotaPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
@@ -45,7 +54,12 @@ export default function RotaPage() {
   const [day, setDay] = useState(from);
   const [start, setStart] = useState("09:00");
   const [end, setEnd] = useState("17:00");
+  const [brk, setBrk] = useState("0");
   const [busy, setBusy] = useState(false);
+
+  // Copy last week → this week (editable preview, then 2-click apply)
+  const [copyRows, setCopyRows] = useState<CopyRow[] | null>(null);
+  const [copyBusy, setCopyBusy] = useState(false);
 
   function reload() {
     return Promise.all([
@@ -79,7 +93,10 @@ export default function RotaPage() {
     }
     setBusy(true);
     try {
-      await api.post("/rota/shifts", { employee_id: emp, date: day, start_time: start, end_time: end });
+      await api.post("/rota/shifts", {
+        employee_id: emp, date: day, start_time: start, end_time: end,
+        break_minutes: parseInt(brk, 10) || 0,
+      });
       await reload();
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not add shift");
@@ -91,6 +108,62 @@ export default function RotaPage() {
   async function removeShift(id: string) {
     await api.delete(`/rota/shifts/${id}`).catch(() => {});
     await reload();
+  }
+
+  async function startCopyLastWeek() {
+    setMsg(null);
+    const prevStart = new Date(weekStart);
+    prevStart.setDate(prevStart.getDate() - 7);
+    const pEnd = new Date(prevStart);
+    pEnd.setDate(pEnd.getDate() + 6);
+    try {
+      const prev = await api.get<Shift[]>(`/rota/shifts?date_from=${iso(prevStart)}&date_to=${iso(pEnd)}`);
+      if (!prev.length) {
+        setMsg("Nothing to copy — last week has no shifts.");
+        return;
+      }
+      setCopyRows(
+        prev.map((s) => {
+          const idx = (new Date(s.date + "T00:00:00").getDay() + 6) % 7; // 0=Mon
+          return {
+            employee_id: s.employee_id,
+            employee_name: s.employee_name,
+            date: iso(weekDates[idx]),
+            start_time: hhmm(s.start_time),
+            end_time: hhmm(s.end_time),
+            break_minutes: s.break_minutes,
+          };
+        }),
+      );
+    } catch {
+      setMsg("Could not load last week's rota.");
+    }
+  }
+
+  function updateCopyRow(i: number, patch: Partial<CopyRow>) {
+    setCopyRows((rows) => rows && rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
+  }
+
+  async function applyCopy() {
+    if (!copyRows || !copyRows.length) return;
+    setCopyBusy(true);
+    setMsg(null);
+    try {
+      for (const r of copyRows) {
+        await api.post("/rota/shifts", {
+          employee_id: r.employee_id, date: r.date,
+          start_time: r.start_time, end_time: r.end_time, break_minutes: r.break_minutes,
+        });
+      }
+      const n = copyRows.length;
+      setCopyRows(null);
+      await reload();
+      setMsg(`Copied ${n} shift${n === 1 ? "" : "s"} from last week.`);
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not copy the rota.");
+    } finally {
+      setCopyBusy(false);
+    }
   }
 
   // ── Excel export / template / upload ───────────────────────────────────────
@@ -167,6 +240,14 @@ export default function RotaPage() {
         {canWrite && (
           <>
             <button
+              onClick={startCopyLastWeek}
+              disabled={!!copyRows}
+              title="Copy last week's shifts into this week — review and tweak before applying"
+              className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+            >
+              ⎘ Copy last week
+            </button>
+            <button
               onClick={() => downloadFile("/rota/template.xlsx", "mise-rota-template.xlsx")}
               title="Download a blank Excel template to fill in offline"
               className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
@@ -222,10 +303,55 @@ export default function RotaPage() {
               <span className="block text-xs font-medium text-fg-faint">End</span>
               <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-32" />
             </label>
+            <label className="block sm:w-auto">
+              <span className="block text-xs font-medium text-fg-faint">Break (min)</span>
+              <input type="number" min={0} step={5} value={brk} onChange={(e) => setBrk(e.target.value)} title="Unpaid break — deducted from paid hours" className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-24" />
+            </label>
             <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {busy ? "Adding…" : "Add shift"}
             </button>
           </form>
+        </Card>
+      )}
+
+      {copyRows && (
+        <Card className="mise-card-slide mb-6 ring-1 ring-brand-500/30">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-fg">⎘ Copy last week → this week</p>
+              <p className="text-xs text-fg-faint">
+                Review and tweak the times, remove any you don&apos;t want, then apply.
+              </p>
+            </div>
+            <button onClick={() => setCopyRows(null)} className="text-fg-faint hover:text-fg" aria-label="Cancel">✕</button>
+          </div>
+          {copyRows.length === 0 ? (
+            <p className="py-4 text-center text-sm text-fg-faint">Nothing left to copy.</p>
+          ) : (
+            <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+              {copyRows.map((r, i) => {
+                const dayIdx = weekDates.findIndex((d) => iso(d) === r.date);
+                return (
+                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-glass/5 p-2 text-sm">
+                    <span className="min-w-[7rem] flex-1 truncate font-medium text-fg">{r.employee_name}</span>
+                    <span className="w-20 text-xs text-fg-faint">
+                      {dayIdx >= 0 ? `${DAYS[dayIdx]} ${weekDates[dayIdx].getDate()}/${weekDates[dayIdx].getMonth() + 1}` : r.date}
+                    </span>
+                    <input type="time" value={r.start_time} onChange={(e) => updateCopyRow(i, { start_time: e.target.value })} className="rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
+                    <input type="time" value={r.end_time} onChange={(e) => updateCopyRow(i, { end_time: e.target.value })} className="rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
+                    <input type="number" min={0} step={5} value={r.break_minutes} onChange={(e) => updateCopyRow(i, { break_minutes: parseInt(e.target.value, 10) || 0 })} title="Break (min)" className="w-14 rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
+                    <button onClick={() => setCopyRows((rows) => rows && rows.filter((_, k) => k !== i))} className="text-fg-faint hover:text-rose-300" aria-label="Remove">✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-3 flex items-center gap-2">
+            <button onClick={applyCopy} disabled={copyBusy || copyRows.length === 0} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              {copyBusy ? "Copying…" : `Apply ${copyRows.length} shift${copyRows.length === 1 ? "" : "s"}`}
+            </button>
+            <button onClick={() => setCopyRows(null)} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2">Cancel</button>
+          </div>
         </Card>
       )}
 
@@ -253,7 +379,10 @@ export default function RotaPage() {
                           <button onClick={() => removeShift(s.id)} aria-label="Remove shift" className="shrink-0 text-fg-faint hover:text-rose-300">✕</button>
                         )}
                       </div>
-                      <div className="mt-0.5 text-fg-soft">{hhmm(s.start_time)}–{hhmm(s.end_time)}</div>
+                      <div className="mt-0.5 text-fg-soft">
+                        {hhmm(s.start_time)}–{hhmm(s.end_time)}
+                        {s.break_minutes > 0 && <span className="text-fg-faint"> · {s.break_minutes}m brk</span>}
+                      </div>
                       <div className="text-fg-faint">{s.hours}h · {format(s.cost)}</div>
                     </li>
                   ))}

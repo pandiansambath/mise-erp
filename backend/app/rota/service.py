@@ -15,12 +15,15 @@ _Q2 = Decimal("0.01")
 _MONTHLY_HOURS = Decimal("173")  # UK avg (~37.5h/wk) — salaried→hourly estimate
 
 
-def shift_hours(start: time, end: time) -> Decimal:
+def shift_hours(start: time, end: time, break_minutes: int = 0) -> Decimal:
     s = Decimal(start.hour) + Decimal(start.minute) / 60
     e = Decimal(end.hour) + Decimal(end.minute) / 60
     if e <= s:
         e += 24  # overnight shift
-    return (e - s).quantize(_Q2)
+    net = (e - s) - Decimal(break_minutes or 0) / 60  # paid hours exclude the unpaid break
+    if net < 0:
+        net = Decimal("0")
+    return net.quantize(_Q2)
 
 
 def hourly_rate(emp: Employee) -> Decimal:
@@ -66,7 +69,7 @@ async def list_shifts(
     out: list[dict] = []
     for sh in rows.scalars():
         emp = emps.get(sh.employee_id)
-        h = shift_hours(sh.start_time, sh.end_time)
+        h = shift_hours(sh.start_time, sh.end_time, sh.break_minutes)
         rate = hourly_rate(emp) if emp else Decimal("0")
         out.append(
             {
@@ -76,6 +79,7 @@ async def list_shifts(
                 "date": sh.date,
                 "start_time": sh.start_time,
                 "end_time": sh.end_time,
+                "break_minutes": sh.break_minutes,
                 "hours": h,
                 "cost": (h * rate).quantize(_Q2),
                 "notes": sh.notes,

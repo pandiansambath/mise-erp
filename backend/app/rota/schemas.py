@@ -12,6 +12,7 @@ class ShiftCreate(BaseModel):
     date: date_type
     start_time: time
     end_time: time
+    break_minutes: int = 0
     notes: str | None = None
 
 
@@ -24,6 +25,7 @@ class ShiftOut(BaseModel):
     date: date_type
     start_time: time
     end_time: time
+    break_minutes: int = 0
     hours: Decimal
     cost: Decimal
     notes: str | None

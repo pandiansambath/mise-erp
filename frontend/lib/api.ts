@@ -635,6 +635,7 @@ export interface Shift {
   date: string;
   start_time: string;
   end_time: string;
+  break_minutes: number;
   hours: string;
   cost: string;
   notes: string | null;
