@@ -313,10 +313,37 @@ function DishRow({ d }: { d: DishMarginRow }) {
   );
 }
 
+// A tiny "ⓘ" that pops a plain-English explanation — so even a beginner gets it.
+function InfoDot({
+  id, text, open, onToggle,
+}: { id: string; text: string; open: boolean; onToggle: (id: string | null) => void }) {
+  return (
+    <span className="relative inline-block align-middle">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggle(open ? null : id); }}
+        aria-label="What's this?"
+        className="ml-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-line text-[10px] font-semibold leading-none text-fg-faint hover:border-brand-400 hover:text-brand-300"
+      >
+        i
+      </button>
+      {open && (
+        <>
+          <span className="fixed inset-0 z-10" onClick={() => onToggle(null)} aria-hidden />
+          <span className="absolute left-0 top-6 z-20 block w-64 rounded-lg border border-line bg-paper-2 p-3 text-left text-xs font-normal normal-case leading-relaxed text-fg-soft shadow-xl shadow-black/40">
+            {text}
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
 export default function MoneyPage() {
   const { format } = useCurrency();
   const [data, setData] = useState<MoneyCentre | null>(null);
   const [pnl, setPnl] = useState<PnL | null>(null);
+  const [openInfo, setOpenInfo] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -378,19 +405,39 @@ export default function MoneyPage() {
             <span className="text-xs text-fg-faint">month to date</span>
           </div>
           <p className="mt-1 text-xs text-fg-faint">
-            Everything you took in, minus everything you spent (food, running costs and petty cash).
+            Follow it top to bottom: money in, take away what you spent, and the green box is what you keep.
           </p>
-          <div className="mt-4 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-fg-soft">Sales in <span className="text-fg-faint">(after delivery commission)</span></span>
-              <span className="font-medium text-fg">{format(pnl.net_sales)}</span>
+
+          {/* Plain-English one-liner */}
+          <div className="mt-4 rounded-xl bg-paper-2/70 px-4 py-3 text-sm text-fg-soft">
+            You took in <b className="text-fg">{format(pnl.net_sales)}</b>, spent{" "}
+            <b className="text-fg">{format(Number(pnl.cost_of_sales) + Number(pnl.operating_expenses))}</b>{" "}
+            (food + running) — so you keep{" "}
+            <b className={parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}>{format(pnl.net_profit)}</b>.
+          </div>
+
+          <div className="mt-3 space-y-2.5 text-sm">
+            {/* 1 — money in */}
+            <div className="flex items-center justify-between rounded-lg border-l-4 border-brand-500/60 bg-brand-500/5 px-3 py-2.5">
+              <span className="flex items-center text-fg">
+                <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-500/15 text-xs font-semibold text-brand-300">1</span>
+                Money in <span className="ml-1 text-xs text-fg-faint">· sales</span>
+                <InfoDot id="sales" open={openInfo === "sales"} onToggle={setOpenInfo} text="Your takings from Sales & Cash — already after delivery apps (Deliveroo, Uber Eats…) take their commission." />
+              </span>
+              <span className="font-semibold text-fg">+{format(pnl.net_sales)}</span>
             </div>
-            <div className="flex items-center justify-between text-fg-soft">
-              <span>− Cost of food / ingredients sold <span className="text-fg-faint">(variable costs)</span></span>
-              <span>−{format(pnl.cost_of_sales)}</span>
+
+            {/* 2 — cost of food */}
+            <div className="flex items-center justify-between rounded-lg border-l-4 border-rose-400/50 bg-rose-400/5 px-3 py-2.5">
+              <span className="flex items-center text-fg">
+                <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-400/15 text-xs font-semibold text-rose-300">2</span>
+                Cost of the food you sold
+                <InfoDot id="food" open={openInfo === "food"} onToggle={setOpenInfo} text="What the ingredients cost — your 'Variable' expenses (meat, veg, packaging). They go up and down with how much you sell." />
+              </span>
+              <span className="font-medium text-rose-300">−{format(pnl.cost_of_sales)}</span>
             </div>
             {pnl.expense_breakdown.filter((c) => c.kind === "VARIABLE").length > 0 && (
-              <div className="ml-4 space-y-1 border-l border-line pl-3">
+              <div className="ml-9 space-y-1 border-l border-line pl-3">
                 {pnl.expense_breakdown.filter((c) => c.kind === "VARIABLE").map((c) => (
                   <div key={c.category_id} className="flex items-center justify-between text-xs text-fg-faint">
                     <span>{c.category_name}</span>
@@ -399,16 +446,28 @@ export default function MoneyPage() {
                 ))}
               </div>
             )}
-            <div className="flex items-center justify-between border-t border-line pt-2">
-              <span className="font-medium text-fg">= Gross profit</span>
-              <span className="font-semibold text-fg">{format(pnl.gross_profit)}</span>
+
+            {/* = gross */}
+            <div className="flex items-center justify-between rounded-lg bg-paper-2 px-3 py-2.5">
+              <span className="flex flex-wrap items-center font-semibold text-fg">
+                = Gross profit
+                <InfoDot id="gross" open={openInfo === "gross"} onToggle={setOpenInfo} text="What's left after the direct cost of the food — but BEFORE rent and bills. (Money in − food cost.)" />
+                <span className="ml-2 rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] font-medium text-brand-300">{pnl.gross_margin_pct}% margin</span>
+              </span>
+              <span className="font-bold text-fg">{format(pnl.gross_profit)}</span>
             </div>
-            <div className="flex items-center justify-between text-fg-soft">
-              <span>− Running costs <span className="text-fg-faint">(fixed: rent, utilities…)</span></span>
-              <span>−{format(pnl.operating_expenses)}</span>
+
+            {/* 3 — running costs */}
+            <div className="flex items-center justify-between rounded-lg border-l-4 border-rose-400/50 bg-rose-400/5 px-3 py-2.5">
+              <span className="flex items-center text-fg">
+                <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-400/15 text-xs font-semibold text-rose-300">3</span>
+                Running costs
+                <InfoDot id="run" open={openInfo === "run"} onToggle={setOpenInfo} text="Your 'Fixed' bills that stay about the same whatever you sell — rent, gas, internet, subscriptions." />
+              </span>
+              <span className="font-medium text-rose-300">−{format(pnl.operating_expenses)}</span>
             </div>
             {pnl.expense_breakdown.filter((c) => c.kind === "FIXED").length > 0 && (
-              <div className="ml-4 space-y-1 border-l border-line pl-3">
+              <div className="ml-9 space-y-1 border-l border-line pl-3">
                 {pnl.expense_breakdown.filter((c) => c.kind === "FIXED").map((c) => (
                   <div key={c.category_id} className="flex items-center justify-between text-xs text-fg-faint">
                     <span>{c.category_name}</span>
@@ -417,9 +476,15 @@ export default function MoneyPage() {
                 ))}
               </div>
             )}
-            <div className="flex items-center justify-between border-t-2 border-line pt-2">
-              <span className="font-semibold text-fg">= Net profit (what you keep)</span>
-              <span className={`text-lg font-bold ${parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}`}>
+
+            {/* = net (hero) */}
+            <div className="flex items-center justify-between rounded-xl bg-brand-500/10 px-4 py-3.5 ring-1 ring-brand-500/30">
+              <span className="flex items-center">
+                <span className="text-base font-bold text-fg">Net profit</span>
+                <InfoDot id="net" open={openInfo === "net"} onToggle={setOpenInfo} text="What you actually keep after EVERYTHING — food and running costs. This is your real bottom line." />
+                <span className="ml-2 text-xs text-fg-faint">what you keep</span>
+              </span>
+              <span className={`text-2xl font-bold ${parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}`}>
                 {format(pnl.net_profit)}
               </span>
             </div>
@@ -427,6 +492,7 @@ export default function MoneyPage() {
           <p className="mt-3 text-xs text-fg-faint">
             Record takings on <Link href="/sales" className="text-brand-400 underline">Sales</Link> and spends on{" "}
             <Link href="/expenses" className="text-brand-400 underline">Expenses</Link>; this updates automatically.
+            New here? See <Link href="/how-it-works" className="text-brand-400 underline">How it works</Link>.
           </p>
         </Card>
       )}
