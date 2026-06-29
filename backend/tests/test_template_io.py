@@ -78,7 +78,7 @@ async def test_inventory_template_download(client, make_user, auth_header):
 @pytest.mark.asyncio
 async def test_inventory_import_template_valid_and_invalid(client, make_user, auth_header):
     h = auth_header(await make_user("tpl2@x.com", Role.SUPER_ADMIN.value))
-    good = b"Name,Unit,Category,Opening stock,Supplier,Price\nRice,kg,Dry Goods,25,Fresh Farms,1.20\n"
+    good = b"Name,Unit,Category,Opening stock\nRice,kg,Dry Goods,25\n"
     ok = await client.post(
         "/api/inventory/import-template", headers=h,
         files={"file": ("items.csv", good, "text/csv")},
@@ -86,7 +86,7 @@ async def test_inventory_import_template_valid_and_invalid(client, make_user, au
     assert ok.status_code == 200
     assert ok.json()["rows"][0]["name"] == "Rice"
 
-    bad = b"Title,Price\nRice,1.20\n"  # no Name/Unit columns
+    bad = b"Category\nDry Goods\n"  # no Name/Unit columns
     res = await client.post(
         "/api/inventory/import-template", headers=h,
         files={"file": ("items.csv", bad, "text/csv")},
@@ -96,22 +96,9 @@ async def test_inventory_import_template_valid_and_invalid(client, make_user, au
 
 
 @pytest.mark.asyncio
-async def test_inventory_import_price_needs_supplier(client, make_user, auth_header):
-    """Price without a Supplier (or vice-versa) is rejected with an exact error."""
-    h = auth_header(await make_user("tplsp@x.com", Role.SUPER_ADMIN.value))
-    bad = b"Name,Unit,Price\nRice,kg,1.20\n"  # price but no supplier
-    res = await client.post(
-        "/api/inventory/import-template", headers=h,
-        files={"file": ("items.csv", bad, "text/csv")},
-    )
-    assert res.status_code == 422
-    assert any("supplier" in e.lower() for e in res.json()["detail"]["errors"])
-
-
-@pytest.mark.asyncio
 async def test_inventory_import_template_commit_creates_items(client, make_user, auth_header):
     h = auth_header(await make_user("tpl3@x.com", Role.SUPER_ADMIN.value))
-    good = b"Name,Unit,Category,Opening stock,Supplier,Price\nBasmati Rice,kg,Dry Goods,25,Fresh Farms,1.20\n"
+    good = b"Name,Unit,Category,Opening stock\nBasmati Rice,kg,Dry Goods,25\n"
     prev = await client.post(
         "/api/inventory/import-template", headers=h,
         files={"file": ("i.csv", good, "text/csv")},
@@ -121,9 +108,6 @@ async def test_inventory_import_template_commit_creates_items(client, make_user,
     assert res.status_code == 200 and "Basmati Rice" in res.json()["created"]
     items = (await client.get("/api/inventory/items", headers=h)).json()
     assert any("basmati" in i["name"].lower() for i in items)
-    # the supplier was linked as the chosen ★ vendor at that price
-    vendors = (await client.get("/api/vendors", headers=h)).json()
-    assert any(v["name"].lower() == "fresh farms" for v in vendors)
 
 
 @pytest.mark.asyncio

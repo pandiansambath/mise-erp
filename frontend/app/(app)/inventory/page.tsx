@@ -11,11 +11,9 @@ import {
   type Item,
   type PurchaseByVendorRow,
   type ReceiptLine,
-  type Vendor,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
-import { Select } from "@/components/Select";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { useConfirm } from "@/components/confirm";
@@ -62,11 +60,6 @@ export default function InventoryPage() {
   const [catMgr, setCatMgr] = useState(false);
   const [catFrom, setCatFrom] = useState("");
   const [catTo, setCatTo] = useState("");
-  // Add-item supplier preview: pick a vendor → see its price for this item (read-only)
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [addVendor, setAddVendor] = useState("");
-  const [addPrice, setAddPrice] = useState("");
-  // item_id -> { vendor_id -> price } (so the add form can show the chosen vendor's price)
   const [allergensTouched, setAllergensTouched] = useState(false);
   // Per-item "purchases by supplier" record (expand a row to load + show it).
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -179,7 +172,6 @@ export default function InventoryPage() {
 
   useEffect(() => {
     load().finally(() => setLoading(false));
-    api.get<Vendor[]>("/vendors").then(setVendors).catch(() => {});
     // Deep link: /inventory?filter=low (dashboard "Low stock" KPI)
     const want = new URLSearchParams(window.location.search).get("filter");
     if (want === "low" || want === "out" || want === "ok") setStatusFilter(want);
@@ -210,8 +202,6 @@ export default function InventoryPage() {
   function cancelEdit() {
     setEditingId(null);
     setForm(EMPTY);
-    setAddVendor("");
-    setAddPrice("");
     setAllergensTouched(false);
     setError(null);
   }
@@ -226,13 +216,6 @@ export default function InventoryPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    // Supplier + price are OPTIONAL, but go together: if you give one, give the other
-    // (a price needs a vendor to belong to). You can add a supplier later on Vendors.
-    const hasPrice = !!addPrice && Number(addPrice) > 0;
-    if (!editingId && (!!addVendor || hasPrice) && !(addVendor && hasPrice)) {
-      setError("Supplier and price go together — pick a supplier and enter its price, or leave both blank.");
-      return;
-    }
     setSaving(true);
     setError(null);
     const payload: Record<string, unknown> = {
@@ -248,16 +231,8 @@ export default function InventoryPage() {
       if (editingId) {
         await api.patch<Item>(`/inventory/items/${editingId}`, payload);
       } else {
-        const item = await api.post<Item>("/inventory/items", payload);
-        // If a supplier + price were given, set that price AND mark it the chosen (★)
-        // supplier. Otherwise the item starts with no supplier — add one later.
-        if (addVendor && addPrice && Number(addPrice) > 0) {
-          await api.post(`/vendors/${addVendor}/items`, {
-            item_id: item.id,
-            price_per_unit: addPrice,
-            is_preferred: true,
-          });
-        }
+        // Price/supplier live on Vendors (single source of truth) — not set here.
+        await api.post<Item>("/inventory/items", payload);
       }
       cancelEdit();
       await load();
@@ -363,9 +338,6 @@ export default function InventoryPage() {
     return sortDir === "asc" ? cmp : -cmp;
   });
 
-  // Add-item supplier preview: the chosen vendor's price for this item (if it
-  // already prices a same-named item) — read-only, no double-entry.
-  const activeVendors = vendors.filter((v) => v.is_active);
 
   const statusChips: { key: StatusFilter; label: string; dot?: string }[] = [
     { key: "all", label: `🧺 All (${counts.all})` },
@@ -505,8 +477,7 @@ export default function InventoryPage() {
                     <th className="py-1">Name</th>
                     <th>Unit</th>
                     <th>Category</th>
-                    <th>Supplier</th>
-                    <th className="text-right">Price</th>
+                    <th className="text-right">Opening stock</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -515,9 +486,8 @@ export default function InventoryPage() {
                       <td className="py-1.5 font-medium text-fg">{String(r.name ?? "")}</td>
                       <td className="text-fg-soft">{String(r.unit ?? "")}</td>
                       <td className="text-fg-soft">{String(r.category ?? "")}</td>
-                      <td className="text-fg-soft">{String(r.supplier ?? "—")}</td>
                       <td className="text-right text-fg-soft">
-                        {r.price != null && r.price !== "" ? format(String(r.price)) : "—"}
+                        {r.current_stock != null && r.current_stock !== "" ? String(r.current_stock) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -593,43 +563,12 @@ export default function InventoryPage() {
           </div>
 
           {!editingId && (
-            <div className="rounded-xl border border-line bg-paper-2/60 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                Supplier &amp; price <span className="font-normal normal-case text-fg-faint">(optional)</span>
-              </p>
-              <p className="mb-2 mt-0.5 text-xs text-fg-faint">
-                Pick the chosen (★) supplier and the price they charge — they go together. Or leave both
-                blank and add a supplier later on the Vendors page.
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <Select
-                  value={addVendor}
-                  onChange={setAddVendor}
-                  placeholder="Choose a supplier…"
-                  className="w-full sm:w-56"
-                  options={[
-                    { value: "", label: "Choose a supplier…" },
-                    ...activeVendors.map((v) => ({ value: v.id, label: v.name })),
-                  ]}
-                />
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-fg-faint">£</span>
-                  <input
-                    value={addPrice}
-                    onChange={(e) => setAddPrice(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="price"
-                    className="w-28 rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500"
-                  />
-                  <span className="text-sm text-fg-faint">/ {form.unit || "unit"}</span>
-                </div>
-                {activeVendors.length === 0 && (
-                  <span className="text-sm text-amber-300">
-                    No suppliers yet — add one on the{" "}
-                    <Link href="/vendors" className="font-medium text-brand-400 hover:underline">Vendors</Link> page first.
-                  </span>
-                )}
-              </div>
+            <div className="rounded-xl border border-line bg-paper-2/60 p-3 text-xs text-fg-faint">
+              💡 Prices live with the supplier. After adding the item, set who supplies it and
+              at what price on the{" "}
+              <Link href="/vendors" className="font-medium text-brand-400 hover:underline">Vendors</Link>{" "}
+              page (or bulk-load them with the Vendors price-list import) — that keeps one price per supplier,
+              no clashes.
             </div>
           )}
 

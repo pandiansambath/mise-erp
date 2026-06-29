@@ -30,7 +30,6 @@ from app.inventory.schemas import (
     WasteList,
     WasteRow,
 )
-from app.vendors import service as vendor_service
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -304,14 +303,14 @@ async def waste_xlsx(
     return _file(export.waste_to_xlsx(rows, date_from, date_to), XLSX_MIME, "mise-waste-log.xlsx")
 
 
-# ── Strict import template (Excel/CSV) ────────────────────────────────────────
-# Supplier + Price go TOGETHER (both or neither): the only price you type is the
-# chosen supplier's. Given, it sets that ★ supplier and seeds the opening value.
+# ── Strict import template (Excel/CSV) — ITEMS ONLY ───────────────────────────
+# Prices live with the supplier (single source of truth): set them on Vendors, or
+# bulk-load them with the Vendors price-list import. So this template has NO price.
 ITEMS_TEMPLATE = TemplateSpec(
     name="Inventory items",
     subtitle=(
-        "One row per item. Name + Unit required (*). Supplier + Price go together "
-        "(fill both, or leave both blank and add a supplier later on Vendors)."
+        "One row per item. Name + Unit are required (*). Prices are set on Vendors "
+        "(or the Vendors price-list import) — not here."
     ),
     columns=[
         Column("name", "Name", required=True, aliases=("item", "product", "ingredient")),
@@ -319,37 +318,13 @@ ITEMS_TEMPLATE = TemplateSpec(
         Column("category", "Category", aliases=("type", "group")),
         Column("current_stock", "Opening stock", kind="number",
                aliases=("stock", "quantity", "qty", "opening")),
-        Column("supplier", "Supplier", aliases=("vendor", "supplier name")),
-        Column("price", "Price", kind="number",
-               aliases=("cost price", "unit price", "cost", "price per unit")),
     ],
     sample_rows=[
-        ["Basmati Rice", "kg", "Dry Goods", 25, "Fresh Farms", 1.20],
-        ["Paneer", "kg", "Dairy", 10, "Fresh Farms", 4.50],
-        ["Chicken", "kg", "Meat", 8, "", ""],
+        ["Basmati Rice", "kg", "Dry Goods", 25],
+        ["Paneer", "kg", "Dairy", 10],
+        ["Chicken", "kg", "Meat", 8],
     ],
 )
-
-
-def _supplier_price_errors(rows: list[dict]) -> list[str]:
-    """Supplier and Price must be filled together (a price needs a vendor)."""
-    out: list[str] = []
-    for i, r in enumerate(rows, start=1):
-        has_supplier = bool(str(r.get("supplier") or "").strip())
-        has_price = r.get("price") not in (None, "")
-        if has_supplier != has_price:
-            need = "a Price" if has_supplier else "a Supplier"
-            out.append(f"Row {i}: needs {need} too — Supplier and Price go together.")
-    return out
-
-
-async def _resolve_vendor(db: AsyncSession, hotel_id: uuid.UUID, name: str):
-    """Find a vendor by normalised (trim + case-fold) name, else create it once —
-    so 'Fresh Farms', 'fresh farms ' and 'FRESH FARMS' all map to one supplier."""
-    nl = name.strip().casefold()
-    vendors = await vendor_service.list_vendors(db, hotel_id)
-    existing = next((v for v in vendors if v.name and v.name.strip().casefold() == nl), None)
-    return existing or await vendor_service.create_vendor(db, hotel_id, name=name.strip())
 
 
 @router.get("/template.xlsx")
@@ -379,9 +354,9 @@ async def import_template(
     file: UploadFile = File(...),
     user: User = Depends(require("inventory:write")),
 ) -> dict:
-    """Validate a filled Excel/CSV template STRICTLY. On a mismatch, return the exact
-    problems (422) so the user can fix + re-upload. On success, return the parsed rows
-    (writes nothing) — the client previews, then commits via /import-template/commit."""
+    """Validate a filled Excel/CSV template (items only). On a mismatch (missing
+    Name/Unit columns, a non-number where a number's expected) return the exact errors
+    (422) so the user can fix + re-upload. Returns the parsed rows (writes nothing)."""
     data = await file.read()
     if len(data) > settings.max_upload_mb * 1024 * 1024:
         raise HTTPException(
@@ -390,7 +365,6 @@ async def import_template(
     rows, errors = template_io.parse_upload(
         data, file.filename or "", file.content_type or "", ITEMS_TEMPLATE
     )
-    errors = errors or _supplier_price_errors(rows)
     if errors:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": errors})
     return {"kind": "items", "rows": rows}
@@ -406,34 +380,23 @@ async def import_template_commit(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("inventory:write")),
 ) -> dict:
-    """Create the validated rows (no AI). Existing items (same name) are skipped, so a
-    re-upload is safe. If Supplier + Price are given, link that ★ chosen supplier at
-    that price and seed the item's opening value from it."""
+    """Create the validated items (no AI). Existing items (same name) are skipped, so a
+    re-upload is safe. Prices/suppliers are set separately on Vendors."""
     created: list[str] = []
     skipped: list[str] = []
     for row in payload.rows:
         name = str(row.get("name") or "").strip()
         if not name:
             continue
-        supplier = str(row.get("supplier") or "").strip()
-        price = row.get("price")
-        has_price = supplier and price not in (None, "")
         fields = {
             k: row[k] for k in ("name", "unit", "category", "current_stock")
             if row.get(k) not in (None, "")
         }
-        if has_price:
-            fields["average_cost"] = price  # opening stock valued at the supplier price
         try:
-            item = await service.create_item(db, user.hotel_id, **fields)
+            await service.create_item(db, user.hotel_id, **fields)
         except service.DuplicateItemError:
             skipped.append(name)
             continue
-        if has_price:
-            vendor = await _resolve_vendor(db, user.hotel_id, supplier)
-            await vendor_service.upsert_vendor_item(
-                db, vendor.id, item.id, Decimal(str(price)), is_preferred=True,
-            )
         created.append(name)
     if created:
         await audit.record(
