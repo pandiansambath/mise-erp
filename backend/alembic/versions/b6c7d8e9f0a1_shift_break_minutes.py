@@ -1,6 +1,6 @@
 """add shifts.break_minutes
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: b6c7d8e9f0a1
 Revises: f2a3b4c5d6e7
 Create Date: 2026-06-28
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "a1b2c3d4e5f6"
+revision: str = "b6c7d8e9f0a1"
 down_revision: str | None = "f2a3b4c5d6e7"
 branch_labels = None
 depends_on = None
