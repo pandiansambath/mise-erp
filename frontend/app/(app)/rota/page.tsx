@@ -69,6 +69,23 @@ export default function RotaPage() {
   const [copySource, setCopySource] = useState<Date | null>(null); // Monday of the source week
   const [copyConflict, setCopyConflict] = useState<"skip" | "replace">("skip");
 
+  // Grab-and-drag to scroll the week strip left/right (hand cursor).
+  const stripRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef({ down: false, startX: 0, scroll: 0 });
+  function onStripDown(e: React.MouseEvent) {
+    const el = stripRef.current;
+    if (!el) return;
+    dragRef.current = { down: true, startX: e.pageX, scroll: el.scrollLeft };
+  }
+  function onStripMove(e: React.MouseEvent) {
+    const el = stripRef.current;
+    if (!el || !dragRef.current.down) return;
+    el.scrollLeft = dragRef.current.scroll - (e.pageX - dragRef.current.startX);
+  }
+  function endStripDrag() {
+    dragRef.current.down = false;
+  }
+
   function reload() {
     return Promise.all([
       api.get<Shift[]>(`/rota/shifts?date_from=${from}&date_to=${to}`).then(setShifts),
@@ -398,15 +415,19 @@ export default function RotaPage() {
                 <span className="w-14 text-center">Break (min)</span>
                 <span className="w-4" />
               </div>
-              <div className="mt-1 max-h-80 space-y-2 overflow-y-auto pr-1">
+              <div className="mise-slide-stagger mt-1 max-h-80 space-y-2 overflow-y-auto pr-1">
                 {copyRows.map((r, i) => {
                   const dayIdx = weekDates.findIndex((d) => iso(d) === r.date);
                   const clash = existingKeys.has(`${r.employee_id}|${r.date}`);
                   return (
-                    <div key={i} className={`flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm ${clash ? "border-amber-400/40 bg-amber-400/5" : "border-line bg-glass/5"}`}>
-                      <span className="min-w-[7rem] flex-1 truncate font-medium text-fg">
-                        {r.employee_name}
-                        {clash && <span className="ml-1 text-[10px] font-normal text-amber-300">⚠ already on</span>}
+                    <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 p-2 text-sm transition hover:border-line-2">
+                      <span className="flex min-w-[7rem] flex-1 items-center gap-2 truncate font-medium text-fg">
+                        <span className="truncate">{r.employee_name}</span>
+                        {clash && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300 ring-1 ring-inset ring-amber-400/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> scheduled
+                          </span>
+                        )}
                       </span>
                       <span className="w-20 text-xs text-fg-faint">
                         {dayIdx >= 0 ? `${DAYS[dayIdx]} ${weekDates[dayIdx].getDate()}/${weekDates[dayIdx].getMonth() + 1}` : r.date}
@@ -423,14 +444,27 @@ export default function RotaPage() {
           )}
 
           {copyClashes > 0 && (
-            <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
-              <b>{copyClashes}</b> already scheduled this week. When applying:
-              <label className="ml-2 inline-flex items-center gap-1">
-                <input type="radio" name="copyConflict" checked={copyConflict === "skip"} onChange={() => setCopyConflict("skip")} /> Skip (keep existing)
-              </label>
-              <label className="ml-3 inline-flex items-center gap-1">
-                <input type="radio" name="copyConflict" checked={copyConflict === "replace"} onChange={() => setCopyConflict("replace")} /> Replace existing
-              </label>
+            <div className="mise-card-slide mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5 text-xs">
+              <span className="text-fg-soft">
+                <b className="text-fg">{copyClashes}</b> already scheduled this week —
+              </span>
+              <div className="inline-flex rounded-lg border border-line bg-paper p-0.5">
+                {(["skip", "replace"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setCopyConflict(m)}
+                    className={`rounded-md px-3 py-1 font-medium transition ${
+                      copyConflict === m ? "bg-brand-600 text-white shadow-sm" : "text-fg-soft hover:text-fg"
+                    }`}
+                  >
+                    {m === "skip" ? "Skip them" : "Replace them"}
+                  </button>
+                ))}
+              </div>
+              <span className="text-fg-faint">
+                {copyConflict === "skip" ? "keeps what's already there" : "overwrites the clashing shifts"}
+              </span>
             </div>
           )}
 
@@ -444,8 +478,15 @@ export default function RotaPage() {
       )}
 
       {/* A horizontal week strip: each day is at least 170px so the shift cards
-          never get crushed — on narrow screens it scrolls instead. */}
-      <div className="flex gap-3 overflow-x-auto pb-2">
+          never get crushed. Grab-and-drag (hand cursor) to scroll left/right. */}
+      <div
+        ref={stripRef}
+        onMouseDown={onStripDown}
+        onMouseMove={onStripMove}
+        onMouseUp={endStripDrag}
+        onMouseLeave={endStripDrag}
+        className="flex cursor-grab gap-3 overflow-x-auto pb-2 select-none active:cursor-grabbing"
+      >
         {weekDates.map((d, i) => {
           const shifts = byDay(d);
           const isToday = iso(d) === iso(new Date());
