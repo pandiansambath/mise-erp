@@ -142,7 +142,12 @@ export default function VendorsPage() {
           ".",
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Import failed");
+      if (err instanceof ApiError && err.status === 422) {
+        const d = err.detail as { errors?: string[] } | undefined;
+        setError("Couldn't import — " + (d?.errors ?? ["the file didn't match the template."]).join("  •  "));
+      } else {
+        setError(err instanceof ApiError ? err.message : "Import failed");
+      }
     } finally {
       e.target.value = "";
     }
@@ -204,7 +209,7 @@ export default function VendorsPage() {
         vendor price can&apos;t be ordered yet.
       </div>
 
-      <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={onImportFile} />
+      <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportFile} />
       {error && <p className="mb-4 text-sm text-rose-400">{error}</p>}
       {notice && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
 
@@ -410,7 +415,8 @@ export default function VendorsPage() {
                 <div className="mt-5 rounded-xl border border-line bg-paper-2/60 p-3">
                   <p className="text-sm font-medium text-fg-soft">Or bulk import a price list</p>
                   <p className="mb-2 mt-1 text-xs text-fg-faint">
-                    Upload the vendor&apos;s Excel — columns <b>Item</b>, <b>Price</b>, optional <b>Unit</b>. New items are
+                    Upload the vendor&apos;s <b>Excel/CSV</b> — columns <b>Item</b>, <b>Price</b>, optional <b>Unit</b>.
+                    It&apos;s checked strictly and tells you the exact fix if anything&apos;s off. New items are
                     created automatically; re-uploading the same file is safe (prices just update).
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -419,14 +425,21 @@ export default function VendorsPage() {
                       onClick={() => fileRef.current?.click()}
                       className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
                     >
-                      ⬆ Import .xlsx
+                      ⬆ Import
                     </button>
                     <button
                       type="button"
-                      onClick={() => downloadFile("/vendors/price-list-template.xlsx", "mise-vendor-price-list-template.xlsx")}
+                      onClick={() => downloadFile("/vendors/price-list-template.xlsx", "mise-vendor-price-list.xlsx")}
                       className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
                     >
-                      ⬇ Download template
+                      ⬇ Template (Excel)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadFile("/vendors/price-list-template.csv", "mise-vendor-price-list.csv")}
+                      className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                    >
+                      CSV
                     </button>
                   </div>
                 </div>

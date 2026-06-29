@@ -248,16 +248,17 @@ def template_xlsx(employee_names: list[str]) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Rota"
-    headers = ["Employee", "Date", "Start", "End", "Notes"]
+    headers = ["Employee", "Date", "Start", "End", "Break (min)", "Notes"]
     ws.cell(row=4, column=1, value=employee_names[0] if employee_names else "Staff full name")
     ws.cell(row=4, column=2, value="2026-06-30")
     ws.cell(row=4, column=3, value="09:00")
     ws.cell(row=4, column=4, value="17:00")
-    ws.cell(row=4, column=5, value="(optional)")
+    ws.cell(row=4, column=5, value=30)
+    ws.cell(row=4, column=6, value="(optional)")
     style_table(
         ws, title="Mise — Rota template", headers=headers, n_rows=1,
-        subtitle="Fill a row per shift, then upload on the Rota page",
-        widths=[26, 14, 10, 10, 30],
+        subtitle="Fill a row per shift, then upload. * Employee/Date/Start/End required.",
+        widths=[26, 14, 10, 10, 12, 30], right_cols={5},
     )
     if employee_names:
         ws2 = wb.create_sheet("Employees")

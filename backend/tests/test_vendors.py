@@ -164,3 +164,21 @@ async def test_staff_cannot_read_vendors(client, make_user, auth_header):
     staff = await make_user("staff@nirai.com", Role.STAFF.value)
     resp = await client.get("/api/vendors", headers=auth_header(staff))
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_price_list_strict_import(client, make_user, auth_header):
+    h = auth_header(await make_user("vimp@x.com", Role.SUPER_ADMIN.value))
+    v = (await client.post("/api/vendors", headers=h, json={"name": "Fresh Farms"})).json()
+    good = b"Item,Price,Unit\nBasmati Rice,5.00,kg\n"
+    ok = await client.post(
+        f"/api/vendors/{v['id']}/items/import", headers=h,
+        files={"file": ("p.csv", good, "text/csv")},
+    )
+    assert ok.status_code == 200
+    bad = b"Item\nBasmati Rice\n"  # missing required Price column
+    res = await client.post(
+        f"/api/vendors/{v['id']}/items/import", headers=h,
+        files={"file": ("p.csv", bad, "text/csv")},
+    )
+    assert res.status_code == 422 and res.json()["detail"]["errors"]

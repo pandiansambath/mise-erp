@@ -184,7 +184,12 @@ export default function RotaPage() {
       setMsg(`Added ${res.created} shift${res.created === 1 ? "" : "s"} from the file${skip}.`);
       await reload();
     } catch (err) {
-      setMsg(err instanceof ApiError ? err.message : "Could not read that file.");
+      if (err instanceof ApiError && err.status === 422) {
+        const d = err.detail as { errors?: string[] } | undefined;
+        setMsg("Couldn't import — " + (d?.errors ?? ["the file didn't match the template."]).join("  •  "));
+      } else {
+        setMsg(err instanceof ApiError ? err.message : "Could not read that file.");
+      }
     } finally {
       setImporting(false);
     }
@@ -224,7 +229,7 @@ export default function RotaPage() {
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
-        <input ref={importInput} type="file" accept=".xlsx" className="hidden" onChange={onImportRota} />
+        <input ref={importInput} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportRota} />
         <button
           onClick={() => downloadFile(`/rota/export.xlsx?date_from=${from}&date_to=${to}`, `mise-rota-${from}.xlsx`)}
           className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
@@ -252,7 +257,14 @@ export default function RotaPage() {
               title="Download a blank Excel template to fill in offline"
               className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
             >
-              ⬇ Template
+              ⬇ Template (Excel)
+            </button>
+            <button
+              onClick={() => downloadFile("/rota/template.csv", "mise-rota-template.csv")}
+              title="Download a blank CSV template"
+              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            >
+              CSV
             </button>
             <button
               onClick={() => importInput.current?.click()}

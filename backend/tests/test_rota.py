@@ -104,3 +104,22 @@ async def test_shift_break_reduces_paid_hours(client, make_user, auth_header):
     assert float(body["hours"]) == 7.5
     assert float(body["cost"]) == 75.0
     assert body["break_minutes"] == 30
+
+
+@pytest.mark.asyncio
+async def test_rota_strict_import(client, make_user, auth_header):
+    h = auth_header(await make_user("rimp@nirai.com", Role.SUPER_ADMIN.value))
+    await client.post(
+        "/api/employees", headers=h,
+        json={"full_name": "Sam", "salary_type": "HOURLY", "hourly_rate": "10.00"},
+    )
+    good = b"Employee,Date,Start,End,Break (min),Notes\nSam,2026-06-30,09:00,17:00,30,opening\n"
+    ok = await client.post(
+        "/api/rota/import", headers=h, files={"file": ("r.csv", good, "text/csv")},
+    )
+    assert ok.status_code == 200 and ok.json()["created"] == 1
+    bad = b"Employee,Date,Start,End\nSam,not-a-date,09:00,17:00\n"  # bad date
+    res = await client.post(
+        "/api/rota/import", headers=h, files={"file": ("r.csv", bad, "text/csv")},
+    )
+    assert res.status_code == 422 and res.json()["detail"]["errors"]

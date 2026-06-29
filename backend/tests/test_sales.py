@@ -170,3 +170,21 @@ async def test_sales_isolated_between_hotels(client, make_user, auth_header, db)
         json={"channel_id": deliveroo["id"], "gross_amount": "100", "payment_method": "ONLINE"},
     )
     assert cross.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_sales_strict_import(client, make_user, auth_header):
+    h = auth_header(await make_user("simp@x.com", Role.SUPER_ADMIN.value))
+    await client.get("/api/sales/channels", headers=h)  # seed default channels
+    good = b"Channel,Gross,Method\nDine-in,240.00,CARD\n"
+    ok = await client.post(
+        "/api/sales/days/2026-06-15/import", headers=h,
+        files={"file": ("s.csv", good, "text/csv")},
+    )
+    assert ok.status_code == 200
+    bad = b"Channel\nDine-in\n"  # missing required Gross column
+    res = await client.post(
+        "/api/sales/days/2026-06-15/import", headers=h,
+        files={"file": ("s.csv", bad, "text/csv")},
+    )
+    assert res.status_code == 422 and res.json()["detail"]["errors"]

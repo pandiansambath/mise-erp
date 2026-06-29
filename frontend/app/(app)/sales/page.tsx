@@ -87,7 +87,12 @@ export default function SalesPage() {
           ".",
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Import failed");
+      if (err instanceof ApiError && err.status === 422) {
+        const d = err.detail as { errors?: string[] } | undefined;
+        setError("Couldn't import — " + (d?.errors ?? ["the file didn't match the template."]).join("  •  "));
+      } else {
+        setError(err instanceof ApiError ? err.message : "Import failed");
+      }
     } finally {
       e.target.value = "";
     }
@@ -159,19 +164,25 @@ export default function SalesPage() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {canWrite && (
             <>
-              <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={onImportFile} />
+              <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportFile} />
               <button
                 onClick={() => fileRef.current?.click()}
                 className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
-                title="Upload a day's sales from Excel (Channel, Gross, Method)"
+                title="Upload a day's sales (Excel/CSV) — checked strictly with exact errors"
               >
-                ⬆ Import Excel
+                ⬆ Import
               </button>
               <button
                 onClick={() => downloadFile("/sales/sales-template.xlsx", "mise-sales-template.xlsx")}
                 className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
               >
-                ⬇ Template
+                ⬇ Template (Excel)
+              </button>
+              <button
+                onClick={() => downloadFile("/sales/sales-template.csv", "mise-sales-template.csv")}
+                className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+              >
+                CSV
               </button>
             </>
           )}

@@ -12,6 +12,9 @@ from __future__ import annotations
 import csv as _csv
 import io
 from dataclasses import dataclass, field
+from datetime import date as _date
+from datetime import datetime as _datetime
+from datetime import time as _time
 from decimal import Decimal, InvalidOperation
 
 from openpyxl import Workbook, load_workbook
@@ -48,6 +51,36 @@ class TemplateSpec:
 
 def _norm(v) -> str:
     return str(v if v is not None else "").strip().lower()
+
+
+def _coerce_date(raw) -> str | None:
+    """Parse a date cell (Excel date object or text) → 'YYYY-MM-DD', or None."""
+    if isinstance(raw, _datetime):
+        return raw.date().isoformat()
+    if isinstance(raw, _date):
+        return raw.isoformat()
+    s = str(raw or "").strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%m/%d/%Y", "%d %b %Y", "%d %B %Y"):
+        try:
+            return _datetime.strptime(s[:11].strip(), fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _coerce_time(raw) -> str | None:
+    """Parse a time cell (Excel time object or text) → 'HH:MM', or None."""
+    if isinstance(raw, _datetime):
+        return raw.strftime("%H:%M")
+    if isinstance(raw, _time):
+        return raw.strftime("%H:%M")
+    s = str(raw or "").strip().upper()
+    for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p"):
+        try:
+            return _datetime.strptime(s, fmt).strftime("%H:%M")
+        except ValueError:
+            continue
+    return None
 
 
 # ── Template generation ───────────────────────────────────────────────────────
@@ -204,6 +237,18 @@ def parse_upload(
                     rec[key] = float(Decimal(cleaned))
                 except (InvalidOperation, ValueError):
                     row_errs.append(f"“{col.header}” must be a number (got “{sval}”)")
+            elif col.kind == "date":
+                d = _coerce_date(raw)
+                if d is None:
+                    row_errs.append(f"“{col.header}” must be a date like 2026-06-30 (got “{sval}”)")
+                else:
+                    rec[key] = d
+            elif col.kind == "time":
+                t = _coerce_time(raw)
+                if t is None:
+                    row_errs.append(f"“{col.header}” must be a time like 09:00 (got “{sval}”)")
+                else:
+                    rec[key] = t
             else:
                 rec[key] = sval
         if row_errs:
