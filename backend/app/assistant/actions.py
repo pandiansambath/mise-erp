@@ -26,6 +26,7 @@ from app.expenses import service as expense_service
 from app.expenses.models import Expense
 from app.inventory import service as inventory_service
 from app.inventory.models import Item, MovementType
+from app.purchasing import service as purchasing_service
 from app.recipes import service as recipe_service
 from app.recipes.models import Recipe
 from app.sales import service as sales_service
@@ -138,6 +139,23 @@ SPECS: dict[str, dict] = {
             + ("…" if len(f["lines"]) > 6 else "")
         ),
     },
+    # Multi-line: order stock. Creates an indent → a PO per supplier.
+    "purchase": {
+        "perm": "indent:write",
+        "label": "purchase order",
+        "required": ["lines"],  # validated specially (see build_proposal)
+        "summary": lambda f: (
+            f"Order {len(f['lines'])} item"
+            + ("" if len(f["lines"]) == 1 else "s")
+            + (f" from {f['vendor']}" if f.get("vendor") else "")
+            + ": "
+            + ", ".join(
+                f"{ln['quantity']}{(' ' + ln['unit']) if ln.get('unit') else ''} {ln['item']}"
+                for ln in f["lines"][:6]
+            )
+            + ("…" if len(f["lines"]) > 6 else "")
+        ),
+    },
 }
 
 
@@ -190,6 +208,19 @@ def build_proposal(kind: str, fields: dict) -> dict:
         if missing:
             return {"ok": False, "kind": kind, "missing": missing}
         clean_ml = {"recipe": recipe, "lines": lines}
+        return {
+            "ok": True, "kind": kind, "label": spec["label"],
+            "fields": clean_ml, "summary": spec["summary"](clean_ml),
+        }
+
+    if kind == "purchase":
+        lines = _build_lines(fields)
+        if not lines:
+            return {"ok": False, "kind": kind, "missing": ["lines"]}
+        clean_ml = {"lines": lines}
+        vendor = str(fields.get("vendor") or "").strip()
+        if vendor:
+            clean_ml["vendor"] = vendor
         return {
             "ok": True, "kind": kind, "label": spec["label"],
             "fields": clean_ml, "summary": spec["summary"](clean_ml),
@@ -323,6 +354,15 @@ async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict
             added.append(item.name)
         # No single-token undo for a batch; edit on the Recipes page if needed.
         undo = {}
+    elif kind == "purchase":
+        result = await _do_purchase(db, user, f)
+        if result.get("error"):
+            return {"ok": False, "error": result["error"]}
+        await audit.record(
+            db, hotel_id=hotel, user=user, action="assistant.act.purchase",
+            summary=f"Copilot: {result['summary']}", entity_type="purchase",
+        )
+        return {"ok": True, "summary": result["summary"], "undo": {}}
     else:  # pragma: no cover
         return {"ok": False, "error": f"Unknown action '{kind}'"}
 
@@ -388,6 +428,39 @@ async def _find_recipe(db: AsyncSession, hotel: uuid.UUID, name: str) -> Recipe 
         (r for r in recipes if r.name and (nl == r.name.lower() or nl in r.name.lower())),
         None,
     )
+
+
+async def _do_purchase(db: AsyncSession, user: User, f: dict) -> dict:
+    """Order stock: resolve items (+ optional supplier), create an indent, then
+    generate a PO per supplier. Returns {summary} or {error}."""
+    hotel = user.hotel_id
+    vendor_id = None
+    if f.get("vendor"):
+        vendor = await _find_vendor(db, hotel, f["vendor"])
+        if vendor is None:
+            return {"error": f"No supplier matches '{f['vendor']}'."}
+        vendor_id = vendor.id
+    items: list[dict] = []
+    unknown: list[str] = []
+    for ln in f["lines"]:
+        item = await _find_item(db, hotel, ln["item"])
+        if item is None:
+            unknown.append(ln["item"])
+            continue
+        items.append(
+            {"item_id": item.id, "required_qty": Decimal(ln["quantity"]), "vendor_id": vendor_id}
+        )
+    if not items:
+        return {"error": "None of those items are in inventory: " + ", ".join(unknown) + "."}
+    indent = await purchasing_service.create_indent(db, hotel, items, created_by=user.id)
+    res = await purchasing_service.generate_pos(db, indent)
+    n = len(res["purchase_orders"])
+    parts = [f"Created {n} purchase order{'' if n == 1 else 's'}"]
+    if res["skipped_items"]:
+        parts.append("no supplier price for: " + ", ".join(res["skipped_items"]))
+    if unknown:
+        parts.append("not in inventory: " + ", ".join(unknown))
+    return {"summary": " · ".join(parts)}
 
 
 async def _do_expense(db: AsyncSession, user: User, f: dict) -> dict:

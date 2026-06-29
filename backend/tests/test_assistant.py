@@ -323,3 +323,30 @@ async def test_business_overview_returns_real_recipe_count(db, make_user):
     listing = await list_recipes(db, user, {})
     assert listing["recipe_count"] == 2
     assert {r["name"] for r in listing["recipes"]} == {"Dosa", "Idli"}
+
+
+@pytest.mark.asyncio
+async def test_act_purchase_creates_po(db, make_user):
+    """Order stock by chat → an indent + a PO for the item's chosen supplier."""
+    from app.purchasing import service as po_service
+    from app.vendors import service as ven
+    user = await make_user("po@x.com", Role.SUPER_ADMIN.value)
+    h = user.hotel_id
+    rice = await inv.create_item(db, h, name="Rice", unit="kg")
+    vendor = await ven.create_vendor(db, h, name="Fresh Farms")
+    await ven.upsert_vendor_item(db, vendor.id, rice.id, Decimal("2.00"), is_preferred=True)
+
+    res = await actions.execute(
+        db, user, "purchase",
+        {"vendor": "Fresh Farms", "lines": [{"item": "Rice", "quantity": 10, "unit": "kg"}]},
+    )
+    assert res["ok"] and "purchase order" in res["summary"].lower()
+    pos = await po_service.list_pos(db, h)
+    assert len(pos) == 1
+
+    # an item with no supplier price is reported, not ordered
+    await inv.create_item(db, h, name="Salt", unit="kg")
+    res2 = await actions.execute(
+        db, user, "purchase", {"lines": [{"item": "Salt", "quantity": 1}]},
+    )
+    assert res2["ok"] and "Created 0 purchase orders" in res2["summary"]
