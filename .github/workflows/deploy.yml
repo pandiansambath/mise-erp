@@ -171,6 +171,7 @@ jobs:
           done
           jq -n --arg reg "$REG" --arg region "$AWS_REGION" '{commands: [
             "set -eux",
+            "for i in $(seq 1 60); do [ -f /opt/mise/docker-compose.yml ] && break; echo waiting-for-cloud-init; sleep 5; done",
             "cd /opt/mise",
             ("aws ecr get-login-password --region " + $region + " | docker login --username AWS --password-stdin " + $reg),
             "docker compose pull",
