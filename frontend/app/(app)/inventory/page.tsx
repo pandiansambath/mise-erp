@@ -411,11 +411,19 @@ export default function InventoryPage() {
     { key: "out", label: `Out (${counts.out})`, dot: "bg-rose-400 ring-2 ring-rose-400/20" },
   ];
 
+  // Stock-status chips = emerald (the brand). Category chips = indigo, so the two
+  // filter groups read as clearly DIFFERENT things that combine, not one long list.
   const chip = (active: boolean) =>
     `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
       active
         ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
         : "border border-line-2 text-fg-soft hover:bg-glass/5"
+    }`;
+  const catChip = (active: boolean) =>
+    `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+      active
+        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
+        : "border border-indigo-400/30 text-fg-soft hover:bg-indigo-500/10"
     }`;
 
   function toggleSort(k: SortKey) {
@@ -745,22 +753,45 @@ export default function InventoryPage() {
                 className="w-full rounded-xl border border-line-2 bg-glass/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
               />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {statusChips.map((s) => (
-                <button key={s.key} type="button" onClick={() => setStatusFilter(s.key)} className={chip(statusFilter === s.key)}>
-                  {s.dot && <span aria-hidden className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${s.dot}`} />}
-                  {s.label}
+            {/* Two SEPARATE filters that combine (AND). Kept on their own labelled
+                rows + different colours so picking a stock status and a category
+                doesn't look like one list (which surprised people with 0 results). */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-fg-faint">Stock</span>
+                {statusChips.map((s) => (
+                  <button key={s.key} type="button" onClick={() => setStatusFilter(s.key)} className={chip(statusFilter === s.key)}>
+                    {s.dot && <span aria-hidden className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${s.dot}`} />}
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-fg-faint">Category</span>
+                <button type="button" onClick={() => setCatFilter("all")} className={catChip(catFilter === "all")}>
+                  All categories
                 </button>
-              ))}
-              <span aria-hidden className="my-auto h-5 w-px shrink-0 bg-glass/10" />
-              <button type="button" onClick={() => setCatFilter("all")} className={chip(catFilter === "all")}>
-                All categories
-              </button>
-              {categories.map((c) => (
-                <button key={c} type="button" onClick={() => setCatFilter(c)} className={chip(catFilter === c)}>
-                  {categoryEmoji(c)} {c}
-                </button>
-              ))}
+                {categories.map((c) => (
+                  <button key={c} type="button" onClick={() => setCatFilter(c)} className={catChip(catFilter === c)}>
+                    {categoryEmoji(c)} {c}
+                  </button>
+                ))}
+              </div>
+              {(statusFilter !== "all" || catFilter !== "all") && (
+                <p className="text-xs text-fg-faint">
+                  Showing <b className="text-fg-soft">{filtered.length}</b> item{filtered.length === 1 ? "" : "s"}
+                  {statusFilter !== "all" && catFilter !== "all"
+                    ? " — the stock filter and the category filter are combined."
+                    : "."}
+                  <button
+                    type="button"
+                    onClick={() => { setStatusFilter("all"); setCatFilter("all"); }}
+                    className="ml-2 font-medium text-brand-400 underline hover:text-brand-300"
+                  >
+                    Clear filters
+                  </button>
+                </p>
+              )}
             </div>
             {/* Rename / merge a category across all its items */}
             <div className="mt-2">

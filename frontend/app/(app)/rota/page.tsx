@@ -7,8 +7,8 @@ import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { localISODate as iso } from "@/lib/date";
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /** Monday of the week containing `d`. */
