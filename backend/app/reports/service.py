@@ -40,6 +40,8 @@ async def pnl(
     operating = exp["fixed_total"]
     gross_profit = (net_sales - cost_of_sales).quantize(_Q2)
     net_profit = (gross_profit - operating).quantize(_Q2)
+    # Insight only — NOT subtracted from profit (the cost already hit when bought).
+    waste = await inventory_service.waste_total(db, hotel_id, date_from, date_to)
 
     return {
         "date_from": date_from,
@@ -54,6 +56,7 @@ async def pnl(
         "food_cost_pct": _pct(cost_of_sales, net_sales),
         "gross_margin_pct": _pct(gross_profit, net_sales),
         "net_margin_pct": _pct(net_profit, net_sales),
+        "waste_total": waste,
         "expense_breakdown": exp["by_category"],
     }
 

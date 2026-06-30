@@ -354,6 +354,16 @@ async def test_remove_used_item_archives(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
+async def test_waste_total_sums_value(db, hotel):
+    """waste_total = qty wasted × cost-at-the-time (an insight figure for the P&L)."""
+    item = await service.create_item(db, hotel.id, name="Milk", unit="l")
+    await service.record_movement(db, item, "PURCHASE_IN", Decimal("10"), unit_cost=Decimal("2.00"))
+    assert await service.waste_total(db, hotel.id) == Decimal("0.00")
+    await service.record_waste(db, item, Decimal("3"), "spoiled")  # 3 × £2.00
+    assert await service.waste_total(db, hotel.id) == Decimal("6.00")
+
+
+@pytest.mark.asyncio
 async def test_remove_item_is_super_admin_only(client, make_user, auth_header):
     """A Manager can add items (inventory:write) but cannot remove them (super-admin)."""
     h = auth_header(await make_user("mgr@nirai.com", Role.MANAGER.value))

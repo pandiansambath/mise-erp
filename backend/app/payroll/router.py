@@ -1,9 +1,11 @@
 """Payroll endpoints: process runs, approve/pay, payslip PDF, advances. Hotel-scoped."""
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
@@ -42,6 +44,12 @@ async def process(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     rows = await service.list_payroll(db, user.hotel_id, payload.pay_period)
+    net_total = sum((r["net_pay"] for r in rows), Decimal("0"))
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="payroll.run",
+        summary=f"Ran payroll for {payload.pay_period}: {len(rows)} staff, net £{net_total}",
+        entity_type="payroll",
+    )
     return [PayrollRow.model_validate(r) for r in rows]
 
 
@@ -61,7 +69,7 @@ async def approve(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:write")),
 ) -> PayrollRow:
-    return await _set_status(db, payroll_id, user.hotel_id, PayrollStatus.APPROVED.value)
+    return await _set_status(db, payroll_id, user, PayrollStatus.APPROVED.value)
 
 
 @router.post("/{payroll_id}/pay", response_model=PayrollRow)
@@ -70,16 +78,22 @@ async def mark_paid(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:write")),
 ) -> PayrollRow:
-    return await _set_status(db, payroll_id, user.hotel_id, PayrollStatus.PAID.value)
+    return await _set_status(db, payroll_id, user, PayrollStatus.PAID.value)
 
 
-async def _set_status(db, payroll_id, hotel_id, new_status) -> PayrollRow:
-    rec = await service.get_payroll(db, payroll_id, hotel_id)
+async def _set_status(db, payroll_id, user, new_status) -> PayrollRow:
+    rec = await service.get_payroll(db, payroll_id, user.hotel_id)
     if rec is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Payroll not found")
     await service.set_status(db, rec, new_status)
-    rows = await service.list_payroll(db, hotel_id, rec.pay_period)
+    rows = await service.list_payroll(db, user.hotel_id, rec.pay_period)
     row = next(r for r in rows if r["id"] == rec.id)
+    verb = new_status.lower()
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action=f"payroll.{verb}",
+        summary=f"Payslip {verb}: {row['employee_name']} £{row['net_pay']} ({rec.pay_period})",
+        entity_type="payroll", entity_id=rec.id,
+    )
     return PayrollRow.model_validate(row)
 
 

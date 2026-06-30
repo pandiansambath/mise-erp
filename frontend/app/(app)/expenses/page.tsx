@@ -69,6 +69,10 @@ export default function ExpensesPage() {
   const [vat, setVat] = useState("");
   const [method, setMethod] = useState("CASH");
   const [description, setDescription] = useState("");
+  // Optional top-up on top of the base amount (e.g. £900 gas + £50 surcharge). Both
+  // are summed into the saved total, and the split is recorded in the description.
+  const [extra, setExtra] = useState("");
+  const [extraReason, setExtraReason] = useState("");
 
   const loadData = useCallback(
     async (f: string, t: string) => {
@@ -131,17 +135,27 @@ export default function ExpensesPage() {
     e.preventDefault();
     setError(null);
     try {
+      const base = parseFloat(amount || "0");
+      const ex = parseFloat(extra || "0");
+      const total = (base + (isNaN(ex) ? 0 : ex)).toFixed(2);
+      // Record the split in the description so the £900 + £50 stays explainable later.
+      const desc =
+        ex > 0
+          ? `${description ? description + " — " : ""}£${base.toFixed(2)} base + £${ex.toFixed(2)} extra${extraReason ? ` (${extraReason})` : ""}`
+          : description || null;
       await api.post<Expense>("/expenses", {
         category_id: categoryId,
         date,
-        amount: amount || "0",
+        amount: total,
         vat_amount: vat || "0",
         payment_method: method,
-        description: description || null,
+        description: desc,
       });
       setAmount("");
       setVat("");
       setDescription("");
+      setExtra("");
+      setExtraReason("");
       await loadData(from, to);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add expense");
@@ -354,6 +368,21 @@ export default function ExpensesPage() {
                   <label className="block text-sm font-medium text-fg-soft">of which VAT</label>
                   <input value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputCls} />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Extra / surcharge (+)</label>
+                  <input value={extra} onChange={(e) => setExtra(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Why the extra?</label>
+                  <input value={extraReason} onChange={(e) => setExtraReason(e.target.value)} placeholder="optional reason" className={inputCls} />
+                </div>
+                {parseFloat(extra || "0") > 0 && (
+                  <p className="col-span-2 -mt-1 text-xs text-fg-faint">
+                    Total saved = <b className="text-fg-soft">{format(String((parseFloat(amount || "0") + parseFloat(extra || "0")).toFixed(2)))}</b>{" "}
+                    ({format(amount || "0")} base + {format(extra)} extra). Use this when you pay a bit more than the
+                    usual amount (e.g. £900 gas + £50 surcharge) — both are added together and the split is noted.
+                  </p>
+                )}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-fg-soft">Description</label>
                   <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />

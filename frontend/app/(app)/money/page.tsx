@@ -489,6 +489,21 @@ export default function MoneyPage() {
               </span>
             </div>
           </div>
+          {parseFloat(pnl.waste_total || "0") > 0 && (
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-sm">
+              <span className="flex items-center">
+                <span aria-hidden className="mr-2">🗑️</span>
+                <span className="font-medium text-fg">Stock wasted this period</span>
+                <InfoDot
+                  id="waste"
+                  open={openInfo === "waste"}
+                  onToggle={setOpenInfo}
+                  text="Value of stock you binned (spoiled / over-prepped). It is NOT subtracted from profit again here — the money already left when you bought the stock, so counting it twice would understate your profit. Shown so you can see and cut the leak. Log it on the Waste page."
+                />
+              </span>
+              <span className="font-semibold text-amber-300">{format(pnl.waste_total)}</span>
+            </div>
+          )}
           <p className="mt-3 text-xs text-fg-faint">
             Record takings on <Link href="/sales" className="text-brand-400 underline">Sales</Link> and spends on{" "}
             <Link href="/expenses" className="text-brand-400 underline">Expenses</Link>; this updates automatically.

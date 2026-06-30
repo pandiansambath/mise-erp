@@ -5,6 +5,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
@@ -92,6 +93,11 @@ async def create_expense(
     )
     # response needs category_name + kind; re-fetch via list-shaped dict
     cat = await service.get_category(db, exp.category_id, user.hotel_id)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="expense.add",
+        summary=f"Added expense: {cat.name} £{exp.amount} ({exp.payment_method or 'n/a'})",
+        entity_type="expense", entity_id=exp.id,
+    )
     return ExpenseOut.model_validate(
         {
             "id": exp.id,
@@ -145,7 +151,13 @@ async def delete_expense(
     exp = await service.get_expense(db, expense_id, user.hotel_id)
     if exp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Expense not found")
+    amount = exp.amount
     await service.delete_expense(db, exp)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="expense.delete",
+        summary=f"Deleted expense £{amount} on {exp.date}",
+        entity_type="expense", entity_id=expense_id,
+    )
 
 
 @router.get("/summary", response_model=ExpenseSummary)

@@ -497,6 +497,7 @@ export interface PnL {
   food_cost_pct: string;
   gross_margin_pct: string;
   net_margin_pct: string;
+  waste_total: string;
   expense_breakdown: { category_id: string; category_name: string; kind: string; total: string }[];
 }
 

@@ -485,6 +485,31 @@ async def remove_item(db: AsyncSession, item: Item) -> dict:
     return {"action": "archived", "usage": usage}
 
 
+async def waste_total(
+    db: AsyncSession, hotel_id: uuid.UUID, date_from=None, date_to=None
+) -> Decimal:
+    """Total £ value of stock WASTED in a period (qty × cost-at-the-time). This is an
+    INSIGHT figure only — the money already left when the stock was bought, so it must
+    NOT be subtracted from profit again (that would double-count)."""
+    from datetime import timedelta
+
+    value = func.abs(StockMovement.quantity) * func.coalesce(StockMovement.unit_cost, 0)
+    stmt = (
+        select(func.coalesce(func.sum(value), 0))
+        .join(Item, Item.id == StockMovement.item_id)
+        .where(
+            Item.hotel_id == hotel_id,
+            StockMovement.movement_type == MovementType.WASTE.value,
+        )
+    )
+    if date_from is not None:
+        stmt = stmt.where(StockMovement.created_at >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(StockMovement.created_at < date_to + timedelta(days=1))
+    val = (await db.execute(stmt)).scalar_one()
+    return Decimal(str(val or 0)).quantize(_COST_QUANT, ROUND_HALF_UP).quantize(Decimal("0.01"))
+
+
 async def low_stock_items(db: AsyncSession, hotel_id: uuid.UUID) -> list[Item]:
     """Active items whose current stock is at or below their minimum level."""
     result = await db.execute(

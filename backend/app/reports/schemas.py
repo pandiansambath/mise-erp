@@ -26,6 +26,7 @@ class PnL(BaseModel):
     food_cost_pct: Decimal
     gross_margin_pct: Decimal
     net_margin_pct: Decimal
+    waste_total: Decimal = Decimal("0")
     expense_breakdown: list[CategoryTotal]
 
 
