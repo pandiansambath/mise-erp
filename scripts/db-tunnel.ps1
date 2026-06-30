@@ -10,7 +10,8 @@
 #
 # Then run:   powershell -File scripts/db-tunnel.ps1
 # Leave it running, and point a GUI (DBeaver / TablePlus / pgAdmin) or psql at:
-#   host=localhost  port=5433  database=mise  user=mise  password=<your DB_PASSWORD>
+#   host=localhost  port=5433  database=mise  user=viewer  password=<read-only password>
+# (Use the read-only `viewer` login for browsing — it can SELECT but not change data.)
 
 $ErrorActionPreference = "Stop"
 $Region   = "eu-west-2"
@@ -25,7 +26,7 @@ $InstanceId = (aws ec2 describe-instances --region $Region `
 if (-not $InstanceId) { throw "No running mise-app instance found (check clock + AWS creds)." }
 Write-Host "Instance: $InstanceId" -ForegroundColor Green
 Write-Host "Tunnel: localhost:$LocalPort  ->  $RdsHost:5432" -ForegroundColor Green
-Write-Host "Connect a DB client to localhost:$LocalPort (db=mise user=mise). Ctrl+C to stop.`n" -ForegroundColor Yellow
+Write-Host "Connect a DB client to localhost:$LocalPort (db=mise, user=viewer, read-only). Ctrl+C to stop.`n" -ForegroundColor Yellow
 
 aws ssm start-session --region $Region --target $InstanceId `
   --document-name AWS-StartPortForwardingSessionToRemoteHost `

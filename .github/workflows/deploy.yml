@@ -101,20 +101,27 @@ jobs:
           echo "registry=$REG" >> "$GITHUB_OUTPUT"
           aws ecr get-login-password | docker login --username AWS --password-stdin "$REG"
 
+      # Push BOTH :<sha> (immutable record / rollback) and :latest. The box's compose
+      # pins :latest so a normal code deploy DOESN'T change user_data -> the EC2 box is
+      # NOT rebuilt; we roll the new images in-place via SSM instead (seconds, not mins).
       - name: Build & push backend image
         run: |
-          IMG="${{ steps.ecr.outputs.registry }}/mise-backend:${{ github.sha }}"
-          docker build --target prod -t "$IMG" ./backend
-          docker push "$IMG"
-          echo "BACKEND_IMAGE=$IMG" >> "$GITHUB_ENV"
+          SHA="${{ steps.ecr.outputs.registry }}/mise-backend:${{ github.sha }}"
+          LATEST="${{ steps.ecr.outputs.registry }}/mise-backend:latest"
+          docker build --target prod -t "$SHA" -t "$LATEST" ./backend
+          docker push "$SHA"
+          docker push "$LATEST"
+          echo "BACKEND_IMAGE=$LATEST" >> "$GITHUB_ENV"
 
       - name: Build & push frontend image
         # Same-origin behind Caddy on the EC2 box -> relative /api (empty base).
         run: |
-          IMG="${{ steps.ecr.outputs.registry }}/mise-frontend:${{ github.sha }}"
-          docker build --build-arg NEXT_PUBLIC_API_URL="" -t "$IMG" ./frontend
-          docker push "$IMG"
-          echo "FRONTEND_IMAGE=$IMG" >> "$GITHUB_ENV"
+          SHA="${{ steps.ecr.outputs.registry }}/mise-frontend:${{ github.sha }}"
+          LATEST="${{ steps.ecr.outputs.registry }}/mise-frontend:latest"
+          docker build --build-arg NEXT_PUBLIC_API_URL="" -t "$SHA" -t "$LATEST" ./frontend
+          docker push "$SHA"
+          docker push "$LATEST"
+          echo "FRONTEND_IMAGE=$LATEST" >> "$GITHUB_ENV"
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -141,6 +148,49 @@ jobs:
             -var="backend_image=$BACKEND_IMAGE" \
             -var="frontend_image=$FRONTEND_IMAGE"
 
+      # Normal code deploys don't change user_data (images are pinned to :latest), so
+      # Terraform leaves the box running. Pull the new images + recreate the app
+      # containers in place via SSM — a few seconds of blip instead of a full rebuild.
+      # (On the rare deploy that DOES change user_data — e.g. a secret — Terraform
+      # replaces the box and this step is just a no-op re-pull.)
+      - name: Roll out new images in-place (no box rebuild)
+        env:
+          REG: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=mise-app" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          echo "App instance: $IID"
+          # A just-replaced box needs a moment before its SSM agent reports in.
+          for i in $(seq 1 20); do
+            PING=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=$IID" \
+              --query "InstanceInformationList[0].PingStatus" --output text 2>/dev/null || echo "")
+            [ "$PING" = "Online" ] && break
+            echo "waiting for SSM agent ($i/20)…"; sleep 15
+          done
+          jq -n --arg reg "$REG" --arg region "$AWS_REGION" '{commands: [
+            "set -eux",
+            "cd /opt/mise",
+            ("aws ecr get-login-password --region " + $region + " | docker login --username AWS --password-stdin " + $reg),
+            "docker compose pull",
+            "docker compose up -d",
+            "docker image prune -f || true"
+          ]}' > rollout.json
+          CMD=$(aws ssm send-command --instance-ids "$IID" \
+            --document-name AWS-RunShellScript --parameters file://rollout.json \
+            --query Command.CommandId --output text)
+          echo "SSM command: $CMD"
+          aws ssm wait command-executed --command-id "$CMD" --instance-id "$IID" || true
+          ST=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$IID" --query Status --output text)
+          echo "----- rollout output -----"
+          aws ssm get-command-invocation --command-id "$CMD" --instance-id "$IID" --query StandardOutputContent --output text
+          echo "----- rollout status: $ST -----"
+          if [ "$ST" != "Success" ]; then
+            aws ssm get-command-invocation --command-id "$CMD" --instance-id "$IID" --query StandardErrorContent --output text
+            exit 1
+          fi
+
       - name: Summary
         working-directory: infra
         run: |
@@ -148,5 +198,5 @@ jobs:
             echo "### 🚀 Mise deployed to eu-west-2"
             echo "- **App:** $(terraform output -raw app_url)"
             echo ""
-            echo "_The box pulls images + runs DB migrations on boot — give it ~2-3 min after apply._"
+            echo "_Images rolled in place via SSM (no box rebuild) — live within seconds._"
           } >> "$GITHUB_STEP_SUMMARY"
