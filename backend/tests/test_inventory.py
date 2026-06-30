@@ -301,3 +301,64 @@ async def test_purchase_chain_receipt(db, make_user):
     lines = await service.receipt_lines(db, h, ref)
     assert {row["item_name"] for row in lines} == {"Rice", "Oil"}
     assert next(row for row in lines if row["item_name"] == "Rice")["line_total"] == Decimal("20.00")
+
+
+# ── Starter catalogue + remove (delete-or-archive) ───────────────────────────
+@pytest.mark.asyncio
+async def test_seed_starter_items_idempotent(db, hotel):
+    first = await service.seed_starter_items(db, hotel.id)
+    assert "Onion" in first["added"] and len(first["added"]) > 50 and first["skipped"] == []
+    # re-running adds nothing new (no duplicates) and skips everything
+    second = await service.seed_starter_items(db, hotel.id)
+    assert second["added"] == [] and len(second["skipped"]) == len(first["added"])
+
+
+@pytest.mark.asyncio
+async def test_seed_starter_endpoint(client, make_user, auth_header):
+    h = auth_header(await make_user("seed@nirai.com", Role.SUPER_ADMIN.value))
+    res = await client.post("/api/inventory/seed-starter", headers=h)
+    assert res.status_code == 200 and res.json()["added"] > 0
+    names = [i["name"] for i in (await client.get("/api/inventory/items", headers=h)).json()]
+    assert "Turmeric Powder" in names
+
+
+@pytest.mark.asyncio
+async def test_remove_unused_item_hard_deletes(client, make_user, auth_header):
+    h = auth_header(await make_user("del@nirai.com", Role.SUPER_ADMIN.value))
+    iid = (
+        await client.post("/api/inventory/items", headers=h, json={"name": "Spare", "unit": "kg"})
+    ).json()["id"]
+    usage = await client.get(f"/api/inventory/items/{iid}/usage", headers=h)
+    assert usage.json()["can_hard_delete"] is True
+    res = await client.delete(f"/api/inventory/items/{iid}", headers=h)
+    assert res.status_code == 200 and res.json()["action"] == "deleted"
+    names = [i["name"] for i in (await client.get("/api/inventory/items", headers=h)).json()]
+    assert "Spare" not in names
+
+
+@pytest.mark.asyncio
+async def test_remove_used_item_archives(client, make_user, auth_header):
+    """An item with stock history is archived (kept), not deleted."""
+    h = auth_header(await make_user("arc@nirai.com", Role.SUPER_ADMIN.value))
+    iid = (
+        await client.post("/api/inventory/items", headers=h, json={"name": "Used Rice", "unit": "kg"})
+    ).json()["id"]
+    await client.post(
+        f"/api/inventory/items/{iid}/movements", headers=h,
+        json={"movement_type": "PURCHASE_IN", "quantity": "5", "unit_cost": "2.00"},
+    )
+    res = await client.delete(f"/api/inventory/items/{iid}", headers=h)
+    assert res.status_code == 200 and res.json()["action"] == "archived"
+    names = [i["name"] for i in (await client.get("/api/inventory/items", headers=h)).json()]
+    assert "Used Rice" not in names  # archived → hidden from the active list
+
+
+@pytest.mark.asyncio
+async def test_remove_item_is_super_admin_only(client, make_user, auth_header):
+    """A Manager can add items (inventory:write) but cannot remove them (super-admin)."""
+    h = auth_header(await make_user("mgr@nirai.com", Role.MANAGER.value))
+    iid = (
+        await client.post("/api/inventory/items", headers=h, json={"name": "NoDelete", "unit": "kg"})
+    ).json()["id"]
+    res = await client.delete(f"/api/inventory/items/{iid}", headers=h)
+    assert res.status_code == 403

@@ -1,0 +1,111 @@
+"""A curated starter catalogue of common restaurant inventory items (name + unit
++ category only — NO price, vendor, or quantity). A new hotel can import the whole
+list in one click so it doesn't start with an empty inventory, then prune what it
+doesn't use and set prices/suppliers via Vendors. Safe to re-run: existing names
+are skipped, never duplicated."""
+
+# (name, unit, category)
+STARTER_ITEMS: list[tuple[str, str, str]] = [
+    # Vegetables
+    ("Onion", "kg", "Vegetables"),
+    ("Tomato", "kg", "Vegetables"),
+    ("Potato", "kg", "Vegetables"),
+    ("Green Chilli", "kg", "Vegetables"),
+    ("Ginger", "kg", "Vegetables"),
+    ("Garlic", "kg", "Vegetables"),
+    ("Carrot", "kg", "Vegetables"),
+    ("Cabbage", "kg", "Vegetables"),
+    ("Cauliflower", "kg", "Vegetables"),
+    ("Green Beans", "kg", "Vegetables"),
+    ("Capsicum", "kg", "Vegetables"),
+    ("Brinjal (Aubergine)", "kg", "Vegetables"),
+    ("Drumstick", "kg", "Vegetables"),
+    ("Spinach", "bunch", "Vegetables"),
+    ("Curry Leaves", "bunch", "Vegetables"),
+    ("Coriander Leaves", "bunch", "Vegetables"),
+    ("Mint Leaves", "bunch", "Vegetables"),
+    ("Lemon", "kg", "Vegetables"),
+    # Dairy & Eggs
+    ("Milk", "litre", "Dairy & Eggs"),
+    ("Curd / Yoghurt", "kg", "Dairy & Eggs"),
+    ("Paneer", "kg", "Dairy & Eggs"),
+    ("Butter", "kg", "Dairy & Eggs"),
+    ("Cheese", "kg", "Dairy & Eggs"),
+    ("Fresh Cream", "litre", "Dairy & Eggs"),
+    ("Eggs", "dozen", "Dairy & Eggs"),
+    # Rice & Grains
+    ("Basmati Rice", "kg", "Rice & Grains"),
+    ("Idli Rice", "kg", "Rice & Grains"),
+    ("Sona Masoori Rice", "kg", "Rice & Grains"),
+    ("Poha (Flattened Rice)", "kg", "Rice & Grains"),
+    ("Semolina (Rava)", "kg", "Rice & Grains"),
+    ("Vermicelli", "kg", "Rice & Grains"),
+    # Flours
+    ("Wheat Flour (Atta)", "kg", "Flours"),
+    ("Plain Flour (Maida)", "kg", "Flours"),
+    ("Rice Flour", "kg", "Flours"),
+    ("Gram Flour (Besan)", "kg", "Flours"),
+    ("Corn Flour", "kg", "Flours"),
+    # Lentils & Pulses
+    ("Toor Dal", "kg", "Lentils & Pulses"),
+    ("Urad Dal", "kg", "Lentils & Pulses"),
+    ("Moong Dal", "kg", "Lentils & Pulses"),
+    ("Chana Dal", "kg", "Lentils & Pulses"),
+    ("Masoor Dal", "kg", "Lentils & Pulses"),
+    ("Chickpeas (Chana)", "kg", "Lentils & Pulses"),
+    ("Kidney Beans (Rajma)", "kg", "Lentils & Pulses"),
+    # Spices & Masala
+    ("Salt", "kg", "Spices & Masala"),
+    ("Turmeric Powder", "kg", "Spices & Masala"),
+    ("Red Chilli Powder", "kg", "Spices & Masala"),
+    ("Coriander Powder", "kg", "Spices & Masala"),
+    ("Cumin Seeds", "kg", "Spices & Masala"),
+    ("Mustard Seeds", "kg", "Spices & Masala"),
+    ("Garam Masala", "kg", "Spices & Masala"),
+    ("Black Pepper", "kg", "Spices & Masala"),
+    ("Cardamom", "kg", "Spices & Masala"),
+    ("Cloves", "kg", "Spices & Masala"),
+    ("Cinnamon", "kg", "Spices & Masala"),
+    ("Bay Leaves", "packet", "Spices & Masala"),
+    ("Fenugreek Seeds", "kg", "Spices & Masala"),
+    ("Asafoetida (Hing)", "packet", "Spices & Masala"),
+    ("Tamarind", "kg", "Spices & Masala"),
+    # Oils & Ghee
+    ("Sunflower Oil", "litre", "Oils & Ghee"),
+    ("Vegetable Oil", "litre", "Oils & Ghee"),
+    ("Coconut Oil", "litre", "Oils & Ghee"),
+    ("Ghee", "kg", "Oils & Ghee"),
+    # Meat & Seafood
+    ("Chicken", "kg", "Meat & Seafood"),
+    ("Mutton (Goat)", "kg", "Meat & Seafood"),
+    ("Lamb", "kg", "Meat & Seafood"),
+    ("Prawns", "kg", "Meat & Seafood"),
+    ("Fish (Tilapia)", "kg", "Meat & Seafood"),
+    ("King Fish", "kg", "Meat & Seafood"),
+    # Condiments & Dry Goods
+    ("Coconut", "piece", "Condiments & Dry Goods"),
+    ("Coconut Milk", "litre", "Condiments & Dry Goods"),
+    ("Cashew Nuts", "kg", "Condiments & Dry Goods"),
+    ("Sugar", "kg", "Condiments & Dry Goods"),
+    ("Tomato Ketchup", "litre", "Condiments & Dry Goods"),
+    ("Soy Sauce", "litre", "Condiments & Dry Goods"),
+    ("Vinegar", "litre", "Condiments & Dry Goods"),
+    ("Papad", "packet", "Condiments & Dry Goods"),
+    # Beverages
+    ("Tea Powder", "kg", "Beverages"),
+    ("Coffee Powder", "kg", "Beverages"),
+    ("Bottled Water", "bottle", "Beverages"),
+    ("Soft Drinks", "bottle", "Beverages"),
+    # Packaging & Disposables
+    ("Takeaway Containers", "piece", "Packaging & Disposables"),
+    ("Paper Napkins", "packet", "Packaging & Disposables"),
+    ("Carry Bags", "packet", "Packaging & Disposables"),
+    ("Aluminium Foil", "roll", "Packaging & Disposables"),
+    ("Cling Film", "roll", "Packaging & Disposables"),
+    # Cleaning & Hygiene
+    ("Dishwash Liquid", "litre", "Cleaning & Hygiene"),
+    ("Hand Wash", "litre", "Cleaning & Hygiene"),
+    ("Floor Cleaner", "litre", "Cleaning & Hygiene"),
+    ("Garbage Bags", "packet", "Cleaning & Hygiene"),
+    ("Kitchen Towels", "roll", "Cleaning & Hygiene"),
+]

@@ -121,6 +121,63 @@ async def update_item(
     return ItemOut.model_validate(item)
 
 
+@router.post("/seed-starter")
+async def seed_starter(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """One-click: add the curated starter catalogue (common restaurant items, name +
+    unit + category only) so a new hotel isn't empty. Re-runnable — existing names
+    are skipped. Prices/suppliers are left blank for the owner to set via Vendors."""
+    result = await service.seed_starter_items(db, user.hotel_id)
+    if result["added"]:
+        await audit.record(
+            db, hotel_id=user.hotel_id, user=user, action="inventory.seed_starter",
+            summary=f"Imported {len(result['added'])} starter items",
+            entity_type="item", entity_id=None,
+        )
+    return {
+        "added": len(result["added"]),
+        "skipped": len(result["skipped"]),
+        "names": result["added"],
+    }
+
+
+@router.get("/items/{item_id}/usage")
+async def get_item_usage(
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> dict:
+    """How tied-in an item is (recipes / orders / stock movements / vendor links) so
+    the UI can warn precisely before removing — and say whether it'll delete or archive."""
+    item = await service.get_item(db, item_id, user.hotel_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    return await service.item_usage(db, item)
+
+
+@router.delete("/items/{item_id}")
+async def delete_item(
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:delete")),  # only "*" (Super Admin) grants this
+) -> dict:
+    """Remove an item (Super Admin only). Unused items are permanently deleted; items
+    with recipe/order/stock history are ARCHIVED so the books stay intact."""
+    item = await service.get_item(db, item_id, user.hotel_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    name = item.name
+    result = await service.remove_item(db, item)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action=f"inventory.{result['action']}",
+        summary=f"{result['action'].capitalize()} item: {name}",
+        entity_type="item", entity_id=item_id,
+    )
+    return result
+
+
 @router.post("/categories/rename")
 async def rename_category(
     payload: CategoryRename,

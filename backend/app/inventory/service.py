@@ -416,6 +416,75 @@ async def rename_category(db: AsyncSession, hotel_id: uuid.UUID, old: str, new: 
     return result.rowcount or 0
 
 
+async def seed_starter_items(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
+    """Create the curated starter catalogue (name + unit + category only) for a hotel.
+    Skips any name that already exists (active OR archived) so it's safe to re-run."""
+    from app.inventory.starter import STARTER_ITEMS
+
+    existing = {
+        n.lower()
+        for (n,) in (
+            await db.execute(select(Item.name).where(Item.hotel_id == hotel_id))
+        ).all()
+    }
+    added: list[str] = []
+    skipped: list[str] = []
+    for name, unit, category in STARTER_ITEMS:
+        nm = normalize_name(name)
+        if nm.lower() in existing:
+            skipped.append(nm)
+            continue
+        db.add(Item(hotel_id=hotel_id, name=nm, unit=unit, category=category))
+        existing.add(nm.lower())
+        added.append(nm)
+    if added:
+        await db.commit()
+    return {"added": added, "skipped": skipped}
+
+
+async def item_usage(db: AsyncSession, item: Item) -> dict:
+    """How much an item is tied into the system, so the UI can warn before removing.
+    Recipes / purchase orders / stock movements make a HARD delete unsafe (we archive
+    instead); vendor price-links cascade away cleanly."""
+    from app.purchasing.models import IndentItem, POItem
+    from app.recipes.models import RecipeIngredient
+    from app.vendors.models import VendorItem
+
+    async def _count(model) -> int:
+        return (
+            await db.execute(
+                select(func.count()).select_from(model).where(model.item_id == item.id)
+            )
+        ).scalar_one()
+
+    recipes = await _count(RecipeIngredient)
+    purchase_orders = await _count(POItem) + await _count(IndentItem)
+    movements = await _count(StockMovement)
+    vendors = await _count(VendorItem)
+    return {
+        "recipes": recipes,
+        "purchase_orders": purchase_orders,
+        "movements": movements,
+        "vendors": vendors,
+        "in_stock": item.current_stock != 0,
+        "can_hard_delete": recipes == 0 and purchase_orders == 0 and movements == 0,
+    }
+
+
+async def remove_item(db: AsyncSession, item: Item) -> dict:
+    """Remove an item. If it's used anywhere with history (recipes / orders / stock
+    movements) it is ARCHIVED (is_active=False) so the past numbers stay intact; if
+    it's unused it is permanently DELETED (vendor price-links cascade away)."""
+    usage = await item_usage(db, item)
+    if usage["can_hard_delete"]:
+        await db.delete(item)
+        await db.commit()
+        return {"action": "deleted", "usage": usage}
+    item.is_active = False
+    await db.commit()
+    return {"action": "archived", "usage": usage}
+
+
 async def low_stock_items(db: AsyncSession, hotel_id: uuid.UUID) -> list[Item]:
     """Active items whose current stock is at or below their minimum level."""
     result = await db.execute(

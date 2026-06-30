@@ -18,6 +18,8 @@ import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPi
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { useConfirm } from "@/components/confirm";
 import { useCurrency } from "@/lib/currency";
+import { useAuth } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 
 const STD_UNITS = ["kg", "g", "litre", "ml", "piece", "pack", "box", "bag", "dozen", "bottle"];
 
@@ -46,7 +48,12 @@ const EMPTY = { name: "", category: "", unit: "kg", min: "", allergens: "" };
 export default function InventoryPage() {
   const router = useRouter();
   const confirm = useConfirm();
+  const { user } = useAuth();
+  const isSuper = user?.role === "SUPER_ADMIN";
+  const canWrite = can(user?.role, "inventory:write");
   const [items, setItems] = useState<Item[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -246,19 +253,74 @@ export default function InventoryPage() {
     }
   }
 
-  async function removeItem(item: Item) {
+  // Add the curated starter catalogue (name + unit only) in one click, so a new
+  // hotel doesn't start with an empty inventory. Existing names are skipped.
+  async function addCommonItems() {
     const ok = await confirm({
-      title: `Remove ${item.name}?`,
+      title: "Add common restaurant items?",
       message:
-        "It will be hidden from inventory, pickers and ordering. Recipes and past purchase orders that used it keep their history. You can't undo this from the app yet.",
-      confirmText: "Remove item",
+        "Adds a ready-made list of ~90 everyday items (vegetables, spices, dairy, rice, oils, packaging, cleaning…) — name + unit only. Prices and suppliers are left blank for you to set on the Vendors page. Anything already in your list is skipped, and you can edit or remove any item afterwards.",
+      confirmText: "Add items",
+    });
+    if (!ok) return;
+    setSeeding(true);
+    setError(null);
+    try {
+      const res = await api.post<{ added: number; skipped: number }>("/inventory/seed-starter", {});
+      await load();
+      setNotice(
+        `Added ${res.added} item${res.added === 1 ? "" : "s"}` +
+          (res.skipped ? `, skipped ${res.skipped} already in your list.` : "."),
+      );
+      setTimeout(() => setNotice(null), 5000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not add starter items");
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  async function removeItem(item: Item) {
+    // Look up how tied-in the item is, so the warning is specific + honest about
+    // whether this permanently deletes (unused) or archives (has history).
+    let usage: {
+      recipes: number;
+      purchase_orders: number;
+      movements: number;
+      can_hard_delete: boolean;
+    } | null = null;
+    try {
+      usage = await api.get(`/inventory/items/${item.id}/usage`);
+    } catch {
+      /* fall back to the safe (archive) wording below */
+    }
+    const willDelete = usage?.can_hard_delete ?? false;
+    const bits: string[] = [];
+    if (usage?.recipes) bits.push(`${usage.recipes} recipe${usage.recipes === 1 ? "" : "s"}`);
+    if (usage?.purchase_orders)
+      bits.push(`${usage.purchase_orders} purchase-order line${usage.purchase_orders === 1 ? "" : "s"}`);
+    if (usage?.movements)
+      bits.push(`${usage.movements} stock movement${usage.movements === 1 ? "" : "s"}`);
+
+    const ok = await confirm({
+      title: `Remove “${item.name}”?`,
+      message: willDelete
+        ? `“${item.name}” isn’t used anywhere yet, so it will be permanently DELETED. This can’t be undone.`
+        : `“${item.name}” is used in ${bits.join(", ") || "your records"}. To keep your past numbers correct it will be ARCHIVED (hidden from inventory, pickers and ordering) — its history stays intact. It won’t appear in new entries.`,
+      confirmText: willDelete ? "Delete permanently" : "Archive item",
       tone: "danger",
     });
     if (!ok) return;
     setError(null);
     try {
-      await api.patch<Item>(`/inventory/items/${item.id}`, { is_active: false });
+      const res = await api.delete<{ action: string }>(`/inventory/items/${item.id}`);
       await load();
+      setNotice(
+        res.action === "deleted"
+          ? `Deleted “${item.name}”.`
+          : `Archived “${item.name}” — hidden from new use, history kept.`,
+      );
+      setTimeout(() => setNotice(null), 5000);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not remove item");
     }
@@ -393,6 +455,16 @@ export default function InventoryPage() {
             className="hidden"
             onChange={onTemplateFile}
           />
+          {canWrite && (
+            <button
+              onClick={addCommonItems}
+              disabled={seeding}
+              title="One-click: add a ready-made list of common restaurant items (name + unit only) so you don't start empty"
+              className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+            >
+              {seeding ? "Adding…" : "✨ Add common items"}
+            </button>
+          )}
           <button
             onClick={() => setTemplateModal(true)}
             title="Download a blank import template (Excel, CSV or PDF)"
@@ -425,6 +497,12 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      {notice && (
+        <p className="mt-3 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-sm text-brand-200">
+          {notice}
+        </p>
+      )}
 
       <p className="mt-3 mb-5 max-w-3xl text-xs leading-relaxed text-fg-faint">
         Bulk add items the reliable way: tap{" "}
@@ -837,13 +915,15 @@ export default function InventoryPage() {
                               >
                                 Edit
                               </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); removeItem(item); }}
-                                title="Remove from inventory"
-                                className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
-                              >
-                                ✕
-                              </button>
+                              {isSuper && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); removeItem(item); }}
+                                  title="Remove from inventory (Super Admin)"
+                                  className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                                >
+                                  ✕
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
