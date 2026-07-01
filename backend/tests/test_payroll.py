@@ -120,6 +120,31 @@ async def test_process_and_payslip_via_api(client, make_user, auth_header, db, h
 
 
 @pytest.mark.asyncio
+async def test_approve_all_and_consolidated_pdf(client, make_user, auth_header, db, hotel):
+    acct = await make_user("acct2@nirai.com", Role.ACCOUNTANT.value)
+    h = auth_header(acct)
+    emp = await emp_service.create_employee(
+        db, hotel.id, full_name="Bala", salary_type="MONTHLY", monthly_salary=Decimal("2600")
+    )
+    await emp_service.set_attendance(db, emp, date(2026, 6, 2), status="PRESENT")
+    await client.post(
+        "/api/payroll/process", headers=h, json={"pay_period": "2026-06", "working_days": 1}
+    )
+
+    # approve-all flips every DRAFT -> APPROVED
+    resp = await client.post("/api/payroll/approve-all?pay_period=2026-06", headers=h)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body and all(r["status"] == "APPROVED" for r in body)
+
+    # one PDF with everyone's payslip
+    pdf = await client.get("/api/payroll/payslips.pdf?pay_period=2026-06", headers=h)
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
 async def test_cashier_cannot_run_payroll(client, make_user, auth_header):
     cashier = await make_user("cash@nirai.com", Role.CASHIER.value)
     resp = await client.post(

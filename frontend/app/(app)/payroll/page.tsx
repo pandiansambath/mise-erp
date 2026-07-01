@@ -1,13 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, downloadFile, type PayrollRow } from "@/lib/api";
+import { api, ApiError, downloadFile, type Employee, type PayrollRow } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import Link from "next/link";
 import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { localISODate } from "@/lib/date";
+
+type Advance = {
+  id: string;
+  employee_id: string;
+  amount: string;
+  reason: string | null;
+  given_date: string;
+  deduct_period: string;
+  is_deducted: boolean;
+};
 
 const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
@@ -69,12 +81,27 @@ export default function PayrollPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Advances (money paid to staff early, deducted at the next run)
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [advances, setAdvances] = useState<Advance[]>([]);
+  const [advEmp, setAdvEmp] = useState("");
+  const [advAmount, setAdvAmount] = useState("");
+  const [advReason, setAdvReason] = useState("");
+  const [advBusy, setAdvBusy] = useState(false);
+  const empName = (id: string) => employees.find((e) => e.id === id)?.full_name ?? "—";
+
   const load = useCallback(async (p: string) => {
     setRows(await api.get<PayrollRow[]>(`/payroll?pay_period=${p}`));
   }, []);
 
+  const loadAdvances = useCallback(async () => {
+    setAdvances(await api.get<Advance[]>("/payroll/advances").catch(() => []));
+  }, []);
+
   useEffect(() => {
     load(period).finally(() => setLoading(false));
+    api.get<Employee[]>("/employees").then((e) => setEmployees(e.filter((x) => x.is_active))).catch(() => {});
+    loadAdvances();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -118,6 +145,50 @@ export default function PayrollPage() {
     if (!ok) return;
     await api.post(`/payroll/${id}/${action}`);
     await load(period);
+  }
+
+  async function approveAll() {
+    const drafts = rows.filter((r) => r.status === "DRAFT").length;
+    if (!drafts) return;
+    const ok = await confirm({
+      title: `Approve all ${drafts} draft payslip${drafts === 1 ? "" : "s"}?`,
+      message: "Approves every draft payslip for this period in one go, so they can be marked paid.",
+      confirmText: "Approve all",
+    });
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setRows(await api.post<PayrollRow[]>(`/payroll/approve-all?pay_period=${period}`));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not approve all");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addAdvance(e: React.FormEvent) {
+    e.preventDefault();
+    if (!advEmp || !advAmount) return;
+    setAdvBusy(true);
+    setError(null);
+    try {
+      await api.post("/payroll/advances", {
+        employee_id: advEmp,
+        amount: advAmount,
+        reason: advReason || null,
+        given_date: localISODate(),
+        deduct_period: period,
+      });
+      setAdvEmp("");
+      setAdvAmount("");
+      setAdvReason("");
+      await loadAdvances();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not record the advance");
+    } finally {
+      setAdvBusy(false);
+    }
   }
 
   const sortedRows = sort.sortRows(rows, (r, k) =>
@@ -171,12 +242,18 @@ export default function PayrollPage() {
               <b className="text-fg">30</b> for every day).
             </p>
             <p>
-              <b className="text-fg">Net</b> = Gross − deductions, where deductions = salary advances due this month + any
-              other deductions you enter.
+              <b className="text-fg">Where are the salaries set?</b> Each person&apos;s monthly salary or hourly rate lives on
+              the <Link href="/employees" className="text-brand-400 underline">Employees</Link> page (edit the person). Payroll reads it from there.
+            </p>
+            <p>
+              <b className="text-fg">Advances</b> = money you give someone early (e.g. an emergency). Record it in{" "}
+              <b className="text-fg">Salary advances</b> below against the month you&apos;ll recover it — it&apos;s then automatically
+              deducted from that run&apos;s <b className="text-fg">Net</b>. So <b className="text-fg">Net</b> = Gross − advances due − any other deductions.
             </p>
             <p className="text-fg-faint">
-              Each run starts as a <b className="text-fg">Draft</b> → <b className="text-fg">Approve</b> it →{" "}
-              <b className="text-fg">Mark paid</b> once paid. You can download a payslip PDF for anyone.
+              <b className="text-fg">Penalties</b> (late / absence) are handled on <Link href="/attendance" className="text-brand-400 underline">Attendance</Link> — they change the
+              days/hours recorded there, which then flows into pay. Each run starts as a{" "}
+              <b className="text-fg">Draft</b> → <b className="text-fg">Approve</b> → <b className="text-fg">Mark paid</b>; download a payslip PDF per person, or the whole run as one PDF.
             </p>
           </div>
         )}
@@ -205,7 +282,21 @@ export default function PayrollPage() {
               <button onClick={runPayroll} disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {busy ? "Running…" : "Run payroll"}
               </button>
+              {rows.some((r) => r.status === "DRAFT") && (
+                <button onClick={approveAll} disabled={busy} className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-60">
+                  ✓ Approve all
+                </button>
+              )}
             </>
+          )}
+          {rows.length > 0 && (
+            <button
+              onClick={() => downloadFile(`/payroll/payslips.pdf?pay_period=${period}`, `payslips-${period}.pdf`)}
+              title="Download every payslip for this period as one PDF"
+              className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            >
+              ⬇ All payslips (PDF)
+            </button>
           )}
           {rows.length > 0 && (
             <span className="ml-auto text-sm text-fg-faint">
@@ -215,6 +306,61 @@ export default function PayrollPage() {
         </div>
         {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
       </Card>
+
+      {canWrite && (
+        <Card className="mb-6">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-fg">Salary advances</h3>
+            <InfoDot
+              id="adv"
+              open={openInfo === "adv"}
+              onToggle={toggleInfo}
+              text="Money given to a person early (e.g. an emergency). Record it against the month you'll recover it — it's automatically deducted from that month's payroll Net when you run it."
+            />
+          </div>
+          <p className="mt-1 text-xs text-fg-faint">
+            Recovered from the selected period&apos;s payroll (<b className="text-fg-soft">{period}</b>).
+          </p>
+          <form onSubmit={addAdvance} className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
+            <label className="block sm:w-48">
+              <span className="block text-xs font-medium text-fg-faint">Employee</span>
+              <select value={advEmp} onChange={(e) => setAdvEmp(e.target.value)} className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm">
+                <option value="">Choose…</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>{e.full_name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block sm:w-32">
+              <span className="block text-xs font-medium text-fg-faint">Amount</span>
+              <input value={advAmount} onChange={(e) => setAdvAmount(e.target.value)} inputMode="decimal" placeholder="0.00" className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm" />
+            </label>
+            <label className="block flex-1 sm:min-w-[10rem]">
+              <span className="block text-xs font-medium text-fg-faint">Reason (optional)</span>
+              <input value={advReason} onChange={(e) => setAdvReason(e.target.value)} placeholder="e.g. medical emergency" className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm" />
+            </label>
+            <button disabled={advBusy || !advEmp || !advAmount} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              {advBusy ? "Saving…" : "Record advance"}
+            </button>
+          </form>
+          {advances.length > 0 && (
+            <div className="mt-4 space-y-1.5">
+              {advances.map((a) => (
+                <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm">
+                  <span className="text-fg">
+                    <b>{empName(a.employee_id)}</b> · {format(a.amount)}
+                    {a.reason ? <span className="text-fg-faint"> — {a.reason}</span> : null}
+                  </span>
+                  <span className="flex items-center gap-2 text-xs">
+                    <Badge tone="slate">recover {a.deduct_period}</Badge>
+                    {a.is_deducted ? <Badge tone="green">deducted</Badge> : <Badge tone="amber">pending</Badge>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card className="p-0">
         <div className="overflow-x-auto">

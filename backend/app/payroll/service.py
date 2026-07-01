@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.employees.models import Attendance, AttendanceStatus, Employee, SalaryType
@@ -171,6 +171,35 @@ async def list_payroll(db: AsyncSession, hotel_id: uuid.UUID, pay_period: str) -
         }
         for p, e in rows.all()
     ]
+
+
+async def payroll_records(
+    db: AsyncSession, hotel_id: uuid.UUID, pay_period: str
+) -> list[tuple[Payroll, Employee]]:
+    """(Payroll, Employee) ORM pairs for a period — used to build the consolidated PDF
+    (needs the full record: days present, hours, etc., not the list dict)."""
+    rows = await db.execute(
+        select(Payroll, Employee)
+        .join(Employee, Payroll.employee_id == Employee.id)
+        .where(Payroll.hotel_id == hotel_id, Payroll.pay_period == pay_period)
+        .order_by(Employee.full_name)
+    )
+    return [(p, e) for p, e in rows.all()]
+
+
+async def approve_all(db: AsyncSession, hotel_id: uuid.UUID, pay_period: str) -> int:
+    """Approve every DRAFT payslip in a period at once. Returns how many were approved."""
+    res = await db.execute(
+        update(Payroll)
+        .where(
+            Payroll.hotel_id == hotel_id,
+            Payroll.pay_period == pay_period,
+            Payroll.status == PayrollStatus.DRAFT.value,
+        )
+        .values(status=PayrollStatus.APPROVED.value)
+    )
+    await db.commit()
+    return res.rowcount or 0
 
 
 async def list_payroll_for_employee(

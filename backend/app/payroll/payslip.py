@@ -14,9 +14,9 @@ def _s(value) -> str:
     return str(value).encode("latin-1", "replace").decode("latin-1")
 
 
-def generate_payslip(payroll, employee, hotel) -> bytes:
+def _draw(pdf: FPDF, payroll, employee, hotel) -> None:
+    """Render ONE payslip page onto `pdf` (reused for single + consolidated)."""
     cur = hotel.base_currency
-    pdf = FPDF()
     pdf.add_page()
 
     # ── header band ──
@@ -87,4 +87,22 @@ def generate_payslip(payroll, employee, hotel) -> bytes:
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 
+
+def generate_payslip(payroll, employee, hotel) -> bytes:
+    """A single employee's payslip PDF."""
+    pdf = FPDF()
+    _draw(pdf, payroll, employee, hotel)
+    return bytes(pdf.output())
+
+
+def generate_consolidated(items, hotel) -> bytes:
+    """One PDF containing every payslip for a period — the super-admin's run summary.
+    `items` is a list of (payroll, employee) pairs."""
+    pdf = FPDF()
+    for payroll, employee in items:
+        _draw(pdf, payroll, employee, hotel)
+    if not items:
+        pdf.add_page()
+        pdf.set_font("Helvetica", "", 12)
+        pdf.cell(0, 10, text="No payroll for this period.")
     return bytes(pdf.output())

@@ -63,6 +63,40 @@ async def list_payroll(
     return [PayrollRow.model_validate(r) for r in rows]
 
 
+@router.post("/approve-all", response_model=list[PayrollRow])
+async def approve_all(
+    pay_period: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:write")),
+) -> list[PayrollRow]:
+    """Approve every DRAFT payslip for the period in one click."""
+    n = await service.approve_all(db, user.hotel_id, pay_period)
+    if n:
+        await audit.record(
+            db, hotel_id=user.hotel_id, user=user, action="payroll.approve_all",
+            summary=f"Approved all {n} draft payslip(s) for {pay_period}",
+            entity_type="payroll",
+        )
+    rows = await service.list_payroll(db, user.hotel_id, pay_period)
+    return [PayrollRow.model_validate(r) for r in rows]
+
+
+@router.get("/payslips.pdf")
+async def payslips_pdf(
+    pay_period: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:read")),
+) -> Response:
+    """One PDF with everyone's payslip for the period (the super-admin run summary)."""
+    items = await service.payroll_records(db, user.hotel_id, pay_period)
+    hotel = await db.get(Hotel, user.hotel_id)
+    pdf = payslip.generate_consolidated(items, hotel)
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="payslips-{pay_period}.pdf"'},
+    )
+
+
 @router.post("/{payroll_id}/approve", response_model=PayrollRow)
 async def approve(
     payroll_id: uuid.UUID,
