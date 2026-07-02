@@ -7,6 +7,7 @@ import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { localISODate } from "@/lib/date";
 
 interface LowStock {
   item_id: string;
@@ -77,7 +78,7 @@ export default function DashboardPage() {
     const jobs: Promise<unknown>[] = [];
     if (seeFinance) {
       jobs.push(api.get<DashboardKpis>("/reports/dashboard").then(setKpis).catch(() => {}));
-      const iso = (d: Date) => d.toISOString().slice(0, 10);
+      const iso = localISODate;
       const ago = (n: number) => {
         const x = new Date();
         x.setDate(x.getDate() - n);
@@ -107,6 +108,13 @@ export default function DashboardPage() {
         title={hotel ? hotel.name : "Dashboard"}
         subtitle="Your restaurant at a glance"
       />
+
+      <p className="-mt-2 mb-5 text-xs text-fg-faint">
+        Time windows: <b className="text-fg-soft">Today</b> = since midnight ·{" "}
+        <b className="text-fg-soft">Month</b> = 1st → today · <b className="text-fg-soft">This week vs last</b> ={" "}
+        rolling last 7 days vs the 7 before. For any custom period, open{" "}
+        <Link href="/reports" className="text-brand-400 underline">Reports</Link>.
+      </p>
 
       {!setupDone && kpis && kpis.recipe_count === 0 && Number(kpis.month_net_sales) === 0 && Number(kpis.month_expenses) === 0 && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-500/30 bg-brand-500/10 px-4 py-3">

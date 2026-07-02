@@ -9,9 +9,10 @@ import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { localISODate } from "@/lib/date";
 
 const METHODS = ["CARD", "CASH", "ONLINE", "BANK"];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localISODate();
 
 export default function SalesPage() {
   const { user } = useAuth();
@@ -151,7 +152,7 @@ export default function SalesPage() {
 
   return (
     <div>
-      <PageHeader title="Sales & Cash" subtitle="Daily takings by channel, commissions, and the till." />
+      <PageHeader title="Sales & Cash" subtitle="One day at a time — takings by channel, commissions and the till for the date you pick." />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <label className="text-sm font-medium text-fg-soft">Date</label>

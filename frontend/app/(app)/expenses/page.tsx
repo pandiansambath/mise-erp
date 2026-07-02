@@ -17,6 +17,8 @@ import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { RangeControls, rangeCaption } from "@/components/RangeControls";
+import { localISODate } from "@/lib/date";
 
 // Payment methods the owner actually uses. Stored as the value; shown as the label.
 const METHODS: { value: string; label: string }[] = [
@@ -32,12 +34,8 @@ const METHOD_LABEL: Record<string, string> = {
   CARD: "Card",
   ONLINE: "Online",
 };
-const monthStart = () => {
-  const d = new Date();
-  d.setDate(1);
-  return d.toISOString().slice(0, 10);
-};
-const today = () => new Date().toISOString().slice(0, 10);
+const monthStart = () => localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+const today = () => localISODate();
 
 export default function ExpensesPage() {
   const { user } = useAuth();
@@ -98,9 +96,11 @@ export default function ExpensesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function applyRange() {
+  function applyRange(f: string, t: string) {
+    setFrom(f);
+    setTo(t);
     setLoading(true);
-    await loadData(from, to).finally(() => setLoading(false));
+    loadData(f, t).finally(() => setLoading(false));
   }
 
   function toggleCat(id: string) {
@@ -187,19 +187,11 @@ export default function ExpensesPage() {
     <div>
       <PageHeader title="Expenses" subtitle="Fixed overheads and variable costs — what's going out." />
 
-      <div className="mb-6 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs font-medium text-fg-faint">From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-fg-faint">To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
-        </div>
-        <button onClick={applyRange} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2">
-          Apply
-        </button>
-      </div>
+      <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} className="mb-2" />
+      <p className="mb-6 text-sm text-fg-faint">
+        Showing spends for <b className="text-fg-soft">{rangeCaption({ from, to })}</b>. The totals and list
+        below are just this period — switch the range to compare months.
+      </p>
 
       <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Fixed costs" value={format(summary.fixed_total)} />

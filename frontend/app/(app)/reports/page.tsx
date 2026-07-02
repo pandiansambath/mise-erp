@@ -3,14 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, downloadFile, type PnL } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { RangeControls, rangeCaption } from "@/components/RangeControls";
+import { localISODate } from "@/lib/date";
 import { useCurrency } from "@/lib/currency";
 
-const monthStart = () => {
-  const d = new Date();
-  d.setDate(1);
-  return d.toISOString().slice(0, 10);
-};
-const today = () => new Date().toISOString().slice(0, 10);
+const monthStart = () => localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+const today = () => localISODate();
 
 function PnlLine({
   label,
@@ -63,28 +61,20 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function apply() {
+  function applyRange(f: string, t: string) {
+    setFrom(f);
+    setTo(t);
     setLoading(true);
-    await load(from, to).finally(() => setLoading(false));
+    load(f, t).finally(() => setLoading(false));
   }
 
   return (
     <div>
-      <PageHeader title="Reports" subtitle="Profit & Loss — did the restaurant make money?" />
+      <PageHeader title="Reports" subtitle="Profit & Loss — did the restaurant make money in a chosen period?" />
 
-      <div className="mb-6 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs font-medium text-fg-faint">From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-fg-faint">To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
-        </div>
-        <button onClick={apply} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2">
-          Apply
-        </button>
-        <div className="ml-auto flex gap-2">
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
+        <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} />
+        <div className="flex gap-2">
           <button
             onClick={() => downloadFile(`/reports/pnl.xlsx?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.xlsx`)}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
@@ -99,6 +89,10 @@ export default function ReportsPage() {
           </button>
         </div>
       </div>
+      <p className="mb-6 text-sm text-fg-faint">
+        Showing <b className="text-fg-soft">{rangeCaption({ from, to })}</b> — every figure below is the
+        total for this period. Pick a quick preset or set exact From/To dates.
+      </p>
 
       {loading ? (
         <Spinner />
