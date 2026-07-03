@@ -173,3 +173,27 @@ async def test_reorder_suggestions_tops_up_to_par(db, hotel):
     assert "Tomato" in sug
     assert sug["Tomato"]["suggested_qty"] == Decimal("21.000")  # 25 par − 4 on hand
     assert "Salt" not in sug
+
+
+@pytest.mark.asyncio
+async def test_partial_receive_records_short_delivery(db, hotel):
+    """Ordered 100, got 30: only 30 hits stock, received_qty + reason are recorded."""
+    rice = await inv.create_item(db, hotel.id, name="Rice", unit="kg")
+    v1 = await ven.create_vendor(db, hotel.id, name="V1")
+    await ven.upsert_vendor_item(db, v1.id, rice.id, Decimal("5.00"))
+    await ven.set_preferred_vendor(db, hotel.id, rice.id, v1.id)
+    indent = await service.create_indent(
+        db, hotel.id, [{"item_id": rice.id, "required_qty": Decimal("100")}]
+    )
+    po = (await service.generate_pos(db, indent))["purchase_orders"][0]
+    pi_id = str((await service.po_items(db, po.id))[0]["po_item_id"])
+
+    await service.receive_po(
+        db, po, lines={pi_id: Decimal("30")}, note="vendor short - sent 30 of 100"
+    )
+    assert po.status == "RECEIVED"
+    assert po.receive_note == "vendor short - sent 30 of 100"
+    # only the 30 that arrived hit stock (not the ordered 100)
+    refetched = await inv.get_item(db, rice.id, hotel.id)
+    assert refetched.current_stock == Decimal("30.000")
+    assert (await service.po_items(db, po.id))[0]["received_qty"] == Decimal("30.000")

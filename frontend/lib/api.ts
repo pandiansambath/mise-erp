@@ -403,6 +403,7 @@ export interface POSummary {
 }
 
 export interface POItemOut {
+  po_item_id: string;
   item_id: string;
   item_name: string;
   ordered_qty: string;
@@ -428,6 +429,7 @@ export interface POOut {
   po_number: string;
   status: string;
   total_amount: string;
+  receive_note?: string | null;
   items: POItemOut[];
 }
 

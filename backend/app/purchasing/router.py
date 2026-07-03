@@ -21,6 +21,7 @@ from app.purchasing.schemas import (
     IndentOut,
     ItemSuppliers,
     POOut,
+    POReceiveRequest,
     POSummary,
     ReorderSuggestion,
 )
@@ -41,6 +42,7 @@ async def _po_out(db, po) -> POOut:
         id=po.id, vendor_id=po.vendor_id,
         vendor_name=await service.vendor_name(db, po.vendor_id),
         po_number=po.po_number, status=po.status, total_amount=po.total_amount,
+        receive_note=po.receive_note,
         items=await service.po_items(db, po.id),
     )
 
@@ -184,18 +186,29 @@ async def get_po(
 @router.post("/purchase-orders/{po_id}/receive", response_model=POOut)
 async def receive_po(
     po_id: uuid.UUID,
+    payload: POReceiveRequest | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("indent:approve")),
 ) -> POOut:
+    """Receive a PO into stock. Optional body carries the ACTUAL received qty per line
+    (for a short/over delivery) + a reason; omit it to receive everything as ordered."""
     po = await service.get_po(db, po_id, user.hotel_id)
     if po is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
-    await service.receive_po(db, po, created_by=user.id)
+    lines = None
+    note = None
+    if payload:
+        note = payload.note
+        if payload.lines:
+            lines = {str(ln.po_item_id): ln.received_qty for ln in payload.lines}
+    await service.receive_po(db, po, lines=lines, note=note, created_by=user.id)
     await publish(user.hotel_id, {"type": "purchasing", "action": "po_received"})
+    summary = f"Received PO {po.po_number} into stock"
+    if note:
+        summary += f" — short/over: {note[:80]}"
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="po.received",
-        summary=f"Received PO {po.po_number} — {po.total_amount} into stock",
-        entity_type="purchase_order", entity_id=po.id,
+        summary=summary, entity_type="purchase_order", entity_id=po.id,
     )
     return await _po_out(db, po)
 
@@ -233,18 +246,22 @@ async def revert_po(
 @router.get("/purchase-orders/{po_id}/pdf")
 async def po_pdf(
     po_id: uuid.UUID,
+    received: bool = False,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("indent:read")),
 ) -> Response:
+    """The PO PDF. ?received=1 returns the Goods Received Note (ordered vs received
+    + the delivery note) so you can keep both the expected and the actual on file."""
     po = await service.get_po(db, po_id, user.hotel_id)
     if po is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
     hotel = await db.get(Hotel, user.hotel_id)
     items = await service.po_items(db, po.id)
     vname = await service.vendor_name(db, po.vendor_id)
-    pdf = pdf_gen.generate_po_pdf(po, vname, items, hotel)
+    pdf = pdf_gen.generate_po_pdf(po, vname, items, hotel, received=received)
+    suffix = "-received" if received else ""
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{po.po_number}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{po.po_number}{suffix}.pdf"'},
     )

@@ -37,6 +37,7 @@ class IndentOut(BaseModel):
 
 
 class POItemOut(BaseModel):
+    po_item_id: uuid.UUID
     item_id: uuid.UUID
     item_name: str
     ordered_qty: Decimal
@@ -52,7 +53,20 @@ class POOut(BaseModel):
     po_number: str
     status: str
     total_amount: Decimal
+    receive_note: str | None = None
     items: list[POItemOut]
+
+
+class POReceiveLine(BaseModel):
+    po_item_id: uuid.UUID
+    received_qty: Decimal = Field(ge=0)
+
+
+class POReceiveRequest(BaseModel):
+    """Optional body for receiving a PO: the actual qty received per line + a reason
+    for any short/over delivery. Omit to receive everything as ordered."""
+    lines: list[POReceiveLine] = []
+    note: str | None = None
 
 
 class POSummary(BaseModel):

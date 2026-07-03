@@ -80,6 +80,10 @@ class PurchaseOrder(Base):
         Numeric(12, 2), nullable=False, default=Decimal("0")
     )
     expected_delivery: Mapped[date | None] = mapped_column(Date)
+    # Set when the PO is received. receive_note explains any short/over delivery
+    # (e.g. "vendor out of stock — got 30 of 100") so the difference stays auditable.
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    receive_note: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

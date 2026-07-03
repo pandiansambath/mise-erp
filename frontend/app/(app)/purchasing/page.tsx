@@ -199,24 +199,46 @@ export default function PurchasingPage() {
     }
   }
 
-  async function receive(poId: string) {
-    const ok = await confirm({
-      title: "Receive this purchase order?",
-      message: "Marks all items as received and adds them to stock (updates average cost).",
-      confirmText: "Receive into stock",
-    });
-    if (!ok) return;
+  // Receive flow: edit the actual qty received per line (for a short/over delivery)
+  // + a reason, so ordered-vs-received stays on record (both PDFs downloadable).
+  const [recvPo, setRecvPo] = useState<POOut | null>(null);
+  const [recvLines, setRecvLines] = useState<Record<string, string>>({});
+  const [recvNote, setRecvNote] = useState("");
+  const [recvBusy, setRecvBusy] = useState(false);
+
+  function openReceive(po: POOut) {
+    setRecvLines(Object.fromEntries(po.items.map((it) => [it.po_item_id, it.ordered_qty])));
+    setRecvNote("");
+    setRecvPo(po);
+  }
+
+  const recvChanged = (po: POOut) =>
+    po.items.some((it) => (recvLines[it.po_item_id] ?? it.ordered_qty) !== it.ordered_qty);
+
+  async function submitReceive() {
+    if (!recvPo) return;
+    setRecvBusy(true);
     setMsg(null);
     try {
-      await api.post(`/purchasing/purchase-orders/${poId}/receive`);
+      await api.post(`/purchasing/purchase-orders/${recvPo.id}/receive`, {
+        lines: recvPo.items.map((it) => ({
+          po_item_id: it.po_item_id,
+          received_qty: recvLines[it.po_item_id] || "0",
+        })),
+        note: recvNote.trim() || null,
+      });
+      const poId = recvPo.id;
+      setRecvPo(null);
       setPoDetail((p) => {
         const next = { ...p };
-        delete next[poId]; // drop the stale copy so re-open shows received qty/status
+        delete next[poId]; // drop stale copy so re-open shows received qty/status
         return next;
       });
       await load();
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not receive PO");
+    } finally {
+      setRecvBusy(false);
     }
   }
 
@@ -441,6 +463,9 @@ export default function PurchasingPage() {
                                 <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
                                 <span className="shrink-0 text-fg-faint">
                                   {it.ordered_qty} × {format(it.unit_price)}
+                                  {po.status === "RECEIVED" && it.received_qty !== it.ordered_qty && (
+                                    <span className="ml-2 font-medium text-rose-300">· got {it.received_qty}</span>
+                                  )}
                                   <span className="ml-2 font-medium text-fg">{format(it.line_total)}</span>
                                 </span>
                               </li>
@@ -454,12 +479,22 @@ export default function PurchasingPage() {
                             onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf`, `${po.po_number}.pdf`)}
                             className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/10"
                           >
-                            ⬇ PDF
+                            ⬇ {po.status === "RECEIVED" ? "PO (ordered)" : "PDF"}
                           </button>
+                          {po.status === "RECEIVED" && (
+                            <button
+                              onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf?received=1`, `${po.po_number}-received.pdf`)}
+                              title="What actually arrived (ordered vs received + the note)"
+                              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/10"
+                            >
+                              ⬇ Received note
+                            </button>
+                          )}
                           {canApprove && po.status !== "RECEIVED" && (
                             <button
-                              onClick={() => receive(po.id)}
-                              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft transition hover:bg-paper-2"
+                              onClick={() => detail && openReceive(detail)}
+                              disabled={!detail}
+                              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft transition hover:bg-paper-2 disabled:opacity-50"
                             >
                               ✓ Receive into stock
                             </button>
@@ -483,6 +518,58 @@ export default function PurchasingPage() {
           </div>
         </Card>
       </div>
+
+      {recvPo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRecvPo(null)} aria-hidden />
+          <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
+            <div className="mb-1 flex items-start justify-between">
+              <h3 className="text-lg font-semibold text-fg">Receive {recvPo.po_number}</h3>
+              <button onClick={() => setRecvPo(null)} className="-mr-1 -mt-1 rounded-lg p-1 text-fg-faint hover:bg-paper hover:text-fg" aria-label="Close">✕</button>
+            </div>
+            <p className="mb-4 text-sm text-fg-faint">
+              Enter what actually arrived. If a line is short or over, edit its received qty and add a reason —
+              the ordered PO and this received note both stay downloadable.
+            </p>
+            <div className="space-y-2">
+              {recvPo.items.map((it) => {
+                const val = recvLines[it.po_item_id] ?? it.ordered_qty;
+                const diff = val !== it.ordered_qty;
+                return (
+                  <div key={it.po_item_id} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate text-fg">{it.item_name}</span>
+                    <span className="shrink-0 text-xs text-fg-faint">ordered {it.ordered_qty}</span>
+                    <input
+                      value={val}
+                      onChange={(e) => setRecvLines((m) => ({ ...m, [it.po_item_id]: e.target.value }))}
+                      inputMode="decimal"
+                      aria-label={`Received quantity for ${it.item_name}`}
+                      className={`w-20 rounded-md border bg-transparent px-2 py-1 text-right text-sm ${diff ? "border-rose-400/60 text-rose-300" : "border-line-2 text-fg"}`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            {recvChanged(recvPo) && (
+              <label className="mt-3 block">
+                <span className="block text-xs font-medium text-fg-faint">Reason for the short / over delivery</span>
+                <input
+                  value={recvNote}
+                  onChange={(e) => setRecvNote(e.target.value)}
+                  placeholder="e.g. vendor out of stock — sent 30 of 100"
+                  className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm"
+                />
+              </label>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setRecvPo(null)} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper">Cancel</button>
+              <button onClick={submitReceive} disabled={recvBusy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+                {recvBusy ? "Receiving…" : "✓ Receive into stock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

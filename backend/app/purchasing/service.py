@@ -288,6 +288,7 @@ async def po_items(db: AsyncSession, po_id: uuid.UUID) -> list[dict]:
     )
     return [
         {
+            "po_item_id": pi.id,
             "item_id": pi.item_id,
             "item_name": it.name,
             "ordered_qty": pi.ordered_qty,
@@ -313,23 +314,42 @@ async def vendor_name(db: AsyncSession, vendor_id: uuid.UUID) -> str:
     return v.name if v else "(vendor)"
 
 
-async def receive_po(db: AsyncSession, po: PurchaseOrder, *, created_by: uuid.UUID | None = None):
-    """Receive all lines into stock (PURCHASE_IN → updates qty + weighted-avg cost)."""
+async def receive_po(
+    db: AsyncSession,
+    po: PurchaseOrder,
+    *,
+    lines: dict[str, Decimal] | None = None,
+    note: str | None = None,
+    created_by: uuid.UUID | None = None,
+):
+    """Receive into stock (PURCHASE_IN → qty + weighted-avg cost).
+
+    `lines` maps po_item_id -> the TOTAL qty actually received on that line (for a
+    partial/short or over delivery, e.g. ordered 100, got 30). None = receive the
+    full outstanding amount. Only the INCREMENT over what was already received is
+    added to stock, so re-receiving is safe. `note` explains any difference and is
+    stored on the PO for the received PDF."""
+    from datetime import UTC, datetime
+
     rows = await db.execute(select(POItem).where(POItem.po_id == po.id))
     for pi in rows.scalars().all():
-        outstanding = pi.ordered_qty - pi.received_qty
-        if outstanding <= 0:
-            continue
-        item = await inventory_service.get_item(db, pi.item_id, po.hotel_id)
-        if item is None:
-            continue
-        await inventory_service.record_movement(
-            db, item, "PURCHASE_IN", outstanding,
-            unit_cost=pi.unit_price, reference_id=po.id, reference_type="PURCHASE_ORDER",
-            vendor_id=po.vendor_id, created_by=created_by,
-        )
-        pi.received_qty = pi.ordered_qty
+        want = lines.get(str(pi.id), pi.received_qty) if lines is not None else pi.ordered_qty
+        if want < 0:
+            want = Decimal("0")
+        add = want - pi.received_qty  # only the newly-arrived amount hits stock
+        if add > 0:
+            item = await inventory_service.get_item(db, pi.item_id, po.hotel_id)
+            if item is not None:
+                await inventory_service.record_movement(
+                    db, item, "PURCHASE_IN", add,
+                    unit_cost=pi.unit_price, reference_id=po.id, reference_type="PURCHASE_ORDER",
+                    vendor_id=po.vendor_id, created_by=created_by,
+                )
+        pi.received_qty = want
     po.status = POStatus.RECEIVED.value
+    po.received_at = datetime.now(UTC)
+    if note:
+        po.receive_note = note
     await db.commit()
     await db.refresh(po)
     return po
