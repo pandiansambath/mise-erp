@@ -5,6 +5,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
@@ -179,6 +180,11 @@ async def set_attendance(
     rec = await service.set_attendance(
         db, emp, payload.date, status=payload.status,
         working_hours_value=payload.working_hours, notes=payload.notes,
+    )
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="attendance.set",
+        summary=f"Attendance: {emp.full_name} {payload.date} = {payload.status}",
+        entity_type="attendance", entity_id=rec.id,
     )
     return AttendanceOut.model_validate(rec)
 

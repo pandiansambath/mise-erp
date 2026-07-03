@@ -6,6 +6,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core import template_io
@@ -211,6 +212,12 @@ async def add_line(
     record = await service.upsert_day(db, user.hotel_id, day, entered_by=user.id)
     await service.add_line(
         db, record, payload.channel_id, payload.gross_amount, payload.payment_method, payload.notes
+    )
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="sale.add",
+        summary=f"Sale: {channel.name} £{payload.gross_amount} "
+                f"({payload.payment_method}) on {day}",
+        entity_type="sale",
     )
     return DaySummary.model_validate(await service.day_summary(db, user.hotel_id, day))
 

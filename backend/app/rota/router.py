@@ -7,6 +7,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core import template_io
@@ -72,7 +73,14 @@ async def create_shift(
     await service.create_shift(db, user.hotel_id, **payload.model_dump())
     # re-read via list so the response carries employee_name + computed hours/cost
     rows = await service.list_shifts(db, user.hotel_id, payload.date, payload.date)
-    return ShiftOut.model_validate(rows[-1])
+    row = rows[-1]
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="shift.add",
+        summary=f"Shift: {row['employee_name']} {payload.date} "
+                f"{payload.start_time}-{payload.end_time}",
+        entity_type="shift", entity_id=row["id"],
+    )
+    return ShiftOut.model_validate(row)
 
 
 @router.get("/shifts", response_model=list[ShiftOut])
@@ -95,7 +103,13 @@ async def delete_shift(
     sh = await service.get_shift(db, shift_id, user.hotel_id)
     if sh is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Shift not found")
+    when = sh.date
     await service.delete_shift(db, sh)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="shift.delete",
+        summary=f"Deleted a shift on {when}",
+        entity_type="shift", entity_id=shift_id,
+    )
 
 
 @router.get("/export.xlsx")
