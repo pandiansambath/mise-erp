@@ -145,15 +145,26 @@ export function QtyInput({
   );
 }
 
-/* Picker tray row uses the shared QtyInput. */
+/* Picker tray row uses the shared QtyInput, plus a pack conversion hint so ordering
+   in the base unit is legible ("25 kg ≈ 5 boxes") for items bought in packs. */
 function QtyFields({ item, qty, onQty }: { item: Item; qty: string; onQty: (v: string) => void }) {
+  const size = parseFloat(item.pack_size || "0");
+  const n = parseFloat(qty || "0");
+  const packs = item.pack_unit && size > 0 && n > 0 ? n / size : null;
   return (
-    <QtyInput
-      unit={item.unit}
-      value={qty}
-      onChange={onQty}
-      label={`Quantity of ${item.name} (${item.unit})`}
-    />
+    <div>
+      <QtyInput
+        unit={item.unit}
+        value={qty}
+        onChange={onQty}
+        label={`Quantity of ${item.name} (${item.unit})`}
+      />
+      {item.pack_unit && size > 0 && (
+        <p className="mt-0.5 text-[11px] text-indigo-300">
+          📦 {packs ? `≈ ${packs < 10 ? packs.toFixed(1) : Math.round(packs)} ${item.pack_unit}${packs === 1 ? "" : "s"}` : `1 ${item.pack_unit} = ${item.pack_size} ${item.unit}`}
+        </p>
+      )}
+    </div>
   );
 }
 
