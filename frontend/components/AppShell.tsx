@@ -132,6 +132,7 @@ function NavLinks({
             key={item.href}
             href={item.href}
             onClick={onClick}
+            data-tour={item.href.slice(1)}
             className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition duration-200 ${
               active
                 ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
