@@ -17,7 +17,17 @@ export type ThemeKey =
   | "violet"
   | "sunset"
   | "rose"
-  | "graphite";
+  | "graphite"
+  // Light (white) themes with a colour accent
+  | "azure"
+  | "honey"
+  | "apricot"
+  | "latte"
+  | "claret"
+  // Dark themes with new accents
+  | "sapphire"
+  | "cocoa"
+  | "burgundy";
 
 type Scale = Record<string, string>; // shade -> hex
 
@@ -99,6 +109,81 @@ export const THEMES: Record<ThemeKey, ThemeDef> = {
     surfaces: ["#0a0c10", "#14181f", "#1a1f28", "#242b36"],
     fg: ["#f1f4f8", "#c3ccd6", "#8d99a8"],
     aurora: ["#64748b", "#94a3b8", "#38bdf8"],
+  },
+
+  // ── Light (white) themes — same bright surfaces, different accent ──
+  azure: {
+    label: "Blue (Light)",
+    brand: { "50": "#eff6ff", "100": "#dbeafe", "200": "#bfdbfe", "300": "#93c5fd", "400": "#60a5fa", "500": "#3b82f6", "600": "#2563eb", "700": "#1d4ed8", "800": "#1e40af", "900": "#1e3a8a", "950": "#172554" },
+    surfaces: ["#eef2f7", "#ffffff", "#f5f8fc", "#e7eef7"],
+    fg: ["#0f172a", "#334155", "#64748b"],
+    aurora: ["#bfdbfe", "#93c5fd", "#a5f3fc"],
+    lines: ["rgba(15,23,42,0.10)", "rgba(15,23,42,0.18)"],
+    glass: "#0f172a",
+    light: true,
+  },
+  honey: {
+    label: "Yellow (Light)",
+    brand: { "50": "#fffbeb", "100": "#fef3c7", "200": "#fde68a", "300": "#fcd34d", "400": "#fbbf24", "500": "#f59e0b", "600": "#d97706", "700": "#b45309", "800": "#92400e", "900": "#78350f", "950": "#451a03" },
+    surfaces: ["#f4f1ea", "#ffffff", "#faf7f0", "#efe9dc"],
+    fg: ["#1c1917", "#44403c", "#78716c"],
+    aurora: ["#fde68a", "#fcd34d", "#fed7aa"],
+    lines: ["rgba(28,25,23,0.10)", "rgba(28,25,23,0.18)"],
+    glass: "#1c1917",
+    light: true,
+  },
+  apricot: {
+    label: "Orange (Light)",
+    brand: { "50": "#fff7ed", "100": "#ffedd5", "200": "#fed7aa", "300": "#fdba74", "400": "#fb923c", "500": "#f97316", "600": "#ea580c", "700": "#c2410c", "800": "#9a3412", "900": "#7c2d12", "950": "#431407" },
+    surfaces: ["#f4f0ec", "#ffffff", "#faf6f1", "#efe7de"],
+    fg: ["#1c1917", "#44403c", "#78716c"],
+    aurora: ["#fed7aa", "#fdba74", "#fecaca"],
+    lines: ["rgba(28,25,23,0.10)", "rgba(28,25,23,0.18)"],
+    glass: "#1c1917",
+    light: true,
+  },
+  latte: {
+    label: "Brown (Light)",
+    brand: { "50": "#f7f3ef", "100": "#ece0d5", "200": "#dcc3ad", "300": "#c8a07f", "400": "#b07d54", "500": "#96603a", "600": "#7c4d2e", "700": "#633c25", "800": "#4d2f1e", "900": "#382317", "950": "#21140c" },
+    surfaces: ["#f3efe9", "#ffffff", "#f9f5ef", "#ede6db"],
+    fg: ["#1c1512", "#44372f", "#7c6a5d"],
+    aurora: ["#dcc3ad", "#c8a07f", "#e7d3bf"],
+    lines: ["rgba(28,21,18,0.10)", "rgba(28,21,18,0.18)"],
+    glass: "#1c1512",
+    light: true,
+  },
+  claret: {
+    label: "Burgundy (Light)",
+    brand: { "50": "#fdf2f4", "100": "#fbe0e6", "200": "#f6c2ce", "300": "#ec96aa", "400": "#dd5f7e", "500": "#c4365a", "600": "#a11f44", "700": "#800020", "800": "#6d1120", "900": "#5c1420", "950": "#33060f" },
+    surfaces: ["#f4eef0", "#ffffff", "#faf4f5", "#eee4e7"],
+    fg: ["#1a1114", "#3f2b30", "#75565e"],
+    aurora: ["#f6c2ce", "#ec96aa", "#e9d5ff"],
+    lines: ["rgba(26,17,20,0.10)", "rgba(26,17,20,0.18)"],
+    glass: "#1a1114",
+    light: true,
+  },
+
+  // ── Dark themes with new accents ──
+  sapphire: {
+    label: "Blue (Dark)",
+    brand: { "50": "#eff6ff", "100": "#dbeafe", "200": "#bfdbfe", "300": "#93c5fd", "400": "#60a5fa", "500": "#3b82f6", "600": "#2563eb", "700": "#1d4ed8", "800": "#1e40af", "900": "#1e3a8a", "950": "#172554" },
+    surfaces: ["#060a14", "#0e1626", "#131d33", "#1c2a49"],
+    fg: ["#eef2f9", "#c1cde0", "#8595b3"],
+    aurora: ["#3b82f6", "#6366f1", "#22d3ee"],
+  },
+  cocoa: {
+    label: "Brown (Dark)",
+    brand: { "50": "#f7f3ef", "100": "#ece0d5", "200": "#dcc3ad", "300": "#c8a07f", "400": "#b07d54", "500": "#9a6a3f", "600": "#7c4d2e", "700": "#633c25", "800": "#4d2f1e", "900": "#382317", "950": "#21140c" },
+    surfaces: ["#100a06", "#1e150e", "#271b12", "#37271a"],
+    fg: ["#f4ede6", "#d3c3b4", "#a48d78"],
+    aurora: ["#b07d54", "#d97706", "#c8a07f"],
+  },
+  burgundy: {
+    label: "Burgundy (Dark)",
+    brand: { "50": "#fdf2f4", "100": "#fbe0e6", "200": "#f6c2ce", "300": "#ec96aa", "400": "#dd5f7e", "500": "#c4365a", "600": "#a11f44", "700": "#800020", "800": "#6d1120", "900": "#5c1420", "950": "#33060f" },
+    surfaces: ["#120409", "#240a14", "#30101c", "#451627"],
+    fg: ["#f8ecf0", "#e0c0cb", "#b8899a"],
+    aurora: ["#c4365a", "#a11f44", "#e11d48"],
   },
 };
 

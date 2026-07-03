@@ -15,10 +15,12 @@ export function Logo({ size = 32, className = "" }: { size?: number; className?:
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
+        {/* Uses the theme accent vars so the DEFAULT logo recolours with the chosen
+            theme inside the dashboard; falls back to emerald on public pages. */}
         <linearGradient id="miseGrad" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#34d399" />
-          <stop offset="0.55" stopColor="#10b981" />
-          <stop offset="1" stopColor="#047857" />
+          <stop stopColor="var(--color-brand-400, #34d399)" />
+          <stop offset="0.55" stopColor="var(--color-brand-500, #10b981)" />
+          <stop offset="1" stopColor="var(--color-brand-700, #047857)" />
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="15" fill="url(#miseGrad)" />
