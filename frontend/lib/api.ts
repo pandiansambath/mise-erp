@@ -174,6 +174,8 @@ export interface Item {
   name: string;
   category: string | null;
   unit: string;
+  pack_unit?: string | null; // buying pack name (box/bag) — optional
+  pack_size?: string | null; // base units per pack: 1 pack_unit = pack_size unit
   current_stock: string;
   min_stock_level: string | null;
   max_stock_level: string | null;

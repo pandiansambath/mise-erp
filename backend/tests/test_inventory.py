@@ -372,3 +372,19 @@ async def test_remove_item_is_super_admin_only(client, make_user, auth_header):
     ).json()["id"]
     res = await client.delete(f"/api/inventory/items/{iid}", headers=h)
     assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_item_pack_fields_roundtrip(client, make_user, auth_header):
+    """An item can be bought in packs: 1 box = 12 litre. Stored + returned."""
+    h = auth_header(await make_user("pack@x.com", Role.SUPER_ADMIN.value))
+    r = await client.post(
+        "/api/inventory/items", headers=h,
+        json={"name": "Cooking Oil", "unit": "litre", "pack_unit": "box", "pack_size": "12"},
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["pack_unit"] == "box" and body["pack_size"] == "12.000"
+    items = (await client.get("/api/inventory/items", headers=h)).json()
+    oil = next(i for i in items if i["name"] == "Cooking Oil")
+    assert oil["pack_unit"] == "box" and oil["pack_size"] == "12.000"

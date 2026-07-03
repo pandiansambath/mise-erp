@@ -17,6 +17,9 @@ class ItemCreate(BaseModel):
     min_stock_level: Decimal | None = Field(default=None, ge=0)
     max_stock_level: Decimal | None = Field(default=None, ge=0)
     cost_price: Decimal | None = Field(default=None, ge=0)
+    # Optional purchase pack: 1 pack_unit = pack_size units (e.g. 1 box = 5 kg).
+    pack_unit: str | None = Field(default=None, max_length=20)
+    pack_size: Decimal | None = Field(default=None, gt=0)
 
 
 class ItemUpdate(BaseModel):
@@ -28,6 +31,8 @@ class ItemUpdate(BaseModel):
     cost_price: Decimal | None = Field(default=None, ge=0)
     is_active: bool | None = None
     allergens: str | None = Field(default=None, max_length=200)  # CSV of codes; "" = reviewed none
+    pack_unit: str | None = Field(default=None, max_length=20)
+    pack_size: Decimal | None = Field(default=None, ge=0)
 
 
 class ItemOut(BaseModel):
@@ -37,6 +42,8 @@ class ItemOut(BaseModel):
     name: str
     category: str | None
     unit: str
+    pack_unit: str | None = None
+    pack_size: Decimal | None = None
     current_stock: Decimal
     min_stock_level: Decimal | None
     max_stock_level: Decimal | None

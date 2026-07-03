@@ -43,7 +43,33 @@ function statusOf(item: Item): "ok" | "low" | "out" {
   return "ok";
 }
 
-const EMPTY = { name: "", category: "", unit: "kg", min: "", allergens: "" };
+// A slim stock-health bar: fill = current ÷ par (max level), else ÷ 2× min. Colour
+// tracks the status (green healthy / amber low / red out) so a glance says "how stocked".
+function StockBar({ item }: { item: Item }) {
+  const cur = parseFloat(item.current_stock || "0");
+  const min = parseFloat(item.min_stock_level || "0");
+  const max = parseFloat(item.max_stock_level || "0");
+  const cap = max > 0 ? max : min > 0 ? min * 2 : 0;
+  const pct = cap > 0 ? Math.max(2, Math.min(100, (cur / cap) * 100)) : cur > 0 ? 100 : 0;
+  const st = statusOf(item);
+  const color = st === "out" ? "bg-rose-500" : st === "low" ? "bg-amber-400" : "bg-brand-500";
+  return (
+    <div className="mt-1 h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-glass/10" title={`${Math.round(pct)}% of par`}>
+      <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+// "≈ 4.9 boxes · 1 box = 5 kg" when the item is bought in packs.
+function packLabel(item: Item): string | null {
+  const size = parseFloat(item.pack_size || "0");
+  if (!item.pack_unit || size <= 0) return null;
+  const packs = parseFloat(item.current_stock || "0") / size;
+  const n = packs < 10 ? packs.toFixed(1) : String(Math.round(packs));
+  return `≈ ${n} ${item.pack_unit}${packs === 1 ? "" : "s"} · 1 ${item.pack_unit} = ${item.pack_size} ${item.unit}`;
+}
+
+const EMPTY = { name: "", category: "", unit: "kg", min: "", allergens: "", packUnit: "", packSize: "" };
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -195,6 +221,8 @@ export default function InventoryPage() {
       unit: item.unit,
       min: item.min_stock_level ?? "",
       allergens: item.allergens ?? "",
+      packUnit: item.pack_unit ?? "",
+      packSize: item.pack_size ?? "",
     });
     setAllergensTouched(false);
     setError(null);
@@ -233,6 +261,9 @@ export default function InventoryPage() {
       unit: form.unit,
       category: form.category || null,
       min_stock_level: form.min || null,
+      // Pack is optional: 1 packUnit = packSize units. Blank pack_size clears it.
+      pack_unit: form.packUnit.trim() || null,
+      pack_size: form.packUnit.trim() && form.packSize ? form.packSize : null,
     };
     // Only write allergens when the user actually touched them (preserves the
     // "not reviewed" state for items edited for other reasons).
@@ -670,6 +701,37 @@ export default function InventoryPage() {
             </div>
           </div>
 
+          {/* Optional purchase pack: 1 pack = N base units. Stock/recipes stay in the base unit. */}
+          <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-paper-2/40 p-3">
+            <div className="w-full text-xs text-fg-faint sm:max-w-xs">
+              <span className="text-sm font-medium text-fg-soft">Sold in packs?</span>{" "}
+              <span className="text-fg-faint">(optional)</span>
+              <p className="mt-0.5">
+                If you buy this in a box/bag/case, say how much is inside. Ordering can then use packs, but
+                stock &amp; recipes still count in <b className="text-fg-soft">{form.unit || "the base unit"}</b>.
+              </p>
+            </div>
+            <div className="w-28">
+              <label className="block text-sm font-medium text-fg-soft">Pack name</label>
+              <input value={form.packUnit} onChange={(e) => setForm({ ...form, packUnit: e.target.value })} placeholder="e.g. box" className={inputCls} />
+            </div>
+            <div className="flex items-end gap-1.5">
+              <span className="pb-2 text-sm text-fg-faint">1 {form.packUnit.trim() || "pack"} =</span>
+              <div className="w-24">
+                <label className="block text-sm font-medium text-fg-soft">Pack size</label>
+                <input
+                  value={form.packSize}
+                  onChange={(e) => setForm({ ...form, packSize: e.target.value })}
+                  inputMode="decimal"
+                  placeholder="0"
+                  disabled={!form.packUnit.trim()}
+                  className={`${inputCls} disabled:opacity-50`}
+                />
+              </div>
+              <span className="pb-2 text-sm text-fg-faint">{form.unit || "unit"}</span>
+            </div>
+          </div>
+
           {!editingId && (
             <div className="rounded-xl border border-line bg-paper-2/60 p-3 text-xs text-fg-faint">
               💡 Prices live with the supplier. After adding the item, set who supplies it and
@@ -927,7 +989,9 @@ export default function InventoryPage() {
                               )}
                               {fmtQty(item.current_stock, item.unit)}
                             </span>
+                            <StockBar item={item} />
                             <p className="text-xs text-fg-faint">{item.min_stock_level ? `min ${fmtQty(item.min_stock_level, item.unit)}` : "no min"}</p>
+                            {packLabel(item) && <p className="text-xs text-indigo-300">📦 {packLabel(item)}</p>}
                           </td>
                           <td className="px-5 py-3 text-right text-fg-soft">{format(item.average_cost)}</td>
                           <td className="px-5 py-3">

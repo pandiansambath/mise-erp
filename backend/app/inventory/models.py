@@ -41,7 +41,12 @@ class Item(Base):
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     category: Mapped[str | None] = mapped_column(String(60))
-    unit: Mapped[str] = mapped_column(String(20), nullable=False)  # kg, litre, piece, box, bag
+    # Base unit — how the item is STOCKED, COSTED and USED IN RECIPES (kg, g, ml, piece).
+    unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Optional purchase pack: 1 <pack_unit> = <pack_size> <unit> (e.g. 1 box = 5 kg).
+    # Lets ordering/receiving buy in packs while stock + recipes stay in the base unit.
+    pack_unit: Mapped[str | None] = mapped_column(String(20))
+    pack_size: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
     # Comma-separated allergen codes (Natasha's Law). NULL = not reviewed; "" = none.
     allergens: Mapped[str | None] = mapped_column(String(200))
     current_stock: Mapped[Decimal] = mapped_column(
