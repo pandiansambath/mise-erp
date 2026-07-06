@@ -1,0 +1,160 @@
+"""Platform operator (Control Room) API — cross-tenant management of ALL hotels.
+
+Strictly gated to users with ``is_platform_owner`` (the Mise operator, i.e. us).
+A normal hotel Super Admin CANNOT reach any of this. Capabilities:
+  • list every hotel with quick stats,
+  • toggle per-hotel FEATURES (entitlements) — foundation for plan tiers,
+  • reset the password of any user in any hotel.
+"""
+import uuid
+from collections import defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.audit import service as audit_service
+from app.auth import service as auth_service
+from app.auth.deps import get_current_user
+from app.auth.models import Role, User
+from app.core.database import get_db
+from app.core.security import hash_password
+from app.hotels.models import Hotel
+from app.platform_admin import features as feat
+
+router = APIRouter(prefix="/platform", tags=["platform"])
+
+
+async def require_platform_owner(user: User = Depends(get_current_user)) -> User:
+    if not user.is_platform_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Platform owner only"
+        )
+    return user
+
+
+class FeatureToggle(BaseModel):
+    features: dict[str, bool] = Field(default_factory=dict)
+
+
+class ResetPassword(BaseModel):
+    user_id: uuid.UUID | None = None  # defaults to the hotel's primary Super Admin
+    new_password: str = Field(min_length=8, max_length=72)  # bcrypt hard limit
+
+
+def _merged_features(hotel: Hotel) -> dict[str, bool]:
+    """Every registered feature resolved to on/off for this hotel."""
+    return {f.key: hotel.feature_on(f.key) for f in feat.FEATURES}
+
+
+@router.get("/features")
+async def list_features(_: User = Depends(require_platform_owner)) -> dict:
+    """The feature registry (labels/descriptions) for the Control Room UI."""
+    return {"features": feat.registry_public()}
+
+
+@router.get("/hotels")
+async def list_hotels(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_owner),
+) -> dict:
+    """Every hotel with quick stats + resolved feature entitlements."""
+    hotels = list((await db.execute(select(Hotel).order_by(Hotel.created_at))).scalars().all())
+    users = list((await db.execute(select(User).order_by(User.created_at))).scalars().all())
+
+    by_hotel: dict[uuid.UUID, list[User]] = defaultdict(list)
+    for u in users:
+        by_hotel[u.hotel_id].append(u)
+
+    items = []
+    for h in hotels:
+        hu = by_hotel.get(h.id, [])
+        admin = next((u for u in hu if u.role == Role.SUPER_ADMIN.value), hu[0] if hu else None)
+        items.append({
+            "id": str(h.id),
+            "name": h.name,
+            "city": h.city,
+            "country": h.country,
+            "base_currency": h.base_currency,
+            "created_at": h.created_at.isoformat(),
+            "has_logo": h.has_logo,
+            "is_active": h.is_active,
+            "user_count": len(hu),
+            "admin_email": admin.email if admin else None,
+            "features": _merged_features(h),
+        })
+    return {"hotels": items}
+
+
+@router.get("/hotels/{hotel_id}/users")
+async def hotel_users(
+    hotel_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_owner),
+) -> dict:
+    """Users of one hotel — so the operator can pick whose password to reset."""
+    us = await auth_service.list_users(db, hotel_id)
+    return {"users": [
+        {"id": str(u.id), "email": u.email, "role": u.role, "is_active": u.is_active}
+        for u in us
+    ]}
+
+
+@router.patch("/hotels/{hotel_id}/features")
+async def set_features(
+    hotel_id: uuid.UUID,
+    body: FeatureToggle,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Turn features on/off for a hotel. Unknown keys are rejected."""
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel not found")
+    current = dict(hotel.features or {})
+    for key, val in body.features.items():
+        if not feat.is_valid_feature(key):
+            raise HTTPException(status_code=400, detail=f"Unknown feature '{key}'")
+        current[key] = bool(val)
+    hotel.features = current  # reassign so SQLAlchemy flags the JSON column dirty
+    await db.commit()
+    changed = ", ".join(f"{k}={'on' if v else 'off'}" for k, v in body.features.items())
+    await audit_service.record(
+        db, hotel_id=hotel_id, user=operator, action="platform.features",
+        summary=f"Features changed: {changed}"[:300], entity_type="hotel", entity_id=hotel_id,
+    )
+    return {"features": _merged_features(hotel)}
+
+
+@router.post("/hotels/{hotel_id}/reset-password")
+async def reset_password(
+    hotel_id: uuid.UUID,
+    body: ResetPassword,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Reset a user's password (defaults to the hotel's primary Super Admin)."""
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel not found")
+
+    if body.user_id is not None:
+        target = await db.get(User, body.user_id)
+    else:
+        target = (await db.execute(
+            select(User)
+            .where(User.hotel_id == hotel_id, User.role == Role.SUPER_ADMIN.value)
+            .order_by(User.created_at)
+        )).scalars().first()
+
+    if target is None or target.hotel_id != hotel_id:
+        raise HTTPException(status_code=404, detail="User not found in this hotel")
+
+    target.password_hash = hash_password(body.new_password)
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=hotel_id, user=operator, action="platform.reset_password",
+        summary=f"Password reset for {target.email}", entity_type="user", entity_id=target.id,
+    )
+    return {"ok": True, "email": target.email}

@@ -7,10 +7,11 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Uuid, func
+from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.platform_admin.features import feature_enabled
 
 
 class Hotel(Base):
@@ -29,6 +30,9 @@ class Hotel(Base):
     )
     # Uploaded brand logo (storage key). When set, replaces the default Mise mark.
     logo_key: Mapped[str | None] = mapped_column(String(255))
+    # Per-hotel feature entitlements (key -> bool). Missing key = default (enabled).
+    # Managed by the platform operator from the Control Room.
+    features: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -37,3 +41,7 @@ class Hotel(Base):
     @property
     def has_logo(self) -> bool:
         return bool(self.logo_key)
+
+    def feature_on(self, key: str) -> bool:
+        """Whether a feature is enabled for this hotel (defaults to on)."""
+        return feature_enabled(self.features, key)

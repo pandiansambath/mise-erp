@@ -15,12 +15,17 @@ from app.assistant.schemas import (
     IngestResult,
     UndoRequest,
 )
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_user, require_feature
 from app.auth.models import User
 from app.core.database import get_db
 from app.core.rbac import has_permission
 
-router = APIRouter(prefix="/assistant", tags=["assistant"])
+# Whole Copilot is gated on the hotel's ai_copilot entitlement (Control Room toggle).
+router = APIRouter(
+    prefix="/assistant",
+    tags=["assistant"],
+    dependencies=[Depends(require_feature("ai_copilot"))],
+)
 
 _MAX_MESSAGES = 40  # keep more of the conversation so the assistant doesn't "forget"
 _MAX_CHARS = 4000

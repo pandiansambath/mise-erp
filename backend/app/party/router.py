@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import require
+from app.auth.deps import require, require_feature
 from app.auth.models import User
 from app.core.database import get_db
 from app.hotels.models import Hotel
@@ -13,7 +13,10 @@ from app.party import service
 from app.party.schemas import PartyQuoteCreate, PartyQuoteOut
 from app.recipes import pdf as recipe_pdf
 
-router = APIRouter(prefix="/party-quotes", tags=["party"])
+router = APIRouter(
+    prefix="/party-quotes", tags=["party"],
+    dependencies=[Depends(require_feature("party_orders"))],
+)
 
 
 @router.post("", response_model=PartyQuoteOut, status_code=status.HTTP_201_CREATED)

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
-from app.auth.deps import require
+from app.auth.deps import require, require_feature
 from app.auth.models import User
 from app.core import template_io
 from app.core.config import settings
@@ -89,7 +89,11 @@ async def price_list_template_csv(user: User = Depends(require("vendors:read")))
     return _pl_file(template_io.template_csv(PRICE_LIST_TEMPLATE), "text/csv", "csv")
 
 
-@router.get("/items/{item_id}/price-comparison", response_model=PriceComparison)
+@router.get(
+    "/items/{item_id}/price-comparison",
+    response_model=PriceComparison,
+    dependencies=[Depends(require_feature("price_comparison"))],
+)
 async def price_comparison(
     item_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

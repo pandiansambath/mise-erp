@@ -15,7 +15,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import require
+from app.auth.deps import require, require_feature
 from app.auth.models import User
 from app.core.config import settings
 from app.core.database import get_db
@@ -25,7 +25,10 @@ from app.documents.models import DocRequestStatus
 from app.documents.schemas import DocRequestCreate, DocRequestOut, DocumentOut, ExpiringDoc
 from app.employees import service as emp_service
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(
+    prefix="/documents", tags=["documents"],
+    dependencies=[Depends(require_feature("documents"))],
+)
 
 
 @router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)

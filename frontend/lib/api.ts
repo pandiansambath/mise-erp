@@ -145,6 +145,7 @@ export interface UserOut {
   role: string;
   is_active: boolean;
   preferred_name?: string | null;
+  is_platform_owner?: boolean; // the Mise operator — unlocks the Control Room
 }
 
 export interface Hotel {
@@ -156,6 +157,12 @@ export interface Hotel {
   break_allowance_minutes: number;
   break_penalty_per_min: string;
   has_logo?: boolean; // an uploaded brand logo replaces the default Mise mark
+  features?: Record<string, boolean>; // per-hotel entitlements (missing = enabled)
+}
+
+/** Whether a feature is on for a hotel (missing / true = enabled). */
+export function featureOn(hotel: Hotel | null | undefined, key: string): boolean {
+  return hotel?.features?.[key] !== false;
 }
 
 export interface TokenResponse {

@@ -11,6 +11,7 @@ from app.auth.service import get_user_by_id
 from app.core.database import get_db
 from app.core.rbac import has_permission
 from app.core.security import decode_token
+from app.hotels.models import Hotel
 
 bearer_scheme = HTTPBearer(auto_error=True)
 
@@ -42,6 +43,25 @@ def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role {user.role} lacks permission '{permission}'",
+            )
+        return user
+
+    return checker
+
+
+def require_feature(feature_key: str) -> Callable[..., Coroutine[Any, Any, User]]:
+    """Dependency factory: 403 if the user's hotel has this feature turned off by
+    the platform operator. Missing/true = enabled (default on)."""
+
+    async def checker(
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        hotel = await db.get(Hotel, user.hotel_id)
+        if hotel is not None and not hotel.feature_on(feature_key):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"The '{feature_key}' feature is disabled for this hotel.",
             )
         return user
 

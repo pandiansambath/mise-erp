@@ -36,6 +36,7 @@ class UserOut(BaseModel):
     role: str
     is_active: bool
     preferred_name: str | None = None
+    is_platform_owner: bool = False
 
 
 class MeUpdate(BaseModel):
@@ -54,6 +55,7 @@ class HotelOut(BaseModel):
     break_allowance_minutes: int = 0
     break_penalty_per_min: Decimal = Decimal("0")
     has_logo: bool = False
+    features: dict = Field(default_factory=dict)
 
 
 class HotelUpdate(BaseModel):

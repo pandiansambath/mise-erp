@@ -4,7 +4,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import require
+from app.auth.deps import require, require_feature
 from app.auth.models import User
 from app.core import notify
 from app.core.database import get_db
@@ -13,7 +13,10 @@ from app.safety import pdf as safety_pdf
 from app.safety import service
 from app.safety.schemas import SafetyLogCreate, SafetyLogOut
 
-router = APIRouter(prefix="/safety", tags=["safety"])
+router = APIRouter(
+    prefix="/safety", tags=["safety"],
+    dependencies=[Depends(require_feature("food_safety"))],
+)
 
 
 @router.post("/logs", response_model=SafetyLogOut, status_code=status.HTTP_201_CREATED)

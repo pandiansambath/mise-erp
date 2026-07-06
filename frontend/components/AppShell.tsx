@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, featureOn } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
@@ -17,7 +17,12 @@ import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
 // `hideIfPerm`: hide the item when the user ALSO has this permission — used so
 // "My Space" (self-service) shows only for staff, not managers/owners who have
 // the full management view.
-type NavItem = { href: string; label: string; icon: string; perm?: string; hideIfPerm?: string };
+type NavItem = {
+  href: string; label: string; icon: string; perm?: string; hideIfPerm?: string;
+  // `feature`: hide this item when the hotel has that entitlement turned off.
+  // `platformOnly`: show only to the Mise operator (is_platform_owner).
+  feature?: string; platformOnly?: boolean;
+};
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "▦" },
@@ -25,13 +30,13 @@ const NAV: NavItem[] = [
   { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read" },
   { href: "/money", label: "Money", icon: "💰", perm: "reports:read" },
   { href: "/vendors", label: "Vendors", icon: "🤝", perm: "vendors:read" },
-  { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read" },
+  { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read", feature: "price_comparison" },
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
   { href: "/stock-take", label: "Stock-take", icon: "📋", perm: "inventory:read" },
   { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },
-  { href: "/party-order", label: "Party Order", icon: "🎉", perm: "recipes:read" },
+  { href: "/party-order", label: "Party Order", icon: "🎉", perm: "recipes:read", feature: "party_orders" },
   { href: "/allergens", label: "Allergens", icon: "⚠️", perm: "recipes:read" },
-  { href: "/food-safety", label: "Food Safety", icon: "🌡️", perm: "inventory:read" },
+  { href: "/food-safety", label: "Food Safety", icon: "🌡️", perm: "inventory:read", feature: "food_safety" },
   { href: "/waste", label: "Waste", icon: "🗑️", perm: "inventory:read" },
   { href: "/purchasing", label: "Purchasing", icon: "🛒", perm: "indent:read" },
   { href: "/sales", label: "Sales & Cash", icon: "🧾", perm: "sales:read" },
@@ -40,9 +45,10 @@ const NAV: NavItem[] = [
   { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read" },
   { href: "/rota", label: "Rota", icon: "🗓️", perm: "employees:read" },
   { href: "/payroll", label: "Payroll", icon: "💷", perm: "payroll:read" },
-  { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read" },
+  { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
   { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read" },
+  { href: "/control-room", label: "Control Room", icon: "🛰️", platformOnly: true },
   { href: "/how-it-works", label: "How it works", icon: "📘" },
 ];
 
@@ -285,7 +291,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navItems = NAV.filter(
     (item) =>
       (!item.perm || can(user?.role, item.perm)) &&
-      (!item.hideIfPerm || !can(user?.role, item.hideIfPerm))
+      (!item.hideIfPerm || !can(user?.role, item.hideIfPerm)) &&
+      (!item.feature || featureOn(hotel, item.feature)) &&
+      (!item.platformOnly || Boolean(user?.is_platform_owner))
   );
 
   return (
@@ -348,9 +356,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Guided tour (walks through pages) + project-aware AI assistant. Both float
-          on every page. */}
+          on every page. The Copilot only appears when the hotel has AI enabled. */}
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
-      <Copilot />
+      {featureOn(hotel, "ai_copilot") && <Copilot />}
     </div>
   );
 }
