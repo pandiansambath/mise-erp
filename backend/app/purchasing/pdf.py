@@ -2,6 +2,8 @@
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+from app.core.pdf_logo import draw_hotel_logo
+
 BRAND = (16, 185, 129)
 DARK = (15, 23, 42)
 MUTED = (100, 116, 139)
@@ -27,10 +29,11 @@ def generate_po_pdf(
     pdf.set_fill_color(*BRAND)
     pdf.rect(0, 0, 210, 30, style="F")
     pdf.set_text_color(255, 255, 255)
-    pdf.set_xy(14, 9)
+    name_x = 34 if draw_hotel_logo(pdf, hotel, x=13, y=6, height=18) else 14
+    pdf.set_xy(name_x, 9)
     pdf.set_font("Helvetica", "B", 20)
     pdf.cell(0, 9, text=_s(hotel.name), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_x(14)
+    pdf.set_x(name_x)
     pdf.set_font("Helvetica", "", 11)
     label = "GOODS RECEIVED NOTE" if received else "PURCHASE ORDER"
     pdf.cell(0, 6, text=f"{label}   |   {po.po_number}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)

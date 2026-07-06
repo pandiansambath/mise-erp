@@ -155,6 +155,7 @@ export interface Hotel {
   base_currency: string;
   break_allowance_minutes: number;
   break_penalty_per_min: string;
+  has_logo?: boolean; // an uploaded brand logo replaces the default Mise mark
 }
 
 export interface TokenResponse {

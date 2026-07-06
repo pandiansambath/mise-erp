@@ -52,6 +52,7 @@ export default function VendorsPage() {
   // add-price form
   const [piItem, setPiItem] = useState("");
   const [piPrice, setPiPrice] = useState("");
+  const [piMode, setPiMode] = useState<"unit" | "pack">("unit"); // enter £/unit or £/pack
 
   function load() {
     return Promise.all([
@@ -110,9 +111,17 @@ export default function VendorsPage() {
     }
     setError(null);
     try {
+      // Vendor prices are always stored per BASE unit. If the user typed £/pack for a
+      // pack item, convert it down (£/box ÷ pack_size = £/unit) before saving.
+      const it = items.find((i) => i.id === piItem);
+      const size = parseFloat(it?.pack_size || "0");
+      const perUnit =
+        piMode === "pack" && it?.pack_unit && size > 0
+          ? (parseFloat(piPrice) / size).toFixed(4)
+          : piPrice;
       await api.post<VendorItem>(`/vendors/${selected}/items`, {
         item_id: piItem,
-        price_per_unit: piPrice,
+        price_per_unit: perUnit,
       });
       setPiPrice("");
       selectVendor(selected);
@@ -375,7 +384,18 @@ export default function VendorsPage() {
                     ) : vendorItems.map((vi) => (
                       <tr key={vi.id} className="border-b border-line transition hover:bg-glass/[0.03]">
                         <td className="px-4 py-2 font-medium text-fg">{itemName(vi.item_id)}</td>
-                        <td className="px-4 py-2 text-right text-fg-soft">{format(vi.price_per_unit)}</td>
+                        <td className="px-4 py-2 text-right text-fg-soft">
+                          {format(vi.price_per_unit)}
+                          {(() => {
+                            const it = items.find((i) => i.id === vi.item_id);
+                            const size = parseFloat(it?.pack_size || "0");
+                            return it?.pack_unit && size > 0 ? (
+                              <span className="ml-1 whitespace-nowrap text-xs text-indigo-300">
+                                ({format((parseFloat(vi.price_per_unit) * size).toFixed(2))}/{it.pack_unit})
+                              </span>
+                            ) : null;
+                          })()}
+                        </td>
                         <td className="px-4 py-2 text-right">{vi.is_preferred && <Badge tone="amber">★ chosen</Badge>}</td>
                       </tr>
                     ))}
@@ -402,9 +422,34 @@ export default function VendorsPage() {
                       placeholder="price"
                       className="w-28 rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
                     />
-                    <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                      Save price
-                    </button>
+                    {(() => {
+                      const it = items.find((i) => i.id === piItem);
+                      const size = parseFloat(it?.pack_size || "0");
+                      const hasPack = Boolean(it?.pack_unit) && size > 0;
+                      const per = parseFloat(piPrice || "0");
+                      return (
+                        <>
+                          {hasPack ? (
+                            <div className="inline-flex overflow-hidden rounded-lg border border-line-2 text-xs">
+                              <button type="button" onClick={() => setPiMode("unit")} className={`px-2.5 py-2 ${piMode === "unit" ? "bg-brand-600 text-white" : "text-fg-soft hover:bg-paper-2"}`}>£/{it!.unit}</button>
+                              <button type="button" onClick={() => setPiMode("pack")} className={`px-2.5 py-2 ${piMode === "pack" ? "bg-brand-600 text-white" : "text-fg-soft hover:bg-paper-2"}`}>£/{it!.pack_unit}</button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-fg-faint">per {it?.unit || "unit"}</span>
+                          )}
+                          <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                            Save price
+                          </button>
+                          {hasPack && per > 0 && (
+                            <span className="w-full text-xs text-indigo-300">
+                              {piMode === "pack"
+                                ? `= ${format((per / size).toFixed(4))}/${it!.unit}  ·  1 ${it!.pack_unit} = ${it!.pack_size} ${it!.unit}`
+                                : `= ${format((per * size).toFixed(2))}/${it!.pack_unit}`}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <p className="mt-2 text-xs text-fg-faint">
                     Same item again = updates the price. Mark the ★ chosen supplier on <b>Price Comparison</b> — and you can

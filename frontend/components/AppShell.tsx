@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { API_BASE } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
@@ -106,10 +107,22 @@ function ThemeSwitcher() {
 }
 
 function Brand() {
+  const { hotel } = useAuth();
   return (
     <div className="flex items-center gap-2.5 px-5 py-5">
-      <Logo size={32} />
-      <span className="font-display text-lg font-semibold tracking-tight text-fg">Mise</span>
+      {hotel?.has_logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`${API_BASE}/api/hotels/${hotel.id}/logo`}
+          alt={hotel.name}
+          className="h-8 w-8 rounded-lg object-contain"
+        />
+      ) : (
+        <Logo size={32} />
+      )}
+      <span className="max-w-[9rem] truncate font-display text-lg font-semibold tracking-tight text-fg">
+        {hotel?.has_logo ? hotel.name : "Mise"}
+      </span>
     </div>
   );
 }

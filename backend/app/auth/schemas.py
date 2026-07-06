@@ -53,6 +53,7 @@ class HotelOut(BaseModel):
     base_currency: str
     break_allowance_minutes: int = 0
     break_penalty_per_min: Decimal = Decimal("0")
+    has_logo: bool = False
 
 
 class HotelUpdate(BaseModel):

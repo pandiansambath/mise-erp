@@ -27,7 +27,13 @@ class Hotel(Base):
     break_penalty_per_min: Mapped[Decimal] = mapped_column(
         Numeric(8, 2), nullable=False, default=Decimal("0")
     )
+    # Uploaded brand logo (storage key). When set, replaces the default Mise mark.
+    logo_key: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    @property
+    def has_logo(self) -> bool:
+        return bool(self.logo_key)

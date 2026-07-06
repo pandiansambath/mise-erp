@@ -27,6 +27,7 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   registerHotel: (input: RegisterHotelInput) => Promise<void>;
+  refreshHotel: () => Promise<void>;
   logout: () => void;
 }
 
@@ -88,6 +89,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [sweepThenGo]
   );
 
+  const refreshHotel = useCallback(async () => {
+    try {
+      const me = await api.get<MeResponse>("/auth/me");
+      setHotel(me.hotel);
+    } catch {
+      /* keep the current hotel on a transient failure */
+    }
+  }, []);
+
   const logout = useCallback(() => {
     clearToken();
     setUser(null);
@@ -96,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, hotel, loading, login, registerHotel, logout }}>
+    <AuthContext.Provider value={{ user, hotel, loading, login, registerHotel, refreshHotel, logout }}>
       {children}
     </AuthContext.Provider>
   );

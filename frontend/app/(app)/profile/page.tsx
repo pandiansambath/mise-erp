@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api, ApiError, type Expense, type ExpenseCategory } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { api, API_BASE, ApiError, postForm, type Expense, type ExpenseCategory } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -9,8 +9,9 @@ import { can } from "@/lib/permissions";
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 export default function ProfilePage() {
-  const { user, hotel } = useAuth();
+  const { user, hotel, refreshHotel } = useAuth();
   const canExpenses = can(user?.role, "expenses:write");
+  const canBrand = user?.role === "SUPER_ADMIN";
   const initial = user?.email?.[0]?.toUpperCase() ?? "?";
 
   const now = new Date();
@@ -49,6 +50,47 @@ export default function ProfilePage() {
       setPwMsg({ ok: false, text: err instanceof ApiError ? err.message : "Could not change password" });
     } finally {
       setPwBusy(false);
+    }
+  }
+
+  // ── Hotel brand logo ────────────────────────────────────────────────────────
+  const logoInput = useRef<HTMLInputElement>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoMsg, setLogoMsg] = useState<string | null>(null);
+  const [logoVer, setLogoVer] = useState(0); // cache-buster for the preview after upload
+  const logoSrc = hotel?.has_logo ? `${API_BASE}/api/hotels/${hotel.id}/logo?v=${logoVer}` : null;
+
+  async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setLogoBusy(true);
+    setLogoMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await postForm("/hotels/logo", fd);
+      await refreshHotel();
+      setLogoVer((v) => v + 1);
+      setLogoMsg("✓ Logo updated — it now appears across the app and on your PDFs.");
+    } catch (err) {
+      setLogoMsg(err instanceof ApiError ? err.message : "Could not upload the logo.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    setLogoBusy(true);
+    setLogoMsg(null);
+    try {
+      await api.delete("/hotels/logo");
+      await refreshHotel();
+      setLogoMsg("Logo removed — back to the default Mise mark.");
+    } catch (err) {
+      setLogoMsg(err instanceof ApiError ? err.message : "Could not remove the logo.");
+    } finally {
+      setLogoBusy(false);
     }
   }
 
@@ -115,6 +157,39 @@ export default function ProfilePage() {
   return (
     <div className="max-w-2xl">
       <PageHeader title="Profile" subtitle="Your account in Mise." />
+
+      {canBrand && (
+        <Card className="mb-6">
+          <input ref={logoInput} type="file" accept="image/png,image/jpeg" className="hidden" onChange={onLogoFile} />
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-paper-2">
+              {logoSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoSrc} alt="Hotel logo" className="h-full w-full object-contain" />
+              ) : (
+                <span className="text-2xl" aria-hidden>🏨</span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-semibold text-fg">Hotel logo</h3>
+              <p className="text-sm text-fg-faint">
+                PNG or JPG, up to 2 MB. Replaces the Mise mark across the app and on your payslip / purchase-order PDFs.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => logoInput.current?.click()} disabled={logoBusy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+                {logoBusy ? "Saving…" : hotel?.has_logo ? "Replace" : "Upload logo"}
+              </button>
+              {hotel?.has_logo && (
+                <button onClick={removeLogo} disabled={logoBusy} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2 disabled:opacity-60">
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+          {logoMsg && <p className="mt-3 text-sm text-brand-300">{logoMsg}</p>}
+        </Card>
+      )}
 
       <Card>
         <div className="flex items-center gap-4">
