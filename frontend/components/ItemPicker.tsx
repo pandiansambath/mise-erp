@@ -9,6 +9,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { Item } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
+import { numeric } from "@/lib/sanitize";
 
 export type PickedLine = { item_id: string; qty: string };
 
@@ -105,7 +106,7 @@ export function QtyInput({
     return (
       <input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(numeric(e.target.value))}
         inputMode="decimal"
         placeholder="qty"
         aria-label={aria}

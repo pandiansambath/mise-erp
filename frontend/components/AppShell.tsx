@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { API_BASE } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
@@ -11,6 +11,7 @@ import { Logo } from "@/components/Logo";
 import { Copilot } from "@/components/Copilot";
 import NotificationBell from "@/components/NotificationBell";
 import { Select } from "@/components/Select";
+import { Tour, shouldAutoStartTour } from "@/components/Tour";
 import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
 
 // `hideIfPerm`: hide the item when the user ALSO has this permission — used so
@@ -42,9 +43,7 @@ const NAV: NavItem[] = [
   { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
   { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read" },
-  { href: "/profile", label: "Profile", icon: "👤" },
   { href: "/how-it-works", label: "How it works", icon: "📘" },
-  { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
 function CurrencySwitcher() {
@@ -65,6 +64,31 @@ function CurrencySwitcher() {
 function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
+  const keys = Object.keys(THEMES) as ThemeKey[];
+  const light = keys.filter((k) => THEMES[k].light);
+  const dark = keys.filter((k) => !THEMES[k].light);
+  const nice = (k: ThemeKey) => THEMES[k].label.replace(/\s*\((Light|Dark)\)$/i, "");
+
+  const Row = ({ k }: { k: ThemeKey }) => (
+    <button
+      type="button"
+      onClick={() => { setTheme(k); setOpen(false); }}
+      className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition hover:bg-glass/5 ${
+        theme === k ? "font-semibold text-fg" : "text-fg-soft"
+      }`}
+    >
+      {/* two-tone swatch: the theme's surface with its accent inside */}
+      <span
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-md ring-1 ring-glass/25"
+        style={{ background: THEMES[k].surfaces[1] }}
+      >
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: THEMES[k].brand["500"] }} />
+      </span>
+      {nice(k)}
+      {theme === k && <span className="ml-auto text-brand-400">✓</span>}
+    </button>
+  );
+
   return (
     <div className="relative">
       <button
@@ -72,35 +96,88 @@ function ThemeSwitcher() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Change theme"
         title="Theme"
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-glass/15 hover:bg-glass/5"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-glass/15 transition hover:bg-glass/5 active:scale-95"
       >
         <span className="h-4 w-4 rounded-full ring-1 ring-glass/25" style={{ background: THEMES[theme].brand["500"] }} />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
-          <div className="mise-pop absolute right-0 z-40 mt-2 w-52 rounded-xl border border-glass/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
-            <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-fg-faint">Theme</p>
-            {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => { setTheme(k); setOpen(false); }}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-glass/5 ${theme === k ? "font-semibold text-fg" : "text-fg-soft"}`}
-              >
-                {/* two-tone swatch: the theme's surface with its accent inside */}
-                <span
-                  className="grid h-5 w-5 shrink-0 place-items-center rounded-md ring-1 ring-glass/25"
-                  style={{ background: THEMES[k].surfaces[1] }}
-                >
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: THEMES[k].brand["500"] }} />
-                </span>
-                {THEMES[k].label}
-                {theme === k && <span className="ml-auto text-brand-400">✓</span>}
-              </button>
-            ))}
+          <div className="mise-pop absolute right-0 z-40 mt-2 max-h-[min(70vh,26rem)] w-56 overflow-y-auto overscroll-contain rounded-xl border border-glass/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+            <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">☀ Light</p>
+            {light.map((k) => <Row key={k} k={k} />)}
+            <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">🌙 Dark</p>
+            {dark.map((k) => <Row key={k} k={k} />)}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/** Top-right account menu — where the user's identity, Profile, Settings and
+    Log out live (the usual place on most apps). */
+function UserMenu() {
+  const { user, hotel, logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const initial = (user?.email?.[0] || "?").toUpperCase();
+  const role = user?.role?.replace(/_/g, " ") ?? "";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Account"
+        title={user?.email}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white ring-1 ring-glass/20 transition hover:brightness-110 active:scale-95"
+      >
+        {initial}
+      </button>
+      {open && (
+        <div className="mise-pop absolute right-0 z-40 mt-2 w-60 overflow-hidden rounded-xl border border-glass/10 bg-paper-2/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div className="border-b border-glass/10 px-3 py-2.5">
+            <p className="truncate text-sm font-semibold text-fg">{hotel?.name ?? "Mise"}</p>
+            <p className="mt-0.5 truncate text-xs text-fg-soft">{user?.email}</p>
+            {role && (
+              <span className="mt-1.5 inline-block rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-300">
+                {role}
+              </span>
+            )}
+          </div>
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-fg-soft transition hover:bg-glass/5"
+          >
+            <span aria-hidden>👤</span> Profile &amp; hotel
+          </Link>
+          <Link
+            href="/settings"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-fg-soft transition hover:bg-glass/5"
+          >
+            <span aria-hidden>⚙</span> Settings
+          </Link>
+          <button
+            type="button"
+            onClick={() => { setOpen(false); logout(); }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-500/10"
+          >
+            <span aria-hidden>⎋</span> Log out
+          </button>
+        </div>
       )}
     </div>
   );
@@ -180,8 +257,9 @@ function ShellAurora() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const pathname = usePathname();
-  const { user, hotel, logout } = useAuth();
+  const { user, hotel } = useAuth();
   const { applyDefault } = useCurrency();
   const { theme } = useTheme();
 
@@ -189,6 +267,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (hotel?.base_currency) applyDefault(hotel.base_currency);
   }, [hotel, applyDefault]);
+
+  // First-time visitors get the guided tour automatically (once). The tour lives
+  // here — not on a page — so it survives the page-to-page navigation it drives.
+  useEffect(() => {
+    if (shouldAutoStartTour()) {
+      const t = window.setTimeout(() => setTourOpen(true), 700);
+      return () => window.clearTimeout(t);
+    }
+  }, []);
+  useEffect(() => {
+    const h = () => setTourOpen(true);
+    window.addEventListener("mise:tour", h);
+    return () => window.removeEventListener("mise:tour", h);
+  }, []);
 
   const navItems = NAV.filter(
     (item) =>
@@ -208,16 +300,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="relative hidden border-r border-glass/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
         <Brand />
         <NavLinks items={navItems} pathname={pathname} />
-        <div className="mt-auto border-t border-glass/10 p-4 text-xs text-fg-faint">
-          {hotel && (
-            <p className="truncate text-sm font-semibold text-fg">
-              {hotel.name}
-              {hotel.city ? ` · ${hotel.city}` : ""}
-            </p>
-          )}
-          <p className="mt-1 truncate text-fg-soft">{user?.email}</p>
-          <p className="mt-0.5">{user?.role.replace(/_/g, " ")}</p>
-        </div>
+        <div className="mt-auto p-3" />
       </aside>
 
       {/* Mobile slide-over */}
@@ -255,13 +338,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NotificationBell />
             <ThemeSwitcher />
             <CurrencySwitcher />
-            <span className="hidden text-sm text-fg-faint lg:inline">{user?.email}</span>
-            <button
-              onClick={logout}
-              className="rounded-lg border border-glass/15 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-glass/5"
-            >
-              Log out
-            </button>
+            <UserMenu />
           </div>
         </header>
 
@@ -270,7 +347,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8">{children}</main>
       </div>
 
-      {/* Project-aware AI assistant — floats on every page */}
+      {/* Guided tour (walks through pages) + project-aware AI assistant. Both float
+          on every page. */}
+      <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       <Copilot />
     </div>
   );

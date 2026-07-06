@@ -16,6 +16,7 @@ import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { numeric } from "@/lib/sanitize";
 
 const CATEGORIES = ["FOOD", "BEVERAGE", "BAR", "UTILITY", "SERVICE", "PROPERTY"];
 const TYPE_EMOJI: Record<string, string> = {
@@ -414,11 +415,9 @@ export default function VendorsPage() {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      inputMode="decimal"
                       value={piPrice}
-                      onChange={(e) => setPiPrice(e.target.value)}
+                      onChange={(e) => setPiPrice(numeric(e.target.value))}
                       placeholder="price"
                       className="w-28 rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
                     />

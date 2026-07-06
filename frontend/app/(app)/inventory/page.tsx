@@ -16,6 +16,7 @@ import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
+import { noDigits, numeric } from "@/lib/sanitize";
 import { useConfirm } from "@/components/confirm";
 import { useCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
@@ -684,6 +685,7 @@ export default function InventoryPage() {
                   options={unitOptions}
                   placeholder="Select unit…"
                   className="w-full"
+                  sanitize={noDigits}
                 />
               </div>
             </div>
@@ -713,7 +715,7 @@ export default function InventoryPage() {
             </div>
             <div className="w-28">
               <label className="block text-sm font-medium text-fg-soft">Pack name</label>
-              <input value={form.packUnit} onChange={(e) => setForm({ ...form, packUnit: e.target.value })} placeholder="e.g. box" className={inputCls} />
+              <input value={form.packUnit} onChange={(e) => setForm({ ...form, packUnit: noDigits(e.target.value) })} placeholder="e.g. box" className={inputCls} />
             </div>
             <div className="flex items-end gap-1.5">
               <span className="pb-2 text-sm text-fg-faint">1 {form.packUnit.trim() || "pack"} =</span>
@@ -721,7 +723,7 @@ export default function InventoryPage() {
                 <label className="block text-sm font-medium text-fg-soft">Pack size</label>
                 <input
                   value={form.packSize}
-                  onChange={(e) => setForm({ ...form, packSize: e.target.value })}
+                  onChange={(e) => setForm({ ...form, packSize: numeric(e.target.value) })}
                   inputMode="decimal"
                   placeholder="0"
                   disabled={!form.packUnit.trim()}

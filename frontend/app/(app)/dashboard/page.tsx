@@ -8,7 +8,6 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { localISODate } from "@/lib/date";
-import { Tour, shouldAutoStartTour } from "@/components/Tour";
 
 interface LowStock {
   item_id: string;
@@ -70,11 +69,8 @@ export default function DashboardPage() {
   const [low, setLow] = useState<LowStock[]>([]);
   const [wow, setWow] = useState<{ cur: PnL; prev: PnL } | null>(null);
   const [setupDone, setSetupDone] = useState(true); // assume done → no flash; corrected in effect
-  const [tourOpen, setTourOpen] = useState(false);
   useEffect(() => {
     try { setSetupDone(localStorage.getItem("mise.setup.done") === "1"); } catch { /* ignore */ }
-    // First-time visitors get the guided tour automatically (once).
-    if (shouldAutoStartTour()) setTourOpen(true);
   }, []);
   const [loading, setLoading] = useState(true);
 
@@ -108,14 +104,13 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title={hotel ? hotel.name : "Dashboard"}
           subtitle="Your restaurant at a glance"
         />
         <button
-          onClick={() => setTourOpen(true)}
+          onClick={() => window.dispatchEvent(new Event("mise:tour"))}
           className="mt-1 shrink-0 rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-500/20"
         >
           ✨ Take a tour

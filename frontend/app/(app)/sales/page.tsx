@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { localISODate } from "@/lib/date";
+import { numeric } from "@/lib/sanitize";
 
 const METHODS = ["CARD", "CASH", "ONLINE", "BANK"];
 const today = () => localISODate();
@@ -234,7 +235,7 @@ export default function SalesPage() {
                   <label className="block text-sm font-medium text-fg-soft">Gross</label>
                   <input
                     value={gross}
-                    onChange={(e) => setGross(e.target.value)}
+                    onChange={(e) => setGross(numeric(e.target.value))}
                     inputMode="decimal"
                     required
                     placeholder="0.00"
@@ -316,7 +317,7 @@ export default function SalesPage() {
               <label className="block text-fg-faint">Opening cash</label>
               <input
                 value={opening}
-                onChange={(e) => setOpening(e.target.value)}
+                onChange={(e) => setOpening(numeric(e.target.value))}
                 inputMode="decimal"
                 disabled={!canWrite}
                 className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2"
@@ -334,7 +335,7 @@ export default function SalesPage() {
               <label className="block text-fg-faint">Counted at close</label>
               <input
                 value={counted}
-                onChange={(e) => setCounted(e.target.value)}
+                onChange={(e) => setCounted(numeric(e.target.value))}
                 inputMode="decimal"
                 disabled={!canWrite}
                 placeholder="physical count"

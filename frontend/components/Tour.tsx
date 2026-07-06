@@ -1,27 +1,26 @@
 "use client";
 
-// A lightweight, dependency-free guided tour: a smooth animated "spotlight" that
-// glides between sidebar sections with a glassy step card. CSP-safe (no CDN/libs),
-// works on desktop (spotlight) and gracefully centres the card on mobile where the
-// sidebar is off-canvas. Persists completion so it only auto-runs once.
-import { useCallback, useEffect, useLayoutEffect, useState, type CSSProperties } from "react";
+// A guided tour that actually WALKS you through the app: each step navigates to a
+// real page and a floating card explains what you're looking at, while the matching
+// section lights up in the sidebar. The tour (not the user) drives the movement.
+// Dependency-free + CSP-safe. Persists completion so it only auto-runs once.
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const KEY = "mise.tour.done";
 
-type Step = { target?: string; title: string; body: string; emoji: string };
+type Step = { href: string; title: string; body: string; emoji: string };
 
 const STEPS: Step[] = [
-  { title: "Welcome to Mise", body: "A 60-second tour of where everything lives. Skip whenever you like.", emoji: "✨" },
-  { target: "dashboard", title: "Dashboard", body: "Your restaurant at a glance — today's takings, this month's profit, low stock.", emoji: "▦" },
-  { target: "money", title: "Money", body: "The plain-English money story: sales − food − running costs = what you keep.", emoji: "💰" },
-  { target: "inventory", title: "Inventory", body: "Every item with live stock, a health bar, pack sizes (1 box = 5 kg) and suppliers.", emoji: "📦" },
-  { target: "recipes", title: "Recipes", body: "Cost each dish from its ingredients, so you always know its real margin.", emoji: "🍲" },
-  { target: "purchasing", title: "Purchasing", body: "Raise orders to suppliers and receive deliveries into stock — even short ones.", emoji: "🛒" },
-  { target: "sales", title: "Sales & Cash", body: "Log daily takings by channel and balance the till.", emoji: "🧾" },
-  { target: "rota", title: "Rota", body: "Schedule shifts and watch forecast labour cost as a % of sales.", emoji: "🗓️" },
-  { target: "payroll", title: "Payroll", body: "Run pay from attendance, handle advances, and issue payslips.", emoji: "💷" },
-  { target: "profile", title: "Make it yours", body: "Add your hotel details + logo in Profile. Themes live in the top bar.", emoji: "🎨" },
-  { title: "You're all set", body: "Explore freely, or tap ✨ Ask Mise any time for help. Enjoy!", emoji: "🚀" },
+  { href: "/dashboard", title: "Welcome to Mise 👋", body: "A quick walk through where everything lives — I'll drive, you just tap Next. This is your Dashboard: today's takings, this month's profit and low stock, at a glance.", emoji: "▦" },
+  { href: "/money", title: "Money", body: "The plain-English money story: sales − food − running costs = what you keep. Waste and every other cost land here too.", emoji: "💰" },
+  { href: "/inventory", title: "Inventory", body: "Every item with live stock, a health bar and pack sizes (1 box = 5 kg) — so recipes cost in the base unit but you order in packs.", emoji: "📦" },
+  { href: "/recipes", title: "Recipes", body: "Cost each dish from its ingredients, so you always know its real margin before you set a price.", emoji: "🍲" },
+  { href: "/purchasing", title: "Purchasing", body: "Turn a shopping list into supplier orders, then receive deliveries into stock — even short ones, with a goods-received note.", emoji: "🛒" },
+  { href: "/sales", title: "Sales & Cash", body: "Log daily takings by channel and balance the till. This feeds your profit and the dashboards.", emoji: "🧾" },
+  { href: "/rota", title: "Rota", body: "Schedule shifts and watch forecast labour cost as a % of sales. Copy a past week in one click.", emoji: "🗓️" },
+  { href: "/payroll", title: "Payroll", body: "Run pay from attendance, record advances, approve everyone, and issue payslip PDFs.", emoji: "💷" },
+  { href: "/profile", title: "Make it yours 🎨", body: "Add your hotel details + logo here (it shows in the sidebar and on your PDFs). Switch themes from the swatch in the top bar. That's the tour — enjoy!", emoji: "🎨" },
 ];
 
 /** Should the tour auto-start (first time only)? */
@@ -34,154 +33,123 @@ export function shouldAutoStartTour(): boolean {
 }
 
 export function Tour({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const router = useRouter();
   const [i, setI] = useState(0);
-  const [rect, setRect] = useState<DOMRect | null>(null);
   const step = STEPS[i];
   const last = i === STEPS.length - 1;
 
+  // Every close path funnels through finish() so `i` is reset to 0 for next time.
   const finish = useCallback(() => {
-    try {
-      localStorage.setItem(KEY, "1");
-    } catch {
-      /* ignore */
-    }
+    try { localStorage.setItem(KEY, "1"); } catch { /* ignore */ }
     setI(0);
     onClose();
   }, [onClose]);
 
-  const measure = useCallback(() => {
-    const t = STEPS[i].target;
-    if (!t) {
-      setRect(null);
-      return;
-    }
-    const el = document.querySelector(`[data-tour="${t}"]`) as HTMLElement | null;
-    if (!el) {
-      setRect(null);
-      return;
-    }
-    el.scrollIntoView({ block: "center", behavior: "auto" });
-    const r = el.getBoundingClientRect();
-    setRect(r.width > 4 && r.height > 4 ? r : null);
-  }, [i]);
-
-  useLayoutEffect(() => {
-    if (open) requestAnimationFrame(measure);
-  }, [open, i, measure]);
-
+  // Drive the app: navigate to this step's page, scroll its sidebar item into view
+  // (so the active highlight is always visible), and reset the page scroll to the top.
   useEffect(() => {
     if (!open) return;
-    const onResize = () => measure();
-    window.addEventListener("resize", onResize);
+    router.push(step.href);
+    const slug = step.href.slice(1);
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-tour="${slug}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
+    }, 70);
+    return () => window.clearTimeout(t);
+  }, [open, i, step.href, router]);
+
+  // Keyboard: →/Enter next · ← back · Esc skip.
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") finish();
-      else if (e.key === "ArrowRight" || e.key === "Enter") setI((x) => Math.min(STEPS.length - 1, x + 1));
+      else if (e.key === "ArrowRight" || e.key === "Enter") setI((x) => (x >= STEPS.length - 1 ? x : x + 1));
       else if (e.key === "ArrowLeft") setI((x) => Math.max(0, x - 1));
     };
     window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, measure, finish]);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, finish]);
 
   if (!open) return null;
 
-  // Card placement: to the right of a spotlit sidebar item, else screen-centred.
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const CARD_W = 320;
-  const centred = !rect || vw < 640;
-  const cardStyle: CSSProperties = centred
-    ? { left: "50%", top: "50%", transform: "translate(-50%, -50%)" }
-    : {
-        left: Math.min((rect as DOMRect).right + 18, vw - CARD_W - 16),
-        top: Math.max(16, Math.min((rect as DOMRect).top - 8, vh - 260)),
-      };
-
   return (
-    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Guided tour">
-      {/* Dim + spotlight. The huge box-shadow darkens everything except the target. */}
-      {rect ? (
-        <div
-          className="pointer-events-none absolute rounded-xl ring-2 ring-brand-400 transition-all duration-500 ease-out"
-          style={{
-            top: rect.top - 6,
-            left: rect.left - 6,
-            width: rect.width + 12,
-            height: rect.height + 12,
-            boxShadow: "0 0 0 9999px rgba(4,7,13,0.74)",
-          }}
-        />
-      ) : (
-        <div className="absolute inset-0 bg-[rgba(4,7,13,0.74)] backdrop-blur-sm" />
-      )}
-
-      {/* Click anywhere (except the card) advances. */}
-      <button
-        type="button"
-        aria-label="Next"
-        className="absolute inset-0 h-full w-full cursor-default"
-        onClick={() => (last ? finish() : setI((x) => x + 1))}
+    <>
+      {/* Soft bottom vignette so the floating card reads clearly, without hiding the
+          page we're actually touring. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-[65]"
+        style={{ boxShadow: "inset 0 -190px 130px -90px rgba(4,7,13,0.6)" }}
       />
 
-      {/* Step card */}
       <div
-        key={i}
-        className="mise-pop absolute w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-brand-400/30 bg-paper-2/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl"
-        style={cardStyle}
+        className="fixed inset-x-0 bottom-0 z-[70] flex justify-center px-4 pb-5 pt-2"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Guided tour"
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-400 via-brand-500 to-brand-700" />
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-500/15 text-xl ring-1 ring-brand-400/30">
-            {step.emoji}
-          </span>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-fg">{step.title}</h3>
-            <p className="mt-1 text-sm leading-relaxed text-fg-soft">{step.body}</p>
+        <div
+          key={i}
+          className="mise-pop pointer-events-auto relative w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-brand-400/30 bg-paper-2/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-400 via-brand-500 to-brand-700" />
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-500/15 text-2xl ring-1 ring-brand-400/30">
+              {step.emoji}
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-fg">{step.title}</h3>
+                <span className="shrink-0 text-xs text-fg-faint">
+                  {i + 1}/{STEPS.length}
+                </span>
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-fg-soft">{step.body}</p>
+            </div>
           </div>
-        </div>
 
-        {/* progress dots */}
-        <div className="mt-4 flex items-center gap-1.5">
-          {STEPS.map((_, k) => (
-            <span
-              key={k}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                k === i ? "w-5 bg-brand-500" : k < i ? "w-1.5 bg-brand-500/50" : "w-1.5 bg-glass/15"
-              }`}
-            />
-          ))}
-        </div>
+          {/* progress dots */}
+          <div className="mt-4 flex items-center gap-1.5">
+            {STEPS.map((_, k) => (
+              <span
+                key={k}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  k === i ? "w-5 bg-brand-500" : k < i ? "w-1.5 bg-brand-500/50" : "w-1.5 bg-glass/15"
+                }`}
+              />
+            ))}
+          </div>
 
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={finish}
-            className="text-xs font-medium text-fg-faint hover:text-fg-soft"
-          >
-            Skip tour
-          </button>
-          <div className="flex items-center gap-2">
-            {i > 0 && (
-              <button
-                type="button"
-                onClick={() => setI((x) => Math.max(0, x - 1))}
-                className="rounded-lg border border-line px-3 py-1.5 text-sm text-fg-soft hover:bg-paper"
-              >
-                Back
-              </button>
-            )}
+          <div className="mt-3 flex items-center justify-between gap-2">
             <button
               type="button"
-              onClick={() => (last ? finish() : setI((x) => x + 1))}
-              className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 active:scale-95"
+              onClick={finish}
+              className="text-xs font-medium text-fg-faint hover:text-fg-soft"
             >
-              {last ? "Finish 🎉" : "Next"}
+              Skip tour
             </button>
+            <div className="flex items-center gap-2">
+              {i > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setI((x) => Math.max(0, x - 1))}
+                  className="rounded-lg border border-line px-3 py-1.5 text-sm text-fg-soft hover:bg-paper"
+                >
+                  Back
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => (last ? finish() : setI((x) => x + 1))}
+                className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 active:scale-95"
+              >
+                {last ? "Finish 🎉" : "Next →"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

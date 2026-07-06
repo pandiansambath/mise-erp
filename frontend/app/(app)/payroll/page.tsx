@@ -5,11 +5,13 @@ import { api, ApiError, downloadFile, type Employee, type PayrollRow } from "@/l
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import Link from "next/link";
 import { SortTh, useSort } from "@/components/sortable";
+import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { localISODate } from "@/lib/date";
+import { numeric } from "@/lib/sanitize";
 
 type Advance = {
   id: string;
@@ -21,7 +23,7 @@ type Advance = {
   is_deducted: boolean;
 };
 
-const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
+const thisMonth = () => localISODate().slice(0, 7); // local YYYY-MM
 
 const statusTone: Record<string, "slate" | "amber" | "green"> = {
   DRAFT: "slate",
@@ -277,7 +279,7 @@ export default function PayrollPage() {
                     text="How many days count as a full month for salaried staff. Daily rate = monthly salary ÷ this. e.g. 26 for a 6-day week, 30 for every day. (Hourly staff ignore this — they're paid per hour.)"
                   />
                 </label>
-                <input value={workingDays} onChange={(e) => setWorkingDays(e.target.value)} inputMode="numeric" className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
+                <input value={workingDays} onChange={(e) => setWorkingDays(numeric(e.target.value, { decimal: false }))} inputMode="numeric" className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
               </div>
               <button onClick={runPayroll} disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {busy ? "Running…" : "Run payroll"}
@@ -322,18 +324,20 @@ export default function PayrollPage() {
             Recovered from the selected period&apos;s payroll (<b className="text-fg-soft">{period}</b>).
           </p>
           <form onSubmit={addAdvance} className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
-            <label className="block sm:w-48">
+            <div className="sm:w-48">
               <span className="block text-xs font-medium text-fg-faint">Employee</span>
-              <select value={advEmp} onChange={(e) => setAdvEmp(e.target.value)} className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm">
-                <option value="">Choose…</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.full_name}</option>
-                ))}
-              </select>
-            </label>
+              <div className="mt-1">
+                <Select
+                  value={advEmp}
+                  onChange={setAdvEmp}
+                  placeholder="Choose…"
+                  options={employees.map((e) => ({ value: e.id, label: e.full_name }))}
+                />
+              </div>
+            </div>
             <label className="block sm:w-32">
               <span className="block text-xs font-medium text-fg-faint">Amount</span>
-              <input value={advAmount} onChange={(e) => setAdvAmount(e.target.value)} inputMode="decimal" placeholder="0.00" className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm" />
+              <input value={advAmount} onChange={(e) => setAdvAmount(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm" />
             </label>
             <label className="block flex-1 sm:min-w-[10rem]">
               <span className="block text-xs font-medium text-fg-faint">Reason (optional)</span>
@@ -357,6 +361,11 @@ export default function PayrollPage() {
                   </span>
                 </div>
               ))}
+              <p className="pt-1 text-[11px] leading-relaxed text-fg-faint">
+                <b className="text-fg-soft">recover 2026-07</b> = this money is taken back from that month&apos;s payroll ·{" "}
+                <b className="text-fg-soft">pending</b> = not recovered yet (that month&apos;s pay hasn&apos;t been run) ·{" "}
+                <b className="text-fg-soft">deducted</b> = already taken off a completed run.
+              </p>
             </div>
           )}
         </Card>

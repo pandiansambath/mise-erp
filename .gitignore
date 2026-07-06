@@ -103,3 +103,7 @@ ssm_backup.json
 
 # Real client data drops (used for AI autofill testing) — never commit
 real_hotel_datas/
+
+# never commit local DB creds / scratch
+database/cred.txt
+ll.txt

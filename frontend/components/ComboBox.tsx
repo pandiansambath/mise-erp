@@ -11,12 +11,15 @@ export function ComboBox({
   options,
   placeholder = "Type to search…",
   className = "",
+  sanitize,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: string[];
   placeholder?: string;
   className?: string;
+  /** Optional keystroke filter (e.g. strip digits from a unit field). */
+  sanitize?: (v: string) => string;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -57,7 +60,7 @@ export function ComboBox({
       <input
         value={value}
         onChange={(e) => {
-          onChange(e.target.value);
+          onChange(sanitize ? sanitize(e.target.value) : e.target.value);
           setOpen(true);
           setActive(0);
         }}

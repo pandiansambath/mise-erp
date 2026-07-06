@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { api, API_BASE, ApiError, postForm, type Expense, type ExpenseCategory } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
@@ -248,6 +249,13 @@ export default function ProfilePage() {
             Your standing fixed costs (rent, gas, electricity…). Set the amounts and post them to
             this month&apos;s expenses in one click — they flow straight into your P&amp;L. Amounts
             remember last month&apos;s figures.
+          </p>
+          <p className="mt-2 rounded-lg border border-line bg-paper-2/50 p-2.5 text-xs leading-relaxed text-fg-faint">
+            <b className="text-fg-soft">&ldquo;Staff Salaries&rdquo; here</b> is a single lump-sum estimate of monthly wages,
+            so your P&amp;L has a labour cost even before you run payroll. It is <b className="text-fg-soft">not</b> the same as{" "}
+            <Link href="/payroll" className="text-brand-400 underline">Payroll</Link> — that pays each person from their own rate
+            (set on <Link href="/employees" className="text-brand-400 underline">Employees</Link>). Use this lump line for a quick
+            forecast; use Payroll for the real, per-person pay run.
           </p>
           {fixedCats.length === 0 ? (
             <p className="mt-4 text-sm text-fg-faint">

@@ -1,7 +1,7 @@
 # Open a local tunnel to the (private) RDS Postgres, via the EC2 box, using AWS SSM.
 # No SSH key, no opening the database to the internet — the box's IAM role already
 # allows SSM, and RDS only accepts connections from that box.
-#
+# commannd --> powershell -ExecutionPolicy Bypass -File .\db-tunnel.ps1
 # Prereqs (one-time):
 #   1) Windows clock must be correct  (Settings > Time & language > Sync now)
 #   2) AWS CLI v2 configured           (aws sts get-caller-identity should work)
@@ -10,8 +10,8 @@
 #
 # Then run:   powershell -File scripts/db-tunnel.ps1
 # Leave it running, and point a GUI (DBeaver / TablePlus / pgAdmin) or psql at:
-#   host=localhost  port=5433  database=mise  user=viewer  password=<read-only password>
-# (Use the read-only `viewer` login for browsing — it can SELECT but not change data.)
+#   host=localhost  port=5433  database=mise  user=miseadmin  password=<your password>
+# (miseadmin = full read+write. A read-only `viewer` login also exists if you prefer.)
 
 $ErrorActionPreference = "Stop"
 $Region   = "eu-west-2"
@@ -26,7 +26,7 @@ $InstanceId = (aws ec2 describe-instances --region $Region `
 if (-not $InstanceId) { throw "No running mise-app instance found (check clock + AWS creds)." }
 Write-Host "Instance: $InstanceId" -ForegroundColor Green
 Write-Host "Tunnel: localhost:$LocalPort  ->  $RdsHost:5432" -ForegroundColor Green
-Write-Host "Connect a DB client to localhost:$LocalPort (db=mise, user=viewer, read-only). Ctrl+C to stop.`n" -ForegroundColor Yellow
+Write-Host "Connect a DB client to localhost:$LocalPort (db=mise, user=miseadmin). Ctrl+C to stop.`n" -ForegroundColor Yellow
 
 aws ssm start-session --region $Region --target $InstanceId `
   --document-name AWS-StartPortForwardingSessionToRemoteHost `

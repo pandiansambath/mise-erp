@@ -2,11 +2,17 @@
 
 // A small custom <select> replacement with an animated popover (mise-pop),
 // click-outside to close, a rotating chevron and a ✓ on the active option.
-// Solid surface (no transparency) so it always reads crisp.
+//
+// The popover is rendered in a PORTAL with fixed positioning, so it can never be
+// clipped by a scrolling/overflow-hidden parent (e.g. the purchasing tray). It
+// auto-flips upward when there isn't room below, and follows scroll/resize.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type SelectOption = { value: string; label: string };
+
+type Pos = { left: number; top: number; bottom: number; width: number; maxH: number; up: boolean };
 
 export function Select({
   value,
@@ -22,21 +28,51 @@ export function Select({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<Pos | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom - 10;
+    const above = r.top - 10;
+    const up = below < 200 && above > below;
+    const maxH = Math.max(120, Math.min(288, up ? above : below));
+    setPos({ left: r.left, top: r.bottom, bottom: window.innerHeight - r.top, width: r.width, maxH, up });
   }, []);
+
+  // Measure when opening (portal only renders once positioned, so there's no flash).
+  useEffect(() => {
+    if (open) place();
+  }, [open, place]);
+
+  // Close on outside click; keep the popover glued to the button on scroll/resize.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const reflow = () => place();
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("resize", reflow);
+    window.addEventListener("scroll", reflow, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("resize", reflow);
+      window.removeEventListener("scroll", reflow, true);
+    };
+  }, [open, place]);
 
   const sel = options.find((o) => o.value === value);
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div className={`relative ${className}`}>
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
@@ -53,31 +89,40 @@ export function Select({
           ▾
         </span>
       </button>
-      {open && (
-        <div
-          role="listbox"
-          className="mise-pop absolute z-40 mt-1.5 max-h-60 w-full overflow-auto rounded-xl border border-line bg-paper-2 p-1 shadow-2xl shadow-black/40"
-        >
-          {options.map((o) => (
-            <button
-              key={o.value || "_empty"}
-              type="button"
-              role="option"
-              aria-selected={o.value === value}
-              onClick={() => {
-                onChange(o.value);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition hover:bg-glass/10 ${
-                o.value === value ? "font-medium text-brand-300" : "text-fg-soft"
-              }`}
-            >
-              <span className="truncate">{o.label}</span>
-              {o.value === value && <span className="text-brand-400">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
+      {open && pos && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popRef}
+            role="listbox"
+            className="mise-pop fixed z-[95] overflow-auto overscroll-contain rounded-xl border border-line bg-paper-2 p-1 shadow-2xl shadow-black/40"
+            style={{
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxH,
+              ...(pos.up ? { bottom: pos.bottom + 6 } : { top: pos.top + 6 }),
+            }}
+          >
+            {options.map((o) => (
+              <button
+                key={o.value || "_empty"}
+                type="button"
+                role="option"
+                aria-selected={o.value === value}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition hover:bg-glass/10 ${
+                  o.value === value ? "font-medium text-brand-300" : "text-fg-soft"
+                }`}
+              >
+                <span className="truncate">{o.label}</span>
+                {o.value === value && <span className="text-brand-400">✓</span>}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

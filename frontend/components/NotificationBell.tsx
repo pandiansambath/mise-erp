@@ -4,7 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-type Notif = { id: string; kind: string; icon: string; title: string; body: string; route: string };
+type Alert = {
+  id: string; kind: string; severity: "danger" | "warn" | "info";
+  icon: string; title: string; body: string; route: string;
+};
+type Activity = {
+  id: string; kind: string; icon: string; title: string; body: string;
+  route: string; at: string; who: string;
+};
+type Feed = { alerts: Alert[]; activity: Activity[]; count: number };
 
 const SEEN_KEY = "mise.notif.seen";
 
@@ -16,28 +24,51 @@ function loadSeen(): Set<string> {
   }
 }
 
+/** Compact relative time: "just now", "5m ago", "3h ago", "2d ago", else a date. */
+function timeAgo(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+const SEV: Record<string, string> = {
+  danger: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  warn: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+  info: "bg-brand-500/15 text-brand-300 ring-brand-500/30",
+};
+
 export default function NotificationBell() {
   const router = useRouter();
-  const [items, setItems] = useState<Notif[]>([]);
+  const [feed, setFeed] = useState<Feed>({ alerts: [], activity: [], count: 0 });
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState<Set<string>>(new Set());
   const ref = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const res = await api.get<{ items: Notif[] }>("/notifications");
-      setItems(res.items || []);
+      const res = await api.get<Feed>("/notifications");
+      setFeed({ alerts: res.alerts || [], activity: res.activity || [], count: res.count || 0 });
     } catch {
       /* header must never break — ignore transient errors */
     }
   }, []);
 
-  // Initial load + poll every 60s; seed "seen" from localStorage.
+  // Initial load + poll every 45s + refresh when the tab regains focus.
   useEffect(() => {
     setSeen(loadSeen());
     refresh();
-    const t = setInterval(refresh, 60_000);
-    return () => clearInterval(t);
+    const t = setInterval(refresh, 45_000);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
   }, [refresh]);
 
   // Close on outside click.
@@ -50,25 +81,25 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  const unseen = items.filter((i) => !seen.has(i.id)).length;
+  const all = [...feed.alerts, ...feed.activity];
+  const unseen = all.filter((i) => !seen.has(i.id)).length;
 
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && items.length) {
-      // opening = everything currently shown is now "seen"
-      const all = new Set(seen);
-      items.forEach((i) => all.add(i.id));
-      setSeen(all);
-      try {
-        localStorage.setItem(SEEN_KEY, JSON.stringify([...all]));
-      } catch {
-        /* ignore */
+    if (next) {
+      refresh();
+      if (all.length) {
+        const merged = new Set(seen);
+        all.forEach((i) => merged.add(i.id));
+        setSeen(merged);
+        try { localStorage.setItem(SEEN_KEY, JSON.stringify([...merged])); } catch { /* ignore */ }
       }
     }
   }
 
   function go(route: string) {
+    if (!route) return;
     setOpen(false);
     router.push(route);
   }
@@ -79,43 +110,86 @@ export default function NotificationBell() {
         type="button"
         aria-label="Notifications"
         onClick={toggle}
-        className="relative rounded-lg border border-glass/15 p-2 text-fg-soft transition hover:bg-glass/5"
+        className="relative rounded-lg border border-glass/15 p-2 text-fg-soft transition hover:bg-glass/5 active:scale-95"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unseen > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-lg shadow-rose-500/40">
             {unseen > 9 ? "9+" : unseen}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-glass/15 bg-shell/95 shadow-2xl backdrop-blur-xl">
-          <div className="flex items-center justify-between border-b border-glass/10 px-4 py-2.5">
+        <div className="mise-pop absolute right-0 z-50 mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-glass/15 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="flex items-center justify-between border-b border-glass/10 px-4 py-3">
             <span className="text-sm font-semibold text-fg">Notifications</span>
-            <span className="text-xs text-fg-faint">{items.length} active</span>
+            <span className="rounded-full bg-glass/10 px-2 py-0.5 text-[11px] font-medium text-fg-faint">
+              {feed.alerts.length} alert{feed.alerts.length === 1 ? "" : "s"}
+            </span>
           </div>
-          <div className="max-h-96 overflow-y-auto">
-            {items.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-fg-faint">You&apos;re all caught up 🎉</p>
-            ) : (
-              items.map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  onClick={() => go(n.route)}
-                  className="flex w-full gap-3 border-b border-glass/5 px-4 py-3 text-left transition last:border-0 hover:bg-glass/5"
-                >
-                  <span className="text-lg leading-none">{n.icon}</span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-fg">{n.title}</span>
-                    <span className="block text-xs text-fg-soft">{n.body}</span>
-                  </span>
-                </button>
-              ))
+
+          <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
+            {all.length === 0 && (
+              <p className="px-4 py-8 text-center text-sm text-fg-faint">You&apos;re all caught up 🎉</p>
+            )}
+
+            {/* Needs attention */}
+            {feed.alerts.length > 0 && (
+              <>
+                <p className="sticky top-0 bg-shell/95 px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-amber-300/80 backdrop-blur">
+                  ⚠ Needs attention
+                </p>
+                {feed.alerts.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => go(n.route)}
+                    className="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-glass/5"
+                  >
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-sm ring-1 ${SEV[n.severity] ?? SEV.info}`}>
+                      {n.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-fg">{n.title}</span>
+                      <span className="block truncate text-xs text-fg-soft">{n.body}</span>
+                    </span>
+                    <span aria-hidden className="mt-1 text-fg-faint">›</span>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* Recent activity */}
+            {feed.activity.length > 0 && (
+              <>
+                <p className="sticky top-0 bg-shell/95 px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-fg-faint backdrop-blur">
+                  🕒 Recent activity
+                </p>
+                {feed.activity.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => go(n.route)}
+                    className="flex w-full items-start gap-3 border-t border-glass/5 px-4 py-2.5 text-left transition first:border-t-0 hover:bg-glass/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-glass/8 text-sm ring-1 ring-glass/10">
+                      {n.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-fg">{n.title}</span>
+                        <span className="shrink-0 text-[10px] text-fg-faint">{timeAgo(n.at)}</span>
+                      </span>
+                      <span className="block truncate text-xs text-fg-soft">{n.body}</span>
+                      {n.who && <span className="block truncate text-[10px] text-fg-faint">by {n.who}</span>}
+                    </span>
+                  </button>
+                ))}
+              </>
             )}
           </div>
         </div>

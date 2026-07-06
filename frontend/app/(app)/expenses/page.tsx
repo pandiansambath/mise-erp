@@ -19,6 +19,7 @@ import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
 import { localISODate } from "@/lib/date";
+import { numeric } from "@/lib/sanitize";
 
 // Payment methods the owner actually uses. Stored as the value; shown as the label.
 const METHODS: { value: string; label: string }[] = [
@@ -354,15 +355,15 @@ export default function ExpensesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Amount (incl VAT)</label>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" required placeholder="0.00" className={inputCls} />
+                  <input value={amount} onChange={(e) => setAmount(numeric(e.target.value))} inputMode="decimal" required placeholder="0.00" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">of which VAT</label>
-                  <input value={vat} onChange={(e) => setVat(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputCls} />
+                  <input value={vat} onChange={(e) => setVat(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Extra / surcharge (+)</label>
-                  <input value={extra} onChange={(e) => setExtra(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputCls} />
+                  <input value={extra} onChange={(e) => setExtra(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Why the extra?</label>

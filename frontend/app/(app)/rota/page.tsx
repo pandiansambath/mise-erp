@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { localISODate as iso } from "@/lib/date";
+import { numeric } from "@/lib/sanitize";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -168,10 +169,16 @@ export default function RotaPage() {
     loadCopyFrom(prevStart);
   }
 
+  // You copy FROM the past — the latest week you may pick is last week. This keeps
+  // the source strictly before the week you're filling in.
+  const latestSource = addDays(weekStart, -7);
+  const canStepLater = copySource ? copySource.getTime() < latestSource.getTime() : false;
+
   function stepCopySource(delta: number) {
     if (!copySource) return;
     const d = new Date(copySource);
     d.setDate(d.getDate() + delta * 7);
+    if (d.getTime() > latestSource.getTime()) return; // never step into this week or the future
     loadCopyFrom(d);
   }
 
@@ -374,7 +381,7 @@ export default function RotaPage() {
             </label>
             <label className="block sm:w-auto">
               <span className="block text-xs font-medium text-fg-faint">Break (min)</span>
-              <input type="number" min={0} step={5} value={brk} onChange={(e) => setBrk(e.target.value)} title="Unpaid break — deducted from paid hours" className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-24" />
+              <input inputMode="numeric" value={brk} onChange={(e) => setBrk(numeric(e.target.value, { decimal: false }))} title="Unpaid break — deducted from paid hours" className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-24" />
             </label>
             <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {busy ? "Adding…" : "Add shift"}
@@ -398,13 +405,13 @@ export default function RotaPage() {
               <span className="min-w-[6rem] text-center text-xs font-medium text-fg">
                 {copySource ? `${fmtDM(copySource)} – ${fmtDM(addDays(copySource, 6))}` : ""}
               </span>
-              <button onClick={() => stepCopySource(1)} disabled={copyBusy} className="rounded-md border border-line-2 px-2 py-1 text-xs text-fg-soft hover:bg-paper-2" aria-label="Later week">›</button>
+              <button onClick={() => stepCopySource(1)} disabled={copyBusy || !canStepLater} title={!canStepLater ? "You can only copy from a past week" : undefined} className="rounded-md border border-line-2 px-2 py-1 text-xs text-fg-soft hover:bg-paper-2 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Later week">›</button>
               <button onClick={() => { setCopyRows(null); setCopySource(null); }} className="ml-1 text-fg-faint hover:text-fg" aria-label="Cancel">✕</button>
             </div>
           </div>
 
           {copyRows.length === 0 ? (
-            <p className="py-4 text-center text-sm text-fg-faint">No shifts in that week — use ‹ › to pick another.</p>
+            <p className="py-4 text-center text-sm text-fg-faint">No shifts in that week — use ‹ to pick an earlier week.</p>
           ) : (
             <>
               <div className="mt-3 flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">

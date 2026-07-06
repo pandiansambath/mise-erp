@@ -8,6 +8,7 @@ import { SortTh, useSort } from "@/components/sortable";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { numeric } from "@/lib/sanitize";
 
 const EMPTY = {
   full_name: "",
@@ -155,12 +156,12 @@ export default function EmployeesPage() {
             {form.salary_type === "MONTHLY" ? (
               <div>
                 <label className="block text-sm font-medium text-fg-soft">Monthly salary</label>
-                <input value={form.monthly_salary} onChange={(e) => setForm({ ...form, monthly_salary: e.target.value })} inputMode="decimal" className={inputCls} />
+                <input value={form.monthly_salary} onChange={(e) => setForm({ ...form, monthly_salary: numeric(e.target.value) })} inputMode="decimal" className={inputCls} />
               </div>
             ) : (
               <div>
                 <label className="block text-sm font-medium text-fg-soft">Hourly rate</label>
-                <input value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} inputMode="decimal" className={inputCls} />
+                <input value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: numeric(e.target.value) })} inputMode="decimal" className={inputCls} />
               </div>
             )}
             <div>
