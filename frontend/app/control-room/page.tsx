@@ -245,14 +245,7 @@ export default function ControlRoomPage() {
     );
   }, [hotels, q]);
 
-  if (!user?.is_platform_owner) {
-    return (
-      <div>
-        <PageHeader title="Control Room" subtitle="Platform operators only" />
-        <Card><p className="text-sm text-fg-soft">You don&apos;t have access to the Control Room. This area is for the Mise operator.</p></Card>
-      </div>
-    );
-  }
+  if (!user?.is_platform_owner) return <Spinner />; // layout redirects; this is a flash-guard
   if (loading) return <Spinner />;
 
   const totalUsers = hotels.reduce((s, h) => s + h.user_count, 0);
@@ -261,7 +254,7 @@ export default function ControlRoomPage() {
 
   return (
     <div>
-      <PageHeader title="🛰️ Control Room" subtitle="Every hotel on Mise — features, access & support in one place." />
+      <PageHeader title="All hotels" subtitle="Every restaurant on Mise — flip features, reset access, all in one place." />
 
       {err && <Card className="mb-4"><p className="text-sm text-rose-400">{err}</p></Card>}
 

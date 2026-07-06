@@ -72,7 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(res.access_token);
       setUser(res.user);
       setHotel(res.hotel);
-      await sweepThenGo("/dashboard");
+      // Operators go straight to the standalone Control Room; everyone else to the app.
+      await sweepThenGo(res.user.is_platform_owner ? "/control-room" : "/dashboard");
     },
     [sweepThenGo]
   );

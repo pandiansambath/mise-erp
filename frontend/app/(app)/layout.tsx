@@ -12,10 +12,13 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
+    if (loading) return;
+    if (!user) router.replace("/login");
+    // Platform operators live in the standalone Control Room, not a hotel's app.
+    else if (user.is_platform_owner) router.replace("/control-room");
   }, [user, loading, router]);
 
-  if (loading || !user) {
+  if (loading || !user || user.is_platform_owner) {
     return (
       <div className="grid min-h-screen place-items-center bg-shell">
         <Spinner />

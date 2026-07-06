@@ -20,8 +20,7 @@ import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
 type NavItem = {
   href: string; label: string; icon: string; perm?: string; hideIfPerm?: string;
   // `feature`: hide this item when the hotel has that entitlement turned off.
-  // `platformOnly`: show only to the Mise operator (is_platform_owner).
-  feature?: string; platformOnly?: boolean;
+  feature?: string;
 };
 
 const NAV: NavItem[] = [
@@ -48,7 +47,6 @@ const NAV: NavItem[] = [
   { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
   { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read" },
-  { href: "/control-room", label: "Control Room", icon: "🛰️", platformOnly: true },
   { href: "/how-it-works", label: "How it works", icon: "📘" },
 ];
 
@@ -292,8 +290,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     (item) =>
       (!item.perm || can(user?.role, item.perm)) &&
       (!item.hideIfPerm || !can(user?.role, item.hideIfPerm)) &&
-      (!item.feature || featureOn(hotel, item.feature)) &&
-      (!item.platformOnly || Boolean(user?.is_platform_owner))
+      (!item.feature || featureOn(hotel, item.feature))
   );
 
   return (
