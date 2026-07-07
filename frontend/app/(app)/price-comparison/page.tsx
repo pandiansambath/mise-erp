@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError, type Item, type PriceComparison, type PricePoint, type Vendor } from "@/lib/api";
+
+type PriceChange = {
+  vendor_name: string; old_price: string | null; new_price: string; source: string; at: string;
+};
+const SRC_TONE: Record<string, "slate" | "amber" | "green"> = {
+  manual: "slate", po: "amber", invoice: "green",
+};
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { ItemPickerSingle } from "@/components/ItemPicker";
@@ -64,6 +71,7 @@ export default function PriceComparisonPage() {
   const [addPrice, setAddPrice] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [history, setHistory] = useState<PricePoint[]>([]);
+  const [changeLog, setChangeLog] = useState<PriceChange[]>([]);
   const { format } = useCurrency();
 
   async function setPreferred(vendorId: string | null) {
@@ -116,6 +124,8 @@ export default function PriceComparisonPage() {
       .then(setData)
       .finally(() => setLoadingCompare(false));
     api.get<PricePoint[]>(`/reports/price-history/${selected}`).then(setHistory).catch(() => setHistory([]));
+    api.get<{ history: PriceChange[] }>(`/vendors/items/${selected}/price-history`)
+      .then((r) => setChangeLog(r.history)).catch(() => setChangeLog([]));
   }, [selected]);
 
   if (loadingItems) return <Spinner />;
@@ -183,6 +193,36 @@ export default function PriceComparisonPage() {
             </p>
             <PriceHistoryChart points={history} />
           </Card>
+
+          {changeLog.length > 0 && (
+            <Card className="mb-5">
+              <h3 className="font-semibold text-fg">Price change log</h3>
+              <p className="mb-3 text-xs text-fg-faint">
+                Every recorded price change for this item — kept forever, with where it came from
+                (<b className="text-fg-soft">manual</b> edit, a received <b className="text-fg-soft">PO</b>, or a scanned{" "}
+                <b className="text-fg-soft">invoice</b>). Old prices are never lost.
+              </p>
+              <ul className="space-y-1.5">
+                {changeLog.map((c, i) => (
+                  <li key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm">
+                    <span className="text-fg">
+                      <b>{c.vendor_name}</b>{" "}
+                      {c.old_price ? (
+                        <span className="text-fg-faint">{format(c.old_price)} → </span>
+                      ) : (
+                        <span className="text-fg-faint">first price </span>
+                      )}
+                      <b className="text-fg">{format(c.new_price)}</b>
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-fg-faint">
+                      <Badge tone={SRC_TONE[c.source] ?? "slate"}>{c.source}</Badge>
+                      {new Date(c.at).toLocaleDateString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           {loadingCompare || !data ? (
             <Spinner />

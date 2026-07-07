@@ -75,3 +75,25 @@ class VendorItem(Base):
     last_updated: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
     is_preferred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[str | None] = mapped_column(Text)
+
+
+class PriceHistory(Base):
+    """Append-only trail of EVERY vendor-price change (item × vendor over time).
+
+    So we never lose a previous price: manual edits, PO receipts and (future) bill
+    scans all write a row here → the item price timeline + honest cost history."""
+
+    __tablename__ = "price_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    item_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    old_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # None = first-ever price
+    new_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # source: manual | po | invoice
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    note: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

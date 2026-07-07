@@ -106,6 +106,16 @@ async def price_comparison(
     return PriceComparison.model_validate(result)
 
 
+@router.get("/items/{item_id}/price-history")
+async def item_price_history(
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    """The full price timeline for an item across its vendors (newest first)."""
+    return {"history": await service.item_price_history(db, user.hotel_id, item_id)}
+
+
 @router.post("/items/{item_id}/preferred", response_model=PriceComparison)
 async def set_preferred(
     item_id: uuid.UUID,

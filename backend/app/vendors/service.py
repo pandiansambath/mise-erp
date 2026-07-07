@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.inventory.models import Item
-from app.vendors.models import Vendor, VendorItem
+from app.vendors.models import PriceHistory, Vendor, VendorItem
 
 
 class DuplicateVendorError(ValueError):
@@ -75,18 +75,21 @@ async def upsert_vendor_item(
     *,
     is_preferred: bool | None = None,
     notes: str | None = None,
+    source: str = "manual",
 ) -> VendorItem:
     """Set (or update) a vendor's price for an item.
 
     `is_preferred`/`notes` are left UNCHANGED when not supplied (None) — so a plain
     price edit never silently un-chooses the ★ preferred supplier or wipes its notes.
-    (New rows default to not-preferred.)"""
+    (New rows default to not-preferred.) Every genuine price change also appends a
+    PriceHistory row (source: manual | po | invoice) so no old price is ever lost."""
     result = await db.execute(
         select(VendorItem).where(
             VendorItem.vendor_id == vendor_id, VendorItem.item_id == item_id
         )
     )
     vi = result.scalar_one_or_none()
+    old_price = vi.price_per_unit if vi is not None else None
     if vi is None:
         vi = VendorItem(vendor_id=vendor_id, item_id=item_id, is_preferred=bool(is_preferred))
         db.add(vi)
@@ -96,9 +99,44 @@ async def upsert_vendor_item(
     if notes is not None:
         vi.notes = notes
     vi.last_updated = date.today()
+
+    # Append to the price history whenever the price actually changed (or is new).
+    if old_price is None or old_price != price_per_unit:
+        hotel_id = (
+            await db.execute(select(Vendor.hotel_id).where(Vendor.id == vendor_id))
+        ).scalar_one_or_none()
+        if hotel_id is not None:
+            db.add(PriceHistory(
+                hotel_id=hotel_id, vendor_id=vendor_id, item_id=item_id,
+                old_price=old_price, new_price=price_per_unit, source=source,
+            ))
+
     await db.commit()
     await db.refresh(vi)
     return vi
+
+
+async def item_price_history(
+    db: AsyncSession, hotel_id: uuid.UUID, item_id: uuid.UUID, *, limit: int = 100
+) -> list[dict]:
+    """The price timeline for one item across all its vendors, newest first."""
+    rows = await db.execute(
+        select(PriceHistory, Vendor.name)
+        .join(Vendor, Vendor.id == PriceHistory.vendor_id, isouter=True)
+        .where(PriceHistory.hotel_id == hotel_id, PriceHistory.item_id == item_id)
+        .order_by(PriceHistory.created_at.desc())
+        .limit(limit)
+    )
+    out: list[dict] = []
+    for ph, vendor_name in rows.all():
+        out.append({
+            "vendor_name": vendor_name or "—",
+            "old_price": str(ph.old_price) if ph.old_price is not None else None,
+            "new_price": str(ph.new_price),
+            "source": ph.source,
+            "at": ph.created_at.isoformat(),
+        })
+    return out
 
 
 async def import_price_list(

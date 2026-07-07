@@ -15,6 +15,23 @@ async def test_duplicate_vendor_name_rejected(db, hotel):
         await vendor_service.create_vendor(db, hotel.id, name=" farm2land ")
 
 
+@pytest.mark.asyncio
+async def test_price_change_records_history(db, hotel):
+    """Setting then changing a vendor price appends to the item price history."""
+    milk = await inv_service.create_item(db, hotel.id, name="Milk", unit="litre")
+    sk = await vendor_service.create_vendor(db, hotel.id, name="SK")
+
+    await vendor_service.upsert_vendor_item(db, sk.id, milk.id, Decimal("1.10"))  # first price
+    await vendor_service.upsert_vendor_item(db, sk.id, milk.id, Decimal("1.10"))  # no change → no row
+    await vendor_service.upsert_vendor_item(db, sk.id, milk.id, Decimal("1.25"))  # a rise
+
+    hist = await vendor_service.item_price_history(db, hotel.id, milk.id)
+    assert len(hist) == 2  # first-set + the rise (the no-op isn't recorded)
+    assert hist[0]["new_price"] == "1.25" and hist[0]["old_price"] == "1.10"  # newest first
+    assert hist[1]["old_price"] is None and hist[1]["new_price"] == "1.10"
+    assert all(h["source"] == "manual" for h in hist)
+
+
 # ── Price comparison engine (the money feature) ────────────────────────────
 @pytest.mark.asyncio
 async def test_price_comparison_picks_cheapest_and_savings(db, hotel):

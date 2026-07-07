@@ -4,10 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, API_BASE, ApiError, postForm, type Expense, type ExpenseCategory } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+// Overhead billing periods. A quarterly/annual amount is the TOTAL for that period;
+// on post it's SPREAD evenly into that many monthly rows so the P&L stays smooth
+// (nothing downstream changes — every row is still a normal monthly expense).
+const PERIOD_MONTHS: Record<string, number> = { MONTHLY: 1, QUARTERLY: 3, ANNUAL: 12 };
+const PERIOD_OPTS = [
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "QUARTERLY", label: "Quarterly" },
+  { value: "ANNUAL", label: "Annual" },
+];
+/** "YYYY-MM-01" for the month `add` months after `base` (handles year rollover). */
+function monthStartAfter(base: Date, add: number): string {
+  const d = new Date(base.getFullYear(), base.getMonth() + add, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
 
 export default function ProfilePage() {
   const { user, hotel, refreshHotel } = useAuth();
@@ -23,6 +39,7 @@ export default function ProfilePage() {
   const [fixedCats, setFixedCats] = useState<ExpenseCategory[]>([]);
   const [recent, setRecent] = useState<Expense[]>([]);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [periods, setPeriods] = useState<Record<string, string>>({}); // catId -> MONTHLY|QUARTERLY|ANNUAL
   const [posting, setPosting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -130,14 +147,26 @@ export default function ProfilePage() {
       for (const c of fixedCats) {
         const amt = amounts[c.id];
         if (!amt || !(parseFloat(amt) > 0) || postedThisMonth(c.id)) continue;
-        await api.post<Expense>("/expenses", {
-          category_id: c.id,
-          date: monthStart,
-          amount: amt,
-          is_recurring: true,
-          recurrence: "MONTHLY",
-          description: `Monthly ${c.name}`,
-        });
+        const period = periods[c.id] || "MONTHLY";
+        const months = PERIOD_MONTHS[period] ?? 1;
+        const total = Math.round(parseFloat(amt) * 100) / 100;
+        // Split evenly; any rounding pennies go on the first month.
+        const per = Math.floor((total / months) * 100) / 100;
+        const remainder = Math.round((total - per * months) * 100) / 100;
+        for (let i = 0; i < months; i++) {
+          const monthAmt = i === 0 ? per + remainder : per;
+          await api.post<Expense>("/expenses", {
+            category_id: c.id,
+            date: monthStartAfter(now, i),
+            amount: monthAmt.toFixed(2),
+            is_recurring: true,
+            recurrence: "MONTHLY", // always monthly rows so the P&L stays smooth
+            description:
+              months > 1
+                ? `${c.name} (${period.toLowerCase()} split ${i + 1}/${months})`
+                : `Monthly ${c.name}`,
+          });
+        }
         posted += 1;
       }
       const from = new Date();
@@ -145,7 +174,7 @@ export default function ProfilePage() {
       setRecent(await api.get<Expense[]>(`/expenses?date_from=${iso(from)}&date_to=${iso(new Date())}`));
       setMsg(
         posted > 0
-          ? `Posted ${posted} overhead${posted === 1 ? "" : "s"} to ${monthLabel}.`
+          ? `Posted ${posted} overhead${posted === 1 ? "" : "s"} — quarterly/annual amounts were spread evenly across their months.`
           : "Nothing to post — this month is already set.",
       );
     } catch (err) {
@@ -244,11 +273,19 @@ export default function ProfilePage() {
 
       {canExpenses && (
         <Card className="mt-6">
-          <h3 className="font-semibold text-fg">Monthly overheads</h3>
+          <h3 className="font-semibold text-fg">Overheads (fixed costs)</h3>
           <p className="mt-1 text-sm text-fg-faint">
-            Your standing fixed costs (rent, gas, electricity…). Set the amounts and post them to
-            this month&apos;s expenses in one click — they flow straight into your P&amp;L. Amounts
-            remember last month&apos;s figures.
+            Your standing fixed costs (rent, gas, electricity…). Set each one&apos;s amount and how
+            often it&apos;s billed, then post — they flow straight into your P&amp;L. Amounts remember
+            last month&apos;s figures.
+          </p>
+          <p className="mt-2 rounded-lg border border-line bg-paper-2/50 p-2.5 text-xs leading-relaxed text-fg-faint">
+            💡 <b className="text-fg-soft">Quarterly / annual are split evenly.</b> Rent is usually
+            <b className="text-fg-soft"> Monthly</b>; a £1,200 <b className="text-fg-soft">Annual</b> insurance
+            posts as <b className="text-fg-soft">£100 × 12 months</b>; a £3,000 <b className="text-fg-soft">Quarterly</b> rent
+            as <b className="text-fg-soft">£1,000 × 3</b>. This keeps every month&apos;s profit accurate — one big
+            bill never distorts a single month. (Each split is still an ordinary monthly expense, so nothing
+            else changes.)
           </p>
           <p className="mt-2 rounded-lg border border-line bg-paper-2/50 p-2.5 text-xs leading-relaxed text-fg-faint">
             <b className="text-fg-soft">&ldquo;Staff Salaries&rdquo; here</b> is a single lump-sum estimate of monthly wages,
@@ -264,24 +301,42 @@ export default function ProfilePage() {
           ) : (
             <>
               <div className="mt-4 space-y-2">
-                {fixedCats.map((c) => (
-                  <div key={c.id} className="flex items-center gap-3">
-                    <span className="flex-1 text-sm text-fg-soft">{c.name}</span>
-                    {postedThisMonth(c.id) ? (
-                      <span className="text-xs font-medium text-brand-400">✓ posted for {monthLabel}</span>
-                    ) : (
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={amounts[c.id] ?? ""}
-                        onChange={(e) => setAmounts({ ...amounts, [c.id]: e.target.value })}
-                        placeholder="amount"
-                        className="w-28 rounded-lg border border-line-2 px-3 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
-                      />
-                    )}
-                  </div>
-                ))}
+                {fixedCats.map((c) => {
+                  const period = periods[c.id] || "MONTHLY";
+                  const months = PERIOD_MONTHS[period] ?? 1;
+                  const amt = parseFloat(amounts[c.id] || "0");
+                  return (
+                    <div key={c.id} className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-[7rem] flex-1 text-sm text-fg-soft">{c.name}</span>
+                      {postedThisMonth(c.id) ? (
+                        <span className="text-xs font-medium text-brand-400">✓ posted for {monthLabel}</span>
+                      ) : (
+                        <>
+                          <Select
+                            value={period}
+                            onChange={(v) => setPeriods({ ...periods, [c.id]: v })}
+                            options={PERIOD_OPTS}
+                            className="w-32"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={amounts[c.id] ?? ""}
+                            onChange={(e) => setAmounts({ ...amounts, [c.id]: e.target.value })}
+                            placeholder={`total / ${period.toLowerCase()}`}
+                            className="w-32 rounded-lg border border-line-2 px-3 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+                          />
+                          {months > 1 && amt > 0 && (
+                            <span className="text-[11px] text-fg-faint">
+                              = {(amt / months).toFixed(2)}/mo × {months}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="mt-4 flex items-center gap-3">
                 <button
@@ -289,7 +344,7 @@ export default function ProfilePage() {
                   disabled={posting}
                   className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
-                  {posting ? "Posting…" : `Post to ${monthLabel}`}
+                  {posting ? "Posting…" : `Post overheads (from ${monthLabel})`}
                 </button>
                 {msg && <span className="text-sm text-fg-faint">{msg}</span>}
               </div>
