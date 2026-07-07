@@ -24,6 +24,21 @@ def _client():
     return boto3.client("textract", region_name=settings.aws_region)
 
 
+def _translate(exc: Exception, what: str) -> TextractError:
+    """Turn a raw boto error into a friendly, actionable message."""
+    msg = str(exc)
+    if "SubscriptionRequired" in msg or "needs a subscription" in msg:
+        return TextractError(
+            "Document reading (AWS Textract) isn't enabled on this AWS account yet. "
+            "An admin needs to activate it — add a valid payment method to the AWS "
+            "account and enable Textract in the AWS console. The feature is ready and "
+            "will start working the moment the account is enabled."
+        )
+    if "AccessDenied" in msg:
+        return TextractError("Document reading isn't permitted for this server yet (IAM).")
+    return TextractError(f"Could not read the {what}: {msg}")
+
+
 def _dec(s: str | None) -> Decimal | None:
     """Pull a number out of a messy Textract string ('£1.25', '1,250.00')."""
     if not s:
@@ -45,7 +60,7 @@ def analyze_expense(data: bytes) -> dict:
     try:
         resp = _client().analyze_expense(Document={"Bytes": data})
     except Exception as exc:
-        raise TextractError(f"Could not read the invoice: {exc}") from exc
+        raise _translate(exc, "invoice") from exc
 
     vendor: str | None = None
     total: Decimal | None = None
@@ -96,7 +111,7 @@ def detect_lines(data: bytes) -> list[str]:
     try:
         resp = _client().detect_document_text(Document={"Bytes": data})
     except Exception as exc:
-        raise TextractError(f"Could not read the note: {exc}") from exc
+        raise _translate(exc, "note") from exc
     lines = [
         (b.get("Text") or "")
         for b in resp.get("Blocks", [])
