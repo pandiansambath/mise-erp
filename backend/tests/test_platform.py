@@ -21,6 +21,33 @@ async def test_non_owner_is_forbidden(client, make_user, auth_header):
 
 
 @pytest.mark.asyncio
+async def test_assign_plan_applies_preset_and_enforces_user_limit(
+    client, make_user, auth_header, db, hotel
+):
+    owner = await _make_owner(make_user, db)  # 1st user in the hotel
+    h = auth_header(owner)
+
+    # Starter turns AI off + caps at 3 users.
+    res = await client.post(f"/api/platform/hotels/{hotel.id}/plan", headers=h, json={"plan": "starter"})
+    assert res.status_code == 200
+    assert res.json()["plan"] == "starter" and res.json()["features"]["ai_copilot"] is False
+
+    # Hotel has 1 user (owner). Add two more up to the cap of 3.
+    for i in range(2):
+        r = await client.post(
+            "/api/auth/users", headers=h,
+            json={"email": f"u{i}@x.com", "password": "password123", "role": Role.STAFF.value},
+        )
+        assert r.status_code == 201
+    # The next one exceeds Starter's 3-user limit.
+    r = await client.post(
+        "/api/auth/users", headers=h,
+        json={"email": "u3@x.com", "password": "password123", "role": Role.STAFF.value},
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_owner_lists_hotels_and_features(client, make_user, auth_header, db):
     owner = await _make_owner(make_user, db)
     h = auth_header(owner)

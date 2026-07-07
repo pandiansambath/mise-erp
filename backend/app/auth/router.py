@@ -23,6 +23,7 @@ from app.core import notify
 from app.core.database import get_db
 from app.core.security import create_access_token
 from app.hotels.models import Hotel
+from app.platform_admin import features as feat
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -148,6 +149,19 @@ async def create_user(
 ) -> UserOut:
     if await service.get_user_by_email(db, payload.email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+    # Enforce the hotel's plan user limit (grandfathers hotels already over it).
+    hotel = await db.get(Hotel, admin.hotel_id)
+    if hotel is not None:
+        current = len(await service.list_users(db, admin.hotel_id))
+        limit = feat.plan_max_users(hotel.plan)
+        if current >= limit:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Your {hotel.plan.title()} plan allows {limit} users and you have "
+                    f"{current}. Upgrade your plan to add more."
+                ),
+            )
     # New users join the admin's hotel.
     user = await service.create_user(
         db, payload.email, payload.password, payload.role, admin.hotel_id,

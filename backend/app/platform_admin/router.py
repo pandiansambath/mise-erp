@@ -82,9 +82,45 @@ async def list_hotels(
             "is_active": h.is_active,
             "user_count": len(hu),
             "admin_email": admin.email if admin else None,
+            "plan": h.plan,
+            "max_users": feat.plan_max_users(h.plan),
             "features": _merged_features(h),
         })
     return {"hotels": items}
+
+
+@router.get("/plans")
+async def list_plans(_: User = Depends(require_platform_owner)) -> dict:
+    """Subscription plans (bundle of features + limits) for the Control Room."""
+    return {"plans": feat.plans_public()}
+
+
+class AssignPlan(BaseModel):
+    plan: str
+
+
+@router.post("/hotels/{hotel_id}/plan")
+async def assign_plan(
+    hotel_id: uuid.UUID,
+    body: AssignPlan,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Put a hotel on a plan — sets its plan + APPLIES that plan's feature preset
+    (the operator can still fine-tune individual toggles afterwards)."""
+    if not feat.is_valid_plan(body.plan):
+        raise HTTPException(status_code=400, detail=f"Unknown plan '{body.plan}'")
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel not found")
+    hotel.plan = body.plan
+    hotel.features = feat.plan_features(body.plan)  # preset (reassign so JSON is dirty)
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=hotel_id, user=operator, action="platform.plan",
+        summary=f"Plan set to {body.plan}", entity_type="hotel", entity_id=hotel_id,
+    )
+    return {"plan": hotel.plan, "features": _merged_features(hotel)}
 
 
 @router.get("/hotels/{hotel_id}/users")

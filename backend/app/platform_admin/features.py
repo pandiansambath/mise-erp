@@ -83,3 +83,86 @@ def registry_public() -> list[dict]:
         }
         for f in FEATURES
     ]
+
+
+# ── Subscription PLANS (a named bundle of features + limits) ─────────────────
+@dataclass(frozen=True)
+class Plan:
+    key: str
+    label: str
+    price_hint: str          # marketing string, e.g. "£29/mo"
+    max_users: int           # user cap (grandfathers hotels already over it)
+    off_features: tuple[str, ...]  # features OFF on this plan (the rest default on)
+    blurb: str
+    highlights: tuple[str, ...]
+
+
+# Starter turns off the AI + HR + premium modules; Pro/Enterprise get everything.
+_STARTER_OFF: tuple[str, ...] = (
+    "ai_copilot", "party_orders", "food_safety", "documents", "price_comparison",
+    "rota", "attendance", "employees", "payroll",
+)
+
+PLANS: tuple[Plan, ...] = (
+    Plan(
+        "starter", "Starter", "£29/mo", 3, _STARTER_OFF,
+        "Money + stock basics for a small kitchen.",
+        (
+            "Inventory, recipes & live costing",
+            "Vendors & purchasing (with consolidated POs)",
+            "Sales, expenses & a real-time P&L",
+            "Up to 3 users",
+        ),
+    ),
+    Plan(
+        "pro", "Pro", "£79/mo", 15, (),
+        "The full operating system — AI, people, purchasing & scanning.",
+        (
+            "Everything in Starter",
+            "AI Copilot + bill & handwritten-recipe scanning",
+            "Payroll, rota & attendance",
+            "Documents, food safety & price comparison",
+            "Up to 15 users",
+        ),
+    ),
+    Plan(
+        "enterprise", "Enterprise", "Let's talk", 100000, (),
+        "Everything, unlimited users, priority support.",
+        (
+            "Everything in Pro",
+            "Unlimited users",
+            "Priority support + onboarding help",
+            "Early access to new modules",
+        ),
+    ),
+)
+
+_PLAN_BY_KEY = {p.key: p for p in PLANS}
+DEFAULT_PLAN = "pro"
+
+
+def is_valid_plan(key: str) -> bool:
+    return key in _PLAN_BY_KEY
+
+
+def plan_features(plan_key: str) -> dict:
+    """The feature map a plan applies (only the OFF ones; the rest default on)."""
+    p = _PLAN_BY_KEY.get(plan_key)
+    return {k: False for k in p.off_features} if p else {}
+
+
+def plan_max_users(plan_key: str) -> int:
+    p = _PLAN_BY_KEY.get(plan_key)
+    return p.max_users if p else 100000
+
+
+def plans_public() -> list[dict]:
+    """Serialisable plans for the Control Room + the public landing page."""
+    return [
+        {
+            "key": p.key, "label": p.label, "price_hint": p.price_hint,
+            "max_users": p.max_users, "blurb": p.blurb,
+            "highlights": list(p.highlights), "off_features": list(p.off_features),
+        }
+        for p in PLANS
+    ]

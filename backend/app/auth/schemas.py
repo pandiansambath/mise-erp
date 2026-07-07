@@ -55,6 +55,7 @@ class HotelOut(BaseModel):
     break_allowance_minutes: int = 0
     break_penalty_per_min: Decimal = Decimal("0")
     min_hourly_rate: Decimal = Decimal("11.44")
+    plan: str = "pro"
     has_logo: bool = False
     features: dict = Field(default_factory=dict)
 

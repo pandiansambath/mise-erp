@@ -12,12 +12,21 @@ import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 
 type FeatureDef = { key: string; label: string; description: string; default: boolean; enforced: boolean };
+type PlanDef = {
+  key: string; label: string; price_hint: string; max_users: number;
+  blurb: string; highlights: string[]; off_features: string[];
+};
 type HotelRow = {
   id: string; name: string; city: string | null; country: string; base_currency: string;
   created_at: string; has_logo: boolean; is_active: boolean;
-  user_count: number; admin_email: string | null; features: Record<string, boolean>;
+  user_count: number; admin_email: string | null; plan: string; max_users: number;
+  features: Record<string, boolean>;
 };
 type HotelUser = { id: string; email: string; role: string; is_active: boolean };
+
+const PLAN_TONE: Record<string, "slate" | "amber" | "green"> = {
+  starter: "slate", pro: "amber", enterprise: "green",
+};
 
 function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -37,11 +46,13 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
 }
 
 function HotelCard({
-  hotel, features, onToggle,
+  hotel, features, plans, onToggle, onApplyPlan,
 }: {
   hotel: HotelRow;
   features: FeatureDef[];
+  plans: PlanDef[];
   onToggle: (key: string, value: boolean) => Promise<void>;
+  onApplyPlan: (plan: string) => Promise<void>;
 }) {
   const confirm = useConfirm();
   const [resetOpen, setResetOpen] = useState(false);
@@ -51,6 +62,21 @@ function HotelCard({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [planSel, setPlanSel] = useState(hotel.plan);
+  const [planBusy, setPlanBusy] = useState(false);
+
+  async function applyPlan() {
+    if (planSel === hotel.plan) return;
+    const p = plans.find((x) => x.key === planSel);
+    const ok = await confirm({
+      title: `Move ${hotel.name} to ${p?.label ?? planSel}?`,
+      message: "This applies that plan's feature preset (you can still fine-tune toggles after).",
+      confirmText: "Apply plan",
+    });
+    if (!ok) return;
+    setPlanBusy(true);
+    try { await onApplyPlan(planSel); } finally { setPlanBusy(false); }
+  }
 
   const created = new Date(hotel.created_at).toLocaleDateString();
 
@@ -118,15 +144,41 @@ function HotelCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="truncate font-semibold text-fg">{hotel.name}</h3>
+            <Badge tone={PLAN_TONE[hotel.plan] ?? "slate"}>{hotel.plan}</Badge>
             {!hotel.is_active && <Badge tone="red">inactive</Badge>}
           </div>
           <p className="truncate text-xs text-fg-faint">
             {[hotel.city, hotel.country].filter(Boolean).join(" · ")} · {hotel.base_currency} · joined {created}
           </p>
           <p className="mt-0.5 truncate text-xs text-fg-soft">
-            👤 {hotel.admin_email ?? "—"} · {hotel.user_count} user{hotel.user_count === 1 ? "" : "s"}
+            👤 {hotel.admin_email ?? "—"} · {hotel.user_count}/{hotel.max_users >= 100000 ? "∞" : hotel.max_users} user{hotel.user_count === 1 ? "" : "s"}
           </p>
         </div>
+      </div>
+
+      {/* plan */}
+      <div className="rounded-xl border border-line bg-paper-2/40 p-3">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">Subscription plan</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-[9rem] flex-1">
+            <Select
+              value={planSel}
+              onChange={setPlanSel}
+              options={plans.map((p) => ({ value: p.key, label: `${p.label} · ${p.price_hint}` }))}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={applyPlan}
+            disabled={planBusy || planSel === hotel.plan}
+            className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+          >
+            {planBusy ? "Applying…" : "Apply plan"}
+          </button>
+        </div>
+        <p className="mt-1.5 text-[11px] text-fg-faint">
+          Applying a plan sets its feature preset + user limit. You can still fine-tune individual toggles below.
+        </p>
       </div>
 
       {/* feature toggles */}
@@ -205,19 +257,32 @@ function HotelCard({
 export default function ControlRoomPage() {
   const { user } = useAuth();
   const [features, setFeatures] = useState<FeatureDef[]>([]);
+  const [plans, setPlans] = useState<PlanDef[]>([]);
   const [hotels, setHotels] = useState<HotelRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
   const load = useCallback(async () => {
-    const [f, h] = await Promise.all([
+    const [f, p, h] = await Promise.all([
       api.get<{ features: FeatureDef[] }>("/platform/features"),
+      api.get<{ plans: PlanDef[] }>("/platform/plans"),
       api.get<{ hotels: HotelRow[] }>("/platform/hotels"),
     ]);
     setFeatures(f.features);
+    setPlans(p.plans);
     setHotels(h.hotels);
   }, []);
+
+  async function applyPlan(hotelId: string, plan: string) {
+    const res = await api.post<{ plan: string; features: Record<string, boolean> }>(
+      `/platform/hotels/${hotelId}/plan`, { plan },
+    );
+    const maxUsers = plans.find((p) => p.key === res.plan)?.max_users ?? 100000;
+    setHotels((hs) => hs.map((h) =>
+      h.id === hotelId ? { ...h, plan: res.plan, features: res.features, max_users: maxUsers } : h,
+    ));
+  }
 
   useEffect(() => {
     if (!user?.is_platform_owner) { setLoading(false); return; }
@@ -279,7 +344,7 @@ export default function ControlRoomPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {filtered.map((h) => (
-            <HotelCard key={h.id} hotel={h} features={features} onToggle={(k, v) => toggle(h.id, k, v)} />
+            <HotelCard key={h.id} hotel={h} features={features} plans={plans} onToggle={(k, v) => toggle(h.id, k, v)} onApplyPlan={(p) => applyPlan(h.id, p)} />
           ))}
         </div>
       )}

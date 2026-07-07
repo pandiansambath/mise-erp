@@ -73,6 +73,55 @@ const STATS = [
   { value: "1 platform", label: "the whole brigade, orchestrated" },
 ];
 
+const PRICING = [
+  {
+    name: "Starter",
+    blurb: "Money + stock basics for a small kitchen.",
+    price: "£29",
+    per: "/mo",
+    featured: false,
+    cta: "Start free",
+    features: [
+      "Inventory, recipes & live per-gram costing",
+      "Vendors & purchasing — consolidated POs",
+      "Sales, expenses & a real-time P&L",
+      "Up to 3 users",
+      "Email support",
+    ],
+  },
+  {
+    name: "Pro",
+    blurb: "The full operating system for a busy restaurant.",
+    price: "£79",
+    per: "/mo",
+    featured: true,
+    cta: "Start free",
+    features: [
+      "Everything in Starter",
+      "AI Copilot + bill & handwritten-recipe scanning",
+      "Payroll, rota & attendance",
+      "Documents, food safety & price comparison",
+      "Up to 15 users",
+      "Priority support",
+    ],
+  },
+  {
+    name: "Enterprise",
+    blurb: "For groups & chains that need it all.",
+    price: "Let’s talk",
+    per: "",
+    featured: false,
+    cta: "Contact sales",
+    features: [
+      "Everything in Pro",
+      "Unlimited users",
+      "Priority support + guided onboarding",
+      "Early access to new modules",
+      "Custom terms & invoicing",
+    ],
+  },
+];
+
 const btnPrimary =
   "mise-btn-shine inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-400 px-6 py-3 text-base font-semibold text-ink-950 shadow-xl shadow-brand-500/25 transition duration-300 hover:shadow-2xl hover:shadow-brand-400/30";
 const btnGhost =
@@ -667,6 +716,7 @@ export default function ClassicLanding() {
           <div className="hidden items-center gap-7 text-sm text-slate-400 md:flex">
             <a href="#how-it-works" className="transition hover:text-white">How it works</a>
             <a href="#modules" className="transition hover:text-white">Modules</a>
+            <a href="#pricing" className="transition hover:text-white">Pricing</a>
             <a href="#why" className="transition hover:text-white">Why Mise</a>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-3">
@@ -898,6 +948,71 @@ export default function ClassicLanding() {
               </div>
             </Reveal>
           ))}
+        </div>
+      </section>
+
+      {/* ── Pricing ── */}
+      <section id="pricing" className="border-y border-white/5 bg-white/[0.02]">
+        <div className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
+          <Reveal>
+            <p className="text-center font-mono text-xs tracking-[0.35em] text-brand-300/90">SIMPLE, HONEST PRICING</p>
+            <h2 className="mt-4 text-center font-display text-4xl text-white sm:text-5xl">
+              Start small. <em className="mise-hero-text not-italic">Grow into it.</em>
+            </h2>
+            <p className="mx-auto mt-5 max-w-2xl text-center text-slate-400">
+              One price per restaurant — every user included up to your plan&apos;s limit. No per-seat
+              surprises, upgrade or cancel anytime.
+            </p>
+          </Reveal>
+          <div className="mt-14 grid items-stretch gap-5 lg:grid-cols-3">
+            {PRICING.map((t, i) => (
+              <Reveal key={t.name} delay={(i % 3) * 90}>
+                <div
+                  className={`relative flex h-full flex-col rounded-2xl border p-7 transition duration-300 ${
+                    t.featured
+                      ? "border-brand-400/50 bg-gradient-to-b from-brand-500/[0.12] to-transparent shadow-2xl shadow-brand-900/30"
+                      : "border-white/10 bg-gradient-to-b from-white/[0.05] to-transparent hover:-translate-y-1 hover:border-white/20"
+                  }`}
+                >
+                  {t.featured && (
+                    <span className="absolute -top-3 left-7 rounded-full bg-gradient-to-r from-brand-500 to-brand-400 px-3 py-1 text-[11px] font-semibold text-ink-950 shadow-lg">
+                      Most popular
+                    </span>
+                  )}
+                  <h3 className="text-lg font-semibold text-white">{t.name}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{t.blurb}</p>
+                  <p className="mt-5 flex items-baseline gap-1.5">
+                    <span className="font-display text-4xl text-white">{t.price}</span>
+                    {t.per && <span className="text-sm text-slate-400">{t.per}</span>}
+                  </p>
+                  <ul className="mt-6 space-y-2.5 text-sm text-slate-300">
+                    {t.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2.5">
+                        <span className="mt-0.5 shrink-0 text-brand-400">✓</span>
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-auto pt-7">
+                    <Link
+                      href={t.name === "Enterprise" ? "/signup" : "/signup"}
+                      className={`block rounded-xl px-4 py-3 text-center text-sm font-semibold transition ${
+                        t.featured
+                          ? "bg-gradient-to-r from-brand-500 to-brand-400 text-ink-950 shadow-lg shadow-brand-500/25 hover:shadow-xl"
+                          : "border border-white/15 text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {t.cta}
+                    </Link>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+          <p className="mt-8 text-center text-xs text-slate-500">
+            Prices in GBP, per restaurant, excl. VAT. Enterprise billed annually. AI document scanning
+            uses each provider&apos;s free tier where available.
+          </p>
         </div>
       </section>
 
