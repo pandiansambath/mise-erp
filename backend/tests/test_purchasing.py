@@ -43,6 +43,35 @@ async def test_generate_pos_groups_by_chosen_vendor(db, hotel):
 
 
 @pytest.mark.asyncio
+async def test_receive_with_bill_prices_updates_vendor_and_history(
+    client, make_user, auth_header, db, hotel
+):
+    """Receiving with update_prices adopts the bill's unit price as the vendor's new
+    price and records a price-history row (source=invoice)."""
+    rice, chicken, v1, v2 = await _setup_catalog(db, hotel.id)  # rice → V1 @ 5.00
+    indent = await service.create_indent(
+        db, hotel.id, [{"item_id": rice.id, "required_qty": Decimal("10")}]
+    )
+    result = await service.generate_pos(db, indent)
+    po = result["purchase_orders"][0]
+    poi = (await service.po_items(db, po.id))[0]
+    admin = await make_user("recv@x.com", Role.SUPER_ADMIN.value)
+
+    res = await client.post(
+        f"/api/purchasing/purchase-orders/{po.id}/receive",
+        headers=auth_header(admin),
+        json={
+            "lines": [{"po_item_id": str(poi["po_item_id"]), "received_qty": "10", "unit_price": "5.75"}],
+            "update_prices": True,
+        },
+    )
+    assert res.status_code == 200
+
+    hist = await ven.item_price_history(db, hotel.id, rice.id)
+    assert hist[0]["new_price"] == "5.75" and hist[0]["source"] == "invoice"
+
+
+@pytest.mark.asyncio
 async def test_indent_consolidated(client, make_user, auth_header, db, hotel):
     """One indent's POs (per vendor) combine into a consolidated view + grand total."""
     rice, chicken, v1, v2 = await _setup_catalog(db, hotel.id)

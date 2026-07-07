@@ -5,6 +5,7 @@ import {
   api,
   ApiError,
   downloadFile,
+  postForm,
   type Indent,
   type Item,
   type ItemSuppliers,
@@ -233,13 +234,52 @@ export default function PurchasingPage() {
   // + a reason, so ordered-vs-received stays on record (both PDFs downloadable).
   const [recvPo, setRecvPo] = useState<POOut | null>(null);
   const [recvLines, setRecvLines] = useState<Record<string, string>>({});
+  const [recvPrices, setRecvPrices] = useState<Record<string, string>>({}); // po_item_id → new unit price (from bill)
+  const [recvUpdatePrices, setRecvUpdatePrices] = useState(false);
   const [recvNote, setRecvNote] = useState("");
   const [recvBusy, setRecvBusy] = useState(false);
+  const [recvScanBusy, setRecvScanBusy] = useState(false);
+  const [recvScanMsg, setRecvScanMsg] = useState<string | null>(null);
 
   function openReceive(po: POOut) {
     setRecvLines(Object.fromEntries(po.items.map((it) => [it.po_item_id, it.ordered_qty])));
+    setRecvPrices({});
+    setRecvUpdatePrices(false);
+    setRecvScanMsg(null);
     setRecvNote("");
     setRecvPo(po);
+  }
+
+  async function scanBill(file: File) {
+    if (!recvPo) return;
+    setRecvScanBusy(true);
+    setRecvScanMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await postForm<{
+        vendor: string | null; total: string | null;
+        lines: { po_item_id: string; received_qty: string; unit_price: string }[];
+        unmatched: string[];
+      }>(`/purchasing/purchase-orders/${recvPo.id}/scan-bill`, fd);
+      const nextLines: Record<string, string> = {};
+      const nextPrices: Record<string, string> = {};
+      for (const l of res.lines) {
+        nextLines[l.po_item_id] = l.received_qty;
+        nextPrices[l.po_item_id] = l.unit_price;
+      }
+      setRecvLines((p) => ({ ...p, ...nextLines }));
+      setRecvPrices(nextPrices);
+      setRecvUpdatePrices(true);
+      setRecvScanMsg(
+        `✓ Read ${res.lines.length} line${res.lines.length === 1 ? "" : "s"}${res.vendor ? ` from ${res.vendor}` : ""}. Review qty + prices, then Receive.` +
+          (res.unmatched.length ? ` (Couldn't match: ${res.unmatched.slice(0, 4).join(", ")})` : ""),
+      );
+    } catch (err) {
+      setRecvScanMsg(err instanceof ApiError ? err.message : "Could not read the bill — try a clearer photo or PDF.");
+    } finally {
+      setRecvScanBusy(false);
+    }
   }
 
   const recvChanged = (po: POOut) =>
@@ -254,8 +294,10 @@ export default function PurchasingPage() {
         lines: recvPo.items.map((it) => ({
           po_item_id: it.po_item_id,
           received_qty: recvLines[it.po_item_id] || "0",
+          unit_price: recvPrices[it.po_item_id] || null,
         })),
         note: recvNote.trim() || null,
+        update_prices: recvUpdatePrices,
       });
       const poId = recvPo.id;
       setRecvPo(null);
@@ -643,29 +685,84 @@ export default function PurchasingPage() {
               <h3 className="text-lg font-semibold text-fg">Receive {recvPo.po_number}</h3>
               <button onClick={() => setRecvPo(null)} className="-mr-1 -mt-1 rounded-lg p-1 text-fg-faint hover:bg-paper hover:text-fg" aria-label="Close">✕</button>
             </div>
-            <p className="mb-4 text-sm text-fg-faint">
+            <p className="mb-3 text-sm text-fg-faint">
               Enter what actually arrived. If a line is short or over, edit its received qty and add a reason —
               the ordered PO and this received note both stay downloadable.
             </p>
+
+            {/* Scan the vendor bill → auto-fill received qty + new prices (Textract). */}
+            <div className="mb-4 rounded-xl border border-brand-500/30 bg-brand-500/[0.05] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium text-fg">📷 Scan the vendor bill <span className="text-fg-faint">(optional)</span></span>
+                <label className="cursor-pointer rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20">
+                  {recvScanBusy ? "Reading…" : "Upload bill"}
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    disabled={recvScanBusy}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) scanBill(f); e.currentTarget.value = ""; }}
+                  />
+                </label>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-fg-faint">
+                Mise reads the bill and matches its lines to <b className="text-fg-soft">this order</b> — filling in the
+                received qty + the <b className="text-fg-soft">actual price</b> per item. Nothing changes until you press
+                Receive; old prices are kept in each item&apos;s <b className="text-fg-soft">price history</b>.
+              </p>
+              {recvScanMsg && <p className="mt-1.5 text-xs text-fg-soft">{recvScanMsg}</p>}
+            </div>
+
             <div className="space-y-2">
               {recvPo.items.map((it) => {
                 const val = recvLines[it.po_item_id] ?? it.ordered_qty;
                 const diff = val !== it.ordered_qty;
+                const newPrice = recvPrices[it.po_item_id];
+                const priceChanged = newPrice !== undefined && newPrice !== it.unit_price;
                 return (
-                  <div key={it.po_item_id} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2 text-sm">
-                    <span className="min-w-0 flex-1 truncate text-fg">{it.item_name}</span>
-                    <span className="shrink-0 text-xs text-fg-faint">ordered {it.ordered_qty}</span>
-                    <input
-                      value={val}
-                      onChange={(e) => setRecvLines((m) => ({ ...m, [it.po_item_id]: e.target.value }))}
-                      inputMode="decimal"
-                      aria-label={`Received quantity for ${it.item_name}`}
-                      className={`w-20 rounded-md border bg-transparent px-2 py-1 text-right text-sm ${diff ? "border-rose-400/60 text-rose-300" : "border-line-2 text-fg"}`}
-                    />
+                  <div key={it.po_item_id} className="rounded-lg border border-line px-3 py-2 text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate text-fg">{it.item_name}</span>
+                      <span className="shrink-0 text-xs text-fg-faint">ordered {it.ordered_qty}</span>
+                      <input
+                        value={val}
+                        onChange={(e) => setRecvLines((m) => ({ ...m, [it.po_item_id]: e.target.value }))}
+                        inputMode="decimal"
+                        aria-label={`Received quantity for ${it.item_name}`}
+                        className={`w-20 rounded-md border bg-transparent px-2 py-1 text-right text-sm ${diff ? "border-rose-400/60 text-rose-300" : "border-line-2 text-fg"}`}
+                      />
+                    </div>
+                    {newPrice !== undefined && (
+                      <div className="mt-1.5 flex items-center gap-2 text-xs">
+                        <span className="text-fg-faint">price:</span>
+                        <span className="text-fg-faint line-through">{format(it.unit_price)}</span>
+                        <span className="text-fg-faint">→</span>
+                        <input
+                          value={newPrice}
+                          onChange={(e) => setRecvPrices((m) => ({ ...m, [it.po_item_id]: e.target.value }))}
+                          inputMode="decimal"
+                          aria-label={`New price for ${it.item_name}`}
+                          className="w-24 rounded-md border border-brand-400/50 bg-transparent px-2 py-0.5 text-right text-fg"
+                        />
+                        {priceChanged && <span className="font-medium text-brand-300">new</span>}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {Object.keys(recvPrices).length > 0 && (
+              <label className="mt-3 flex items-center gap-2 text-sm text-fg-soft">
+                <input
+                  type="checkbox"
+                  checked={recvUpdatePrices}
+                  onChange={(e) => setRecvUpdatePrices(e.target.checked)}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Update each vendor price to the bill price <span className="text-fg-faint">(saved to price history)</span>
+              </label>
+            )}
             {recvChanged(recvPo) && (
               <label className="mt-3 block">
                 <span className="block text-xs font-medium text-fg-faint">Reason for the short / over delivery</span>

@@ -60,6 +60,9 @@ class POOut(BaseModel):
 class POReceiveLine(BaseModel):
     po_item_id: uuid.UUID
     received_qty: Decimal = Field(ge=0)
+    # Actual unit price from the vendor bill (optional). When update_prices is set,
+    # this becomes the vendor's new price for the item + a price-history row.
+    unit_price: Decimal | None = Field(default=None, ge=0)
 
 
 class POReceiveRequest(BaseModel):
@@ -67,6 +70,8 @@ class POReceiveRequest(BaseModel):
     for any short/over delivery. Omit to receive everything as ordered."""
     lines: list[POReceiveLine] = []
     note: str | None = None
+    # When true, each line's unit_price updates that vendor's price going forward.
+    update_prices: bool = False
 
 
 class POSummary(BaseModel):

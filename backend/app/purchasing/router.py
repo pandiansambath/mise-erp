@@ -1,14 +1,16 @@
 """Indent & purchase-order endpoints. Hotel-scoped."""
 import uuid
 from decimal import Decimal
+from difflib import SequenceMatcher
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import textract as textract_svc
 from app.core.database import get_db
 from app.core.events import publish
 from app.hotels.models import Hotel
@@ -26,6 +28,7 @@ from app.purchasing.schemas import (
     POSummary,
     ReorderSuggestion,
 )
+from app.vendors import service as vendor_service
 from app.vendors.models import Vendor
 
 router = APIRouter(prefix="/purchasing", tags=["purchasing"])
@@ -279,15 +282,93 @@ async def receive_po(
         if payload.lines:
             lines = {str(ln.po_item_id): ln.received_qty for ln in payload.lines}
     await service.receive_po(db, po, lines=lines, note=note, created_by=user.id)
+
+    # From a scanned bill: adopt the invoice's unit prices as this vendor's new price
+    # for each item (records a price-history row with source=invoice).
+    price_updates = 0
+    if payload and payload.update_prices and payload.lines:
+        item_by_poitem = {
+            str(it["po_item_id"]): it["item_id"] for it in await service.po_items(db, po.id)
+        }
+        for ln in payload.lines:
+            if ln.unit_price is not None:
+                item_id = item_by_poitem.get(str(ln.po_item_id))
+                if item_id is not None:
+                    await vendor_service.upsert_vendor_item(
+                        db, po.vendor_id, item_id, ln.unit_price, source="invoice"
+                    )
+                    price_updates += 1
+
     await publish(user.hotel_id, {"type": "purchasing", "action": "po_received"})
     summary = f"Received PO {po.po_number} into stock"
     if note:
         summary += f" — short/over: {note[:80]}"
+    if price_updates:
+        summary += f" — updated {price_updates} price(s) from the bill"
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="po.received",
         summary=summary, entity_type="purchase_order", entity_id=po.id,
     )
     return await _po_out(db, po)
+
+
+@router.post("/purchase-orders/{po_id}/scan-bill")
+async def scan_bill(
+    po_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:approve")),
+) -> dict:
+    """Read a vendor bill (Textract AnalyzeExpense) and match its lines to THIS PO's
+    items — returning a reconcile preview (received qty + new unit price per line) the
+    operator confirms before receiving. We already know the vendor + expected items, so
+    matching is against a handful of lines, not the whole catalogue."""
+    po = await service.get_po(db, po_id, user.hotel_id)
+    if po is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
+    try:
+        parsed = textract_svc.analyze_expense(data)
+    except textract_svc.TextractError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+    po_lines = await service.po_items(db, po.id)
+    bill_lines = parsed["line_items"]
+    used: set[int] = set()
+    out_lines: list[dict] = []
+    for pl in po_lines:
+        best_i, best_score = -1, 0.0
+        for i, bl in enumerate(bill_lines):
+            if i in used or not bl.get("description"):
+                continue
+            score = SequenceMatcher(
+                None, pl["item_name"].lower(), bl["description"].lower()
+            ).ratio()
+            if score > best_score:
+                best_i, best_score = i, score
+        matched = best_score >= 0.4
+        bl = bill_lines[best_i] if matched else None
+        if matched:
+            used.add(best_i)
+        out_lines.append({
+            "po_item_id": str(pl["po_item_id"]),
+            "item_name": pl["item_name"],
+            "ordered_qty": str(pl["ordered_qty"]),
+            "old_price": str(pl["unit_price"]),
+            "matched_text": bl["description"] if bl else None,
+            "received_qty": (bl.get("qty") if bl and bl.get("qty") else str(pl["ordered_qty"])),
+            "unit_price": (bl.get("unit_price") if bl else None) or str(pl["unit_price"]),
+            "confidence": round(best_score, 2),
+        })
+    unmatched = [bl["description"] for i, bl in enumerate(bill_lines) if i not in used]
+    return {
+        "vendor": parsed["vendor"],
+        "total": parsed["total"],
+        "lines": out_lines,
+        "unmatched": unmatched,
+    }
 
 
 @router.post("/purchase-orders/{po_id}/revert", response_model=IndentOut)
