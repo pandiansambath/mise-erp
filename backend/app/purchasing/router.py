@@ -172,71 +172,74 @@ async def list_pos(
     return out
 
 
-async def _consolidated_open(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
-    """Every OPEN purchase order (not fully received) grouped by vendor, with a
-    grand total — the 'everything currently on order' overview. Received qty is kept
-    per line so short/partial deliveries stay visible."""
-    all_pos = await service.list_pos(db, hotel_id)
-    open_pos = [p for p in all_pos if p.status != POStatus.RECEIVED.value]
+async def _consolidated_for_indent(
+    db: AsyncSession, hotel_id: uuid.UUID, indent_id: uuid.UUID
+) -> dict:
+    """The POs generated from ONE indent (one per vendor), combined into a single
+    view. Each vendor group carries its PO id/number so the UI can also grab that
+    vendor's own PDF. Received qty is kept per line so short deliveries stay visible."""
+    pos = [p for p in await service.list_pos(db, hotel_id) if p.indent_id == indent_id]
     vendor_rows = (
         await db.execute(select(Vendor).where(Vendor.hotel_id == hotel_id))
     ).scalars().all()
     vnames = {v.id: v.name for v in vendor_rows}
-    groups: dict[uuid.UUID, dict] = {}
+    vendors: list[dict] = []
     grand = Decimal("0")
     item_count = 0
-    for p in open_pos:
-        g = groups.setdefault(p.vendor_id, {
+    for p in pos:
+        items = await service.po_items(db, p.id)
+        vendors.append({
             "vendor_id": str(p.vendor_id),
             "vendor_name": vnames.get(p.vendor_id, ""),
-            "po_numbers": [],
-            "items": [],
-            "subtotal": Decimal("0"),
+            "po_id": str(p.id),
+            "po_number": p.po_number,
+            "po_numbers": [p.po_number],  # for the shared PDF renderer
+            "status": p.status,
+            "subtotal": str(p.total_amount),
+            "items": [
+                {
+                    "item_name": it["item_name"],
+                    "ordered_qty": str(it["ordered_qty"]),
+                    "received_qty": str(it["received_qty"]),
+                    "unit_price": str(it["unit_price"]),
+                    "line_total": str(it["line_total"]),
+                    "po_number": p.po_number,
+                }
+                for it in items
+            ],
         })
-        g["po_numbers"].append(p.po_number)
-        g["subtotal"] += p.total_amount
         grand += p.total_amount
-        for it in await service.po_items(db, p.id):
-            g["items"].append({
-                "item_name": it["item_name"],
-                "ordered_qty": str(it["ordered_qty"]),
-                "received_qty": str(it["received_qty"]),
-                "unit_price": str(it["unit_price"]),
-                "line_total": str(it["line_total"]),
-                "po_number": p.po_number,
-            })
-            item_count += 1
-    vendors = list(groups.values())
-    for g in vendors:
-        g["subtotal"] = str(g["subtotal"])
+        item_count += len(items)
     return {
         "vendors": vendors,
         "grand_total": str(grand),
-        "po_count": len(open_pos),
-        "vendor_count": len(vendors),
+        "po_count": len(pos),
+        "vendor_count": len(pos),  # one PO per vendor per indent
         "item_count": item_count,
     }
 
 
-@router.get("/purchase-orders/consolidated")
-async def consolidated_pos(
+@router.get("/indents/{indent_id}/consolidated")
+async def indent_consolidated(
+    indent_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("indent:read")),
 ) -> dict:
-    """All open POs combined into one view (grouped by vendor) + grand total."""
-    data = await _consolidated_open(db, user.hotel_id)
+    """This indent's POs (per vendor) + a combined total, for the consolidated view."""
+    data = await _consolidated_for_indent(db, user.hotel_id, indent_id)
     hotel = await db.get(Hotel, user.hotel_id)
     data["currency"] = hotel.base_currency if hotel else "GBP"
     return data
 
 
-@router.get("/purchase-orders/consolidated.pdf")
-async def consolidated_pos_pdf(
+@router.get("/indents/{indent_id}/consolidated.pdf")
+async def indent_consolidated_pdf(
+    indent_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("indent:read")),
 ) -> Response:
-    """One consolidated PDF across every open PO, grouped by vendor."""
-    data = await _consolidated_open(db, user.hotel_id)
+    """One consolidated PDF for this indent, grouped by vendor."""
+    data = await _consolidated_for_indent(db, user.hotel_id, indent_id)
     hotel = await db.get(Hotel, user.hotel_id)
     pdf = pdf_gen.generate_consolidated_po_pdf(data["vendors"], data["grand_total"], hotel)
     return Response(

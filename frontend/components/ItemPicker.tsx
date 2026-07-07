@@ -323,7 +323,7 @@ export function ItemPicker({
             Tap items above to add them here, then enter how much you need.
           </p>
         ) : (
-          <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+          <ul className="mt-2 grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
             {chosen.map(({ line, item }) => (
               <li key={item.id} className="mise-pop rounded-lg border border-line bg-paper/80 px-3 py-2">
                 {/* Row 1: name + remove. Row 2: quantity controls. Stacking the

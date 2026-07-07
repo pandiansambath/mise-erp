@@ -29,8 +29,8 @@ type ConsolidatedItem = {
   unit_price: string; line_total: string; po_number: string;
 };
 type ConsolidatedVendor = {
-  vendor_id: string; vendor_name: string; po_numbers: string[];
-  items: ConsolidatedItem[]; subtotal: string;
+  vendor_id: string; vendor_name: string; po_id: string; po_number: string;
+  status: string; po_numbers: string[]; items: ConsolidatedItem[]; subtotal: string;
 };
 type Consolidated = {
   vendors: ConsolidatedVendor[]; grand_total: string;
@@ -71,18 +71,31 @@ export default function PurchasingPage() {
   const [openPo, setOpenPo] = useState<string | null>(null);
   const [poDetail, setPoDetail] = useState<Record<string, POOut>>({});
   const [poBusy, setPoBusy] = useState<string | null>(null);
-  const [consol, setConsol] = useState<Consolidated | null>(null);
-  const [consolOpen, setConsolOpen] = useState(false);
+  // Per-indent consolidated view (its POs across vendors), lazy-loaded on expand.
+  const [indentConsol, setIndentConsol] = useState<Record<string, Consolidated>>({});
 
   async function load() {
-    const [ind, p, c] = await Promise.all([
+    const [ind, p] = await Promise.all([
       api.get<Indent[]>("/purchasing/indents"),
       api.get<POSummary[]>("/purchasing/purchase-orders"),
-      api.get<Consolidated>("/purchasing/purchase-orders/consolidated").catch(() => null),
     ]);
     setIndents(ind);
     setPos(p);
-    setConsol(c);
+    setIndentConsol({}); // POs may have changed → drop cached consolidations
+  }
+
+  async function toggleIndent(ind: Indent) {
+    const opening = openIndent !== ind.id;
+    setOpenIndent(opening ? ind.id : null);
+    // When opening an ORDERED indent, fetch its consolidated POs once.
+    if (opening && ind.status === "ORDERED" && !indentConsol[ind.id]) {
+      try {
+        const c = await api.get<Consolidated>(`/purchasing/indents/${ind.id}/consolidated`);
+        setIndentConsol((prev) => ({ ...prev, [ind.id]: c }));
+      } catch {
+        /* ignore — the PDFs still work directly */
+      }
+    }
   }
 
   useEffect(() => {
@@ -385,7 +398,7 @@ export default function PurchasingPage() {
                   <div key={ind.id} className="overflow-hidden rounded-xl border border-line bg-glass/5 transition hover:border-line-2">
                     <button
                       type="button"
-                      onClick={() => setOpenIndent(open ? null : ind.id)}
+                      onClick={() => toggleIndent(ind)}
                       aria-expanded={open}
                       className="flex w-full items-center gap-3 px-4 py-3 text-left"
                     >
@@ -409,6 +422,45 @@ export default function PurchasingPage() {
                             </li>
                           ))}
                         </ul>
+                        {/* Once ordered: the POs this indent produced — one PDF per
+                            vendor + ONE consolidated PDF for the whole indent. */}
+                        {ind.status === "ORDERED" && indentConsol[ind.id] && indentConsol[ind.id].po_count > 0 && (
+                          <div className="rounded-xl border border-brand-500/30 bg-brand-500/[0.06] p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">
+                                Orders from this indent
+                              </span>
+                              <span className="text-xs text-fg-faint">
+                                {indentConsol[ind.id].vendor_count} vendor{indentConsol[ind.id].vendor_count === 1 ? "" : "s"} · <b className="text-fg-soft">{format(indentConsol[ind.id].grand_total)}</b>
+                              </span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {indentConsol[ind.id].vendors.map((v) => (
+                                <div key={v.po_id} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-paper-2/40 px-2.5 py-1.5">
+                                  <span className="min-w-0 truncate text-sm text-fg">
+                                    {v.vendor_name || "—"} <span className="text-xs text-fg-faint">· {v.po_number} · {format(v.subtotal)}</span>
+                                  </span>
+                                  <button
+                                    onClick={() => downloadFile(`/purchasing/purchase-orders/${v.po_id}/pdf`, `${v.po_number}.pdf`)}
+                                    className="shrink-0 rounded-md border border-line px-2 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
+                                  >
+                                    ⬇ PDF
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <button
+                              onClick={() => downloadFile(`/purchasing/indents/${ind.id}/consolidated.pdf`, `consolidated-${ind.date}.pdf`)}
+                              className="mt-2.5 w-full rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2 text-sm font-semibold text-brand-300 transition hover:bg-brand-500/20"
+                            >
+                              🧾 Download consolidated PDF (all vendors)
+                            </button>
+                            <p className="mt-1.5 text-[11px] text-fg-faint">
+                              Receiving &amp; short-delivery notes are on each order in the <b className="text-fg-soft">Purchase orders</b> panel.
+                            </p>
+                          </div>
+                        )}
+
                         <div className="flex gap-2">
                           {canApprove && ind.status !== "ORDERED" && (
                             <button
@@ -444,63 +496,6 @@ export default function PurchasingPage() {
             <span className="text-xs text-fg-faint">{pos.length} total</span>
           </div>
           <div className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
-            {/* Consolidated PO — one combined view of everything still on order,
-                grouped by vendor, above the individual per-vendor POs. */}
-            {consol && consol.po_count > 0 && (
-              <div className="overflow-hidden rounded-xl border border-brand-500/40 bg-brand-500/[0.06]">
-                <button
-                  type="button"
-                  onClick={() => setConsolOpen((o) => !o)}
-                  aria-expanded={consolOpen}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left"
-                >
-                  <span aria-hidden className={`text-brand-300 transition-transform duration-200 ${consolOpen ? "rotate-90" : ""}`}>›</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-fg">🧾 Consolidated PO — everything on order</span>
-                    <span className="block text-xs text-fg-faint">
-                      {consol.po_count} order{consol.po_count === 1 ? "" : "s"} · {consol.vendor_count} vendor{consol.vendor_count === 1 ? "" : "s"} · {consol.item_count} item{consol.item_count === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-sm font-semibold text-brand-300">{format(consol.grand_total)}</span>
-                    <span className="text-[10px] uppercase tracking-wide text-fg-faint">grand total</span>
-                  </span>
-                </button>
-                {consolOpen && (
-                  <div className="mise-pop space-y-3 border-t border-brand-500/20 px-4 py-3">
-                    {consol.vendors.map((v) => (
-                      <div key={v.vendor_id} className="rounded-lg border border-line bg-paper-2/40 p-2.5">
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-fg">{v.vendor_name || "—"}</span>
-                          <span className="text-xs text-fg-faint">{v.po_numbers.join(", ")} · <b className="text-fg-soft">{format(v.subtotal)}</b></span>
-                        </div>
-                        <ul className="space-y-1">
-                          {v.items.map((it, k) => (
-                            <li key={`${it.po_number}-${it.item_name}-${k}`} className="flex items-baseline justify-between gap-3 text-xs">
-                              <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
-                              <span className="shrink-0 text-fg-faint">
-                                {it.ordered_qty} × {format(it.unit_price)}
-                                {it.received_qty !== it.ordered_qty && (
-                                  <span className="ml-1.5 font-medium text-rose-300">· got {it.received_qty}</span>
-                                )}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => downloadFile("/purchasing/purchase-orders/consolidated.pdf", "consolidated-po.pdf")}
-                      className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20"
-                    >
-                      ⬇ Download consolidated PDF
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
             {pos.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">No purchase orders yet.</p>
             ) : (
