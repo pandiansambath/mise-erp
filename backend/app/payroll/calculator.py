@@ -49,10 +49,11 @@ def calc_hourly(
     total_hours: Decimal,
     advance: Decimal = Decimal("0"),
     other_deductions: Decimal = Decimal("0"),
+    min_wage: Decimal = MIN_WAGE_UK,
 ) -> dict:
-    if hourly_rate < MIN_WAGE_UK:
+    if hourly_rate < min_wage:
         raise MinWageError(
-            f"Hourly rate £{hourly_rate} is below UK minimum wage £{MIN_WAGE_UK}"
+            f"Hourly rate £{hourly_rate} is below the minimum wage £{min_wage}"
         )
     gross = total_hours * hourly_rate
     net = gross - advance - other_deductions

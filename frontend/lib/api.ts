@@ -156,6 +156,7 @@ export interface Hotel {
   base_currency: string;
   break_allowance_minutes: number;
   break_penalty_per_min: string;
+  min_hourly_rate?: string; // configurable minimum wage floor (payroll rejects below)
   has_logo?: boolean; // an uploaded brand logo replaces the default Mise mark
   features?: Record<string, boolean>; // per-hotel entitlements (missing = enabled)
 }

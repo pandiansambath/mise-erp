@@ -32,6 +32,9 @@ async def process(
     else:
         employees = await list_employees(db, user.hotel_id)
 
+    hotel = await db.get(Hotel, user.hotel_id)
+    min_wage = hotel.min_hourly_rate if hotel else calculator.MIN_WAGE_UK
+
     try:
         for emp in employees:
             await service.process_payroll(
@@ -39,6 +42,7 @@ async def process(
                 working_days=payload.working_days,
                 other_deductions=payload.other_deductions,
                 processed_by=user.id,
+                min_wage=min_wage,
             )
     except calculator.MinWageError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc

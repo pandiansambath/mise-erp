@@ -235,7 +235,7 @@ export default function PayrollPage() {
               <div className="rounded-lg border border-line bg-paper-2/50 p-3">
                 <p className="font-semibold text-fg">Hourly staff</p>
                 <p className="mt-1">Pay = hours worked × hourly rate.</p>
-                <p className="text-fg-faint">Hours come from attendance; rate must be ≥ UK minimum wage.</p>
+                <p className="text-fg-faint">Hours come from attendance; rate must be ≥ your minimum wage (set in <Link href="/settings" className="underline">Settings</Link>).</p>
               </div>
             </div>
             <p>
@@ -256,6 +256,13 @@ export default function PayrollPage() {
               <b className="text-fg">Penalties</b> (late / absence) are handled on <Link href="/attendance" className="text-brand-400 underline">Attendance</Link> — they change the
               days/hours recorded there, which then flows into pay. Each run starts as a{" "}
               <b className="text-fg">Draft</b> → <b className="text-fg">Approve</b> → <b className="text-fg">Mark paid</b>; download a payslip PDF per person, or the whole run as one PDF.
+            </p>
+            <p className="rounded-lg border border-line bg-paper-2/50 p-2.5 text-xs text-fg-faint">
+              <b className="text-fg-soft">Two &ldquo;salary&rdquo; places — no double-count.</b> This page (Payroll) works out
+              exact <b className="text-fg-soft">per-person</b> pay and makes payslips, but it does <b className="text-fg-soft">not</b> post to your
+              P&amp;L. Your P&amp;L / Money labour cost comes only from the <b className="text-fg-soft">&ldquo;Staff Salaries&rdquo;</b> line in{" "}
+              <Link href="/profile" className="text-brand-400 underline">Profile → Monthly overheads</Link> (a single monthly figure you set).
+              Use Payroll to pay people accurately; use that overhead line for the P&amp;L number.
             </p>
           </div>
         )}

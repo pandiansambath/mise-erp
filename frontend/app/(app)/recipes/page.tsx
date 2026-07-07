@@ -31,6 +31,11 @@ function SourceChip({ source, vendor }: { source: string; vendor: string | null 
   return <Badge tone="red">no price</Badge>;
 }
 
+// Cache cost breakdowns so re-opening a dish is INSTANT (the first open still
+// fetches). Cleared by reload() whenever recipes change, so it never goes stale.
+const _costCache = new Map<string, RecipeCostBreakdown>();
+export function clearCostCache() { _costCache.clear(); }
+
 function CostDetail({
   recipeId,
   items,
@@ -40,10 +45,17 @@ function CostDetail({
   items: Item[];
   onTag: (itemId: string, csv: string) => void;
 }) {
-  const [data, setData] = useState<RecipeCostBreakdown | null>(null);
+  const [data, setData] = useState<RecipeCostBreakdown | null>(() => _costCache.get(recipeId) ?? null);
   const { format } = useCurrency();
   useEffect(() => {
-    api.get<RecipeCostBreakdown>(`/recipes/${recipeId}/cost`).then(setData);
+    const cached = _costCache.get(recipeId);
+    if (cached) { setData(cached); return; }
+    let alive = true;
+    api.get<RecipeCostBreakdown>(`/recipes/${recipeId}/cost`).then((d) => {
+      _costCache.set(recipeId, d);
+      if (alive) setData(d);
+    });
+    return () => { alive = false; };
   }, [recipeId]);
 
   // Tag an ingredient's allergens right here (saves instantly to the Inventory
@@ -218,6 +230,7 @@ export default function RecipesPage() {
   const confirm = useConfirm();
 
   function reload(includeInactive = showArchived) {
+    clearCostCache(); // recipes changed → drop cached cost breakdowns
     return api
       .get<Recipe[]>(`/recipes${includeInactive ? "?include_inactive=true" : ""}`)
       .then(setRecipes);
@@ -441,7 +454,14 @@ export default function RecipesPage() {
                     </span>
                     <span className="flex items-center gap-3">
                       {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
-                      <span className="text-fg-faint">{open ? "▲" : "▼"}</span>
+                      <svg
+                        width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        aria-hidden
+                        className={`text-fg-faint transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
                     </span>
                   </button>
                   {canWrite &&
@@ -600,7 +620,7 @@ export default function RecipesPage() {
           <p className="py-6 text-center text-sm text-fg-faint">No recipes yet.</p>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="gap-4 [column-fill:_balance] sm:columns-2 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid">
           {sortEntries([...activeGroups.entries()]).map(([dishName, variants]) => dishCard(dishName, variants))}
           {activeGroups.size === 0 && (
             <Card>
@@ -620,7 +640,7 @@ export default function RecipesPage() {
               {archivedGroups.size} dish{archivedGroups.size === 1 ? "" : "es"} · hidden from costing &amp; the menu — Restore to bring back
             </span>
           </div>
-          <div className="space-y-3 rounded-2xl border border-dashed border-line-2 bg-glass/[0.02] p-3">
+          <div className="gap-4 rounded-2xl border border-dashed border-line-2 bg-glass/[0.02] p-3 [column-fill:_balance] sm:columns-2 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid">
             {sortEntries([...archivedGroups.entries()]).map(([dishName, variants]) => dishCard(dishName, variants))}
           </div>
         </div>

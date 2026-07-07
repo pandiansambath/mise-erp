@@ -54,6 +54,7 @@ class HotelOut(BaseModel):
     base_currency: str
     break_allowance_minutes: int = 0
     break_penalty_per_min: Decimal = Decimal("0")
+    min_hourly_rate: Decimal = Decimal("11.44")
     has_logo: bool = False
     features: dict = Field(default_factory=dict)
 
@@ -64,6 +65,7 @@ class HotelUpdate(BaseModel):
     city: str | None = None
     break_allowance_minutes: int | None = Field(default=None, ge=0, le=600)
     break_penalty_per_min: Decimal | None = Field(default=None, ge=0)
+    min_hourly_rate: Decimal | None = Field(default=None, ge=0)
 
 
 class TokenResponse(BaseModel):

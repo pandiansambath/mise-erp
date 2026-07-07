@@ -74,6 +74,7 @@ async def process_payroll(
     working_days: int = 26,
     other_deductions: Decimal = Decimal("0"),
     processed_by: uuid.UUID | None = None,
+    min_wage: Decimal = calculator.MIN_WAGE_UK,
 ) -> Payroll:
     start, end = month_range(pay_period)
     stats = await _attendance_stats(db, employee.id, start, end)
@@ -95,6 +96,7 @@ async def process_payroll(
             total_hours=stats["total_hours"],
             advance=advance_total,
             other_deductions=other_deductions,
+            min_wage=min_wage,
         )
     else:
         calc = calculator.calc_monthly(

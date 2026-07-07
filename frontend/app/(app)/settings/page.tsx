@@ -5,10 +5,11 @@ import { api } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
+import { numeric } from "@/lib/sanitize";
 
 export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
-  const { user, hotel } = useAuth();
+  const { user, hotel, refreshHotel } = useAuth();
   const isAdmin = user?.role === "SUPER_ADMIN";
 
   const [allowance, setAllowance] = useState("0");
@@ -16,12 +17,30 @@ export default function SettingsPage() {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [savedPolicy, setSavedPolicy] = useState(false);
 
+  const [minWage, setMinWage] = useState("11.44");
+  const [savingWage, setSavingWage] = useState(false);
+  const [savedWage, setSavedWage] = useState(false);
+
   useEffect(() => {
     if (hotel) {
       setAllowance(String(hotel.break_allowance_minutes ?? 0));
       setPenalty(hotel.break_penalty_per_min ?? "0");
+      setMinWage(hotel.min_hourly_rate ?? "11.44");
     }
   }, [hotel]);
+
+  async function saveMinWage(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingWage(true);
+    setSavedWage(false);
+    try {
+      await api.patch("/hotels/me", { min_hourly_rate: minWage || "0" });
+      await refreshHotel();
+      setSavedWage(true);
+    } finally {
+      setSavingWage(false);
+    }
+  }
 
   async function saveBreakPolicy(e: React.FormEvent) {
     e.preventDefault();
@@ -106,6 +125,34 @@ export default function SettingsPage() {
           <p className="mt-2 text-xs text-fg-faint">
             Set allowance to 0 with a 0 penalty to disable break penalties.
           </p>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card className="mb-6">
+          <h3 className="font-semibold text-fg">Payroll: minimum wage</h3>
+          <p className="mt-1 text-sm text-fg-faint">
+            The lowest hourly rate you&apos;re allowed to pay. Payroll blocks any run where
+            an hourly employee&apos;s rate is below this. Set it to your country&apos;s statutory
+            minimum (UK 2024 = £11.44) and update it when the law changes.
+          </p>
+          <form onSubmit={saveMinWage} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="sm:w-56">
+              <label className="block text-sm font-medium text-fg-soft">
+                Minimum hourly rate ({hotel?.base_currency ?? "GBP"})
+              </label>
+              <input
+                value={minWage}
+                onChange={(e) => setMinWage(numeric(e.target.value))}
+                inputMode="decimal"
+                className={inputCls}
+              />
+            </div>
+            <button type="submit" disabled={savingWage} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              {savingWage ? "Saving…" : "Save"}
+            </button>
+            {savedWage && <span className="text-sm text-brand-400">Saved ✓</span>}
+          </form>
         </Card>
       )}
 

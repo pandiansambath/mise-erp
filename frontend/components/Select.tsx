@@ -48,7 +48,8 @@ export function Select({
     if (open) place();
   }, [open, place]);
 
-  // Close on outside click; keep the popover glued to the button on scroll/resize.
+  // Close on outside click. CLOSE on scroll too (like a native <select>) so the
+  // open popover never floats over other cards when a container scrolls.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -56,16 +57,21 @@ export function Select({
       if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
       setOpen(false);
     };
-    const reflow = () => place();
+    const close = (e?: Event) => {
+      // don't close when the scroll happens INSIDE the popover's own option list
+      if (e && e.target instanceof Node && popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDoc);
-    window.addEventListener("resize", reflow);
-    window.addEventListener("scroll", reflow, true);
+    window.addEventListener("resize", close);
+    // capture=true so we also catch scrolls inside any nested scroll container
+    window.addEventListener("scroll", close, true);
     return () => {
       document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("resize", reflow);
-      window.removeEventListener("scroll", reflow, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
     };
-  }, [open, place]);
+  }, [open]);
 
   const sel = options.find((o) => o.value === value);
 

@@ -166,3 +166,21 @@ async def test_hourly_below_min_wage_blocked_via_api(client, make_user, auth_hea
         json={"pay_period": "2026-06", "employee_id": str(emp.id)},
     )
     assert resp.status_code == 400  # below UK minimum wage
+
+
+@pytest.mark.asyncio
+async def test_configurable_min_wage_allows_lower_rate(client, make_user, auth_header, db, hotel):
+    """Lowering the hotel's min_hourly_rate lets an otherwise-blocked rate through."""
+    hotel.min_hourly_rate = Decimal("8.00")
+    await db.commit()
+    acct = await make_user("acct2@nirai.com", Role.ACCOUNTANT.value)
+    emp = await emp_service.create_employee(
+        db, hotel.id, full_name="LowRate", salary_type="HOURLY", hourly_rate=Decimal("9.00")
+    )
+    await emp_service.set_attendance(db, emp, date(2026, 6, 2), status="PRESENT", working_hours_value=Decimal("8"))
+    resp = await client.post(
+        "/api/payroll/process",
+        headers=auth_header(acct),
+        json={"pay_period": "2026-06", "employee_id": str(emp.id)},
+    )
+    assert resp.status_code == 200  # 9.00 ≥ configured 8.00

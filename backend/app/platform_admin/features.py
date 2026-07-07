@@ -21,7 +21,8 @@ class Feature:
     enforced: bool = False  # True = also blocked server-side, not just hidden
 
 
-# Order here is the order shown in the Control Room.
+# Order here is the order shown in the Control Room. `enforced=True` = also blocked
+# server-side (its API 403s); the rest are hidden from that hotel's UI (nav).
 FEATURES: tuple[Feature, ...] = (
     Feature(
         "ai_copilot", "AI Copilot (Ask Mise)",
@@ -43,6 +44,15 @@ FEATURES: tuple[Feature, ...] = (
         "price_comparison", "Price Comparison",
         "Cheapest-supplier comparison across vendors.", enforced=True,
     ),
+    Feature("reports", "Reports (P&L)", "Profit & loss reports and downloads."),
+    Feature("expenses", "Expenses", "Running-cost / overhead tracking."),
+    Feature("waste", "Waste log", "Log wasted stock and its cost."),
+    Feature("stock_take", "Stock-take", "Physical stock counts & variance."),
+    Feature("allergens", "Allergens sheet", "Per-dish allergen matrix (Natasha's Law)."),
+    Feature("rota", "Rota", "Shift scheduling + forecast labour cost."),
+    Feature("attendance", "Attendance", "Clock-in, days & hours worked."),
+    Feature("employees", "Employees", "Staff records, salaries, visas."),
+    Feature("payroll", "Payroll", "Run pay, advances and payslips."),
 )
 
 _BY_KEY = {f.key: f for f in FEATURES}

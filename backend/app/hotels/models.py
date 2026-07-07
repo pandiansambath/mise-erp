@@ -28,6 +28,11 @@ class Hotel(Base):
     break_penalty_per_min: Mapped[Decimal] = mapped_column(
         Numeric(8, 2), nullable=False, default=Decimal("0")
     )
+    # Statutory minimum hourly wage floor — payroll rejects rates below it.
+    # Configurable per hotel (differs by country/year). UK 2024 default.
+    min_hourly_rate: Mapped[Decimal] = mapped_column(
+        Numeric(8, 2), nullable=False, default=Decimal("11.44")
+    )
     # Uploaded brand logo (storage key). When set, replaces the default Mise mark.
     logo_key: Mapped[str | None] = mapped_column(String(255))
     # Per-hotel feature entitlements (key -> bool). Missing key = default (enabled).

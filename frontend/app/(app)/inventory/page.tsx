@@ -266,9 +266,9 @@ export default function InventoryPage() {
       pack_unit: form.packUnit.trim() || null,
       pack_size: form.packUnit.trim() && form.packSize ? form.packSize : null,
     };
-    // Only write allergens when the user actually touched them (preserves the
-    // "not reviewed" state for items edited for other reasons).
-    if (editingId && allergensTouched) payload.allergens = form.allergens;
+    // Write allergens whenever the user touched the picker (works for add + edit).
+    // Left untouched → stays "not reviewed" so the Allergens sheet still prompts.
+    if (allergensTouched) payload.allergens = form.allergens;
     try {
       if (editingId) {
         await api.patch<Item>(`/inventory/items/${editingId}`, payload);
@@ -744,7 +744,7 @@ export default function InventoryPage() {
             </div>
           )}
 
-          {editingId && (
+          {(
             <div className="rounded-xl border border-line bg-paper-2/60 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
                 Allergens (Natasha&apos;s Law)

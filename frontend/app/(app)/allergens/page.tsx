@@ -54,31 +54,29 @@ export default function AllergensPage() {
           <p className="py-6 text-center text-sm text-fg-faint">No recipes yet.</p>
         </Card>
       ) : (
-        <Card className="p-0">
-          <ul className="divide-y divide-line">
-            {rows.map((r) => (
-              <li key={r.recipe_id} className="px-5 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-fg">{r.name}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {r.allergens.length === 0 && r.unreviewed.length === 0 ? (
-                      <Badge tone="green">no listed allergens</Badge>
-                    ) : (
-                      r.allergens.map((a) => (
-                        <Badge key={a} tone="red">{ALLERGEN_LABEL[a] ?? a}</Badge>
-                      ))
-                    )}
-                  </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((r) => (
+            <Card key={r.recipe_id}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-fg">{r.name}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {r.allergens.length === 0 && r.unreviewed.length === 0 ? (
+                    <Badge tone="green">no listed allergens</Badge>
+                  ) : (
+                    r.allergens.map((a) => (
+                      <Badge key={a} tone="red">{ALLERGEN_LABEL[a] ?? a}</Badge>
+                    ))
+                  )}
                 </div>
-                {r.unreviewed.length > 0 && (
-                  <p className="mt-1 text-xs text-amber-300">
-                    ⚠ Not reviewed: {r.unreviewed.join(", ")} — tag on Inventory to confirm.
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
+              </div>
+              {r.unreviewed.length > 0 && (
+                <p className="mt-2 text-xs text-amber-300">
+                  ⚠ Not reviewed: {r.unreviewed.join(", ")} — tag on Inventory to confirm.
+                </p>
+              )}
+            </Card>
+          ))}
+        </div>
       )}
 
       <p className="mt-3 text-xs text-fg-faint">
