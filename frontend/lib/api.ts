@@ -411,6 +411,7 @@ export interface POSummary {
   po_number: string;
   status: string;
   total_amount: string;
+  indent_id?: string | null; // the purchase run this PO belongs to
 }
 
 export interface POItemOut {

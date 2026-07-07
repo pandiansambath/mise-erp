@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   api,
   ApiError,
@@ -335,6 +335,26 @@ export default function PurchasingPage() {
     }
   }
 
+  // Group POs by the purchase run (indent) they came from, so each run offers a
+  // consolidated PDF alongside its per-vendor orders. (Hook must run before any
+  // early return.) Keeps the panel's newest-first order (first appearance wins).
+  const poGroups = useMemo(() => {
+    const byIndent = new Map<string, POSummary[]>();
+    const order: string[] = [];
+    for (const po of pos) {
+      const key = po.indent_id ?? "__none__";
+      if (!byIndent.has(key)) { byIndent.set(key, []); order.push(key); }
+      byIndent.get(key)!.push(po);
+    }
+    return order.map((key) => {
+      const groupPos = byIndent.get(key)!;
+      const total = groupPos.reduce((s, p) => s + parseFloat(p.total_amount || "0"), 0);
+      const indent = key === "__none__" ? null : indents.find((i) => i.id === key) ?? null;
+      const vendorCount = new Set(groupPos.map((p) => p.vendor_id)).size;
+      return { key, indentId: key === "__none__" ? null : key, pos: groupPos, total, indent, vendorCount };
+    });
+  }, [pos, indents]);
+
   if (loading) return <Spinner />;
 
   // Only items a vendor actually prices can be ordered — keeps the chain honest.
@@ -495,11 +515,35 @@ export default function PurchasingPage() {
             <h3 className="font-semibold text-fg">Purchase orders</h3>
             <span className="text-xs text-fg-faint">{pos.length} total</span>
           </div>
-          <div className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto p-3">
             {pos.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">No purchase orders yet.</p>
             ) : (
-              pos.map((po) => {
+              poGroups.map((g) => (
+              <div key={g.key} className="rounded-2xl border border-line/70 bg-glass/[0.02] p-2.5">
+                {/* Purchase-run header: per-vendor orders below + one consolidated PDF */}
+                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-fg">
+                      {g.indent ? `🛒 Purchase · ${g.indent.date}` : "Other orders"}
+                    </span>
+                    <span className="block text-[11px] text-fg-faint">
+                      {g.pos.length} order{g.pos.length === 1 ? "" : "s"} · {g.vendorCount} vendor{g.vendorCount === 1 ? "" : "s"} · <b className="text-fg-soft">{format(String(g.total.toFixed(2)))}</b>
+                    </span>
+                  </span>
+                  {g.indentId && (
+                    <button
+                      type="button"
+                      onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.indent?.date ?? "po"}.pdf`)}
+                      title="One PDF for this whole purchase (all vendors + items)"
+                      className="shrink-0 rounded-lg border border-brand-500/40 bg-brand-500/10 px-2.5 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20"
+                    >
+                      🧾 Consolidated PDF
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+              {g.pos.map((po) => {
                 const open = openPo === po.id;
                 const detail = poDetail[po.id];
                 const busy = poBusy === po.id;
@@ -582,7 +626,10 @@ export default function PurchasingPage() {
                     )}
                   </div>
                 );
-              })
+              })}
+                </div>
+              </div>
+              ))
             )}
           </div>
         </Card>

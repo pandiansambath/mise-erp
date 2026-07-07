@@ -78,6 +78,7 @@ class POSummary(BaseModel):
     po_number: str
     status: str
     total_amount: Decimal
+    indent_id: uuid.UUID | None = None  # groups POs by the purchase run they came from
 
 
 class GenerateResult(BaseModel):
