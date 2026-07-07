@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
+import { api, ApiError, postForm, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
@@ -198,6 +198,11 @@ function CostDetail({
 }
 
 type IngLine = PickedLine;
+
+type NotePreviewLine = {
+  raw: string; name: string; qty: string | null; unit: string | null;
+  item_id: string | null; item_name: string | null; matched_unit: string | null; confidence: number;
+};
 type IngredientOut = { item_id: string; quantity: string; unit: string };
 
 const DEFAULT_CATEGORIES = [
@@ -224,6 +229,43 @@ export default function RecipesPage() {
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Handwritten-note OCR (Textract): upload → editable preview → add to ingredients.
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteMsg, setNoteMsg] = useState<string | null>(null);
+  const [notePreview, setNotePreview] = useState<NotePreviewLine[] | null>(null);
+
+  async function scanNote(file: File) {
+    setNoteBusy(true);
+    setNoteMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await postForm<{ lines: NotePreviewLine[] }>("/recipes/scan-note", fd);
+      if (!res.lines.length) {
+        setNoteMsg("Couldn't read any lines — try a clearer, well-lit photo.");
+        return;
+      }
+      setNotePreview(res.lines);
+    } catch (err) {
+      setNoteMsg(err instanceof ApiError ? err.message : "Could not read the note.");
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  function confirmNote() {
+    if (!notePreview) return;
+    const additions = notePreview
+      .filter((l) => l.item_id)
+      .map((l) => ({ item_id: l.item_id as string, qty: l.qty ?? "" }));
+    // merge, keeping the newest qty for any duplicate item
+    const byId = new Map(ings.map((l) => [l.item_id, l]));
+    for (const a of additions) byId.set(a.item_id, a);
+    setIngs([...byId.values()]);
+    setNotePreview(null);
+    setNoteMsg(`Added ${additions.length} ingredient${additions.length === 1 ? "" : "s"} — review & save.`);
+  }
 
   const [showArchived, setShowArchived] = useState(false);
   const [sort, setSort] = useState<"name" | "margin-desc" | "margin-asc">("name");
@@ -560,7 +602,24 @@ export default function RecipesPage() {
                   </div>
                 </div>
 
-                <p className="pt-1 text-sm font-medium text-fg-soft">Ingredients</p>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <p className="text-sm font-medium text-fg-soft">Ingredients</p>
+                  <label className="cursor-pointer rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-brand-500/20">
+                    {noteBusy ? "Reading…" : "📷 From handwritten note"}
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      disabled={noteBusy}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) scanNote(f); e.currentTarget.value = ""; }}
+                    />
+                  </label>
+                </div>
+                <p className="-mt-1 text-[11px] text-fg-faint">
+                  Snap your chef&apos;s handwritten list — Mise reads it, matches each line to an
+                  inventory item, and lets you review before adding. Nothing is added until you confirm.
+                </p>
+                {noteMsg && <p className="text-xs text-fg-soft">{noteMsg}</p>}
                 <ItemPicker
                   items={items}
                   lines={ings}
@@ -642,6 +701,62 @@ export default function RecipesPage() {
           </div>
           <div className="gap-4 rounded-2xl border border-dashed border-line-2 bg-glass/[0.02] p-3 [column-fill:_balance] sm:columns-2 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid">
             {sortEntries([...archivedGroups.entries()]).map(([dishName, variants]) => dishCard(dishName, variants))}
+          </div>
+        </div>
+      )}
+
+      {/* Handwritten-note OCR preview — review/fix each line, then add to ingredients. */}
+      {notePreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setNotePreview(null)} aria-hidden />
+          <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
+            <div className="mb-1 flex items-start justify-between">
+              <h3 className="text-lg font-semibold text-fg">Review the scanned note</h3>
+              <button onClick={() => setNotePreview(null)} className="-mr-1 -mt-1 rounded-lg p-1 text-fg-faint hover:bg-paper hover:text-fg" aria-label="Close">✕</button>
+            </div>
+            <p className="mb-4 text-sm text-fg-faint">
+              We matched each line to an inventory item. Fix any mismatches, set quantities, then add
+              them. Lines with no item selected are skipped. Handwriting varies — always double-check.
+            </p>
+            <div className="space-y-2">
+              {notePreview.map((l, i) => (
+                <div key={i} className="rounded-lg border border-line px-3 py-2">
+                  <p className="mb-1 truncate text-[11px] text-fg-faint" title={l.raw}>
+                    &ldquo;{l.raw}&rdquo;{l.confidence < 0.5 && <span className="ml-1 text-amber-300">· low match</span>}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="min-w-[10rem] flex-1">
+                      <Select
+                        value={l.item_id ?? ""}
+                        onChange={(v) => setNotePreview((p) => p && p.map((x, k) => (k === i ? { ...x, item_id: v || null } : x)))}
+                        placeholder="— skip this line —"
+                        options={[
+                          { value: "", label: "— skip this line —" },
+                          ...items.map((it) => ({ value: it.id, label: it.name })),
+                        ]}
+                      />
+                    </div>
+                    <input
+                      value={l.qty ?? ""}
+                      onChange={(e) => setNotePreview((p) => p && p.map((x, k) => (k === i ? { ...x, qty: e.target.value } : x)))}
+                      inputMode="decimal"
+                      placeholder="qty"
+                      aria-label={`Quantity for ${l.name}`}
+                      className="w-24 rounded-md border border-line-2 bg-transparent px-2 py-1.5 text-right text-sm"
+                    />
+                    <span className="text-xs text-fg-faint">
+                      {l.item_id ? (items.find((it) => it.id === l.item_id)?.unit ?? l.unit) : l.unit}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setNotePreview(null)} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper">Cancel</button>
+              <button onClick={confirmNote} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                Add {notePreview.filter((l) => l.item_id).length} to ingredients
+              </button>
+            </div>
           </div>
         </div>
       )}

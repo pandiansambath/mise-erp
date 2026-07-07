@@ -7,7 +7,16 @@ import pytest
 from app.auth.models import Role
 from app.inventory import service as inv
 from app.recipes import service as rec
+from app.recipes.router import _parse_note_line
 from app.vendors import service as ven
+
+
+def test_parse_note_line_extracts_name_qty_unit():
+    assert _parse_note_line("1. CHICKEN (Breast) 200 gms") == ("CHICKEN (Breast)", "200", "g")
+    assert _parse_note_line("3) onion 100gms") == ("onion", "100", "g")
+    assert _parse_note_line("Oil 100 ml") == ("Oil", "100", "ml")
+    assert _parse_note_line("Curry leaves few sprig") == ("Curry leaves few sprig", None, None)
+    assert _parse_note_line("Tomato 2 kg") == ("Tomato", "2", "kg")
 
 
 async def _setup_biryani(db, hotel, chicken_price=Decimal("8.00")):

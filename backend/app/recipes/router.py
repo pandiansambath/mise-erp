@@ -1,14 +1,18 @@
 """Recipe endpoints: CRUD, ingredients, and cost/margin calculation. Hotel-scoped."""
+import re
 import uuid
+from difflib import SequenceMatcher
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import textract as textract_svc
 from app.core.database import get_db
 from app.hotels.models import Hotel
+from app.inventory import service as inv_service
 from app.inventory.service import get_item
 from app.recipes import pdf as recipe_pdf
 from app.recipes import service
@@ -23,6 +27,32 @@ from app.recipes.schemas import (
 )
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
+
+# Handwritten-note parsing: strip a leading "1." / "3)" and pull a trailing quantity.
+_NUM_PREFIX_RE = re.compile(r"^\s*\d+\s*[.)]\s*")
+_QTY_RE = re.compile(r"(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?\s*$")
+_UNIT_MAP = {
+    "gms": "g", "gm": "g", "gram": "g", "grams": "g", "g": "g",
+    "kg": "kg", "kgs": "kg", "ml": "ml", "l": "litre", "ltr": "litre",
+    "litre": "litre", "liter": "litre", "nos": "piece", "no": "piece",
+    "pcs": "piece", "pc": "piece", "piece": "piece", "tray": "tray",
+    "pack": "pack", "packet": "pack",
+}
+
+
+def _parse_note_line(line: str) -> tuple[str, str | None, str | None]:
+    """A handwritten line → (item name, qty, unit). Best-effort."""
+    s = _NUM_PREFIX_RE.sub("", line.strip())
+    qty: str | None = None
+    unit: str | None = None
+    name = s
+    m = _QTY_RE.search(s)
+    if m:
+        qty = m.group(1)
+        raw_unit = (m.group(2) or "").lower()
+        unit = _UNIT_MAP.get(raw_unit, raw_unit or None)
+        name = s[: m.start()].strip(" -:·.")
+    return name, qty, unit
 
 
 @router.post("", response_model=RecipeOut, status_code=status.HTTP_201_CREATED)
@@ -50,6 +80,49 @@ async def list_recipes(
         db, user.hotel_id, active_only=not include_inactive
     )
     return [RecipeOut.model_validate(r) for r in recipes]
+
+
+@router.post("/scan-note")
+async def scan_note(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("recipes:write")),
+) -> dict:
+    """Read a HANDWRITTEN recipe note (Textract OCR) and turn each line into a
+    suggested ingredient (item name + qty), matched to your inventory. Returns an
+    editable preview — nothing is added until the user confirms."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
+    try:
+        lines = textract_svc.detect_lines(data)
+    except textract_svc.TextractError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+    items = await inv_service.list_items(db, user.hotel_id)
+    out: list[dict] = []
+    for ln in lines:
+        name, qty, unit = _parse_note_line(ln)
+        if not name or len(name) < 2:
+            continue
+        best = None
+        best_score = 0.0
+        for it in items:
+            score = SequenceMatcher(None, name.lower(), it.name.lower()).ratio()
+            if score > best_score:
+                best, best_score = it, score
+        matched = best_score >= 0.5 and best is not None
+        out.append({
+            "raw": ln,
+            "name": name,
+            "qty": qty,
+            "unit": unit,
+            "item_id": str(best.id) if matched else None,
+            "item_name": best.name if matched else None,
+            "matched_unit": best.unit if matched else None,
+            "confidence": round(best_score, 2),
+        })
+    return {"lines": out}
 
 
 # Defined before /{recipe_id} so the literal path isn't captured as a recipe id.
