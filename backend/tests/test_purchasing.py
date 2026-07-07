@@ -43,6 +43,26 @@ async def test_generate_pos_groups_by_chosen_vendor(db, hotel):
 
 
 @pytest.mark.asyncio
+async def test_consolidated_open_pos(client, make_user, auth_header, db, hotel):
+    """The consolidated view combines all open POs across vendors with a grand total."""
+    rice, chicken, v1, v2 = await _setup_catalog(db, hotel.id)
+    indent = await service.create_indent(
+        db, hotel.id,
+        [{"item_id": rice.id, "required_qty": Decimal("10")},
+         {"item_id": chicken.id, "required_qty": Decimal("4")}],
+    )
+    await service.generate_pos(db, indent)
+    admin = await make_user("buyer@x.com", Role.SUPER_ADMIN.value)
+    res = await client.get(
+        "/api/purchasing/purchase-orders/consolidated", headers=auth_header(admin)
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["po_count"] == 2 and data["vendor_count"] == 2 and data["item_count"] == 2
+    assert Decimal(data["grand_total"]) == Decimal("82.00")  # 50.00 + 32.00
+
+
+@pytest.mark.asyncio
 async def test_item_without_chosen_vendor_falls_back_to_cheapest(db, hotel):
     rice = await inv.create_item(db, hotel.id, name="Rice", unit="kg")
     v1 = await ven.create_vendor(db, hotel.id, name="V1")

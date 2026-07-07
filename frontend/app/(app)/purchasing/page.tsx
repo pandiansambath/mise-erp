@@ -24,6 +24,19 @@ import { can } from "@/lib/permissions";
 
 type Line = PickedLine;
 
+type ConsolidatedItem = {
+  item_name: string; ordered_qty: string; received_qty: string;
+  unit_price: string; line_total: string; po_number: string;
+};
+type ConsolidatedVendor = {
+  vendor_id: string; vendor_name: string; po_numbers: string[];
+  items: ConsolidatedItem[]; subtotal: string;
+};
+type Consolidated = {
+  vendors: ConsolidatedVendor[]; grand_total: string;
+  po_count: number; vendor_count: number; item_count: number; currency: string;
+};
+
 const indentTone: Record<string, "slate" | "amber" | "green" | "red"> = {
   PENDING: "amber",
   APPROVED: "green",
@@ -58,14 +71,18 @@ export default function PurchasingPage() {
   const [openPo, setOpenPo] = useState<string | null>(null);
   const [poDetail, setPoDetail] = useState<Record<string, POOut>>({});
   const [poBusy, setPoBusy] = useState<string | null>(null);
+  const [consol, setConsol] = useState<Consolidated | null>(null);
+  const [consolOpen, setConsolOpen] = useState(false);
 
   async function load() {
-    const [ind, p] = await Promise.all([
+    const [ind, p, c] = await Promise.all([
       api.get<Indent[]>("/purchasing/indents"),
       api.get<POSummary[]>("/purchasing/purchase-orders"),
+      api.get<Consolidated>("/purchasing/purchase-orders/consolidated").catch(() => null),
     ]);
     setIndents(ind);
     setPos(p);
+    setConsol(c);
   }
 
   useEffect(() => {
@@ -427,6 +444,63 @@ export default function PurchasingPage() {
             <span className="text-xs text-fg-faint">{pos.length} total</span>
           </div>
           <div className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
+            {/* Consolidated PO — one combined view of everything still on order,
+                grouped by vendor, above the individual per-vendor POs. */}
+            {consol && consol.po_count > 0 && (
+              <div className="overflow-hidden rounded-xl border border-brand-500/40 bg-brand-500/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setConsolOpen((o) => !o)}
+                  aria-expanded={consolOpen}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                >
+                  <span aria-hidden className={`text-brand-300 transition-transform duration-200 ${consolOpen ? "rotate-90" : ""}`}>›</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-fg">🧾 Consolidated PO — everything on order</span>
+                    <span className="block text-xs text-fg-faint">
+                      {consol.po_count} order{consol.po_count === 1 ? "" : "s"} · {consol.vendor_count} vendor{consol.vendor_count === 1 ? "" : "s"} · {consol.item_count} item{consol.item_count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm font-semibold text-brand-300">{format(consol.grand_total)}</span>
+                    <span className="text-[10px] uppercase tracking-wide text-fg-faint">grand total</span>
+                  </span>
+                </button>
+                {consolOpen && (
+                  <div className="mise-pop space-y-3 border-t border-brand-500/20 px-4 py-3">
+                    {consol.vendors.map((v) => (
+                      <div key={v.vendor_id} className="rounded-lg border border-line bg-paper-2/40 p-2.5">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-fg">{v.vendor_name || "—"}</span>
+                          <span className="text-xs text-fg-faint">{v.po_numbers.join(", ")} · <b className="text-fg-soft">{format(v.subtotal)}</b></span>
+                        </div>
+                        <ul className="space-y-1">
+                          {v.items.map((it, k) => (
+                            <li key={`${it.po_number}-${it.item_name}-${k}`} className="flex items-baseline justify-between gap-3 text-xs">
+                              <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
+                              <span className="shrink-0 text-fg-faint">
+                                {it.ordered_qty} × {format(it.unit_price)}
+                                {it.received_qty !== it.ordered_qty && (
+                                  <span className="ml-1.5 font-medium text-rose-300">· got {it.received_qty}</span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => downloadFile("/purchasing/purchase-orders/consolidated.pdf", "consolidated-po.pdf")}
+                      className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20"
+                    >
+                      ⬇ Download consolidated PDF
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {pos.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">No purchase orders yet.</p>
             ) : (

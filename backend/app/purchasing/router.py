@@ -1,5 +1,6 @@
 """Indent & purchase-order endpoints. Hotel-scoped."""
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
@@ -169,6 +170,79 @@ async def list_pos(
         row.vendor_name = names.get(p.vendor_id, "")
         out.append(row)
     return out
+
+
+async def _consolidated_open(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
+    """Every OPEN purchase order (not fully received) grouped by vendor, with a
+    grand total — the 'everything currently on order' overview. Received qty is kept
+    per line so short/partial deliveries stay visible."""
+    all_pos = await service.list_pos(db, hotel_id)
+    open_pos = [p for p in all_pos if p.status != POStatus.RECEIVED.value]
+    vendor_rows = (
+        await db.execute(select(Vendor).where(Vendor.hotel_id == hotel_id))
+    ).scalars().all()
+    vnames = {v.id: v.name for v in vendor_rows}
+    groups: dict[uuid.UUID, dict] = {}
+    grand = Decimal("0")
+    item_count = 0
+    for p in open_pos:
+        g = groups.setdefault(p.vendor_id, {
+            "vendor_id": str(p.vendor_id),
+            "vendor_name": vnames.get(p.vendor_id, ""),
+            "po_numbers": [],
+            "items": [],
+            "subtotal": Decimal("0"),
+        })
+        g["po_numbers"].append(p.po_number)
+        g["subtotal"] += p.total_amount
+        grand += p.total_amount
+        for it in await service.po_items(db, p.id):
+            g["items"].append({
+                "item_name": it["item_name"],
+                "ordered_qty": str(it["ordered_qty"]),
+                "received_qty": str(it["received_qty"]),
+                "unit_price": str(it["unit_price"]),
+                "line_total": str(it["line_total"]),
+                "po_number": p.po_number,
+            })
+            item_count += 1
+    vendors = list(groups.values())
+    for g in vendors:
+        g["subtotal"] = str(g["subtotal"])
+    return {
+        "vendors": vendors,
+        "grand_total": str(grand),
+        "po_count": len(open_pos),
+        "vendor_count": len(vendors),
+        "item_count": item_count,
+    }
+
+
+@router.get("/purchase-orders/consolidated")
+async def consolidated_pos(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:read")),
+) -> dict:
+    """All open POs combined into one view (grouped by vendor) + grand total."""
+    data = await _consolidated_open(db, user.hotel_id)
+    hotel = await db.get(Hotel, user.hotel_id)
+    data["currency"] = hotel.base_currency if hotel else "GBP"
+    return data
+
+
+@router.get("/purchase-orders/consolidated.pdf")
+async def consolidated_pos_pdf(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:read")),
+) -> Response:
+    """One consolidated PDF across every open PO, grouped by vendor."""
+    data = await _consolidated_open(db, user.hotel_id)
+    hotel = await db.get(Hotel, user.hotel_id)
+    pdf = pdf_gen.generate_consolidated_po_pdf(data["vendors"], data["grand_total"], hotel)
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=consolidated-po.pdf"},
+    )
 
 
 @router.get("/purchase-orders/{po_id}", response_model=POOut)
