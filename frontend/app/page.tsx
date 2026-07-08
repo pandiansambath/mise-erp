@@ -2,7 +2,8 @@
 
 // Landing entry point. Picks the experience and gets out of the way:
 //   • logged-in visitors → straight to the dashboard
-//   • motion-OK visitors → the cinematic real-footage journey
+//   • motion-OK visitors → the premium landing (cinema hero + live dashboard
+//     simulation + one-shot AI morph films)
 //   • reduced-motion visitors (or a runtime error) → the classic polished
 //     landing page, which stays as an always-works fallback.
 
@@ -14,8 +15,8 @@ import { Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import ClassicLanding from "@/components/landing/ClassicLanding";
 
-// The premium cinematic journey (Lenis + bespoke AI scenes). Browser-only.
-const JourneyExperience = dynamic(() => import("@/components/experience/ExperienceJourney"), {
+// The premium landing. Browser-only (scroll-driven, IntersectionObserver).
+const PremiumLanding = dynamic(() => import("@/components/landing/premium/PremiumLanding"), {
   ssr: false,
   loading: () => <DarkSplash />,
 });
@@ -31,8 +32,8 @@ function DarkSplash() {
   );
 }
 
-/** If the journey ever throws at runtime, fall back to the classic page
-    instead of showing a blank screen. */
+/** If the premium landing ever throws at runtime, fall back to the classic
+    page instead of showing a blank screen. */
 class JourneyBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
@@ -71,7 +72,7 @@ export default function Landing() {
   if (mode === "classic") return <ClassicLanding />;
   return (
     <JourneyBoundary>
-      <JourneyExperience />
+      <PremiumLanding />
     </JourneyBoundary>
   );
 }

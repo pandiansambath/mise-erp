@@ -586,43 +586,6 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-copilot-glow, .mise-msg-in, .mise-bob, .mise-copilot-in, .mise-copilot-out, .mise-launcher-in { animation: none; }
 }
 
-/* Quantum journey CSS fallback (only when WebGL is unavailable) — keeps it alive */
-@keyframes mise-quantum-drift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-.mise-quantum-fallback { animation: mise-quantum-drift 22s ease-in-out infinite; }
-
-/* ── Premium Experience journey (cinematic AI scenes) ─────────────────────── */
-/* Each scene image breathes slowly so the page is ALIVE even when still; scroll
-   then crossfades scene to scene. transform-only → GPU-composited, buttery. */
-@keyframes mise-exp-drift {
-  0%   { transform: scale(1.06) translate(0, 0); }
-  50%  { transform: scale(1.13) translate(-1.6%, -1.1%); }
-  100% { transform: scale(1.06) translate(0, 0); }
-}
-.mise-exp-drift { animation: mise-exp-drift 30s ease-in-out infinite; will-change: transform; }
-
-@keyframes mise-exp-in { from { opacity: 0; } to { opacity: 1; } }
-.mise-exp-in { animation: mise-exp-in 1s ease-out both; }
-
-@media (prefers-reduced-motion: reduce) { .mise-exp-drift { animation: none; } }
-
-/* ── Experience: animated scene text (staggered rise-in) ──────────────────── */
-@keyframes mise-text-rise {
-  from { opacity: 0; transform: translateY(34px); filter: blur(10px); }
-  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
-}
-[data-text] { opacity: 0; pointer-events: none; transition: opacity 0.45s ease; }
-[data-text].is-active { opacity: 1; pointer-events: auto; }
-[data-text].is-active .mise-reveal-item {
-  animation: mise-text-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-text].is-active .mise-reveal-item { animation: none; }
-}
-
 /* ── Onboarding wizard ─────────────────────────────────────────────────────── */
 @keyframes mise-step-in {
   from { opacity: 0; transform: translateY(26px) scale(0.985); filter: blur(7px); }
@@ -663,4 +626,37 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 .mise-slide-stagger > *:nth-child(n + 6) { animation-delay: 0.4s; }
 @media (prefers-reduced-motion: reduce) {
   .mise-step, .mise-onb-bg, .mise-pop-lg, .mise-card-slide, .mise-slide-stagger > * { animation: none; }
+}
+
+/* ── Premium landing (2026 rebuild) ────────────────────────────────────────── */
+/* Cinematic stills breathe very slowly so full-bleed scenes feel alive even
+   when nothing is playing. transform-only → GPU-composited. */
+@keyframes mise-l-ken {
+  0%   { transform: scale(1.05) translate(0, 0); }
+  50%  { transform: scale(1.12) translate(-1.2%, -0.8%); }
+  100% { transform: scale(1.05) translate(0, 0); }
+}
+.mise-l-ken { animation: mise-l-ken 26s ease-in-out infinite; will-change: transform; }
+
+/* The Copilot orb breathes and subtly shifts hue. */
+@keyframes mise-l-orb {
+  0%, 100% { transform: scale(1); filter: hue-rotate(0deg); }
+  50%      { transform: scale(1.07); filter: hue-rotate(-14deg); }
+}
+.mise-l-orb { animation: mise-l-orb 5.5s ease-in-out infinite; }
+
+/* Blinking caret for the self-typing Copilot chat. */
+@keyframes mise-l-caret-blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+.mise-l-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: mise-l-caret-blink 0.85s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-l-ken, .mise-l-orb, .mise-l-caret { animation: none; }
 }
