@@ -55,7 +55,19 @@ resource "aws_instance" "app" {
     caddyfile        = local.caddyfile
   })
   # Re-run cloud-init (pull new images + restart) whenever the images change.
+  # (Normal deploys pin images to :latest, so user_data is stable and the box is
+  # NOT replaced — we roll images in-place via SSM instead.)
   user_data_replace_on_change = true
+
+  lifecycle {
+    # The AMI comes from AWS's "latest AL2023" SSM parameter, which AWS bumps every
+    # few weeks. WITHOUT this, that bump shows up as an `ami` diff and forces a FULL
+    # box replacement on the next deploy — downtime, a flaky rollout, and a Caddy
+    # cert re-issue. The app runs entirely in Docker (images rebuilt each deploy), so
+    # the host AMI rarely matters. Ignore AMI drift here; refresh the OS deliberately
+    # with `terraform taint aws_instance.app` when we actually want a new base image.
+    ignore_changes = [ami]
+  }
 
   depends_on = [aws_db_instance.main]
   tags       = { Name = "${var.project}-app" }
