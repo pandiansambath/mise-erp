@@ -22,6 +22,12 @@ from app.core.database import get_db
 from app.core.security import hash_password
 from app.hotels.models import Hotel
 from app.platform_admin import features as feat
+from app.platform_admin.models import PlatformConfig
+
+
+async def _plan_price_overrides(db: AsyncSession) -> dict:
+    row = await db.get(PlatformConfig, 1)
+    return dict(row.plan_prices) if row and row.plan_prices else {}
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
@@ -90,9 +96,36 @@ async def list_hotels(
 
 
 @router.get("/plans")
-async def list_plans(_: User = Depends(require_platform_owner)) -> dict:
-    """Subscription plans (bundle of features + limits) for the Control Room."""
-    return {"plans": feat.plans_public()}
+async def list_plans(db: AsyncSession = Depends(get_db)) -> dict:
+    """Subscription plans (features + limits + current prices). PUBLIC so the landing
+    page can render live pricing; contains no sensitive data."""
+    return {"plans": feat.plans_public(await _plan_price_overrides(db))}
+
+
+class PlanPrices(BaseModel):
+    prices: dict[str, str] = Field(default_factory=dict)  # plan_key -> "£89/mo"
+
+
+@router.patch("/plans/prices")
+async def set_plan_prices(
+    body: PlanPrices,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Operator edits the displayed price of each plan (Control Room)."""
+    clean = {k: v.strip() for k, v in body.prices.items() if feat.is_valid_plan(k) and v.strip()}
+    row = await db.get(PlatformConfig, 1)
+    if row is None:
+        row = PlatformConfig(id=1, plan_prices=clean)
+        db.add(row)
+    else:
+        row.plan_prices = clean
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.plan_prices",
+        summary=f"Plan prices updated: {clean}"[:300],
+    )
+    return {"plans": feat.plans_public(clean)}
 
 
 class AssignPlan(BaseModel):

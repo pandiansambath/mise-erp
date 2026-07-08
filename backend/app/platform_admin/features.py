@@ -156,11 +156,14 @@ def plan_max_users(plan_key: str) -> int:
     return p.max_users if p else 100000
 
 
-def plans_public() -> list[dict]:
-    """Serialisable plans for the Control Room + the public landing page."""
+def plans_public(price_overrides: dict | None = None) -> list[dict]:
+    """Serialisable plans for the Control Room + the public landing page. The operator
+    can override each plan's display price (price_overrides: plan_key -> string)."""
+    ov = price_overrides or {}
     return [
         {
-            "key": p.key, "label": p.label, "price_hint": p.price_hint,
+            "key": p.key, "label": p.label,
+            "price_hint": ov.get(p.key) or p.price_hint,
             "max_users": p.max_users, "blurb": p.blurb,
             "highlights": list(p.highlights), "off_features": list(p.off_features),
         }

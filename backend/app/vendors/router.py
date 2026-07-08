@@ -237,3 +237,20 @@ async def list_vendor_items(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
     items = await service.list_vendor_items(db, vendor_id)
     return [VendorItemOut.model_validate(i) for i in items]
+
+
+@router.delete("/{vendor_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_vendor_item(
+    vendor_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> Response:
+    """Remove this vendor's price for an item (the item itself stays)."""
+    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+    ok = await service.delete_vendor_item(db, vendor_id, item_id)
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This vendor has no price for that item")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

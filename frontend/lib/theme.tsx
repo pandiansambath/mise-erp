@@ -241,6 +241,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, t);
   }, []);
 
+  // Apply the theme's CSS variables to :root (documentElement) so EVERYTHING —
+  // including popovers portaled to <body> (e.g. the Select dropdown) — inherits the
+  // active theme, not the default. Fixes green dropdowns while on a brown theme.
+  useEffect(() => {
+    const root = document.documentElement;
+    const vars = themeVars(theme) as unknown as Record<string, string>;
+    for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
+    root.setAttribute("data-mode", THEMES[theme].light ? "light" : "dark");
+    root.style.colorScheme = THEMES[theme].light ? "light" : "dark";
+  }, [theme]);
+
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 }
 

@@ -40,6 +40,7 @@ export default function SalesPage() {
   // cash form
   const [opening, setOpening] = useState("");
   const [counted, setCounted] = useState("");
+  const [carried, setCarried] = useState(false); // opening auto-filled from yesterday's close
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -47,8 +48,22 @@ export default function SalesPage() {
   const loadDay = async (d: string) => {
     const s = await api.get<DaySummary>(`/sales/days/${d}`);
     setSummary(s);
-    setOpening(s.opening_cash ?? "");
     setCounted(s.cash_counted ?? "");
+    setCarried(false);
+    if (s.opening_cash) {
+      setOpening(s.opening_cash);
+    } else {
+      // Auto-carry: yesterday's closing count becomes today's opening (editable).
+      const prev = new Date(d + "T00:00:00");
+      prev.setDate(prev.getDate() - 1);
+      try {
+        const ps = await api.get<DaySummary>(`/sales/days/${localISODate(prev)}`);
+        setOpening(ps.cash_counted ?? "");
+        setCarried(Boolean(ps.cash_counted && ps.cash_counted !== ""));
+      } catch {
+        setOpening("");
+      }
+    }
   };
 
   useEffect(() => {
@@ -317,11 +332,16 @@ export default function SalesPage() {
               <label className="block text-fg-faint">Opening cash</label>
               <input
                 value={opening}
-                onChange={(e) => setOpening(numeric(e.target.value))}
+                onChange={(e) => { setOpening(numeric(e.target.value)); setCarried(false); }}
                 inputMode="decimal"
                 disabled={!canWrite}
                 className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2"
               />
+              {carried && (
+                <p className="mt-1 text-[11px] text-brand-400">
+                  ↩ carried from yesterday&apos;s closing count — edit if you added/removed cash.
+                </p>
+              )}
             </div>
             <div className="flex justify-between border-t border-line pt-3 text-fg-soft">
               <span>+ Cash sales</span>

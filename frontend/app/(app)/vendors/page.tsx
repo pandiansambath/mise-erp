@@ -181,6 +181,27 @@ export default function VendorsPage() {
     }
   }
 
+  async function removeVendorItem(vi: VendorItem) {
+    const name = itemName(vi.item_id);
+    const ok = await confirm({
+      title: `Remove ${selectedVendor?.name}'s price for ${name}?`,
+      message:
+        "This removes ONLY this supplier's price for the item — the item, its stock and recipes all " +
+        "stay. If this is the cheapest / ★ chosen supplier, recipe costs and ordering switch to the " +
+        "next option (or fall back to average cost if no supplier is left). Past purchase orders are " +
+        "unaffected and the price history is kept. You can re-add the price anytime.",
+      confirmText: "Remove price",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/vendors/${selected}/items/${vi.item_id}`);
+      setVendorItems(await api.get<VendorItem[]>(`/vendors/${selected}/items`));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove the price");
+    }
+  }
+
   if (loading) return <Spinner />;
 
   const itemName = (id: string) => {
@@ -397,7 +418,22 @@ export default function VendorsPage() {
                             ) : null;
                           })()}
                         </td>
-                        <td className="px-4 py-2 text-right">{vi.is_preferred && <Badge tone="amber">★ chosen</Badge>}</td>
+                        <td className="px-4 py-2 text-right">
+                          <span className="flex items-center justify-end gap-2">
+                            {vi.is_preferred && <Badge tone="amber">★ chosen</Badge>}
+                            {canWrite && (
+                              <button
+                                type="button"
+                                onClick={() => removeVendorItem(vi)}
+                                title="Remove this vendor's price for this item"
+                                aria-label={`Remove price for ${itemName(vi.item_id)}`}
+                                className="rounded-md border border-line px-1.5 py-0.5 text-xs text-fg-faint transition hover:border-rose-400/50 hover:bg-rose-400/10 hover:text-rose-300"
+                              >
+                                🗑
+                              </button>
+                            )}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

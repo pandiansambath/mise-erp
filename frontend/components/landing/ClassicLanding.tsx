@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 import { Spinner } from "@/components/ui";
+import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 /* ────────────────────────────── content ─────────────────────────────────── */
@@ -640,6 +641,19 @@ export default function ClassicLanding() {
   const [intro, setIntro] = useState<Intro>("pending");
   const heroIn = intro === "leaving" || intro === "done";
 
+  // Live plan prices set by the operator in the Control Room (public endpoint).
+  const [livePrices, setLivePrices] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch(`${API_BASE}/api/platform/plans`)
+      .then((r) => r.json())
+      .then((d) => {
+        const m: Record<string, string> = {};
+        for (const p of d.plans ?? []) m[p.key] = p.price_hint;
+        setLivePrices(m);
+      })
+      .catch(() => {});
+  }, []);
+
   useDarkDocument();
   // Native scroll is GPU-accelerated and smoother than a JS wheel-lerp on real
   // hardware/browsers — the lerp was causing the "stuck" feel, so it's disabled.
@@ -982,8 +996,12 @@ export default function ClassicLanding() {
                   <h3 className="text-lg font-semibold text-white">{t.name}</h3>
                   <p className="mt-1 text-sm text-slate-400">{t.blurb}</p>
                   <p className="mt-5 flex items-baseline gap-1.5">
-                    <span className="font-display text-4xl text-white">{t.price}</span>
-                    {t.per && <span className="text-sm text-slate-400">{t.per}</span>}
+                    <span className="font-display text-4xl text-white">
+                      {(livePrices[t.name.toLowerCase()] ?? `${t.price}${t.per}`).replace(/\/mo$/, "")}
+                    </span>
+                    {(livePrices[t.name.toLowerCase()] ?? `${t.price}${t.per}`).endsWith("/mo") && (
+                      <span className="text-sm text-slate-400">/mo</span>
+                    )}
                   </p>
                   <ul className="mt-6 space-y-2.5 text-sm text-slate-300">
                     {t.features.map((f) => (

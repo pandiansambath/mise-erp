@@ -289,6 +289,28 @@ export default function ControlRoomPage() {
     load().catch(() => setErr("Could not load the Control Room.")).finally(() => setLoading(false));
   }, [load, user]);
 
+  // Plan-price editor (operator sets the displayed prices; the landing reads them).
+  const [priceEdits, setPriceEdits] = useState<Record<string, string>>({});
+  const [savingPrices, setSavingPrices] = useState(false);
+  const [priceMsg, setPriceMsg] = useState<string | null>(null);
+  useEffect(() => {
+    setPriceEdits(Object.fromEntries(plans.map((p) => [p.key, p.price_hint])));
+  }, [plans]);
+
+  async function savePrices() {
+    setSavingPrices(true);
+    setPriceMsg(null);
+    try {
+      const res = await api.patch<{ plans: PlanDef[] }>("/platform/plans/prices", { prices: priceEdits });
+      setPlans(res.plans);
+      setPriceMsg("Saved ✓ — live on the landing page.");
+    } catch {
+      setPriceMsg("Could not save prices.");
+    } finally {
+      setSavingPrices(false);
+    }
+  }
+
   async function toggle(hotelId: string, key: string, value: boolean) {
     const prev = hotels;
     setHotels((hs) => hs.map((h) => (h.id === hotelId ? { ...h, features: { ...h.features, [key]: value } } : h)));
@@ -329,6 +351,43 @@ export default function ControlRoomPage() {
         <StatCard label="AI enabled" value={`${aiOn}/${hotels.length}`} accent="copper" hint="Ask Mise" />
         <StatCard label="Features" value={String(features.length)} accent="amber" hint="per hotel" />
       </div>
+
+      {plans.length > 0 && (
+        <Card className="mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-fg">Plans &amp; pricing</h3>
+              <p className="text-xs text-fg-faint">Edit each plan&apos;s displayed price — it updates the public pricing page instantly.</p>
+            </div>
+            <button
+              onClick={savePrices}
+              disabled={savingPrices}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              {savingPrices ? "Saving…" : "Save prices"}
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {plans.map((p) => (
+              <div key={p.key} className="rounded-xl border border-line bg-paper-2/40 p-3">
+                <p className="flex items-center justify-between text-sm font-medium text-fg">
+                  {p.label}
+                  <span className="text-[11px] text-fg-faint">
+                    {p.max_users >= 100000 ? "∞ users" : `${p.max_users} users`}
+                  </span>
+                </p>
+                <input
+                  value={priceEdits[p.key] ?? ""}
+                  onChange={(e) => setPriceEdits({ ...priceEdits, [p.key]: e.target.value })}
+                  placeholder="e.g. £79/mo"
+                  className="mt-2 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+                />
+              </div>
+            ))}
+          </div>
+          {priceMsg && <p className="mt-2 text-xs text-brand-400">{priceMsg}</p>}
+        </Card>
+      )}
 
       <div className="mb-4">
         <input

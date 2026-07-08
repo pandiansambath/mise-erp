@@ -116,6 +116,23 @@ async def upsert_vendor_item(
     return vi
 
 
+async def delete_vendor_item(
+    db: AsyncSession, vendor_id: uuid.UUID, item_id: uuid.UUID
+) -> bool:
+    """Remove ONE vendor's price for an item. Leaves the inventory item, its stock,
+    recipes, past POs and price history untouched — only this supplier link goes."""
+    vi = (await db.execute(
+        select(VendorItem).where(
+            VendorItem.vendor_id == vendor_id, VendorItem.item_id == item_id
+        )
+    )).scalar_one_or_none()
+    if vi is None:
+        return False
+    await db.delete(vi)
+    await db.commit()
+    return True
+
+
 async def item_price_history(
     db: AsyncSession, hotel_id: uuid.UUID, item_id: uuid.UUID, *, limit: int = 100
 ) -> list[dict]:
