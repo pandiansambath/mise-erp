@@ -148,7 +148,7 @@ function CashCard() {
 
 export default function Reports() {
   return (
-    <section id="reports" className="relative overflow-hidden">
+    <section id="reports" className="mise-cv relative overflow-hidden">
       {/* the liquid-gold cinematic, veiled */}
       <img
         src="/experience/gold.jpg"

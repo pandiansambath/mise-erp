@@ -32,7 +32,7 @@ const VOICES = [
 
 export default function Testimonials() {
   return (
-    <section className="relative overflow-hidden border-t border-white/5">
+    <section className="mise-cv relative overflow-hidden border-t border-white/5">
       <img
         src="/experience/garden.jpg"
         alt=""

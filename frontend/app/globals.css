@@ -660,3 +660,8 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 @media (prefers-reduced-motion: reduce) {
   .mise-l-ken, .mise-l-orb, .mise-l-caret { animation: none; }
 }
+
+/* Skip layout/paint for sections far off-screen — big scroll-perf win on
+   long pages. The intrinsic size keeps the scrollbar stable. */
+.mise-cv { content-visibility: auto; contain-intrinsic-size: auto 900px; }
+.mise-cv-screen { content-visibility: auto; contain-intrinsic-size: auto 100vh; }

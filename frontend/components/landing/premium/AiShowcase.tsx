@@ -138,7 +138,7 @@ function Chat() {
 
 export default function AiShowcase() {
   return (
-    <section id="copilot" className="relative overflow-hidden border-t border-white/5 bg-[#02080a]">
+    <section id="copilot" className="mise-cv relative overflow-hidden border-t border-white/5 bg-[#02080a]">
       {/* the orb's glow bleeds over the whole section */}
       <div className="pointer-events-none absolute left-1/2 top-0 h-[560px] w-[860px] -translate-x-1/2 -translate-y-1/3 rounded-full opacity-60 blur-3xl"
         style={{ background: "radial-gradient(closest-side, rgba(16,185,129,0.28), rgba(234,183,138,0.12), transparent 70%)" }}

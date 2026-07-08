@@ -82,7 +82,7 @@ export default function Pricing() {
   }, []);
 
   return (
-    <section id="pricing" className="relative overflow-hidden border-t border-white/5">
+    <section id="pricing" className="mise-cv relative overflow-hidden border-t border-white/5">
       {/* dawn sky, barely there */}
       <img
         src="/experience/sky.jpg"

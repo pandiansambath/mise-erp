@@ -1,48 +1,134 @@
 "use client";
 
-// Two-act hero. Act 1: pure cinema — the floating dish under a spotlight with
-// the brand line. Act 2: as you scroll, the film fades and the real product —
-// a live dashboard simulation — rises and straightens into view. One sticky
-// viewport, all transform/opacity (GPU-cheap), no scroll hijacking.
+// Two-act hero. Act 1: the fire-to-dish film plays ONCE on arrival and settles
+// into the plate still under the brand line. Act 2: as you scroll, the film
+// fades and the real product — a live dashboard simulation — rises and
+// straightens into view.
+//
+// Performance: scroll drives everything through REFS with direct style writes
+// inside one rAF — zero React re-renders per frame, transform/opacity only.
 
 import Link from "next/link";
-import { btnGhost, btnPrimary, Magnetic, usePrefersReducedMotion, useScrollProgress } from "./bits";
+import { useEffect, useRef, useState } from "react";
+import { btnGhost, btnPrimary, Magnetic } from "./bits";
 import DashboardSim from "./DashboardSim";
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
-/** Remap progress so a phase runs 0→1 between a and b. */
 const phase = (p: number, a: number, b: number) => clamp01((p - a) / (b - a));
 
-export default function Hero() {
-  const { ref, p } = useScrollProgress<HTMLElement>();
-  const reduced = usePrefersReducedMotion();
+export default function Hero({ start }: { start: boolean }) {
+  const wrapRef = useRef<HTMLElement>(null);
+  const filmRef = useRef<HTMLDivElement>(null); // dish still + entry film
+  const skyRef = useRef<HTMLImageElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  const dashRef = useRef<HTMLDivElement>(null);
+  const capRef = useRef<HTMLDivElement>(null);
+  const cueRef = useRef<HTMLDivElement>(null);
+  const vidRef = useRef<HTMLVideoElement>(null);
+  const [film, setFilm] = useState<"idle" | "playing" | "done">("idle");
 
-  const fade = phase(p, 0.05, 0.5); // headline + film out
-  const rise = phase(p, 0.12, 0.85); // dashboard in
-  const eased = 1 - Math.pow(1 - rise, 3);
+  // ── the entry film: flame settles into the plate ──
+  useEffect(() => {
+    if (!start || film !== "idle") return;
+    const el = vidRef.current;
+    if (!el) return;
+    type NetInfo = { saveData?: boolean };
+    const conn = (navigator as Navigator & { connection?: NetInfo }).connection;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || conn?.saveData) {
+      setFilm("done");
+      return;
+    }
+    el.play()
+      .then(() => setFilm("playing"))
+      .catch(() => setFilm("done"));
+  }, [start, film]);
+
+  // ── scroll → direct style writes, no re-renders ──
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0;
+    let last = -1;
+
+    const update = () => {
+      const rect = wrap.getBoundingClientRect();
+      const total = rect.height - window.innerHeight;
+      const p = clamp01(total > 0 ? -rect.top / total : 0);
+      if (Math.abs(p - last) < 0.0015) return;
+      last = p;
+
+      const fade = phase(p, 0.05, 0.5); // headline + film out
+      const rise = phase(p, 0.12, 0.85); // dashboard in
+      const eased = 1 - Math.pow(1 - rise, 3);
+
+      if (filmRef.current) {
+        filmRef.current.style.opacity = String(1 - fade * 0.96);
+        if (!reduced) filmRef.current.style.transform = `scale(${1.06 + p * 0.1})`;
+      }
+      if (skyRef.current) skyRef.current.style.opacity = String(fade * 0.42);
+      if (headRef.current) {
+        headRef.current.style.opacity = String(1 - fade * 1.35);
+        if (!reduced) headRef.current.style.transform = `translateY(${fade * -46}px)`;
+        headRef.current.style.pointerEvents = fade > 0.5 ? "none" : "";
+      }
+      if (dashRef.current) {
+        dashRef.current.style.transform = reduced
+          ? "translateY(4%)"
+          : `translateY(${(1 - eased) * 66}%) rotateX(${(1 - eased) * 18}deg) scale(${0.94 + eased * 0.06})`;
+      }
+      if (capRef.current) capRef.current.style.opacity = String(phase(p, 0.45, 0.75));
+      if (cueRef.current) cueRef.current.style.opacity = String(1 - phase(p, 0.01, 0.08));
+    };
+
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
 
   return (
-    <section ref={ref} className="relative" style={{ height: "230vh" }}>
+    <section ref={wrapRef} className="relative" style={{ height: "230vh" }}>
       <div className="sticky top-0 h-screen overflow-hidden bg-ink-950">
-        {/* Act 1 backdrop — the dish */}
-        <img
-          src="/experience/dish.jpg"
-          alt=""
-          fetchPriority="high"
-          className="absolute inset-0 h-full w-full object-cover"
-          style={{
-            opacity: 1 - fade * 0.96,
-            transform: reduced ? undefined : `scale(${1.06 + p * 0.1})`,
-            transformOrigin: "50% 42%",
-          }}
-        />
+        {/* Act 1 backdrop — the dish (still + one-shot entry film) */}
+        <div ref={filmRef} className="absolute inset-0" style={{ transformOrigin: "50% 42%" }}>
+          <img
+            src="/experience/dish.jpg"
+            alt=""
+            fetchPriority="high"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <video
+            ref={vidRef}
+            muted
+            playsInline
+            preload="auto"
+            src="/experience/film/fire-to-dish.mp4"
+            onEnded={() => setFilm("done")}
+            onError={() => setFilm("done")}
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{ opacity: film === "playing" ? 1 : 0, transition: "opacity 700ms ease" }}
+          />
+        </div>
         {/* Act 2 backdrop — above the clouds */}
         <img
+          ref={skyRef}
           src="/experience/sky.jpg"
           alt=""
           loading="lazy"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
-          style={{ opacity: fade * 0.42 }}
+          style={{ opacity: 0 }}
         />
         {/* veils — keep type readable, blend edges into ink */}
         <div className="absolute inset-0 bg-gradient-to-b from-ink-950/85 via-ink-950/10 to-ink-950" />
@@ -50,14 +136,10 @@ export default function Hero() {
 
         {/* Act 1 — headline */}
         <div
+          ref={headRef}
           className="absolute inset-x-0 top-[14vh] z-10 flex flex-col items-center px-6 text-center sm:top-[15vh]"
-          style={{
-            opacity: 1 - fade * 1.35,
-            transform: reduced ? undefined : `translateY(${fade * -46}px)`,
-            pointerEvents: fade > 0.5 ? "none" : undefined,
-          }}
         >
-          <span className="mise-enter is-in inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3.5 py-1.5 font-mono text-[11px] tracking-[0.3em] text-copper-200 backdrop-blur">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3.5 py-1.5 font-mono text-[11px] tracking-[0.3em] text-copper-200 backdrop-blur">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
             THE HOTEL OPERATING SYSTEM
           </span>
@@ -85,27 +167,14 @@ export default function Hero() {
         </div>
 
         {/* Act 2 — the product rises */}
-        <div
-          className="absolute inset-x-0 bottom-0 z-20 flex justify-center"
-          style={{ perspective: "1400px" }}
-        >
-          <div
-            className="origin-bottom"
-            style={{
-              transform: reduced
-                ? "translateY(4%)"
-                : `translateY(${(1 - eased) * 66}%) rotateX(${(1 - eased) * 18}deg) scale(${0.94 + eased * 0.06})`,
-            }}
-          >
+        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center" style={{ perspective: "1400px" }}>
+          <div ref={dashRef} className="origin-bottom" style={{ transform: "translateY(66%) rotateX(18deg) scale(0.94)" }}>
             <DashboardSim />
           </div>
         </div>
 
         {/* caption that appears with the dashboard */}
-        <div
-          className="pointer-events-none absolute inset-x-0 top-[7vh] z-10 text-center"
-          style={{ opacity: phase(p, 0.45, 0.75) }}
-        >
+        <div ref={capRef} className="pointer-events-none absolute inset-x-0 top-[7vh] z-10 text-center" style={{ opacity: 0 }}>
           <p className="font-mono text-[11px] tracking-[0.35em] text-brand-300/90">THIS IS MISE</p>
           <p className="mt-2 font-display text-2xl text-white sm:text-3xl">
             Your whole operation, <em className="text-copper-200">live</em>.
@@ -114,8 +183,8 @@ export default function Hero() {
 
         {/* scroll cue — sits BELOW the rising dashboard so the window covers it */}
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-6 z-[15] flex flex-col items-center gap-1.5"
-          style={{ opacity: 1 - phase(p, 0.01, 0.08), transition: "opacity 300ms" }}
+          ref={cueRef}
+          className="pointer-events-none absolute inset-x-0 bottom-6 z-[15] flex flex-col items-center gap-1.5 transition-opacity duration-300"
         >
           <span className="font-mono text-[10px] tracking-[0.35em] text-white/70">SCROLL</span>
           <span className="mise-scroll-chevron text-white/70">↓</span>

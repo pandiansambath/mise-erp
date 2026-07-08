@@ -15,6 +15,7 @@ import { Brand } from "@/components/Brand";
 import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 import AiShowcase from "./AiShowcase";
+import Arrival from "./Arrival";
 import { Counter, Magnetic, useDarkDocument } from "./bits";
 import FeatureTour from "./FeatureTour";
 import FinalCta from "./FinalCta";
@@ -55,7 +56,8 @@ function ScrollProgress() {
   );
 }
 
-/** A soft emerald spotlight that follows the cursor (fine pointers only). */
+/** A soft emerald spotlight that follows the cursor (fine pointers only).
+    A fixed-size layer moved with translate3d — compositor-only, no repaints. */
 function CursorGlow() {
   const ref = useRef<HTMLDivElement>(null);
   const [on, setOn] = useState(false);
@@ -68,7 +70,7 @@ function CursorGlow() {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         if (ref.current) {
-          ref.current.style.background = `radial-gradient(560px circle at ${e.clientX}px ${e.clientY}px, rgba(16,185,129,0.055), transparent 65%)`;
+          ref.current.style.transform = `translate3d(${e.clientX - 280}px, ${e.clientY - 280}px, 0)`;
         }
       });
     };
@@ -79,7 +81,53 @@ function CursorGlow() {
     };
   }, []);
   if (!on) return null;
-  return <div ref={ref} className="pointer-events-none fixed inset-0 z-[5]" aria-hidden />;
+  return (
+    <div
+      ref={ref}
+      className="pointer-events-none fixed left-0 top-0 z-[5] h-[560px] w-[560px] rounded-full will-change-transform"
+      style={{
+        background: "radial-gradient(circle, rgba(16,185,129,0.055), transparent 65%)",
+        transform: "translate3d(-600px, -600px, 0)",
+      }}
+      aria-hidden
+    />
+  );
+}
+
+/** Quietly pre-warms every journey still + film into the HTTP cache after the
+    veil lifts, one at a time, so nothing pops in when the visitor scrolls. */
+function usePreWarm(ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    type NetInfo = { saveData?: boolean };
+    const conn = (navigator as Navigator & { connection?: NetInfo }).connection;
+    if (conn?.saveData) return;
+    let cancelled = false;
+    const stills = ["sky", "forest", "source", "garden", "fire", "gold", "table", "restaurant", "dawn", "mountains"];
+    const films = [
+      "sky-to-mountains", "mountains-to-forest", "forest-to-source", "source-to-garden",
+      "garden-to-fire", "table-to-gold", "dish-to-restaurant", "restaurant-to-table", "gold-to-dawn",
+    ];
+    const t = window.setTimeout(async () => {
+      for (const s of stills) {
+        if (cancelled) return;
+        const im = new Image();
+        im.src = `/experience/${s}.jpg`;
+      }
+      for (const f of films) {
+        if (cancelled) return;
+        try {
+          await fetch(`/experience/film/${f}.mp4`, { cache: "force-cache" });
+        } catch {
+          /* offline / aborted — the scene still shows its still */
+        }
+      }
+    }, 1200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [ready]);
 }
 
 function Nav() {
@@ -93,7 +141,7 @@ function Nav() {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
-        solid ? "border-b border-white/5 bg-ink-950/75 backdrop-blur-xl" : "bg-transparent"
+        solid ? "border-b border-white/5 bg-ink-950/95 sm:bg-ink-950/75 sm:backdrop-blur-xl" : "bg-transparent"
       }`}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-6">
@@ -207,6 +255,7 @@ export default function PremiumLanding() {
     const t = window.setTimeout(done, 1600);
     return () => window.clearTimeout(t);
   }, []);
+  usePreWarm(ready);
 
   return (
     <div className="mise-dark-page min-h-screen bg-ink-950 text-slate-100">
@@ -229,12 +278,13 @@ export default function PremiumLanding() {
       <Nav />
 
       <main>
-        <Hero />
+        <Hero start={ready} />
         <TrustStrip />
         <Story />
         <FeatureTour />
         <AiShowcase />
         <Reports />
+        <Arrival />
         <Pricing />
         <Testimonials />
         <FinalCta />

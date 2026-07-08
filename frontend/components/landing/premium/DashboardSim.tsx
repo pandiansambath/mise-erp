@@ -112,7 +112,7 @@ export default function DashboardSim() {
   return (
     <div ref={ref} className="relative w-[min(1060px,94vw)]">
       {/* the app window */}
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800/95 to-ink-900/95 shadow-2xl shadow-black/60 ring-1 ring-white/5 backdrop-blur-xl">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800 to-ink-900 shadow-2xl shadow-black/60 ring-1 ring-white/5">
         {/* chrome */}
         <div className="flex items-center gap-1.5 border-b border-white/5 px-4 py-2.5">
           <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
