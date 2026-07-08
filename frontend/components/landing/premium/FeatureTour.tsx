@@ -1,28 +1,45 @@
 "use client";
 
-// The product tour. Desktop: a sticky mock panel on the right morphs while the
-// feature copy scrolls on the left (scroll drives the active feature — no icon
-// grid). Mobile: each feature card carries its own mini-mock inline.
+// The product tour. Desktop: a sticky demo panel on the right MORPHS while the
+// feature copy scrolls on the left. Every demo is ALIVE — rows light up in
+// sequence, values blip, badges pulse — the machine visibly running, never a
+// dead screenshot. Mobile: each feature card carries its own live mini-demo.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Reveal } from "@/components/Reveal";
-import { SectionHead } from "./bits";
+import { Aurora, Counter, SectionHead, useTick } from "./bits";
 
-/* ────────────────────────── mock panels ────────────────────────── */
+/* ────────────────────────── live demo panels ────────────────────────── */
 
-function Row({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`flex items-center gap-3 text-[12px] ${className}`}>{children}</div>;
+function Row({ children, hot = false, className = "" }: { children: ReactNode; hot?: boolean; className?: string }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-lg text-[12px] transition-colors duration-500 ${hot ? "mise-l-live-row" : ""} ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 function Bar({ pct, tone = "from-brand-500 to-brand-300" }: { pct: number; tone?: string }) {
   return (
     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-      <span className={`block h-full rounded-full bg-gradient-to-r ${tone}`} style={{ width: `${pct}%` }} />
+      <span
+        className={`block h-full rounded-full bg-gradient-to-r ${tone}`}
+        style={{ width: `${pct}%`, transition: "width 700ms cubic-bezier(0.22,1,0.36,1)" }}
+      />
+    </span>
+  );
+}
+
+function LiveDot() {
+  return (
+    <span className="ml-auto inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-brand-300/90">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" /> live
     </span>
   );
 }
 
 function MockInventory() {
+  const hot = useTick(4, 2000);
   const rows = [
     { n: "Basmati rice", v: "42 kg", pct: 84, low: false },
     { n: "Chicken breast", v: "6 kg", pct: 48, low: false },
@@ -31,13 +48,13 @@ function MockInventory() {
   ];
   return (
     <div className="space-y-2.5">
-      {rows.map((r) => (
-        <Row key={r.n} className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2.5">
+      {rows.map((r, i) => (
+        <Row key={r.n} hot={hot === i} className="border border-white/5 bg-white/[0.03] px-3 py-2.5">
           <span className="w-28 shrink-0 truncate text-slate-200">{r.n}</span>
-          <Bar pct={r.pct} tone={r.low ? "from-amber-500 to-amber-300" : "from-brand-500 to-brand-300"} />
-          <span className="w-14 shrink-0 text-right font-mono text-[11px] text-slate-400">{r.v}</span>
+          <Bar pct={r.pct + (hot === i ? 4 : 0)} tone={r.low ? "from-amber-500 to-amber-300" : "from-brand-500 to-brand-300"} />
+          <span className={`w-14 shrink-0 text-right font-mono text-[11px] text-slate-400 ${hot === i ? "mise-l-blip" : ""}`}>{r.v}</span>
           {r.low ? (
-            <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-medium text-amber-300">
+            <span className="shrink-0 animate-pulse rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-medium text-amber-300">
               LOW
             </span>
           ) : (
@@ -45,9 +62,12 @@ function MockInventory() {
           )}
         </Row>
       ))}
-      <p className="pt-1 font-mono text-[10px] text-slate-500">
-        Stock valued live at weighted-average cost · <span className="text-copper-200">£4,318 on the shelf</span>
-      </p>
+      <div className="flex items-center pt-1">
+        <p className="font-mono text-[10px] text-slate-500">
+          Shelf valued live · <span className="text-copper-200">£4,318</span>
+        </p>
+        <LiveDot />
+      </div>
     </div>
   );
 }
@@ -60,46 +80,56 @@ function MockRecipes() {
     { n: "Spice blend · 12 g", v: "£0.44" },
     { n: "Tomato base · 120 g", v: "£0.68" },
   ];
+  const hot = useTick(ing.length + 1, 1500); // final beat lands on the total
+  const totalHot = hot === ing.length;
   return (
     <div>
       <div className="flex items-baseline justify-between">
         <p className="text-sm font-semibold text-white">Butter Chicken</p>
-        <span className="rounded-full border border-brand-400/30 bg-brand-500/10 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-brand-300">
+        <span className={`rounded-full border border-brand-400/30 bg-brand-500/10 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-brand-300 ${totalHot ? "mise-l-blip" : ""}`}>
           71% GP
         </span>
       </div>
-      <div className="mt-3 space-y-1.5">
-        {ing.map((i) => (
-          <Row key={i.n} className="justify-between border-b border-white/5 pb-1.5">
+      <div className="mt-3 space-y-1">
+        {ing.map((i, idx) => (
+          <Row key={i.n} hot={hot === idx} className="justify-between border-b border-white/5 px-2 py-1.5">
             <span className="text-slate-300">{i.n}</span>
-            <span className="font-mono text-[11px] text-slate-400">{i.v}</span>
+            <span className={`font-mono text-[11px] text-slate-400 ${hot === idx ? "mise-l-blip text-copper-200" : ""}`}>{i.v}</span>
           </Row>
         ))}
       </div>
       <div className="mt-3 flex items-baseline justify-between">
         <span className="text-[12px] text-slate-400">Plate cost → menu £11.95</span>
-        <span className="font-mono text-lg font-bold text-copper-200">£3.41</span>
+        <span className={`font-mono text-lg font-bold text-copper-200 ${totalHot ? "mise-l-blip" : ""}`}>£3.41</span>
       </div>
-      <p className="mt-2 font-mono text-[10px] text-slate-500">Re-costs itself when any vendor price moves</p>
+      <div className="mt-2 flex items-center">
+        <p className="font-mono text-[10px] text-slate-500">Re-costs itself when any vendor price moves</p>
+        <LiveDot />
+      </div>
     </div>
   );
 }
 
 function MockPurchasing() {
+  const hot = useTick(3, 1900);
+  const pos = [
+    { v: "Rudra Foods", items: "5 items", total: "£43.60", tag: "cheapest on 5/5" },
+    { v: "Farm2Land", items: "4 items", total: "£28.90", tag: "cheapest on 4/4" },
+  ];
   return (
     <div className="space-y-2.5">
-      <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+      <div className={`rounded-lg border border-white/10 bg-white/[0.04] p-3 transition-colors duration-500 ${hot === 0 ? "mise-l-live-row" : ""}`}>
         <p className="text-[11px] font-medium text-slate-300">Kitchen indent · 9 items</p>
         <p className="mt-1 text-[11px] text-slate-500">Split by cheapest vendor →</p>
       </div>
-      {[
-        { v: "Rudra Foods", items: "5 items", total: "£43.60", tag: "cheapest on 5/5" },
-        { v: "Farm2Land", items: "4 items", total: "£28.90", tag: "cheapest on 4/4" },
-      ].map((po) => (
-        <div key={po.v} className="rounded-lg border border-brand-400/20 bg-brand-500/[0.06] p-3">
+      {pos.map((po, i) => (
+        <div
+          key={po.v}
+          className={`rounded-lg border border-brand-400/20 bg-brand-500/[0.06] p-3 transition-colors duration-500 ${hot === i + 1 ? "mise-l-live-row" : ""}`}
+        >
           <div className="flex items-baseline justify-between">
             <p className="text-[12px] font-semibold text-white">PO → {po.v}</p>
-            <p className="font-mono text-[12px] font-bold text-copper-200">{po.total}</p>
+            <p className={`font-mono text-[12px] font-bold text-copper-200 ${hot === i + 1 ? "mise-l-blip" : ""}`}>{po.total}</p>
           </div>
           <div className="mt-1 flex items-center justify-between">
             <p className="text-[11px] text-slate-400">{po.items}</p>
@@ -107,18 +137,26 @@ function MockPurchasing() {
           </div>
         </div>
       ))}
-      <p className="font-mono text-[10px] text-slate-500">Received → stock & costs update automatically</p>
+      <div className="flex items-center">
+        <p className="font-mono text-[10px] text-slate-500">Received → stock &amp; costs update automatically</p>
+        <LiveDot />
+      </div>
     </div>
   );
 }
 
 function MockStaff() {
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const hot = useTick(7, 1300);
+  const labour = 26 + (hot % 3);
   return (
     <div>
       <div className="grid grid-cols-7 gap-1.5">
         {days.map((d, i) => (
-          <div key={d} className="rounded-lg border border-white/5 bg-white/[0.03] p-1.5 text-center">
+          <div
+            key={d}
+            className={`rounded-lg border border-white/5 bg-white/[0.03] p-1.5 text-center transition-colors duration-400 ${hot === i ? "mise-l-live-row" : ""}`}
+          >
             <p className="text-[9px] uppercase text-slate-500">{d}</p>
             <div className={`mt-1 rounded px-1 py-1 text-[9px] font-medium ${i === 5 || i === 6 ? "bg-copper-500/20 text-copper-200" : "bg-brand-500/15 text-brand-200"}`}>
               {i === 5 || i === 6 ? "3 shifts" : "2 shifts"}
@@ -128,17 +166,21 @@ function MockStaff() {
       </div>
       <Row className="mt-3.5">
         <span className="w-32 shrink-0 text-slate-300">Labour this week</span>
-        <Bar pct={27} />
-        <span className="shrink-0 font-mono text-[11px] font-semibold text-brand-300">27% of net sales</span>
+        <Bar pct={labour} />
+        <span className="shrink-0 font-mono text-[11px] font-semibold text-brand-300">
+          <span key={labour} className="mise-l-blip">{labour}%</span> of net sales
+        </span>
       </Row>
-      <p className="mt-3 font-mono text-[10px] text-slate-500">
-        Punch clock → attendance → UK-compliant payslips, one thread
-      </p>
+      <div className="mt-3 flex items-center">
+        <p className="font-mono text-[10px] text-slate-500">Punch clock → attendance → UK-compliant payslips</p>
+        <LiveDot />
+      </div>
     </div>
   );
 }
 
 function MockSales() {
+  const hot = useTick(4, 1700);
   const ch = [
     { n: "Dine-in", v: "£1,180", note: "no commission" },
     { n: "Deliveroo", v: "£412", note: "−28% commission" },
@@ -146,24 +188,29 @@ function MockSales() {
   ];
   return (
     <div className="space-y-2">
-      {ch.map((c) => (
-        <Row key={c.n} className="justify-between rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2.5">
+      {ch.map((c, i) => (
+        <Row key={c.n} hot={hot === i} className="justify-between border border-white/5 bg-white/[0.03] px-3 py-2.5">
           <span className="text-slate-200">{c.n}</span>
           <span className="text-[10px] text-slate-500">{c.note}</span>
-          <span className="font-mono text-[12px] font-semibold text-white">{c.v}</span>
+          <span className={`font-mono text-[12px] font-semibold text-white ${hot === i ? "mise-l-blip" : ""}`}>{c.v}</span>
         </Row>
       ))}
-      <div className="rounded-lg border border-brand-400/25 bg-brand-500/[0.07] px-3 py-2.5">
+      <div className={`rounded-lg border border-brand-400/25 bg-brand-500/[0.07] px-3 py-2.5 transition-colors duration-500 ${hot === 3 ? "mise-l-live-row" : ""}`}>
         <Row className="justify-between">
           <span className="font-medium text-brand-200">Till reconciled</span>
-          <span className="font-mono text-[12px] font-bold text-brand-300">variance £0.00 ✓</span>
+          <span className={`font-mono text-[12px] font-bold text-brand-300 ${hot === 3 ? "mise-l-blip" : ""}`}>variance £0.00 ✓</span>
         </Row>
+      </div>
+      <div className="flex items-center">
+        <p className="font-mono text-[10px] text-slate-500">Petty cash &amp; carry-over handled nightly</p>
+        <LiveDot />
       </div>
     </div>
   );
 }
 
 function MockReports() {
+  const hot = useTick(4, 1600);
   const rows = [
     { n: "Net sales", v: "£41,208", pct: 100, tone: "from-slate-400 to-slate-300" },
     { n: "Cost of sales", v: "−£11,950", pct: 29, tone: "from-amber-500 to-amber-300" },
@@ -173,20 +220,25 @@ function MockReports() {
   return (
     <div>
       <p className="text-[11px] font-medium text-slate-300">P&L · this month</p>
-      <div className="mt-2.5 space-y-2">
-        {rows.map((r) => (
-          <Row key={r.n}>
+      <div className="mt-2.5 space-y-1.5">
+        {rows.map((r, i) => (
+          <Row key={r.n} hot={hot === i} className="px-2 py-1">
             <span className="w-24 shrink-0 text-slate-300">{r.n}</span>
             <Bar pct={r.pct} tone={r.tone} />
-            <span className="w-20 shrink-0 text-right font-mono text-[11px] text-slate-400">{r.v}</span>
+            <span className={`w-20 shrink-0 text-right font-mono text-[11px] text-slate-400 ${hot === i ? "mise-l-blip" : ""}`}>{r.v}</span>
           </Row>
         ))}
       </div>
       <div className="mt-3 flex items-baseline justify-between rounded-lg border border-copper-400/25 bg-copper-500/[0.08] px-3 py-2.5">
         <span className="text-[12px] font-medium text-copper-200">Net profit</span>
-        <span className="font-mono text-base font-bold text-copper-200">£11,539 · 28%</span>
+        <span className="font-mono text-base font-bold text-copper-200">
+          <Counter value={11539} prefix="£" /> · 28%
+        </span>
       </div>
-      <p className="mt-2 font-mono text-[10px] text-slate-500">Excel / CSV / PDF export · food-cost variance vs ideal</p>
+      <div className="mt-2 flex items-center">
+        <p className="font-mono text-[10px] text-slate-500">Excel / CSV / PDF export · variance vs ideal</p>
+        <LiveDot />
+      </div>
     </div>
   );
 }
@@ -199,42 +251,42 @@ const FEATURES = [
     icon: "📦",
     title: "Inventory that knows its worth",
     body: "Live stock at weighted-average cost, low-stock alerts, waste log, stock-take variance — the shelf, valued in pounds at all times.",
-    mock: <MockInventory />,
+    Mock: MockInventory,
   },
   {
     key: "recipes",
     icon: "👨‍🍳",
     title: "Recipes costed to the gram",
     body: "Every dish knows its plate cost and margin, pulls live vendor prices, and re-costs itself the moment the market moves.",
-    mock: <MockRecipes />,
+    Mock: MockRecipes,
   },
   {
     key: "purchasing",
     icon: "🛒",
     title: "Purchasing on autopilot",
     body: "Kitchen indents become purchase orders grouped by the cheapest vendor. Receiving a delivery updates stock and costs in one tap.",
-    mock: <MockPurchasing />,
+    Mock: MockPurchasing,
   },
   {
     key: "staff",
     icon: "🧑‍🤝‍🧑",
     title: "Rota, attendance & payroll",
     body: "Shifts with break rules, a punch clock, salary advances and UK-compliant payslips — with labour % of sales watching the line.",
-    mock: <MockStaff />,
+    Mock: MockStaff,
   },
   {
     key: "sales",
     icon: "🧾",
     title: "Sales & a till that balances",
     body: "Takings by channel with delivery commissions handled, petty cash, and a cash drawer reconciled to the penny every night.",
-    mock: <MockSales />,
+    Mock: MockSales,
   },
   {
     key: "reports",
     icon: "📈",
     title: "Reports that end arguments",
     body: "A live P&L from gross to net, food-cost variance against ideal, budgets, menu engineering — one set of numbers for every role.",
-    mock: <MockReports />,
+    Mock: MockReports,
   },
 ];
 
@@ -258,9 +310,12 @@ export default function FeatureTour() {
     return () => io.disconnect();
   }, []);
 
+  const Active = FEATURES[active].Mock;
+
   return (
-    <section id="product" className="relative border-t border-white/5 bg-ink-950">
-      <div className="mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
+    <section id="product" className="relative overflow-hidden border-t border-white/5 bg-ink-950">
+      <Aurora strength={0.5} />
+      <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>
           <SectionHead
             kicker="ONE SYSTEM · EVERY DEPARTMENT"
@@ -310,8 +365,10 @@ export default function FeatureTour() {
                     >
                       {f.body}
                     </p>
-                    {/* inline mock on small screens */}
-                    <div className="mt-5 rounded-xl border border-white/10 bg-ink-900/80 p-4 lg:hidden">{f.mock}</div>
+                    {/* inline live demo on small screens */}
+                    <div className="mt-5 rounded-xl border border-white/10 bg-ink-900/80 p-4 lg:hidden">
+                      <f.Mock />
+                    </div>
                   </div>
                 </Reveal>
               </div>
@@ -327,21 +384,15 @@ export default function FeatureTour() {
                   <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
                   <span className="ml-2 font-mono text-[11px] text-slate-500">mise · {FEATURES[active].key}</span>
+                  <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-medium text-brand-200">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" /> Live
+                  </span>
                 </div>
-                <div className="relative min-h-[380px] p-6">
-                  {FEATURES.map((f, i) => (
-                    <div
-                      key={f.key}
-                      className="absolute inset-0 p-6 transition-all duration-500"
-                      style={{
-                        opacity: active === i ? 1 : 0,
-                        transform: active === i ? "translateY(0)" : "translateY(14px)",
-                        pointerEvents: active === i ? "auto" : "none",
-                      }}
-                    >
-                      {f.mock}
-                    </div>
-                  ))}
+                <div className="min-h-[360px] p-6">
+                  {/* remount per feature → entrance animation + fresh live cycle */}
+                  <div key={FEATURES[active].key} className="mise-card-slide">
+                    <Active />
+                  </div>
                 </div>
               </div>
               {/* progress dots */}

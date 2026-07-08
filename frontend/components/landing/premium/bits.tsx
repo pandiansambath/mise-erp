@@ -192,6 +192,53 @@ export function SectionHead({
   );
 }
 
+/** Drifting aurora light — the ambient thread that ties every section
+    together. Blurred blobs on their own compositor layers (cheap), with the
+    slow hue-melt from the design system. `strength` scales the presence. */
+export function Aurora({
+  strength = 1,
+  copper = true,
+  className = "",
+}: {
+  strength?: number;
+  copper?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`mise-aurora mise-aurora-shift ${className}`} style={{ opacity: strength }} aria-hidden>
+      <span
+        style={{ left: "-6%", top: "-12%", width: 480, height: 480, background: "radial-gradient(circle, #10b981, transparent 68%)" }}
+      />
+      <span
+        className="hidden sm:block"
+        style={{ right: "-8%", top: "14%", width: 440, height: 440, background: "radial-gradient(circle, #0ea5e9, transparent 70%)", animationDelay: "7s" }}
+      />
+      <span
+        style={{
+          left: "30%",
+          bottom: "-24%",
+          width: 520,
+          height: 520,
+          background: `radial-gradient(circle, ${copper ? "#c07b3e" : "#14b8a6"}, transparent 72%)`,
+          animationDelay: "13s",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Cycles 0..n-1 on an interval — the heartbeat behind "live" demo panels. */
+export function useTick(n: number, ms = 2200) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (n <= 1) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => setI((v) => (v + 1) % n), ms);
+    return () => window.clearInterval(id);
+  }, [n, ms]);
+  return i;
+}
+
 export const btnPrimary =
   "mise-btn-shine inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-400 px-6 py-3 text-base font-semibold text-ink-950 shadow-xl shadow-brand-500/25 transition duration-300 hover:shadow-2xl hover:shadow-brand-400/30";
 

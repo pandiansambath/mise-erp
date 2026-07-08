@@ -1,11 +1,13 @@
 "use client";
 
-// The journey — five full-screen beats that teach the product by watching:
-// the world (where food begins) → the ingredient (a price) → one source
-// (the platform) → the kitchen (live costing) → the money (a living P&L).
-// Each beat is normal scroll with a one-shot morph film that settles into a
-// crisp still. No pinning, no scrubbing, no loops.
+// The journey — ONE continuous cinema. The backdrop is a pinned stage where
+// five scenes CROSSFADE into each other as the copy glides over them: the
+// world → the ingredient → one source → the kitchen → the money. Each scene
+// plays its one-shot morph film when it takes the stage and rewinds when it
+// leaves, so the journey replays on every pass. No hard cuts anywhere —
+// scenes melt, text rises, the story reads itself.
 
+import { useEffect, useRef, useState } from "react";
 import { Reveal } from "@/components/Reveal";
 import CineMedia from "./CineMedia";
 
@@ -72,38 +74,97 @@ const alignCls: Record<Beat["align"], string> = {
 };
 
 export default function Story() {
+  const [active, setActive] = useState(0);
+  const beatRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // The copy block nearest the viewport centre owns the stage.
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const idx = beatRefs.current.indexOf(e.target as HTMLDivElement);
+          if (idx >= 0) setActive(idx);
+        }
+      },
+      { rootMargin: "-45% 0px -45% 0px" },
+    );
+    beatRefs.current.forEach((el) => el && io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <section id="story" aria-label="How Mise works">
-      {BEATS.map((b) => (
-        <div key={b.still} className="mise-cv-screen relative flex min-h-screen items-center overflow-hidden">
-          <CineMedia still={b.still} videos={b.videos} dim={0.38} />
-          <div className="relative z-10 mx-auto w-full max-w-6xl px-6 sm:px-10">
-            <div className={`max-w-xl ${alignCls[b.align]}`}>
-              <Reveal>
-                <p className="font-mono text-[11px] tracking-[0.4em] text-copper-200/90 sm:text-xs">{b.kicker}</p>
-              </Reveal>
-              <Reveal delay={110}>
-                <h2 className="mt-5 font-display text-4xl leading-[1.05] tracking-tight text-white drop-shadow-[0_2px_28px_rgba(0,0,0,0.65)] sm:text-6xl">
-                  {b.title[0]}
-                  <span className="block">{b.title[1]}</span>
-                </h2>
-              </Reveal>
-              <Reveal delay={220}>
-                <p className="mt-6 text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg">{b.body}</p>
-              </Reveal>
-              {b.chip ? (
-                <Reveal delay={330}>
-                  <div className="mt-7 inline-block rounded-2xl border border-white/15 bg-black/45 p-4 text-left backdrop-blur-md">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">{b.chip.label}</p>
-                    <p className="mt-1 font-mono text-lg font-semibold text-copper-200 sm:text-xl">{b.chip.value}</p>
-                    <p className="mt-0.5 font-mono text-[11px] text-brand-300/90">{b.chip.sub}</p>
-                  </div>
+    <section id="story" aria-label="How Mise works" className="relative">
+      {/* ── the pinned cinema stage — scenes melt into each other ── */}
+      <div className="sticky top-0 h-screen overflow-hidden">
+        {BEATS.map((b, i) => (
+          <div
+            key={b.still}
+            className="absolute inset-0"
+            style={{
+              opacity: active === i ? 1 : 0,
+              transform: `scale(${active === i ? 1 : 1.045})`,
+              transition: "opacity 1100ms ease, transform 1400ms ease",
+              pointerEvents: "none",
+            }}
+          >
+            <CineMedia still={b.still} videos={b.videos} dim={0.38} on={active === i} />
+          </div>
+        ))}
+
+        {/* journey progress — five embers along the bottom of the stage */}
+        <div className="absolute inset-x-0 bottom-7 z-10 flex justify-center gap-2.5">
+          {BEATS.map((b, i) => (
+            <span
+              key={b.still}
+              className="h-1.5 rounded-full transition-all duration-700"
+              style={{
+                width: active === i ? 26 : 6,
+                background: active === i ? "var(--color-copper-300)" : "rgba(255,255,255,0.22)",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── the copy glides over the stage ── */}
+      <div className="relative z-10 -mt-[100vh]">
+        {BEATS.map((b, i) => (
+          <div
+            key={b.still}
+            ref={(el) => {
+              beatRefs.current[i] = el;
+            }}
+            className="flex min-h-screen items-center"
+          >
+            <div className="mx-auto w-full max-w-6xl px-6 sm:px-10">
+              <div className={`max-w-xl ${alignCls[b.align]}`}>
+                <Reveal>
+                  <p className="font-mono text-[11px] tracking-[0.4em] text-copper-200/90 sm:text-xs">{b.kicker}</p>
                 </Reveal>
-              ) : null}
+                <Reveal delay={110}>
+                  <h2 className="mt-5 font-display text-4xl leading-[1.05] tracking-tight text-white drop-shadow-[0_2px_28px_rgba(0,0,0,0.65)] sm:text-6xl">
+                    {b.title[0]}
+                    <span className="block">{b.title[1]}</span>
+                  </h2>
+                </Reveal>
+                <Reveal delay={220}>
+                  <p className="mt-6 text-base leading-relaxed text-slate-200/90 drop-shadow sm:text-lg">{b.body}</p>
+                </Reveal>
+                {b.chip ? (
+                  <Reveal delay={330}>
+                    <div className="mt-7 inline-block rounded-2xl border border-white/15 bg-black/45 p-4 text-left backdrop-blur-md">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">{b.chip.label}</p>
+                      <p className="mt-1 font-mono text-lg font-semibold text-copper-200 sm:text-xl">{b.chip.value}</p>
+                      <p className="mt-0.5 font-mono text-[11px] text-brand-300/90">{b.chip.sub}</p>
+                    </div>
+                  </Reveal>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </section>
   );
 }

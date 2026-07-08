@@ -10,11 +10,23 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { btnGhost, btnPrimary, Magnetic } from "./bits";
+import { Aurora, btnGhost, btnPrimary, Magnetic } from "./bits";
 import DashboardSim from "./DashboardSim";
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const phase = (p: number, a: number, b: number) => clamp01((p - a) / (b - a));
+
+// Embers + steam motes drifting up around the plate — position, tint, pace.
+const MOTES = [
+  { left: "18%", size: 5, tint: "rgba(234,183,138,0.8)", t: 12, x: 42, o: 0.5, d: 0 },
+  { left: "30%", size: 3, tint: "rgba(167,243,208,0.7)", t: 14, x: -30, o: 0.4, d: 3.5, sm: true },
+  { left: "42%", size: 4, tint: "rgba(234,183,138,0.75)", t: 10, x: 24, o: 0.55, d: 1.2 },
+  { left: "52%", size: 6, tint: "rgba(246,216,184,0.6)", t: 15, x: -46, o: 0.4, d: 5.4 },
+  { left: "63%", size: 3, tint: "rgba(167,243,208,0.65)", t: 11, x: 36, o: 0.45, d: 2.3, sm: true },
+  { left: "72%", size: 4, tint: "rgba(234,183,138,0.8)", t: 13, x: -22, o: 0.5, d: 6.8 },
+  { left: "84%", size: 5, tint: "rgba(246,216,184,0.55)", t: 16, x: 30, o: 0.4, d: 4.1, sm: true },
+  { left: "10%", size: 3, tint: "rgba(167,243,208,0.6)", t: 13, x: 26, o: 0.4, d: 8.2, sm: true },
+];
 
 export default function Hero({ start }: { start: boolean }) {
   const wrapRef = useRef<HTMLElement>(null);
@@ -26,10 +38,35 @@ export default function Hero({ start }: { start: boolean }) {
   const cueRef = useRef<HTMLDivElement>(null);
   const vidRef = useRef<HTMLVideoElement>(null);
   const [film, setFilm] = useState<"idle" | "playing" | "done">("idle");
+  const [visible, setVisible] = useState(true);
+
+  // Leaving the hero rewinds the entry film so it replays on the way back.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) setVisible(e.isIntersecting);
+      },
+      { threshold: 0.02 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (visible) return;
+    const el = vidRef.current;
+    if (el) {
+      el.pause();
+      try { el.currentTime = 0; } catch { /* not loaded yet */ }
+    }
+    setFilm("idle");
+  }, [visible]);
 
   // ── the entry film: flame settles into the plate ──
   useEffect(() => {
-    if (!start || film !== "idle") return;
+    if (!start || !visible || film !== "idle") return;
     const el = vidRef.current;
     if (!el) return;
     type NetInfo = { saveData?: boolean };
@@ -42,7 +79,7 @@ export default function Hero({ start }: { start: boolean }) {
     el.play()
       .then(() => setFilm("playing"))
       .catch(() => setFilm("done"));
-  }, [start, film]);
+  }, [start, visible, film]);
 
   // ── scroll → direct style writes, no re-renders ──
   useEffect(() => {
@@ -106,7 +143,7 @@ export default function Hero({ start }: { start: boolean }) {
             alt=""
             fetchPriority="high"
             decoding="async"
-            className="absolute inset-0 h-full w-full object-cover"
+            className="mise-l-ken absolute inset-0 h-full w-full object-cover"
           />
           <video
             ref={vidRef}
@@ -130,6 +167,27 @@ export default function Hero({ start }: { start: boolean }) {
           className="absolute inset-0 h-full w-full object-cover"
           style={{ opacity: 0 }}
         />
+        {/* aurora breathing at the edges + embers rising off the plate */}
+        <Aurora strength={0.32} />
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          {MOTES.map((m, i) => (
+            <span
+              key={i}
+              className={`mise-l-mote ${m.sm ? "hidden sm:block" : ""}`}
+              style={{
+                left: m.left,
+                width: m.size,
+                height: m.size,
+                background: m.tint,
+                animationDelay: `${m.d}s`,
+                ["--mote-t" as string]: `${m.t}s`,
+                ["--mote-x" as string]: `${m.x}px`,
+                ["--mote-o" as string]: m.o,
+              }}
+            />
+          ))}
+        </div>
+
         {/* veils — keep type readable, blend edges into ink */}
         <div className="absolute inset-0 bg-gradient-to-b from-ink-950/85 via-ink-950/10 to-ink-950" />
         <div className="absolute inset-0" style={{ boxShadow: "inset 0 0 220px 60px rgba(2,8,6,0.55)" }} />

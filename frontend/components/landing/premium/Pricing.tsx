@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Reveal } from "@/components/Reveal";
 import { API_BASE } from "@/lib/api";
-import { Magnetic, SectionHead } from "./bits";
+import { Aurora, Magnetic, SectionHead } from "./bits";
 
 const PLANS = [
   {
@@ -91,6 +91,7 @@ export default function Pricing() {
         className="absolute inset-0 h-full w-full object-cover opacity-[0.14]"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-ink-950/85 to-ink-950" />
+      <Aurora strength={0.45} />
 
       <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>

@@ -5,7 +5,7 @@
 // are hand-rolled SVG/CSS so they animate at 60fps with zero dependencies.
 
 import { Reveal } from "@/components/Reveal";
-import { Counter, SectionHead, useInView } from "./bits";
+import { Aurora, Counter, SectionHead, useInView } from "./bits";
 
 const PNL = [
   { n: "Net sales", v: "£41,208", pct: 100, deduct: false },
@@ -157,6 +157,7 @@ export default function Reports() {
         className="absolute inset-0 h-full w-full object-cover opacity-30"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-ink-950/60 to-ink-950" />
+      <Aurora strength={0.4} />
 
       <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>

@@ -4,7 +4,7 @@
 // the AURUM exterior — the "restaurant that runs on Mise".
 
 import { Reveal } from "@/components/Reveal";
-import { SectionHead } from "./bits";
+import { Aurora, SectionHead } from "./bits";
 
 const VOICES = [
   {
@@ -40,6 +40,7 @@ export default function Testimonials() {
         className="absolute inset-0 h-full w-full object-cover opacity-[0.16]"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-ink-950/80 to-ink-950" />
+      <Aurora strength={0.4} />
 
       <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>

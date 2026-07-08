@@ -16,7 +16,7 @@ import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 import AiShowcase from "./AiShowcase";
 import Arrival from "./Arrival";
-import { Counter, Magnetic, useDarkDocument } from "./bits";
+import { Aurora, Counter, Magnetic, useDarkDocument } from "./bits";
 import FeatureTour from "./FeatureTour";
 import FinalCta from "./FinalCta";
 import Hero from "./Hero";
@@ -186,8 +186,10 @@ const STATS = [
 
 function TrustStrip() {
   return (
-    <section className="border-y border-white/5 bg-white/[0.02]">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-12 sm:px-10 lg:grid-cols-4">
+    <section className="relative overflow-hidden border-y border-white/5 bg-white/[0.02]">
+      <Aurora strength={0.35} />
+      <div className="mise-dots pointer-events-none absolute inset-0" />
+      <div className="relative mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-12 sm:px-10 lg:grid-cols-4">
         {STATS.map((s, i) => (
           <Reveal key={s.label} delay={i * 80}>
             <div className="text-center">
@@ -207,8 +209,9 @@ function TrustStrip() {
 
 function Footer() {
   return (
-    <footer className="border-t border-white/5 bg-ink-950">
-      <div className="mx-auto max-w-6xl px-6 py-14 sm:px-10">
+    <footer className="relative overflow-hidden border-t border-white/5 bg-ink-950">
+      <Aurora strength={0.25} />
+      <div className="relative mx-auto max-w-6xl px-6 py-14 sm:px-10">
         <div className="flex flex-col items-start justify-between gap-8 sm:flex-row sm:items-center">
           <div>
             <Brand size={30} wordClassName="text-xl text-white" />

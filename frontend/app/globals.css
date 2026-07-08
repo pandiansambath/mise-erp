@@ -665,3 +665,39 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
    long pages. The intrinsic size keeps the scrollbar stable. */
 .mise-cv { content-visibility: auto; contain-intrinsic-size: auto 900px; }
 .mise-cv-screen { content-visibility: auto; contain-intrinsic-size: auto 100vh; }
+
+/* Embers/steam motes drifting up through the hero — pure transform/opacity. */
+@keyframes mise-l-mote {
+  0%   { transform: translate3d(0, 0, 0) scale(0.8); opacity: 0; }
+  12%  { opacity: var(--mote-o, 0.5); }
+  85%  { opacity: var(--mote-o, 0.5); }
+  100% { transform: translate3d(var(--mote-x, 30px), -78vh, 0) scale(1.25); opacity: 0; }
+}
+.mise-l-mote {
+  position: absolute;
+  bottom: 8vh;
+  border-radius: 9999px;
+  filter: blur(1.5px);
+  animation: mise-l-mote var(--mote-t, 11s) linear infinite;
+  will-change: transform, opacity;
+}
+
+/* "The machine is running" — a row the demo panel is currently touching. */
+.mise-l-live-row {
+  background: color-mix(in srgb, var(--color-brand-500) 12%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand-400) 35%, transparent);
+  transition: background 400ms ease, box-shadow 400ms ease;
+}
+
+/* Value blip when a demo number is touched. */
+@keyframes mise-l-blip {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.mise-l-blip { animation: mise-l-blip 0.5s ease-out; display: inline-block; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-l-mote { animation: none; opacity: 0; }
+  .mise-l-blip { animation: none; }
+}

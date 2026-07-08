@@ -1,17 +1,16 @@
 "use client";
 
 // Full-bleed cinematic backdrop: a crisp still with up to TWO chained one-shot
-// "morph" films layered above it. When the scene enters view (or immediately,
-// with `eager`), film 1 fades in and plays once; if a second film is chained
-// it takes over on the exact frame the first ended on; then the layer fades
-// away to the still — motion that settles, never a loop or a scrub.
+// "morph" films layered above it. When the scene comes on (scroll-into-view,
+// or an external `on` signal from the journey stage) the film fades in and
+// plays once, then settles to the still. Leaving the scene REWINDS it, so
+// coming back replays the moment — the site never goes dead on a second look.
 //
-// Films play on every device (they're ~1MB each and pre-warmed into the HTTP
-// cache by the landing shell). Only data-saver and reduced-motion visitors
-// get stills alone.
+// Films play on every device (~0.5–1MB each, pre-warmed into the HTTP cache).
+// Only data-saver and reduced-motion visitors get stills alone.
 
 import { useEffect, useRef, useState } from "react";
-import { useInView, usePrefersReducedMotion } from "./bits";
+import { usePrefersReducedMotion } from "./bits";
 
 type Stage = "idle" | "v0" | "v1" | "settled";
 
@@ -19,7 +18,7 @@ export default function CineMedia({
   still,
   videos = [],
   dim = 0.45,
-  eager = false,
+  on,
   className = "",
 }: {
   /** file name under /experience, without extension */
@@ -28,16 +27,17 @@ export default function CineMedia({
   videos?: string[];
   /** 0–1 darkness of the veil laid over the media */
   dim?: number;
-  /** start playing as soon as allowed instead of waiting for scroll-into-view */
-  eager?: boolean;
+  /** external play signal (journey stage); omit to self-observe visibility */
+  on?: boolean;
   className?: string;
 }) {
-  const { ref, inView } = useInView<HTMLDivElement>(0.3);
+  const ref = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
   const v0 = useRef<HTMLVideoElement>(null);
   const v1 = useRef<HTMLVideoElement>(null);
   const [allowed, setAllowed] = useState(false);
   const [stage, setStage] = useState<Stage>("idle");
+  const [seen, setSeen] = useState(false); // self-observed visibility
 
   useEffect(() => {
     type NetInfo = { saveData?: boolean };
@@ -45,15 +45,53 @@ export default function CineMedia({
     setAllowed(videos.length > 0 && !reduced && !conn?.saveData);
   }, [videos.length, reduced]);
 
-  const go = eager || inView;
+  // Self-observe only when no external signal is given. Live (not once):
+  // leaving re-arms the scene.
   useEffect(() => {
-    if (!go || !allowed || stage !== "idle") return;
-    const el = v0.current;
+    if (on !== undefined) return;
+    const el = ref.current;
     if (!el) return;
-    el.play()
-      .then(() => setStage("v0"))
-      .catch(() => setStage("settled"));
-  }, [go, allowed, stage]);
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) setSeen(e.isIntersecting);
+      },
+      { threshold: 0.3 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [on]);
+
+  const active = on !== undefined ? on : seen;
+
+  // Play when active; rewind + re-arm when not.
+  useEffect(() => {
+    const a = v0.current;
+    const b = v1.current;
+    if (!active) {
+      setStage("idle");
+      if (a) {
+        a.pause();
+        try { a.currentTime = 0; } catch { /* not loaded yet */ }
+      }
+      if (b) {
+        b.pause();
+        try { b.currentTime = 0; } catch { /* not loaded yet */ }
+      }
+      return;
+    }
+    if (!allowed) {
+      setStage("settled");
+      return;
+    }
+    // Let the stage crossfade land before the film starts.
+    const t = window.setTimeout(() => {
+      v0.current
+        ?.play()
+        .then(() => setStage("v0"))
+        .catch(() => setStage("settled"));
+    }, 380);
+    return () => window.clearTimeout(t);
+  }, [active, allowed]);
 
   const advance = (from: 0 | 1) => {
     if (from === 0 && videos[1] && v1.current) {
@@ -71,9 +109,9 @@ export default function CineMedia({
       <img
         src={`/experience/${still}.jpg`}
         alt=""
-        loading={eager ? "eager" : "lazy"}
+        loading="lazy"
         decoding="async"
-        className={`absolute inset-0 h-full w-full object-cover ${reduced || !go ? "" : "mise-l-ken"}`}
+        className={`absolute inset-0 h-full w-full object-cover ${reduced || !active ? "" : "mise-l-ken"}`}
       />
       {allowed ? (
         <>
@@ -104,7 +142,7 @@ export default function CineMedia({
         </>
       ) : null}
       <div className="absolute inset-0" style={{ background: `rgba(2,8,6,${dim})` }} />
-      <div className="absolute inset-0 bg-gradient-to-b from-ink-950/70 via-transparent to-ink-950/80" />
+      <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-transparent to-ink-950" />
     </div>
   );
 }

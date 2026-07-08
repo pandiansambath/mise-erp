@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Reveal } from "@/components/Reveal";
-import { SectionHead, useInView, usePrefersReducedMotion } from "./bits";
+import { Aurora, SectionHead, useInView, usePrefersReducedMotion } from "./bits";
 
 const CONVOS = [
   {
@@ -143,6 +143,7 @@ export default function AiShowcase() {
       <div className="pointer-events-none absolute left-1/2 top-0 h-[560px] w-[860px] -translate-x-1/2 -translate-y-1/3 rounded-full opacity-60 blur-3xl"
         style={{ background: "radial-gradient(closest-side, rgba(16,185,129,0.28), rgba(234,183,138,0.12), transparent 70%)" }}
       />
+      <Aurora strength={0.55} />
       <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>
           <div className="flex justify-center">
