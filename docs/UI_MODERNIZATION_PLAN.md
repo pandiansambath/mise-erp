@@ -26,6 +26,25 @@
 - **Performance guardrails**: no per-frame React state on scroll (refs + direct
   style writes), `content-visibility` for long pages, lazy heavy panels.
 
+## 📊 CHARTS & DATA-VIZ MANDATE (user 2026-07-09: "add pie charts, bar charts, statistics — whatever you can")
+Every page that shows data gets AT LEAST one visualization. Hand-rolled animated
+SVG (components/charts.tsx) — no chart library, self-drawing on scroll-into-view,
+theme-aware via tokens. The vocabulary:
+- **Donut/pie** → composition (expense categories, sales by channel, stock by category)
+- **Bars** → comparison (vendor spend, dish margins, staff hours)
+- **Line/area + sparkline** → trends (sales 14d, price history, cash position)
+- **Meter** → target vs actual (food cost %, labour %, budgets)
+
+## ✨ INTERACTION STANDARDS ("jaw-dropping, not just OK" — apply everywhere)
+- Buttons: hover lift + shine sweep, **press-down scale** (.mise-press), busy state morphs to spinner-in-button
+- Numbers NEVER pop in — always AnimatedNumber count-up
+- Rows/cards: hover lift + border glow; NEW rows slide-in; deleted rows collapse
+- Tabs/segmented controls: sliding active indicator (not color-swap only)
+- Toggles: springy knob; checkboxes: draw-in tick
+- Panels/drawers: slide+fade with spring easing, never instant
+- Skeleton shimmer while loading; EmptyStates always designed with a CTA
+- Focus-visible rings on everything (accessibility = premium)
+
 ## DEFINITION OF DONE — every page must pass this checklist
 - [ ] Reads correctly in dark AND light mode
 - [ ] Mobile (390px), tablet (768px), desktop (1280px+) verified via Playwright screenshots
