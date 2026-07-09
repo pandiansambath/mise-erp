@@ -177,29 +177,94 @@ function Nav() {
 
 /* ─────────────────────── trust strip ─────────────────────── */
 
-const STATS = [
-  { value: 11, suffix: "", label: "departments, one login" },
-  { value: 0, custom: "Per-gram", label: "recipe costing accuracy" },
-  { value: 0, custom: "£ / ₹ / $", label: "multi-currency, multi-property" },
-  { value: 99.9, custom: "99.9%", label: "uptime target, cloud-hosted" },
+const DEPARTMENTS = [
+  "📦 Inventory",
+  "👨‍🍳 Recipes & costing",
+  "🛒 Purchasing",
+  "🧾 Sales & cash",
+  "🗓 Rota & attendance",
+  "💷 Payroll",
+  "✨ AI Copilot",
+  "📈 Reports & P&L",
+  "🏨 Multi-property",
+  "🧾 Expenses & taxes",
+  "📄 Documents & food safety",
 ];
+
+/** A £ figure that keeps ticking up while you watch — the platform, running. */
+function LiveMoney() {
+  const [v, setV] = useState(47318);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(
+      () => setV((x) => x + 14 + Math.round(Math.random() * 58)),
+      1700,
+    );
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <span key={v} className="mise-l-blip inline-block">
+      £{v.toLocaleString("en-GB")}
+    </span>
+  );
+}
 
 function TrustStrip() {
   return (
-    <section className="relative overflow-hidden border-y border-white/5 bg-white/[0.02]">
-      <Aurora strength={0.35} />
+    <section className="relative overflow-hidden bg-white/[0.02]">
+      <Aurora strength={0.4} />
       <div className="mise-dots pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-12 sm:px-10 lg:grid-cols-4">
-        {STATS.map((s, i) => (
-          <Reveal key={s.label} delay={i * 80}>
-            <div className="text-center">
-              <p className="font-display text-3xl text-white sm:text-4xl">
-                {s.custom ?? <Counter value={s.value} suffix={s.suffix} />}
-              </p>
-              <p className="mt-1.5 text-[12px] text-slate-500 sm:text-sm">{s.label}</p>
-            </div>
-          </Reveal>
-        ))}
+      <div className="relative mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 pb-8 pt-12 sm:px-10 lg:grid-cols-4">
+        <Reveal>
+          <div className="text-center">
+            <p className="font-display text-3xl text-copper-200 sm:text-4xl">
+              <LiveMoney />
+            </p>
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] text-slate-500 sm:text-sm">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
+              tracked through Mise today
+            </p>
+          </div>
+        </Reveal>
+        <Reveal delay={80}>
+          <div className="text-center">
+            <p className="font-display text-3xl text-white sm:text-4xl">
+              <Counter value={11} />
+            </p>
+            <p className="mt-1.5 text-[12px] text-slate-500 sm:text-sm">departments, one login</p>
+          </div>
+        </Reveal>
+        <Reveal delay={160}>
+          <div className="text-center">
+            <p className="font-display text-3xl text-white sm:text-4xl">Per-gram</p>
+            <p className="mt-1.5 text-[12px] text-slate-500 sm:text-sm">recipe costing accuracy</p>
+          </div>
+        </Reveal>
+        <Reveal delay={240}>
+          <div className="text-center">
+            <p className="font-display text-3xl text-white sm:text-4xl">99.9%</p>
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] text-slate-500 sm:text-sm">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
+              uptime, cloud-hosted
+            </p>
+          </div>
+        </Reveal>
+      </div>
+
+      {/* the whole house, gliding by — constant gentle motion */}
+      <div className="relative pb-10">
+        <div className="mise-marquee-mask overflow-hidden">
+          <div className="mise-marquee gap-3 pr-3">
+            {[...DEPARTMENTS, ...DEPARTMENTS].map((d, i) => (
+              <span
+                key={`${d}-${i}`}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300"
+              >
+                {d}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -209,7 +274,7 @@ function TrustStrip() {
 
 function Footer() {
   return (
-    <footer className="relative overflow-hidden border-t border-white/5 bg-ink-950">
+    <footer className="relative overflow-hidden bg-ink-950">
       <Aurora strength={0.25} />
       <div className="relative mx-auto max-w-6xl px-6 py-14 sm:px-10">
         <div className="flex flex-col items-start justify-between gap-8 sm:flex-row sm:items-center">
@@ -243,12 +308,15 @@ function Footer() {
 export default function PremiumLanding() {
   useDarkDocument();
 
-  // A brief veil so the hero image never pops in half-loaded. Lifts on load
-  // or after 1.6s, whichever comes first.
+  // A brief veil so the hero opening frame never pops in half-loaded. The
+  // hero opens on the FIRE (the entry film's first frame), so that's the
+  // image we wait for. Lifts on load or after 1.6s, whichever comes first.
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const img = new Image();
-    img.src = "/experience/dish.jpg";
+    img.src = "/experience/fire.jpg";
+    const dish = new Image();
+    dish.src = "/experience/dish.jpg"; // the film's destination — warm it too
     const done = () => setReady(true);
     if (img.complete) done();
     else {

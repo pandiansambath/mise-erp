@@ -205,24 +205,28 @@ export function Aurora({
   className?: string;
 }) {
   return (
-    <div className={`mise-aurora mise-aurora-shift ${className}`} style={{ opacity: strength }} aria-hidden>
-      <span
-        style={{ left: "-6%", top: "-12%", width: 480, height: 480, background: "radial-gradient(circle, #10b981, transparent 68%)" }}
-      />
-      <span
-        className="hidden sm:block"
-        style={{ right: "-8%", top: "14%", width: 440, height: 440, background: "radial-gradient(circle, #0ea5e9, transparent 70%)", animationDelay: "7s" }}
-      />
-      <span
-        style={{
-          left: "30%",
-          bottom: "-24%",
-          width: 520,
-          height: 520,
-          background: `radial-gradient(circle, ${copper ? "#c07b3e" : "#14b8a6"}, transparent 72%)`,
-          animationDelay: "13s",
-        }}
-      />
+    // Self-clipping wrapper: the blobs never force `overflow-hidden` onto the
+    // host section (which would silently break position:sticky children).
+    <div className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`} aria-hidden>
+      <div className="mise-aurora mise-aurora-shift" style={{ opacity: strength }}>
+        <span
+          style={{ left: "-6%", top: "-12%", width: 480, height: 480, background: "radial-gradient(circle, #10b981, transparent 68%)" }}
+        />
+        <span
+          className="hidden sm:block"
+          style={{ right: "-8%", top: "14%", width: 440, height: 440, background: "radial-gradient(circle, #0ea5e9, transparent 70%)", animationDelay: "7s" }}
+        />
+        <span
+          style={{
+            left: "30%",
+            bottom: "-24%",
+            width: 520,
+            height: 520,
+            background: `radial-gradient(circle, ${copper ? "#c07b3e" : "#14b8a6"}, transparent 72%)`,
+            animationDelay: "13s",
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -1,15 +1,19 @@
 "use client";
 
-// The journey — ONE continuous cinema. The backdrop is a pinned stage where
-// five scenes CROSSFADE into each other as the copy glides over them: the
-// world → the ingredient → one source → the kitchen → the money. Each scene
-// plays its one-shot morph film when it takes the stage and rewinds when it
-// leaves, so the journey replays on every pass. No hard cuts anywhere —
-// scenes melt, text rises, the story reads itself.
+// The journey — ONE continuous cinema, directed by the films themselves.
+//
+// Sequencing (the fix for "I glimpse the next image before its video"):
+// each morph film STARTS on the world you are already looking at and ENDS on
+// the next scene's still. So when a beat takes the stage we play its film
+// OVER the current backdrop first — the first frame matches what's on screen,
+// no jump — and only when it finishes does the new still take the base. Going
+// backwards (or fast-skipping, or with data-saver on) falls back to a soft
+// still-to-still crossfade. Scrolling away re-arms everything, so the journey
+// replays on every pass.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Reveal } from "@/components/Reveal";
-import CineMedia from "./CineMedia";
+import { usePrefersReducedMotion } from "./bits";
 
 type Beat = {
   still: string;
@@ -73,9 +77,102 @@ const alignCls: Record<Beat["align"], string> = {
   right: "ml-auto text-right",
 };
 
+/** Plays a beat's film chain (1–2 clips) over the stage, then reports back. */
+function FilmLayer({
+  videos,
+  onDone,
+  onFail,
+  fading,
+}: {
+  videos: string[];
+  onDone: () => void;
+  onFail: () => void;
+  fading: boolean;
+}) {
+  const v0 = useRef<HTMLVideoElement>(null);
+  const v1 = useRef<HTMLVideoElement>(null);
+  const [seg, setSeg] = useState<"warmup" | "v0" | "v1">("warmup");
+
+  useEffect(() => {
+    const el = v0.current;
+    if (!el) return;
+    let cancelled = false;
+    el.play()
+      .then(() => {
+        if (!cancelled) setSeg("v0");
+      })
+      .catch(() => {
+        if (!cancelled) onFail();
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const advance = () => {
+    if (videos[1] && v1.current) {
+      v1.current
+        .play()
+        .then(() => setSeg("v1"))
+        .catch(onDone);
+    } else {
+      onDone();
+    }
+  };
+
+  return (
+    <div
+      className="absolute inset-0"
+      style={{ opacity: seg === "warmup" || fading ? 0 : 1, transition: "opacity 450ms ease" }}
+    >
+      <video
+        ref={v0}
+        muted
+        playsInline
+        preload="auto"
+        src={`/experience/film/${videos[0]}.mp4`}
+        onEnded={advance}
+        onError={onFail}
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ opacity: seg === "v1" ? 0 : 1, transition: "opacity 350ms ease" }}
+      />
+      {videos[1] ? (
+        <video
+          ref={v1}
+          muted
+          playsInline
+          preload="auto"
+          src={`/experience/film/${videos[1]}.mp4`}
+          onEnded={onDone}
+          onError={onDone}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ opacity: seg === "v1" ? 1 : 0, transition: "opacity 350ms ease" }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+type StageState = {
+  base: number; // the settled still on the stage
+  film: { to: number; run: number; fading: boolean } | null; // run = remount key
+};
+
 export default function Story() {
+  const reduced = usePrefersReducedMotion();
+  const [allowed, setAllowed] = useState(false);
   const [active, setActive] = useState(0);
+  const [st, setSt] = useState<StageState>({ base: 0, film: null });
+  const runRef = useRef(0);
+  const sectionRef = useRef<HTMLElement>(null);
   const beatRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    type NetInfo = { saveData?: boolean };
+    const conn = (navigator as Navigator & { connection?: NetInfo }).connection;
+    setAllowed(!reduced && !conn?.saveData);
+  }, [reduced]);
 
   // The copy block nearest the viewport centre owns the stage.
   useEffect(() => {
@@ -93,24 +190,89 @@ export default function Story() {
     return () => io.disconnect();
   }, []);
 
+  // Direct the stage: forward one step → the film IS the transition;
+  // anything else → soft crossfade of stills.
+  useEffect(() => {
+    setSt((s) => {
+      if (s.film && !s.film.fading) {
+        if (s.film.to === active) return s;
+        return { base: active, film: null }; // fast-scroll: cut to target
+      }
+      if (active === s.base) return s;
+      if (allowed && active === s.base + 1) {
+        runRef.current += 1;
+        return { ...s, film: { to: active, run: runRef.current, fading: false } };
+      }
+      return { base: active, film: null };
+    });
+  }, [active, allowed]);
+
+  // Entering the section from above plays the opening flythrough (beat 0);
+  // leaving above re-arms it for the next visit.
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const fromTop = e.boundingClientRect.top > 0;
+          if (e.isIntersecting && fromTop) {
+            setSt((s) => {
+              if (s.base !== 0 || s.film) return s;
+              runRef.current += 1;
+              return { ...s, film: { to: 0, run: runRef.current, fading: false } };
+            });
+          }
+        }
+      },
+      { threshold: 0.08 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const onFilmDone = useCallback(() => {
+    setSt((s) => (s.film ? { base: s.film.to, film: { ...s.film, fading: true } } : s));
+    window.setTimeout(() => {
+      setSt((s) => (s.film?.fading ? { ...s, film: null } : s));
+    }, 520);
+  }, []);
+
+  const onFilmFail = useCallback(() => {
+    setSt((s) => (s.film ? { base: s.film.to, film: null } : s));
+  }, []);
+
   return (
-    <section id="story" aria-label="How Mise works" className="relative">
-      {/* ── the pinned cinema stage — scenes melt into each other ── */}
+    <section ref={sectionRef} id="story" aria-label="How Mise works" className="relative">
+      {/* ── the pinned cinema stage ── */}
       <div className="sticky top-0 h-screen overflow-hidden">
+        {/* settled stills (crossfade base) */}
         {BEATS.map((b, i) => (
-          <div
+          <img
             key={b.still}
-            className="absolute inset-0"
-            style={{
-              opacity: active === i ? 1 : 0,
-              transform: `scale(${active === i ? 1 : 1.045})`,
-              transition: "opacity 1100ms ease, transform 1400ms ease",
-              pointerEvents: "none",
-            }}
-          >
-            <CineMedia still={b.still} videos={b.videos} dim={0.38} on={active === i} />
-          </div>
+            src={`/experience/${b.still}.jpg`}
+            alt=""
+            loading={i === 0 ? "eager" : "lazy"}
+            decoding="async"
+            className={`absolute inset-0 h-full w-full object-cover ${st.base === i && !reduced ? "mise-l-ken" : ""}`}
+            style={{ opacity: st.base === i ? 1 : 0, transition: "opacity 900ms ease" }}
+          />
         ))}
+
+        {/* the morph film, playing over the stage */}
+        {st.film ? (
+          <FilmLayer
+            key={st.film.run}
+            videos={BEATS[st.film.to].videos}
+            onDone={onFilmDone}
+            onFail={onFilmFail}
+            fading={st.film.fading}
+          />
+        ) : null}
+
+        {/* veils */}
+        <div className="pointer-events-none absolute inset-0" style={{ background: "rgba(2,8,6,0.38)" }} />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink-950 via-transparent to-ink-950" />
 
         {/* journey progress — five embers along the bottom of the stage */}
         <div className="absolute inset-x-0 bottom-7 z-10 flex justify-center gap-2.5">

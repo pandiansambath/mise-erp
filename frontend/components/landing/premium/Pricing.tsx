@@ -82,7 +82,7 @@ export default function Pricing() {
   }, []);
 
   return (
-    <section id="pricing" className="mise-cv relative overflow-hidden border-t border-white/5">
+    <section id="pricing" className="mise-cv relative overflow-hidden">
       {/* dawn sky, barely there */}
       <img
         src="/experience/sky.jpg"
@@ -93,7 +93,7 @@ export default function Pricing() {
       <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-ink-950/85 to-ink-950" />
       <Aurora strength={0.45} />
 
-      <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
+      <div className="relative mx-auto max-w-6xl px-6 py-20 sm:px-10 sm:py-24">
         <Reveal>
           <SectionHead
             kicker="PRICING"

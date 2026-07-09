@@ -159,7 +159,7 @@ export default function Reports() {
       <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-ink-950/60 to-ink-950" />
       <Aurora strength={0.4} />
 
-      <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
+      <div className="relative mx-auto max-w-6xl px-6 py-20 sm:px-10 sm:py-24">
         <Reveal>
           <SectionHead
             kicker="REPORTS"

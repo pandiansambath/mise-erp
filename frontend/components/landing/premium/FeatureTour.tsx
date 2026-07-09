@@ -313,7 +313,8 @@ export default function FeatureTour() {
   const Active = FEATURES[active].Mock;
 
   return (
-    <section id="product" className="relative overflow-hidden border-t border-white/5 bg-ink-950">
+    // No overflow-hidden on this section — it would break the sticky demo panel.
+    <section id="product" className="relative bg-ink-950">
       <Aurora strength={0.5} />
       <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>

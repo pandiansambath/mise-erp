@@ -16,13 +16,17 @@ type Stage = "idle" | "v0" | "v1" | "settled";
 
 export default function CineMedia({
   still,
+  preStill,
   videos = [],
   dim = 0.45,
   on,
   className = "",
 }: {
-  /** file name under /experience, without extension */
+  /** the DESTINATION still — what the scene settles on after the film */
   still: string;
+  /** the film's opening world — shown before/while the film starts, so the
+      first frame matches the backdrop and the destination is never spoiled */
+  preStill?: string;
   /** up to two /experience/film clips (no extension), played back-to-back */
   videos?: string[];
   /** 0–1 darkness of the veil laid over the media */
@@ -104,14 +108,29 @@ export default function CineMedia({
     }
   };
 
+  // Before/while the film runs, show its opening world; settle on the
+  // destination still only when the film lands (or when films are off).
+  const showPre = allowed && preStill && stage !== "settled";
+
   return (
     <div ref={ref} className={`absolute inset-0 overflow-hidden ${className}`} aria-hidden>
+      {preStill ? (
+        <img
+          src={`/experience/${preStill}.jpg`}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ opacity: showPre ? 1 : 0, transition: "opacity 600ms ease" }}
+        />
+      ) : null}
       <img
         src={`/experience/${still}.jpg`}
         alt=""
         loading="lazy"
         decoding="async"
         className={`absolute inset-0 h-full w-full object-cover ${reduced || !active ? "" : "mise-l-ken"}`}
+        style={preStill ? { opacity: showPre ? 0 : 1, transition: "opacity 600ms ease" } : undefined}
       />
       {allowed ? (
         <>

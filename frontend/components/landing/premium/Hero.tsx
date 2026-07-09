@@ -37,8 +37,22 @@ export default function Hero({ start }: { start: boolean }) {
   const capRef = useRef<HTMLDivElement>(null);
   const cueRef = useRef<HTMLDivElement>(null);
   const vidRef = useRef<HTMLVideoElement>(null);
+  // Entry-film sequencing (fix for "I see the plate, then fire, then plate"):
+  // when the film is allowed, the hero OPENS on the fire — the film's first
+  // frame — plays the flame-into-dish morph, and LANDS on the plate. The
+  // plate is the destination, never a spoiler. No film → plate from frame 1.
+  // Optimistically true so the FIRST paint is already the fire — never a
+  // flash of the plate. The effect corrects it for data-saver/reduced-motion.
+  const [allowed, setAllowed] = useState(true);
   const [film, setFilm] = useState<"idle" | "playing" | "done">("idle");
   const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    type NetInfo = { saveData?: boolean };
+    const conn = (navigator as Navigator & { connection?: NetInfo }).connection;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setAllowed(!reduced && !conn?.saveData);
+  }, []);
 
   // Leaving the hero rewinds the entry film so it replays on the way back.
   useEffect(() => {
@@ -64,22 +78,21 @@ export default function Hero({ start }: { start: boolean }) {
     setFilm("idle");
   }, [visible]);
 
-  // ── the entry film: flame settles into the plate ──
   useEffect(() => {
     if (!start || !visible || film !== "idle") return;
-    const el = vidRef.current;
-    if (!el) return;
-    type NetInfo = { saveData?: boolean };
-    const conn = (navigator as Navigator & { connection?: NetInfo }).connection;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced || conn?.saveData) {
+    if (!allowed) {
       setFilm("done");
       return;
     }
+    const el = vidRef.current;
+    if (!el) return;
     el.play()
       .then(() => setFilm("playing"))
       .catch(() => setFilm("done"));
-  }, [start, visible, film]);
+  }, [start, visible, allowed, film]);
+
+  // What the backdrop shows before/after the film.
+  const baseStill = allowed && film !== "done" ? "fire" : "dish";
 
   // ── scroll → direct style writes, no re-renders ──
   useEffect(() => {
@@ -136,14 +149,23 @@ export default function Hero({ start }: { start: boolean }) {
   return (
     <section ref={wrapRef} className="relative" style={{ height: "230vh" }}>
       <div className="sticky top-0 h-screen overflow-hidden bg-ink-950">
-        {/* Act 1 backdrop — the dish (still + one-shot entry film) */}
+        {/* Act 1 backdrop — fire (film start) morphing into the dish (destination) */}
         <div ref={filmRef} className="absolute inset-0" style={{ transformOrigin: "50% 42%" }}>
+          <img
+            src="/experience/fire.jpg"
+            alt=""
+            fetchPriority="high"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{ opacity: baseStill === "fire" ? 1 : 0, transition: "opacity 600ms ease" }}
+          />
           <img
             src="/experience/dish.jpg"
             alt=""
             fetchPriority="high"
             decoding="async"
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
+            style={{ opacity: baseStill === "dish" ? 1 : 0, transition: "opacity 600ms ease" }}
           />
           <video
             ref={vidRef}
@@ -154,7 +176,7 @@ export default function Hero({ start }: { start: boolean }) {
             onEnded={() => setFilm("done")}
             onError={() => setFilm("done")}
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ opacity: film === "playing" ? 1 : 0, transition: "opacity 700ms ease" }}
+            style={{ opacity: film === "playing" ? 1 : 0, transition: "opacity 350ms ease" }}
           />
         </div>
         {/* Act 2 backdrop — above the clouds */}

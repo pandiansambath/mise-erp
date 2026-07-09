@@ -32,7 +32,7 @@ const VOICES = [
 
 export default function Testimonials() {
   return (
-    <section className="mise-cv relative overflow-hidden border-t border-white/5">
+    <section className="mise-cv relative overflow-hidden">
       <img
         src="/experience/garden.jpg"
         alt=""
@@ -42,7 +42,7 @@ export default function Testimonials() {
       <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-ink-950/80 to-ink-950" />
       <Aurora strength={0.4} />
 
-      <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
+      <div className="relative mx-auto max-w-6xl px-6 py-20 sm:px-10 sm:py-24">
         <Reveal>
           <SectionHead
             kicker="OPERATORS"

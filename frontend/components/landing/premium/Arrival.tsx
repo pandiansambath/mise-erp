@@ -10,7 +10,7 @@ import CineMedia from "./CineMedia";
 export default function Arrival() {
   return (
     <section className="mise-cv-screen relative flex min-h-[92vh] items-center overflow-hidden">
-      <CineMedia still="table" videos={["dish-to-restaurant", "restaurant-to-table"]} dim={0.34} />
+      <CineMedia still="table" preStill="dish" videos={["dish-to-restaurant", "restaurant-to-table"]} dim={0.34} />
       <div className="relative z-10 mx-auto w-full max-w-4xl px-6 py-24 text-center sm:px-10">
         <Reveal>
           <p className="font-mono text-[11px] tracking-[0.4em] text-copper-200/90 sm:text-xs">06 · THE PAYOFF</p>
