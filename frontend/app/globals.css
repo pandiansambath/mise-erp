@@ -753,3 +753,14 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-shimmer, .mise-fade-in, .mise-drawer-in { animation: none; }
   .mise-press:active { transform: none; }
 }
+
+/* Wrong-credentials shake — the form says "no" like a head shake. */
+@keyframes mise-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+.mise-shake { animation: mise-shake 420ms ease; }
+@media (prefers-reduced-motion: reduce) { .mise-shake { animation: none; } }

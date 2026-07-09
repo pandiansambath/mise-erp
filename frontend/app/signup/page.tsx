@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { AuthBackdrop, PasswordInput, SubmitButton, authInput, authLabel } from "@/components/auth/bits";
+import { Sparkline } from "@/components/charts";
 import { Curtain, useCurtain } from "@/components/Curtain";
+import { AnimatedNumber } from "@/components/fx";
 import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 
@@ -46,6 +49,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [shake, setShake] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,25 +59,20 @@ export default function SignupPage() {
       await registerHotel({ hotel_name: hotelName, country, city: city || undefined, email, password });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register. Is the server running?");
+      setShake(true);
     } finally {
       setBusy(false);
     }
   }
 
-  const inputCls =
-    "mt-1.5 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-brand-400/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-brand-500/20";
-  const labelCls = "block text-sm font-medium text-slate-300";
+  const inputCls = `mt-1.5 ${authInput}`;
+  const labelCls = authLabel;
 
   return (
     <div className="mise-dark-page relative min-h-screen overflow-hidden bg-ink-950 text-slate-100">
       <Curtain show={curtain} label="Setting your tables…" />
-      {/* aurora backdrop — same colour-gliding treatment as the landing */}
-      <div className="mise-aurora mise-aurora-shift">
-        <span style={{ left: "-10%", top: "-15%", width: 560, height: 560, background: "radial-gradient(circle, #10b981, transparent 68%)" }} />
-        <span style={{ right: "-12%", bottom: "-20%", width: 520, height: 520, background: "radial-gradient(circle, #0ea5e9, transparent 70%)", animationDelay: "8s" }} />
-      </div>
-      <div className="mise-dots pointer-events-none absolute inset-0" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-ink-950/30 to-ink-950" />
+      {/* cinematic backdrop — the dawn: a new beginning */}
+      <AuthBackdrop still="dawn" />
 
       <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-12 px-5 py-12 lg:grid-cols-[1fr_minmax(0,440px)] lg:gap-20">
         {/* LEFT — the pitch (hidden on small screens) */}
@@ -107,7 +106,23 @@ export default function SignupPage() {
             </ul>
           </Reveal>
           <Reveal delay={330}>
-            <p className="mt-10 max-w-sm border-l border-white/10 pl-5 font-display text-lg italic leading-snug text-slate-400">
+            {/* a taste of the product: the live P&L card they'll wake up to */}
+            <div className="mt-9 max-w-sm rounded-2xl border border-white/10 bg-ink-900/70 p-5 shadow-2xl shadow-black/40 backdrop-blur">
+              <div className="flex items-baseline justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Net profit · this week</p>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" /> live
+                </span>
+              </div>
+              <p className="mt-1.5 font-mono text-2xl font-bold text-copper-200">
+                <AnimatedNumber value={3412} prefix="£" />
+              </p>
+              <Sparkline data={[380, 420, 361, 505, 468, 590, 688]} color="#eab78a" height={34} className="mt-2 h-[34px]" />
+              <p className="mt-2 font-mono text-[10px] text-slate-500">what your dashboard looks like from day one</p>
+            </div>
+          </Reveal>
+          <Reveal delay={410}>
+            <p className="mt-8 max-w-sm border-l border-white/10 pl-5 font-display text-lg italic leading-snug text-slate-400">
               “Great kitchens don&apos;t hope the numbers work. They prep them like everything else.”
             </p>
           </Reveal>
@@ -127,7 +142,8 @@ export default function SignupPage() {
 
             <form
               onSubmit={onSubmit}
-              className="space-y-4 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.02] p-7 shadow-2xl shadow-black/40 backdrop-blur-xl"
+              onAnimationEnd={() => setShake(false)}
+              className={`space-y-4 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.02] p-7 shadow-2xl shadow-black/40 backdrop-blur-xl ${shake ? "mise-shake" : ""}`}
             >
               <div className="hidden lg:block">
                 <h2 className="font-display text-2xl text-white">Register your hotel</h2>
@@ -156,20 +172,23 @@ export default function SignupPage() {
               </div>
               <div>
                 <label htmlFor="password" className={labelCls}>Password</label>
-                <input id="password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} placeholder="min 8 characters" className={inputCls} />
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="new-password"
+                  minLength={8}
+                  placeholder="min 8 characters"
+                />
               </div>
 
               {error && (
                 <p role="alert" className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200">{error}</p>
               )}
 
-              <button
-                type="submit"
-                disabled={busy}
-                className="mise-btn-shine w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-400 px-4 py-3 text-sm font-semibold text-ink-950 shadow-xl shadow-brand-500/25 transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60"
-              >
-                {busy ? "Creating your restaurant…" : "Create my restaurant"}
-              </button>
+              <SubmitButton busy={busy} busyLabel="Creating your restaurant…">
+                Create my restaurant
+              </SubmitButton>
 
               <p className="text-center text-sm text-slate-400">
                 Already have an account?{" "}
