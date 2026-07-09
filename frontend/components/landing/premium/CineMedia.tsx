@@ -10,7 +10,7 @@
 // Only data-saver and reduced-motion visitors get stills alone.
 
 import { useEffect, useRef, useState } from "react";
-import { usePrefersReducedMotion } from "./bits";
+import { filmPath, usePrefersReducedMotion, useSmallScreen } from "./bits";
 
 type Stage = "idle" | "v0" | "v1" | "settled";
 
@@ -37,6 +37,7 @@ export default function CineMedia({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
+  const small = useSmallScreen();
   const v0 = useRef<HTMLVideoElement>(null);
   const v1 = useRef<HTMLVideoElement>(null);
   const [allowed, setAllowed] = useState(false);
@@ -139,7 +140,7 @@ export default function CineMedia({
             muted
             playsInline
             preload="none"
-            src={`/experience/film/${videos[0]}.mp4`}
+            src={filmPath(videos[0], small)}
             onEnded={() => advance(0)}
             onError={() => setStage("settled")}
             className="absolute inset-0 h-full w-full object-cover"
@@ -151,7 +152,7 @@ export default function CineMedia({
               muted
               playsInline
               preload="none"
-              src={`/experience/film/${videos[1]}.mp4`}
+              src={filmPath(videos[1], small)}
               onEnded={() => advance(1)}
               onError={() => setStage("settled")}
               className="absolute inset-0 h-full w-full object-cover"

@@ -108,6 +108,8 @@ function usePreWarm(ready: boolean) {
       "sky-to-mountains", "mountains-to-forest", "forest-to-source", "source-to-garden",
       "garden-to-fire", "table-to-gold", "dish-to-restaurant", "restaurant-to-table", "gold-to-dawn",
     ];
+    // Phones get the 640px encodes (~1.7MB all-in) — same warm-up, 4× lighter.
+    const small = window.matchMedia("(max-width: 767px)").matches;
     const t = window.setTimeout(async () => {
       for (const s of stills) {
         if (cancelled) return;
@@ -117,7 +119,7 @@ function usePreWarm(ready: boolean) {
       for (const f of films) {
         if (cancelled) return;
         try {
-          await fetch(`/experience/film/${f}.mp4`, { cache: "force-cache" });
+          await fetch(`/experience/film/${small ? "m/" : ""}${f}.mp4`, { cache: "force-cache" });
         } catch {
           /* offline / aborted — the scene still shows its still */
         }

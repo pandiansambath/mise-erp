@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Reveal } from "@/components/Reveal";
-import { usePrefersReducedMotion } from "./bits";
+import { filmPath, usePrefersReducedMotion, useSmallScreen } from "./bits";
 
 type Beat = {
   still: string;
@@ -92,6 +92,7 @@ function FilmLayer({
   const v0 = useRef<HTMLVideoElement>(null);
   const v1 = useRef<HTMLVideoElement>(null);
   const [seg, setSeg] = useState<"warmup" | "v0" | "v1">("warmup");
+  const small = useSmallScreen();
 
   useEffect(() => {
     const el = v0.current;
@@ -131,7 +132,7 @@ function FilmLayer({
         muted
         playsInline
         preload="auto"
-        src={`/experience/film/${videos[0]}.mp4`}
+        src={filmPath(videos[0], small)}
         onEnded={advance}
         onError={onFail}
         className="absolute inset-0 h-full w-full object-cover"
@@ -143,7 +144,7 @@ function FilmLayer({
           muted
           playsInline
           preload="auto"
-          src={`/experience/film/${videos[1]}.mp4`}
+          src={filmPath(videos[1], small)}
           onEnded={onDone}
           onError={onDone}
           className="absolute inset-0 h-full w-full object-cover"
@@ -161,6 +162,7 @@ type StageState = {
 
 export default function Story() {
   const reduced = usePrefersReducedMotion();
+  const small = useSmallScreen();
   const [allowed, setAllowed] = useState(false);
   const [active, setActive] = useState(0);
   const [st, setSt] = useState<StageState>({ base: 0, film: null });
@@ -246,18 +248,22 @@ export default function Story() {
     <section ref={sectionRef} id="story" aria-label="How Mise works" className="relative">
       {/* ── the pinned cinema stage ── */}
       <div className="sticky top-0 h-screen overflow-hidden">
-        {/* settled stills (crossfade base) */}
-        {BEATS.map((b, i) => (
-          <img
-            key={b.still}
-            src={`/experience/${b.still}.jpg`}
-            alt=""
-            loading={i === 0 ? "eager" : "lazy"}
-            decoding="async"
-            className={`absolute inset-0 h-full w-full object-cover ${st.base === i && !reduced ? "mise-l-ken" : ""}`}
-            style={{ opacity: st.base === i ? 1 : 0, transition: "opacity 900ms ease" }}
-          />
-        ))}
+        {/* settled stills (crossfade base). Phones keep only the stills near
+            the action mounted — five resident full-screen layers is too much
+            GPU memory for small devices. */}
+        {BEATS.map((b, i) =>
+          !small || Math.abs(i - st.base) <= 1 || st.film?.to === i ? (
+            <img
+              key={b.still}
+              src={`/experience/${b.still}.jpg`}
+              alt=""
+              loading={i === 0 ? "eager" : "lazy"}
+              decoding="async"
+              className={`absolute inset-0 h-full w-full object-cover ${st.base === i && !reduced ? "mise-l-ken" : ""}`}
+              style={{ opacity: st.base === i ? 1 : 0, transition: "opacity 900ms ease" }}
+            />
+          ) : null,
+        )}
 
         {/* the morph film, playing over the stage */}
         {st.film ? (
@@ -315,7 +321,7 @@ export default function Story() {
                 </Reveal>
                 {b.chip ? (
                   <Reveal delay={330}>
-                    <div className="mt-7 inline-block rounded-2xl border border-white/15 bg-black/45 p-4 text-left backdrop-blur-md">
+                    <div className="mt-7 inline-block rounded-2xl border border-white/15 bg-black/55 p-4 text-left sm:bg-black/45 sm:backdrop-blur-md">
                       <p className="text-[11px] uppercase tracking-wide text-slate-400">{b.chip.label}</p>
                       <p className="mt-1 font-mono text-lg font-semibold text-copper-200 sm:text-xl">{b.chip.value}</p>
                       <p className="mt-0.5 font-mono text-[11px] text-brand-300/90">{b.chip.sub}</p>

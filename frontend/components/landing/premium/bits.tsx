@@ -91,6 +91,29 @@ export function useDarkDocument() {
   }, []);
 }
 
+/** True on phone-sized screens — used to serve the 360p film variants and a
+    lighter compositing budget. Tracks live (rotation/resize). */
+export function useSmallScreen() {
+  // Synchronous initial value: the landing renders client-side only, so the
+  // FIRST render already picks the right film variant — no wasted 720p fetch
+  // on phones before the effect runs.
+  const [small, setSmall] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setSmall(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return small;
+}
+
+/** Phones get the 640px encodes (~150-240KB); everything else the 720p ones. */
+export const filmPath = (name: string, small: boolean) =>
+  `/experience/film/${small ? "m/" : ""}${name}.mp4`;
+
 /* ─────────────────────────── primitives ────────────────────────── */
 
 /** Counts 0 → value with an ease-out once scrolled into view. */

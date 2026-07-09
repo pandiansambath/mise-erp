@@ -10,7 +10,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Aurora, btnGhost, btnPrimary, Magnetic } from "./bits";
+import { Aurora, btnGhost, btnPrimary, filmPath, Magnetic, useSmallScreen } from "./bits";
 import DashboardSim from "./DashboardSim";
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -46,6 +46,7 @@ export default function Hero({ start }: { start: boolean }) {
   const [allowed, setAllowed] = useState(true);
   const [film, setFilm] = useState<"idle" | "playing" | "done">("idle");
   const [visible, setVisible] = useState(true);
+  const small = useSmallScreen();
 
   useEffect(() => {
     type NetInfo = { saveData?: boolean };
@@ -172,7 +173,7 @@ export default function Hero({ start }: { start: boolean }) {
             muted
             playsInline
             preload="auto"
-            src="/experience/film/fire-to-dish.mp4"
+            src={filmPath("fire-to-dish", small)}
             onEnded={() => setFilm("done")}
             onError={() => setFilm("done")}
             className="absolute inset-0 h-full w-full object-cover"

@@ -119,6 +119,15 @@ body {
   animation: mise-aurora-drift 24s ease-in-out infinite;
   will-change: transform;
 }
+/* Phones: tighter blur + slower drift — big blur radii are the single most
+   expensive paint on small GPUs. Same look at arm's length, half the cost. */
+@media (max-width: 640px) {
+  .mise-aurora span {
+    filter: blur(38px);
+    animation-duration: 34s;
+    opacity: 0.5;
+  }
+}
 
 /* ── Faint dot-grid texture behind the hero ─────────────────────────────── */
 .mise-dots {
@@ -700,4 +709,47 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 @media (prefers-reduced-motion: reduce) {
   .mise-l-mote { animation: none; opacity: 0; }
   .mise-l-blip { animation: none; }
+}
+
+/* ── App kit (phase 0): shimmer, press, drawer ─────────────────────────────── */
+@keyframes mise-shimmer-sweep {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+.mise-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--color-glass) 9%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: mise-shimmer-sweep 1.6s ease-in-out infinite;
+}
+
+/* Press-down feel on any clickable — the tactile half of "premium". */
+.mise-press { transition: transform 120ms ease; }
+.mise-press:active { transform: scale(0.96); }
+
+@keyframes mise-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.mise-fade-in { animation: mise-fade-in 200ms ease-out both; }
+
+@keyframes mise-drawer-in-side {
+  from { transform: translateX(48px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes mise-drawer-in-up {
+  from { transform: translateY(48px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.mise-drawer-in { animation: mise-drawer-in-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (min-width: 640px) {
+  .mise-drawer-in { animation-name: mise-drawer-in-side; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-shimmer, .mise-fade-in, .mise-drawer-in { animation: none; }
+  .mise-press:active { transform: none; }
 }
