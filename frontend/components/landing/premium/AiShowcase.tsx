@@ -44,6 +44,133 @@ const POWERS = [
   },
 ];
 
+/* ─────────────────── the orbit — scroll-driven ─────────────────── */
+
+// Everything Copilot touches revolves around it on a tilted elliptical track.
+// The revolution is DRIVEN BY SCROLL (plus a slow idle drift so it never
+// freezes), with depth faked by scale/opacity/z-index as satellites pass in
+// front of or behind the orb. Refs + one rAF while on screen — zero React
+// re-renders, transform/opacity only.
+
+const SATELLITES = [
+  { icon: "🧾", label: "Bills" },
+  { icon: "✍️", label: "Recipes" },
+  { icon: "📦", label: "Stock" },
+  { icon: "🗓", label: "Rota" },
+  { icon: "💷", label: "Sales" },
+  { icon: "📈", label: "P&L" },
+  { icon: "📎", label: "Docs" },
+  { icon: "🔮", label: "Forecasts" },
+];
+
+function OrbitStage() {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const satRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0;
+    let running = false;
+    const t0 = performance.now();
+
+    const render = (now: number) => {
+      const rect = stage.getBoundingClientRect();
+      const vh = window.innerHeight;
+      // -1 → 1 as the stage crosses the viewport: scroll turns the ring.
+      const p = ((vh - rect.top - rect.height / 2) / (vh + rect.height)) * 2;
+      const rx = Math.min(rect.width / 2 - 64, 330);
+      const ry = Math.max(rx * 0.3, 62);
+      if (trackRef.current) {
+        trackRef.current.style.width = `${rx * 2}px`;
+        trackRef.current.style.height = `${ry * 2}px`;
+      }
+      const base = reduced ? -Math.PI / 2 : p * 2.6 + (now - t0) * 0.00012;
+      const n = SATELLITES.length;
+      satRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const a = base + (i / n) * Math.PI * 2;
+        const depth = (Math.sin(a) + 1) / 2; // 0 = behind the orb, 1 = in front
+        el.style.transform = `translate(-50%, -50%) translate3d(${(Math.cos(a) * rx).toFixed(1)}px, ${(Math.sin(a) * ry).toFixed(1)}px, 0) scale(${(0.72 + depth * 0.34).toFixed(3)})`;
+        el.style.opacity = (0.35 + depth * 0.65).toFixed(3);
+        el.style.zIndex = depth > 0.5 ? "30" : "5";
+      });
+      if (running && !reduced) raf = requestAnimationFrame(render);
+    };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting && !running) {
+            running = true;
+            raf = requestAnimationFrame(render);
+          } else if (!e.isIntersecting && running) {
+            running = false;
+            cancelAnimationFrame(raf);
+          }
+        }
+      },
+      { threshold: 0 },
+    );
+    io.observe(stage);
+    render(performance.now()); // first paint, even before intersection
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      io.disconnect();
+    };
+  }, []);
+
+  return (
+    <div ref={stageRef} id="orbit-stage" className="relative mx-auto h-[240px] w-full max-w-3xl sm:h-[280px]">
+      {/* the elliptical track, faint */}
+      <div
+        ref={trackRef}
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-white/10"
+        aria-hidden
+      />
+      {/* the orb — the still centre of the system */}
+      <div className="absolute left-1/2 top-1/2 z-10 h-20 w-20 -translate-x-1/2 -translate-y-1/2 sm:h-24 sm:w-24">
+        <span className="absolute -inset-9 rounded-full bg-brand-400/15 blur-2xl" />
+        <span className="absolute -inset-4 rounded-full bg-copper-400/10 blur-xl" />
+        <span
+          className="mise-l-orb absolute inset-0 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle at 32% 28%, rgba(255,255,255,0.85), rgba(167,243,208,0.55) 22%, rgba(16,185,129,0.35) 52%, rgba(4,30,23,0.45) 82%)",
+            boxShadow:
+              "inset 0 -12px 26px rgba(2,20,14,0.6), inset 0 6px 14px rgba(255,255,255,0.28), 0 0 34px rgba(16,185,129,0.35)",
+          }}
+        />
+        <span
+          className="absolute -inset-1.5 rounded-full animate-[spin_9s_linear_infinite]"
+          style={{
+            background: "conic-gradient(from 0deg, transparent 0deg, rgba(167,243,208,0.8) 38deg, transparent 95deg)",
+            WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px))",
+            mask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px))",
+          }}
+        />
+      </div>
+      {/* the satellites — everything Copilot touches, in orbit */}
+      {SATELLITES.map((s, i) => (
+        <div
+          key={s.label}
+          ref={(el) => {
+            satRefs.current[i] = el;
+          }}
+          className="absolute left-1/2 top-1/2 flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-ink-900/85 px-3 py-1.5 text-xs text-slate-200 shadow-lg shadow-black/40 backdrop-blur will-change-transform"
+          style={{ opacity: 0 }}
+        >
+          <span aria-hidden>{s.icon}</span>
+          {s.label}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Types `text` character-by-character once `go` turns true. */
 function useTyped(text: string, go: boolean, speed = 18) {
   const reduced = usePrefersReducedMotion();
@@ -138,7 +265,9 @@ function Chat() {
 
 export default function AiShowcase() {
   return (
-    <section id="copilot" className="mise-cv relative overflow-hidden bg-ink-950">
+    // No content-visibility here: the orbit measures its rect every frame and
+    // anchor-jumps to #copilot must land exactly.
+    <section id="copilot" className="relative overflow-hidden bg-ink-950">
       {/* the orb's glow bleeds over the whole section */}
       <div className="pointer-events-none absolute left-1/2 top-0 h-[560px] w-[860px] -translate-x-1/2 -translate-y-1/3 rounded-full opacity-60 blur-3xl"
         style={{ background: "radial-gradient(closest-side, rgba(16,185,129,0.28), rgba(234,183,138,0.12), transparent 70%)" }}
@@ -146,34 +275,7 @@ export default function AiShowcase() {
       <Aurora strength={0.55} />
       <div className="relative mx-auto max-w-6xl px-6 py-20 sm:px-10 sm:py-24">
         <Reveal>
-          <div className="flex justify-center">
-            <div className="relative h-20 w-20 sm:h-24 sm:w-24">
-              {/* halo */}
-              <span className="absolute -inset-9 rounded-full bg-brand-400/15 blur-2xl" />
-              <span className="absolute -inset-4 rounded-full bg-copper-400/10 blur-xl" />
-              {/* glass sphere */}
-              <span
-                className="mise-l-orb absolute inset-0 rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle at 32% 28%, rgba(255,255,255,0.85), rgba(167,243,208,0.55) 22%, rgba(16,185,129,0.35) 52%, rgba(4,30,23,0.45) 82%)",
-                  boxShadow:
-                    "inset 0 -12px 26px rgba(2,20,14,0.6), inset 0 6px 14px rgba(255,255,255,0.28), 0 0 34px rgba(16,185,129,0.35)",
-                }}
-              />
-              {/* orbiting light */}
-              <span
-                className="absolute -inset-1.5 rounded-full animate-[spin_9s_linear_infinite]"
-                style={{
-                  background:
-                    "conic-gradient(from 0deg, transparent 0deg, rgba(167,243,208,0.8) 38deg, transparent 95deg)",
-                  WebkitMask:
-                    "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px))",
-                  mask: "radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px))",
-                }}
-              />
-            </div>
-          </div>
+          <OrbitStage />
         </Reveal>
         <Reveal delay={100}>
           <div className="mt-8">
