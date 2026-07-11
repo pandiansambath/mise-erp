@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, downloadFile, type AllergenRow } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
+import { Donut } from "@/components/charts";
 import { ALLERGEN_LABEL } from "@/lib/allergens";
 
 export default function AllergensPage() {
@@ -21,6 +22,9 @@ export default function AllergensPage() {
   if (!rows) return <Spinner />;
 
   const reviewedNeeded = rows.filter((r) => r.unreviewed.length > 0).length;
+  const clear = rows.filter((r) => r.allergens.length === 0 && r.unreviewed.length === 0).length;
+  // mutually exclusive with "needs review" so the donut sums to the dish count
+  const withAllergens = rows.filter((r) => r.allergens.length > 0 && r.unreviewed.length === 0).length;
 
   return (
     <div>
@@ -29,13 +33,28 @@ export default function AllergensPage() {
           title="Allergens"
           subtitle="Per-dish allergens (UK Natasha's Law), built from each recipe's ingredients."
         />
-        <button
-          onClick={() => downloadFile("/recipes/allergen-matrix.pdf", "allergen-matrix.pdf")}
-          className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-        >
+        <Button variant="soft" onClick={() => downloadFile("/recipes/allergen-matrix.pdf", "allergen-matrix.pdf")}>
           ⬇ Download (PDF)
-        </button>
+        </Button>
       </div>
+
+      {rows.length > 0 && (
+        <Card className="mise-feel mb-4">
+          <h3 className="font-semibold text-fg">Menu safety at a glance</h3>
+          <p className="text-xs text-fg-faint">every dish should be green or red — amber means the sheet isn&apos;t legally complete yet</p>
+          <div className="mt-4">
+            <Donut
+              centerLabel="dishes"
+              centerValue={String(rows.length)}
+              segments={[
+                { label: "No listed allergens", value: clear, color: "#10b981" },
+                { label: "Contains allergens", value: withAllergens, color: "#f43f5e" },
+                { label: "Needs review", value: reviewedNeeded, color: "#f59e0b" },
+              ].filter((s) => s.value > 0)}
+            />
+          </div>
+        </Card>
+      )}
 
       <p className="mb-4 rounded-lg bg-glass/5 px-3 py-2 text-xs text-fg-faint">
         Allergens are tagged once per ingredient on the{" "}
@@ -56,7 +75,7 @@ export default function AllergensPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((r) => (
-            <Card key={r.recipe_id}>
+            <Card key={r.recipe_id} className="mise-feel">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-medium text-fg">{r.name}</span>
                 <div className="flex flex-wrap gap-1.5">

@@ -33,6 +33,7 @@ export const QUICK_ACTIONS: PaletteItem[] = [
   { href: "/inventory?filter=low", label: "Show low stock", icon: "⚠️", keywords: "reorder alert running out", group: "Actions", parent: "/inventory" },
   { href: "/employees?new=1", label: "Add an employee", icon: "👤", keywords: "staff hire person new", group: "Actions", parent: "/employees" },
   { href: "/stock-take?focus=1", label: "Start a stock take", icon: "📋", keywords: "count stocktake", group: "Actions", parent: "/stock-take" },
+  { href: "/waste?new=1", label: "Log waste", icon: "🗑️", keywords: "spoiled binned spillage", group: "Actions", parent: "/waste" },
 ];
 
 function score(item: PaletteItem, q: string): number {

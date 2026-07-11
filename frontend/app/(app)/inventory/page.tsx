@@ -13,6 +13,7 @@ import {
   type ReceiptLine,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { AreaChart } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
@@ -101,6 +102,7 @@ export default function InventoryPage() {
   const [bdLoading, setBdLoading] = useState<string | null>(null);
   // The "chain": open a purchase into the full delivery it came on (shared reference).
   const [receipts, setReceipts] = useState<Record<string, ReceiptLine[]>>({});
+  const [priceHist, setPriceHist] = useState<Record<string, { date: string; price: string; vendor_name?: string | null }[]>>({});
   const [openReceipt, setOpenReceipt] = useState<string | null>(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
 
@@ -381,6 +383,13 @@ export default function InventoryPage() {
       } finally {
         setBdLoading(null);
       }
+    }
+    if (!priceHist[item.id]) {
+      // What you actually paid over time (received POs) — drawn as an area line.
+      api
+        .get<{ date: string; price: string; vendor_name?: string | null }[]>(`/reports/price-history/${item.id}`)
+        .then((pts) => setPriceHist((h) => ({ ...h, [item.id]: pts })))
+        .catch(() => setPriceHist((h) => ({ ...h, [item.id]: [] })));
     }
   }
 
@@ -1002,13 +1011,13 @@ export default function InventoryPage() {
                                 onClick={(e) => { e.stopPropagation(); orderItem(item); }}
                                 disabled={(item.vendor_count ?? 0) === 0}
                                 title={(item.vendor_count ?? 0) === 0 ? "Add a vendor price first (Vendors page)" : "Order this item — opens Purchasing with it picked"}
-                                className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="mise-press rounded-md border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/20 disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 🛒 Order
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); startEdit(item); }}
-                                className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                                className="mise-raised mise-press rounded-md px-2.5 py-1 text-xs font-medium text-fg-soft"
                               >
                                 Edit
                               </button>
@@ -1042,6 +1051,25 @@ export default function InventoryPage() {
                                   <p className="mt-3 text-xs text-fg-faint">Loading…</p>
                                 ) : rows && rows.length > 0 ? (
                                   <>
+                                    {(priceHist[item.id]?.length ?? 0) >= 2 && (
+                                      <div className="mise-well mt-3 rounded-xl p-3">
+                                        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                                          Price you paid per {item.unit} — over time
+                                        </p>
+                                        <AreaChart
+                                          data={priceHist[item.id].map((p) => parseFloat(p.price) || 0)}
+                                          labels={priceHist[item.id].map((p) => p.date)}
+                                          color={
+                                            (parseFloat(priceHist[item.id][priceHist[item.id].length - 1].price) || 0) >
+                                            (parseFloat(priceHist[item.id][0].price) || 0)
+                                              ? "#f43f5e"
+                                              : "#10b981"
+                                          }
+                                          height={90}
+                                          formatValue={(v) => format(String(v))}
+                                        />
+                                      </div>
+                                    )}
                                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                       {rows.map((r, idx) => (
                                         <div
@@ -1050,8 +1078,8 @@ export default function InventoryPage() {
                                           tabIndex={r.vendor ? 0 : undefined}
                                           onClick={r.vendor && r.vendor_id ? () => router.push(`/vendors?focus=${r.vendor_id}`) : undefined}
                                           title={r.vendor ? `View ${r.vendor} on the Vendors page` : undefined}
-                                          className={`flex items-center justify-between rounded-xl border border-line bg-paper-3 px-3.5 py-2.5 ${
-                                            r.vendor ? "cursor-pointer transition hover:border-brand-400/60 hover:bg-paper-2" : ""
+                                          className={`mise-well flex items-center justify-between rounded-xl px-3.5 py-2.5 ${
+                                            r.vendor ? "mise-feel cursor-pointer" : ""
                                           }`}
                                         >
                                           <div className="flex min-w-0 items-center gap-3">

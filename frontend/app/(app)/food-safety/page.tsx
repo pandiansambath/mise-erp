@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type SafetyLog } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
+import { Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -116,6 +117,14 @@ export default function FoodSafetyPage() {
 
   if (!logs) return <Spinner />;
 
+  // Range health: temps in/out of range + how many of today's checks are done
+  const temps = logs.filter((l) => l.kind === "TEMP");
+  const tempsOk = temps.filter((l) => l.status !== "FAIL").length;
+  const tempsFail = temps.length - tempsOk;
+  const todayChecks = new Set(
+    logs.filter((l) => l.kind === "CHECK" && l.date === today()).map((l) => l.label),
+  );
+
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -123,31 +132,64 @@ export default function FoodSafetyPage() {
           title="Food safety"
           subtitle="Temperature readings + daily cleaning/opening/closing checks — your EHO audit trail."
         />
-        <button
+        <Button
+          variant="soft"
           onClick={() =>
             downloadFile(
               `/safety/logs.pdf?date_from=${from}&date_to=${to}`,
               `food-safety-log-${from}_${to}.pdf`
             )
           }
-          className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
         >
           ⬇ Download (PDF)
-        </button>
+        </Button>
       </div>
+
+      {temps.length > 0 && (
+        <Card className="mise-feel mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-[220px] flex-1">
+              <h3 className="font-semibold text-fg">Temperatures in range</h3>
+              <p className="text-xs text-fg-faint">for the picked date range — a FAIL is what an EHO asks about first</p>
+              <div className="mt-4">
+                <Donut
+                  centerLabel="readings"
+                  centerValue={String(temps.length)}
+                  segments={[
+                    { label: "In range", value: tempsOk, color: "#10b981" },
+                    { label: "FAIL", value: tempsFail, color: "#f43f5e" },
+                  ].filter((s) => s.value > 0)}
+                />
+              </div>
+            </div>
+            <div className="mise-well min-w-[220px] rounded-xl p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-fg-faint">Today&apos;s checks</p>
+              <p className="mt-1 text-2xl font-bold text-fg">
+                {todayChecks.size}<span className="text-sm font-medium text-fg-faint"> / {DAILY_CHECKS.length} done</span>
+              </p>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-glass/10">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${todayChecks.size === DAILY_CHECKS.length ? "bg-brand-500" : "bg-amber-500"}`}
+                  style={{ width: `${(todayChecks.size / DAILY_CHECKS.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {msg && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{msg}</p>}
 
       {canWrite && (
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
-          <Card>
+          <Card className="mise-feel">
             <h3 className="font-semibold text-fg">Log a temperature</h3>
             <form onSubmit={saveTemp} className="mt-3 space-y-3">
               <input
                 value={loc}
                 onChange={(e) => setLoc(e.target.value)}
                 placeholder="Appliance / location (e.g. Walk-in fridge)"
-                className="w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500"
+                className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
               />
               <div className="flex flex-wrap items-center gap-2">
                 <Select
@@ -161,25 +203,26 @@ export default function FoodSafetyPage() {
                   onChange={(e) => setTemp(e.target.value)}
                   inputMode="decimal"
                   placeholder="°C"
-                  className="w-20 rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-center text-sm text-fg outline-none focus:border-brand-500"
+                  className="mise-well w-20 rounded-lg px-3 py-2 text-center text-sm text-fg outline-none"
                 />
                 {tempStatus && <StatusBadge s={tempStatus} />}
               </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-              >
+              <Button type="submit" variant="primary" busy={busy}>
                 Log temperature
-              </button>
+              </Button>
             </form>
           </Card>
 
-          <Card>
+          <Card className="mise-feel">
             <h3 className="font-semibold text-fg">Daily checks</h3>
             <div className="mt-3 space-y-2">
               {DAILY_CHECKS.map((t) => (
-                <label key={t} className="flex cursor-pointer items-center gap-2 text-sm text-fg-soft">
+                <label
+                  key={t}
+                  className={`mise-well mise-feel flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    ticked[t] ? "text-fg" : "text-fg-soft"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={!!ticked[t]}
@@ -187,16 +230,13 @@ export default function FoodSafetyPage() {
                     className="h-4 w-4 accent-brand-500"
                   />
                   {t}
+                  {todayChecks.has(t) && <Badge tone="green">✓ logged today</Badge>}
                 </label>
               ))}
             </div>
-            <button
-              onClick={saveChecks}
-              disabled={busy}
-              className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-            >
+            <Button className="mt-3" variant="primary" onClick={saveChecks} busy={busy}>
               Save checks
-            </button>
+            </Button>
           </Card>
         </div>
       )}

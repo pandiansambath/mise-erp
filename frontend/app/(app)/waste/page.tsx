@@ -9,12 +9,14 @@ import {
   type WasteListResponse,
   type WasteRow,
 } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
+import { Bars, Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { fmtQty, ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 const REASONS = [
   "Spoiled / expired",
@@ -39,6 +41,9 @@ export default function WastePage() {
   const [reason, setReason] = useState(REASONS[0]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // ⌘K "Log waste" (?new=1) → spotlight the form
+  useDeepLink({ new: () => spotlight("waste-form") }, !loading);
 
   async function loadWaste() {
     setData(await api.get<WasteListResponse>("/inventory/waste"));
@@ -75,6 +80,25 @@ export default function WastePage() {
 
   if (loading) return <Spinner />;
 
+  // Where the waste money goes — by reason (donut) and by item (bars)
+  const REASON_COLORS = ["#f43f5e", "#f59e0b", "#38bdf8", "#a78bfa", "#10b981", "#94a3b8"];
+  const byReason = (data?.rows ?? []).reduce<Record<string, number>>((acc, w) => {
+    const k = w.reason || "Other";
+    acc[k] = (acc[k] ?? 0) + (parseFloat(w.value) || 0);
+    return acc;
+  }, {});
+  const reasonSegs = Object.entries(byReason)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }));
+  const byItem = (data?.rows ?? []).reduce<Record<string, number>>((acc, w) => {
+    acc[w.item_name] = (acc[w.item_name] ?? 0) + (parseFloat(w.value) || 0);
+    return acc;
+  }, {});
+  const topItems = Object.entries(byItem)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([label, value]) => ({ label, value, color: "#f43f5e" }));
+
   return (
     <div>
       <PageHeader
@@ -84,7 +108,7 @@ export default function WastePage() {
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
 
       {canWrite && (
-        <Card className="mb-6">
+        <Card className="mise-feel mb-6" id="waste-form">
           <p className="mb-3 text-sm font-medium text-fg-soft">Log waste</p>
           <form onSubmit={submit} className="space-y-4">
             <ItemPickerSingle items={items} value={itemId} onChange={setItemId} />
@@ -113,13 +137,9 @@ export default function WastePage() {
                   options={REASONS.map((r) => ({ value: r, label: r }))}
                 />
               </label>
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-              >
-                {busy ? "Logging…" : "Log waste"}
-              </button>
+              <Button type="submit" variant="primary" busy={busy} busyLabel="Logging…">
+                Log waste
+              </Button>
             </div>
             {chosen && (
               <p className="text-xs text-fg-faint">
@@ -129,6 +149,30 @@ export default function WastePage() {
             )}
           </form>
         </Card>
+      )}
+
+      {reasonSegs.length > 0 && (
+        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="mise-feel">
+            <h3 className="font-semibold text-fg">Why it&apos;s binned</h3>
+            <p className="text-xs text-fg-faint">value of waste by reason — attack the biggest slice first</p>
+            <div className="mt-4">
+              <Donut
+                centerLabel="wasted"
+                centerValue={format(data?.total_value ?? "0")}
+                formatValue={(v) => format(String(v))}
+                segments={reasonSegs}
+              />
+            </div>
+          </Card>
+          <Card className="mise-feel">
+            <h3 className="font-semibold text-fg">Most-wasted items</h3>
+            <p className="text-xs text-fg-faint">where the money actually leaks</p>
+            <div className="mise-well mt-4 rounded-xl p-3">
+              <Bars items={topItems} formatValue={(v) => format(String(v))} />
+            </div>
+          </Card>
+        </div>
       )}
 
       <Card className="p-0">
@@ -142,20 +186,12 @@ export default function WastePage() {
             )}
             {data && data.rows.length > 0 && (
               <div className="flex gap-2">
-                <button
-                  onClick={() => downloadFile("/inventory/waste.xlsx", "mise-waste-log.xlsx")}
-                  title="Download waste log (Excel)"
-                  className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-                >
+                <Button size="sm" variant="soft" onClick={() => downloadFile("/inventory/waste.xlsx", "mise-waste-log.xlsx")} title="Download waste log (Excel)">
                   ⬇ Excel
-                </button>
-                <button
-                  onClick={() => downloadFile("/inventory/waste.csv", "mise-waste-log.csv")}
-                  title="Download waste log (CSV)"
-                  className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-                >
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => downloadFile("/inventory/waste.csv", "mise-waste-log.csv")} title="Download waste log (CSV)">
                   CSV
-                </button>
+                </Button>
               </div>
             )}
           </div>

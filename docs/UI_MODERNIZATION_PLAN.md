@@ -176,9 +176,9 @@ every list staggers 40ms/row (cap 8); numbers always AnimatedNumber.
       Donut + budget Meters + tactile cards (this run)
 - [x] **/reports**: ✅ where-money-went Donut + health Meters + expense Bars +
       raised export/print buttons + animated net (this run)
-- [ ] **/price-comparison**: vendor price matrix → highlight cheapest cell
-      (emerald), price-rise cells (amber), sparkline per item price history
-      (price_history table already exists!)
+- [x] **/price-comparison**: ✅ ea467d8 self-drawing AreaChart price history
+      (green falling / red climbing) + tactile wells/raised buttons; cheapest
+      + chosen-supplier highlights already existed
 - [x] **/payroll**: ✅ WEEKLY pay runs (ISO weeks, hourly staff, advances
       next-pay rule) + neumorphic cadence Segmented + week picker + Button/well
       kit. Payslip-card flip + tick cascade still open (Phase 6 polish)
