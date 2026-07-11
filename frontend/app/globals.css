@@ -770,6 +770,78 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
 }
 
+/* ── Tactile layer (soft-neumorphic hybrid, token-driven → both themes) ─────
+   The touch-feel: inputs sit in soft INSET wells, interactive surfaces are
+   gently RAISED, and everything presses IN under the finger. Shadows derive
+   from tokens, so light mode gets classic soft grey/white neumorphism and
+   dark mode gets deep shadow + subtle top rim. */
+.mise-well {
+  background: color-mix(in srgb, var(--color-shell) 55%, var(--color-paper));
+  border: 1px solid var(--color-line);
+  box-shadow:
+    inset 0 2px 6px color-mix(in srgb, #000 28%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-glass) 7%, transparent);
+}
+.mise-well:focus-within {
+  border-color: color-mix(in srgb, var(--color-brand-400) 55%, transparent);
+  box-shadow:
+    inset 0 2px 6px color-mix(in srgb, #000 24%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--color-brand-500) 18%, transparent);
+}
+.mise-raised {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-glass) 8%, var(--color-paper-2)),
+    var(--color-paper-2)
+  );
+  border: 1px solid var(--color-line);
+  box-shadow:
+    0 2px 6px color-mix(in srgb, #000 30%, transparent),
+    0 8px 22px -12px color-mix(in srgb, #000 45%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-glass) 12%, transparent);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+.mise-raised:hover { filter: brightness(1.06); }
+.mise-raised:active {
+  transform: scale(0.97);
+  box-shadow:
+    inset 0 2px 8px color-mix(in srgb, #000 35%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #000 15%, transparent);
+}
+/* Light theme: real soft-UI shadows (dark grey out, white in). */
+.mise-app[data-mode="light"] .mise-well {
+  background: color-mix(in srgb, #0f172a 4%, var(--color-paper));
+  box-shadow:
+    inset 2px 2px 6px color-mix(in srgb, #0f172a 12%, transparent),
+    inset -2px -2px 5px color-mix(in srgb, #fff 80%, transparent);
+}
+.mise-app[data-mode="light"] .mise-raised {
+  background: var(--color-paper);
+  box-shadow:
+    3px 3px 8px color-mix(in srgb, #0f172a 12%, transparent),
+    -3px -3px 8px color-mix(in srgb, #fff 85%, transparent);
+}
+.mise-app[data-mode="light"] .mise-raised:active {
+  box-shadow:
+    inset 2px 2px 6px color-mix(in srgb, #0f172a 14%, transparent),
+    inset -2px -2px 5px color-mix(in srgb, #fff 70%, transparent);
+}
+
+/* The springy knob curve (toggles, segmented thumbs) — slight overshoot. */
+.mise-spring { transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1), left 320ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* Checkbox tick draws itself. */
+@keyframes mise-tick-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.mise-tick path {
+  stroke-dasharray: 1;
+  animation: mise-tick-draw 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-spring { transition: none; }
+  .mise-tick path { animation: none; }
+}
+
 /* Auth gate: content swap — children rise in with a stagger. */
 @keyframes mise-auth-rise {
   from { opacity: 0; transform: translateY(14px); filter: blur(5px); }

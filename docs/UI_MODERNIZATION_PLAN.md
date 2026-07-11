@@ -52,6 +52,35 @@ theme-aware via tokens. The vocabulary:
 - **Line/area + sparkline** → trends (sales 14d, price history, cash position)
 - **Meter** → target vs actual (food cost %, labour %, budgets)
 
+## 🫳 TACTILE DESIGN SYSTEM (user 2026-07-10: neumorphism? → HYBRID decided)
+Pure neumorphism rejected (needs flat mono bg → kills aurora/glass/films; weak
+contrast; bad in dark). We take its SOUL — touch-feel — as a token-driven layer
+that works in BOTH themes:
+- `.mise-well`   → neumorphic INSET wells for inputs/search/filter tracks
+- `.mise-raised` → soft-raised interactive surfaces (buttons, pills, thumbs)
+- press-in on :active everywhere (mise-press + inset shadow swap)
+- `Segmented` control: well track + raised sliding thumb (spring ease)
+- `Toggle`: springy knob w/ overshoot; `Checkbox`: tick draws itself
+Glass (.mise-glass) stays for overlays/feature cards; flat+hairline for tables.
+
+### Per-section motion & style map (apply while doing each phase)
+- **Dashboard**: stat cards w/ count-up + sparklines + delta chips; aurora header band; greeting types itself
+- **Inventory**: rows hover-lift + press → item Drawer (Task A history+chain); stock Meters; LOW badge pulse; stagger-in list
+- **Purchasing**: PO cards raised w/ status chip pulse; receive = press-hold morph → success tick draw; indent→PO split animation
+- **Sales & cash**: till reconcile = "balance" moment (scales settle + tick draws + count-up to £0.00 variance); channel Donut
+- **Expenses (Task B)**: summary header w/ Donut + top-category chips; well filters; entries stagger
+- **Money**: in/out waterfall Bars; net counter; month scrubber w/ sliding thumb
+- **Reports**: chart kit everywhere (Donut/Bars/Area/Meter); print/export raised buttons
+- **Rota**: shift pills raised (grab-feel), week grid sliding selection; copy-week ghost preview slides in
+- **Attendance**: punch clock = BIG tactile button (deep press + ring ripple); day timeline dots
+- **Payroll**: payslip cards flip/expand; run-payroll progress with per-employee tick cascade
+- **Staff/Employees/My**: avatar chips, doc cards w/ expiry meter; self-service = mobile-first wells
+- **Settings/Profile**: Segmented controls, wells, theme switch springy
+- **Copilot**: orb everywhere consistent; chat glass
+- **Control Room**: same tactile kit on operator console + Phase 8 features
+Transitions: route mount = rise+fade stagger; drawers slide; tabs = thumb glide;
+every list staggers 40ms/row (cap 8); numbers always AnimatedNumber.
+
 ## ✨ INTERACTION STANDARDS ("jaw-dropping, not just OK" — apply everywhere)
 - Buttons: hover lift + shine sweep, **press-down scale** (.mise-press), busy state morphs to spinner-in-button
 - Numbers NEVER pop in — always AnimatedNumber count-up
