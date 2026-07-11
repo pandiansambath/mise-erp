@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Donut, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
@@ -166,6 +167,17 @@ export default function SalesPage() {
   const variance = summary.cash_variance;
   const varianceNum = variance != null ? parseFloat(variance) : null;
 
+  // Today's takings by channel — the composition donut.
+  const channelSegs: DonutSegment[] = (() => {
+    const byChannel = new Map<string, number>();
+    for (const l of summary.lines) {
+      byChannel.set(l.channel_name, (byChannel.get(l.channel_name) ?? 0) + (parseFloat(l.gross_amount) || 0));
+    }
+    return [...byChannel.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({ label, value }));
+  })();
+
   return (
     <div>
       <PageHeader title="Sales & Cash" subtitle="One day at a time — takings by channel, commissions and the till for the date you pick." />
@@ -225,6 +237,22 @@ export default function SalesPage() {
           hint={varianceNum == null ? "Count cash to check" : varianceNum === 0 ? "Balanced" : "Off"}
         />
       </div>
+
+      {channelSegs.length > 0 && (
+        <Card className="mt-6">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-fg">Takings by channel</h2>
+            <span className="text-xs text-fg-faint">{day}</span>
+          </div>
+          <Donut
+            segments={channelSegs}
+            centerValue={format(summary.totals.gross)}
+            centerLabel="gross today"
+            className="mt-4"
+            formatValue={(v) => format(String(v))}
+          />
+        </Card>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Add + lines */}
@@ -363,15 +391,31 @@ export default function SalesPage() {
               />
             </div>
             {varianceNum != null && (
-              <div
-                className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                  varianceNum === 0
-                    ? "bg-brand-400/10 text-brand-300"
-                    : "bg-amber-400/10 text-amber-300"
-                }`}
-              >
-                Variance: {format(variance)} {varianceNum === 0 ? "✓ balanced" : "— please check"}
-              </div>
+              varianceNum === 0 ? (
+                // The nightly payoff: the till settles, the tick draws itself.
+                <div className="mise-pop-lg flex items-center gap-3 rounded-xl border border-brand-400/30 bg-brand-400/10 px-4 py-3">
+                  <svg viewBox="0 0 24 24" className="mise-tick h-7 w-7 shrink-0" aria-hidden>
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="#34d399" strokeOpacity="0.35" strokeWidth="2" />
+                    <path
+                      d="M7 12.5l3.2 3.2L17 9"
+                      fill="none"
+                      stroke="#34d399"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      pathLength={1}
+                    />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-semibold text-brand-300">Till balanced</p>
+                    <p className="font-mono text-xs text-brand-300/80">variance {format(variance)} · every penny accounted for</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm font-medium text-amber-300">
+                  Variance: {format(variance)} — please check
+                </div>
+              )
             )}
             {canWrite && (
               <button

@@ -9,7 +9,8 @@ import {
   type ExpenseSummary,
   type Item,
 } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
+import { Donut, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
@@ -175,10 +176,36 @@ export default function ExpensesPage() {
     await loadData(from, to);
   }
 
-  if (loading || !summary) return <Spinner />;
+  if (loading || !summary) {
+    return (
+      <div>
+        <PageHeader title="Expenses" subtitle="Fixed overheads and variable costs — what's going out." />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Card key={i}>
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="mt-3 h-7 w-24" />
+            </Card>
+          ))}
+        </div>
+        <Card className="mt-6">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="mt-4 h-40" />
+        </Card>
+      </div>
+    );
+  }
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+    "mise-well mt-1 w-full rounded-xl px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-faint";
+
+  const grandTotal = parseFloat(summary.grand_total) || 0;
+  const donutSegs: DonutSegment[] = (() => {
+    const sorted = [...summary.by_category].sort((a, b) => (parseFloat(b.total) || 0) - (parseFloat(a.total) || 0));
+    const top = sorted.slice(0, 5).map((c) => ({ label: c.category_name, value: parseFloat(c.total) || 0 }));
+    const rest = sorted.slice(5).reduce((s, c) => s + (parseFloat(c.total) || 0), 0);
+    return rest > 0 ? [...top, { label: "Other", value: rest, color: "#94a3b8" }] : top;
+  })();
 
   const sortedExpenses = sort.sortRows(expenses, (x, k) =>
     k === "amount" ? parseFloat(x.amount || "0") : k === "category" ? x.category_name : x.date,
@@ -201,6 +228,22 @@ export default function ExpensesPage() {
         <StatCard label="Total spend" value={format(summary.grand_total)} accent="rose" />
       </div>
 
+      {donutSegs.length > 0 && (
+        <Card className="mt-6">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-fg">Where it went</h2>
+            <span className="text-xs text-fg-faint">{rangeCaption({ from, to })}</span>
+          </div>
+          <Donut
+            segments={donutSegs}
+            centerValue={format(summary.grand_total)}
+            centerLabel="total spend"
+            className="mt-4"
+            formatValue={(v) => format(String(v))}
+          />
+        </Card>
+      )}
+
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* LEFT — the data (breakdown + entries) */}
         <div className="min-w-0 space-y-6 lg:col-span-2">
@@ -222,14 +265,27 @@ export default function ExpensesPage() {
                       <button
                         type="button"
                         onClick={() => toggleCat(c.category_id)}
-                        className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-paper-2"
+                        className="w-full px-5 py-3 text-left transition hover:bg-paper-2"
                       >
-                        <span className={`text-fg-faint transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
-                        <span className="font-medium text-fg">{c.category_name}</span>
-                        <Badge tone={c.kind === "FIXED" ? "slate" : "amber"}>
-                          {c.kind === "FIXED" ? "Fixed" : "Variable"}
-                        </Badge>
-                        <span className="ml-auto font-semibold text-fg">{format(c.total)}</span>
+                        <span className="flex items-center gap-3">
+                          <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>▸</span>
+                          <span className="font-medium text-fg">{c.category_name}</span>
+                          <Badge tone={c.kind === "FIXED" ? "slate" : "amber"}>
+                            {c.kind === "FIXED" ? "Fixed" : "Variable"}
+                          </Badge>
+                          <span className="ml-auto font-mono font-semibold text-fg">{format(c.total)}</span>
+                        </span>
+                        {/* share of the period's spend, at a glance */}
+                        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-glass/10">
+                          <span
+                            className="block h-full rounded-full"
+                            style={{
+                              width: `${grandTotal > 0 ? Math.max(1.5, ((parseFloat(c.total) || 0) / grandTotal) * 100) : 0}%`,
+                              background: c.kind === "FIXED" ? "#94a3b8" : "#f59e0b",
+                              transition: "width 800ms cubic-bezier(0.22,1,0.36,1)",
+                            }}
+                          />
+                        </span>
                       </button>
                       {open && (
                         <div className="bg-paper-2/40 px-5 pb-4 pt-1 text-sm">
@@ -308,12 +364,12 @@ export default function ExpensesPage() {
                             <Badge tone="slate">{METHOD_LABEL[x.payment_method] ?? x.payment_method}</Badge>
                           )}
                         </td>
-                        <td className="px-5 py-3 text-right font-medium text-fg">{format(x.amount)}</td>
+                        <td className="px-5 py-3 text-right font-mono font-medium text-fg">{format(x.amount)}</td>
                         <td className="px-5 py-3 text-right">
                           {canWrite && (
-                            <button onClick={() => remove(x.id)} className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2">
+                            <Button size="sm" variant="ghost" onClick={() => remove(x.id)}>
                               Remove
-                            </button>
+                            </Button>
                           )}
                         </td>
                       </tr>
@@ -381,12 +437,12 @@ export default function ExpensesPage() {
                   <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
                 </div>
                 <div className="col-span-2 flex flex-wrap items-center gap-2">
-                  <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                  <Button type="submit" variant="primary">
                     Add expense
-                  </button>
-                  <button type="button" onClick={startPettyCash} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2" title="Cash to staff, or something bought outside">
+                  </Button>
+                  <Button type="button" variant="soft" onClick={startPettyCash} title="Cash to staff, or something bought outside">
                     ＋ Petty cash
-                  </button>
+                  </Button>
                 </div>
                 {error && <p className="col-span-2 text-sm text-rose-400">{error}</p>}
               </form>
