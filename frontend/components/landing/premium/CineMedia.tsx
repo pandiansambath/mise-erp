@@ -10,7 +10,7 @@
 // Only data-saver and reduced-motion visitors get stills alone.
 
 import { useEffect, useRef, useState } from "react";
-import { filmPath, usePrefersReducedMotion, useSmallScreen } from "./bits";
+import { filmPath, HandoffVeil, stillPath, usePrefersReducedMotion, useSmallScreen } from "./bits";
 
 type Stage = "idle" | "v0" | "v1" | "settled";
 
@@ -98,14 +98,21 @@ export default function CineMedia({
     return () => window.clearTimeout(t);
   }, [active, allowed]);
 
+  // Bloom swells exactly as a film hands back to its still.
+  const [bloom, setBloom] = useState(0);
+  const settle = () => {
+    setBloom((b) => b + 1);
+    setStage("settled");
+  };
+
   const advance = (from: 0 | 1) => {
     if (from === 0 && videos[1] && v1.current) {
       v1.current
         .play()
         .then(() => setStage("v1"))
-        .catch(() => setStage("settled"));
+        .catch(settle);
     } else {
-      setStage("settled");
+      settle();
     }
   };
 
@@ -117,21 +124,21 @@ export default function CineMedia({
     <div ref={ref} className={`absolute inset-0 overflow-hidden ${className}`} aria-hidden>
       {preStill ? (
         <img
-          src={`/experience/${preStill}.jpg`}
+          src={stillPath(preStill, small)}
           alt=""
           loading="lazy"
           decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
-          style={{ opacity: showPre ? 1 : 0, transition: "opacity 600ms ease" }}
+          style={{ opacity: showPre ? 1 : 0, transition: "opacity 1000ms ease" }}
         />
       ) : null}
       <img
-        src={`/experience/${still}.jpg`}
+        src={stillPath(still, small)}
         alt=""
         loading="lazy"
         decoding="async"
         className={`absolute inset-0 h-full w-full object-cover ${reduced || !active ? "" : "mise-l-ken"}`}
-        style={preStill ? { opacity: showPre ? 0 : 1, transition: "opacity 600ms ease" } : undefined}
+        style={preStill ? { opacity: showPre ? 0 : 1, transition: "opacity 1000ms ease" } : undefined}
       />
       {allowed ? (
         <>
@@ -144,7 +151,7 @@ export default function CineMedia({
             onEnded={() => advance(0)}
             onError={() => setStage("settled")}
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ opacity: stage === "v0" ? 1 : 0, transition: "opacity 600ms ease" }}
+            style={{ opacity: stage === "v0" ? 1 : 0, transition: "opacity 1100ms ease" }}
           />
           {videos[1] ? (
             <video
@@ -156,11 +163,12 @@ export default function CineMedia({
               onEnded={() => advance(1)}
               onError={() => setStage("settled")}
               className="absolute inset-0 h-full w-full object-cover"
-              style={{ opacity: stage === "v1" ? 1 : 0, transition: "opacity 400ms ease" }}
+              style={{ opacity: stage === "v1" ? 1 : 0, transition: "opacity 1100ms ease" }}
             />
           ) : null}
         </>
       ) : null}
+      {bloom > 0 && <HandoffVeil key={bloom} />}
       <div className="absolute inset-0" style={{ background: `rgba(2,8,6,${dim})` }} />
       <div className="absolute inset-0 bg-gradient-to-b from-ink-950 via-transparent to-ink-950" />
     </div>

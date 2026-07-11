@@ -327,7 +327,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
         <div className="relative h-[min(720px,92vh)] w-full overflow-hidden rounded-[28px] border border-white/10 shadow-2xl shadow-black/60">
           {/* forms live on both halves; the panel covers the sleeping one */}
           <div
-            className={`absolute inset-y-0 left-0 flex w-1/2 items-center justify-center overflow-y-auto bg-ink-950/80 p-8 transition-opacity duration-500 ${
+            className={`mise-noscrollbar absolute inset-y-0 left-0 flex w-1/2 items-center justify-center overflow-y-auto bg-ink-950/80 p-8 transition-opacity duration-500 ${
               isLogin ? "pointer-events-none opacity-0" : "opacity-100"
             }`}
             style={{ transitionDelay: isLogin ? "0ms" : "260ms" }}
@@ -338,7 +338,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
             </div>
           </div>
           <div
-            className={`absolute inset-y-0 right-0 flex w-1/2 items-center justify-center overflow-y-auto bg-ink-950/80 p-8 transition-opacity duration-500 ${
+            className={`mise-noscrollbar absolute inset-y-0 right-0 flex w-1/2 items-center justify-center overflow-y-auto bg-ink-950/80 p-8 transition-opacity duration-500 ${
               isLogin ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
             style={{ transitionDelay: isLogin ? "260ms" : "0ms" }}
@@ -362,46 +362,64 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
         </div>
       </div>
 
-      {/* ── mobile: the morphing card ── */}
-      <div className="relative flex h-full flex-col overflow-y-auto px-4 pb-8 pt-6 lg:hidden">
-        {/* compact cinematic header */}
-        <div className="relative mb-5 shrink-0 overflow-hidden rounded-2xl border border-white/10">
+      {/* ── mobile: full-bleed cinema behind the morphing glass card ── */}
+      <div className="mise-noscrollbar relative flex h-full flex-col overflow-y-auto lg:hidden">
+        {/* the 9:16 film stills the user shot for phones — full vibrancy */}
+        <div className="fixed inset-0" aria-hidden>
           <img
-            src={`/experience/${isLogin ? "table" : "dawn"}.jpg`}
+            src="/experience/m/table.jpg"
             alt=""
             decoding="async"
-            className="h-28 w-full object-cover"
-            style={{ transition: "opacity 500ms ease" }}
+            className="mise-l-ken absolute inset-0 h-full w-full object-cover"
+            style={{ opacity: isLogin ? 1 : 0, transition: "opacity 700ms ease" }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/85 to-ink-950/20" />
-          <Link href="/" className="absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2.5">
-            <Logo size={36} />
-            <span className="font-display text-lg font-semibold text-white">Mise</span>
-          </Link>
-          <p className="absolute bottom-2.5 right-4 font-mono text-[9px] uppercase tracking-[0.3em] text-slate-300">
-            Every plate · Every penny
-          </p>
+          <img
+            src="/experience/m/dawn.jpg"
+            alt=""
+            decoding="async"
+            className="mise-l-ken absolute inset-0 h-full w-full object-cover"
+            style={{ opacity: isLogin ? 0 : 1, transition: "opacity 700ms ease" }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-ink-950/80 via-ink-950/35 to-ink-950/90" />
         </div>
 
-        <div key={mode} className="mise-auth-stagger mx-auto w-full max-w-md">
-          {isLogin ? <LoginForm active /> : <SignupForm active />}
-          <p className="mt-5 text-center text-sm text-slate-300">
-            {isLogin ? (
-              <>
-                New here?{" "}
-                <button type="button" onClick={() => switchTo("signup")} className="font-medium text-brand-300 transition hover:text-brand-200">
-                  Register your hotel
-                </button>
-              </>
-            ) : (
-              <>
-                Already have an account?{" "}
-                <button type="button" onClick={() => switchTo("login")} className="font-medium text-brand-300 transition hover:text-brand-200">
-                  Sign in
-                </button>
-              </>
-            )}
-          </p>
+        <div className="relative flex min-h-full flex-col px-4 pb-8 pt-6">
+          <Link href="/" className="mb-6 flex items-center gap-2.5">
+            <Logo size={38} />
+            <span className="font-display text-xl font-semibold text-white drop-shadow">Mise</span>
+            <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.3em] text-slate-300 drop-shadow">
+              Every plate · Every penny
+            </span>
+          </Link>
+
+          <div key={mode} className="mise-auth-stagger mx-auto mt-auto w-full max-w-md">
+            <h1 className="mb-4 font-display text-3xl leading-tight text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.7)]">
+              {isLogin ? (
+                <>Welcome back to <span className="mise-profit-text italic">the pass.</span></>
+              ) : (
+                <>Set your house <span className="mise-profit-text italic">in order.</span></>
+              )}
+            </h1>
+            {isLogin ? <LoginForm active /> : <SignupForm active />}
+            <p className="mb-2 mt-5 text-center text-sm text-slate-200 drop-shadow">
+              {isLogin ? (
+                <>
+                  New here?{" "}
+                  <button type="button" onClick={() => switchTo("signup")} className="mise-press font-semibold text-brand-300 transition hover:text-brand-200">
+                    Register your hotel →
+                  </button>
+                </>
+              ) : (
+                <>
+                  Already have an account?{" "}
+                  <button type="button" onClick={() => switchTo("login")} className="mise-press font-semibold text-brand-300 transition hover:text-brand-200">
+                    ← Sign in
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="mt-auto" />
         </div>
       </div>
     </div>

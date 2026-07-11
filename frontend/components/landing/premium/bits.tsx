@@ -110,6 +110,27 @@ export function useSmallScreen() {
   return small;
 }
 
+/** The handoff veil: kitchen smoke billows + a warm light bloom swells at the
+    exact moment a film hands back to its still — the swap happens behind it.
+    Remount (fresh key) to play; it dissolves to invisible on its own. */
+export function HandoffVeil() {
+  return (
+    <div aria-hidden>
+      <div className="mise-l-bloom" />
+      <div className="mise-l-smoke">
+        <span style={{ left: "-14%", ["--sx" as string]: "0%", ["--so" as string]: 0.45, ["--st" as string]: "1.45s" }} />
+        <span style={{ left: "22%", animationDelay: "0.1s", ["--sx" as string]: "2%", ["--so" as string]: 0.55, ["--sd" as string]: "-4%", ["--st" as string]: "1.6s" }} />
+        <span style={{ left: "52%", animationDelay: "0.2s", ["--sx" as string]: "-1%", ["--so" as string]: 0.4, ["--st" as string]: "1.35s" }} />
+      </div>
+    </div>
+  );
+}
+
+/** Phones get the native 9:16 stills (user-generated, perfect framing);
+    everything else the 16:9 originals. */
+export const stillPath = (name: string, small: boolean) =>
+  `/experience/${small ? "m/" : ""}${name}.jpg`;
+
 /** Phones get the 640px encodes (~150-240KB); everything else the 720p ones. */
 export const filmPath = (name: string, small: boolean) =>
   `/experience/film/${small ? "m/" : ""}${name}.mp4`;

@@ -10,7 +10,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Aurora, btnGhost, btnPrimary, filmPath, Magnetic, useSmallScreen } from "./bits";
+import { Aurora, btnGhost, btnPrimary, filmPath, HandoffVeil, Magnetic, stillPath, useSmallScreen } from "./bits";
 import DashboardSim from "./DashboardSim";
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -153,20 +153,20 @@ export default function Hero({ start }: { start: boolean }) {
         {/* Act 1 backdrop — fire (film start) morphing into the dish (destination) */}
         <div ref={filmRef} className="absolute inset-0" style={{ transformOrigin: "50% 42%" }}>
           <img
-            src="/experience/fire.jpg"
+            src={stillPath("fire", small)}
             alt=""
             fetchPriority="high"
             decoding="async"
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ opacity: baseStill === "fire" ? 1 : 0, transition: "opacity 600ms ease" }}
+            style={{ opacity: baseStill === "fire" ? 1 : 0, transition: "opacity 1000ms ease" }}
           />
           <img
-            src="/experience/dish.jpg"
+            src={stillPath("dish", small)}
             alt=""
             fetchPriority="high"
             decoding="async"
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
-            style={{ opacity: baseStill === "dish" ? 1 : 0, transition: "opacity 600ms ease" }}
+            style={{ opacity: baseStill === "dish" ? 1 : 0, transition: "opacity 1000ms ease" }}
           />
           <video
             ref={vidRef}
@@ -177,13 +177,15 @@ export default function Hero({ start }: { start: boolean }) {
             onEnded={() => setFilm("done")}
             onError={() => setFilm("done")}
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ opacity: film === "playing" ? 1 : 0, transition: "opacity 350ms ease" }}
+            style={{ opacity: film === "playing" ? 1 : 0, transition: "opacity 1000ms ease" }}
           />
+          {/* smoke + bloom over the film→plate handoff */}
+          {film === "done" && <HandoffVeil />}
         </div>
         {/* Act 2 backdrop — above the clouds */}
         <img
           ref={skyRef}
-          src="/experience/sky.jpg"
+          src={stillPath("sky", small)}
           alt=""
           loading="lazy"
           decoding="async"

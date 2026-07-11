@@ -315,7 +315,14 @@ export default function FeatureTour() {
   return (
     // No overflow-hidden on this section — it would break the sticky demo panel.
     <section id="product" className="relative bg-ink-950">
-      <Aurora strength={0.5} />
+      <Aurora strength={0.8} />
+      {/* fill the void: faint dot grid + a warm hearth glow behind the panel */}
+      <div className="mise-dots pointer-events-none absolute inset-0" aria-hidden />
+      <div
+        className="pointer-events-none absolute right-[-8%] top-1/4 hidden h-[560px] w-[560px] rounded-full lg:block"
+        style={{ background: "radial-gradient(circle, rgba(16,185,129,0.10), rgba(234,183,138,0.06) 45%, transparent 70%)" }}
+        aria-hidden
+      />
       <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>
           <SectionHead

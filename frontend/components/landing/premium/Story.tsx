@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Reveal } from "@/components/Reveal";
-import { filmPath, usePrefersReducedMotion, useSmallScreen } from "./bits";
+import { filmPath, HandoffVeil, stillPath, usePrefersReducedMotion, useSmallScreen } from "./bits";
 
 type Beat = {
   still: string;
@@ -125,7 +125,7 @@ function FilmLayer({
   return (
     <div
       className="absolute inset-0"
-      style={{ opacity: seg === "warmup" || fading ? 0 : 1, transition: "opacity 450ms ease" }}
+      style={{ opacity: seg === "warmup" || fading ? 0 : 1, transition: "opacity 900ms ease" }}
     >
       <video
         ref={v0}
@@ -233,11 +233,15 @@ export default function Story() {
     return () => io.disconnect();
   }, []);
 
+  // The handoff moment: a soft light-bloom "breath" swells over the stage as
+  // the film hands back to the still, so the eye never catches the swap.
+  const [bloom, setBloom] = useState(0);
   const onFilmDone = useCallback(() => {
+    setBloom((b) => b + 1);
     setSt((s) => (s.film ? { base: s.film.to, film: { ...s.film, fading: true } } : s));
     window.setTimeout(() => {
       setSt((s) => (s.film?.fading ? { ...s, film: null } : s));
-    }, 520);
+    }, 980);
   }, []);
 
   const onFilmFail = useCallback(() => {
@@ -255,7 +259,7 @@ export default function Story() {
           !small || Math.abs(i - st.base) <= 1 || st.film?.to === i ? (
             <img
               key={b.still}
-              src={`/experience/${b.still}.jpg`}
+              src={stillPath(b.still, small)}
               alt=""
               loading={i === 0 ? "eager" : "lazy"}
               decoding="async"
@@ -275,6 +279,9 @@ export default function Story() {
             fading={st.film.fading}
           />
         ) : null}
+
+        {/* smoke + bloom hide every film→still handoff */}
+        {bloom > 0 && <HandoffVeil key={bloom} />}
 
         {/* veils */}
         <div className="pointer-events-none absolute inset-0" style={{ background: "rgba(2,8,6,0.38)" }} />

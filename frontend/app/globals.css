@@ -827,6 +827,47 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
     inset -2px -2px 5px color-mix(in srgb, #fff 70%, transparent);
 }
 
+/* A soft light-bloom "breath" that swells over the cinema stage exactly when
+   a film hands back to its still — the eye follows the light, not the swap. */
+@keyframes mise-l-bloom {
+  0%   { opacity: 0; transform: scale(0.55); }
+  28%  { opacity: 0.6; }
+  100% { opacity: 0; transform: scale(1.75); }
+}
+.mise-l-bloom {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 55%, rgba(255, 238, 205, 0.55), rgba(234, 183, 138, 0.28) 34%, transparent 68%);
+  animation: mise-l-bloom 1.15s ease-out both;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) { .mise-l-bloom { animation: none; opacity: 0; } }
+
+/* Kitchen smoke billows up and dissolves exactly over the film→still swap. */
+@keyframes mise-l-smoke-puff {
+  0%   { opacity: 0; transform: translate3d(var(--sx, 0%), 28%, 0) scale(0.5); }
+  22%  { opacity: var(--so, 0.5); }
+  100% { opacity: 0; transform: translate3d(calc(var(--sx, 0%) + var(--sd, 5%)), -52%, 0) scale(1.65); }
+}
+.mise-l-smoke { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.mise-l-smoke span {
+  position: absolute;
+  bottom: -22%;
+  width: 62vmax;
+  height: 62vmax;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(238, 232, 220, 0.4), rgba(198, 188, 172, 0.16) 46%, transparent 70%);
+  filter: blur(36px);
+  animation: mise-l-smoke-puff var(--st, 1.5s) ease-out both;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) { .mise-l-smoke span { animation: none; opacity: 0; } }
+
+/* Scrollable but never shows a scrollbar (auth gate form halves). */
+.mise-noscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.mise-noscrollbar::-webkit-scrollbar { display: none; }
+
 /* Command palette entrance: drops in with a breath of scale. */
 @keyframes mise-palette-in {
   from { opacity: 0; transform: translate(-50%, -8px) scale(0.985); }
