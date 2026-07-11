@@ -63,6 +63,15 @@ that works in BOTH themes:
 - `Toggle`: springy knob w/ overshoot; `Checkbox`: tick draws itself
 Glass (.mise-glass) stays for overlays/feature cards; flat+hairline for tables.
 
+### ⚠️ NO SECTION LEFT FLAT (user 2026-07-11, repeated twice — hard rule)
+The tactile kit (.mise-well / .mise-raised / .mise-feel / Button / Segmented /
+Toggle + hover-lift & press-in motion) must reach EVERY page — dashboard ✓,
+expenses ✓, sales ✓ … and still owed to: inventory, stock-take, purchasing,
+vendors, price-comparison, waste, recipes, party-order, allergens, food-safety,
+money, reports, payroll, employees, attendance, rota, staff, documents, audit,
+settings, profile, my, how-it-works, onboarding, CONTROL ROOM. When touching
+any page for any reason, apply the kit before closing the task.
+
 ### Per-section motion & style map (apply while doing each phase)
 - **Dashboard**: stat cards w/ count-up + sparklines + delta chips; aurora header band; greeting types itself
 - **Inventory**: rows hover-lift + press → item Drawer (Task A history+chain); stock Meters; LOW badge pulse; stagger-in list
