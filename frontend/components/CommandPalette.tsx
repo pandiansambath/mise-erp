@@ -135,7 +135,8 @@ export default function CommandPalette({
     <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Command palette">
       <div className="mise-fade-in absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
       <div className="mise-palette-in absolute left-1/2 top-[16vh] w-[min(600px,92vw)] -translate-x-1/2">
-        <div className="mise-glass overflow-hidden rounded-2xl">
+        {/* theme-safe surface: paper, not glass — glass washes out in light mode */}
+        <div className="overflow-hidden rounded-2xl border border-line bg-paper-2/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
           <div className="mise-well m-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
             <span aria-hidden className="text-fg-faint">⌕</span>
             <input
@@ -151,7 +152,7 @@ export default function CommandPalette({
             />
             <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-fg-faint">esc</kbd>
           </div>
-          <div ref={listRef} className="max-h-[46vh] overflow-y-auto overscroll-contain px-2 pb-2">
+          <div ref={listRef} className="mise-noscrollbar max-h-[46vh] overflow-y-auto overscroll-contain px-2 pb-2">
             {results.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-fg-faint">Nothing matches “{q}”</p>
             )}

@@ -49,7 +49,7 @@ function WowStat({
   const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "→";
   const show = (v: string) => (pct ? `${v}%` : fmt(v));
   return (
-    <div className="mise-well rounded-xl p-3.5">
+    <div className="mise-well mise-feel rounded-xl p-3.5">
       <p className="text-xs uppercase tracking-wide text-fg-faint">{label}</p>
       <p className="mt-1 font-mono text-xl font-semibold text-fg">{show(cur)}</p>
       <p className={`mt-0.5 text-xs ${diff === 0 ? "text-fg-faint" : good ? "text-brand-400" : "text-rose-400"}`}>
@@ -246,7 +246,7 @@ export default function DashboardPage() {
       {seeFinance && (week || donut) && (
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           {week && (
-            <Card>
+            <Card className="mise-feel">
               <div className="flex items-baseline justify-between">
                 <h3 className="font-semibold text-fg">Net sales · last 7 days</h3>
                 <span className="font-mono text-xs text-copper-300">
@@ -263,7 +263,7 @@ export default function DashboardPage() {
             </Card>
           )}
           {donut && curWeek && (
-            <Card>
+            <Card className="mise-feel">
               <h3 className="font-semibold text-fg">Where this week&apos;s money went</h3>
               <Donut
                 segments={donut}
@@ -278,7 +278,7 @@ export default function DashboardPage() {
       )}
 
       {seeFinance && curWeek && (
-        <Card className="mt-6">
+        <Card className="mise-feel mt-6">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-fg">Targets · this week</h3>
             <Link href="/reports" className="text-sm font-medium text-brand-400 hover:underline">

@@ -864,6 +864,15 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 }
 @media (prefers-reduced-motion: reduce) { .mise-l-smoke span { animation: none; opacity: 0; } }
 
+/* The touch-feel: surfaces lift toward the finger and settle when pressed.
+   Pair with .mise-well / .mise-raised / Card wherever a box invites touch. */
+.mise-feel { transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease; }
+.mise-feel:hover { transform: translateY(-2px); }
+.mise-feel:active { transform: translateY(0) scale(0.985); }
+@media (prefers-reduced-motion: reduce) {
+  .mise-feel:hover, .mise-feel:active { transform: none; }
+}
+
 /* Scrollable but never shows a scrollbar (auth gate form halves). */
 .mise-noscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .mise-noscrollbar::-webkit-scrollbar { display: none; }

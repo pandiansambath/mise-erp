@@ -58,8 +58,8 @@ export function StatCard({
   };
   const body = (
     <Card
-      className={`transition duration-300 hover:border-line-2 hover:bg-paper-2/90 ${
-        href ? "group cursor-pointer hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/30" : ""
+      className={`mise-feel h-full hover:border-line-2 hover:bg-paper-2/90 ${
+        href ? "group cursor-pointer hover:shadow-xl hover:shadow-black/30" : ""
       }`}
     >
       <p className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-fg-faint">
@@ -88,7 +88,7 @@ export function StatCard({
       {hint && <p className="mt-1 text-xs text-fg-faint">{hint}</p>}
     </Card>
   );
-  return href ? <Link href={href} className="block">{body}</Link> : body;
+  return href ? <Link href={href} className="block h-full">{body}</Link> : body;
 }
 
 export function PageHeader({
