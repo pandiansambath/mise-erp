@@ -196,18 +196,25 @@ every list staggers 40ms/row (cap 8); numbers always AnimatedNumber.
       overnight shifts roll past midnight; clock-out mid-break folds break in
 
 ## PHASE 5 — OPS CLUSTER (inventory · purchasing · vendors · recipes · party-order · stock-take · waste · allergens · food-safety)
-- [ ] **/inventory — includes Task A**: per-item Drawer = one-stop history
-      (stock, avg cost, chosen supplier, purchase TIMELINE; click an entry →
-      the full RECEIPT/chain of items delivered together via reference_id)
-- [ ] **/inventory**: low-stock rows pulse amber; value-on-shelf ticker;
-      lot/stock-lot visual per vendor
-- [ ] **/purchasing**: indent → PO pipeline as a visual flow (three columns:
-      Indent → POs by vendor → Received), status chips animated
-- [ ] **/recipes**: cost breakdown per dish like the landing mock (ingredient
-      rows + GP badge + re-costs-live note); margin health color scale
-- [ ] **/vendors**: vendor cards w/ spend sparkline, price-list import CTA
-- [ ] **/party-order, /stock-take, /waste, /allergens, /food-safety**: bring to
-      kit standard (headers, tables, empty states, skeletons) + small live touches
+- [x] **/inventory — Task A**: ✅ one-stop item history was ALREADY the inline
+      expansion (purchase cards + receipt chain via reference_id, 974123f);
+      287804e added the missing piece: price-paid-over-time AreaChart inside it
+      + tactile purchase cards + press/raised row buttons
+- [ ] **/inventory extras**: low-stock rows pulse amber; value-on-shelf ticker
+      (small polish, later pass)
+- [x] **/purchasing**: ✅ 879d060 tactile pass (press/raised buttons everywhere);
+      pipeline-flow visual = later polish
+- [x] **/recipes**: ✅ 1e9aeba "where the plate cost goes" ingredient Donut in
+      CostDetail + KPI wells w/ feel; margin colors already existed
+- [x] **/vendors**: ✅ 879d060 feel/raised vendor cards, well inputs, tactile
+      import buttons; spend sparkline = later (needs spend-by-vendor endpoint)
+- [x] **/party-order**: ✅ 1e9aeba raised/press buttons + feel quote cards
+- [x] **/stock-take**: ✅ ⌘K "Start a stock take" spotlight deep link (a30475a)
+- [x] **/waste**: ✅ 287804e why-binned Donut + most-wasted Bars + Log-waste
+      1-click + tactile form
+- [x] **/allergens**: ✅ 287804e menu-safety Donut (green/red/amber) + feel cards
+- [x] **/food-safety**: ✅ 287804e temps-in-range Donut + today's-checks progress
+      bar + tactile check rows + well inputs
 
 ## PHASE 6 — PEOPLE CLUSTER (employees · staff · attendance · rota · my · profile)
 - [ ] **/rota**: week grid with drag-feel polish, labour % meter live under the
