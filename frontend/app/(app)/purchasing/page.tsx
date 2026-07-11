@@ -419,7 +419,7 @@ export default function PurchasingPage() {
               type="button"
               onClick={orderAllLow}
               title="Pull every low-stock item (topped up to par) into the indent"
-              className="rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
+              className="mise-press rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
             >
               🛒 Order all low-stock
             </button>
@@ -435,10 +435,10 @@ export default function PurchasingPage() {
           <form onSubmit={submitIndent} className="space-y-3">
             <ItemPicker items={orderable} lines={lines} onChange={setLines} lineExtra={supplierPicker} />
             <div className="flex flex-wrap gap-2">
-              <button type="submit" className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
+              <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
                 Submit indent
               </button>
-              <button type="button" onClick={resetIndent} className="rounded-lg border border-line-2 px-4 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2">
+              <button type="button" onClick={resetIndent} className="mise-raised mise-press rounded-lg px-4 py-1.5 text-sm font-medium text-fg-soft">
                 Clear
               </button>
             </div>
@@ -636,7 +636,7 @@ export default function PurchasingPage() {
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf`, `${po.po_number}.pdf`)}
-                            className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/10"
+                            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
                           >
                             ⬇ {po.status === "RECEIVED" ? "PO (ordered)" : "PDF"}
                           </button>
@@ -644,7 +644,7 @@ export default function PurchasingPage() {
                             <button
                               onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf?received=1`, `${po.po_number}-received.pdf`)}
                               title="What actually arrived (ordered vs received + the note)"
-                              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/10"
+                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
                             >
                               ⬇ Received note
                             </button>
@@ -653,7 +653,7 @@ export default function PurchasingPage() {
                             <button
                               onClick={() => detail && openReceive(detail)}
                               disabled={!detail}
-                              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft transition hover:bg-paper-2 disabled:opacity-50"
+                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft disabled:opacity-50"
                             >
                               ✓ Receive into stock
                             </button>
@@ -780,7 +780,7 @@ export default function PurchasingPage() {
             )}
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setRecvPo(null)} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper">Cancel</button>
-              <button onClick={submitReceive} disabled={recvBusy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              <button onClick={submitReceive} disabled={recvBusy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {recvBusy ? "Receiving…" : "✓ Receive into stock"}
               </button>
             </div>

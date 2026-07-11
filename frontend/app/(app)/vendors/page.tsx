@@ -23,7 +23,7 @@ const TYPE_EMOJI: Record<string, string> = {
   FOOD: "🥕", BEVERAGE: "🧃", BAR: "🍷", UTILITY: "🔌", SERVICE: "🧰", PROPERTY: "🏠",
 };
 const inputCls =
-  "mt-1 w-full rounded-lg border border-line-2 bg-paper px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+  "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none";
 
 export default function VendorsPage() {
   const { user } = useAuth();
@@ -245,7 +245,7 @@ export default function VendorsPage() {
       {notice && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
 
       {canWrite && (
-        <Card className="mb-6">
+        <Card className="mise-feel mb-6" id="vendor-form">
           <p className="mb-3 text-sm font-medium text-fg-soft">Add a vendor</p>
           <form onSubmit={addVendor} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
@@ -314,7 +314,7 @@ export default function VendorsPage() {
               </div>
             </div>
             <div className="sm:col-span-3">
-              <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+              <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
                 Add vendor
               </button>
             </div>
@@ -337,10 +337,10 @@ export default function VendorsPage() {
                 key={v.id}
                 type="button"
                 onClick={() => selectVendor(v.id)}
-                className={`rounded-2xl border p-4 text-left transition duration-200 ${
+                className={`mise-feel rounded-2xl border p-4 text-left transition duration-200 ${
                   sel
                     ? "border-brand-500 bg-brand-400/10 shadow-lg shadow-brand-600/20"
-                    : "border-line bg-paper/90 hover:border-line-2 hover:bg-paper-2/90"
+                    : "mise-raised border-line"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -455,7 +455,7 @@ export default function VendorsPage() {
                       value={piPrice}
                       onChange={(e) => setPiPrice(numeric(e.target.value))}
                       placeholder="price"
-                      className="w-28 rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+                      className="mise-well w-28 rounded-lg px-3 py-2 text-sm outline-none"
                     />
                     {(() => {
                       const it = items.find((i) => i.id === piItem);
@@ -472,7 +472,7 @@ export default function VendorsPage() {
                           ) : (
                             <span className="text-xs text-fg-faint">per {it?.unit || "unit"}</span>
                           )}
-                          <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                          <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
                             Save price
                           </button>
                           {hasPack && per > 0 && (
@@ -492,7 +492,7 @@ export default function VendorsPage() {
                   </p>
                 </form>
 
-                <div className="mt-5 rounded-xl border border-line bg-paper-2/60 p-3">
+                <div className="mise-well mt-5 rounded-xl p-3">
                   <p className="text-sm font-medium text-fg-soft">Or bulk import a price list</p>
                   <p className="mb-2 mt-1 text-xs text-fg-faint">
                     Upload the vendor&apos;s <b>Excel/CSV</b> — columns <b>Item</b>, <b>Price</b>, optional <b>Unit</b>.
@@ -503,21 +503,21 @@ export default function VendorsPage() {
                     <button
                       type="button"
                       onClick={() => fileRef.current?.click()}
-                      className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                      className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
                     >
                       ⬆ Import
                     </button>
                     <button
                       type="button"
                       onClick={() => downloadFile("/vendors/price-list-template.xlsx", "mise-vendor-price-list.xlsx")}
-                      className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                      className="mise-raised mise-press rounded-lg px-4 py-2 text-sm font-medium text-fg-soft"
                     >
                       ⬇ Template (Excel)
                     </button>
                     <button
                       type="button"
                       onClick={() => downloadFile("/vendors/price-list-template.csv", "mise-vendor-price-list.csv")}
-                      className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                      className="mise-raised mise-press rounded-lg px-4 py-2 text-sm font-medium text-fg-soft"
                     >
                       CSV
                     </button>
