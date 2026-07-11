@@ -754,6 +754,37 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-press:active { transform: none; }
 }
 
+/* ── Liquid glass (Apple 2025 language, translated) ────────────────────────
+   Translucent panel that refracts what's behind it: blur + saturation boost,
+   a 1px inner light rim along the top edge, and a soft specular falloff. */
+.mise-glass {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03) 40%, rgba(255, 255, 255, 0.05));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 60px -18px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+}
+
+/* Auth gate: content swap — children rise in with a stagger. */
+@keyframes mise-auth-rise {
+  from { opacity: 0; transform: translateY(14px); filter: blur(5px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.mise-auth-stagger > * { animation: mise-auth-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mise-auth-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.mise-auth-stagger > *:nth-child(2) { animation-delay: 0.12s; }
+.mise-auth-stagger > *:nth-child(3) { animation-delay: 0.19s; }
+.mise-auth-stagger > *:nth-child(n + 4) { animation-delay: 0.26s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-auth-stagger > * { animation: none; }
+}
+
 /* Wrong-credentials shake — the form says "no" like a head shake. */
 @keyframes mise-shake {
   0%, 100% { transform: translateX(0); }
