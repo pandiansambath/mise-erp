@@ -8,12 +8,16 @@ import { Sparkline } from "@/components/charts";
 export function Card({
   children,
   className = "",
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  /** anchor for deep links — ⌘K one-click actions spotlight cards by id */
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={`rounded-2xl border border-line bg-paper/90 p-5 shadow-lg shadow-black/20 ${className}`}
     >
       {children}

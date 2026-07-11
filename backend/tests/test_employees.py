@@ -73,6 +73,40 @@ async def test_break_before_clock_in_fails(db, hotel):
         await service.punch(db, emp, "BREAK_START")
 
 
+@pytest.mark.asyncio
+async def test_clock_out_during_break_folds_break_in(db, hotel):
+    """Clocking out mid-break must close the break, not silently drop it."""
+    emp = await service.create_employee(db, hotel.id, full_name="Y")
+    await service.punch(db, emp, "CLOCK_IN")
+    await service.punch(db, emp, "BREAK_START")
+    rec = await service.punch(db, emp, "CLOCK_OUT")
+    assert rec.break_start is None
+    assert rec.break_end is not None  # break was closed at clock-out
+
+
+@pytest.mark.asyncio
+async def test_edit_attendance_overnight_shift(db, hotel):
+    """Out earlier than in = closed past midnight → 18:00→01:30 is 7.5h, not 0."""
+    emp = await service.create_employee(db, hotel.id, full_name="Night")
+    rec = await service.edit_attendance(
+        db, emp, date(2026, 7, 10), "GB",
+        clock_in="18:00", clock_out="01:30", break_minutes=0,
+    )
+    assert rec.working_hours == Decimal("7.50")
+    assert rec.clock_out > rec.clock_in
+
+
+@pytest.mark.asyncio
+async def test_edit_attendance_full_day(db, hotel):
+    """The reported case: 11:00 → 23:30 with no break must be 12.50 hours."""
+    emp = await service.create_employee(db, hotel.id, full_name="Long")
+    rec = await service.edit_attendance(
+        db, emp, date(2026, 7, 10), "GB",
+        clock_in="11:00", clock_out="23:30", break_minutes=0,
+    )
+    assert rec.working_hours == Decimal("12.50")
+
+
 # ── API + RBAC ────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_manager_can_add_employee(client, make_user, auth_header):

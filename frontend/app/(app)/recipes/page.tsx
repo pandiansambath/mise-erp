@@ -11,6 +11,7 @@ import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 function marginTone(pct: number): "green" | "amber" | "red" {
   if (pct >= 65) return "green";
@@ -221,6 +222,9 @@ export default function RecipesPage() {
   // New/edit-recipe form
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+
+  // ⌘K "Create a recipe" lands here with ?new=1 → open + spotlight the form
+  useDeepLink({ new: () => { setShowForm(true); spotlight("recipe-form"); } }, !loading);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [servings, setServings] = useState("1");
@@ -560,7 +564,7 @@ export default function RecipesPage() {
               + New recipe
             </button>
           ) : (
-            <Card>
+            <Card id="recipe-form">
               <p className="mb-3 text-sm font-medium text-fg-soft">
                 {editId ? "Edit recipe" : "New recipe"}
               </p>

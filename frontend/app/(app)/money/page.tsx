@@ -13,9 +13,11 @@ import {
   type MoneyCentre,
   type PnL,
 } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Bars, Donut, Meter } from "@/components/charts";
+import { AnimatedNumber } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
-import { useCurrency } from "@/lib/currency";
+import { CURRENCIES, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 
 const CLASS_META: Record<string, { emoji: string; label: string; tone: "green" | "amber" | "slate" | "red" }> = {
@@ -77,18 +79,17 @@ function BudgetCard() {
   const show = (v: string | null, money?: boolean) =>
     v == null ? "—" : money ? format(v) : `${v}%`;
 
+  // % targets that are set → live gauges (needle animates in)
+  const meterRows = ROWS.filter((r) => !r.money && b.targets[r.key] != null);
+
   return (
-    <Card className="mt-6">
+    <Card className="mise-feel mt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold text-fg">Budget vs actual — this month</h3>
         {canWrite && (
-          <button
-            type="button"
-            onClick={() => setEdit((v) => !v)}
-            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-          >
+          <Button variant="soft" size="sm" onClick={() => setEdit((v) => !v)}>
             {edit ? "Close" : "✎ Set targets"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -102,20 +103,30 @@ function BudgetCard() {
                 value={form[r.key] ?? ""}
                 onChange={(e) => setForm({ ...form, [r.key]: e.target.value })}
                 placeholder="—"
-                className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-sm text-fg outline-none focus:border-brand-500"
+                className="mise-well mt-1 w-full rounded-lg px-2 py-1.5 text-sm text-fg outline-none"
               />
             </label>
           ))}
           <div className="col-span-2 sm:col-span-4">
-            <button
-              type="button"
-              onClick={save}
-              disabled={busy}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-            >
-              {busy ? "Saving…" : "Save targets"}
-            </button>
+            <Button variant="primary" onClick={save} busy={busy} busyLabel="Saving…">
+              Save targets
+            </Button>
           </div>
+        </div>
+      )}
+
+      {meterRows.length > 0 && (
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {meterRows.map((r) => (
+            <div key={r.key} className="mise-well mise-feel rounded-xl p-3">
+              <Meter
+                label={r.label}
+                value={parseFloat(b.actual[r.key] ?? "0")}
+                target={parseFloat(b.targets[r.key] ?? "0")}
+                goodBelow={!r.higherBetter}
+              />
+            </div>
+          ))}
         </div>
       )}
 
@@ -195,7 +206,7 @@ function MenuEngineeringCard() {
   if (!me) return null;
 
   return (
-    <Card className="mt-6">
+    <Card className="mise-feel mt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="font-semibold text-fg">Menu engineering</h3>
@@ -206,13 +217,9 @@ function MenuEngineeringCard() {
           </p>
         </div>
         {canWrite && (
-          <button
-            type="button"
-            onClick={() => setEntry((v) => !v)}
-            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-          >
+          <Button variant="soft" size="sm" onClick={() => setEntry((v) => !v)}>
             {entry ? "Close" : "✎ Record dishes sold (today)"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -230,19 +237,14 @@ function MenuEngineeringCard() {
                   value={counts[d.recipe_id] ?? ""}
                   onChange={(e) => setCounts({ ...counts, [d.recipe_id]: e.target.value })}
                   placeholder="0"
-                  className="w-16 rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-center text-sm outline-none focus:border-brand-500"
+                  className="mise-well w-16 rounded-lg px-2 py-1 text-center text-sm outline-none"
                 />
               </label>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={save}
-            disabled={busy}
-            className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-          >
-            {busy ? "Saving…" : "Save"}
-          </button>
+          <Button variant="primary" className="mt-3" onClick={save} busy={busy} busyLabel="Saving…">
+            Save
+          </Button>
         </div>
       )}
 
@@ -340,7 +342,9 @@ function InfoDot({
 }
 
 export default function MoneyPage() {
-  const { format } = useCurrency();
+  const { format, currency } = useCurrency();
+  const rate = CURRENCIES[currency].rate;
+  const symbol = CURRENCIES[currency].symbol;
   const [data, setData] = useState<MoneyCentre | null>(null);
   const [pnl, setPnl] = useState<PnL | null>(null);
   const [openInfo, setOpenInfo] = useState<string | null>(null);
@@ -399,7 +403,7 @@ export default function MoneyPage() {
 
       {/* Profit after everything — the plain in − out = profit picture */}
       {pnl && (
-        <Card className="mt-6">
+        <Card className="mise-feel mt-6">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-fg">Profit — after everything</h3>
             <span className="text-xs text-fg-faint">month to date</span>
@@ -407,6 +411,19 @@ export default function MoneyPage() {
           <p className="mt-1 text-xs text-fg-faint">
             Follow it top to bottom: money in, take away what you spent, and the green box is what you keep.
           </p>
+
+          {/* The same story as one picture — bars draw in when scrolled to */}
+          <div className="mise-well mt-4 rounded-xl p-3">
+            <Bars
+              formatValue={(v) => format(String(v))}
+              items={[
+                { label: "Money in", value: Math.max(0, parseFloat(pnl.net_sales)), color: "#10b981" },
+                { label: "Food cost", value: Math.max(0, parseFloat(pnl.cost_of_sales)), color: "#f43f5e" },
+                { label: "Running costs", value: Math.max(0, parseFloat(pnl.operating_expenses)), color: "#f59e0b" },
+                { label: "You keep", value: Math.max(0, parseFloat(pnl.net_profit)), color: "#38bdf8" },
+              ]}
+            />
+          </div>
 
           {/* Plain-English one-liner */}
           <div className="mt-4 rounded-xl bg-paper-2/70 px-4 py-3 text-sm text-fg-soft">
@@ -485,7 +502,7 @@ export default function MoneyPage() {
                 <span className="ml-2 text-xs text-fg-faint">what you keep</span>
               </span>
               <span className={`text-2xl font-bold ${parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}`}>
-                {format(pnl.net_profit)}
+                <AnimatedNumber value={parseFloat(pnl.net_profit) * rate} prefix={symbol} decimals={2} />
               </span>
             </div>
           </div>
@@ -513,7 +530,7 @@ export default function MoneyPage() {
       )}
 
       {/* Break-even */}
-      <Card className="mt-6">
+      <Card className="mise-feel mt-6">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-fg">Break-even</h3>
           <span className="text-xs text-fg-faint">based on this period&apos;s recorded fixed costs</span>
@@ -585,7 +602,7 @@ export default function MoneyPage() {
                 ? "⚠ A few points of leak — check portion sizes and waste."
                 : "🔴 Big leak — well above ideal. Likely over-portioning, waste, theft, or under-priced dishes.";
         return (
-          <Card className="mt-6">
+          <Card className="mise-feel mt-6">
             <h3 className="font-semibold text-fg">Food-cost variance — ideal vs actual</h3>
             <p className="text-xs text-fg-faint">
               What your menu <i>should</i> cost (dishes sold × recipe) vs what your books <i>actually</i> show
@@ -622,7 +639,7 @@ export default function MoneyPage() {
       })()}
 
       {/* Waste — a pure profit leak */}
-      <Card className="mt-6 flex flex-wrap items-center justify-between gap-3">
+      <Card className="mise-feel mt-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold text-fg">🗑️ Waste this period</h3>
           <p className="text-xs text-fg-faint">
@@ -640,7 +657,7 @@ export default function MoneyPage() {
           </div>
           <Link
             href="/waste"
-            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
           >
             Log waste →
           </Link>
@@ -649,36 +666,29 @@ export default function MoneyPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Stock value by category */}
-        <Card>
+        <Card className="mise-feel">
           <h3 className="font-semibold text-fg">Stock value by category</h3>
           <p className="text-xs text-fg-faint">{format(data.stock_value.total)} total, at weighted-average cost</p>
           {data.stock_value.by_category.length === 0 ? (
             <p className="mt-3 text-sm text-fg-faint">No stock recorded yet.</p>
           ) : (
-            <ul className="mt-3 space-y-2">
-              {data.stock_value.by_category.map((c) => {
-                const pct =
-                  parseFloat(data.stock_value.total) > 0
-                    ? (parseFloat(c.value) / parseFloat(data.stock_value.total)) * 100
-                    : 0;
-                return (
-                  <li key={c.category}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-fg-soft">{c.category}</span>
-                      <span className="font-medium text-fg">{format(c.value)}</span>
-                    </div>
-                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-glass/10">
-                      <div className="h-full rounded-full bg-copper-400" style={{ width: `${pct}%` }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="mt-4">
+              <Donut
+                centerLabel="on hand"
+                centerValue={format(data.stock_value.total)}
+                formatValue={(v) => format(String(v))}
+                segments={data.stock_value.by_category.map((c, i) => ({
+                  label: c.category,
+                  value: parseFloat(c.value),
+                  color: ["#d97742", "#10b981", "#38bdf8", "#f59e0b", "#a78bfa", "#f43f5e", "#94a3b8"][i % 7],
+                }))}
+              />
+            </div>
           )}
         </Card>
 
         {/* Dish margins */}
-        <Card>
+        <Card className="mise-feel">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-fg">Dish margins</h3>
             <Link href="/recipes" className="text-xs text-brand-400 hover:underline">
@@ -707,7 +717,7 @@ export default function MoneyPage() {
       </div>
 
       {/* Price-rise alerts */}
-      <Card className="mt-6">
+      <Card className="mise-feel mt-6">
         <h3 className="font-semibold text-fg">Vendor price-rise alerts</h3>
         <p className="text-xs text-fg-faint">
           Items whose price climbed vs the last time you ordered — based on what you actually paid.

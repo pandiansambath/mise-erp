@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type Employee, type PayrollRow } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import Link from "next/link";
 import { SortTh, useSort } from "@/components/sortable";
 import { Select } from "@/components/Select";
@@ -24,6 +24,37 @@ type Advance = {
 };
 
 const thisMonth = () => localISODate().slice(0, 7); // local YYYY-MM
+
+// ISO week helpers — the backend speaks "2026-W28" for weekly-paid (hourly) staff.
+const thisWeek = () => {
+  const d = new Date();
+  const thu = new Date(d); // ISO week number = week of this date's Thursday
+  thu.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
+  const jan4 = new Date(thu.getFullYear(), 0, 4);
+  const week1Mon = new Date(jan4);
+  week1Mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  const week = Math.round((thu.getTime() - week1Mon.getTime()) / (7 * 86400000)) + 1;
+  return `${thu.getFullYear()}-W${String(week).padStart(2, "0")}`;
+};
+
+const isoWeekMonday = (w: string): Date => {
+  const [y, wk] = [parseInt(w.slice(0, 4), 10), parseInt(w.slice(6), 10)];
+  const jan4 = new Date(y, 0, 4);
+  const week1Mon = new Date(jan4);
+  week1Mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  const mon = new Date(week1Mon);
+  mon.setDate(week1Mon.getDate() + (wk - 1) * 7);
+  return mon;
+};
+
+const weekLabel = (w: string): string => {
+  if (!/^\d{4}-W\d{2}$/.test(w)) return w;
+  const mon = isoWeekMonday(w);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const fmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return `${fmt(mon)} – ${fmt(sun)}`;
+};
 
 const statusTone: Record<string, "slate" | "amber" | "green"> = {
   DRAFT: "slate",
@@ -72,7 +103,13 @@ export default function PayrollPage() {
   const confirm = useConfirm();
   const canWrite = can(user?.role, "payroll:write");
 
+  // Pay cadence: monthly runs (salaried + hourly) or weekly runs (hourly staff
+  // paid week-by-week). Each keeps its own picked period.
+  const [cadence, setCadence] = useState<"MONTHLY" | "WEEKLY">("MONTHLY");
   const [period, setPeriod] = useState(thisMonth());
+  const [week, setWeek] = useState(thisWeek());
+  const active = cadence === "WEEKLY" ? week : period;
+  const activeLabel = cadence === "WEEKLY" ? `week ${week.slice(6)} (${weekLabel(week)})` : period;
   const [workingDays, setWorkingDays] = useState("26");
   const [helpOpen, setHelpOpen] = useState(true);
   const [openInfo, setOpenInfo] = useState<string | null>(null);
@@ -107,16 +144,26 @@ export default function PayrollPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function changePeriod(p: string) {
-    setPeriod(p);
+  async function changePeriod(p: string, c: "MONTHLY" | "WEEKLY" = cadence) {
+    if (!p) return;
+    if (c === "WEEKLY") setWeek(p);
+    else setPeriod(p);
     setLoading(true);
     await load(p).finally(() => setLoading(false));
   }
 
+  async function switchCadence(c: "MONTHLY" | "WEEKLY") {
+    setCadence(c);
+    await changePeriod(c === "WEEKLY" ? week : period, c);
+  }
+
   async function runPayroll() {
     const ok = await confirm({
-      title: "Run payroll?",
-      message: `This calculates pay for ${period} using ${workingDays || "26"} working days for every active employee.`,
+      title: cadence === "WEEKLY" ? "Run weekly payroll?" : "Run payroll?",
+      message:
+        cadence === "WEEKLY"
+          ? `This calculates pay for ${activeLabel} for every hourly-paid employee (weekly-paid staff). Salaried staff are paid on their monthly run.`
+          : `This calculates pay for ${period} using ${workingDays || "26"} working days for every active employee.`,
       confirmText: "Run payroll",
     });
     if (!ok) return;
@@ -124,7 +171,7 @@ export default function PayrollPage() {
     setError(null);
     try {
       const result = await api.post<PayrollRow[]>("/payroll/process", {
-        pay_period: period,
+        pay_period: active,
         working_days: parseInt(workingDays || "26", 10),
       });
       setRows(result);
@@ -146,7 +193,7 @@ export default function PayrollPage() {
     });
     if (!ok) return;
     await api.post(`/payroll/${id}/${action}`);
-    await load(period);
+    await load(active);
   }
 
   async function approveAll() {
@@ -161,7 +208,7 @@ export default function PayrollPage() {
     setBusy(true);
     setError(null);
     try {
-      setRows(await api.post<PayrollRow[]>(`/payroll/approve-all?pay_period=${period}`));
+      setRows(await api.post<PayrollRow[]>(`/payroll/approve-all?pay_period=${active}`));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not approve all");
     } finally {
@@ -180,7 +227,7 @@ export default function PayrollPage() {
         amount: advAmount,
         reason: advReason || null,
         given_date: localISODate(),
-        deduct_period: period,
+        deduct_period: active,
       });
       setAdvEmp("");
       setAdvAmount("");
@@ -239,6 +286,12 @@ export default function PayrollPage() {
               </div>
             </div>
             <p>
+              <b className="text-fg">Paying some people weekly?</b> Switch the cadence to{" "}
+              <b className="text-fg">Weekly</b>, pick the week, and run — it pays your <b className="text-fg">hourly</b> staff
+              for that Monday–Sunday week&apos;s attendance. Salaried staff aren&apos;t touched; run their month as usual.
+              Weekly runs also recover any advance scheduled for the month that week ends in.
+            </p>
+            <p>
               <b className="text-fg">Working days</b> is the divisor that turns a monthly salary into a daily rate — set it to
               how many days a full month is for you (e.g. <b className="text-fg">26</b> if staff work 6 days/week,{" "}
               <b className="text-fg">30</b> for every day).
@@ -268,44 +321,73 @@ export default function PayrollPage() {
         )}
       </Card>
 
-      <Card className="mb-6">
+      <Card className="mise-feel mb-6">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs font-medium text-fg-faint">Pay period</label>
-            <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mt-1 rounded-lg border border-line-2 px-3 py-2 text-sm" />
+            <label className="block text-xs font-medium text-fg-faint">Pay cadence</label>
+            <Segmented
+              className="mt-1"
+              value={cadence}
+              onChange={switchCadence}
+              options={[
+                { value: "MONTHLY", label: "Monthly" },
+                { value: "WEEKLY", label: "Weekly" },
+              ]}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-fg-faint">
+              {cadence === "WEEKLY" ? "Week" : "Pay period"}
+              {cadence === "WEEKLY" && (
+                <InfoDot
+                  id="wk"
+                  open={openInfo === "wk"}
+                  onToggle={toggleInfo}
+                  text="Weekly runs pay your hourly (weekly-paid) staff for one Monday–Sunday week of attendance. Salaried staff stay on the monthly run."
+                />
+              )}
+            </label>
+            {cadence === "WEEKLY" ? (
+              <input type="week" value={week} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 rounded-lg px-3 py-2 text-sm" />
+            ) : (
+              <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 rounded-lg px-3 py-2 text-sm" />
+            )}
+            {cadence === "WEEKLY" && <p className="mt-1 text-[11px] text-fg-faint">{weekLabel(week)}</p>}
           </div>
           {canWrite && (
             <>
-              <div className="w-32">
-                <label className="block text-xs font-medium text-fg-faint">
-                  Working days
-                  <InfoDot
-                    id="wd"
-                    open={openInfo === "wd"}
-                    onToggle={toggleInfo}
-                    text="How many days count as a full month for salaried staff. Daily rate = monthly salary ÷ this. e.g. 26 for a 6-day week, 30 for every day. (Hourly staff ignore this — they're paid per hour.)"
-                  />
-                </label>
-                <input value={workingDays} onChange={(e) => setWorkingDays(numeric(e.target.value, { decimal: false }))} inputMode="numeric" className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
-              </div>
-              <button onClick={runPayroll} disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-                {busy ? "Running…" : "Run payroll"}
-              </button>
+              {cadence === "MONTHLY" && (
+                <div className="w-32">
+                  <label className="block text-xs font-medium text-fg-faint">
+                    Working days
+                    <InfoDot
+                      id="wd"
+                      open={openInfo === "wd"}
+                      onToggle={toggleInfo}
+                      text="How many days count as a full month for salaried staff. Daily rate = monthly salary ÷ this. e.g. 26 for a 6-day week, 30 for every day. (Hourly staff ignore this — they're paid per hour.)"
+                    />
+                  </label>
+                  <input value={workingDays} onChange={(e) => setWorkingDays(numeric(e.target.value, { decimal: false }))} inputMode="numeric" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm" />
+                </div>
+              )}
+              <Button variant="primary" onClick={runPayroll} busy={busy} busyLabel="Running…">
+                Run {cadence === "WEEKLY" ? "weekly " : ""}payroll
+              </Button>
               {rows.some((r) => r.status === "DRAFT") && (
-                <button onClick={approveAll} disabled={busy} className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-60">
+                <Button variant="soft" onClick={approveAll} disabled={busy}>
                   ✓ Approve all
-                </button>
+                </Button>
               )}
             </>
           )}
           {rows.length > 0 && (
-            <button
-              onClick={() => downloadFile(`/payroll/payslips.pdf?pay_period=${period}`, `payslips-${period}.pdf`)}
+            <Button
+              variant="ghost"
+              onClick={() => downloadFile(`/payroll/payslips.pdf?pay_period=${active}`, `payslips-${active}.pdf`)}
               title="Download every payslip for this period as one PDF"
-              className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
             >
               ⬇ All payslips (PDF)
-            </button>
+            </Button>
           )}
           {rows.length > 0 && (
             <span className="ml-auto text-sm text-fg-faint">
@@ -328,7 +410,7 @@ export default function PayrollPage() {
             />
           </div>
           <p className="mt-1 text-xs text-fg-faint">
-            Recovered from the selected period&apos;s payroll (<b className="text-fg-soft">{period}</b>).
+            Recovered from the selected period&apos;s payroll (<b className="text-fg-soft">{activeLabel}</b>).
           </p>
           <form onSubmit={addAdvance} className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
             <div className="sm:w-48">
@@ -344,20 +426,20 @@ export default function PayrollPage() {
             </div>
             <label className="block sm:w-32">
               <span className="block text-xs font-medium text-fg-faint">Amount</span>
-              <input value={advAmount} onChange={(e) => setAdvAmount(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm" />
+              <input value={advAmount} onChange={(e) => setAdvAmount(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm" />
             </label>
             <label className="block flex-1 sm:min-w-[10rem]">
               <span className="block text-xs font-medium text-fg-faint">Reason (optional)</span>
-              <input value={advReason} onChange={(e) => setAdvReason(e.target.value)} placeholder="e.g. medical emergency" className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm" />
+              <input value={advReason} onChange={(e) => setAdvReason(e.target.value)} placeholder="e.g. medical emergency" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm" />
             </label>
-            <button disabled={advBusy || !advEmp || !advAmount} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-              {advBusy ? "Saving…" : "Record advance"}
-            </button>
+            <Button type="submit" variant="primary" busy={advBusy} busyLabel="Saving…" disabled={!advEmp || !advAmount}>
+              Record advance
+            </Button>
           </form>
           {advances.length > 0 && (
             <div className="mt-4 space-y-1.5">
               {advances.map((a) => (
-                <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm">
+                <div key={a.id} className="mise-well mise-feel flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
                   <span className="text-fg">
                     <b>{empName(a.employee_id)}</b> · {format(a.amount)}
                     {a.reason ? <span className="text-fg-faint"> — {a.reason}</span> : null}

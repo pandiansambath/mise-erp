@@ -12,6 +12,7 @@ import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { localISODate } from "@/lib/date";
 import { numeric } from "@/lib/sanitize";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 const METHODS = ["CARD", "CASH", "ONLINE", "BANK"];
 const today = () => localISODate();
@@ -45,6 +46,9 @@ export default function SalesPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // ⌘K "Record today's takings" (?new=1) → spotlight the entry form
+  useDeepLink({ new: () => spotlight("sales-form") }, !loading);
 
   const loadDay = async (d: string) => {
     const s = await api.get<DaySummary>(`/sales/days/${d}`);
@@ -258,7 +262,7 @@ export default function SalesPage() {
         {/* Add + lines */}
         <div className="min-w-0 lg:col-span-2">
           {canWrite && (
-            <Card className="mb-4">
+            <Card className="mb-4" id="sales-form">
               <form onSubmit={addLine} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-fg-soft">Channel</label>

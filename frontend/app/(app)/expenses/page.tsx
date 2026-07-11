@@ -21,6 +21,7 @@ import { can } from "@/lib/permissions";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
 import { localISODate } from "@/lib/date";
 import { numeric } from "@/lib/sanitize";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 // Payment methods the owner actually uses. Stored as the value; shown as the label.
 const METHODS: { value: string; label: string }[] = [
@@ -73,6 +74,9 @@ export default function ExpensesPage() {
   // are summed into the saved total, and the split is recorded in the description.
   const [extra, setExtra] = useState("");
   const [extraReason, setExtraReason] = useState("");
+
+  // ⌘K "Add an expense" (?new=1) → scroll, ring-pulse and focus the form
+  useDeepLink({ new: () => spotlight("expense-form") }, !loading);
 
   const loadData = useCallback(
     async (f: string, t: string) => {
@@ -384,7 +388,7 @@ export default function ExpensesPage() {
         {/* RIGHT — add expense + manage (superadmin), sticky on desktop */}
         <div className="space-y-4 self-start lg:sticky lg:top-4">
           {canWrite && (
-            <Card>
+            <Card id="expense-form">
               <h3 className="mb-3 font-semibold text-fg">Add expense</h3>
               <form onSubmit={addExpense} className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">

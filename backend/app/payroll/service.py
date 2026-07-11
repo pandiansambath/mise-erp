@@ -1,4 +1,5 @@
 """Payroll service: gather attendance, process a pay run, advances, payslip PDF."""
+import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -10,13 +11,28 @@ from app.employees.models import Attendance, AttendanceStatus, Employee, SalaryT
 from app.payroll import calculator
 from app.payroll.models import Payroll, PayrollStatus, SalaryAdvance
 
+_WEEK_RE = re.compile(r"^(\d{4})-W(\d{2})$")
 
-def month_range(period: str) -> tuple[date, date]:
-    """'2026-06' -> (2026-06-01, 2026-06-30)."""
+
+def is_weekly(period: str) -> bool:
+    """'2026-W28' → True; '2026-06' → False."""
+    return bool(_WEEK_RE.match(period))
+
+
+def period_range(period: str) -> tuple[date, date]:
+    """'2026-06' → calendar month; '2026-W28' → ISO week (Mon–Sun)."""
+    m = _WEEK_RE.match(period)
+    if m:
+        start = date.fromisocalendar(int(m[1]), int(m[2]), 1)
+        return start, start + timedelta(days=6)
     year, month = (int(p) for p in period.split("-"))
     start = date(year, month, 1)
     nxt = date(year + (month == 12), (month % 12) + 1, 1)
     return start, nxt - timedelta(days=1)
+
+
+# kept for existing imports/tests
+month_range = period_range
 
 
 async def _attendance_stats(db, employee_id: uuid.UUID, start: date, end: date) -> dict:
@@ -76,14 +92,24 @@ async def process_payroll(
     processed_by: uuid.UUID | None = None,
     min_wage: Decimal = calculator.MIN_WAGE_UK,
 ) -> Payroll:
-    start, end = month_range(pay_period)
+    weekly = is_weekly(pay_period)
+    if weekly and employee.salary_type != SalaryType.HOURLY.value:
+        raise ValueError(
+            f"{employee.full_name} is on a monthly salary — weekly runs are for "
+            "hourly-paid staff. Run their month instead."
+        )
+    start, end = period_range(pay_period)
     stats = await _attendance_stats(db, employee.id, start, end)
 
-    # Pending advances for this period
+    # Pending advances for this period. A weekly run also picks up advances
+    # scheduled for the month the week ends in — "deduct from their next pay".
+    periods = {pay_period}
+    if weekly:
+        periods.add(f"{end.year:04d}-{end.month:02d}")
     adv_rows = await db.execute(
         select(SalaryAdvance).where(
             SalaryAdvance.employee_id == employee.id,
-            SalaryAdvance.deduct_period == pay_period,
+            SalaryAdvance.deduct_period.in_(periods),
             SalaryAdvance.is_deducted.is_(False),
         )
     )
@@ -120,7 +146,7 @@ async def process_payroll(
         rec = Payroll(hotel_id=employee.hotel_id, employee_id=employee.id, pay_period=pay_period)
         db.add(rec)
 
-    rec.pay_period_type = employee.salary_type
+    rec.pay_period_type = "WEEKLY" if weekly else "MONTHLY"
     rec.working_days = working_days
     rec.days_present = stats["days_present"]
     rec.half_days = stats["half_days"]

@@ -24,6 +24,7 @@ async def process(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:write")),
 ) -> list[PayrollRow]:
+    weekly = service.is_weekly(payload.pay_period)
     if payload.employee_id:
         emp = await get_employee(db, payload.employee_id, user.hotel_id)
         if emp is None:
@@ -31,6 +32,15 @@ async def process(
         employees = [emp]
     else:
         employees = await list_employees(db, user.hotel_id)
+        if weekly:
+            # A weekly run pays the weekly-paid (hourly) staff; monthly-salaried
+            # colleagues are paid on their month-end run.
+            employees = [e for e in employees if e.salary_type == "HOURLY"]
+            if not employees:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "No hourly-paid staff to run weekly payroll for.",
+                )
 
     hotel = await db.get(Hotel, user.hotel_id)
     min_wage = hotel.min_hourly_rate if hotel else calculator.MIN_WAGE_UK
@@ -46,6 +56,8 @@ async def process(
             )
     except calculator.MinWageError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     rows = await service.list_payroll(db, user.hotel_id, payload.pay_period)
     net_total = sum((r["net_pay"] for r in rows), Decimal("0"))
@@ -59,7 +71,7 @@ async def process(
 
 @router.get("", response_model=list[PayrollRow])
 async def list_payroll(
-    pay_period: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    pay_period: str = Query(..., pattern=r"^\d{4}-(\d{2}|W\d{2})$"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:read")),
 ) -> list[PayrollRow]:
@@ -69,7 +81,7 @@ async def list_payroll(
 
 @router.post("/approve-all", response_model=list[PayrollRow])
 async def approve_all(
-    pay_period: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    pay_period: str = Query(..., pattern=r"^\d{4}-(\d{2}|W\d{2})$"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:write")),
 ) -> list[PayrollRow]:
@@ -87,7 +99,7 @@ async def approve_all(
 
 @router.get("/payslips.pdf")
 async def payslips_pdf(
-    pay_period: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    pay_period: str = Query(..., pattern=r"^\d{4}-(\d{2}|W\d{2})$"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:read")),
 ) -> Response:

@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { numeric } from "@/lib/sanitize";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 const EMPTY = {
   full_name: "",
@@ -41,6 +42,9 @@ export default function EmployeesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ⌘K "Add an employee" (?new=1) → spotlight the add form
+  useDeepLink({ new: () => spotlight("employee-form") }, !loading);
 
   function load() {
     return Promise.all([
@@ -128,7 +132,7 @@ export default function EmployeesPage() {
       )}
 
       {canWrite && (
-        <Card className="mb-6">
+        <Card className="mb-6" id="employee-form">
           <p className="mb-3 text-sm font-medium text-fg-soft">
             {editingId ? "Edit employee" : "Add employee"}
           </p>

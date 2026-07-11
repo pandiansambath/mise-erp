@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProcessRequest(BaseModel):
-    pay_period: str = Field(pattern=r"^\d{4}-\d{2}$")  # YYYY-MM
+    # YYYY-MM (monthly) or YYYY-Wnn (ISO week, for weekly-paid hourly staff)
+    pay_period: str = Field(pattern=r"^\d{4}-(\d{2}|W\d{2})$")
     employee_id: uuid.UUID | None = None  # None = all active employees
     working_days: int = Field(default=26, gt=0, le=31)
     other_deductions: Decimal = Field(default=Decimal("0"), ge=0)
@@ -31,7 +32,8 @@ class AdvanceCreate(BaseModel):
     amount: Decimal = Field(gt=0)
     reason: str | None = None
     given_date: date_type | None = None
-    deduct_period: str = Field(pattern=r"^\d{4}-\d{2}$")
+    # month (2026-07) or ISO week (2026-W28) — whichever run should recover it
+    deduct_period: str = Field(pattern=r"^\d{4}-(\d{2}|W\d{2})$")
 
 
 class AdvanceOut(BaseModel):

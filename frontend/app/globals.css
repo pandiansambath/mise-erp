@@ -827,6 +827,36 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
     inset -2px -2px 5px color-mix(in srgb, #fff 70%, transparent);
 }
 
+/* Frosted panel that survives BOTH themes — dark keeps depth, light goes true
+   glassmorphic (white frost + saturation) instead of washing out like .mise-glass. */
+.mise-glass-panel {
+  background: linear-gradient(180deg, rgba(32, 27, 24, 0.88), rgba(22, 19, 17, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.mise-app[data-mode="light"] .mise-glass-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(250, 247, 244, 0.82));
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 24px 70px rgba(31, 26, 22, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* One-click actions land HERE: a copper ring swells around the form the palette
+   just delivered you to, then breathes out. Pure box-shadow — no layout shift. */
+@keyframes mise-spotlight-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(217, 119, 66, 0); }
+  18% { box-shadow: 0 0 0 4px rgba(217, 119, 66, 0.45), 0 0 42px rgba(217, 119, 66, 0.25); }
+  100% { box-shadow: 0 0 0 12px rgba(217, 119, 66, 0), 0 0 0 rgba(217, 119, 66, 0); }
+}
+.mise-spotlight {
+  animation: mise-spotlight-pulse 1.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  border-radius: 1rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-spotlight { animation: none; }
+}
+
 /* A soft light-bloom "breath" that swells over the cinema stage exactly when
    a film hands back to its still — the eye follows the light, not the swap. */
 @keyframes mise-l-bloom {

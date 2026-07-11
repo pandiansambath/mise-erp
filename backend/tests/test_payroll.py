@@ -95,6 +95,49 @@ async def test_process_hourly(db, hotel):
     assert rec.gross_pay == Decimal("480.00")
 
 
+# ── Weekly runs ─────────────────────────────────────────────────────────────
+def test_period_range_weekly():
+    # ISO week 2026-W28 = Mon 2026-07-06 → Sun 2026-07-12
+    start, end = service.period_range("2026-W28")
+    assert start == date(2026, 7, 6)
+    assert end == date(2026, 7, 12)
+    assert service.is_weekly("2026-W28") is True
+    assert service.is_weekly("2026-07") is False
+
+
+@pytest.mark.asyncio
+async def test_process_weekly_hourly(db, hotel):
+    """Weekly run pays only the hours inside that ISO week and grabs advances
+    scheduled for the month the week ends in."""
+    emp = await emp_service.create_employee(
+        db, hotel.id, full_name="Weekly Wes", salary_type="HOURLY", hourly_rate=Decimal("12.00")
+    )
+    # 3 days in week 28 (Jul 6–12) + 1 day outside it
+    for d in (6, 7, 8):
+        await emp_service.set_attendance(
+            db, emp, date(2026, 7, d), status="PRESENT", working_hours_value=Decimal("8")
+        )
+    await emp_service.set_attendance(db, emp, date(2026, 7, 20), status="PRESENT", working_hours_value=Decimal("8"))
+    await service.create_advance(
+        db, hotel.id, employee_id=emp.id, amount=Decimal("50"), deduct_period="2026-07"
+    )
+    rec = await service.process_payroll(db, emp, "2026-W28")
+    assert rec.total_hours == Decimal("24.00")  # only the week's 3×8h
+    assert rec.gross_pay == Decimal("288.00")
+    assert rec.advance_deduction == Decimal("50.00")  # July advance, next-pay rule
+    assert rec.net_pay == Decimal("238.00")
+    assert rec.pay_period_type == "WEEKLY"
+
+
+@pytest.mark.asyncio
+async def test_weekly_run_rejects_monthly_staff(db, hotel):
+    emp = await emp_service.create_employee(
+        db, hotel.id, full_name="Salaried Sam", salary_type="MONTHLY", monthly_salary=Decimal("2600")
+    )
+    with pytest.raises(ValueError):
+        await service.process_payroll(db, emp, "2026-W28")
+
+
 # ── API + payslip + RBAC ────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_process_and_payslip_via_api(client, make_user, auth_header, db, hotel):

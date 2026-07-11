@@ -56,6 +56,49 @@ export function useTick(n: number, ms = 2200) {
   return i;
 }
 
+/**
+ * ⌘K one-click actions land here. Runs the handler for the first URL query
+ * param it recognises (?new=1, ?copy=1, …), exactly once, after `ready`
+ * (usually !loading) so the target UI exists. window.location, not
+ * useSearchParams — no Suspense boundary needed at build time.
+ */
+export function useDeepLink(handlers: Record<string, () => void>, ready = true) {
+  const fired = useRef(false);
+  const ref = useRef(handlers);
+  useEffect(() => {
+    ref.current = handlers; // runs before the firing effect below on each commit
+  });
+  useEffect(() => {
+    if (!ready || fired.current) return;
+    fired.current = true;
+    const sp = new URLSearchParams(window.location.search);
+    for (const key of Object.keys(ref.current)) {
+      if (sp.has(key)) {
+        ref.current[key]();
+        return;
+      }
+    }
+  }, [ready]);
+}
+
+/** Scroll a form into view, pulse a copper ring around it, focus its first field.
+ *  Retries for ~2s — the target may render only after a setState or a fetch. */
+export function spotlight(id: string, attempt = 0) {
+  window.setTimeout(() => {
+    const el = document.getElementById(id);
+    if (!el) {
+      if (attempt < 16) spotlight(id, attempt + 1);
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("mise-spotlight");
+    void el.offsetWidth; // restart the animation if it's already been played
+    el.classList.add("mise-spotlight");
+    window.setTimeout(() => el.classList.remove("mise-spotlight"), 1900);
+    el.querySelector<HTMLElement>("input, select, textarea")?.focus({ preventScroll: true });
+  }, attempt === 0 ? 80 : 130);
+}
+
 /* ─────────────────────────── components ────────────────────────── */
 
 /** Numbers never pop in — they count. Formats en-GB, supports decimals. */

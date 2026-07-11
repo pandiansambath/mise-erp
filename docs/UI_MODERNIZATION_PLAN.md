@@ -169,19 +169,31 @@ every list staggers 40ms/row (cap 8); numbers always AnimatedNumber.
 - [ ] 14-day sales chart = self-drawing SVG (landing pattern), not a static lib
 
 ## PHASE 4 — MONEY CLUSTER (sales · expenses · money · reports · price-comparison · payroll)
-- [ ] **/expenses — Task B redesign (user: "very clumsy")**: summary header
-      (month total, fixed vs variable, top categories as chips), tidy filterable
-      table, collapsible manage-categories panel, calmer spacing
-- [ ] **/sales**: channel cards w/ commission callouts, till-variance hero
-      ("balanced to £0.00" = green pulse), day timeline
-- [ ] **/money**: money-in/out flows as animated horizontal bars; petty cash
-      drawer visual; carry-over explained inline
-- [ ] **/reports**: P&L as the landing's animated bars; food-cost ring; export
-      buttons as first-class; budget vs actual meters
+- [x] **/expenses — Task B redesign (user: "very clumsy")**: ✅ 562112c donut +
+      per-category share bars + wells + Button kit + skeletons
+- [x] **/sales**: ✅ 562112c channel donut + till-balanced self-drawing tick
+- [x] **/money**: ✅ in/out waterfall Bars + AnimatedNumber net counter + stock
+      Donut + budget Meters + tactile cards (this run)
+- [x] **/reports**: ✅ where-money-went Donut + health Meters + expense Bars +
+      raised export/print buttons + animated net (this run)
 - [ ] **/price-comparison**: vendor price matrix → highlight cheapest cell
       (emerald), price-rise cells (amber), sparkline per item price history
       (price_history table already exists!)
-- [ ] **/payroll**: payslip cards, run-payroll flow with step feedback
+- [x] **/payroll**: ✅ WEEKLY pay runs (ISO weeks, hourly staff, advances
+      next-pay rule) + neumorphic cadence Segmented + week picker + Button/well
+      kit. Payslip-card flip + tick cascade still open (Phase 6 polish)
+
+### ⌘K 2.0 (shipped this run)
+- [x] Light-glassmorphism panel (.mise-glass-panel — frosted white in light mode)
+- [x] ONE-CLICK ACTIONS: create recipe / copy rota / record takings / add
+      expense / new PO / low stock / add employee / stock take — deep links
+      REALLY fire now (useDeepLink + spotlight copper-ring pulse on the form)
+- [x] Sub-suggestions: searching nests actions under their parent page (↳)
+
+### Attendance calc fix (user bug, shipped this run)
+- [x] Break always visible when >0 (was hidden after manual edits — the "10.50"
+      mystery); hours shown as "12h 30m"; live math preview in Edit dialog;
+      overnight shifts roll past midnight; clock-out mid-break folds break in
 
 ## PHASE 5 — OPS CLUSTER (inventory · purchasing · vendors · recipes · party-order · stock-take · waste · allergens · food-safety)
 - [ ] **/inventory — includes Task A**: per-item Drawer = one-stop history

@@ -33,6 +33,27 @@ export default function AttendancePage() {
   const toHHMM = (iso: string | null | undefined): string =>
     iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }) : "";
 
+  // Decimal hours → "12h 30m" (10.50 reads as ten-and-a-half hours, not 10:50)
+  const fmtHours = (dec: string | number | null | undefined): string => {
+    if (dec == null || dec === "") return "—";
+    const n = typeof dec === "number" ? dec : parseFloat(dec);
+    if (!isFinite(n)) return "—";
+    const mins = Math.round(n * 60);
+    return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`;
+  };
+
+  // Live preview for the edit dialog — the exact math the server will do:
+  // (out − in, rolling past midnight) − break. No more surprise numbers.
+  const previewMins = (() => {
+    if (!ci || !co) return null;
+    const [ih, im] = ci.split(":").map(Number);
+    const [oh, om] = co.split(":").map(Number);
+    let span = oh * 60 + om - (ih * 60 + im);
+    if (span <= 0) span += 24 * 60; // clock-out after midnight
+    return Math.max(0, span - (parseInt(brk || "0", 10) || 0));
+  })();
+  const previewOvernight = !!ci && !!co && co <= ci;
+
   const load = useCallback(async (d: string) => {
     const [emps, att] = await Promise.all([
       api.get<Employee[]>("/employees"),
@@ -174,13 +195,16 @@ export default function AttendancePage() {
                       <td className="px-5 py-3 text-right text-fg-soft">
                         {onBreak ? (
                           <span className="text-amber-400">on break…</span>
-                        ) : r?.break_end ? (
+                        ) : r && r.break_minutes > 0 ? (
+                          // always show a deducted break, even if it was set via Edit
                           `${r.break_minutes}m${r.over_break_minutes ? ` (+${r.over_break_minutes})` : ""}`
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right text-fg-soft">{r?.working_hours ?? "—"}</td>
+                      <td className="px-5 py-3 text-right text-fg-soft" title={r?.working_hours ? `${r.working_hours} h (break already deducted)` : undefined}>
+                        {fmtHours(r?.working_hours)}
+                      </td>
                       <td className="px-5 py-3 text-right">
                         {r && parseFloat(r.break_penalty) > 0 ? (
                           <span className="text-rose-400">{format(r.break_penalty)}</span>
@@ -237,6 +261,12 @@ export default function AttendancePage() {
               <label className="col-span-2 text-sm text-fg-soft">Break (minutes)
                 <input type="number" min="0" value={brk} onChange={(ev) => setBrk(ev.target.value)} className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
               </label>
+              {previewMins !== null && (
+                <p className="mise-well col-span-2 rounded-lg px-3 py-2 text-xs text-fg-soft">
+                  {ci} → {co}{previewOvernight ? " (next day)" : ""} − {parseInt(brk || "0", 10) || 0}m break ={" "}
+                  <b className="text-fg">{fmtHours(previewMins / 60)}</b>
+                </p>
+              )}
             </div>
             <p className="mt-2 text-xs text-fg-faint">Leave clock-in empty to mark the day absent.</p>
             <div className="mt-4 flex justify-end gap-2">

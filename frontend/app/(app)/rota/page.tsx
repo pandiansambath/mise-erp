@@ -9,6 +9,7 @@ import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { localISODate as iso } from "@/lib/date";
 import { numeric } from "@/lib/sanitize";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -69,6 +70,9 @@ export default function RotaPage() {
   const [copyBusy, setCopyBusy] = useState(false);
   const [copySource, setCopySource] = useState<Date | null>(null); // Monday of the source week
   const [copyConflict, setCopyConflict] = useState<"skip" | "replace">("skip");
+
+  // ⌘K "Copy last week's rota" (?copy=1) → open the copy preview + spotlight it
+  useDeepLink({ copy: () => { startCopy(); spotlight("rota-copy"); } }, !loading);
 
   // Grab-and-drag to scroll the week strip left/right (hand cursor).
   const stripRef = useRef<HTMLDivElement>(null);
@@ -391,7 +395,7 @@ export default function RotaPage() {
       )}
 
       {copyRows && (
-        <Card className="mise-card-slide mb-6 ring-1 ring-brand-500/30">
+        <Card className="mise-card-slide mb-6 ring-1 ring-brand-500/30" id="rota-copy">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="font-semibold text-fg">⎘ Copy a week → this week ({from} → {to})</p>

@@ -22,6 +22,7 @@ import { useAuth } from "@/lib/auth";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 type Line = PickedLine;
 
@@ -67,6 +68,9 @@ export default function PurchasingPage() {
   // item_id -> the vendor PICKED for this order ("" / missing = automatic)
   const [vendorPick, setVendorPick] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<string | null>(null);
+
+  // ⌘K "Start a purchase order" (?new=1) → spotlight the indent composer
+  useDeepLink({ new: () => spotlight("indent-form") }, !loading);
   // Tap-to-expand: which indent / PO row is open, plus a cache of fetched PO lines.
   const [openIndent, setOpenIndent] = useState<string | null>(null);
   const [openPo, setOpenPo] = useState<string | null>(null);
@@ -408,7 +412,7 @@ export default function PurchasingPage() {
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
 
       {canWrite && (
-        <Card className="mb-6">
+        <Card className="mb-6" id="indent-form">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium text-fg-soft">New kitchen indent</p>
             <button

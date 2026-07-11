@@ -1,6 +1,6 @@
 """Employee & attendance service. Hotel-scoped, with UK visa-expiry alerts."""
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
@@ -178,6 +178,11 @@ async def punch(db: AsyncSession, employee: Employee, ptype: str) -> Attendance:
     elif ptype == PunchType.CLOCK_OUT.value:
         if not rec or not rec.clock_in:
             raise PunchError("Not clocked in")
+        if rec.break_start:
+            # Clocked out while still on break — close the break so it counts.
+            rec.break_minutes += max(0, round((now - rec.break_start).total_seconds() / 60))
+            rec.break_end = now
+            rec.break_start = None
         rec.clock_out = now
         rec.working_hours = working_hours(rec.clock_in, now, rec.break_minutes)
 
@@ -222,6 +227,8 @@ async def edit_attendance(
     tz = hotel_timezone(country)
     ci = _local_hhmm_to_utc(day, clock_in, tz) if clock_in else None
     co = _local_hhmm_to_utc(day, clock_out, tz) if clock_out else None
+    if ci and co and co <= ci:
+        co += timedelta(days=1)  # closed past midnight — out belongs to the next day
     rec.clock_in = ci
     rec.clock_out = co
     rec.break_minutes = max(0, break_minutes)

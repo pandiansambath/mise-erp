@@ -8,6 +8,7 @@ import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { spotlight, useDeepLink } from "@/components/fx";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -23,6 +24,9 @@ export default function StockTakePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // ⌘K "Start a stock take" (?focus=1) → spotlight the count sheet
+  useDeepLink({ focus: () => spotlight("stock-count") }, !loading);
 
   function load() {
     return api.get<Item[]>("/inventory/items").then((i) => setItems(i.filter((x) => x.is_active)));
@@ -131,7 +135,7 @@ export default function StockTakePage() {
         />
       </div>
 
-      <Card className="p-0">
+      <Card className="p-0" id="stock-count">
         <div className="max-h-[62vh] overflow-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-paper">
