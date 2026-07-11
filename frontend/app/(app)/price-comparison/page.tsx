@@ -9,14 +9,15 @@ type PriceChange = {
 const SRC_TONE: Record<string, "slate" | "amber" | "green"> = {
   manual: "slate", po: "amber", invoice: "green",
 };
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
+import { AreaChart } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 
-/** Hand-rolled bar chart of what you actually paid over time (no chart lib). */
+/** What you actually paid over time — self-drawing area line from the chart kit. */
 function PriceHistoryChart({ points }: { points: PricePoint[] }) {
   const { format } = useCurrency();
   if (points.length < 2) {
@@ -27,27 +28,19 @@ function PriceHistoryChart({ points }: { points: PricePoint[] }) {
     );
   }
   const prices = points.map((p) => parseFloat(p.price) || 0);
-  const max = Math.max(...prices);
   const first = prices[0];
   const last = prices[prices.length - 1];
   const change = first > 0 ? ((last - first) / first) * 100 : 0;
+  const rising = change > 0;
   return (
     <div>
-      <div className="flex items-end gap-1.5" style={{ height: 120 }}>
-        {points.map((p, i) => {
-          const h = max > 0 ? Math.max(4, (prices[i] / max) * 110) : 4;
-          const rising = i > 0 && prices[i] > prices[i - 1];
-          return (
-            <div key={i} className="flex flex-1 flex-col items-center justify-end" title={`${p.date}: ${format(p.price)}${p.vendor_name ? ` · ${p.vendor_name}` : ""}`}>
-              <span className="mb-1 text-[10px] text-fg-faint">{format(p.price)}</span>
-              <div
-                className={`w-full rounded-t ${rising ? "bg-rose-400/70" : "bg-brand-500/70"}`}
-                style={{ height: `${h}px` }}
-              />
-            </div>
-          );
-        })}
-      </div>
+      <AreaChart
+        data={prices}
+        labels={points.map((p) => p.date)}
+        color={rising ? "#f43f5e" : "#10b981"}
+        height={130}
+        formatValue={(v) => format(String(v))}
+      />
       <p className="mt-2 text-xs text-fg-faint">
         {points.length} orders · {points[0].date} → {points[points.length - 1].date} ·{" "}
         <span className={change > 0 ? "text-rose-400" : change < 0 ? "text-brand-400" : ""}>
@@ -131,7 +124,7 @@ export default function PriceComparisonPage() {
   if (loadingItems) return <Spinner />;
 
   const addPriceForm = canWrite ? (
-    <Card className="mt-4">
+    <Card className="mise-feel mt-4">
       <p className="mb-2 text-sm font-medium text-fg-soft">Add a vendor price for this item</p>
       <form onSubmit={addVendorPrice} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto]">
         <Select
@@ -150,11 +143,11 @@ export default function PriceComparisonPage() {
           value={addPrice}
           onChange={(e) => setAddPrice(e.target.value)}
           placeholder="price"
-          className="rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 sm:w-28"
+          className="mise-well rounded-lg px-3 py-2 text-sm outline-none sm:w-28"
         />
-        <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+        <Button type="submit" variant="primary">
           Add
-        </button>
+        </Button>
       </form>
       {addError && <p className="mt-2 text-sm text-rose-400">{addError}</p>}
       <p className="mt-2 text-xs text-fg-faint">
@@ -186,16 +179,16 @@ export default function PriceComparisonPage() {
             <ItemPickerSingle items={items} value={selected} onChange={setSelected} />
           </div>
 
-          <Card className="mb-5">
+          <Card className="mise-feel mb-5">
             <h3 className="font-semibold text-fg">Price history — what you&apos;ve paid</h3>
             <p className="mb-3 text-xs text-fg-faint">
-              From your received purchase orders. Red bars = a rise vs the order before.
+              From your received purchase orders — green line falling is good, red line climbing is money leaking.
             </p>
             <PriceHistoryChart points={history} />
           </Card>
 
           {changeLog.length > 0 && (
-            <Card className="mb-5">
+            <Card className="mise-feel mb-5">
               <h3 className="font-semibold text-fg">Price change log</h3>
               <p className="mb-3 text-xs text-fg-faint">
                 Every recorded price change for this item — kept forever, with where it came from
@@ -204,7 +197,7 @@ export default function PriceComparisonPage() {
               </p>
               <ul className="space-y-1.5">
                 {changeLog.map((c, i) => (
-                  <li key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm">
+                  <li key={i} className="mise-well mise-feel flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
                     <span className="text-fg">
                       <b>{c.vendor_name}</b>{" "}
                       {c.old_price ? (
@@ -287,7 +280,7 @@ export default function PriceComparisonPage() {
                             {canWrite && !row.is_preferred && (
                               <button
                                 onClick={() => setPreferred(row.vendor_id)}
-                                className="rounded-md border border-line px-2 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                                className="mise-raised mise-press rounded-md px-2 py-1 text-xs font-medium text-fg-soft"
                               >
                                 Choose supplier
                               </button>
@@ -295,7 +288,7 @@ export default function PriceComparisonPage() {
                             {canWrite && row.is_preferred && (
                               <button
                                 onClick={() => setPreferred(null)}
-                                className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2"
+                                className="mise-raised mise-press rounded-md px-2 py-1 text-xs text-fg-faint"
                               >
                                 Clear
                               </button>
