@@ -8,6 +8,7 @@ import { API_BASE, featureOn } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
+import CommandPalette from "@/components/CommandPalette";
 import { Copilot } from "@/components/Copilot";
 import NotificationBell from "@/components/NotificationBell";
 import { Select } from "@/components/Select";
@@ -21,34 +22,39 @@ type NavItem = {
   href: string; label: string; icon: string; perm?: string; hideIfPerm?: string;
   // `feature`: hide this item when the hotel has that entitlement turned off.
   feature?: string;
+  /** sidebar section + palette search hints */
+  group: string;
+  keywords?: string;
 };
 
 const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "▦" },
-  { href: "/my", label: "My Space", icon: "🙋", perm: "attendance:self", hideIfPerm: "attendance:read" },
-  { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read", feature: "reports" },
-  { href: "/money", label: "Money", icon: "💰", perm: "reports:read" },
-  { href: "/vendors", label: "Vendors", icon: "🤝", perm: "vendors:read" },
-  { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read", feature: "price_comparison" },
-  { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read" },
-  { href: "/stock-take", label: "Stock-take", icon: "📋", perm: "inventory:read", feature: "stock_take" },
-  { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read" },
-  { href: "/party-order", label: "Party Order", icon: "🎉", perm: "recipes:read", feature: "party_orders" },
-  { href: "/allergens", label: "Allergens", icon: "⚠️", perm: "recipes:read", feature: "allergens" },
-  { href: "/food-safety", label: "Food Safety", icon: "🌡️", perm: "inventory:read", feature: "food_safety" },
-  { href: "/waste", label: "Waste", icon: "🗑️", perm: "inventory:read", feature: "waste" },
-  { href: "/purchasing", label: "Purchasing", icon: "🛒", perm: "indent:read" },
-  { href: "/sales", label: "Sales & Cash", icon: "🧾", perm: "sales:read" },
-  { href: "/expenses", label: "Expenses", icon: "💸", perm: "expenses:read", feature: "expenses" },
-  { href: "/employees", label: "Employees", icon: "🧑‍🍳", perm: "employees:read", feature: "employees" },
-  { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read", feature: "attendance" },
-  { href: "/rota", label: "Rota", icon: "🗓️", perm: "employees:read", feature: "rota" },
-  { href: "/payroll", label: "Payroll", icon: "💷", perm: "payroll:read", feature: "payroll" },
-  { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents" },
-  { href: "/staff", label: "Staff", icon: "👥", perm: "users:read" },
-  { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read" },
-  { href: "/how-it-works", label: "How it works", icon: "📘" },
+  { href: "/dashboard", label: "Dashboard", icon: "▦", group: "Overview", keywords: "home overview" },
+  { href: "/my", label: "My Space", icon: "🙋", perm: "attendance:self", hideIfPerm: "attendance:read", group: "Overview", keywords: "self service" },
+  { href: "/how-it-works", label: "How it works", icon: "📘", group: "Overview", keywords: "help guide formulas" },
+  { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read", feature: "reports", group: "Money", keywords: "profit loss pnl food cost" },
+  { href: "/money", label: "Money", icon: "💰", perm: "reports:read", group: "Money", keywords: "cash in out" },
+  { href: "/sales", label: "Sales & Cash", icon: "🧾", perm: "sales:read", group: "Money", keywords: "takings till revenue" },
+  { href: "/expenses", label: "Expenses", icon: "💸", perm: "expenses:read", feature: "expenses", group: "Money", keywords: "costs spend petty" },
+  { href: "/payroll", label: "Payroll", icon: "💷", perm: "payroll:read", feature: "payroll", group: "Money", keywords: "payslip salary wages" },
+  { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read", group: "Stock", keywords: "stock items shelf" },
+  { href: "/stock-take", label: "Stock-take", icon: "📋", perm: "inventory:read", feature: "stock_take", group: "Stock", keywords: "count variance" },
+  { href: "/purchasing", label: "Purchasing", icon: "🛒", perm: "indent:read", group: "Stock", keywords: "po indent order buy" },
+  { href: "/vendors", label: "Vendors", icon: "🤝", perm: "vendors:read", group: "Stock", keywords: "suppliers" },
+  { href: "/price-comparison", label: "Price Comparison", icon: "⚖", perm: "vendors:read", feature: "price_comparison", group: "Stock", keywords: "cheapest vendor" },
+  { href: "/waste", label: "Waste", icon: "🗑️", perm: "inventory:read", feature: "waste", group: "Stock", keywords: "spoilage bin" },
+  { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read", group: "Kitchen", keywords: "dishes menu costing" },
+  { href: "/party-order", label: "Party Order", icon: "🎉", perm: "recipes:read", feature: "party_orders", group: "Kitchen", keywords: "event catering" },
+  { href: "/allergens", label: "Allergens", icon: "⚠️", perm: "recipes:read", feature: "allergens", group: "Kitchen" },
+  { href: "/food-safety", label: "Food Safety", icon: "🌡️", perm: "inventory:read", feature: "food_safety", group: "Kitchen", keywords: "temperature haccp" },
+  { href: "/employees", label: "Employees", icon: "🧑‍🍳", perm: "employees:read", feature: "employees", group: "People", keywords: "team hr" },
+  { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read", feature: "attendance", group: "People", keywords: "punch clock present" },
+  { href: "/rota", label: "Rota", icon: "🗓️", perm: "employees:read", feature: "rota", group: "People", keywords: "shifts schedule week" },
+  { href: "/staff", label: "Staff", icon: "👥", perm: "users:read", group: "People", keywords: "users accounts roles" },
+  { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents", group: "Admin", keywords: "files certificates" },
+  { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read", group: "Admin", keywords: "history who changed" },
 ];
+
+const NAV_GROUPS = ["Overview", "Money", "Stock", "Kitchen", "People", "Admin"];
 
 function CurrencySwitcher() {
   const { currency, setCurrency } = useCurrency();
@@ -218,26 +224,39 @@ function NavLinks({
   onClick?: () => void;
 }) {
   return (
-    <nav className="flex flex-col gap-1 px-3">
-      {items.map((item) => {
-        const active = pathname === item.href;
+    <nav className="flex flex-col px-3">
+      {NAV_GROUPS.map((group) => {
+        const inGroup = items.filter((i) => i.group === group);
+        if (inGroup.length === 0) return null;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onClick}
-            data-tour={item.href.slice(1)}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition duration-200 ${
-              active
-                ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                : "text-fg-faint hover:translate-x-0.5 hover:bg-glass/5 hover:text-fg"
-            }`}
-          >
-            <span aria-hidden className="text-base">
-              {item.icon}
-            </span>
-            {item.label}
-          </Link>
+          <div key={group} className="mb-1.5">
+            <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint/70">
+              {group}
+            </p>
+            <div className="flex flex-col gap-0.5">
+              {inGroup.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onClick}
+                    data-tour={item.href.slice(1)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition duration-200 ${
+                      active
+                        ? "mise-raised !bg-brand-600 text-white"
+                        : "text-fg-faint hover:translate-x-0.5 hover:bg-glass/5 hover:text-fg"
+                    }`}
+                  >
+                    <span aria-hidden className="text-base">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </nav>
@@ -262,7 +281,20 @@ function ShellAurora() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
+
+  // ⌘K / Ctrl+K from anywhere in the app.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const { user, hotel } = useAuth();
   const { applyDefault } = useCurrency();
   const { theme } = useTheme();
@@ -339,6 +371,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="mt-1 block h-0.5 w-5 bg-current" />
           </button>
           <h1 className="font-display text-sm font-semibold text-fg lg:hidden">Mise</h1>
+          {/* ⌘K search — a well that invites the finger */}
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="mise-well mise-press hidden items-center gap-2.5 rounded-xl px-3.5 py-2 text-sm text-fg-faint transition hover:text-fg-soft sm:flex sm:w-56 lg:w-72"
+            aria-label="Open command palette"
+          >
+            <span aria-hidden>⌕</span>
+            <span className="flex-1 text-left">Jump to…</span>
+            <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="mise-press rounded-lg p-2 text-fg-soft hover:bg-glass/5 sm:hidden"
+            aria-label="Search"
+          >
+            ⌕
+          </button>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <NotificationBell />
             <ThemeSwitcher />
@@ -356,6 +407,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           on every page. The Copilot only appears when the hotel has AI enabled. */}
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       {featureOn(hotel, "ai_copilot") && <Copilot />}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        items={navItems.map((n) => ({ href: n.href, label: n.label, icon: n.icon, keywords: n.keywords, group: n.group }))}
+      />
     </div>
   );
 }
