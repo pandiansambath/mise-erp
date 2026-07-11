@@ -383,21 +383,21 @@ export default function PartyOrderPage() {
                 <button
                   onClick={previewPdf}
                   disabled={downloading}
-                  className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2 disabled:opacity-60"
+                  className="mise-raised mise-press rounded-lg px-4 py-2 text-sm font-medium text-fg-soft disabled:opacity-60"
                 >
                   {downloading ? "Preparing…" : "⬇ Preview PDF"}
                 </button>
                 <button
                   onClick={saveQuote}
                   disabled={saving}
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   {saving ? "Saving…" : editingId ? "Update quote" : "✓ Confirm & save quote"}
                 </button>
                 {editingId && (
                   <button
                     onClick={resetBuilder}
-                    className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                    className="mise-raised mise-press rounded-lg px-4 py-2 text-sm font-medium text-fg-soft"
                   >
                     Cancel edit
                   </button>
@@ -423,7 +423,7 @@ export default function PartyOrderPage() {
                   const dishes = q.lines.length;
                   const plates = q.lines.reduce((s, l) => s + l.qty, 0);
                   return (
-                    <Card key={q.id} className="mise-card-slide">
+                    <Card key={q.id} className="mise-card-slide mise-feel">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -455,13 +455,13 @@ export default function PartyOrderPage() {
                         <button
                           onClick={() => setOpenQuoteId((id) => (id === q.id ? null : q.id))}
                           aria-expanded={openQuoteId === q.id}
-                          className="rounded-lg border border-line-2 px-3 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                          className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft"
                         >
                           {openQuoteId === q.id ? "▾ Hide details" : `▸ View details (${dishes})`}
                         </button>
                         <button
                           onClick={() => downloadFile(`/party-quotes/${q.id}.pdf`, `party-quote-${q.id.slice(0, 8)}.pdf`)}
-                          className="rounded-lg border border-line-2 px-3 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                          className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft"
                         >
                           ⬇ Download PDF
                         </button>
@@ -469,13 +469,13 @@ export default function PartyOrderPage() {
                           <>
                             <button
                               onClick={() => editQuote(q)}
-                              className="rounded-lg border border-line-2 px-3 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft"
                             >
                               ✎ Edit
                             </button>
                             <button
                               onClick={() => removeQuote(q)}
-                              className="rounded-lg border border-rose-500/40 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10"
+                              className="mise-press rounded-lg border border-rose-500/40 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10"
                             >
                               Remove
                             </button>

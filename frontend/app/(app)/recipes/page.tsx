@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, postForm, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { ComboBox } from "@/components/ComboBox";
@@ -88,12 +89,37 @@ function CostDetail({
           { label: "Margin", value: data.profit_margin_pct ? `${data.profit_margin_pct}%` : "—", cls: marginCls },
           { label: `Batch (${data.servings} serves)`, value: format(data.total_cost), cls: "text-fg" },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-xl border border-line bg-paper-2/60 p-3">
+          <div key={kpi.label} className="mise-well mise-feel rounded-xl p-3">
             <p className="text-xs uppercase tracking-wide text-fg-faint">{kpi.label}</p>
             <p className={`mt-1 text-lg font-semibold ${kpi.cls}`}>{kpi.value}</p>
           </div>
         ))}
       </div>
+
+      {data.ingredients.length >= 2 && (
+        <div className="mise-well rounded-xl p-3">
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+            Where the plate cost goes
+          </p>
+          <Donut
+            centerLabel="per batch"
+            centerValue={format(data.total_cost)}
+            formatValue={(v) => format(String(v))}
+            segments={(() => {
+              const sorted = [...data.ingredients]
+                .map((ing) => ({ label: ing.item_name, value: parseFloat(ing.line_cost) || 0 }))
+                .filter((s) => s.value > 0)
+                .sort((a, b) => b.value - a.value);
+              const top = sorted.slice(0, 5);
+              const rest = sorted.slice(5).reduce((s, x) => s + x.value, 0);
+              const palette = ["#d97742", "#10b981", "#38bdf8", "#f59e0b", "#a78bfa"];
+              const segs = top.map((s, i) => ({ ...s, color: palette[i] }));
+              if (rest > 0) segs.push({ label: "Other", value: rest, color: "#94a3b8" });
+              return segs;
+            })()}
+          />
+        </div>
+      )}
 
       {(() => {
         const cps = parseFloat(data.cost_per_serving) || 0;
@@ -559,7 +585,7 @@ export default function RecipesPage() {
           {!showForm ? (
             <button
               onClick={() => setShowForm(true)}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
             >
               + New recipe
             </button>
