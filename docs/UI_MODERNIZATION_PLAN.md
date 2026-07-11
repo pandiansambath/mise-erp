@@ -26,6 +26,23 @@
 - **Performance guardrails**: no per-frame React state on scroll (refs + direct
   style writes), `content-visibility` for long pages, lazy heavy panels.
 
+## 🫧 LIQUID GLASS PASS (user 2026-07-09: Apple's liquid-glass design → landing too) — QUEUED
+Apple 2025 "Liquid Glass" language, translated to the web: translucent panels that
+REFRACT what's behind them. Recipe per surface: layered `backdrop-blur + saturate`,
+a 1px inner light rim (inset top highlight), soft specular sweep that follows
+hover/tilt, edge gradients that bend the backdrop color. Apply to: landing nav,
+dashboard-sim window, Copilot chat card, feature-tour panel, pricing cards, chips —
+then reuse the same tokens for in-app cards. Keep GPU budget in mind on mobile
+(blur is expensive — desktop-first, cheaper fallback on phones).
+
+## 🌗 AUDIENCE & THEME DECISION (2026-07-09, discussed with user)
+Landing + auth stay DARK (cinematic brand, matches all AI film assets; premium-SaaS
+norm) — aurora is a KEEPER per user. The accommodation for older hotel owners is a
+READABILITY PASS, not a light theme: body copy ≥ slate-200 on dark, generous type
+sizes, strong veils under text on imagery, no long reading on busy backgrounds.
+The in-app workspace keeps its existing light/dark switcher (owners doing hours of
+data entry can choose). Revisit only if real prospect feedback asks for light.
+
 ## 📊 CHARTS & DATA-VIZ MANDATE (user 2026-07-09: "add pie charts, bar charts, statistics — whatever you can")
 Every page that shows data gets AT LEAST one visualization. Hand-rolled animated
 SVG (components/charts.tsx) — no chart library, self-drawing on scroll-into-view,
