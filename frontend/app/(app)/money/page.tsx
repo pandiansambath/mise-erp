@@ -14,7 +14,7 @@ import {
   type PnL,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
-import { Bars, Donut, Meter } from "@/components/charts";
+import { Bars, Donut, Meter, Waffle } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, useCurrency } from "@/lib/currency";
@@ -421,6 +421,21 @@ export default function MoneyPage() {
                 { label: "Food cost", value: Math.max(0, parseFloat(pnl.cost_of_sales)), color: "#f43f5e" },
                 { label: "Running costs", value: Math.max(0, parseFloat(pnl.operating_expenses)), color: "#f59e0b" },
                 { label: "You keep", value: Math.max(0, parseFloat(pnl.net_profit)), color: "#38bdf8" },
+              ]}
+            />
+          </div>
+
+          {/* Every £1 as 100 squares — the most beginner-readable proportion chart */}
+          <div className="mise-well mt-4 rounded-xl p-4">
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+              Every £1 you took in — square by square
+            </p>
+            <Waffle
+              formatValue={(v) => format(String(v))}
+              segments={[
+                { label: "Food", value: Math.max(0, parseFloat(pnl.cost_of_sales)), color: "#f43f5e" },
+                { label: "Running costs", value: Math.max(0, parseFloat(pnl.operating_expenses)), color: "#f59e0b" },
+                { label: "You keep", value: Math.max(0, parseFloat(pnl.net_profit)), color: "#10b981" },
               ]}
             />
           </div>

@@ -359,3 +359,200 @@ export function Meter({
     </div>
   );
 }
+
+/* ────────────────────────── Treemap ──────────────────────────
+   Modern "expense map": every category is a box, area = share of spend.
+   Strip layout (rows of proportional widths) — reads instantly, no lib. */
+
+export type TreemapItem = { label: string; value: number; color?: string };
+
+export function Treemap({
+  items,
+  height = 220,
+  formatValue = (v: number) => v.toLocaleString("en-GB"),
+  className = "",
+}: {
+  items: TreemapItem[];
+  height?: number;
+  formatValue?: (v: number) => string;
+  className?: string;
+}) {
+  const { ref, inView } = useInView<HTMLDivElement>(0.3);
+  const reduced = usePrefersReducedMotion();
+  const drawn = inView || reduced;
+  const sorted = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value);
+  const total = sorted.reduce((s, i) => s + i.value, 0);
+  if (total <= 0 || sorted.length === 0) return null;
+
+  // Slice into rows of ~1–3 boxes: big items get their own row, small share one.
+  const rows: TreemapItem[][] = [];
+  let row: TreemapItem[] = [];
+  let rowSum = 0;
+  for (const it of sorted) {
+    row.push(it);
+    rowSum += it.value;
+    if (rowSum >= total / 3 || row.length >= 3) {
+      rows.push(row);
+      row = [];
+      rowSum = 0;
+    }
+  }
+  if (row.length) rows.push(row);
+
+  let i = 0;
+  return (
+    <div ref={ref} className={`flex w-full flex-col gap-1 ${className}`} style={{ height }}>
+      {rows.map((r, ri) => {
+        const rSum = r.reduce((s, x) => s + x.value, 0);
+        return (
+          <div key={ri} className="flex min-h-0 gap-1" style={{ flexGrow: rSum }}>
+            {r.map((it) => {
+              const idx = i++;
+              return (
+                <div
+                  key={it.label}
+                  title={`${it.label} · ${formatValue(it.value)} (${Math.round((it.value / total) * 100)}%)`}
+                  className="mise-feel relative min-w-0 overflow-hidden rounded-lg p-2"
+                  style={{
+                    flexGrow: it.value,
+                    flexBasis: 0,
+                    background: `${it.color ?? CHART_COLORS[idx % CHART_COLORS.length]}26`,
+                    border: `1px solid ${it.color ?? CHART_COLORS[idx % CHART_COLORS.length]}55`,
+                    opacity: drawn ? 1 : 0,
+                    transform: drawn ? "scale(1)" : "scale(0.92)",
+                    transition: `opacity 600ms ${easeDraw} ${idx * 90}ms, transform 600ms ${easeDraw} ${idx * 90}ms`,
+                  }}
+                >
+                  <p className="truncate text-[11px] font-medium" style={{ color: it.color ?? CHART_COLORS[idx % CHART_COLORS.length] }}>
+                    {it.label}
+                  </p>
+                  <p className="truncate text-xs font-semibold text-fg">{formatValue(it.value)}</p>
+                  <p className="text-[10px] text-fg-faint">{Math.round((it.value / total) * 100)}%</p>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ────────────────────────── Waffle ──────────────────────────
+   "Every £1 you took in": a 10×10 grid — each square is 1%. The most
+   instantly-readable proportion chart there is for non-finance people. */
+
+export function Waffle({
+  segments,
+  formatValue = (v: number) => v.toLocaleString("en-GB"),
+  className = "",
+}: {
+  segments: { label: string; value: number; color: string }[];
+  formatValue?: (v: number) => string;
+  className?: string;
+}) {
+  const { ref, inView } = useInView<HTMLDivElement>(0.3);
+  const reduced = usePrefersReducedMotion();
+  const drawn = inView || reduced;
+  const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
+  if (total <= 0) return null;
+  // 100 cells, allocated by share (largest remainder keeps the sum at 100)
+  const exact = segments.map((s) => (Math.max(0, s.value) / total) * 100);
+  const cells = exact.map(Math.floor);
+  let left = 100 - cells.reduce((s, n) => s + n, 0);
+  const rema = exact.map((e, i) => ({ i, r: e - Math.floor(e) })).sort((a, b) => b.r - a.r);
+  for (const { i } of rema) {
+    if (left <= 0) break;
+    cells[i] += 1;
+    left -= 1;
+  }
+  const colors: string[] = [];
+  segments.forEach((s, i) => { for (let k = 0; k < cells[i]; k++) colors.push(s.color); });
+
+  return (
+    <div ref={ref} className={className}>
+      <div className="grid grid-cols-10 gap-1">
+        {colors.map((c, i) => (
+          <span
+            key={i}
+            className="aspect-square rounded-[3px]"
+            style={{
+              background: c,
+              opacity: drawn ? 0.9 : 0,
+              transform: drawn ? "scale(1)" : "scale(0.4)",
+              transition: `opacity 420ms ${easeDraw} ${i * 9}ms, transform 420ms ${easeDraw} ${i * 9}ms`,
+            }}
+          />
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+        {segments.map((s, i) => (
+          <span key={s.label} className="flex items-center gap-1.5 text-xs text-fg-soft">
+            <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: s.color }} />
+            {s.label} · <b className="text-fg">{cells[i]}%</b>
+            <span className="text-fg-faint">({formatValue(s.value)})</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────── RadialBars ──────────────────────────
+   Activity-ring style: concentric arcs, each ring's sweep = its share of
+   the largest value. Premium "watch rings" look for top-N comparisons. */
+
+export function RadialBars({
+  items,
+  size = 180,
+  formatValue = (v: number) => v.toLocaleString("en-GB"),
+  className = "",
+}: {
+  items: { label: string; value: number; color?: string }[];
+  size?: number;
+  formatValue?: (v: number) => string;
+  className?: string;
+}) {
+  const { ref, inView } = useInView<HTMLDivElement>(0.35);
+  const reduced = usePrefersReducedMotion();
+  const drawn = inView || reduced;
+  const top = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value).slice(0, 5);
+  const max = Math.max(...top.map((i) => i.value), 1);
+  const thickness = 9;
+  const gap = 4;
+  const c = size / 2;
+  return (
+    <div ref={ref} className={`flex flex-wrap items-center gap-5 ${className}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
+        {top.map((it, i) => {
+          const r = c - thickness / 2 - i * (thickness + gap);
+          if (r <= 8) return null;
+          const circ = 2 * Math.PI * r;
+          const frac = Math.min(1, it.value / max) * 0.83; // cap sweep so rings never close
+          const color = it.color ?? CHART_COLORS[i % CHART_COLORS.length];
+          return (
+            <g key={it.label}>
+              <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeOpacity={0.14} strokeWidth={thickness} />
+              <circle
+                cx={c} cy={c} r={r} fill="none"
+                stroke={color} strokeWidth={thickness} strokeLinecap="round"
+                strokeDasharray={circ}
+                strokeDashoffset={drawn ? circ * (1 - frac) : circ}
+                style={{ transition: `stroke-dashoffset 1300ms ${easeDraw} ${i * 140}ms` }}
+              />
+            </g>
+          );
+        })}
+      </svg>
+      <ul className="min-w-0 flex-1 space-y-1.5">
+        {top.map((it, i) => (
+          <li key={it.label} className="flex items-center gap-2 text-xs">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: it.color ?? CHART_COLORS[i % CHART_COLORS.length] }} />
+            <span className="min-w-0 flex-1 truncate text-fg-soft" title={it.label}>{it.label}</span>
+            <span className="shrink-0 font-medium text-fg">{formatValue(it.value)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

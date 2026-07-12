@@ -10,7 +10,7 @@ import {
   type Item,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
-import { Donut, type DonutSegment } from "@/components/charts";
+import { Donut, Treemap, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
@@ -233,19 +233,33 @@ export default function ExpensesPage() {
       </div>
 
       {donutSegs.length > 0 && (
-        <Card className="mt-6">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-fg">Where it went</h2>
-            <span className="text-xs text-fg-faint">{rangeCaption({ from, to })}</span>
-          </div>
-          <Donut
-            segments={donutSegs}
-            centerValue={format(summary.grand_total)}
-            centerLabel="total spend"
-            className="mt-4"
-            formatValue={(v) => format(String(v))}
-          />
-        </Card>
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="mise-feel">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-semibold text-fg">Where it went</h2>
+              <span className="text-xs text-fg-faint">{rangeCaption({ from, to })}</span>
+            </div>
+            <Donut
+              segments={donutSegs}
+              centerValue={format(summary.grand_total)}
+              centerLabel="total spend"
+              className="mt-4"
+              formatValue={(v) => format(String(v))}
+            />
+          </Card>
+          <Card className="mise-feel">
+            <h2 className="text-sm font-semibold text-fg">The expense map</h2>
+            <p className="text-xs text-fg-faint">bigger box = more money — spot the heavy categories in one glance</p>
+            <Treemap
+              className="mt-4"
+              items={summary.by_category.map((c) => ({
+                label: c.category_name,
+                value: parseFloat(c.total) || 0,
+              }))}
+              formatValue={(v) => format(String(v))}
+            />
+          </Card>
+        </div>
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">

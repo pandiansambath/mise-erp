@@ -13,7 +13,7 @@ import {
   type ReceiptLine,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
-import { AreaChart } from "@/components/charts";
+import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
@@ -814,6 +814,29 @@ export default function InventoryPage() {
         <Spinner />
       ) : (
         <>
+          {/* Where the stock money sits — activity-ring style, top items by £ on shelf */}
+          {items.length > 0 && (() => {
+            const valued = items
+              .filter((i) => i.is_active)
+              .map((i) => ({
+                label: i.name,
+                value: (parseFloat(i.current_stock) || 0) * (parseFloat(i.average_cost) || 0),
+              }))
+              .filter((x) => x.value > 0);
+            if (valued.length < 2) return null;
+            const total = valued.reduce((s, x) => s + x.value, 0);
+            return (
+              <Card className="mise-feel mb-4">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-semibold text-fg">Where your stock money sits</h3>
+                  <span className="font-mono text-xs text-copper-300">{format(String(total))} on the shelf</span>
+                </div>
+                <p className="text-xs text-fg-faint">top items by value on hand — the rings you&apos;d count first</p>
+                <RadialBars className="mt-4" items={valued} formatValue={(v) => format(String(v))} />
+              </Card>
+            );
+          })()}
+
           {/* Search + filters */}
           <div className="mb-3 space-y-2">
             <div className="relative max-w-md">
@@ -823,7 +846,7 @@ export default function InventoryPage() {
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search items…"
                 aria-label="Search items"
-                className="w-full rounded-xl border border-line-2 bg-glass/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+                className="mise-well w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-fg outline-none"
               />
             </div>
             {/* Two SEPARATE filters that combine (AND). Kept on their own labelled

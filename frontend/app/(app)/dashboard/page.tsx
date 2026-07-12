@@ -262,16 +262,33 @@ export default function DashboardPage() {
               />
             </Card>
           )}
-          {donut && curWeek && (
+          {curWeek && (
             <Card className="mise-feel">
               <h3 className="font-semibold text-fg">Where this week&apos;s money went</h3>
-              <Donut
-                segments={donut}
-                centerValue={format(curWeek.net_sales)}
-                centerLabel="net sales · 7d"
-                className="mt-4"
-                formatValue={(v) => format(String(v))}
-              />
+              {donut ? (
+                <Donut
+                  segments={donut}
+                  centerValue={format(curWeek.net_sales)}
+                  centerLabel="net sales · 7d"
+                  className="mt-4"
+                  formatValue={(v) => format(String(v))}
+                />
+              ) : (
+                // No money recorded yet — never leave a hole in the grid
+                <div className="mise-well mt-4 rounded-xl p-6 text-center">
+                  <p className="text-2xl" aria-hidden>🍽️</p>
+                  <p className="mt-2 text-sm text-fg-soft">Nothing recorded this week yet.</p>
+                  <p className="mt-1 text-xs text-fg-faint">
+                    Record takings and expenses and this fills with your week&apos;s money story.
+                  </p>
+                  <Link
+                    href="/sales?new=1"
+                    className="mise-press mt-4 inline-block rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+                  >
+                    Record today&apos;s takings →
+                  </Link>
+                </div>
+              )}
             </Card>
           )}
         </div>

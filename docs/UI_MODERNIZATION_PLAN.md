@@ -293,3 +293,7 @@ real operator console.*
 4. Backend work rides along per phase (analytics/announcements/impersonation
    endpoints) with pytest coverage ≥ existing gate.
 5. Update this file's checkboxes + memory after every phase.
+
+---
+
+> ⭐ **2026-07-12: execution moved to [SECTION_CHECKLIST_V2.md](SECTION_CHECKLIST_V2.md)** — the user-mandated per-section deep checklist (all 32 sections, each with neumorphism + charts + morphisms + features). This file stays as phase-level history.
