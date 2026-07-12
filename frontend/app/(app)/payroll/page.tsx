@@ -120,6 +120,9 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // run-payroll tick cascade + expanded payslip-preview row
+  const [runNames, setRunNames] = useState<string[] | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   // Advances (money paid to staff early, deducted at the next run)
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -170,15 +173,24 @@ export default function PayrollPage() {
     if (!ok) return;
     setBusy(true);
     setError(null);
+    // the cascade: everyone this run will touch, ticked off one by one
+    const pool = cadence === "WEEKLY" ? employees.filter((e) => e.salary_type === "HOURLY") : employees;
+    const names = (pool.length ? pool : employees).map((e) => e.full_name);
+    setRunNames(names);
+    const started = Date.now();
     try {
       const result = await api.post<PayrollRow[]>("/payroll/process", {
         pay_period: active,
         working_days: parseInt(workingDays || "26", 10),
       });
+      // let the ticks finish their beat before the panel bows out
+      const wait = Math.max(0, Math.min(names.length, 12) * 140 + 900 - (Date.now() - started));
+      await new Promise((r) => setTimeout(r, wait));
       setRows(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not run payroll");
     } finally {
+      setRunNames(null);
       setBusy(false);
     }
   }
@@ -461,6 +473,26 @@ export default function PayrollPage() {
         </Card>
       )}
 
+      {runNames && (
+        <Card className="mise-pop-lg mb-6 border-brand-400/30">
+          <div className="flex items-center gap-3">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-brand-400" />
+            <h3 className="font-semibold text-fg">Running {cadence === "WEEKLY" ? "weekly " : ""}payroll — {activeLabel}</h3>
+          </div>
+          <div className="mt-3 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+            {runNames.slice(0, 12).map((n, i) => (
+              <div key={n + i} className="mise-well flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-fg-soft">
+                <span className="mise-tick-in text-brand-400" style={{ animationDelay: `${i * 140}ms` }}>✓</span>
+                <span className="truncate">{n}</span>
+              </div>
+            ))}
+          </div>
+          {runNames.length > 12 && (
+            <p className="mt-2 text-xs text-fg-faint">…and {runNames.length - 12} more</p>
+          )}
+        </Card>
+      )}
+
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -482,35 +514,15 @@ export default function PayrollPage() {
                 </td></tr>
               ) : (
                 sortedRows.map((r) => (
-                  <tr key={r.id} className="border-b border-line">
-                    <td className="px-5 py-3 font-medium text-fg">{r.employee_name}</td>
-                    <td className="px-5 py-3 text-right text-fg-soft">{format(r.gross_pay)}</td>
-                    <td className="px-5 py-3 text-right text-rose-400">
-                      {format(String(parseFloat(r.advance_deduction) + parseFloat(r.other_deductions)))}
-                    </td>
-                    <td className="px-5 py-3 text-right font-semibold text-fg">{format(r.net_pay)}</td>
-                    <td className="px-5 py-3"><Badge tone={statusTone[r.status] ?? "slate"}>{r.status}</Badge></td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        onClick={() => downloadFile(`/payroll/${r.id}/payslip.pdf`, `payslip-${r.employee_name}-${r.pay_period}.pdf`)}
-                        className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
-                      >
-                        ⬇ PDF
-                      </button>
-                    </td>
-                    {canWrite && (
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          {r.status === "DRAFT" && (
-                            <button onClick={() => act(r.id, "approve")} className="rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2">Approve</button>
-                          )}
-                          {r.status === "APPROVED" && (
-                            <button onClick={() => act(r.id, "pay")} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Mark paid</button>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
+                  <PayslipRow
+                    key={r.id}
+                    r={r}
+                    canWrite={canWrite}
+                    format={format}
+                    open={expanded === r.id}
+                    onToggle={() => setExpanded((cur) => (cur === r.id ? null : r.id))}
+                    onAct={act}
+                  />
                 ))
               )}
             </tbody>
@@ -534,5 +546,103 @@ export default function PayrollPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+/** A payslip line: label, dotted leader, monospace figure. */
+function Line({ label, value, tone = "text-fg-soft" }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="flex items-baseline gap-2 text-sm">
+      <span className="text-fg-faint">{label}</span>
+      <span className="mb-1 flex-1 border-b border-dotted border-line" />
+      <span className={`font-mono ${tone}`}>{value}</span>
+    </div>
+  );
+}
+
+/** One payroll line that morphs open into a payslip preview on click. */
+function PayslipRow({
+  r,
+  canWrite,
+  format,
+  open,
+  onToggle,
+  onAct,
+}: {
+  r: PayrollRow;
+  canWrite: boolean;
+  format: (v: string) => string;
+  open: boolean;
+  onToggle: () => void;
+  onAct: (id: string, action: "approve" | "pay") => void;
+}) {
+  const overtime = parseFloat(r.overtime_pay) || 0;
+  const basic = (parseFloat(r.gross_pay) || 0) - overtime;
+  const adv = parseFloat(r.advance_deduction) || 0;
+  const other = parseFloat(r.other_deductions) || 0;
+  return (
+    <>
+      <tr
+        onClick={onToggle}
+        className={`cursor-pointer border-b border-line transition-colors ${open ? "bg-brand-400/5" : "hover:bg-glass/5"}`}
+      >
+        <td className="px-5 py-3 font-medium text-fg">
+          <span className={`mr-2 inline-block text-xs text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>▶</span>
+          {r.employee_name}
+        </td>
+        <td className="px-5 py-3 text-right text-fg-soft">{format(r.gross_pay)}</td>
+        <td className="px-5 py-3 text-right text-rose-400">{format(String(adv + other))}</td>
+        <td className="px-5 py-3 text-right font-semibold text-fg">{format(r.net_pay)}</td>
+        <td className="px-5 py-3"><Badge tone={statusTone[r.status] ?? "slate"}>{r.status}</Badge></td>
+        <td className="px-5 py-3 text-right">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadFile(`/payroll/${r.id}/payslip.pdf`, `payslip-${r.employee_name}-${r.pay_period}.pdf`);
+            }}
+            className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
+          >
+            ⬇ PDF
+          </button>
+        </td>
+        {canWrite && (
+          <td className="px-5 py-3 text-right">
+            <div className="flex justify-end gap-1">
+              {r.status === "DRAFT" && (
+                <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "approve"); }} className="rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2">Approve</button>
+              )}
+              {r.status === "APPROVED" && (
+                <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "pay"); }} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Mark paid</button>
+              )}
+            </div>
+          </td>
+        )}
+      </tr>
+      {open && (
+        <tr className="border-b border-line">
+          <td colSpan={canWrite ? 7 : 6} className="px-5 pb-4 pt-1">
+            <div className="mise-pop mise-well max-w-md rounded-xl p-4">
+              <div className="flex items-baseline justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-faint">Payslip · {r.pay_period}</p>
+                <Badge tone={statusTone[r.status] ?? "slate"}>{r.status}</Badge>
+              </div>
+              <p className="mt-1 font-semibold text-fg">{r.employee_name}</p>
+              <div className="mt-3 space-y-1.5">
+                <Line label="Basic pay" value={format(String(basic))} />
+                {overtime > 0 && <Line label="Overtime" value={`+ ${format(String(overtime))}`} tone="text-brand-300" />}
+                <Line label="Gross" value={format(r.gross_pay)} tone="text-fg" />
+                {adv > 0 && <Line label="Advance recovered" value={`− ${format(String(adv))}`} tone="text-rose-400" />}
+                {other > 0 && <Line label="Other deductions" value={`− ${format(String(other))}`} tone="text-rose-400" />}
+              </div>
+              <div className="mt-3 flex items-baseline gap-2 border-t border-line pt-2">
+                <span className="text-sm font-semibold text-fg">Net pay</span>
+                <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                <span className="font-mono text-lg font-bold text-brand-300">{format(r.net_pay)}</span>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

@@ -21,6 +21,9 @@ export default function AttendancePage() {
   const [day, setDay] = useState(today());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rows, setRows] = useState<Record<string, AttendanceRow>>({});
+  // per-person trailing week: employee_id -> hours worked on each of the 7 days ending `day`
+  const [week, setWeek] = useState<Record<string, number[]>>({});
+  const [weekDays, setWeekDays] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,8 +72,30 @@ export default function AttendancePage() {
     setRows(Object.fromEntries(att.map((r) => [r.employee_id, r])));
   }, []);
 
+  // The week strip loads quietly after the day view — never blocks the page.
+  const loadWeek = useCallback(async (d: string) => {
+    const end = new Date(d + "T12:00:00");
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const dt = new Date(end);
+      dt.setDate(end.getDate() - (6 - i));
+      return dt.toISOString().slice(0, 10);
+    });
+    setWeekDays(days);
+    const perDay = await Promise.all(
+      days.map((dt) => api.get<AttendanceRow[]>(`/attendance?on=${dt}`).catch(() => [] as AttendanceRow[])),
+    );
+    const map: Record<string, number[]> = {};
+    perDay.forEach((att, i) => {
+      for (const r of att) {
+        (map[r.employee_id] ??= Array(7).fill(0))[i] = parseFloat(r.working_hours ?? "0") || 0;
+      }
+    });
+    setWeek(map);
+  }, []);
+
   useEffect(() => {
     load(day).finally(() => setLoading(false));
+    loadWeek(day);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -78,6 +103,7 @@ export default function AttendancePage() {
     setDay(d);
     setLoading(true);
     await load(d).finally(() => setLoading(false));
+    loadWeek(d);
   }
 
   async function punch(employeeId: string, type: string) {
@@ -244,7 +270,28 @@ export default function AttendancePage() {
                   const onBreak = !!r?.on_break;
                   return (
                     <tr key={e.id} className="border-b border-line">
-                      <td className="px-5 py-3 font-medium text-fg">{e.full_name}</td>
+                      <td className="px-5 py-3 font-medium text-fg">
+                        {e.full_name}
+                        {week[e.id] && (
+                          // the last 7 days at a glance — darker = longer day
+                          <span className="mt-1.5 flex items-center gap-[3px]" aria-hidden>
+                            {week[e.id].map((h, i) => (
+                              <span
+                                key={i}
+                                title={`${weekDays[i]}: ${h ? `${h.toFixed(1)}h` : "off"}`}
+                                className="h-2.5 w-2.5 rounded-[3px]"
+                                style={{
+                                  background:
+                                    h > 0
+                                      ? `rgba(16,185,129,${Math.min(1, 0.25 + (h / 10) * 0.75).toFixed(2)})`
+                                      : "rgba(148,163,158,0.14)",
+                                }}
+                              />
+                            ))}
+                            <span className="ml-1 text-[9px] font-normal text-fg-faint">7d</span>
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-3">
                         {onBreak ? (
                           <Badge tone="amber">On break</Badge>

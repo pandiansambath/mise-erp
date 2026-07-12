@@ -1017,6 +1017,15 @@ html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transpa
 }
 @media (prefers-reduced-motion: reduce) { .mise-l-smoke span { animation: none; opacity: 0; } }
 
+/* Run-payroll cascade: each employee's tick pops in on its own beat. */
+@keyframes mise-tick-in-k {
+  0%   { opacity: 0; transform: scale(0.3) rotate(-18deg); }
+  70%  { opacity: 1; transform: scale(1.18) rotate(4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.mise-tick-in { animation: mise-tick-in-k 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@media (prefers-reduced-motion: reduce) { .mise-tick-in { animation: none; opacity: 1; } }
+
 /* The touch-feel: surfaces lift toward the finger and settle when pressed.
    Pair with .mise-well / .mise-raised / Card wherever a box invites touch. */
 .mise-feel { transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease; }

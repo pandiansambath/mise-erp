@@ -54,14 +54,14 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 5 · Reports (P&L)
 - [x] Donut + Meters + Bars + print/export raised buttons
-- [ ] Month-vs-month comparison mode (two ranges side by side, delta column)
+- [x] Month-vs-month comparison mode (⇄ Compare: equal-length prior window, delta chips, margin pts)
 - [x] P&L lines count up on load (currency-aware AnimatedNumber)
 - [ ] Feature: monthly P&L PDF snapshot archive (needs backend)
 
 ## 6 · Payroll
 - [x] WEEKLY runs + cadence Segmented + tactile (a30475a)
-- [ ] Payslip cards: flip/expand morph (card → payslip preview)
-- [ ] Run-payroll: per-employee tick cascade while processing
+- [x] Payslip cards: flip/expand morph (row click → payslip preview with dotted leaders)
+- [x] Run-payroll: per-employee tick cascade while processing (staggered mise-tick-in wells)
 - [x] Net-pay by person Bars under the table
 - [ ] Feature: payslip share (needs email/WhatsApp provider — parked)
 
@@ -130,7 +130,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [x] Calc transparency (break shown, "12h 30m", live preview, overnight)
 - [x] PUNCH CLOCK: hero card w/ chef tapping his watch + giant round neumorphic button + ring ripple
 - [x] Day-strip per row (06:00–24:00, shift filled; amber while still working)
-- [ ] Week heat strip per person (mini CalendarHeat)
+- [x] Week heat strip per person (7-day squares under the name, darker = longer day)
 
 ## 19 · Rota
 - [x] Labour Meter + per-person cost Bars + tactile toolbar

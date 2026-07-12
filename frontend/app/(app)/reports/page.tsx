@@ -52,6 +52,9 @@ export default function ReportsPage() {
   const [pnl, setPnl] = useState<PnL | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // compare mode: this period vs the equal-length period straight before it
+  const [compare, setCompare] = useState(false);
+  const [prev, setPrev] = useState<PnL | null>(null);
 
   const load = useCallback(async (f: string, t: string) => {
     try {
@@ -72,6 +75,28 @@ export default function ReportsPage() {
     setTo(t);
     setLoading(true);
     load(f, t).finally(() => setLoading(false));
+    if (compare) loadPrev(f, t);
+  }
+
+  const loadPrev = useCallback(async (f: string, t: string) => {
+    const day = 86400000;
+    const len = Math.round((new Date(t).getTime() - new Date(f).getTime()) / day) + 1;
+    const pf = localISODate(new Date(new Date(f).getTime() - len * day));
+    const pt = localISODate(new Date(new Date(f).getTime() - day));
+    try {
+      setPrev(await api.get<PnL>(`/reports/pnl?date_from=${pf}&date_to=${pt}`));
+    } catch {
+      setPrev(null);
+    }
+  }, []);
+
+  function toggleCompare() {
+    setCompare((c) => {
+      const next = !c;
+      if (next) loadPrev(from, to);
+      else setPrev(null);
+      return next;
+    });
   }
 
   const num = (v: string) => Math.max(0, parseFloat(v) || 0);
@@ -94,6 +119,13 @@ export default function ReportsPage() {
             onClick={() => downloadFile(`/reports/pnl.csv?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.csv`)}
           >
             ⬇ CSV
+          </Button>
+          <Button
+            variant={compare ? "primary" : "ghost"}
+            onClick={toggleCompare}
+            title="Put this period next to the equal-length period straight before it"
+          >
+            ⇄ Compare
           </Button>
           <Button variant="ghost" onClick={() => window.print()} title="Print this report">
             🖨 Print
@@ -122,6 +154,82 @@ export default function ReportsPage() {
             <StatCard label="Net margin" value={`${pnl.net_margin_pct}%`} accent="brand" />
             <StatCard label="Food cost" value={`${pnl.food_cost_pct}%`} hint="target 25-35%" accent="amber" />
           </div>
+
+          {compare && prev && (
+            <Card className="mise-pop mise-feel mt-6">
+              <h3 className="font-semibold text-fg">This period vs the one before</h3>
+              <p className="text-xs text-fg-faint">
+                {prev.date_from} → {prev.date_to} <span className="mx-1">·</span> then {pnl.date_from} → {pnl.date_to}
+              </p>
+              <div className="mise-well mt-4 overflow-x-auto rounded-xl p-3">
+                <table className="w-full min-w-[26rem] text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase text-fg-faint">
+                      <th className="py-1.5 font-medium">Line</th>
+                      <th className="py-1.5 text-right font-medium">Before</th>
+                      <th className="py-1.5 text-right font-medium">This period</th>
+                      <th className="py-1.5 text-right font-medium">Change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(
+                      [
+                        ["Net sales", prev.net_sales, pnl.net_sales, true],
+                        ["Cost of sales (food)", prev.cost_of_sales, pnl.cost_of_sales, false],
+                        ["Running costs", prev.operating_expenses, pnl.operating_expenses, false],
+                        ["Waste", prev.waste_total, pnl.waste_total, false],
+                        ["Net profit", prev.net_profit, pnl.net_profit, true],
+                      ] as [string, string, string, boolean][]
+                    ).map(([label, a, b, upGood]) => {
+                      const av = parseFloat(a) || 0;
+                      const bv = parseFloat(b) || 0;
+                      const d = bv - av;
+                      const pct = av !== 0 ? (d / Math.abs(av)) * 100 : null;
+                      const good = d === 0 ? null : upGood ? d > 0 : d < 0;
+                      return (
+                        <tr key={label} className="border-t border-line/60">
+                          <td className="py-2 text-fg-soft">{label}</td>
+                          <td className="py-2 text-right tabular-nums text-fg-faint">{format(String(av))}</td>
+                          <td className="py-2 text-right font-medium tabular-nums text-fg">{format(String(bv))}</td>
+                          <td className="py-2 text-right">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
+                                good === null
+                                  ? "bg-glass/10 text-fg-faint"
+                                  : good
+                                    ? "bg-brand-400/15 text-brand-300"
+                                    : "bg-rose-500/15 text-rose-300"
+                              }`}
+                            >
+                              {d === 0 ? "—" : d > 0 ? "▲" : "▼"} {format(String(Math.abs(d)))}
+                              {pct !== null && <span className="opacity-75">({Math.abs(pct).toFixed(0)}%)</span>}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="border-t border-line/60">
+                      <td className="py-2 text-fg-soft">Net margin</td>
+                      <td className="py-2 text-right tabular-nums text-fg-faint">{prev.net_margin_pct}%</td>
+                      <td className="py-2 text-right font-medium tabular-nums text-fg">{pnl.net_margin_pct}%</td>
+                      <td className="py-2 text-right text-xs text-fg-faint">
+                        {(parseFloat(pnl.net_margin_pct) - parseFloat(prev.net_margin_pct)).toFixed(1)} pts
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[11px] text-fg-faint">
+                Green = moved the right way (sales/profit up, costs/waste down). The “before” window is the same
+                number of days ending the day before this one starts.
+              </p>
+            </Card>
+          )}
+          {compare && !prev && (
+            <Card className="mt-6">
+              <p className="py-3 text-center text-sm text-fg-faint">No data for the period before this one yet.</p>
+            </Card>
+          )}
 
           {/* The period as one picture: where every pound went + health gauges */}
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
