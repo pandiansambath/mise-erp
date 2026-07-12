@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, postForm, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
-import { Bars, Donut } from "@/components/charts";
+import { Badge, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { Bars, Donut, Treemap } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { ComboBox } from "@/components/ComboBox";
@@ -49,6 +49,7 @@ function CostDetail({
 }) {
   const [data, setData] = useState<RecipeCostBreakdown | null>(() => _costCache.get(recipeId) ?? null);
   const [whatIf, setWhatIf] = useState<number | null>(null); // what-if price slider
+  const [costView, setCostView] = useState<"donut" | "map">("donut");
   const { format } = useCurrency();
   useEffect(() => {
     const cached = _costCache.get(recipeId);
@@ -143,9 +144,28 @@ function CostDetail({
 
       {data.ingredients.length >= 2 && (
         <div className="mise-well rounded-xl p-3">
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-            Where the plate cost goes
-          </p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+              Where the plate cost goes
+            </p>
+            <Segmented
+              value={costView}
+              onChange={setCostView}
+              options={[
+                { value: "donut", label: "◔" },
+                { value: "map", label: "▦" },
+              ]}
+            />
+          </div>
+          {costView === "map" ? (
+            <Treemap
+              height={190}
+              formatValue={(v) => format(String(v))}
+              items={data.ingredients
+                .map((ing) => ({ label: ing.item_name, value: parseFloat(ing.line_cost) || 0 }))
+                .filter((x) => x.value > 0)}
+            />
+          ) : (
           <Donut
             centerLabel="per batch"
             centerValue={format(data.total_cost)}
@@ -163,6 +183,7 @@ function CostDetail({
               return segs;
             })()}
           />
+          )}
         </div>
       )}
 

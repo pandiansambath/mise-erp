@@ -82,7 +82,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [x] Tactile buttons (879d060)
 - [x] Pipeline strip: Indents raised → Approved → POs out → Received (tactile stages w/ counts)
 - [ ] Consolidated view: per-vendor subtotal Bars
-- [ ] Receive drawer: old→new price-change chips highlighted
+- [x] Receive drawer: old→new price chips (strikethrough → input + "new") — verified existing
 - [ ] Feature: expected-delivery date on PO + "due today" chip on dashboard
 
 ## 10 · Vendors
@@ -104,7 +104,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 13 · Recipes
 - [x] Plate-cost Donut + KPI wells
 - [x] Margin ladder: top-10 dishes as colour-coded Bars at page top
-- [ ] Ingredient Treemap as alternative cost view (toggle)
+- [x] Ingredient Treemap ↔ Donut toggle (◔/▦ Segmented) in the cost panel
 - [x] What-if price slider — drag the price, margin/profit update live
 
 ## 14 · Party Order
@@ -119,7 +119,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 16 · Food Safety
 - [x] Temps Donut + today's-checks progress + tactile rows
 - [x] Temperature-drift AreaChart for the most-logged appliance (°C over time)
-- [ ] Feature: dashboard nudge chip when today's checks incomplete
+- [x] Dashboard nudge chip: "🌡 3/7 safety checks logged today →" (after 10am)
 
 ## 17 · Employees
 - [x] Avatar-initial chips in the table

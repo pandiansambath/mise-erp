@@ -105,6 +105,7 @@ export default function DashboardPage() {
   const [week, setWeek] = useState<DayPoint[] | null>(null); // last 7 days, oldest first
   const [monthDays, setMonthDays] = useState<{ date: string; value: number }[]>([]); // ~5 weeks for the heatmap
   const [tonight, setTonight] = useState<string[]>([]); // who's on the rota today
+  const [checksDone, setChecksDone] = useState<number | null>(null); // today's safety checks
   const [curWeek, setCurWeek] = useState<PnL | null>(null);
   const [prevWeek, setPrevWeek] = useState<PnL | null>(null);
   const [setupDone, setSetupDone] = useState(true); // assume done → no flash; corrected in effect
@@ -158,6 +159,16 @@ export default function DashboardPage() {
     }
     if (seeInventory)
       jobs.push(api.get<LowStock[]>("/inventory/alerts/low-stock").then(setLow).catch(() => {}));
+    // safety pulse: how many of today's 7 daily checks are logged?
+    {
+      const t0 = iso(ago(0));
+      jobs.push(
+        api
+          .get<{ kind: string; label: string; date: string }[]>(`/safety/logs?date_from=${t0}&date_to=${t0}`)
+          .then((logs) => setChecksDone(new Set(logs.filter((l) => l.kind === "CHECK").map((l) => l.label)).size))
+          .catch(() => {}),
+      );
+    }
     // who's cooking today — the rota says
     {
       const t = iso(ago(0));
@@ -214,6 +225,11 @@ export default function DashboardPage() {
       />
 
       <p className="-mt-2 mb-5 text-xs text-fg-faint">
+        {checksDone != null && checksDone < 7 && new Date().getHours() >= 10 && (
+          <Link href="/food-safety" className="mise-well mise-press mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-amber-300 hover:text-amber-200">
+            🌡 {checksDone}/7 safety checks logged today →
+          </Link>
+        )}
         {tonight.length > 0 && (
           <span className="mise-well mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-fg-soft">
             <span aria-hidden>🧑‍🍳</span>
