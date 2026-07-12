@@ -29,6 +29,108 @@ const PLAN_TONE: Record<string, "slate" | "amber" | "green"> = {
   starter: "slate", pro: "amber", enterprise: "green",
 };
 
+type Announcement = {
+  id: string; message: string; level: string;
+  expires_at: string | null; is_active: boolean; created_at: string | null;
+};
+
+/** 📣 Broadcast a banner into every hotel's app shell. */
+function AnnouncementsCard() {
+  const confirm = useConfirm();
+  const [list, setList] = useState<Announcement[]>([]);
+  const [message, setMessage] = useState("");
+  const [level, setLevel] = useState<"info" | "warn">("info");
+  const [expires, setExpires] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    api.get<{ announcements: Announcement[] }>("/platform/announcements")
+      .then((r) => setList(r.announcements))
+      .catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  async function send() {
+    if (message.trim().length < 3) return;
+    const ok = await confirm({
+      title: "Broadcast to every hotel?",
+      message: `This banner appears in ALL hotels' apps${expires ? ` until ${expires}` : " until you withdraw it"}.`,
+      confirmText: "Broadcast",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await api.post("/platform/announcements", {
+        message: message.trim(),
+        level,
+        expires_at: expires ? new Date(`${expires}T23:59:59`).toISOString() : null,
+      });
+      setMessage("");
+      setExpires("");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function withdraw(a: Announcement) {
+    const ok = await confirm({
+      title: "Withdraw this broadcast?",
+      message: "It disappears from every hotel's app immediately.",
+      confirmText: "Withdraw",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await api.delete(`/platform/announcements/${a.id}`);
+    await load();
+  }
+
+  return (
+    <Card className="mise-feel mb-6">
+      <h3 className="font-semibold text-fg">📣 Broadcast to all hotels</h3>
+      <p className="text-xs text-fg-faint">a dismissible banner in every hotel&apos;s app — maintenance notices, new features, price changes</p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="min-w-[16rem] flex-1">
+          <input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={500}
+            placeholder="e.g. Mise gets new charts tonight 22:00–22:15 — nothing you need to do."
+            className="mise-well w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+          />
+        </div>
+        <Toggle on={level === "warn"} onChange={(v) => setLevel(v ? "warn" : "info")} label="⚠ warning tone" />
+        <label className="block">
+          <span className="block text-[11px] text-fg-faint">Auto-expires (optional)</span>
+          <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="mise-well mt-1 rounded-lg px-2.5 py-1.5 text-sm outline-none" />
+        </label>
+        <Button variant="primary" onClick={send} busy={busy} disabled={message.trim().length < 3}>
+          Broadcast
+        </Button>
+      </div>
+      {list.length > 0 && (
+        <ul className="mt-4 space-y-1.5">
+          {list.slice(0, 6).map((a) => (
+            <li key={a.id} className="mise-well flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 truncate text-fg">
+                {a.level === "warn" ? "⚠️" : "📣"} {a.message}
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                {a.is_active ? <Badge tone="green">live</Badge> : <Badge tone="slate">off</Badge>}
+                {a.expires_at && <span className="text-[11px] text-fg-faint">until {a.expires_at.slice(0, 10)}</span>}
+                {a.is_active && (
+                  <button type="button" onClick={() => withdraw(a)} className="mise-press rounded-md border border-rose-500/40 px-2 py-0.5 text-xs text-rose-300 hover:bg-rose-500/10">
+                    withdraw
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function HotelCard({
   hotel, features, plans, onToggle, onApplyPlan, onSuspend,
 }: {
@@ -417,6 +519,8 @@ export default function ControlRoomPage() {
           </Card>
         </div>
       )}
+
+      <AnnouncementsCard />
 
       {plans.length > 0 && (
         <Card className="mb-6">

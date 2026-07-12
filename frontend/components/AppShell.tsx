@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { API_BASE, featureOn } from "@/lib/api";
+import { API_BASE, api, featureOn } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
@@ -278,6 +278,55 @@ function ShellAurora() {
   );
 }
 
+/** Operator broadcast banner — platform announcements shown to every hotel
+ *  until they expire; each user can dismiss (remembered locally). */
+function AnnouncementBanner() {
+  type Ann = { id: string; message: string; level: string };
+  const [anns, setAnns] = useState<Ann[]>([]);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      setDismissed(JSON.parse(localStorage.getItem("mise.dismissed.announcements") ?? "[]"));
+    } catch { /* ignore */ }
+    api
+      .get<{ announcements: Ann[] }>("/platform/announcements/active")
+      .then((r) => setAnns(r.announcements))
+      .catch(() => {});
+  }, []);
+  const visible = anns.filter((a) => !dismissed.includes(a.id));
+  if (visible.length === 0) return null;
+  const dismiss = (id: string) => {
+    const next = [...dismissed, id].slice(-20);
+    setDismissed(next);
+    try { localStorage.setItem("mise.dismissed.announcements", JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  return (
+    <div className="space-y-1.5 px-4 pt-3 lg:px-8">
+      {visible.map((a) => (
+        <div
+          key={a.id}
+          className={`mise-pop flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm backdrop-blur ${
+            a.level === "warn"
+              ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+              : "border-brand-500/30 bg-brand-500/10 text-brand-200"
+          }`}
+        >
+          <span aria-hidden>{a.level === "warn" ? "⚠️" : "📣"}</span>
+          <p className="min-w-0 flex-1">{a.message}</p>
+          <button
+            type="button"
+            onClick={() => dismiss(a.id)}
+            aria-label="Dismiss"
+            className="mise-press shrink-0 rounded-lg px-2 py-0.5 text-fg-faint transition hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
@@ -400,7 +449,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* pb is generous so the floating "Ask Mise" launcher (bottom-right) never
             covers a page's last action button. */}
-        <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8">
+          <AnnouncementBanner />
+          {children}
+        </main>
       </div>
 
       {/* Guided tour (walks through pages) + project-aware AI assistant. Both float

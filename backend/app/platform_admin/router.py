@@ -8,6 +8,7 @@ A normal hotel Super Admin CANNOT reach any of this. Capabilities:
 """
 import uuid
 from collections import defaultdict
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -22,7 +23,7 @@ from app.core.database import get_db
 from app.core.security import hash_password
 from app.hotels.models import Hotel
 from app.platform_admin import features as feat
-from app.platform_admin.models import PlatformConfig
+from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
 
 
 async def _plan_price_overrides(db: AsyncSession) -> dict:
@@ -51,6 +52,12 @@ class ResetPassword(BaseModel):
 
 class SuspendBody(BaseModel):
     active: bool  # False = suspend (logins blocked), True = reactivate
+
+
+class AnnouncementCreate(BaseModel):
+    message: str = Field(min_length=3, max_length=500)
+    level: str = Field(default="info", pattern=r"^(info|warn)$")
+    expires_at: datetime | None = None
 
 
 def _merged_features(hotel: Hotel) -> dict[str, bool]:
@@ -231,6 +238,80 @@ async def reset_password(
         summary=f"Password reset for {target.email}", entity_type="user", entity_id=target.id,
     )
     return {"ok": True, "email": target.email}
+
+
+def _announcement_out(a: PlatformAnnouncement) -> dict:
+    return {
+        "id": str(a.id),
+        "message": a.message,
+        "level": a.level,
+        "expires_at": a.expires_at.isoformat() if a.expires_at else None,
+        "is_active": a.is_active,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    }
+
+
+@router.get("/announcements")
+async def list_announcements(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_owner),
+) -> dict:
+    """Every broadcast, newest first — the operator's send history."""
+    rows = (await db.execute(
+        select(PlatformAnnouncement).order_by(PlatformAnnouncement.created_at.desc()).limit(50)
+    )).scalars().all()
+    return {"announcements": [_announcement_out(a) for a in rows]}
+
+
+@router.post("/announcements")
+async def create_announcement(
+    body: AnnouncementCreate,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Broadcast a banner to every hotel's app shell (until expiry/deactivation)."""
+    a = PlatformAnnouncement(message=body.message.strip(), level=body.level, expires_at=body.expires_at)
+    db.add(a)
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.announce",
+        summary=f"Broadcast ({body.level}): {body.message[:120]}", entity_type="platform",
+    )
+    return _announcement_out(a)
+
+
+@router.delete("/announcements/{announcement_id}")
+async def deactivate_announcement(
+    announcement_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    a = await db.get(PlatformAnnouncement, announcement_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    a.is_active = False
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.announce_off",
+        summary=f"Broadcast withdrawn: {a.message[:120]}", entity_type="platform",
+    )
+    return {"ok": True}
+
+
+@router.get("/announcements/active")
+async def active_announcements(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),  # ANY signed-in user — feeds the app-shell banner
+) -> dict:
+    now = datetime.now(UTC)
+    rows = (await db.execute(
+        select(PlatformAnnouncement)
+        .where(PlatformAnnouncement.is_active.is_(True))
+        .order_by(PlatformAnnouncement.created_at.desc())
+        .limit(5)
+    )).scalars().all()
+    live = [a for a in rows if a.expires_at is None or a.expires_at > now]
+    return {"announcements": [_announcement_out(a) for a in live]}
 
 
 @router.post("/hotels/{hotel_id}/suspend")
