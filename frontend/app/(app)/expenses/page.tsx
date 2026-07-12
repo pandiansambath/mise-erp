@@ -10,7 +10,7 @@ import {
   type Item,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
-import { Donut, Treemap, type DonutSegment } from "@/components/charts";
+import { Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
@@ -248,6 +248,18 @@ export default function ExpensesPage() {
             />
           </Card>
           <Card className="mise-feel">
+            <div className="mise-well mb-4 rounded-xl p-4">
+              <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                Fixed bills vs variable costs — each square is 1%
+              </p>
+              <Waffle
+                formatValue={(v) => format(String(v))}
+                segments={[
+                  { label: "Variable (moves with sales)", value: parseFloat(summary.variable_total) || 0, color: "#f59e0b" },
+                  { label: "Fixed (arrives regardless)", value: parseFloat(summary.fixed_total) || 0, color: "#94a3b8" },
+                ].filter((x) => x.value > 0)}
+              />
+            </div>
             <h2 className="text-sm font-semibold text-fg">The expense map</h2>
             <p className="text-xs text-fg-faint">bigger box = more money — spot the heavy categories in one glance</p>
             <Treemap

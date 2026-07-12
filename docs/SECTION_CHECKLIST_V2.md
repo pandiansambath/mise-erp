@@ -42,7 +42,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 3 · Expenses
 - [x] Donut + share bars + wells (562112c) · [x] Treemap expense map
-- [ ] Fixed-vs-variable Waffle strip under the KPIs
+- [x] Fixed-vs-variable Waffle (each square = 1% of spend)
 - [ ] Petty-cash drawer visual (notes/coins breakdown as Bars)
 - [ ] Feature: recurring-expense detection ("Rent looks monthly — auto-remind?")
 
@@ -109,7 +109,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 14 · Party Order
 - [x] Tactile buttons + feel cards
-- [ ] Per-quote cost/price/margin mini-Bars
+- [x] Per-quote cost-vs-profit split bar on every quote card
 - [ ] Feature: quote → printable PDF (print stylesheet)
 
 ## 15 · Allergens

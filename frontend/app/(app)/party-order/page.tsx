@@ -451,6 +451,13 @@ export default function PartyOrderPage() {
                           </p>
                         </div>
                       </div>
+                      {/* the quote's money at a glance: cost vs profit share of the price */}
+                      {q.total_price > 0 && (
+                        <div className="mise-well mt-3 flex h-2.5 overflow-hidden rounded-full" title={`cost ${money(q.currency, q.total_price - q.profit)} · profit ${money(q.currency, q.profit)}`}>
+                          <span className="h-full bg-rose-400/70" style={{ width: `${Math.max(0, Math.min(100, ((q.total_price - q.profit) / q.total_price) * 100))}%` }} />
+                          <span className="h-full bg-brand-500/80" style={{ width: `${Math.max(0, Math.min(100, (q.profit / q.total_price) * 100))}%` }} />
+                        </div>
+                      )}
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           onClick={() => setOpenQuoteId((id) => (id === q.id ? null : q.id))}
