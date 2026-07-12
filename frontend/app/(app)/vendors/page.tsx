@@ -11,6 +11,7 @@ import {
   type VendorItem,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Bars } from "@/components/charts";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -42,6 +43,14 @@ export default function VendorsPage() {
   const detailRef = useRef<HTMLDivElement>(null);
 
   // add-vendor form
+  const [spend, setSpend] = useState<{ vendor_name: string; total: string }[]>([]);
+  useEffect(() => {
+    api
+      .get<{ vendors: { vendor_name: string; total: string }[] }>("/vendors/spend?days=90")
+      .then((r) => setSpend(r.vendors))
+      .catch(() => {});
+  }, []);
+
   const [vName, setVName] = useState("");
   const [vCat, setVCat] = useState("FOOD");
   const [extraCats, setExtraCats] = useState<string[]>([]); // superadmin-added types
@@ -319,6 +328,25 @@ export default function VendorsPage() {
               </button>
             </div>
           </form>
+        </Card>
+      )}
+
+      {spend.length > 0 && (
+        <Card className="mise-feel mb-6">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-semibold text-fg">Who gets your money</h3>
+            <span className="text-xs text-fg-faint">received orders · last 90 days</span>
+          </div>
+          <div className="mise-well mt-4 rounded-xl p-3">
+            <Bars
+              formatValue={(v) => format(String(v))}
+              items={spend.slice(0, 8).map((x) => ({
+                label: x.vendor_name,
+                value: parseFloat(x.total) || 0,
+                color: "#d97742",
+              }))}
+            />
+          </div>
         </Card>
       )}
 

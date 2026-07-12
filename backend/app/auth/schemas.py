@@ -1,5 +1,6 @@
 """Pydantic request/response schemas for auth & user management."""
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -37,6 +38,7 @@ class UserOut(BaseModel):
     is_active: bool
     preferred_name: str | None = None
     is_platform_owner: bool = False
+    last_login: datetime | None = None
 
 
 class MeUpdate(BaseModel):

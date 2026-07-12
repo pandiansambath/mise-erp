@@ -76,13 +76,28 @@ async def list_hotels(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_platform_owner),
 ) -> dict:
-    """Every hotel with quick stats + resolved feature entitlements."""
+    """Every hotel with quick stats + resolved feature entitlements + health."""
     hotels = list((await db.execute(select(Hotel).order_by(Hotel.created_at))).scalars().all())
     users = list((await db.execute(select(User).order_by(User.created_at))).scalars().all())
 
     by_hotel: dict[uuid.UUID, list[User]] = defaultdict(list)
     for u in users:
         by_hotel[u.hotel_id].append(u)
+
+    # Health signals: latest login per hotel + sales entries in the last 7 days.
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import func as safunc
+
+    from app.sales.models import DailySales
+
+    week_ago = (datetime.now(UTC) - timedelta(days=7)).date()
+    sales_rows = await db.execute(
+        select(DailySales.hotel_id, safunc.count())
+        .where(DailySales.date >= week_ago)
+        .group_by(DailySales.hotel_id)
+    )
+    sales_7d = {hid: n for hid, n in sales_rows.all()}
 
     items = []
     for h in hotels:
@@ -102,6 +117,10 @@ async def list_hotels(
             "plan": h.plan,
             "max_users": feat.plan_max_users(h.plan),
             "features": _merged_features(h),
+            "last_active": max(
+                (u.last_login for u in hu if u.last_login), default=None
+            ).isoformat() if any(u.last_login for u in hu) else None,
+            "sales_entries_7d": sales_7d.get(h.id, 0),
         })
     return {"hotels": items}
 

@@ -1,5 +1,6 @@
 """Auth & user-management endpoints. User management is hotel-scoped."""
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +53,8 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account is suspended. Contact Mise support.",
         )
+    user.last_login = datetime.now(UTC)
+    await db.commit()
     token = create_access_token(subject=str(user.id), role=user.role)
     return TokenResponse(
         access_token=token,

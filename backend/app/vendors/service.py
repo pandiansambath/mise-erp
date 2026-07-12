@@ -276,3 +276,29 @@ async def compare_vendor_prices(
         "most_expensive_vendor": most_expensive,
         "potential_saving_per_unit": saving,
     }
+
+async def spend_by_vendor(db: AsyncSession, hotel_id: uuid.UUID, days: int) -> list[dict]:
+    """Total received-PO value per vendor in the last `days` — one query."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import func as safunc
+
+    from app.purchasing.models import POStatus, PurchaseOrder
+    from app.vendors.models import Vendor
+
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    rows = await db.execute(
+        select(Vendor.id, Vendor.name, safunc.sum(PurchaseOrder.total_amount))
+        .join(PurchaseOrder, PurchaseOrder.vendor_id == Vendor.id)
+        .where(
+            PurchaseOrder.hotel_id == hotel_id,
+            PurchaseOrder.status == POStatus.RECEIVED.value,
+            PurchaseOrder.received_at >= cutoff,
+        )
+        .group_by(Vendor.id, Vendor.name)
+        .order_by(safunc.sum(PurchaseOrder.total_amount).desc())
+    )
+    return [
+        {"vendor_id": str(vid), "vendor_name": name, "total": str(total)}
+        for vid, name, total in rows.all()
+    ]

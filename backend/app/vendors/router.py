@@ -46,6 +46,16 @@ async def create_vendor(
     return VendorOut.model_validate(vendor)
 
 
+@router.get("/spend")
+async def vendor_spend(
+    days: int = Query(default=90, ge=7, le=365),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    """What you've actually paid each vendor (received POs) in the window."""
+    return {"days": days, "vendors": await service.spend_by_vendor(db, user.hotel_id, days)}
+
+
 @router.get("", response_model=list[VendorOut])
 async def list_vendors(
     category: str | None = Query(default=None),

@@ -87,7 +87,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 10 · Vendors
 - [x] Feel cards + well inputs + tactile import buttons
-- [ ] Spend-per-vendor Bars (needs /vendors/spend endpoint — 30d PO totals)
+- [x] Spend-per-vendor Bars ("who gets your money", 90d received POs)
 - [ ] Price-list table: cheapest-cell emerald highlight
 - [ ] Feature: vendor scorecard (price-rise count 90d, order count)
 
@@ -141,7 +141,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 20 · Staff
 - [x] Avatar chips + well form + tactile
 - [x] Role Donut (who can do what)
-- [ ] Feature: last-login column (backend touch)
+- [x] Last-seen column (login stamps users.last_login)
 
 ## 21 · My (self-service)
 - [x] KPI wells
@@ -200,8 +200,8 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [ ] Hotel table w/ sort/filter + per-hotel Drawer (replaces long cards)
 - [x] FEATURE: announcements/broadcast (platform_announcements table, operator
       composer + withdraw, dismissible shell banner, audited)
-- [ ] FEATURE: per-hotel health (last login, sales entries 7d, docs) →
-      Active/Quiet/Dormant chips — needs /platform/stats
+- [x] FEATURE: per-hotel health chips — Active (traded/logged in ≤3d) /
+      Quiet (≤14d) / Dormant, from last_login + sales entries 7d
 - [ ] FEATURE: read-only impersonation ("view as hotel") — server-enforced, audited
 - [ ] FEATURE: operator audit tab (platform.* timeline)
 - [ ] FEATURE: signup funnel (onboarding-completed flag per hotel)

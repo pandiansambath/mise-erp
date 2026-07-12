@@ -22,7 +22,16 @@ type HotelRow = {
   created_at: string; has_logo: boolean; is_active: boolean;
   user_count: number; admin_email: string | null; plan: string; max_users: number;
   features: Record<string, boolean>;
+  last_active?: string | null; sales_entries_7d?: number;
 };
+
+/** Active = traded/logged in this week · Quiet = seen in 14d · Dormant = gone cold */
+function healthOf(h: HotelRow): { label: string; tone: "green" | "amber" | "slate" } {
+  const days = h.last_active ? (Date.now() - new Date(h.last_active).getTime()) / 86400000 : Infinity;
+  if ((h.sales_entries_7d ?? 0) > 0 || days <= 3) return { label: "Active", tone: "green" };
+  if (days <= 14) return { label: "Quiet", tone: "amber" };
+  return { label: "Dormant", tone: "slate" };
+}
 type HotelUser = { id: string; email: string; role: string; is_active: boolean };
 
 const PLAN_TONE: Record<string, "slate" | "amber" | "green"> = {
@@ -248,7 +257,8 @@ function HotelCard({
           <div className="flex items-center gap-2">
             <h3 className="truncate font-semibold text-fg">{hotel.name}</h3>
             <Badge tone={PLAN_TONE[hotel.plan] ?? "slate"}>{hotel.plan}</Badge>
-            {!hotel.is_active && <Badge tone="red">inactive</Badge>}
+            <Badge tone={healthOf(hotel).tone}>{healthOf(hotel).label}</Badge>
+            {!hotel.is_active && <Badge tone="red">suspended</Badge>}
           </div>
           <p className="truncate text-xs text-fg-faint">
             {[hotel.city, hotel.country].filter(Boolean).join(" · ")} · {hotel.base_currency} · joined {created}

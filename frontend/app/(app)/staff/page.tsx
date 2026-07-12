@@ -214,6 +214,7 @@ export default function StaffPage() {
                   <th className="px-5 py-3 font-medium">Email</th>
                   <th className="px-5 py-3 font-medium">Role</th>
                   <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 font-medium">Last seen</th>
                   <th className="px-5 py-3 text-right font-medium"></th>
                 </tr>
               </thead>
@@ -247,6 +248,11 @@ export default function StaffPage() {
                         ) : (
                           <Badge tone="red">Inactive</Badge>
                         )}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-fg-faint">
+                        {u.last_login
+                          ? new Date(u.last_login).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+                          : "never"}
                       </td>
                       <td className="px-5 py-3 text-right">
                         {canWrite && !isSelf && (
