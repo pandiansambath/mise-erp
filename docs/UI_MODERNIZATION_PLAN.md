@@ -217,18 +217,23 @@ every list staggers 40ms/row (cap 8); numbers always AnimatedNumber.
       bar + tactile check rows + well inputs
 
 ## PHASE 6 — PEOPLE CLUSTER (employees · staff · attendance · rota · my · profile)
-- [ ] **/rota**: week grid with drag-feel polish, labour % meter live under the
-      grid, copy-last-week button prominent, break chips
-- [ ] **/attendance**: punch timeline per day, late/absent tinting, penalty
-      config surfaced clearly
-- [ ] **/employees + /staff**: person cards w/ avatar initials, role badges,
-      doc-expiry warnings inline
-- [ ] **/my** (self-service): make it feel like a mini-app: my shifts, my
-      payslips, my documents — mobile-first cards
-- [ ] **/profile**: cleanup to kit standard
+- [x] **/rota**: ✅ d42503e labour-% Meter under the week header + per-person
+      cost Bars + raised/press toolbar; drag-feel polish + break chips = later
+- [x] **/attendance**: ✅ a30475a calc-transparency fix (break always shown,
+      "12h 30m" format, live math preview, overnight, mid-break clock-out);
+      punch-timeline visual = later polish
+- [x] **/staff**: ✅ d42503e avatar-initial chips + well form + tactile buttons
+- [ ] **/employees**: person cards w/ doc-expiry warnings inline (has ⌘K
+      add-employee deep link already)
+- [x] **/my**: ✅ d42503e KPI wells w/ feel (mini-app card pass = later)
+- [x] **/profile**: ✅ d42503e raised-press buttons (kit standard)
 
 ## PHASE 7 — KNOWLEDGE & SYSTEM (how-it-works · documents · settings · audit)
-- [ ] **/how-it-works — Task C (user's ⭐MAIN)**: full knowledge HUB — topic
+- [x] **/how-it-works — Task C**: ✅ full hub — 13 topics (added payroll incl.
+      WEEKLY runs, attendance-hours maths, break-even, waste no-double-count,
+      menu engineering, stock-take variance — each w/ formula + worked example
+      + live sim + per-topic Ask-Mise), search well, tactile kit
+- [ ] *(original Task C spec below, kept for reference)*: full knowledge HUB — topic
       cards/accordion: formula in mono block + REAL worked example + "Still
       confused? Ask Mise" button that opens Copilot pre-seeded with the topic.
       Cover: weighted-avg cost, purchasing loop, rota/labour %, recipe costing,

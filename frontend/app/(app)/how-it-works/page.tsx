@@ -27,7 +27,7 @@ function Field({ label, value, onChange, step = 1, prefix }: {
   return (
     <label className="block">
       <span className="text-[11px] uppercase tracking-wide text-fg-faint">{label}</span>
-      <div className="mt-1 flex items-center rounded-lg border border-line-2 bg-transparent focus-within:border-brand-500">
+      <div className="mise-well mt-1 flex items-center rounded-lg">
         {prefix && <span className="pl-2.5 text-sm text-fg-faint">{prefix}</span>}
         <input
           type="number" value={value} step={step} inputMode="decimal"
@@ -114,6 +114,94 @@ function LabourSim() {
   );
 }
 
+function PaySim() {
+  const [hours, setHours] = useState(38);
+  const [rate, setRate] = useState(12);
+  const [advance, setAdvance] = useState(50);
+  const gross = hours * rate;
+  const net = gross - advance;
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Hours worked" value={hours} onChange={setHours} step={0.5} />
+        <Field label="Hourly rate" value={rate} onChange={setRate} prefix="£" step={0.5} />
+        <Field label="Advance due" value={advance} onChange={setAdvance} prefix="£" step={10} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Out label="Gross pay" value={money(gross)} />
+        <Out label="Net pay" value={money(net)} accent />
+      </div>
+    </div>
+  );
+}
+
+function HoursSim() {
+  const [inH, setInH] = useState(11);
+  const [outH, setOutH] = useState(23.5);
+  const [brk, setBrk] = useState(0);
+  let span = outH - inH;
+  if (span <= 0) span += 24; // clocked out past midnight
+  const mins = Math.max(0, Math.round(span * 60) - brk);
+  const hhmm = `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`;
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Clock in (24h)" value={inH} onChange={setInH} step={0.5} />
+        <Field label="Clock out (24h)" value={outH} onChange={setOutH} step={0.5} />
+        <Field label="Break (min)" value={brk} onChange={setBrk} step={15} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Out label="Hours worked" value={hhmm} accent />
+        <Out label="Overnight?" value={outH <= inH ? "yes — rolls past midnight" : "no"} />
+      </div>
+      <p className="mt-2 text-xs text-fg-faint">
+        Enter 23.5 for 23:30. Breaks are always subtracted — the Attendance page shows exactly this maths.
+      </p>
+    </div>
+  );
+}
+
+function BreakEvenSim() {
+  const [fixed, setFixed] = useState(9000);
+  const [cm, setCm] = useState(70);
+  const be = cm > 0 ? fixed / (cm / 100) : 0;
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Fixed costs (month)" value={fixed} onChange={setFixed} prefix="£" step={100} />
+        <Field label="Contribution margin %" value={cm} onChange={setCm} step={1} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Out label="Break-even sales" value={money(be)} accent />
+        <Out label="≈ per day (30d)" value={money(be / 30)} />
+      </div>
+    </div>
+  );
+}
+
+function StockTakeSim() {
+  const [system, setSystem] = useState(24);
+  const [counted, setCounted] = useState(22);
+  const [cost, setCost] = useState(2.5);
+  const diff = counted - system;
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="System says (kg)" value={system} onChange={setSystem} step={0.5} />
+        <Field label="You counted (kg)" value={counted} onChange={setCounted} step={0.5} />
+        <Field label="Avg cost" value={cost} onChange={setCost} prefix="£" step={0.1} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Out label="Variance" value={`${f2(diff)} kg`} />
+        <Out label="Money impact" value={money(diff * cost)} accent={diff >= 0} />
+      </div>
+      <p className="mt-2 text-xs text-fg-faint">
+        Negative = stock missing vs the books (waste, over-portioning, un-logged use). Applying the count corrects the system.
+      </p>
+    </div>
+  );
+}
+
 function PnlSim() {
   const [sales, setSales] = useState(20000);
   const [cogs, setCogs] = useState(6000);
@@ -140,15 +228,21 @@ function PnlSim() {
 }
 
 // ── Topic card ────────────────────────────────────────────────────────────────
-function Topic({ icon, title, tag, ask, sim, children }: {
+function Topic({ icon, title, tag, ask, sim, q = "", keywords = "", children }: {
   icon: string; title: string; tag: string; ask: string;
   sim?: React.ReactNode; children: React.ReactNode;
+  /** live search text from the hub header */
+  q?: string;
+  /** extra words the search should match ("wages salary pay") */
+  keywords?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const needle = q.trim().toLowerCase();
+  if (needle && !`${title} ${tag} ${keywords}`.toLowerCase().includes(needle)) return null;
   return (
-    <Card className="transition hover:border-brand-500/30">
+    <Card className="mise-feel transition hover:border-brand-500/30">
       <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-xl">{icon}</span>
+        <span className="mise-well flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl">{icon}</span>
         <div>
           <h3 className="font-semibold text-fg">{title}</h3>
           <span className="text-[11px] uppercase tracking-wide text-fg-faint">{tag}</span>
@@ -159,14 +253,14 @@ function Topic({ icon, title, tag, ask, sim, children }: {
         {sim && (
           <button
             onClick={() => setOpen((o) => !o)}
-            className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-xs font-semibold text-brand-300 transition hover:bg-brand-500/20"
+            className="mise-press rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-xs font-semibold text-brand-300 transition hover:bg-brand-500/20"
           >
             {open ? "▾ Hide live example" : "▸ See it live"}
           </button>
         )}
         <button
           onClick={() => askMise(ask)}
-          className="rounded-lg border border-line-2 px-3 py-1.5 text-xs font-medium text-fg-soft transition hover:bg-paper-2"
+          className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft"
         >
           ✨ Still unsure? Ask Mise
         </button>
@@ -179,6 +273,7 @@ function Topic({ icon, title, tag, ask, sim, children }: {
 }
 
 export default function HowItWorksPage() {
+  const [q, setQ] = useState("");
   return (
     <div>
       <PageHeader
@@ -186,8 +281,19 @@ export default function HowItWorksPage() {
         subtitle="Every number in Mise, in plain English — the real formula, a worked example, and a live demo you can play with. Stuck on anything? tap “Ask Mise”."
       />
 
+      <div className="mise-well mt-5 flex max-w-md items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+        <span aria-hidden className="text-fg-faint">⌕</span>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search a topic… (payroll, margin, break-even, waste…)"
+          className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-faint"
+        />
+      </div>
+
       <div className="mise-slide-stagger mt-5 space-y-4">
         <Topic
+          q={q} keywords="stock average price blend cost"
           icon="📦" title="Inventory — weighted-average cost" tag="Inventory"
           ask="In simple words, how is weighted-average cost calculated in Mise? Give a quick example."
           sim={<WeightedAvgSim />}
@@ -204,6 +310,7 @@ export default function HowItWorksPage() {
         </Topic>
 
         <Topic
+          q={q} keywords="supplier vendor price today shelf"
           icon="🏷️" title="Avg cost vs Current buy price" tag="Inventory"
           ask="What's the difference between average cost and current buy price in Mise?"
         >
@@ -219,6 +326,7 @@ export default function HowItWorksPage() {
         </Topic>
 
         <Topic
+          q={q} keywords="dish gp gross profit plate selling"
           icon="🍲" title="Recipes — cost, margin & food cost %" tag="Recipes"
           ask="How does Mise work out a dish's cost, margin and food-cost %? Give an example."
           sim={<MarginSim />}
@@ -235,6 +343,7 @@ export default function HowItWorksPage() {
         </Topic>
 
         <Topic
+          q={q} keywords="staffing shifts wages schedule"
           icon="🗓️" title="Rota — labour cost & labour %" tag="Rota"
           ask="How is labour cost and labour % of sales calculated in the rota?"
           sim={<LabourSim />}
@@ -248,6 +357,7 @@ export default function HowItWorksPage() {
         </Topic>
 
         <Topic
+          q={q} keywords="pnl net gross revenue bottom line"
           icon="📈" title="Reports — Profit &amp; Loss" tag="Reports (P&L)"
           ask="Explain the P&L in Mise — net sales, cost of sales, gross and net profit — with an example."
           sim={<PnlSim />}
@@ -265,6 +375,7 @@ export default function HowItWorksPage() {
         </Topic>
 
         <Topic
+          q={q} keywords="difference sections takings spend"
           icon="🧭" title="Sales &amp; Cash vs Expenses vs Money" tag="Where things live"
           ask="What's the difference between the Sales & Cash, Expenses, and Money sections in Mise?"
         >
@@ -274,6 +385,7 @@ export default function HowItWorksPage() {
         </Topic>
 
         <Topic
+          q={q} keywords="order po receive supplier delivery"
           icon="🛒" title="Purchasing — indents &amp; deliveries" tag="Purchasing"
           ask="How does purchasing work in Mise — indents, ordering and receiving stock?"
         >
@@ -282,6 +394,93 @@ export default function HowItWorksPage() {
             mark it <b>received</b>. Receiving adds the stock <b>in</b> at the price paid — which is what updates the
             item&apos;s weighted-average cost and its purchase history.
           </p>
+        </Topic>
+
+        <Topic
+          q={q} keywords="wages salary pay run weekly monthly advance payslip"
+          icon="💷" title="Payroll — monthly &amp; weekly runs" tag="Payroll"
+          ask="How does payroll work in Mise — monthly vs weekly runs, hourly vs salaried, and advances?"
+          sim={<PaySim />}
+        >
+          <p>
+            <b>Hourly staff:</b> pay = attendance hours × their rate. <b>Salaried staff:</b> daily rate = monthly
+            salary ÷ your <i>working days</i>, × days present. Any <b>advance</b> you gave is recovered from the run&apos;s Net.
+          </p>
+          <p>
+            <b>Weekly-paid people?</b> Switch the cadence to <b>Weekly</b>, pick the Monday–Sunday week and run — it
+            pays hourly staff for that week&apos;s attendance only, and picks up advances scheduled for the month the
+            week ends in. Salaried colleagues stay on the monthly run.
+          </p>
+          <Formula>net pay = gross − advances due − other deductions</Formula>
+        </Topic>
+
+        <Topic
+          q={q} keywords="clock in out break overnight hours punch 12h 30m"
+          icon="⏱️" title="Attendance — how hours are counted" tag="Attendance"
+          ask="How does Mise calculate attendance hours, including breaks and overnight shifts?"
+          sim={<HoursSim />}
+        >
+          <p>
+            Hours = <b>clock-out − clock-in − breaks</b>. Breaks are <i>always</i> subtracted and always shown in the
+            Break column. If someone clocks out <b>after midnight</b> (18:00 → 01:30), the maths rolls into the next
+            day — a night shift is never counted as zero.
+          </p>
+          <Formula>hours = (out − in, rolling past midnight) − break minutes</Formula>
+          <p><b>Example:</b> in 11:00, out 23:30, 120m break → 12h 30m − 2h = <b>10h 30m</b>. The Edit dialog shows this exact line as you type.</p>
+        </Topic>
+
+        <Topic
+          q={q} keywords="cover costs fixed contribution minimum sales"
+          icon="⚖️" title="Break-even — the sales you must hit" tag="Money"
+          ask="What is break-even and how does Mise calculate my break-even sales?"
+          sim={<BreakEvenSim />}
+        >
+          <p>
+            Your fixed bills (rent, salaries, internet…) arrive whether you sell or not. Every pound of sales keeps
+            its <b>contribution margin</b> (what&apos;s left after food cost). Break-even = the sales where contributions
+            exactly cover the fixed bills — after that, you&apos;re into profit.
+          </p>
+          <Formula>break-even sales = fixed costs ÷ contribution margin %</Formula>
+          <p><b>Example:</b> £9,000 fixed ÷ 70% = <b>£12,857</b> — about £429/day in a 30-day month.</p>
+        </Topic>
+
+        <Topic
+          q={q} keywords="bin spoiled leak spillage over-prep double count"
+          icon="🗑️" title="Waste — a leak, not a second cost" tag="Money"
+          ask="How does waste logging work in Mise and why isn't it subtracted from profit twice?"
+        >
+          <p>
+            Logging waste removes the stock and shows the <b>£ value you binned</b>. It is <i>not</i> subtracted from
+            profit again — the money already left when you <b>bought</b> the stock, so counting it twice would
+            understate your profit. It&apos;s shown so you can see and cut the leak.
+          </p>
+          <p className="text-fg-faint">The Waste page&apos;s charts show <b>why</b> it&apos;s binned and <b>which items</b> leak most — attack the biggest slice first.</p>
+        </Topic>
+
+        <Topic
+          q={q} keywords="stars dogs plowhorse puzzle popularity menu promote cut"
+          icon="⭐" title="Menu engineering — stars &amp; dogs" tag="Money"
+          ask="Explain menu engineering in Mise — stars, plowhorses, puzzles and dogs."
+        >
+          <p>
+            Record <b>dishes sold</b> and Mise crosses each dish&apos;s <b>popularity</b> with its <b>margin</b>:
+            ⭐ <b>Stars</b> (popular + high margin — promote them), 🐎 <b>Plowhorses</b> (popular, thin margin — re-price
+            or re-cost), 🧩 <b>Puzzles</b> (great margin, few sales — reposition on the menu), 🐕 <b>Dogs</b> (neither — cut).
+          </p>
+        </Topic>
+
+        <Topic
+          q={q} keywords="count variance missing shrinkage correct system"
+          icon="📋" title="Stock-take — counted vs system" tag="Inventory"
+          ask="How does a stock-take work in Mise and what does the variance mean?"
+          sim={<StockTakeSim />}
+        >
+          <p>
+            The system tracks what <i>should</i> be on the shelf (purchases in, recipes/waste out). A <b>stock-take</b> is
+            you counting what&apos;s <i>actually</i> there. The gap × avg cost = the <b>money impact</b> — missing stock is
+            usually un-logged waste, over-portioning or theft. Applying the count corrects the system.
+          </p>
+          <Formula>variance = counted − system · money impact = variance × avg cost</Formula>
         </Topic>
       </div>
 
