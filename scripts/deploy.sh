@@ -4,7 +4,8 @@
 # The workflow has its own test gate, so a broken push can never reach prod.
 # Token is read by pattern and NEVER printed.
 cd "$(dirname "$0")/.." || exit 1
-TOKEN=$(grep -oE '(ghp_|github_pat_)[A-Za-z0-9_]+' github_token.txt | head -1)
+# The real token sits on its OWN line — embedded matches (URLs, notes) are stale.
+TOKEN=$(grep -E '^[[:space:]]*(ghp_|github_pat_)[A-Za-z0-9_]+[[:space:]]*$' github_token.txt | head -1 | tr -d '[:space:]')
 if [ -z "$TOKEN" ]; then echo "no token found in github_token.txt"; exit 1; fi
 code=$(curl -s -o .deploy_dispatch_response -w "%{http_code}" -X POST \
   -H "Authorization: Bearer $TOKEN" \
