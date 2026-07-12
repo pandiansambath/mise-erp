@@ -865,6 +865,26 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-low-pulse { animation: none; background-color: rgba(245, 158, 11, 0.05); }
 }
 
+/* Kitchen steam rolls over the chef medallion whenever he changes pose —
+   the eye follows the steam, never the image swap. */
+@keyframes mise-chef-puff-k {
+  0% { opacity: 0; transform: scale(0.45); }
+  22% { opacity: 0.92; }
+  100% { opacity: 0; transform: scale(1.65); }
+}
+.mise-chef-puff {
+  position: absolute;
+  inset: -12%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.28) 55%, transparent 78%);
+  filter: blur(10px);
+  animation: mise-chef-puff-k 680ms ease-out forwards;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-chef-puff { animation: none; opacity: 0; }
+}
+
 /* The chef medallion breathes — barely, like something alive. */
 @keyframes mise-chef-breathe-k {
   0%, 100% { transform: scale(1); }
