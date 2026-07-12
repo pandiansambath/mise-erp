@@ -10,7 +10,7 @@ import {
   type WasteRow,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
-import { Bars, Donut } from "@/components/charts";
+import { Bars, Donut, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { fmtQty, ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
@@ -99,6 +99,22 @@ export default function WastePage() {
     .slice(0, 6)
     .map(([label, value]) => ({ label, value, color: "#f43f5e" }));
 
+  // Waste £ per day, last 14 days — is the leak growing or shrinking?
+  const trend = (() => {
+    const byDay = new Map<string, number>();
+    for (const w of data?.rows ?? []) {
+      const d = w.created_at.slice(0, 10);
+      byDay.set(d, (byDay.get(d) ?? 0) + (parseFloat(w.value) || 0));
+    }
+    const days: number[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(byDay.get(d.toISOString().slice(0, 10)) ?? 0);
+    }
+    return days;
+  })();
+
   return (
     <div>
       <PageHeader
@@ -171,6 +187,14 @@ export default function WastePage() {
             <div className="mise-well mt-4 rounded-xl p-3">
               <Bars items={topItems} formatValue={(v) => format(String(v))} />
             </div>
+            {trend.some((v) => v > 0) && (
+              <div className="mise-well mt-3 rounded-xl p-3">
+                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Waste per day — last 14 days
+                </p>
+                <Sparkline data={trend} color="#f43f5e" height={40} className="w-full" />
+              </div>
+            )}
           </Card>
         </div>
       )}

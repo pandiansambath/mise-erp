@@ -19,7 +19,8 @@ import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPi
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { noDigits, numeric } from "@/lib/sanitize";
 import { useConfirm } from "@/components/confirm";
-import { useCurrency } from "@/lib/currency";
+import { CURRENCIES, useCurrency } from "@/lib/currency";
+import { AnimatedNumber } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 
@@ -128,7 +129,7 @@ export default function InventoryPage() {
   const formRef = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState(false);
   const flashTimer = useRef<number | null>(null);
-  const { format } = useCurrency();
+  const { format, currency } = useCurrency();
 
   function load() {
     return api.get<Item[]>("/inventory/items").then(setItems);
@@ -835,7 +836,10 @@ export default function InventoryPage() {
               <Card className="mise-feel mb-4">
                 <div className="flex items-baseline justify-between">
                   <h3 className="font-semibold text-fg">Where your stock money sits</h3>
-                  <span className="font-mono text-xs text-copper-300">{format(String(total))} on the shelf</span>
+                  <span className="font-mono text-sm font-semibold text-copper-300">
+                    <AnimatedNumber value={total * CURRENCIES[currency].rate} prefix={CURRENCIES[currency].symbol} decimals={2} />
+                    <span className="ml-1 text-xs font-normal text-fg-faint">on the shelf</span>
+                  </span>
                 </div>
                 <p className="text-xs text-fg-faint">
                   top 5 of {valued.length} valued items — tap one to jump to it in the table
@@ -914,11 +918,15 @@ export default function InventoryPage() {
                 <button type="button" onClick={() => setCatFilter("all")} className={catChip(catFilter === "all")}>
                   All categories
                 </button>
-                {categories.map((c) => (
-                  <button key={c} type="button" onClick={() => setCatFilter(c)} className={catChip(catFilter === c)}>
-                    {categoryEmoji(c)} {c}
-                  </button>
-                ))}
+                {categories.map((c) => {
+                  const n = items.filter((i) => i.is_active && (i.category?.trim() || "Other") === c).length;
+                  return (
+                    <button key={c} type="button" onClick={() => setCatFilter(c)} className={catChip(catFilter === c)}>
+                      {categoryEmoji(c)} {c}
+                      <span className="ml-1.5 rounded-full bg-glass/10 px-1.5 text-[10px] text-fg-faint">{n}</span>
+                    </button>
+                  );
+                })}
               </div>
               {(statusFilter !== "all" || catFilter !== "all") && (
                 <p className="text-xs text-fg-faint">

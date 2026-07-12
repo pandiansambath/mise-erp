@@ -10,6 +10,14 @@ glassmorphism panels (.mise-glass-panel), claymorphism accents for empty
 states. Execute top to bottom; tick here; keep UI_MODERNIZATION_PLAN.md as
 the phase-level history.
 
+**Cross-cutting shipped 2026-07-12:** interactive Donut (tap slice → pops out,
+centre swaps to its value/share → tap again drills down; `onSelect` powers
+in-place SUB-CHARTS like money's "Inside Spices" bars) · dot leaders in every
+chart legend · RadialBars "+N more · £X" honesty line · CHEF v2 realistic
+3D renders in a breathing medallion + docs/CHEF_PROMPTS.md 10-pose pack
+(user generating the 4K set — poses 5–10 wiring pending) · platform
+announcements broadcast · g-key shortcuts + "?" palette.
+
 ## 1 · Dashboard
 - [x] Right-side gap fixed (empty-state card, never a hole)
 - [ ] CalendarHeat "month rhythm" (needs /reports/sales-trend endpoint — one
@@ -21,7 +29,7 @@ the phase-level history.
 ## 2 · Sales & Cash
 - [ ] CalendarHeat: takings intensity per day of month (needs trend endpoint)
 - [ ] Channel cards → mise-well tiles w/ per-channel Sparkline (7d)
-- [ ] Payment-method split Waffle (cash vs card vs apps)
+- [x] Payment-method split Waffle (how it was paid)
 - [ ] Till-count keypad: big neumorphic number pad for counting cash (touch!)
 - [ ] Feature: "yesterday vs same day last week" delta chip in the header
 
@@ -52,11 +60,10 @@ the phase-level history.
 
 ## 7 · Inventory
 - [x] Task A history + price AreaChart + RadialBars stock rings + well search
-- [ ] Low-stock rows: soft amber pulse (attention without alarm)
-- [ ] Value-on-shelf ticker: AnimatedNumber re-counts on filter change
-- [ ] Category chips → count badges (Meat · 12)
-- [ ] Feature: reorder strip ("7 items under min — build the PO") → one click
-      opens purchasing prefilled with ALL low items
+- [x] Low-stock rows: soft amber pulse
+- [x] Value-on-shelf ticker: AnimatedNumber counts up (currency-aware)
+- [x] Category chips → count badges (Meat · 12)
+- [x] Reorder nudge strip (N need ordering → Show low / Show out)
 
 ## 8 · Stock-take
 - [x] ⌘K deep link + spotlight
@@ -84,7 +91,7 @@ the phase-level history.
 
 ## 12 · Waste
 - [x] Why-binned Donut + most-wasted Bars + 1-click log
-- [ ] Waste-over-time Sparkline (client-side group by day)
+- [x] Waste-over-time Sparkline (14d, client-side)
 - [ ] Reason picker → big tactile emoji tiles instead of dropdown
 
 ## 13 · Recipes
@@ -100,7 +107,7 @@ the phase-level history.
 
 ## 15 · Allergens
 - [x] Menu-safety Donut + feel cards
-- [ ] Allergen frequency Bars (which allergen is in most dishes)
+- [x] Allergen frequency Bars (top allergens across dishes)
 
 ## 16 · Food Safety
 - [x] Temps Donut + today's-checks progress + tactile rows
@@ -108,14 +115,13 @@ the phase-level history.
 - [ ] Feature: dashboard nudge chip when today's checks incomplete
 
 ## 17 · Employees
-- [ ] Person cards w/ avatar initials + role/status badges
+- [x] Avatar-initial chips in the table
 - [ ] Visa-expiry timeline strip (due 30/60/90 days)
-- [ ] Pay-mix Donut (hourly vs salaried)
+- [x] Pay-mix Donut (hourly vs salaried — weekly vs monthly payroll)
 
 ## 18 · Attendance
 - [x] Calc transparency (break shown, "12h 30m", live preview, overnight)
-- [ ] PUNCH CLOCK: big neumorphic press button w/ ring ripple — the flagship
-      tactile moment of the whole app
+- [x] PUNCH CLOCK: hero card w/ chef + giant round neumorphic button + ring ripple
 - [ ] Day timeline dots per row (in → break → out)
 - [ ] Week heat strip per person (mini CalendarHeat)
 
@@ -146,9 +152,9 @@ the phase-level history.
 - [ ] Upload: drag-drop glass panel w/ progress ring
 
 ## 24 · Audit
-- [ ] Actor avatar chips + action-type color coding
-- [ ] Events/day Sparkline (14d)
-- [ ] Filter well (user / action / entity)
+- [x] Actor avatar chips + action badges
+- [x] Events/day Sparkline (14d pulse)
+- [x] Filter well (person / action / words)
 
 ## 25 · Settings
 - [x] Raised-press buttons
@@ -182,8 +188,8 @@ the phase-level history.
 - [x] Signups Sparkline + fleet-by-plan Donut + tactile pass
 - [ ] UI: dark ops-console identity (denser, mono-heavy, "NASA" feel)
 - [ ] Hotel table w/ sort/filter + per-hotel Drawer (replaces long cards)
-- [ ] FEATURE: announcements/broadcast banner (new table + shell banner +
-      per-user dismiss) — next backend build
+- [x] FEATURE: announcements/broadcast (platform_announcements table, operator
+      composer + withdraw, dismissible shell banner, audited)
 - [ ] FEATURE: per-hotel health (last login, sales entries 7d, docs) →
       Active/Quiet/Dormant chips — needs /platform/stats
 - [ ] FEATURE: read-only impersonation ("view as hotel") — server-enforced, audited
@@ -195,4 +201,4 @@ the phase-level history.
 - [x] ⌘K actions + glass palette + grouped nav
 - [ ] Notification center dropdown (bell → glass panel, mark-read)
 - [ ] Mobile bottom tab bar (5 tabs)
-- [ ] Keyboard shortcuts (g d / g i / ?)
+- [x] Keyboard shortcuts: g d/i/s/m/r/p jumps + ? opens ⌘K

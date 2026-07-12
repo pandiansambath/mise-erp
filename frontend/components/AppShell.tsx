@@ -333,7 +333,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
 
-  // ⌘K / Ctrl+K from anywhere in the app.
+  // ⌘K / Ctrl+K from anywhere; "g then <letter>" jumps (g d = dashboard,
+  // g i = inventory, g s = sales, g m = money, g r = reports); "?" opens ⌘K.
+  const gRef = useRef(0);
+  useEffect(() => {
+    const JUMPS: Record<string, string> = {
+      d: "/dashboard", i: "/inventory", s: "/sales", m: "/money", r: "/reports", p: "/payroll",
+    };
+    const onJump = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "?") {
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+      if (e.key.toLowerCase() === "g") {
+        gRef.current = Date.now();
+        return;
+      }
+      const target = JUMPS[e.key.toLowerCase()];
+      if (target && Date.now() - gRef.current < 900) {
+        e.preventDefault();
+        window.location.assign(target);
+      }
+      gRef.current = 0;
+    };
+    window.addEventListener("keydown", onJump);
+    return () => window.removeEventListener("keydown", onJump);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {

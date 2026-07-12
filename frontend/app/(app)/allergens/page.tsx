@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, downloadFile, type AllergenRow } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
-import { Donut } from "@/components/charts";
+import { Bars, Donut } from "@/components/charts";
 import { ALLERGEN_LABEL } from "@/lib/allergens";
 
 export default function AllergensPage() {
@@ -39,21 +39,41 @@ export default function AllergensPage() {
       </div>
 
       {rows.length > 0 && (
-        <Card className="mise-feel mb-4">
-          <h3 className="font-semibold text-fg">Menu safety at a glance</h3>
-          <p className="text-xs text-fg-faint">every dish should be green or red — amber means the sheet isn&apos;t legally complete yet</p>
-          <div className="mt-4">
-            <Donut
-              centerLabel="dishes"
-              centerValue={String(rows.length)}
-              segments={[
-                { label: "No listed allergens", value: clear, color: "#10b981" },
-                { label: "Contains allergens", value: withAllergens, color: "#f43f5e" },
-                { label: "Needs review", value: reviewedNeeded, color: "#f59e0b" },
-              ].filter((s) => s.value > 0)}
-            />
-          </div>
-        </Card>
+        <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="mise-feel">
+            <h3 className="font-semibold text-fg">Menu safety at a glance</h3>
+            <p className="text-xs text-fg-faint">every dish should be green or red — amber means the sheet isn&apos;t legally complete yet</p>
+            <div className="mt-4">
+              <Donut
+                centerLabel="dishes"
+                centerValue={String(rows.length)}
+                segments={[
+                  { label: "No listed allergens", value: clear, color: "#10b981" },
+                  { label: "Contains allergens", value: withAllergens, color: "#f43f5e" },
+                  { label: "Needs review", value: reviewedNeeded, color: "#f59e0b" },
+                ].filter((s) => s.value > 0)}
+              />
+            </div>
+          </Card>
+          {(() => {
+            const freq = new Map<string, number>();
+            for (const r of rows) for (const a of r.allergens) freq.set(a, (freq.get(a) ?? 0) + 1);
+            const items = [...freq.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8)
+              .map(([code, n]) => ({ label: ALLERGEN_LABEL[code] ?? code, value: n, color: "#f43f5e" }));
+            if (items.length === 0) return null;
+            return (
+              <Card className="mise-feel">
+                <h3 className="font-semibold text-fg">Most common allergens</h3>
+                <p className="text-xs text-fg-faint">how many dishes each allergen appears in — what your waiters get asked about</p>
+                <div className="mise-well mt-4 rounded-xl p-3">
+                  <Bars items={items} formatValue={(v) => `${v} dish${v === 1 ? "" : "es"}`} />
+                </div>
+              </Card>
+            );
+          })()}
+        </div>
       )}
 
       <p className="mb-4 rounded-lg bg-glass/5 px-3 py-2 text-xs text-fg-faint">
