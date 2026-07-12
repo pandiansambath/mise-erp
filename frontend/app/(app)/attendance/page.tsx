@@ -270,6 +270,23 @@ export default function AttendancePage() {
                       </td>
                       <td className="px-5 py-3 text-right text-fg-soft" title={r?.working_hours ? `${r.working_hours} h (break already deducted)` : undefined}>
                         {fmtHours(r?.working_hours)}
+                        {r?.clock_in && (() => {
+                          // the day as a strip: 06:00→24:00, shift filled in
+                          const frac = (iso: string) => {
+                            const [h, m] = fmtTime(iso).split(":").map(Number);
+                            return Math.max(0, Math.min(1, (h + m / 60 - 6) / 18));
+                          };
+                          const a = frac(r.clock_in);
+                          const b = r.clock_out ? Math.max(a + 0.02, frac(r.clock_out)) : Math.max(a + 0.02, frac(new Date().toISOString()));
+                          return (
+                            <span className="mise-well mt-1.5 block h-1.5 w-24 overflow-hidden rounded-full" aria-hidden>
+                              <span
+                                className={`block h-full rounded-full ${r.clock_out ? "bg-brand-500/70" : "bg-amber-400/80"}`}
+                                style={{ marginLeft: `${a * 100}%`, width: `${Math.max(3, (b - a) * 100)}%` }}
+                              />
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-5 py-3 text-right">
                         {r && parseFloat(r.break_penalty) > 0 ? (

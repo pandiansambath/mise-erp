@@ -129,7 +129,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 18 · Attendance
 - [x] Calc transparency (break shown, "12h 30m", live preview, overnight)
 - [x] PUNCH CLOCK: hero card w/ chef tapping his watch + giant round neumorphic button + ring ripple
-- [ ] Day timeline dots per row (in → break → out)
+- [x] Day-strip per row (06:00–24:00, shift filled; amber while still working)
 - [ ] Week heat strip per person (mini CalendarHeat)
 
 ## 19 · Rota
