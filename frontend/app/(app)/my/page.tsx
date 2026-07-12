@@ -13,6 +13,7 @@ import {
   type PayrollRow,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Sparkline } from "@/components/charts";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { useHotelTime } from "@/lib/time";
@@ -214,7 +215,28 @@ export default function MySpacePage() {
         </Card>
 
         <Card className="p-0">
-          <h3 className="px-5 pt-4 font-semibold text-fg">Recent attendance</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
+            <h3 className="font-semibold text-fg">Recent attendance</h3>
+            {(() => {
+              const byDate = new Map(attendance.map((a) => [a.date, parseFloat(a.working_hours ?? "0") || 0]));
+              const data: number[] = [];
+              const labels: string[] = [];
+              for (let i = 27; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const iso = d.toISOString().slice(0, 10);
+                data.push(byDate.get(iso) ?? 0);
+                labels.push(d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }));
+              }
+              if (!data.some((v) => v > 0)) return null;
+              return (
+                <span className="mise-well flex items-center gap-2 rounded-lg px-3 py-1.5">
+                  <Sparkline data={data} labels={labels} formatValue={(v) => `${v}h worked`} height={24} />
+                  <span className="text-[10px] text-fg-faint">4 weeks</span>
+                </span>
+              );
+            })()}
+          </div>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

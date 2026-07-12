@@ -146,7 +146,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 21 · My (self-service)
 - [x] KPI wells
 - [ ] Mobile-first mini-app cards (shifts/payslips/docs as swipe cards)
-- [ ] My-hours Sparkline (last 4 weeks)
+- [x] My-hours Sparkline (last 4 weeks, hover shows the day)
 
 ## 22 · Profile
 - [x] Raised-press buttons
