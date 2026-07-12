@@ -39,6 +39,8 @@ export function PasswordInput({
   autoComplete = "current-password",
   placeholder = "••••••••",
   minLength,
+  onFocusChange,
+  onShowChange,
 }: {
   id: string;
   value: string;
@@ -46,6 +48,10 @@ export function PasswordInput({
   autoComplete?: string;
   placeholder?: string;
   minLength?: number;
+  /** the chef mascot listens: covers his eyes while this field is focused */
+  onFocusChange?: (focused: boolean) => void;
+  /** …and peeks through his fingers when the password is shown */
+  onShowChange?: (show: boolean) => void;
 }) {
   const [show, setShow] = useState(false);
   const [caps, setCaps] = useState(false);
@@ -59,7 +65,11 @@ export function PasswordInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyUp={(e) => setCaps(e.getModifierState?.("CapsLock") ?? false)}
-          onBlur={() => setCaps(false)}
+          onFocus={() => onFocusChange?.(true)}
+          onBlur={() => {
+            setCaps(false);
+            onFocusChange?.(false);
+          }}
           required
           minLength={minLength}
           placeholder={placeholder}
@@ -67,7 +77,12 @@ export function PasswordInput({
         />
         <button
           type="button"
-          onClick={() => setShow((s) => !s)}
+          onClick={() =>
+            setShow((s) => {
+              onShowChange?.(!s);
+              return !s;
+            })
+          }
           aria-label={show ? "Hide password" : "Show password"}
           className="mise-press absolute right-1.5 top-1/2 grid h-7 w-8 -translate-y-1/2 place-items-center rounded-lg text-sm text-slate-400 transition hover:bg-white/5 hover:text-white"
         >

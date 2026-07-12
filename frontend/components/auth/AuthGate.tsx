@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { PasswordInput, SubmitButton, authInput, authLabel } from "@/components/auth/bits";
+import ChefMascot, { type ChefMood } from "@/components/auth/ChefMascot";
 import { Sparkline } from "@/components/charts";
 import { Curtain, useCurtain } from "@/components/Curtain";
 import { AnimatedNumber, Aurora } from "@/components/fx";
@@ -35,6 +36,26 @@ const PROMISES = [
   "A real-time P&L from day one",
 ];
 
+/** Shared chef-mood logic: watches typed fields, covers eyes on password. */
+function useChefMood(typedLen: number) {
+  const [typingFocus, setTypingFocus] = useState(false);
+  const [pwFocus, setPwFocus] = useState(false);
+  const [pwShown, setPwShown] = useState(false);
+  const [busyHappy, setBusyHappy] = useState(false);
+  const mood: ChefMood = busyHappy
+    ? "happy"
+    : pwFocus
+      ? pwShown
+        ? "peek"
+        : "cover"
+      : typingFocus
+        ? "watch"
+        : "idle";
+  // eyes sweep left→right as the text grows
+  const look = -1 + 2 * Math.min(1, typedLen / 26);
+  return { mood, look, setTypingFocus, setPwFocus, setPwShown, setBusyHappy };
+}
+
 /* ─────────────────────────── forms ─────────────────────────── */
 
 function LoginForm({ active }: { active: boolean }) {
@@ -44,16 +65,19 @@ function LoginForm({ active }: { active: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
+  const chef = useChefMood(email.length);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    chef.setBusyHappy(true);
     try {
       await login(email, password);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not log in. Is the server running?");
       setShake(true);
+      chef.setBusyHappy(false);
     } finally {
       setBusy(false);
     }
@@ -63,8 +87,12 @@ function LoginForm({ active }: { active: boolean }) {
     <form
       onSubmit={onSubmit}
       onAnimationEnd={() => setShake(false)}
-      className={`mise-glass space-y-4 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
+      className={`mise-glass relative space-y-4 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
     >
+      {/* the maître — watches your email, covers his eyes for the password */}
+      <div className="pointer-events-none absolute -top-[96px] left-1/2 w-40 -translate-x-1/2">
+        <ChefMascot mood={chef.mood} look={chef.look} />
+      </div>
       <div>
         <h2 className="font-display text-2xl text-white">Welcome back</h2>
         <p className="mt-1 text-sm text-slate-300">Sign in to your Mise workspace.</p>
@@ -77,6 +105,8 @@ function LoginForm({ active }: { active: boolean }) {
           autoComplete="username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onFocus={() => chef.setTypingFocus(true)}
+          onBlur={() => chef.setTypingFocus(false)}
           required
           disabled={!active}
           placeholder="owner@restaurant.com"
@@ -85,7 +115,13 @@ function LoginForm({ active }: { active: boolean }) {
       </div>
       <div>
         <label htmlFor="li-password" className={authLabel}>Password</label>
-        <PasswordInput id="li-password" value={password} onChange={setPassword} />
+        <PasswordInput
+          id="li-password"
+          value={password}
+          onChange={setPassword}
+          onFocusChange={chef.setPwFocus}
+          onShowChange={chef.setPwShown}
+        />
       </div>
       {error && (
         <p role="alert" className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200">
@@ -107,16 +143,19 @@ function SignupForm({ active }: { active: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
+  const chef = useChefMood(email.length || hotelName.length);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    chef.setBusyHappy(true);
     try {
       await registerHotel({ hotel_name: hotelName, country, city: city || undefined, email, password });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register. Is the server running?");
       setShake(true);
+      chef.setBusyHappy(false);
     } finally {
       setBusy(false);
     }
@@ -126,8 +165,12 @@ function SignupForm({ active }: { active: boolean }) {
     <form
       onSubmit={onSubmit}
       onAnimationEnd={() => setShake(false)}
-      className={`mise-glass space-y-3.5 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
+      className={`mise-glass relative space-y-3.5 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
     >
+      {/* the maître greets new houses too */}
+      <div className="pointer-events-none absolute -top-[96px] left-1/2 w-40 -translate-x-1/2">
+        <ChefMascot mood={chef.mood} look={chef.look} />
+      </div>
       <div>
         <h2 className="font-display text-2xl text-white">Register your hotel</h2>
         <p className="mt-1 text-sm text-slate-300">Free to start. No card required.</p>
@@ -138,6 +181,8 @@ function SignupForm({ active }: { active: boolean }) {
           id="su-hotel"
           value={hotelName}
           onChange={(e) => setHotelName(e.target.value)}
+          onFocus={() => chef.setTypingFocus(true)}
+          onBlur={() => chef.setTypingFocus(false)}
           required
           disabled={!active}
           placeholder="e.g. NIRAI"
@@ -171,6 +216,8 @@ function SignupForm({ active }: { active: boolean }) {
           autoComplete="username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onFocus={() => chef.setTypingFocus(true)}
+          onBlur={() => chef.setTypingFocus(false)}
           required
           disabled={!active}
           placeholder="owner@restaurant.com"
@@ -186,6 +233,8 @@ function SignupForm({ active }: { active: boolean }) {
           autoComplete="new-password"
           minLength={8}
           placeholder="min 8 characters"
+          onFocusChange={chef.setPwFocus}
+          onShowChange={chef.setPwShown}
         />
       </div>
       {error && (
