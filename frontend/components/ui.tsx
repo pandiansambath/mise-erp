@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 import { Sparkline } from "@/components/charts";
+import ChefMascot from "@/components/auth/ChefMascot";
 
 export function Card({
   children,
@@ -300,17 +301,24 @@ export function EmptyState({
   title,
   body,
   action,
+  chef = true,
 }: {
   icon?: string;
   title: string;
   body?: string;
   action?: ReactNode;
+  /** the shrugging maître fronts empty states by default */
+  chef?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line-2 px-6 py-14 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-2xl border border-line bg-paper-2 text-2xl shadow-inner">
-        {icon}
-      </span>
+      {chef ? (
+        <ChefMascot mood="shrug" className="w-24" />
+      ) : (
+        <span className="grid h-14 w-14 place-items-center rounded-2xl border border-line bg-paper-2 text-2xl shadow-inner">
+          {icon}
+        </span>
+      )}
       <p className="mt-4 font-display text-lg font-semibold text-fg">{title}</p>
       {body && <p className="mt-1.5 max-w-sm text-sm text-fg-faint">{body}</p>}
       {action && <div className="mt-5">{action}</div>}

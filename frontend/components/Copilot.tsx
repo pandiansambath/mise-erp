@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, postForm } from "@/lib/api";
 import { speak, speechOutputSupported, stopSpeaking, useVoiceInput } from "@/lib/useVoice";
+import ChefMascot from "@/components/auth/ChefMascot";
 
 type Action = { label: string; href: string };
 type Row = Record<string, unknown>;
@@ -298,7 +299,7 @@ export function Copilot() {
           {/* Header */}
           <div className="relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3">
             <div className="absolute inset-0 bg-gradient-to-r from-brand-600/25 via-brand-500/10 to-transparent" aria-hidden />
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-lg text-white shadow-lg shadow-brand-600/30">✨</span>
+            <ChefMascot mood={loading ? "think" : "happy"} className="relative w-10 shrink-0" />
             <div className="relative leading-tight">
               <p className="text-sm font-semibold text-fg">Mise Copilot</p>
               <p className="text-[11px] text-fg-faint">{configured === false ? "Quick help & navigation" : "One place for every plate & penny"}</p>

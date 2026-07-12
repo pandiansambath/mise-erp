@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { Card, PageHeader } from "@/components/ui";
 import { askMise } from "@/lib/copilot";
+import ChefMascot from "@/components/auth/ChefMascot";
 
 const f2 = (n: number) => (Number.isFinite(n) ? n : 0).toLocaleString(undefined, {
   minimumFractionDigits: 2, maximumFractionDigits: 2,
@@ -281,14 +282,19 @@ export default function HowItWorksPage() {
         subtitle="Every number in Mise, in plain English — the real formula, a worked example, and a live demo you can play with. Stuck on anything? tap “Ask Mise”."
       />
 
-      <div className="mise-well mt-5 flex max-w-md items-center gap-2.5 rounded-xl px-3.5 py-2.5">
-        <span aria-hidden className="text-fg-faint">⌕</span>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search a topic… (payroll, margin, break-even, waste…)"
-          className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-faint"
-        />
+      <div className="mt-5 flex items-center gap-4">
+        <div className="w-20 shrink-0 sm:w-24">
+          <ChefMascot mood="books" />
+        </div>
+        <div className="mise-well flex max-w-md flex-1 items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+          <span aria-hidden className="text-fg-faint">⌕</span>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search a topic… (payroll, margin, break-even, waste…)"
+            className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-faint"
+          />
+        </div>
       </div>
 
       <div className="mise-slide-stagger mt-5 space-y-4">

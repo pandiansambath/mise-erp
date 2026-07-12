@@ -8,6 +8,7 @@ import { useCurrency } from "@/lib/currency";
 import { themeVars, useTheme } from "@/lib/theme";
 import { Logo } from "@/components/Logo";
 import { Copilot } from "@/components/Copilot";
+import ChefMascot from "@/components/auth/ChefMascot";
 
 type Row = Record<string, unknown>;
 const NAME_KEY = "mise.user.name";
@@ -196,7 +197,9 @@ function Welcome({
 }) {
   return (
     <div>
-      <span className="mise-pop-lg inline-block text-5xl">👋</span>
+      <div className="mise-pop-lg w-28">
+        <ChefMascot mood="welcome" />
+      </div>
       <h1 className="mt-4 font-display text-3xl font-semibold sm:text-4xl">
         Welcome{hotelName ? ` to ${hotelName}` : ""}.
       </h1>

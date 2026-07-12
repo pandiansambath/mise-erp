@@ -173,7 +173,7 @@ export default function AttendancePage() {
           <Card className="mise-feel mb-6">
             <div className="flex flex-wrap items-center gap-6">
               <div className="w-28 shrink-0 sm:w-32">
-                <ChefMascot mood={state.type === null ? "happy" : r?.on_break ? "cover" : "watch"} look={0} />
+                <ChefMascot mood={state.type === null ? "happy" : r?.on_break ? "think" : "point"} look={0} />
               </div>
               <div className="min-w-[12rem] flex-1">
                 <h3 className="font-semibold text-fg">Punch clock</h3>

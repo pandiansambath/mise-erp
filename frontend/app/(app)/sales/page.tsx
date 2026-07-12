@@ -13,6 +13,7 @@ import { can } from "@/lib/permissions";
 import { localISODate } from "@/lib/date";
 import { numeric } from "@/lib/sanitize";
 import { spotlight, useDeepLink } from "@/components/fx";
+import ChefMascot from "@/components/auth/ChefMascot";
 
 const METHODS = ["CARD", "CASH", "ONLINE", "BANK"];
 const today = () => localISODate();
@@ -435,10 +436,11 @@ export default function SalesPage() {
                       pathLength={1}
                     />
                   </svg>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-brand-300">Till balanced</p>
                     <p className="font-mono text-xs text-brand-300/80">variance {format(variance)} · every penny accounted for</p>
                   </div>
+                  <ChefMascot mood="serve" className="w-16 shrink-0" />
                 </div>
               ) : (
                 <div className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm font-medium text-amber-300">

@@ -24,7 +24,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
       query instead of 31 pnl calls)
 - [ ] Greeting row: "service tonight" hint from rota (who's on this evening)
 - [ ] Low-stock KPI → mini RadialBars preview on hover (glass popover)
-- [ ] Claymorphic empty states (soft 3D blob illustrations) when brand new
+- [x] Chef empty states: shrugging maître fronts EVERY EmptyState app-wide
 
 ## 2 · Sales & Cash
 - [ ] CalendarHeat: takings intensity per day of month (needs trend endpoint)
@@ -121,7 +121,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 18 · Attendance
 - [x] Calc transparency (break shown, "12h 30m", live preview, overnight)
-- [x] PUNCH CLOCK: hero card w/ chef + giant round neumorphic button + ring ripple
+- [x] PUNCH CLOCK: hero card w/ chef tapping his watch + giant round neumorphic button + ring ripple
 - [ ] Day timeline dots per row (in → break → out)
 - [ ] Week heat strip per person (mini CalendarHeat)
 
@@ -162,13 +162,14 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [ ] Danger-zone red well card
 
 ## 26 · How-It-Works
-- [x] 13-topic hub + search + sims + tactile (Task C DONE)
+- [x] 13-topic hub + search + sims + tactile (Task C DONE) + books-chef tutor
 - [ ] Per-topic deep links FROM pages ("how is this worked out?" → hub topic)
 
 ## 27 · Onboarding
 - [x] Press-feel CTAs
 - [ ] Import flow polish: upload → parsed preview → confirm morph
 - [ ] Finish screen: ember-confetti burst + dashboard-ready morph
+- [x] Welcome step: chef welcome pose greets new owners
 
 ## 28 · Login / Signup
 - [x] Cinematic morph gate (f2f0d4f)
@@ -180,6 +181,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [ ] Verify pricing cards read live plan prices from /platform/plans
 
 ## 30 · Copilot (Ask Mise)
+- [x] Chef in the chat header — thinks while answering, beams when done
 - [ ] Chat UI: glass panel, message pop-in, typing shimmer (Copilot Body plan)
 - [ ] Then brain/hands/legs/ears per [[nirai-copilot-body-plan]]
 
