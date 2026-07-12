@@ -57,14 +57,25 @@ export default function SettingsPage() {
     }
   }
 
-  const inputCls =
-    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500";
+  const inputCls = "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none";
 
   return (
     <div className="max-w-2xl">
-      <PageHeader title="Settings" subtitle="Display preferences and account." />
+      <PageHeader title="Settings" subtitle="Display preferences, house rules and account." />
 
-      <Card className="mb-6">
+      <div className="mise-well mb-6 flex flex-wrap gap-1.5 rounded-xl p-1.5">
+        {[
+          ["#s-display", "💱 Display"],
+          ...(isAdmin ? [["#s-attendance", "⏱️ Attendance rules"], ["#s-payroll", "💷 Payroll"]] : []),
+          ["#s-account", "👤 Account"],
+        ].map(([href, label]) => (
+          <a key={href} href={href} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft">
+            {label}
+          </a>
+        ))}
+      </div>
+
+      <Card className="mise-feel mb-6" id="s-display">
         <h3 className="font-semibold text-fg">Display currency</h3>
         <p className="mt-1 text-sm text-fg-faint">
           Amounts are stored in the restaurant&apos;s base currency (GBP). This converts
@@ -77,10 +88,10 @@ export default function SettingsPage() {
               <button
                 key={code}
                 onClick={() => setCurrency(code)}
-                className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
+                className={`mise-press flex items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
                   active
                     ? "border-brand-500 bg-brand-400/10"
-                    : "border-line hover:border-line-2"
+                    : "mise-raised border-line"
                 }`}
               >
                 <span className="font-medium text-fg">
@@ -100,7 +111,7 @@ export default function SettingsPage() {
       </Card>
 
       {isAdmin && (
-        <Card className="mb-6">
+        <Card className="mise-feel mb-6" id="s-attendance">
           <h3 className="font-semibold text-fg">Attendance: break &amp; penalty policy</h3>
           <p className="mt-1 text-sm text-fg-faint">
             Paid break minutes allowed per shift. Minutes beyond this are flagged on the
@@ -129,7 +140,7 @@ export default function SettingsPage() {
       )}
 
       {isAdmin && (
-        <Card className="mb-6">
+        <Card className="mise-feel mb-6" id="s-payroll">
           <h3 className="font-semibold text-fg">Payroll: minimum wage</h3>
           <p className="mt-1 text-sm text-fg-faint">
             The lowest hourly rate you&apos;re allowed to pay. Payroll blocks any run where
@@ -156,7 +167,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      <Card>
+      <Card className="mise-feel" id="s-account">
         <h3 className="font-semibold text-fg">Account</h3>
         <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
           <div>

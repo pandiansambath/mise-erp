@@ -165,7 +165,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 25 · Settings
 - [x] Raised-press buttons
-- [ ] Sectioned nav (Hotel · Attendance rules · Payments · Channels · Plans)
+- [x] Section jump-nav pills (Display · Attendance rules · Payroll · Account) + wells/feel
 - [ ] Danger-zone red well card
 
 ## 26 · How-It-Works
