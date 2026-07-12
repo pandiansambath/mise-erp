@@ -42,6 +42,7 @@ export default function DocumentsPage() {
   const [uploadForReq, setUploadForReq] = useState<string | null>(null);
 
   const [docs, setDocs] = useState<DocumentItem[]>([]);
+  const [typeFilter, setTypeFilter] = useState("all");
   const [expiring, setExpiring] = useState<ExpiringDoc[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [requests, setRequests] = useState<DocRequest[]>([]);
@@ -322,6 +323,23 @@ export default function DocumentsPage() {
             Your venue&apos;s own files — licences, insurance, contracts, bills. Staff documents live under their request above, not here.
           </p>
         </div>
+        {(() => {
+          const venue = docs.filter((d) => d.related_entity_type !== "EMPLOYEE");
+          const types = [...new Set(venue.map((d) => d.doc_type))];
+          if (types.length < 2) return null;
+          return (
+            <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+              <button type="button" onClick={() => setTypeFilter("all")} className={`mise-press rounded-full px-3 py-1 text-xs font-medium ${typeFilter === "all" ? "bg-brand-600 text-white" : "mise-raised text-fg-soft"}`}>
+                All ({venue.length})
+              </button>
+              {types.map((t) => (
+                <button key={t} type="button" onClick={() => setTypeFilter(t)} className={`mise-press rounded-full px-3 py-1 text-xs font-medium ${typeFilter === t ? "bg-brand-600 text-white" : "mise-raised text-fg-soft"}`}>
+                  {typeLabel(t)} ({venue.filter((d) => d.doc_type === t).length})
+                </button>
+              ))}
+            </div>
+          );
+        })()}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -334,9 +352,9 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
-              {docs.filter((d) => d.related_entity_type !== "EMPLOYEE").length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-fg-faint">No restaurant documents yet.</td></tr>
-              ) : docs.filter((d) => d.related_entity_type !== "EMPLOYEE").map((d) => (
+              {docs.filter((d) => d.related_entity_type !== "EMPLOYEE" && (typeFilter === "all" || d.doc_type === typeFilter)).length === 0 ? (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-fg-faint">No restaurant documents{typeFilter !== "all" ? " of this type" : " yet"}.</td></tr>
+              ) : docs.filter((d) => d.related_entity_type !== "EMPLOYEE" && (typeFilter === "all" || d.doc_type === typeFilter)).map((d) => (
                 <tr key={d.id} className="border-b border-line">
                   <td className="px-5 py-3 font-medium text-fg">{d.title}</td>
                   <td className="px-5 py-3 text-fg-faint">{typeLabel(d.doc_type)}</td>

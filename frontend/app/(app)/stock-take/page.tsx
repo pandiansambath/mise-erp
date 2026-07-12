@@ -117,7 +117,7 @@ export default function StockTakePage() {
             <button
               onClick={apply}
               disabled={saving || toApply.length === 0}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {saving ? "Applying…" : "Apply counts"}
             </button>
@@ -131,7 +131,7 @@ export default function StockTakePage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search items…"
-          className="w-full rounded-xl border border-line-2 bg-glass/5 py-2.5 pl-9 pr-3 text-sm text-fg outline-none focus:border-brand-500"
+          className="mise-well w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-fg outline-none"
         />
       </div>
 
@@ -160,12 +160,36 @@ export default function StockTakePage() {
                     </td>
                     <td className="px-4 py-2 text-fg-soft">{fmtQty(i.current_stock, i.unit)}</td>
                     <td className="px-4 py-2">
-                      <QtyInput
-                        unit={i.unit}
-                        value={counts[i.id] ?? ""}
-                        onChange={(v) => setCounts((c) => ({ ...c, [i.id]: v }))}
-                        label={`Counted ${i.name}`}
-                      />
+                      <span className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          aria-label={`One less ${i.unit}`}
+                          onClick={() => setCounts((c) => {
+                            const base = c[i.id] !== undefined && c[i.id] !== "" ? parseFloat(c[i.id]) || 0 : parseFloat(i.current_stock) || 0;
+                            return { ...c, [i.id]: String(Math.max(0, Math.round((base - 1) * 1000) / 1000)) };
+                          })}
+                          className="mise-raised mise-press grid h-9 w-9 shrink-0 place-items-center rounded-full text-base font-bold text-fg-soft"
+                        >
+                          −
+                        </button>
+                        <QtyInput
+                          unit={i.unit}
+                          value={counts[i.id] ?? ""}
+                          onChange={(v) => setCounts((c) => ({ ...c, [i.id]: v }))}
+                          label={`Counted ${i.name}`}
+                        />
+                        <button
+                          type="button"
+                          aria-label={`One more ${i.unit}`}
+                          onClick={() => setCounts((c) => {
+                            const base = c[i.id] !== undefined && c[i.id] !== "" ? parseFloat(c[i.id]) || 0 : parseFloat(i.current_stock) || 0;
+                            return { ...c, [i.id]: String(Math.round((base + 1) * 1000) / 1000) };
+                          })}
+                          className="mise-raised mise-press grid h-9 w-9 shrink-0 place-items-center rounded-full text-base font-bold text-brand-300"
+                        >
+                          +
+                        </button>
+                      </span>
                     </td>
                     <td className="px-4 py-2 text-right">
                       {has ? (

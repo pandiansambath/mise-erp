@@ -74,9 +74,9 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 8 · Stock-take
 - [x] ⌘K deep link + spotlight
-- [ ] Live variance chip per row while typing (£ impact)
+- [x] Live variance chip per row while typing (was already live — verified)
 - [ ] Post-apply summary: total shrinkage Waffle
-- [ ] Big neumorphic +/- steppers for tablet counting
+- [x] Big neumorphic − / + steppers per row (tablet counting)
 
 ## 9 · Purchasing
 - [x] Tactile buttons (879d060)
@@ -155,7 +155,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 23 · Documents
 - [x] Raised-press buttons
-- [ ] Expiry timeline strip (docs due soon) + type filter chips
+- [x] Type filter chips w/ counts (expiry alerts strip already existed)
 - [ ] Upload: drag-drop glass panel w/ progress ring
 
 ## 24 · Audit
