@@ -270,7 +270,9 @@ async def create_announcement(
     operator: User = Depends(require_platform_owner),
 ) -> dict:
     """Broadcast a banner to every hotel's app shell (until expiry/deactivation)."""
-    a = PlatformAnnouncement(message=body.message.strip(), level=body.level, expires_at=body.expires_at)
+    a = PlatformAnnouncement(
+        message=body.message.strip(), level=body.level, expires_at=body.expires_at
+    )
     db.add(a)
     await db.commit()
     await audit_service.record(
