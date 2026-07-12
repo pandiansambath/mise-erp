@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type Item, type PriceComparison, type PricePoint, type Vendor } from "@/lib/api";
+import { api, ApiError, type Item, type ItemSuppliers, type PriceComparison, type PricePoint, type Vendor } from "@/lib/api";
 
 type PriceChange = {
   vendor_name: string; old_price: string | null; new_price: string; source: string; at: string;
@@ -65,7 +65,29 @@ export default function PriceComparisonPage() {
   const [addError, setAddError] = useState<string | null>(null);
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [changeLog, setChangeLog] = useState<PriceChange[]>([]);
+  const [allSuppliers, setAllSuppliers] = useState<ItemSuppliers[]>([]);
   const { format } = useCurrency();
+
+  useEffect(() => {
+    api.get<ItemSuppliers[]>("/purchasing/item-suppliers").then(setAllSuppliers).catch(() => {});
+  }, []);
+
+  // If every item switched to its cheapest supplier, per-unit savings add up to:
+  const switchSave = (() => {
+    let total = 0;
+    let count = 0;
+    for (const row of allSuppliers) {
+      if (row.vendors.length < 2) continue;
+      const cheapest = Math.min(...row.vendors.map((v) => parseFloat(v.price_per_unit) || Infinity));
+      const current = row.vendors.find((v) => v.is_preferred);
+      const cur = current ? parseFloat(current.price_per_unit) : cheapest;
+      if (cur - cheapest > 0.001) {
+        total += cur - cheapest;
+        count += 1;
+      }
+    }
+    return { total, count };
+  })();
 
   async function setPreferred(vendorId: string | null) {
     const res = await api.post<PriceComparison>(`/vendors/items/${selected}/preferred`, {
@@ -162,6 +184,20 @@ export default function PriceComparisonPage() {
         title="Price Comparison"
         subtitle="Who's cheapest for each item — and how much you'd save by switching."
       />
+
+      {switchSave.count > 0 && (
+        <Card className="mise-feel mb-5 border-brand-400/30">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-fg">
+              <span aria-hidden className="mr-1.5">💡</span>
+              <b>{switchSave.count}</b> item{switchSave.count === 1 ? " isn't" : "s aren't"} on their cheapest supplier —
+              switching saves <b className="text-brand-400">{format(String(Math.round(switchSave.total * 100) / 100))}</b>
+              <span className="text-xs text-fg-faint"> per unit of each, every order</span>
+            </p>
+            <span className="text-[11px] text-fg-faint">pick ★ per item below, or override per order on Purchasing</span>
+          </div>
+        </Card>
+      )}
 
       {items.length === 0 ? (
         <Card>

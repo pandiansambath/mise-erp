@@ -94,7 +94,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 11 · Price Comparison
 - [x] AreaChart history + tactile
 - [ ] Multi-vendor overlay lines (one per vendor, same item)
-- [ ] Feature: "switch & save" total (move every item to cheapest = £X/mo)
+- [x] Switch & save strip: N items off their cheapest supplier = £X/unit saved
 
 ## 12 · Waste
 - [x] Why-binned Donut + most-wasted Bars + 1-click log
