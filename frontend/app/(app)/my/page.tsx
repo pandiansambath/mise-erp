@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -40,6 +40,13 @@ export default function MySpacePage() {
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [payslips, setPayslips] = useState<PayrollRow[]>([]);
   const [docs, setDocs] = useState<DocumentItem[]>([]);
+
+  // last-7-days totals for the phone swipe card (cutoff frozen at mount)
+  const [weekCutoff] = useState(() => new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
+  const weekStats = useMemo(() => {
+    const week = attendance.filter((a) => a.date >= weekCutoff);
+    return { n: week.length, hrs: week.reduce((t, a) => t + (parseFloat(a.working_hours ?? "0") || 0), 0) };
+  }, [attendance, weekCutoff]);
   const [requests, setRequests] = useState<DocRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [notLinked, setNotLinked] = useState(false);
@@ -182,6 +189,47 @@ export default function MySpacePage() {
           )}
         </div>
       </Card>
+
+      {/* Phone-first mini-app: the essentials as swipeable snap cards. The full
+          tables below stay for desktop (and anyone who scrolls). */}
+      <div className="mb-6 lg:hidden">
+        <div className="mise-noscrollbar -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
+          {payslips.slice(0, 2).map((p) => (
+            <div key={p.id} className="mise-raised mise-feel w-[76%] shrink-0 snap-center rounded-2xl p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint">Payslip · {p.pay_period}</p>
+              <p className="mt-1.5 font-mono text-2xl font-bold text-brand-300">{format(p.net_pay)}</p>
+              <div className="mt-2 flex items-center justify-between">
+                <Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge>
+                <button
+                  onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)}
+                  className="mise-press rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-brand-300"
+                >
+                  ⬇ PDF
+                </button>
+              </div>
+            </div>
+          ))}
+          <div className="mise-raised mise-feel w-[76%] shrink-0 snap-center rounded-2xl p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint">This week</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold text-fg">
+              {Math.floor(weekStats.hrs)}h {String(Math.round((weekStats.hrs % 1) * 60)).padStart(2, "0")}m
+            </p>
+            <p className="mt-2 text-xs text-fg-faint">
+              {weekStats.n} shift{weekStats.n === 1 ? "" : "s"} in the last 7 days
+            </p>
+          </div>
+          <div className="mise-raised mise-feel w-[76%] shrink-0 snap-center rounded-2xl p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint">Documents</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold text-fg">{docs.length}</p>
+            <p className="mt-2 text-xs text-fg-faint">
+              {requests.filter((r) => r.status === "PENDING").length > 0
+                ? `${requests.filter((r) => r.status === "PENDING").length} still needed from you ↑`
+                : "nothing outstanding — all handed in ✓"}
+            </p>
+          </div>
+        </div>
+        <p className="mt-1 text-center text-[10px] text-fg-faint">swipe →</p>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-0">

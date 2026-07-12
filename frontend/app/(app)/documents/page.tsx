@@ -40,6 +40,8 @@ export default function DocumentsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const reqFileRef = useRef<HTMLInputElement>(null);
   const [uploadForReq, setUploadForReq] = useState<string | null>(null);
+  const [dropOver, setDropOver] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
 
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [typeFilter, setTypeFilter] = useState("all");
@@ -146,6 +148,7 @@ export default function DocumentsPage() {
       await postForm("/documents", form);
       setTitle("");
       setExpiry("");
+      setPicked(null);
       if (fileRef.current) fileRef.current.value = "";
       await load();
     } catch (err) {
@@ -201,7 +204,44 @@ export default function DocumentsPage() {
           <form onSubmit={upload} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-fg-soft">File</label>
-              <input ref={fileRef} type="file" className="mt-1 w-full text-sm" />
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => fileRef.current?.click()}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+                onDragOver={(e) => { e.preventDefault(); setDropOver(true); }}
+                onDragLeave={() => setDropOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDropOver(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f && fileRef.current) {
+                    const dt = new DataTransfer();
+                    dt.items.add(f);
+                    fileRef.current.files = dt.files;
+                    setPicked(f.name);
+                  }
+                }}
+                className={`mise-well mt-1 flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-brand-500/25 ${
+                  dropOver ? "ring-2 ring-brand-400/40" : ""
+                }`}
+              >
+                {saving ? (
+                  <span className="mise-upload-ring shrink-0" aria-label="Uploading" />
+                ) : (
+                  <span aria-hidden className="text-lg">{picked ? "📄" : "📎"}</span>
+                )}
+                <span className={`min-w-0 flex-1 truncate ${picked ? "text-fg" : "text-fg-faint"}`}>
+                  {saving ? "Uploading…" : picked ?? (dropOver ? "Drop it here" : "Drop a file here, or tap to choose")}
+                </span>
+                {picked && !saving && <span className="text-xs text-brand-300">change</span>}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => setPicked(e.target.files?.[0]?.name ?? null)}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-fg-soft">Type</label>

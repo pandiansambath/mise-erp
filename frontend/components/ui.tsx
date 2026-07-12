@@ -10,16 +10,18 @@ export function Card({
   children,
   className = "",
   id,
+  ...rest
 }: {
   children: ReactNode;
   className?: string;
   /** anchor for deep links — ⌘K one-click actions spotlight cards by id */
   id?: string;
-}) {
+} & React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       id={id}
       className={`rounded-2xl border border-line bg-paper/90 p-5 shadow-lg shadow-black/20 ${className}`}
+      {...rest}
     >
       {children}
     </div>

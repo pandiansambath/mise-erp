@@ -76,12 +76,11 @@ export default function ProfilePage() {
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoMsg, setLogoMsg] = useState<string | null>(null);
   const [logoVer, setLogoVer] = useState(0); // cache-buster for the preview after upload
+  const [logoDrag, setLogoDrag] = useState(false);
   const logoSrc = hotel?.has_logo ? `${API_BASE}/api/hotels/${hotel.id}/logo?v=${logoVer}` : null;
 
-  async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  async function uploadLogo(file: File | undefined) {
+            if (!file) return;
     setLogoBusy(true);
     setLogoMsg(null);
     try {
@@ -96,6 +95,12 @@ export default function ProfilePage() {
     } finally {
       setLogoBusy(false);
     }
+  }
+
+  async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    await uploadLogo(file);
   }
 
   async function removeLogo() {
@@ -189,13 +194,24 @@ export default function ProfilePage() {
       <PageHeader title="Profile" subtitle="Your account in Mise." />
 
       {canBrand && (
-        <Card className="mb-6">
+        <Card
+          className={`mb-6 transition-all duration-200 ${logoDrag ? "border-brand-400/60 bg-brand-400/5 ring-2 ring-brand-400/30" : ""}`}
+          onDragOver={(e: React.DragEvent) => { e.preventDefault(); setLogoDrag(true); }}
+          onDragLeave={() => setLogoDrag(false)}
+          onDrop={(e: React.DragEvent) => {
+            e.preventDefault();
+            setLogoDrag(false);
+            uploadLogo(e.dataTransfer.files?.[0]);
+          }}
+        >
           <input ref={logoInput} type="file" accept="image/png,image/jpeg" className="hidden" onChange={onLogoFile} />
           <div className="flex flex-wrap items-center gap-4">
-            <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-paper-2">
-              {logoSrc ? (
+            <div className="mise-well grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl">
+              {logoBusy ? (
+                <span className="mise-upload-ring" aria-label="Uploading" />
+              ) : logoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoSrc} alt="Hotel logo" className="h-full w-full object-contain" />
+                <img key={logoVer} src={logoSrc} alt="Hotel logo" className="mise-pop h-full w-full object-contain" />
               ) : (
                 <span className="text-2xl" aria-hidden>🏨</span>
               )}
@@ -203,7 +219,10 @@ export default function ProfilePage() {
             <div className="min-w-0 flex-1">
               <h3 className="font-semibold text-fg">Hotel logo</h3>
               <p className="text-sm text-fg-faint">
-                PNG or JPG, up to 2 MB. Replaces the Mise mark across the app and on your payslip / purchase-order PDFs.
+                {logoDrag
+                  ? "Drop it here —"
+                  : "Drag a PNG/JPG anywhere on this card, or use the button."}{" "}
+                Up to 2 MB. Replaces the Mise mark across the app and on your payslip / purchase-order PDFs.
               </p>
             </div>
             <div className="flex gap-2">
@@ -305,8 +324,17 @@ export default function ProfilePage() {
                   const period = periods[c.id] || "MONTHLY";
                   const months = PERIOD_MONTHS[period] ?? 1;
                   const amt = parseFloat(amounts[c.id] || "0");
+                  const monthlyEq = amt / months;
+                  const totalEq = fixedCats.reduce(
+                    (t, x) =>
+                      t +
+                      (parseFloat(amounts[x.id] || "0") || 0) /
+                        (PERIOD_MONTHS[periods[x.id] || "MONTHLY"] ?? 1),
+                    0,
+                  );
                   return (
-                    <div key={c.id} className="flex flex-wrap items-center gap-2">
+                    <div key={c.id}>
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="min-w-[7rem] flex-1 text-sm text-fg-soft">{c.name}</span>
                       {postedThisMonth(c.id) ? (
                         <span className="text-xs font-medium text-brand-400">✓ posted for {monthLabel}</span>
@@ -334,6 +362,21 @@ export default function ProfilePage() {
                           )}
                         </>
                       )}
+                    </div>
+                    {monthlyEq > 0 && totalEq > 0 && (
+                      // this line's share of the monthly overhead bill
+                      <div className="mt-1 flex items-center gap-2 pl-1">
+                        <span className="mise-well h-1.5 flex-1 overflow-hidden rounded-full">
+                          <span
+                            className="block h-full rounded-full bg-copper-500/70 transition-[width] duration-500"
+                            style={{ width: `${Math.max(2, (monthlyEq / totalEq) * 100)}%` }}
+                          />
+                        </span>
+                        <span className="w-10 text-right text-[10px] tabular-nums text-fg-faint">
+                          {Math.round((monthlyEq / totalEq) * 100)}%
+                        </span>
+                      </div>
+                    )}
                     </div>
                   );
                 })}

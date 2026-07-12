@@ -145,18 +145,18 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 21 · My (self-service)
 - [x] KPI wells
-- [ ] Mobile-first mini-app cards (shifts/payslips/docs as swipe cards)
+- [x] Mobile-first mini-app cards (snap-scroll swipe strip: payslips w/ PDF, week hours, docs status)
 - [x] My-hours Sparkline (last 4 weeks, hover shows the day)
 
 ## 22 · Profile
 - [x] Raised-press buttons
-- [ ] Overheads editor: per-line Bars (share of total overhead)
-- [ ] Logo upload: drag-drop well with preview morph
+- [x] Overheads editor: per-line Bars (share-of-monthly-overhead bar + % under each line)
+- [x] Logo upload: drag-drop well with preview morph (whole card is the dropzone, ring highlight, mise-pop preview)
 
 ## 23 · Documents
 - [x] Raised-press buttons
 - [x] Type filter chips w/ counts (expiry alerts strip already existed)
-- [ ] Upload: drag-drop glass panel w/ progress ring
+- [x] Upload: drag-drop panel w/ progress ring (tap-or-drop well, spinning upload ring while saving)
 
 ## 24 · Audit
 - [x] Actor avatar chips + action badges

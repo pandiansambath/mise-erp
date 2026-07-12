@@ -1017,6 +1017,17 @@ html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transpa
 }
 @media (prefers-reduced-motion: reduce) { .mise-l-smoke span { animation: none; opacity: 0; } }
 
+/* Indeterminate upload ring — shown while a file is on its way up. */
+@keyframes mise-ring-spin-k { to { transform: rotate(360deg); } }
+.mise-upload-ring {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  border: 3px solid rgba(148, 163, 158, 0.25);
+  border-top-color: var(--color-brand-400);
+  animation: mise-ring-spin-k 0.8s linear infinite;
+}
+
 /* Run-payroll cascade: each employee's tick pops in on its own beat. */
 @keyframes mise-tick-in-k {
   0%   { opacity: 0; transform: scale(0.3) rotate(-18deg); }
