@@ -138,7 +138,7 @@ export default function MySpacePage() {
                 ) : (
                   <button
                     onClick={() => pickFile(r.id)}
-                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
+                    className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
                   >
                     Upload
                   </button>
@@ -149,23 +149,23 @@ export default function MySpacePage() {
         </Card>
       )}
 
-      <Card className="mb-6">
+      <Card className="mise-feel mb-6">
         <div className="mise-stagger grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div>
+          <div className="mise-well mise-feel rounded-xl p-3">
             <p className="text-xs uppercase text-fg-faint">Code</p>
             <p className="font-semibold text-fg">{emp.employee_code}</p>
           </div>
-          <div>
+          <div className="mise-well mise-feel rounded-xl p-3">
             <p className="text-xs uppercase text-fg-faint">Job title</p>
             <p className="font-semibold text-fg">{emp.job_title || "—"}</p>
           </div>
-          <div>
+          <div className="mise-well mise-feel rounded-xl p-3">
             <p className="text-xs uppercase text-fg-faint">Access</p>
             <p className="font-semibold text-fg">
               {user ? ROLE_LABELS[user.role] ?? user.role : "—"}
             </p>
           </div>
-          <div>
+          <div className="mise-well mise-feel rounded-xl p-3">
             <p className="text-xs uppercase text-fg-faint">Pay</p>
             <p className="font-semibold text-fg">
               {emp.salary_type === "HOURLY"
@@ -174,7 +174,7 @@ export default function MySpacePage() {
             </p>
           </div>
           {emp.visa_expiry_date && (
-            <div>
+            <div className="mise-well mise-feel rounded-xl p-3">
               <p className="text-xs uppercase text-fg-faint">Visa expiry</p>
               <p className="font-semibold text-fg">{emp.visa_expiry_date}</p>
             </div>

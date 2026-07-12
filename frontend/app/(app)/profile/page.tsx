@@ -207,7 +207,7 @@ export default function ProfilePage() {
               </p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => logoInput.current?.click()} disabled={logoBusy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              <button onClick={() => logoInput.current?.click()} disabled={logoBusy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {logoBusy ? "Saving…" : hotel?.has_logo ? "Replace" : "Upload logo"}
               </button>
               {hotel?.has_logo && (
@@ -342,7 +342,7 @@ export default function ProfilePage() {
                 <button
                   onClick={postOverheads}
                   disabled={posting}
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   {posting ? "Posting…" : `Post overheads (from ${monthLabel})`}
                 </button>
@@ -395,7 +395,7 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={pwBusy || !pw.current || !pw.next}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {pwBusy ? "Updating…" : "Update password"}
           </button>

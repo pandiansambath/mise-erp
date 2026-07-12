@@ -102,8 +102,7 @@ export default function StaffPage() {
     );
   }
 
-  const inputCls =
-    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+  const inputCls = "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none";
 
   return (
     <div>
@@ -113,7 +112,7 @@ export default function StaffPage() {
       />
 
       {canWrite && (
-        <Card className="mb-6">
+        <Card className="mise-feel mb-6" id="staff-form">
           <p className="mb-3 text-sm font-medium text-fg-soft">Add a team member</p>
           <form onSubmit={addUser} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="w-full sm:w-52">
@@ -168,7 +167,7 @@ export default function StaffPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {saving ? "Adding…" : "Add member"}
             </button>
@@ -202,6 +201,9 @@ export default function StaffPage() {
                   return (
                     <tr key={u.id} className="border-b border-line">
                       <td className="px-5 py-3 font-medium text-fg">
+                        <span aria-hidden className="mise-raised mr-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold uppercase text-brand-300">
+                          {u.email.slice(0, 2)}
+                        </span>
                         {u.email}
                         {isSelf && <span className="ml-2 text-xs text-fg-faint">(you)</span>}
                       </td>

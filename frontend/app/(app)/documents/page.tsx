@@ -220,7 +220,7 @@ export default function DocumentsPage() {
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="defaults to filename" className={inputCls} />
             </div>
             <div className="flex items-end sm:col-span-4">
-              <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              <button type="submit" disabled={saving} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {saving ? "Uploading…" : "Upload"}
               </button>
               {error && <span className="ml-3 text-sm text-rose-400">{error}</span>}
@@ -266,7 +266,7 @@ export default function DocumentsPage() {
               <input value={reqTitle} onChange={(e) => setReqTitle(e.target.value)} placeholder="e.g. Passport, Right-to-work" className={inputCls} />
             </div>
             <div className="sm:col-span-4">
-              <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+              <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
                 Request document
               </button>
             </div>

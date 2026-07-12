@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
+import { Bars, Meter } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -282,9 +283,9 @@ export default function RotaPage() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button onClick={() => shiftWeek(-1)} className="rounded-lg border border-line-2 px-3 py-1.5 text-sm text-fg-soft hover:bg-paper-2">← Prev</button>
+          <button onClick={() => shiftWeek(-1)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm text-fg-soft">← Prev</button>
           <span className="text-sm font-medium text-fg">{from} → {to}</span>
-          <button onClick={() => shiftWeek(1)} className="rounded-lg border border-line-2 px-3 py-1.5 text-sm text-fg-soft hover:bg-paper-2">Next →</button>
+          <button onClick={() => shiftWeek(1)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm text-fg-soft">Next →</button>
         </div>
         {labour && (
           <div className="flex items-center gap-4 text-sm">
@@ -296,17 +297,26 @@ export default function RotaPage() {
         )}
       </div>
 
+      {labour && parseFloat(labour.net_sales) > 0 && (
+        <div className="mise-well mise-feel mb-4 max-w-md rounded-xl p-4">
+          <Meter label="Labour cost" value={parseFloat(labour.labour_pct) || 0} target={30} goodBelow />
+          <p className="mt-1.5 text-[11px] text-fg-faint">
+            This week&apos;s planned labour as % of net sales — most kitchens aim under 30%.
+          </p>
+        </div>
+      )}
+
       <div className="mb-6 flex flex-wrap gap-2">
         <input ref={importInput} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportRota} />
         <button
           onClick={() => downloadFile(`/rota/export.xlsx?date_from=${from}&date_to=${to}`, `mise-rota-${from}.xlsx`)}
-          className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+          className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
         >
           ⬇ Excel
         </button>
         <button
           onClick={() => downloadFile(`/rota/export.pdf?date_from=${from}&date_to=${to}`, `mise-rota-${from}.pdf`)}
-          className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+          className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
         >
           ⬇ PDF
         </button>
@@ -316,21 +326,21 @@ export default function RotaPage() {
               onClick={startCopy}
               disabled={!!copyRows}
               title="Copy a previous week's shifts into this week — pick the week, review, then apply"
-              className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+              className="mise-press rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
             >
               ⎘ Copy a week
             </button>
             <button
               onClick={() => downloadFile(`/rota/template.xlsx?date_from=${from}&date_to=${to}`, "mise-rota-template.xlsx")}
               title="Download this week as a blank grid (same layout as ⬇ Excel) — fill the cells and upload it back"
-              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
             >
               ⬇ Blank grid (Excel)
             </button>
             <button
               onClick={() => downloadFile(`/rota/template.csv?date_from=${from}&date_to=${to}`, "mise-rota-template.csv")}
               title="Same blank grid as a CSV"
-              className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
             >
               CSV
             </button>
@@ -338,7 +348,7 @@ export default function RotaPage() {
               onClick={() => importInput.current?.click()}
               disabled={importing}
               title="Upload a filled grid (the same layout you download) — it replaces that week's shifts for the staff in the file"
-              className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+              className="mise-press rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
             >
               {importing ? "Reading…" : "⬆ Upload grid"}
             </button>
@@ -534,16 +544,20 @@ export default function RotaPage() {
       </div>
 
       {labour && labour.by_employee.length > 0 && (
-        <Card className="mt-6">
+        <Card className="mise-feel mt-6">
           <h3 className="font-semibold text-fg">Labour by person (this week)</h3>
-          <ul className="mt-3 divide-y divide-line">
-            {labour.by_employee.map((b) => (
-              <li key={b.employee_id} className="flex items-center justify-between py-2 text-sm">
-                <span className="text-fg-soft">{b.employee_name}</span>
-                <span className="text-fg-faint">{b.hours} h · <b className="text-fg">{format(b.cost)}</b></span>
-              </li>
-            ))}
-          </ul>
+          <div className="mise-well mt-3 rounded-xl p-3">
+            <Bars
+              formatValue={(v) => format(String(v))}
+              items={[...labour.by_employee]
+                .sort((a, b) => parseFloat(b.cost) - parseFloat(a.cost))
+                .map((b) => ({
+                  label: `${b.employee_name} · ${b.hours}h`,
+                  value: parseFloat(b.cost) || 0,
+                  color: "#d97742",
+                }))}
+            />
+          </div>
           <p className="mt-2 text-xs text-fg-faint">
             Rates: each person&apos;s hourly rate (salaried estimated at monthly ÷ 173h). Labour % = cost ÷ net sales.
           </p>

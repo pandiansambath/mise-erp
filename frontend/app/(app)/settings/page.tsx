@@ -117,7 +117,7 @@ export default function SettingsPage() {
               </label>
               <input value={penalty} onChange={(e) => setPenalty(e.target.value)} inputMode="decimal" className={inputCls} />
             </div>
-            <button type="submit" disabled={savingPolicy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+            <button type="submit" disabled={savingPolicy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {savingPolicy ? "Saving…" : "Save policy"}
             </button>
             {savedPolicy && <span className="text-sm text-brand-400">Saved ✓</span>}
@@ -148,7 +148,7 @@ export default function SettingsPage() {
                 className={inputCls}
               />
             </div>
-            <button type="submit" disabled={savingWage} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+            <button type="submit" disabled={savingWage} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {savingWage ? "Saving…" : "Save"}
             </button>
             {savedWage && <span className="text-sm text-brand-400">Saved ✓</span>}
