@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
-import { Donut, type DonutSegment } from "@/components/charts";
+import { Donut, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
@@ -182,6 +182,21 @@ export default function SalesPage() {
       .map(([label, value]) => ({ label, value }));
   })();
 
+  // How today's money arrived — cash vs card vs apps, as a 100-square waffle.
+  const METHOD_COLORS: Record<string, string> = {
+    CASH: "#10b981", CARD: "#38bdf8", ONLINE: "#a78bfa", UPI: "#f59e0b", OTHER: "#94a3b8",
+  };
+  const methodSegs = (() => {
+    const byMethod = new Map<string, number>();
+    for (const l of summary.lines) {
+      const key = (l.payment_method || "OTHER").toUpperCase();
+      byMethod.set(key, (byMethod.get(key) ?? 0) + (parseFloat(l.gross_amount) || 0));
+    }
+    return [...byMethod.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({ label, value, color: METHOD_COLORS[label] ?? "#94a3b8" }));
+  })();
+
   return (
     <div>
       <PageHeader title="Sales & Cash" subtitle="One day at a time — takings by channel, commissions and the till for the date you pick." />
@@ -243,18 +258,28 @@ export default function SalesPage() {
       </div>
 
       {channelSegs.length > 0 && (
-        <Card className="mt-6">
+        <Card className="mise-feel mt-6">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-semibold text-fg">Takings by channel</h2>
             <span className="text-xs text-fg-faint">{day}</span>
           </div>
-          <Donut
-            segments={channelSegs}
-            centerValue={format(summary.totals.gross)}
-            centerLabel="gross today"
-            className="mt-4"
-            formatValue={(v) => format(String(v))}
-          />
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <Donut
+              segments={channelSegs}
+              centerValue={format(summary.totals.gross)}
+              centerLabel="gross today"
+              className="mt-4"
+              formatValue={(v) => format(String(v))}
+            />
+            {methodSegs.length > 0 && (
+              <div className="mise-well mt-4 rounded-xl p-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  How it was paid — each square is 1%
+                </p>
+                <Waffle segments={methodSegs} formatValue={(v) => format(String(v))} />
+              </div>
+            )}
+          </div>
         </Card>
       )}
 

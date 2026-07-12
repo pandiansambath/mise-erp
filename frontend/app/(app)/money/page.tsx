@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   api,
   ApiError,
@@ -342,6 +343,7 @@ function InfoDot({
 }
 
 export default function MoneyPage() {
+  const router = useRouter();
   const { format, currency } = useCurrency();
   const rate = CURRENCIES[currency].rate;
   const symbol = CURRENCIES[currency].symbol;
@@ -441,7 +443,7 @@ export default function MoneyPage() {
           </div>
 
           {/* Plain-English one-liner */}
-          <div className="mt-4 rounded-xl bg-paper-2/70 px-4 py-3 text-sm text-fg-soft">
+          <div className="mise-well mt-4 rounded-xl px-4 py-3 text-sm text-fg-soft">
             You took in <b className="text-fg">{format(pnl.net_sales)}</b>, spent{" "}
             <b className="text-fg">{format(Number(pnl.cost_of_sales) + Number(pnl.operating_expenses))}</b>{" "}
             (food + running) — so you keep{" "}
@@ -450,7 +452,7 @@ export default function MoneyPage() {
 
           <div className="mt-3 space-y-2.5 text-sm">
             {/* 1 — money in */}
-            <div className="flex items-center justify-between rounded-lg border-l-4 border-brand-500/60 bg-brand-500/5 px-3 py-2.5">
+            <div className="mise-well mise-feel flex items-center justify-between rounded-xl border-l-4 border-brand-500/60 px-3 py-2.5">
               <span className="flex items-center text-fg">
                 <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-500/15 text-xs font-semibold text-brand-300">1</span>
                 Money in <span className="ml-1 text-xs text-fg-faint">· sales</span>
@@ -460,7 +462,7 @@ export default function MoneyPage() {
             </div>
 
             {/* 2 — cost of food */}
-            <div className="flex items-center justify-between rounded-lg border-l-4 border-rose-400/50 bg-rose-400/5 px-3 py-2.5">
+            <div className="mise-well mise-feel flex items-center justify-between rounded-xl border-l-4 border-rose-400/50 px-3 py-2.5">
               <span className="flex items-center text-fg">
                 <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-400/15 text-xs font-semibold text-rose-300">2</span>
                 Cost of the food you sold
@@ -480,7 +482,7 @@ export default function MoneyPage() {
             )}
 
             {/* = gross */}
-            <div className="flex items-center justify-between rounded-lg bg-paper-2 px-3 py-2.5">
+            <div className="mise-well mise-feel flex items-center justify-between rounded-xl px-3 py-2.5">
               <span className="flex flex-wrap items-center font-semibold text-fg">
                 = Gross profit
                 <InfoDot id="gross" open={openInfo === "gross"} onToggle={setOpenInfo} text="What's left after the direct cost of the food — but BEFORE rent and bills. (Money in − food cost.)" />
@@ -490,7 +492,7 @@ export default function MoneyPage() {
             </div>
 
             {/* 3 — running costs */}
-            <div className="flex items-center justify-between rounded-lg border-l-4 border-rose-400/50 bg-rose-400/5 px-3 py-2.5">
+            <div className="mise-well mise-feel flex items-center justify-between rounded-xl border-l-4 border-rose-400/50 px-3 py-2.5">
               <span className="flex items-center text-fg">
                 <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-400/15 text-xs font-semibold text-rose-300">3</span>
                 Running costs
@@ -510,7 +512,7 @@ export default function MoneyPage() {
             )}
 
             {/* = net (hero) */}
-            <div className="flex items-center justify-between rounded-xl bg-brand-500/10 px-4 py-3.5 ring-1 ring-brand-500/30">
+            <div className="mise-raised mise-feel flex items-center justify-between rounded-xl bg-brand-500/10 px-4 py-3.5 ring-1 ring-brand-500/30">
               <span className="flex items-center">
                 <span className="text-base font-bold text-fg">Net profit</span>
                 <InfoDot id="net" open={openInfo === "net"} onToggle={setOpenInfo} text="What you actually keep after EVERYTHING — food and running costs. This is your real bottom line." />
@@ -522,7 +524,7 @@ export default function MoneyPage() {
             </div>
           </div>
           {parseFloat(pnl.waste_total || "0") > 0 && (
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-sm">
+            <div className="mise-well mise-feel mt-3 flex items-center justify-between rounded-xl border border-amber-400/30 px-4 py-3 text-sm">
               <span className="flex items-center">
                 <span aria-hidden className="mr-2">🗑️</span>
                 <span className="font-medium text-fg">Stock wasted this period</span>
@@ -687,11 +689,14 @@ export default function MoneyPage() {
           {data.stock_value.by_category.length === 0 ? (
             <p className="mt-3 text-sm text-fg-faint">No stock recorded yet.</p>
           ) : (
+            <>
+            <p className="mt-1 text-[11px] text-fg-faint">tap a slice to see its share · tap again to open those items in Inventory</p>
             <div className="mt-4">
               <Donut
                 centerLabel="on hand"
                 centerValue={format(data.stock_value.total)}
                 formatValue={(v) => format(String(v))}
+                onSegmentClick={(s) => router.push(`/inventory?cat=${encodeURIComponent(s.label)}`)}
                 segments={data.stock_value.by_category.map((c, i) => ({
                   label: c.category,
                   value: parseFloat(c.value),
@@ -699,6 +704,7 @@ export default function MoneyPage() {
                 }))}
               />
             </div>
+            </>
           )}
         </Card>
 

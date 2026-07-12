@@ -211,9 +211,15 @@ export default function InventoryPage() {
 
   useEffect(() => {
     load().finally(() => setLoading(false));
-    // Deep link: /inventory?filter=low (dashboard "Low stock" KPI)
-    const want = new URLSearchParams(window.location.search).get("filter");
+    // Deep links: /inventory?filter=low (dashboard KPI), ?cat=Spices (money
+    // page donut drill-down), ?q=Saffron (chart legends)
+    const sp = new URLSearchParams(window.location.search);
+    const want = sp.get("filter");
     if (want === "low" || want === "out" || want === "ok") setStatusFilter(want);
+    const cat = sp.get("cat");
+    if (cat) setCatFilter(cat === "Uncategorised" ? "Other" : cat);
+    const query = sp.get("q");
+    if (query) setQ(query);
   }, []);
 
   function startEdit(item: Item) {
@@ -831,9 +837,50 @@ export default function InventoryPage() {
                   <h3 className="font-semibold text-fg">Where your stock money sits</h3>
                   <span className="font-mono text-xs text-copper-300">{format(String(total))} on the shelf</span>
                 </div>
-                <p className="text-xs text-fg-faint">top items by value on hand — the rings you&apos;d count first</p>
-                <RadialBars className="mt-4" items={valued} formatValue={(v) => format(String(v))} />
+                <p className="text-xs text-fg-faint">
+                  top 5 of {valued.length} valued items — tap one to jump to it in the table
+                </p>
+                <RadialBars
+                  className="mt-4"
+                  items={valued}
+                  formatValue={(v) => format(String(v))}
+                  onItemClick={(it) => {
+                    setQ(it.label);
+                    setStatusFilter("all");
+                    setCatFilter("all");
+                  }}
+                />
               </Card>
+            );
+          })()}
+
+          {/* Reorder nudge — the shelf talks to you */}
+          {(() => {
+            const lows = items.filter((i) => i.is_active && stockState(i).label === "running low").length;
+            const outs = items.filter((i) => i.is_active && stockState(i).label === "out of stock").length;
+            if (lows + outs === 0) return null;
+            return (
+              <div className="mise-well mise-feel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/20 px-4 py-3">
+                <p className="text-sm text-fg">
+                  <span aria-hidden className="mr-1.5">🛎️</span>
+                  <b>{lows + outs}</b> item{lows + outs === 1 ? "" : "s"} need{lows + outs === 1 ? "s" : ""} ordering
+                  <span className="ml-1 text-xs text-fg-faint">
+                    ({lows} running low{outs > 0 ? ` · ${outs} out of stock` : ""})
+                  </span>
+                </p>
+                <div className="flex gap-2">
+                  {lows > 0 && (
+                    <button type="button" onClick={() => setStatusFilter("low")} className="mise-press rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/20">
+                      Show low
+                    </button>
+                  )}
+                  {outs > 0 && (
+                    <button type="button" onClick={() => setStatusFilter("out")} className="mise-press rounded-lg border border-rose-400/40 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-400/20">
+                      Show out
+                    </button>
+                  )}
+                </div>
+              </div>
             );
           })()}
 
@@ -964,7 +1011,7 @@ export default function InventoryPage() {
                         <tr
                           className={`border-b border-line transition hover:bg-glass/[0.04] ${
                             hasHistory ? "cursor-pointer" : ""
-                          } ${isOpen ? "bg-glass/[0.04]" : ""}`}
+                          } ${isOpen ? "bg-glass/[0.04]" : ""} ${st.label === "running low" ? "mise-low-pulse" : ""}`}
                           onClick={hasHistory ? () => toggleBreakdown(item) : undefined}
                           aria-expanded={hasHistory ? isOpen : undefined}
                         >

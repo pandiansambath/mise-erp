@@ -842,6 +842,16 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   box-shadow: 0 24px 70px rgba(31, 26, 22, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
+/* Running-low inventory rows breathe a soft amber — attention without alarm. */
+@keyframes mise-low-pulse-k {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(245, 158, 11, 0.07); }
+}
+.mise-low-pulse { animation: mise-low-pulse-k 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mise-low-pulse { animation: none; background-color: rgba(245, 158, 11, 0.05); }
+}
+
 /* The auth-card chef blinks every few seconds — thin skin-toned lids scale
    down over the eyes and snap back. */
 @keyframes mise-chef-blink-k {

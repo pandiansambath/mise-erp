@@ -10,7 +10,7 @@
 //   <Bars items={[{label,value,color?}]} />     comparison, animated widths
 //   <Meter value={29} target={30} />            actual vs target
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import { AnimatedNumber, useInView, usePrefersReducedMotion } from "@/components/fx";
 
 /** Default categorical palette — brand-led, readable on paper in both themes. */
@@ -188,6 +188,7 @@ export function Donut({
   centerValue,
   legend = true,
   formatValue = (v: number) => v.toLocaleString("en-GB"),
+  onSegmentClick,
   className = "",
 }: {
   segments: DonutSegment[];
@@ -198,25 +199,40 @@ export function Donut({
   centerValue?: string;
   legend?: boolean;
   formatValue?: (v: number) => string;
+  /** drill-down: called when a slice/legend row is clicked a second time */
+  onSegmentClick?: (segment: DonutSegment) => void;
   className?: string;
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.35);
   const reduced = usePrefersReducedMotion();
+  // Touch a slice → it pops out and the centre swaps to ITS name/value/share.
+  const [sel, setSel] = useState<number | null>(null);
   const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
   const R = (size - thickness) / 2;
   const C = 2 * Math.PI * R;
   const drawn = inView || reduced;
+  const pick = (i: number, s: DonutSegment) => {
+    if (sel === i) {
+      if (onSegmentClick) onSegmentClick(s); // second tap = drill down
+      else setSel(null);
+    } else {
+      setSel(i);
+    }
+  };
+  const active = sel != null ? segments[sel] : null;
   let acc = 0;
   return (
     <div ref={ref} className={`flex flex-wrap items-center gap-5 ${className}`}>
       <div className="relative" style={{ width: size, height: size }}>
-        <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90 overflow-visible">
           <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke="currentColor" strokeOpacity="0.08" strokeWidth={thickness} />
           {total > 0 &&
             segments.map((s, i) => {
               const frac = Math.max(0, s.value) / total;
               const offset = acc;
               acc += frac;
+              const isSel = sel === i;
+              const dim = sel != null && !isSel;
               return (
                 <circle
                   key={s.label}
@@ -225,37 +241,63 @@ export function Donut({
                   r={R}
                   fill="none"
                   stroke={s.color ?? CHART_COLORS[i % CHART_COLORS.length]}
-                  strokeWidth={thickness}
+                  strokeWidth={isSel ? thickness + 5 : thickness}
                   strokeLinecap={frac > 0.02 ? "round" : "butt"}
                   strokeDasharray={`${Math.max(0.001, frac * C - 2)} ${C}`}
                   strokeDashoffset={drawn ? -offset * C : C * 0.25}
+                  onClick={() => pick(i, s)}
+                  className="cursor-pointer"
                   style={{
-                    opacity: drawn ? 1 : 0,
-                    transition: `stroke-dashoffset 1100ms ${easeDraw} ${i * 90}ms, opacity 500ms ease ${i * 90}ms`,
+                    opacity: drawn ? (dim ? 0.3 : 1) : 0,
+                    transition: `stroke-dashoffset 1100ms ${easeDraw} ${i * 90}ms, opacity 400ms ease, stroke-width 250ms ${easeDraw}`,
                   }}
-                />
+                >
+                  <title>{`${s.label} · ${formatValue(s.value)} (${Math.round(frac * 100)}%)`}</title>
+                </circle>
               );
             })}
         </svg>
-        <div className="absolute inset-0 grid place-items-center">
-          <div className="text-center">
-            <p className="font-mono text-xl font-bold text-fg">{centerValue ?? formatValue(total)}</p>
-            {centerLabel ? <p className="text-[10px] text-fg-faint">{centerLabel}</p> : null}
-          </div>
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          {active ? (
+            <div className="mise-pop px-3 text-center">
+              <p className="truncate text-[11px] font-medium" style={{ color: active.color ?? CHART_COLORS[(sel ?? 0) % CHART_COLORS.length] }}>
+                {active.label}
+              </p>
+              <p className="font-mono text-lg font-bold text-fg">{formatValue(active.value)}</p>
+              <p className="text-[10px] text-fg-faint">
+                {total > 0 ? `${Math.round((active.value / total) * 100)}% of total` : ""}
+                {onSegmentClick ? " · tap again to open" : ""}
+              </p>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="font-mono text-xl font-bold text-fg">{centerValue ?? formatValue(total)}</p>
+              {centerLabel ? <p className="text-[10px] text-fg-faint">{centerLabel}</p> : null}
+            </div>
+          )}
         </div>
       </div>
       {legend ? (
-        <ul className="min-w-0 flex-1 space-y-1.5">
+        <ul className="min-w-0 flex-1 space-y-1">
           {segments.map((s, i) => (
-            <li key={s.label} className="flex items-center gap-2 text-xs">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: s.color ?? CHART_COLORS[i % CHART_COLORS.length] }}
-              />
-              <span className="truncate text-fg-soft">{s.label}</span>
-              <span className="ml-auto font-mono text-fg-faint">
-                {total > 0 ? `${Math.round((s.value / total) * 100)}%` : "—"}
-              </span>
+            <li key={s.label}>
+              <button
+                type="button"
+                onClick={() => pick(i, s)}
+                className={`mise-press flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left text-xs transition-colors ${
+                  sel === i ? "mise-well" : "hover:bg-glass/5"
+                } ${sel != null && sel !== i ? "opacity-50" : ""}`}
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 self-center rounded-full"
+                  style={{ background: s.color ?? CHART_COLORS[i % CHART_COLORS.length] }}
+                />
+                <span className="min-w-0 max-w-[60%] truncate text-fg-soft">{s.label}</span>
+                <span aria-hidden className="mx-1 flex-1 self-center border-b border-dotted border-line-2" />
+                <span className="shrink-0 font-mono text-fg-faint">
+                  {sel === i ? formatValue(s.value) : total > 0 ? `${Math.round((s.value / total) * 100)}%` : "—"}
+                </span>
+              </button>
             </li>
           ))}
         </ul>
@@ -506,53 +548,81 @@ export function RadialBars({
   items,
   size = 180,
   formatValue = (v: number) => v.toLocaleString("en-GB"),
+  onItemClick,
   className = "",
 }: {
   items: { label: string; value: number; color?: string }[];
   size?: number;
   formatValue?: (v: number) => string;
+  /** tap a legend row to drill into that item */
+  onItemClick?: (item: { label: string; value: number }) => void;
   className?: string;
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.35);
   const reduced = usePrefersReducedMotion();
   const drawn = inView || reduced;
-  const top = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value).slice(0, 5);
+  const sorted = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value);
+  const top = sorted.slice(0, 5);
+  const rest = sorted.slice(5);
+  const restSum = rest.reduce((s, x) => s + x.value, 0);
   const max = Math.max(...top.map((i) => i.value), 1);
   const thickness = 9;
   const gap = 4;
   const c = size / 2;
   return (
-    <div ref={ref} className={`flex flex-wrap items-center gap-5 ${className}`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
-        {top.map((it, i) => {
-          const r = c - thickness / 2 - i * (thickness + gap);
-          if (r <= 8) return null;
-          const circ = 2 * Math.PI * r;
-          const frac = Math.min(1, it.value / max) * 0.83; // cap sweep so rings never close
-          const color = it.color ?? CHART_COLORS[i % CHART_COLORS.length];
-          return (
-            <g key={it.label}>
-              <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeOpacity={0.14} strokeWidth={thickness} />
-              <circle
-                cx={c} cy={c} r={r} fill="none"
-                stroke={color} strokeWidth={thickness} strokeLinecap="round"
-                strokeDasharray={circ}
-                strokeDashoffset={drawn ? circ * (1 - frac) : circ}
-                style={{ transition: `stroke-dashoffset 1300ms ${easeDraw} ${i * 140}ms` }}
-              />
-            </g>
-          );
-        })}
-      </svg>
-      <ul className="min-w-0 flex-1 space-y-1.5">
-        {top.map((it, i) => (
-          <li key={it.label} className="flex items-center gap-2 text-xs">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: it.color ?? CHART_COLORS[i % CHART_COLORS.length] }} />
-            <span className="min-w-0 flex-1 truncate text-fg-soft" title={it.label}>{it.label}</span>
-            <span className="shrink-0 font-medium text-fg">{formatValue(it.value)}</span>
-          </li>
-        ))}
-      </ul>
+    <div ref={ref} className={className}>
+      <div className="flex flex-wrap items-center gap-5">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
+          {top.map((it, i) => {
+            const r = c - thickness / 2 - i * (thickness + gap);
+            if (r <= 8) return null;
+            const circ = 2 * Math.PI * r;
+            const frac = Math.min(1, it.value / max) * 0.83; // cap sweep so rings never close
+            const color = it.color ?? CHART_COLORS[i % CHART_COLORS.length];
+            return (
+              <g key={it.label}>
+                <title>{`${it.label} · ${formatValue(it.value)}`}</title>
+                <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeOpacity={0.14} strokeWidth={thickness} />
+                <circle
+                  cx={c} cy={c} r={r} fill="none"
+                  stroke={color} strokeWidth={thickness} strokeLinecap="round"
+                  strokeDasharray={circ}
+                  strokeDashoffset={drawn ? circ * (1 - frac) : circ}
+                  style={{ transition: `stroke-dashoffset 1300ms ${easeDraw} ${i * 140}ms` }}
+                />
+              </g>
+            );
+          })}
+        </svg>
+        <ul className="min-w-0 flex-1 space-y-1">
+          {top.map((it, i) => (
+            <li key={it.label}>
+              <button
+                type="button"
+                onClick={onItemClick ? () => onItemClick(it) : undefined}
+                className={`flex w-full items-baseline gap-2 rounded-lg px-1.5 py-1 text-left text-xs ${
+                  onItemClick ? "mise-press cursor-pointer transition-colors hover:bg-glass/5" : "cursor-default"
+                }`}
+                title={onItemClick ? `Show ${it.label} in the table` : it.label}
+              >
+                <span className="h-2.5 w-2.5 shrink-0 self-center rounded-full" style={{ background: it.color ?? CHART_COLORS[i % CHART_COLORS.length] }} />
+                <span className="min-w-0 max-w-[60%] truncate text-fg-soft">{it.label}</span>
+                {/* menu-style dot leader — the eye never loses which price is whose */}
+                <span aria-hidden className="mx-1 flex-1 border-b border-dotted border-line-2" />
+                <span className="shrink-0 font-medium text-fg">{formatValue(it.value)}</span>
+              </button>
+            </li>
+          ))}
+          {rest.length > 0 && (
+            <li className="flex items-baseline gap-2 px-1.5 py-1 text-xs text-fg-faint">
+              <span className="h-2.5 w-2.5 shrink-0 self-center rounded-full bg-glass/20" />
+              <span className="min-w-0 truncate">+ {rest.length} more item{rest.length === 1 ? "" : "s"}</span>
+              <span aria-hidden className="mx-1 flex-1 border-b border-dotted border-line-2" />
+              <span className="shrink-0 font-mono">{formatValue(restSum)}</span>
+            </li>
+          )}
+        </ul>
+      </div>
     </div>
   );
 }
