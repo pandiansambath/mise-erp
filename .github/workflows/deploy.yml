@@ -108,7 +108,7 @@ jobs:
         run: |
           SHA="${{ steps.ecr.outputs.registry }}/mise-backend:${{ github.sha }}"
           LATEST="${{ steps.ecr.outputs.registry }}/mise-backend:latest"
-          docker build --target prod -t "$SHA" -t "$LATEST" ./backend
+          docker build --target prod --build-arg APP_COMMIT="${{ github.sha }}" -t "$SHA" -t "$LATEST" ./backend
           docker push "$SHA"
           docker push "$LATEST"
           echo "BACKEND_IMAGE=$LATEST" >> "$GITHUB_ENV"

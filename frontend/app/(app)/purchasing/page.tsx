@@ -447,6 +447,60 @@ export default function PurchasingPage() {
         </Card>
       )}
 
+      {/* ── The purchasing pipeline — where every order sits, at a glance ── */}
+      {(indents.length > 0 || pos.length > 0) && (
+        <Card className="mise-feel mb-6">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            {(() => {
+              const stages = [
+                {
+                  icon: "📝",
+                  label: "Indents raised",
+                  main: indents.filter((x) => x.status === "PENDING").length,
+                  sub: "awaiting approval",
+                  tone: "text-amber-300",
+                },
+                {
+                  icon: "✅",
+                  label: "Approved",
+                  main: indents.filter((x) => x.status === "APPROVED").length,
+                  sub: "ready to order",
+                  tone: "text-brand-300",
+                },
+                {
+                  icon: "📦",
+                  label: "POs out",
+                  main: pos.filter((x) => x.status !== "RECEIVED").length,
+                  sub: "with suppliers",
+                  tone: "text-sky-300",
+                },
+                {
+                  icon: "🏠",
+                  label: "Received",
+                  main: pos.filter((x) => x.status === "RECEIVED").length,
+                  sub: "in your stock",
+                  tone: "text-fg",
+                },
+              ];
+              return stages.map((st, i) => (
+                <div key={st.label} className="flex flex-1 items-center gap-2">
+                  <div className="mise-well mise-feel flex flex-1 items-center gap-3 rounded-xl px-3.5 py-2.5">
+                    <span aria-hidden className="text-xl">{st.icon}</span>
+                    <span className="min-w-0">
+                      <span className={`block text-lg font-bold leading-tight ${st.tone}`}>{st.main}</span>
+                      <span className="block truncate text-[11px] text-fg-faint">{st.label} · {st.sub}</span>
+                    </span>
+                  </div>
+                  {i < stages.length - 1 && (
+                    <span aria-hidden className="hidden text-fg-faint sm:block">→</span>
+                  )}
+                </div>
+              ));
+            })()}
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Indents — tap a row to see its items, suppliers and the approve action. */}
         <Card className="overflow-hidden p-0">

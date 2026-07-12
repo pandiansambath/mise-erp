@@ -80,7 +80,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 9 · Purchasing
 - [x] Tactile buttons (879d060)
-- [ ] Indent → PO pipeline as 3-column visual flow (Indent → POs → Received)
+- [x] Pipeline strip: Indents raised → Approved → POs out → Received (tactile stages w/ counts)
 - [ ] Consolidated view: per-vendor subtotal Bars
 - [ ] Receive drawer: old→new price-change chips highlighted
 - [ ] Feature: expected-delivery date on PO + "due today" chip on dashboard

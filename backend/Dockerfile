@@ -25,6 +25,9 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 
 # ── prod: lean, non-root, used by App Runner ──
 FROM base AS prod
+# Baked at build time by deploy.yml — /api/health reports it for deploy verification.
+ARG APP_COMMIT=unknown
+ENV APP_COMMIT=$APP_COMMIT
 COPY . .
 RUN useradd --create-home --uid 1000 appuser && chown -R appuser /app
 USER appuser
