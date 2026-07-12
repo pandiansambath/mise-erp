@@ -865,6 +865,17 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-low-pulse { animation: none; background-color: rgba(245, 158, 11, 0.05); }
 }
 
+/* Onboarding finale: ember-confetti — sparks rise, drift and burn out. */
+@keyframes mise-confetti-k {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-240px) translateX(14px) scale(1.1); }
+}
+.mise-confetti { animation: mise-confetti-k 1.8s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .mise-confetti { animation: none; opacity: 0; }
+}
+
 /* Kitchen steam rolls over the chef medallion whenever he changes pose —
    the eye follows the steam, never the image swap. */
 @keyframes mise-chef-puff-k {

@@ -175,7 +175,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 27 · Onboarding
 - [x] Press-feel CTAs
 - [ ] Import flow polish: upload → parsed preview → confirm morph
-- [ ] Finish screen: ember-confetti burst + dashboard-ready morph
+- [x] Finish screen: ember-confetti burst + serve-chef presenting the dashboard
 - [x] Welcome step: chef welcome pose greets new owners
 
 ## 28 · Login / Signup

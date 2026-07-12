@@ -535,9 +535,35 @@ function ReviewStep({ onNext, onRestart }: { onNext: () => void; onRestart: () =
 }
 
 function Done({ name, onFinish }: { name: string; onFinish: () => void }) {
+  // one-shot ember-confetti burst — sparks rise and fade like the kitchen lit up
+  const embers = Array.from({ length: 22 }, (_, i) => ({
+    left: `${6 + ((i * 37) % 88)}%`,
+    delay: `${(i % 9) * 130}ms`,
+    dur: `${1500 + ((i * 53) % 900)}ms`,
+    size: 3 + ((i * 7) % 5),
+    tint: i % 3 === 0 ? "#f59e0b" : i % 3 === 1 ? "#34d399" : "#fda4af",
+  }));
   return (
-    <div className="flex flex-col items-center text-center">
-      <span className="mise-pop-lg text-6xl">🎉</span>
+    <div className="relative flex flex-col items-center text-center">
+      <div className="pointer-events-none absolute inset-x-0 -top-6 h-64 overflow-visible" aria-hidden>
+        {embers.map((e, i) => (
+          <span
+            key={i}
+            className="mise-confetti absolute bottom-0 rounded-full"
+            style={{
+              left: e.left,
+              width: e.size,
+              height: e.size,
+              background: e.tint,
+              animationDelay: e.delay,
+              animationDuration: e.dur,
+            }}
+          />
+        ))}
+      </div>
+      <div className="mise-pop-lg w-28">
+        <ChefMascot mood="serve" />
+      </div>
       <h2 className="mt-4 font-display text-3xl font-semibold sm:text-4xl">You&apos;re all set, {name}!</h2>
       <p className="mt-3 max-w-md text-white/70">
         Your dashboard is ready. You can add recipes, staff and past sales anytime — just ask the Copilot, or
