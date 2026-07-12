@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type SafetyLog } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
-import { Donut } from "@/components/charts";
+import { AreaChart, Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -144,6 +144,39 @@ export default function FoodSafetyPage() {
           ⬇ Download (PDF)
         </Button>
       </div>
+
+      {(() => {
+        // drift chart for the most-logged appliance — is the fridge creeping up?
+        const byAppliance = new Map<string, { t: string; v: number }[]>();
+        for (const l of temps) {
+          if (l.reading == null) continue;
+          const key = l.label.split("·")[0].trim();
+          const arr = byAppliance.get(key) ?? [];
+          arr.push({ t: l.created_at, v: parseFloat(l.reading) });
+          byAppliance.set(key, arr);
+        }
+        const busiest = [...byAppliance.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+        if (!busiest || busiest[1].length < 3) return null;
+        const series = [...busiest[1]].sort((a, b) => a.t.localeCompare(b.t));
+        return (
+          <Card className="mise-feel mb-6">
+            <div className="flex items-baseline justify-between">
+              <h3 className="font-semibold text-fg">Temperature drift — {busiest[0]}</h3>
+              <span className="text-xs text-fg-faint">{series.length} readings in range</span>
+            </div>
+            <p className="text-xs text-fg-faint">a slow upward creep = a fridge asking for a service BEFORE it fails an inspection</p>
+            <div className="mise-well mt-4 rounded-xl p-3">
+              <AreaChart
+                data={series.map((x) => x.v)}
+                labels={series.map((x) => new Date(x.t).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}
+                color="#38bdf8"
+                height={110}
+                formatValue={(v) => `${v}°C`}
+              />
+            </div>
+          </Card>
+        );
+      })()}
 
       {temps.length > 0 && (
         <Card className="mise-feel mb-6">

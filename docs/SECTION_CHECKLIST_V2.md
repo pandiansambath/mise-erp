@@ -118,7 +118,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 16 · Food Safety
 - [x] Temps Donut + today's-checks progress + tactile rows
-- [ ] Per-appliance temperature AreaChart (fridge drift over the week)
+- [x] Temperature-drift AreaChart for the most-logged appliance (°C over time)
 - [ ] Feature: dashboard nudge chip when today's checks incomplete
 
 ## 17 · Employees
