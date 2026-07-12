@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
-import { Donut, Waffle, type DonutSegment } from "@/components/charts";
+import { CalendarHeat, Donut, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
@@ -47,9 +47,24 @@ export default function SalesPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [heatDays, setHeatDays] = useState<{ date: string; value: number }[]>([]);
 
   // ⌘K "Record today's takings" (?new=1) → spotlight the entry form
   useDeepLink({ new: () => spotlight("sales-form") }, !loading);
+
+  // Last ~10 weeks of takings for the rhythm heatmap — one query.
+  useEffect(() => {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 69);
+    const iso = (d: Date) => localISODate(d);
+    api
+      .get<{ days: { date: string; net: string }[] }>(
+        `/reports/sales-trend?date_from=${iso(from)}&date_to=${iso(to)}`,
+      )
+      .then((r) => setHeatDays(r.days.map((d) => ({ date: d.date, value: parseFloat(d.net) || 0 }))))
+      .catch(() => {});
+  }, []);
 
   const loadDay = async (d: string) => {
     const s = await api.get<DaySummary>(`/sales/days/${d}`);
@@ -280,6 +295,18 @@ export default function SalesPage() {
                 <Waffle segments={methodSegs} formatValue={(v) => format(String(v))} />
               </div>
             )}
+          </div>
+        </Card>
+      )}
+
+      {heatDays.length > 1 && (
+        <Card className="mise-feel mt-6">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-fg">Takings rhythm — last 10 weeks</h2>
+            <span className="text-xs text-fg-faint">darker = bigger day · hover for the figure</span>
+          </div>
+          <div className="mise-well mt-4 overflow-x-auto rounded-xl p-4">
+            <CalendarHeat days={heatDays} formatValue={(v) => format(String(v))} />
           </div>
         </Card>
       )}

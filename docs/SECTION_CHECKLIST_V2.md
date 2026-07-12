@@ -27,7 +27,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [x] Chef empty states: shrugging maître fronts EVERY EmptyState app-wide
 
 ## 2 · Sales & Cash
-- [ ] CalendarHeat on sales page too (endpoint now exists — quick wire)
+- [x] CalendarHeat on sales page (takings rhythm, last 10 weeks)
 - [ ] Channel cards → mise-well tiles w/ per-channel Sparkline (7d)
 - [x] Payment-method split Waffle (how it was paid)
 - [ ] Till-count keypad: big neumorphic number pad for counting cash (touch!)
@@ -182,7 +182,8 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 30 · Copilot (Ask Mise)
 - [x] Chef in the chat header — thinks while answering, beams when done
-- [ ] Chat UI: glass panel, message pop-in, typing shimmer (Copilot Body plan)
+- [x] Chat panel = theme-aware liquid glass (.mise-glass-panel)
+- [ ] Typing shimmer + message polish (Copilot Body plan continues)
 - [ ] Then brain/hands/legs/ears per [[nirai-copilot-body-plan]]
 
 ## 31 · 🛰️ CONTROL ROOM (UI + FEATURES — user priority)
