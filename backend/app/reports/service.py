@@ -61,6 +61,13 @@ async def pnl(
     }
 
 
+async def sales_trend(
+    db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
+) -> list[dict]:
+    """Per-day net sales — one query for trend lines and calendar heatmaps."""
+    return await sales_service.daily_net(db, hotel_id, date_from, date_to)
+
+
 async def dashboard(db: AsyncSession, hotel_id: uuid.UUID, on: date_type | None = None) -> dict:
     today = on or date_type.today()
     month_start = today.replace(day=1)

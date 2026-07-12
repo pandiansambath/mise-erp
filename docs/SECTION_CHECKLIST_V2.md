@@ -20,14 +20,14 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 1 · Dashboard
 - [x] Right-side gap fixed (empty-state card, never a hole)
-- [ ] CalendarHeat "month rhythm" (needs /reports/sales-trend endpoint — one
-      query instead of 31 pnl calls)
+- [x] CalendarHeat "month rhythm" — GitHub-style takings heatmap, fed by the
+      NEW /reports/sales-trend endpoint (dashboard's 7 pnl calls → 1 query)
 - [ ] Greeting row: "service tonight" hint from rota (who's on this evening)
 - [ ] Low-stock KPI → mini RadialBars preview on hover (glass popover)
 - [x] Chef empty states: shrugging maître fronts EVERY EmptyState app-wide
 
 ## 2 · Sales & Cash
-- [ ] CalendarHeat: takings intensity per day of month (needs trend endpoint)
+- [ ] CalendarHeat on sales page too (endpoint now exists — quick wire)
 - [ ] Channel cards → mise-well tiles w/ per-channel Sparkline (7d)
 - [x] Payment-method split Waffle (how it was paid)
 - [ ] Till-count keypad: big neumorphic number pad for counting cash (touch!)

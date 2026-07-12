@@ -634,3 +634,80 @@ export function RadialBars({
     </div>
   );
 }
+
+/* ────────────────────────── CalendarHeat ──────────────────────────
+   GitHub-style month heatmap: one cell per day, colour intensity = takings.
+   The month's rhythm at a glance — weekends glow, dead Mondays fade. */
+
+export function CalendarHeat({
+  days,
+  color = "#10b981",
+  formatValue = (v: number) => v.toLocaleString("en-GB"),
+  className = "",
+}: {
+  /** ISO date + value; missing days render as empty cells */
+  days: { date: string; value: number }[];
+  color?: string;
+  formatValue?: (v: number) => string;
+  className?: string;
+}) {
+  const { ref, inView } = useInView<HTMLDivElement>(0.3);
+  const reduced = usePrefersReducedMotion();
+  const drawn = inView || reduced;
+  if (days.length === 0) return null;
+  const byDate = new Map(days.map((d) => [d.date, d.value]));
+  const dates = [...byDate.keys()].sort();
+  const first = new Date(dates[0] + "T00:00:00");
+  const last = new Date(dates[dates.length - 1] + "T00:00:00");
+  const max = Math.max(...days.map((d) => d.value), 1);
+  // grid starts on the Monday of the first week
+  const start = new Date(first);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const weeks: Date[][] = [];
+  const cur = new Date(start);
+  while (cur <= last) {
+    const week: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      week.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+  const DOW = ["M", "T", "W", "T", "F", "S", "S"];
+  let cellIdx = 0;
+  return (
+    <div ref={ref} className={`flex gap-1.5 ${className}`}>
+      <div className="grid grid-rows-7 gap-1 pr-0.5 text-[9px] leading-none text-fg-faint">
+        {DOW.map((d, i) => (
+          <span key={i} className="flex h-4 items-center">{d}</span>
+        ))}
+      </div>
+      <div className="flex gap-1 overflow-x-auto">
+        {weeks.map((week, wi) => (
+          <div key={wi} className="grid grid-rows-7 gap-1">
+            {week.map((d) => {
+              const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              const v = byDate.get(iso);
+              const inRange = d >= first && d <= last;
+              const idx = cellIdx++;
+              const alpha = v ? 0.16 + 0.84 * Math.min(1, v / max) : 0;
+              return (
+                <span
+                  key={iso}
+                  title={inRange ? `${iso} · ${v ? formatValue(v) : "no sales"}` : undefined}
+                  className="h-4 w-4 rounded-[4px]"
+                  style={{
+                    background: v ? color : "currentColor",
+                    opacity: drawn ? (inRange ? (v ? alpha : 0.07) : 0) : 0,
+                    transform: drawn ? "scale(1)" : "scale(0.3)",
+                    transition: `opacity 420ms ${easeDraw} ${idx * 12}ms, transform 420ms ${easeDraw} ${idx * 12}ms`,
+                  }}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

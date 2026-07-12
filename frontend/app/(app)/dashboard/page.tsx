@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, type DashboardKpis, type PnL } from "@/lib/api";
-import { AreaChart, Bars, Donut, Meter, type DonutSegment } from "@/components/charts";
+import { AreaChart, Bars, CalendarHeat, Donut, Meter, type DonutSegment } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
@@ -103,6 +103,7 @@ export default function DashboardPage() {
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [low, setLow] = useState<LowStock[]>([]);
   const [week, setWeek] = useState<DayPoint[] | null>(null); // last 7 days, oldest first
+  const [monthDays, setMonthDays] = useState<{ date: string; value: number }[]>([]); // ~5 weeks for the heatmap
   const [curWeek, setCurWeek] = useState<PnL | null>(null);
   const [prevWeek, setPrevWeek] = useState<PnL | null>(null);
   const [setupDone, setSetupDone] = useState(true); // assume done → no flash; corrected in effect
@@ -131,20 +132,26 @@ export default function DashboardPage() {
           .then(setPrevWeek)
           .catch(() => {}),
       );
-      // The 7-day series: one tiny P&L per day → the chart draws the real week.
+      // One query covers BOTH the 7-day trend line and the 5-week heatmap
+      // (used to be seven separate per-day P&L calls).
       jobs.push(
-        Promise.all(
-          [6, 5, 4, 3, 2, 1, 0].map((n) => {
-            const d = ago(n);
-            return api
-              .get<PnL>(`/reports/pnl?date_from=${iso(d)}&date_to=${iso(d)}`)
-              .then((p) => ({
-                label: d.toLocaleDateString("en-GB", { weekday: "short" }),
-                net: parseFloat(p.net_sales) || 0,
-              }));
-          }),
-        )
-          .then(setWeek)
+        api
+          .get<{ days: { date: string; net: string }[] }>(
+            `/reports/sales-trend?date_from=${iso(ago(34))}&date_to=${iso(ago(0))}`,
+          )
+          .then((r) => {
+            const byDate = new Map(r.days.map((d) => [d.date, parseFloat(d.net) || 0]));
+            setWeek(
+              [6, 5, 4, 3, 2, 1, 0].map((n) => {
+                const d = ago(n);
+                return {
+                  label: d.toLocaleDateString("en-GB", { weekday: "short" }),
+                  net: byDate.get(iso(d)) ?? 0,
+                };
+              }),
+            );
+            setMonthDays(r.days.map((d) => ({ date: d.date, value: parseFloat(d.net) || 0 })));
+          })
           .catch(() => {}),
       );
     }
@@ -292,6 +299,18 @@ export default function DashboardPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {seeFinance && monthDays.length > 1 && (
+        <Card className="mise-feel mt-6">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-semibold text-fg">The month&apos;s rhythm</h3>
+            <span className="text-xs text-fg-faint">last 5 weeks · darker = bigger day</span>
+          </div>
+          <div className="mise-well mt-4 overflow-x-auto rounded-xl p-4">
+            <CalendarHeat days={monthDays} formatValue={(v) => format(String(v))} />
+          </div>
+        </Card>
       )}
 
       {seeFinance && curWeek && (

@@ -85,3 +85,26 @@ async def test_accountant_can_view_reports(client, make_user, auth_header):
     acct = await make_user("acct@nirai.com", Role.ACCOUNTANT.value)
     resp = await client.get("/api/reports/dashboard", headers=auth_header(acct))
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_sales_trend_per_day(client, make_user, auth_header, db, hotel):
+    """One query, one row per day with sales — commission already deducted."""
+    await sales.ensure_default_channels(db, hotel.id)
+    chans = {c.name: c for c in await sales.list_channels(db, hotel.id)}
+    d1, d2 = date(2026, 6, 2), date(2026, 6, 4)
+    day1 = await sales.upsert_day(db, hotel.id, d1)
+    await sales.add_line(db, day1, chans["Deliveroo"].id, Decimal("1000"), "ONLINE")  # 30% comm
+    day2 = await sales.upsert_day(db, hotel.id, d2)
+    await sales.add_line(db, day2, chans["Dine-In"].id, Decimal("500"), "CASH")  # 0% comm
+
+    acct = await make_user("trend@nirai.com", Role.ACCOUNTANT.value)
+    r = await client.get(
+        "/api/reports/sales-trend?date_from=2026-06-01&date_to=2026-06-30",
+        headers=auth_header(acct),
+    )
+    assert r.status_code == 200
+    days = r.json()["days"]
+    assert [d["date"] for d in days] == ["2026-06-02", "2026-06-04"]
+    assert days[0]["net"] == "700.00"
+    assert days[1]["net"] == "500.00"

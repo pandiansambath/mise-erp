@@ -42,6 +42,18 @@ async def dashboard(
     return Dashboard.model_validate(await service.dashboard(db, user.hotel_id))
 
 
+@router.get("/sales-trend")
+async def sales_trend(
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("reports:read")),
+) -> dict:
+    """Net sales per day in ONE query — feeds the dashboard trend and the
+    calendar heatmaps (replaces N per-day P&L calls)."""
+    return {"days": await service.sales_trend(db, user.hotel_id, date_from, date_to)}
+
+
 @router.get("/money", response_model=MoneyCentre)
 async def money_centre(
     date_from: date_type | None = Query(default=None),

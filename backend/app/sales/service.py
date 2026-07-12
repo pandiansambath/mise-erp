@@ -218,6 +218,30 @@ async def day_summary(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> 
     }
 
 
+async def daily_net(
+    db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
+) -> list[dict]:
+    """Net sales per day in one query — feeds trend charts and heatmaps."""
+    rows = await db.execute(
+        select(DailySales.date, SalesLine.gross_amount, SalesChannel.commission_pct)
+        .select_from(SalesLine)
+        .join(SalesChannel, SalesLine.channel_id == SalesChannel.id)
+        .join(DailySales, SalesLine.daily_sales_id == DailySales.id)
+        .where(
+            DailySales.hotel_id == hotel_id,
+            DailySales.date >= date_from,
+            DailySales.date <= date_to,
+        )
+    )
+    by_day: dict[date_type, Decimal] = {}
+    for d, gross, pct in rows.all():
+        net = gross - commission_for(gross, pct)
+        by_day[d] = by_day.get(d, Decimal("0")) + net
+    return [
+        {"date": d.isoformat(), "net": str(v.quantize(_Q2))} for d, v in sorted(by_day.items())
+    ]
+
+
 async def range_summary(
     db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
 ) -> dict:
