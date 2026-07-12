@@ -25,17 +25,18 @@ function PnlLine({
   bold?: boolean;
   tone?: "profit";
 }) {
-  const { format } = useCurrency();
+  const { currency } = useCurrency();
   const profit =
     tone === "profit" ? (parseFloat(value) >= 0 ? "text-brand-400" : "text-rose-400") : "";
+  const n = Math.abs(parseFloat(value) || 0) * CURRENCIES[currency].rate;
   return (
     <div
       className={`flex items-center justify-between py-2.5 ${bold ? "border-t border-line" : ""}`}
     >
       <span className={bold ? "font-semibold text-fg" : "text-fg-soft"}>{label}</span>
       <span className={`tabular-nums ${bold ? "font-semibold" : ""} ${profit}`}>
-        {sign === "minus" ? "−" : ""}
-        {format(value)}
+        {sign === "minus" ? "−" : parseFloat(value) < 0 ? "−" : ""}
+        <AnimatedNumber value={n} prefix={CURRENCIES[currency].symbol} decimals={2} duration={900} />
       </span>
     </div>
   );

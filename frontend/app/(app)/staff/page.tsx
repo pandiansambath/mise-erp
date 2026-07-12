@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Donut } from "@/components/charts";
+import { ROLE_LABELS as RL } from "@/lib/permissions";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -178,6 +180,26 @@ export default function StaffPage() {
             self-register. Pick an <b>Employee</b> to give that person a login tied to their HR
             record (so they can later see their own attendance &amp; payslips).
           </p>
+        </Card>
+      )}
+
+      {!loading && users.length > 1 && (
+        <Card className="mise-feel mb-6">
+          <h3 className="font-semibold text-fg">Who can do what</h3>
+          <p className="text-xs text-fg-faint">how access is spread across the team</p>
+          <div className="mt-4">
+            <Donut
+              centerLabel="logins"
+              centerValue={String(users.length)}
+              segments={Object.entries(
+                users.reduce((acc, u) => {
+                  const k = RL[u.role] ?? u.role;
+                  acc[k] = (acc[k] ?? 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>),
+              ).map(([label, value]) => ({ label, value }))}
+            />
+          </div>
         </Card>
       )}
 

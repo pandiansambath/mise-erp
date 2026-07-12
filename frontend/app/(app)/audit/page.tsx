@@ -43,12 +43,14 @@ export default function AuditPage() {
       byDay.set(d, (byDay.get(d) ?? 0) + 1);
     }
     const out: number[] = [];
+    const labels: string[] = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       out.push(byDay.get(d.toISOString().slice(0, 10)) ?? 0);
+      labels.push(d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }));
     }
-    return out;
+    return { out, labels };
   }, [events]);
 
   const filtered = useMemo(() => {
@@ -82,9 +84,9 @@ export default function AuditPage() {
             className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-faint"
           />
         </div>
-        {pulse.some((n) => n > 0) && (
+        {pulse.out.some((n) => n > 0) && (
           <div className="mise-well mise-feel flex items-center gap-3 rounded-xl px-4 py-2">
-            <Sparkline data={pulse} height={28} />
+            <Sparkline data={pulse.out} labels={pulse.labels} formatValue={(v) => `${v} action${v === 1 ? "" : "s"}`} height={28} />
             <span className="text-[11px] text-fg-faint">activity · 14d</span>
           </div>
         )}

@@ -10,6 +10,13 @@ glassmorphism panels (.mise-glass-panel), claymorphism accents for empty
 states. Execute top to bottom; tick here; keep UI_MODERNIZATION_PLAN.md as
 the phase-level history.
 
+**LIVING CHARTS (user 2026-07-12: "charts are very raw — add life"):** every
+chart type now has an INSTANT glass tooltip that follows the cursor — Area/
+Sparkline show the date + value with a crosshair dot, Donut slices show value
++ share, Bars rows highlight + show share, Waffle squares, Treemap boxes,
+RadialBars rings, CalendarHeat days ("Sat 5 Jul · £1,240"), Meter shows
+now-vs-target. No more browser title bubbles anywhere.
+
 **Cross-cutting shipped 2026-07-12:** interactive Donut (tap slice → pops out,
 centre swaps to its value/share → tap again drills down; `onSelect` powers
 in-place SUB-CHARTS like money's "Inside Spices" bars) · dot leaders in every
@@ -31,7 +38,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [ ] Channel cards → mise-well tiles w/ per-channel Sparkline (7d)
 - [x] Payment-method split Waffle (how it was paid)
 - [ ] Till-count keypad: big neumorphic number pad for counting cash (touch!)
-- [ ] Feature: "yesterday vs same day last week" delta chip in the header
+- [x] "vs same weekday last week" delta chip beside the date picker
 
 ## 3 · Expenses
 - [x] Donut + share bars + wells (562112c) · [x] Treemap expense map
@@ -48,14 +55,14 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 5 · Reports (P&L)
 - [x] Donut + Meters + Bars + print/export raised buttons
 - [ ] Month-vs-month comparison mode (two ranges side by side, delta column)
-- [ ] P&L lines count up on load (AnimatedNumber per PnlLine)
+- [x] P&L lines count up on load (currency-aware AnimatedNumber)
 - [ ] Feature: monthly P&L PDF snapshot archive (needs backend)
 
 ## 6 · Payroll
 - [x] WEEKLY runs + cadence Segmented + tactile (a30475a)
 - [ ] Payslip cards: flip/expand morph (card → payslip preview)
 - [ ] Run-payroll: per-employee tick cascade while processing
-- [ ] Net-pay by person Bars under the table
+- [x] Net-pay by person Bars under the table
 - [ ] Feature: payslip share (needs email/WhatsApp provider — parked)
 
 ## 7 · Inventory
@@ -92,13 +99,13 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 12 · Waste
 - [x] Why-binned Donut + most-wasted Bars + 1-click log
 - [x] Waste-over-time Sparkline (14d, client-side)
-- [ ] Reason picker → big tactile emoji tiles instead of dropdown
+- [x] Reason picker → tactile emoji tiles
 
 ## 13 · Recipes
 - [x] Plate-cost Donut + KPI wells
-- [ ] Margin ladder: all dishes as sorted Bars (green→red) at page top
+- [x] Margin ladder: top-10 dishes as colour-coded Bars at page top
 - [ ] Ingredient Treemap as alternative cost view (toggle)
-- [ ] Feature: "what-if" price slider — drag selling price, margin live-updates
+- [x] What-if price slider — drag the price, margin/profit update live
 
 ## 14 · Party Order
 - [x] Tactile buttons + feel cards
@@ -133,7 +140,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 20 · Staff
 - [x] Avatar chips + well form + tactile
-- [ ] Role Donut (how access is spread)
+- [x] Role Donut (who can do what)
 - [ ] Feature: last-login column (backend touch)
 
 ## 21 · My (self-service)

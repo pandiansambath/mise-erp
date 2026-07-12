@@ -10,7 +10,7 @@
 //   <Bars items={[{label,value,color?}]} />     comparison, animated widths
 //   <Meter value={29} target={30} />            actual vs target
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { AnimatedNumber, useInView, usePrefersReducedMotion } from "@/components/fx";
 
 /** Default categorical palette — brand-led, readable on paper in both themes. */
@@ -27,22 +27,67 @@ export const CHART_COLORS = [
 
 const easeDraw = "cubic-bezier(0.22, 1, 0.36, 1)";
 
+/* ────────────────────── instant hover tooltip ──────────────────────
+   Every chart shares this: a glass tip that follows the cursor and shows
+   the point's full story (label · value · share) with zero delay — no
+   raw browser title bubbles. */
+
+type TipState = { x: number; y: number; title: string; lines: string[] } | null;
+
+function useChartTip() {
+  const [tip, setTip] = useState<TipState>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const show = (e: { clientX: number; clientY: number }, title: string, lines: string[] = []) => {
+    const box = boxRef.current?.getBoundingClientRect();
+    if (!box) return;
+    setTip({ x: e.clientX - box.left, y: e.clientY - box.top, title, lines });
+  };
+  const hide = () => setTip(null);
+  return { tip, show, hide, boxRef };
+}
+
+function ChartTip({ tip }: { tip: TipState }) {
+  if (!tip) return null;
+  return (
+    <div
+      className="mise-glass-panel pointer-events-none absolute z-30 min-w-[7rem] max-w-[15rem] rounded-xl px-3 py-2"
+      style={{
+        left: tip.x,
+        top: tip.y,
+        transform: `translate(${tip.x > 160 ? "calc(-100% - 10px)" : "12px"}, -110%)`,
+      }}
+      aria-hidden
+    >
+      <p className="truncate text-xs font-semibold text-fg">{tip.title}</p>
+      {tip.lines.map((l, i) => (
+        <p key={i} className="font-mono text-[11px] leading-snug text-fg-soft">{l}</p>
+      ))}
+    </div>
+  );
+}
+
 /* ────────────────────────── Sparkline ────────────────────────── */
 
 export function Sparkline({
   data,
+  labels,
   color = "#10b981",
   height = 36,
+  formatValue = (v: number) => v.toLocaleString("en-GB"),
   className = "",
 }: {
   data: number[];
+  /** optional per-point labels (dates) for the hover tip */
+  labels?: string[];
   color?: string;
   height?: number;
+  formatValue?: (v: number) => string;
   className?: string;
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.4);
   const reduced = usePrefersReducedMotion();
   const id = useId();
+  const { tip, show, hide, boxRef } = useChartTip();
   if (data.length < 2) return null;
   const W = 120;
   const min = Math.min(...data);
@@ -54,9 +99,28 @@ export function Sparkline({
   ]);
   const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const drawn = inView || reduced;
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const i = Math.max(0, Math.min(data.length - 1, Math.round(((e.clientX - r.left) / r.width) * (data.length - 1))));
+    show(e, labels?.[i] ?? `point ${i + 1}/${data.length}`, [formatValue(data[i])]);
+  };
   return (
-    <div ref={ref} className={className}>
-      <svg viewBox={`0 0 ${W} ${height}`} className="h-full w-full" preserveAspectRatio="none" aria-hidden>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative ${className}`}
+    >
+      <ChartTip tip={tip} />
+      <svg
+        viewBox={`0 0 ${W} ${height}`}
+        className="h-full w-full"
+        preserveAspectRatio="none"
+        aria-hidden
+        onMouseMove={onMove}
+        onMouseLeave={hide}
+      >
         <defs>
           <linearGradient id={`sp-${id}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.28" />
@@ -105,6 +169,8 @@ export function AreaChart({
   const { ref, inView } = useInView<HTMLDivElement>(0.35);
   const reduced = usePrefersReducedMotion();
   const id = useId();
+  const { tip, show, hide, boxRef } = useChartTip();
+  const [hoverI, setHoverI] = useState<number | null>(null);
   if (data.length < 2) return null;
   const W = 560;
   const min = Math.min(...data);
@@ -117,9 +183,40 @@ export function AreaChart({
   const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const last = pts[pts.length - 1];
   const drawn = inView || reduced;
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const i = Math.round(((e.clientX - r.left) / r.width) * (data.length - 1));
+    const clamped = Math.max(0, Math.min(data.length - 1, i));
+    setHoverI(clamped);
+    show(e, labels?.[clamped] ?? `point ${clamped + 1}/${data.length}`, [formatValue(data[clamped])]);
+  };
   return (
-    <div ref={ref} className={className}>
-      <svg viewBox={`0 0 ${W} ${height}`} className="w-full" style={{ height }} preserveAspectRatio="none" aria-hidden>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative ${className}`}
+    >
+      <ChartTip tip={tip} />
+      <svg
+        viewBox={`0 0 ${W} ${height}`}
+        className="w-full cursor-crosshair"
+        style={{ height }}
+        preserveAspectRatio="none"
+        aria-hidden
+        onMouseMove={onMove}
+        onMouseLeave={() => {
+          setHoverI(null);
+          hide();
+        }}
+      >
+        {hoverI != null && (
+          <g>
+            <line x1={pts[hoverI][0]} x2={pts[hoverI][0]} y1={0} y2={height} stroke={color} strokeOpacity="0.35" strokeDasharray="3 4" />
+            <circle cx={pts[hoverI][0]} cy={pts[hoverI][1]} r="5" fill={color} stroke="#fff" strokeWidth="1.5" />
+          </g>
+        )}
         <defs>
           <linearGradient id={`ar-${id}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.30" />
@@ -209,6 +306,7 @@ export function Donut({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.35);
   const reduced = usePrefersReducedMotion();
+  const { tip, show, hide, boxRef } = useChartTip();
   // Touch a slice → it pops out and the centre swaps to ITS name/value/share.
   const [sel, setSel] = useState<number | null>(null);
   const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
@@ -230,7 +328,14 @@ export function Donut({
   const active = sel != null ? segments[sel] : null;
   let acc = 0;
   return (
-    <div ref={ref} className={`flex flex-wrap items-center gap-5 ${className}`}>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative flex flex-wrap items-center gap-5 ${className}`}
+    >
+      <ChartTip tip={tip} />
       <div className="relative" style={{ width: size, height: size }}>
         <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90 overflow-visible">
           <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke="currentColor" strokeOpacity="0.08" strokeWidth={thickness} />
@@ -254,14 +359,14 @@ export function Donut({
                   strokeDasharray={`${Math.max(0.001, frac * C - 2)} ${C}`}
                   strokeDashoffset={drawn ? -offset * C : C * 0.25}
                   onClick={() => pick(i, s)}
+                  onMouseMove={(e) => show(e, s.label, [formatValue(s.value), `${Math.round(frac * 100)}% of total`])}
+                  onMouseLeave={hide}
                   className="cursor-pointer"
                   style={{
                     opacity: drawn ? (dim ? 0.3 : 1) : 0,
                     transition: `stroke-dashoffset 1100ms ${easeDraw} ${i * 90}ms, opacity 400ms ease, stroke-width 250ms ${easeDraw}`,
                   }}
-                >
-                  <title>{`${s.label} · ${formatValue(s.value)} (${Math.round(frac * 100)}%)`}</title>
-                </circle>
+                />
               );
             })}
         </svg>
@@ -329,13 +434,33 @@ export function Bars({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.3);
   const reduced = usePrefersReducedMotion();
+  const { tip, show, hide, boxRef } = useChartTip();
   const max = Math.max(...items.map((i) => i.value), 1);
+  const total = items.reduce((s, x) => s + Math.max(0, x.value), 0);
   const drawn = inView || reduced;
   return (
-    <div ref={ref} className={`space-y-2.5 ${className}`}>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative space-y-2.5 ${className}`}
+    >
+      <ChartTip tip={tip} />
       {items.map((it, i) => (
-        <div key={it.label} className="flex items-center gap-3 text-xs">
-          <span className="w-28 shrink-0 truncate text-fg-soft" title={it.label}>
+        <div
+          key={it.label}
+          className="flex items-center gap-3 rounded-lg px-1 text-xs transition-colors hover:bg-glass/5"
+          onMouseMove={(e) =>
+            show(e, it.label, [
+              formatValue(it.value),
+              total > 0 ? `${Math.round((it.value / total) * 100)}% of total` : "",
+              it.hint ?? "",
+            ].filter(Boolean))
+          }
+          onMouseLeave={hide}
+        >
+          <span className="w-28 shrink-0 truncate text-fg-soft">
             {it.label}
           </span>
           <span className="h-2 flex-1 overflow-hidden rounded-full bg-glass/10">
@@ -375,12 +500,27 @@ export function Meter({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.4);
   const reduced = usePrefersReducedMotion();
+  const { tip, show, hide, boxRef } = useChartTip();
   const drawn = inView || reduced;
   const healthy = goodBelow ? value <= target : value >= target;
   const tone = healthy ? "#10b981" : "#f59e0b";
   const maxScale = Math.max(value, target) * 1.25 || 1;
   return (
-    <div ref={ref} className={className}>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative ${className}`}
+      onMouseMove={(e) =>
+        show(e, label ?? "vs target", [
+          `now ${value}${suffix} · target ${target}${suffix}`,
+          healthy ? "on track ✓" : goodBelow ? "over target" : "under target",
+        ])
+      }
+      onMouseLeave={hide}
+    >
+      <ChartTip tip={tip} />
       {label ? (
         <div className="mb-1.5 flex items-baseline justify-between text-xs">
           <span className="text-fg-soft">{label}</span>
@@ -429,6 +569,7 @@ export function Treemap({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.3);
   const reduced = usePrefersReducedMotion();
+  const { tip, show, hide, boxRef } = useChartTip();
   const drawn = inView || reduced;
   const sorted = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value);
   const total = sorted.reduce((s, i) => s + i.value, 0);
@@ -451,7 +592,15 @@ export function Treemap({
 
   let i = 0;
   return (
-    <div ref={ref} className={`flex w-full flex-col gap-1 ${className}`} style={{ height }}>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative flex w-full flex-col gap-1 ${className}`}
+      style={{ height }}
+    >
+      <ChartTip tip={tip} />
       {rows.map((r, ri) => {
         const rSum = r.reduce((s, x) => s + x.value, 0);
         return (
@@ -461,7 +610,8 @@ export function Treemap({
               return (
                 <div
                   key={it.label}
-                  title={`${it.label} · ${formatValue(it.value)} (${Math.round((it.value / total) * 100)}%)`}
+                  onMouseMove={(e) => show(e, it.label, [formatValue(it.value), `${Math.round((it.value / total) * 100)}% of spend`])}
+                  onMouseLeave={hide}
                   className="mise-feel relative min-w-0 overflow-hidden rounded-lg p-2"
                   style={{
                     flexGrow: it.value,
@@ -503,6 +653,7 @@ export function Waffle({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.3);
   const reduced = usePrefersReducedMotion();
+  const { tip, show, hide, boxRef } = useChartTip();
   const drawn = inView || reduced;
   const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
   if (total <= 0) return null;
@@ -517,14 +668,32 @@ export function Waffle({
     left -= 1;
   }
   const colors: string[] = [];
-  segments.forEach((s, i) => { for (let k = 0; k < cells[i]; k++) colors.push(s.color); });
+  const owners: number[] = [];
+  segments.forEach((s, i) => {
+    for (let k = 0; k < cells[i]; k++) {
+      colors.push(s.color);
+      owners.push(i);
+    }
+  });
 
   return (
-    <div ref={ref} className={className}>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative ${className}`}
+    >
+      <ChartTip tip={tip} />
       <div className="grid grid-cols-10 gap-1">
         {colors.map((c, i) => (
           <span
             key={i}
+            onMouseMove={(e) => {
+              const seg = segments[owners[i]];
+              show(e, seg.label, [formatValue(seg.value), `${cells[owners[i]]}% of the total`]);
+            }}
+            onMouseLeave={hide}
             className="aspect-square rounded-[3px]"
             style={{
               background: c,
@@ -568,6 +737,7 @@ export function RadialBars({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.35);
   const reduced = usePrefersReducedMotion();
+  const { tip, show, hide, boxRef } = useChartTip();
   const drawn = inView || reduced;
   const sorted = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value);
   const top = sorted.slice(0, 5);
@@ -578,7 +748,14 @@ export function RadialBars({
   const gap = 4;
   const c = size / 2;
   return (
-    <div ref={ref} className={className}>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative ${className}`}
+    >
+      <ChartTip tip={tip} />
       <div className="flex flex-wrap items-center gap-5">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90">
           {top.map((it, i) => {
@@ -588,8 +765,11 @@ export function RadialBars({
             const frac = Math.min(1, it.value / max) * 0.83; // cap sweep so rings never close
             const color = it.color ?? CHART_COLORS[i % CHART_COLORS.length];
             return (
-              <g key={it.label}>
-                <title>{`${it.label} · ${formatValue(it.value)}`}</title>
+              <g
+                key={it.label}
+                onMouseMove={(e) => show(e, it.label, [formatValue(it.value), `${Math.round((it.value / max) * 100)}% of the biggest`])}
+                onMouseLeave={hide}
+              >
                 <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeOpacity={0.14} strokeWidth={thickness} />
                 <circle
                   cx={c} cy={c} r={r} fill="none"
@@ -653,6 +833,7 @@ export function CalendarHeat({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.3);
   const reduced = usePrefersReducedMotion();
+  const { tip, show, hide, boxRef } = useChartTip();
   const drawn = inView || reduced;
   if (days.length === 0) return null;
   const byDate = new Map(days.map((d) => [d.date, d.value]));
@@ -676,7 +857,14 @@ export function CalendarHeat({
   const DOW = ["M", "T", "W", "T", "F", "S", "S"];
   let cellIdx = 0;
   return (
-    <div ref={ref} className={`flex gap-1.5 ${className}`}>
+    <div
+      ref={(el) => {
+        ref.current = el;
+        boxRef.current = el;
+      }}
+      className={`relative flex gap-1.5 ${className}`}
+    >
+      <ChartTip tip={tip} />
       <div className="grid grid-rows-7 gap-1 pr-0.5 text-[9px] leading-none text-fg-faint">
         {DOW.map((d, i) => (
           <span key={i} className="flex h-4 items-center">{d}</span>
@@ -694,7 +882,15 @@ export function CalendarHeat({
               return (
                 <span
                   key={iso}
-                  title={inRange ? `${iso} · ${v ? formatValue(v) : "no sales"}` : undefined}
+                  onMouseMove={
+                    inRange
+                      ? (e) => {
+                          const nice = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+                          show(e, nice, [v ? formatValue(v) : "no sales recorded"]);
+                        }
+                      : undefined
+                  }
+                  onMouseLeave={inRange ? hide : undefined}
                   className="h-4 w-4 rounded-[4px]"
                   style={{
                     background: v ? color : "currentColor",

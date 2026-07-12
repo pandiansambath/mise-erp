@@ -223,8 +223,27 @@ export default function SalesPage() {
           type="date"
           value={day}
           onChange={(e) => changeDay(e.target.value)}
-          className="rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500"
+          className="mise-well rounded-lg px-3 py-2 text-sm outline-none"
         />
+        {(() => {
+          // vs the same weekday last week — instant context for the day you're on
+          const get = (d: string) => heatDays.find((x) => x.date === d)?.value;
+          const cur = get(day);
+          const prev = new Date(day + "T00:00:00");
+          prev.setDate(prev.getDate() - 7);
+          const prevVal = get(localISODate(prev));
+          if (cur == null || prevVal == null || prevVal <= 0) return null;
+          const pct = ((cur - prevVal) / prevVal) * 100;
+          const up = pct >= 0;
+          return (
+            <span
+              className={`mise-well rounded-full px-2.5 py-1 text-xs font-medium ${up ? "text-brand-400" : "text-rose-400"}`}
+              title={`vs the same weekday last week (${format(String(prevVal))})`}
+            >
+              {up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}% vs last week
+            </span>
+          );
+        })()}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {canWrite && (
             <>

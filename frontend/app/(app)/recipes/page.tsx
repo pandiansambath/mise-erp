@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, postForm, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
-import { Donut } from "@/components/charts";
+import { Bars, Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { ComboBox } from "@/components/ComboBox";
@@ -48,6 +48,7 @@ function CostDetail({
   onTag: (itemId: string, csv: string) => void;
 }) {
   const [data, setData] = useState<RecipeCostBreakdown | null>(() => _costCache.get(recipeId) ?? null);
+  const [whatIf, setWhatIf] = useState<number | null>(null); // what-if price slider
   const { format } = useCurrency();
   useEffect(() => {
     const cached = _costCache.get(recipeId);
@@ -95,6 +96,50 @@ function CostDetail({
           </div>
         ))}
       </div>
+
+      {/* What-if: drag the price, watch the margin move — pricing decisions in seconds */}
+      {(() => {
+        const cost = parseFloat(data.cost_per_serving) || 0;
+        if (cost <= 0) return null;
+        const current = parseFloat(data.selling_price || "0") || cost * 3;
+        const price = whatIf ?? current;
+        const margin = price > 0 ? ((price - cost) / price) * 100 : 0;
+        const tone = margin >= 65 ? "text-brand-400" : margin >= 40 ? "text-amber-400" : "text-rose-400";
+        return (
+          <div className="mise-well mise-feel rounded-xl p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                What-if pricing — drag it
+              </p>
+              <p className="text-sm">
+                <span className="font-mono font-semibold text-fg">{format(String(price))}</span>
+                <span className="mx-2 text-fg-faint">→</span>
+                <span className={`font-mono font-bold ${tone}`}>{margin.toFixed(1)}% margin</span>
+                <span className="ml-2 text-xs text-fg-faint">({format(String(price - cost))}/plate)</span>
+              </p>
+            </div>
+            <input
+              type="range"
+              min={Math.max(0.5, cost).toFixed(2)}
+              max={(Math.max(current, cost) * 2.5).toFixed(2)}
+              step="0.05"
+              value={price}
+              onChange={(e) => setWhatIf(parseFloat(e.target.value))}
+              className="mt-3 w-full accent-emerald-500"
+              aria-label="What-if selling price"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-fg-faint">
+              <span>cost {format(String(cost))}</span>
+              {whatIf != null && (
+                <button type="button" onClick={() => setWhatIf(null)} className="mise-press rounded px-1.5 text-brand-400 hover:underline">
+                  reset to current price
+                </button>
+              )}
+              <span>{format(String(Math.max(current, cost) * 2.5))}</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {data.ingredients.length >= 2 && (
         <div className="mise-well rounded-xl p-3">
@@ -703,6 +748,37 @@ export default function RecipesPage() {
           Show archived
         </label>
       </div>
+
+      {/* Margin ladder — the whole menu's health, best to thinnest */}
+      {(() => {
+        const priced = recipes
+          .filter((r) => r.is_active && r.profit_margin != null)
+          .map((r) => ({ name: r.name, m: parseFloat(r.profit_margin!) }))
+          .filter((x) => Number.isFinite(x.m))
+          .sort((a, b) => b.m - a.m);
+        if (priced.length < 2) return null;
+        return (
+          <Card className="mise-feel mb-6">
+            <div className="flex items-baseline justify-between">
+              <h3 className="font-semibold text-fg">Margin ladder</h3>
+              <span className="text-xs text-fg-faint">every priced dish, best → thinnest</span>
+            </div>
+            <div className="mise-well mt-4 rounded-xl p-3">
+              <Bars
+                formatValue={(v) => `${v.toFixed(1)}%`}
+                items={priced.slice(0, 10).map((x) => ({
+                  label: x.name,
+                  value: Math.max(0, x.m),
+                  color: x.m >= 65 ? "#10b981" : x.m >= 40 ? "#f59e0b" : "#f43f5e",
+                }))}
+              />
+              {priced.length > 10 && (
+                <p className="mt-2 text-[11px] text-fg-faint">+ {priced.length - 10} more below — sort the list by margin to see them all</p>
+              )}
+            </div>
+          </Card>
+        );
+      })()}
 
       {activeGroups.size === 0 && archivedGroups.size === 0 ? (
         <Card>

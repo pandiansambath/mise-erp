@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type Employee, type PayrollRow } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { Bars } from "@/components/charts";
 import Link from "next/link";
 import { SortTh, useSort } from "@/components/sortable";
 import { Select } from "@/components/Select";
@@ -516,6 +517,22 @@ export default function PayrollPage() {
           </table>
         </div>
       </Card>
+
+      {rows.length > 1 && (
+        <Card className="mise-feel mt-6">
+          <h3 className="font-semibold text-fg">Net pay by person</h3>
+          <p className="text-xs text-fg-faint">this run, largest first</p>
+          <div className="mise-well mt-4 rounded-xl p-3">
+            <Bars
+              formatValue={(v) => format(String(v))}
+              items={[...rows]
+                .sort((a, b) => parseFloat(b.net_pay) - parseFloat(a.net_pay))
+                .slice(0, 12)
+                .map((r) => ({ label: r.employee_name, value: Math.max(0, parseFloat(r.net_pay) || 0), color: "#d97742" }))}
+            />
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

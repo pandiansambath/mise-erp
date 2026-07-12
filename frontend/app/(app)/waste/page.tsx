@@ -11,7 +11,6 @@ import {
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars, Donut, Sparkline } from "@/components/charts";
-import { Select } from "@/components/Select";
 import { fmtQty, ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -19,12 +18,12 @@ import { can } from "@/lib/permissions";
 import { spotlight, useDeepLink } from "@/components/fx";
 
 const REASONS = [
-  "Spoiled / expired",
-  "Spillage / breakage",
-  "Over-preparation",
-  "Staff meal",
-  "Customer return",
-  "Other",
+  { label: "Spoiled / expired", emoji: "🥀" },
+  { label: "Spillage / breakage", emoji: "💥" },
+  { label: "Over-preparation", emoji: "🍲" },
+  { label: "Staff meal", emoji: "🍽️" },
+  { label: "Customer return", emoji: "↩️" },
+  { label: "Other", emoji: "🏷️" },
 ];
 
 export default function WastePage() {
@@ -38,7 +37,7 @@ export default function WastePage() {
 
   const [itemId, setItemId] = useState("");
   const [qty, setQty] = useState("");
-  const [reason, setReason] = useState(REASONS[0]);
+  const [reason, setReason] = useState(REASONS[0].label);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -69,7 +68,7 @@ export default function WastePage() {
       await api.post<WasteRow>("/inventory/waste", { item_id: itemId, quantity: qty, reason });
       setItemId("");
       setQty("");
-      setReason(REASONS[0]);
+      setReason(REASONS[0].label);
       await loadWaste();
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not log waste");
@@ -107,12 +106,15 @@ export default function WastePage() {
       byDay.set(d, (byDay.get(d) ?? 0) + (parseFloat(w.value) || 0));
     }
     const days: number[] = [];
+    const labels: string[] = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      days.push(byDay.get(d.toISOString().slice(0, 10)) ?? 0);
+      const iso = d.toISOString().slice(0, 10);
+      days.push(byDay.get(iso) ?? 0);
+      labels.push(d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }));
     }
-    return days;
+    return { days, labels };
   })();
 
   return (
@@ -144,15 +146,26 @@ export default function WastePage() {
                   ) : null}
                 </span>
               </label>
-              <label className="block">
+              <div className="block">
                 <span className="block text-xs font-medium text-fg-faint">Reason</span>
-                <Select
-                  value={reason}
-                  onChange={setReason}
-                  className="mt-1"
-                  options={REASONS.map((r) => ({ value: r, label: r }))}
-                />
-              </label>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {REASONS.map((r) => (
+                    <button
+                      key={r.label}
+                      type="button"
+                      onClick={() => setReason(r.label)}
+                      className={`mise-press rounded-xl px-3 py-2 text-xs font-medium transition ${
+                        reason === r.label
+                          ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
+                          : "mise-raised text-fg-soft"
+                      }`}
+                    >
+                      <span aria-hidden className="mr-1 text-sm">{r.emoji}</span>
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Button type="submit" variant="primary" busy={busy} busyLabel="Logging…">
                 Log waste
               </Button>
@@ -187,12 +200,12 @@ export default function WastePage() {
             <div className="mise-well mt-4 rounded-xl p-3">
               <Bars items={topItems} formatValue={(v) => format(String(v))} />
             </div>
-            {trend.some((v) => v > 0) && (
+            {trend.days.some((v) => v > 0) && (
               <div className="mise-well mt-3 rounded-xl p-3">
                 <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
                   Waste per day — last 14 days
                 </p>
-                <Sparkline data={trend} color="#f43f5e" height={40} className="w-full" />
+                <Sparkline data={trend.days} labels={trend.labels} formatValue={(v) => format(String(v))} color="#f43f5e" height={40} className="w-full" />
               </div>
             )}
           </Card>
