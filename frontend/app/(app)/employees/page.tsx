@@ -120,16 +120,38 @@ export default function EmployeesPage() {
       <PageHeader title="Employees" subtitle="Your team, pay details, and UK compliance." />
 
       {alerts.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
-          <p className="text-sm font-semibold text-amber-200">⚠️ Visa expiry alerts</p>
-          <ul className="mt-1 text-sm text-amber-300">
-            {alerts.map((a) => (
-              <li key={a.employee_id}>
-                {a.full_name} — visa {a.days_left < 0 ? `expired ${-a.days_left}d ago` : `expires in ${a.days_left}d`} ({a.visa_expiry_date})
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Card className="mise-feel mb-6 border-amber-400/30">
+          <p className="text-sm font-semibold text-amber-200">⚠️ Visa runway — who needs action, and when</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { label: "Expired", test: (d: number) => d < 0, tone: "border-rose-500/40 text-rose-300" },
+              { label: "≤ 30 days", test: (d: number) => d >= 0 && d <= 30, tone: "border-amber-400/40 text-amber-300" },
+              { label: "31–60 days", test: (d: number) => d > 30 && d <= 60, tone: "border-amber-400/25 text-amber-200" },
+              { label: "61–90 days", test: (d: number) => d > 60, tone: "border-line text-fg-soft" },
+            ].map((bucket) => {
+              const people = alerts.filter((a) => bucket.test(a.days_left));
+              return (
+                <div key={bucket.label} className={`mise-well rounded-xl border p-3 ${bucket.tone}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide">{bucket.label}</p>
+                  {people.length === 0 ? (
+                    <p className="mt-1 text-xs opacity-60">nobody 🎉</p>
+                  ) : (
+                    <ul className="mt-1.5 space-y-1">
+                      {people.map((a) => (
+                        <li key={a.employee_id} className="truncate text-xs" title={`${a.full_name} · ${a.visa_expiry_date}`}>
+                          {a.full_name}
+                          <span className="ml-1 opacity-70">
+                            {a.days_left < 0 ? `${-a.days_left}d ago` : `${a.days_left}d`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       )}
 
       {canWrite && (

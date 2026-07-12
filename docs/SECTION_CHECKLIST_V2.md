@@ -123,7 +123,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 17 · Employees
 - [x] Avatar-initial chips in the table
-- [ ] Visa-expiry timeline strip (due 30/60/90 days)
+- [x] Visa runway strip: Expired / ≤30 / 31–60 / 61–90 day buckets w/ people
 - [x] Pay-mix Donut (hourly vs salaried — weekly vs monthly payroll)
 
 ## 18 · Attendance
@@ -170,7 +170,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 26 · How-It-Works
 - [x] 13-topic hub + search + sims + tactile (Task C DONE) + books-chef tutor
-- [ ] Per-topic deep links FROM pages ("how is this worked out?" → hub topic)
+- [x] "How is this worked out?" links from Reports (Money/Payroll had them)
 
 ## 27 · Onboarding
 - [x] Press-feel CTAs

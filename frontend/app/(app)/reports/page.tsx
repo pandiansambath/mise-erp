@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, downloadFile, type PnL } from "@/lib/api";
 import { Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
@@ -101,7 +102,8 @@ export default function ReportsPage() {
       </div>
       <p className="mb-6 text-sm text-fg-faint">
         Showing <b className="text-fg-soft">{rangeCaption({ from, to })}</b> — every figure below is the
-        total for this period. Pick a quick preset or set exact From/To dates.
+        total for this period. Pick a quick preset or set exact From/To dates.{" "}
+        <Link href="/how-it-works" className="text-brand-400 underline">How is this worked out?</Link>
       </p>
 
       {loading ? (
