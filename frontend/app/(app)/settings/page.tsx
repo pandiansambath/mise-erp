@@ -167,7 +167,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      <Card className="mise-feel" id="s-account">
+      <Card className="mise-feel mb-6" id="s-account">
         <h3 className="font-semibold text-fg">Account</h3>
         <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
           <div>
@@ -179,6 +179,39 @@ export default function SettingsPage() {
             <dd className="font-medium text-fg">{user?.role.replace(/_/g, " ")}</dd>
           </div>
         </dl>
+      </Card>
+
+      <Card className="mise-feel border-rose-500/30">
+        <h3 className="font-semibold text-rose-300">Danger zone</h3>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-fg">Reset this device&apos;s local data</p>
+            <p className="text-xs text-fg-faint">clears theme, dismissed banners, tour progress and cached preferences on THIS browser — your restaurant data is untouched</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                const keep = localStorage.getItem("mise_token");
+                localStorage.clear();
+                if (keep) localStorage.setItem("mise_token", keep);
+              } catch { /* ignore */ }
+              window.location.reload();
+            }}
+            className="mise-press rounded-lg border border-rose-500/40 px-3 py-1.5 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+          >
+            Reset local data
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <div>
+            <p className="text-sm text-fg">Close your Mise account</p>
+            <p className="text-xs text-fg-faint">handled personally so nothing is lost by accident — email us and we action it same-day</p>
+          </div>
+          <a href="mailto:support@mise.app?subject=Close%20my%20Mise%20account" className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft">
+            Contact support
+          </a>
+        </div>
       </Card>
     </div>
   );

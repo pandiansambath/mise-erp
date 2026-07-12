@@ -921,6 +921,24 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-spotlight { animation: none; }
 }
 
+/* Page scroll hygiene: absolutely-positioned glows/auroras poke past the
+   viewport edge — clip them instead of growing a horizontal scrollbar.
+   (clip, not hidden: hidden would turn body into a scroll container and
+   break every position:sticky stage on the landing page.) */
+html, body { overflow-x: clip; }
+
+/* Slim, quiet scrollbar — the stock chunky one fights the cinema look. */
+html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transparent; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background: rgba(148, 163, 158, 0.3);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 158, 0.55); background-clip: content-box; }
+
 /* Phone cinema band: the 16:9 film plays at FULL native sharpness (no crop —
    cropping to 9:16 threw away two-thirds of the pixels and looked mushy).
    It sits centred over the 9:16 still, top/bottom edges dissolved by a mask
@@ -933,6 +951,34 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
   mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
 }
+
+/* Smoke plumes hugging the phone band's top/bottom seams — the 16:9 film
+   melts into the 9:16 still through drifting kitchen haze instead of ending
+   at a bare fade line. Sized taller than the band so the plumes overhang. */
+@keyframes mise-l-bandsmoke-k {
+  0%, 100% { transform: translate3d(-1.5%, -50%, 0) scale(1); }
+  50%      { transform: translate3d(1.5%, -50%, 0) scale(1.05); }
+}
+.mise-l-bandsmoke {
+  position: absolute;
+  left: -14%;
+  right: -14%;
+  top: 50%;
+  aspect-ratio: 1284 / 1050;
+  transform: translateY(-50%);
+  pointer-events: none;
+  background:
+    radial-gradient(42% 15% at 28% 19%, rgba(226, 217, 202, 0.16), transparent 70%),
+    radial-gradient(48% 16% at 70% 22%, rgba(198, 188, 172, 0.1), transparent 70%),
+    radial-gradient(46% 15% at 34% 81%, rgba(226, 217, 202, 0.13), transparent 70%),
+    radial-gradient(50% 17% at 74% 78%, rgba(198, 188, 172, 0.1), transparent 70%),
+    radial-gradient(85% 42% at 50% 50%, transparent 52%, rgba(4, 12, 9, 0.55) 80%, transparent 100%);
+  filter: blur(26px);
+  animation: mise-l-bandsmoke-k 9s ease-in-out infinite;
+  will-change: transform;
+  transition: opacity 900ms ease;
+}
+@media (prefers-reduced-motion: reduce) { .mise-l-bandsmoke { animation: none; } }
 
 /* A soft light-bloom "breath" that swells over the cinema stage exactly when
    a film hands back to its still — the eye follows the light, not the swap. */

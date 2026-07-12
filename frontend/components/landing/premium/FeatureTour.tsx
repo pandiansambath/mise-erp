@@ -290,6 +290,18 @@ const FEATURES = [
   },
 ];
 
+// Embers drifting through the tour's dark air — the copy column leaves a lot
+// of black between blocks on desktop; these keep that space alive.
+const TOUR_MOTES = [
+  { left: "8%", size: 5, tint: "rgba(234,183,138,0.7)", d: 0, t: 13, x: 34, o: 0.4 },
+  { left: "22%", size: 3, tint: "rgba(148,233,184,0.6)", d: 3.2, t: 11, x: -26, o: 0.35 },
+  { left: "38%", size: 4, tint: "rgba(226,217,202,0.55)", d: 6.1, t: 15, x: 18, o: 0.3 },
+  { left: "47%", size: 3, tint: "rgba(234,183,138,0.6)", d: 1.6, t: 12, x: -30, o: 0.35 },
+  { left: "60%", size: 5, tint: "rgba(148,233,184,0.5)", d: 4.4, t: 14, x: 24, o: 0.3 },
+  { left: "76%", size: 3, tint: "rgba(226,217,202,0.5)", d: 7.8, t: 12, x: -20, o: 0.3 },
+  { left: "90%", size: 4, tint: "rgba(234,183,138,0.55)", d: 2.7, t: 13, x: 28, o: 0.35 },
+];
+
 export default function FeatureTour() {
   const [active, setActive] = useState(0);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -323,6 +335,33 @@ export default function FeatureTour() {
         style={{ background: "radial-gradient(circle, rgba(16,185,129,0.10), rgba(234,183,138,0.06) 45%, transparent 70%)" }}
         aria-hidden
       />
+      {/* a second hearth on the copy side + embers rising through the section,
+          so the air between the copy blocks never reads as dead black */}
+      <div
+        className="pointer-events-none absolute left-[-10%] top-[55%] hidden h-[520px] w-[520px] rounded-full lg:block"
+        style={{ background: "radial-gradient(circle, rgba(234,183,138,0.08), rgba(16,185,129,0.05) 45%, transparent 70%)" }}
+        aria-hidden
+      />
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="sticky top-0 h-screen overflow-hidden">
+          {TOUR_MOTES.map((m, i) => (
+            <span
+              key={i}
+              className="mise-l-mote"
+              style={{
+                left: m.left,
+                width: m.size,
+                height: m.size,
+                background: m.tint,
+                animationDelay: `${m.d}s`,
+                ["--mote-t" as string]: `${m.t}s`,
+                ["--mote-x" as string]: `${m.x}px`,
+                ["--mote-o" as string]: m.o,
+              }}
+            />
+          ))}
+        </div>
+      </div>
       <div className="relative mx-auto max-w-6xl px-6 py-24 sm:px-10 sm:py-32">
         <Reveal>
           <SectionHead

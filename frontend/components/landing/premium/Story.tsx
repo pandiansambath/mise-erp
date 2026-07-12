@@ -127,6 +127,7 @@ function FilmLayer({
       className="absolute inset-0"
       style={{ opacity: seg === "warmup" || fading ? 0 : 1, transition: "opacity 900ms ease" }}
     >
+      {small && <span className="mise-l-bandsmoke" aria-hidden />}
       <video
         ref={v0}
         muted
@@ -271,8 +272,14 @@ export default function Story() {
               alt=""
               loading={i === 0 ? "eager" : "lazy"}
               decoding="async"
-              className={`absolute inset-0 h-full w-full object-cover ${st.base === i && !reduced ? "mise-l-ken" : ""}`}
-              style={{ opacity: st.base === i ? 1 : 0, transition: "opacity 900ms ease" }}
+              className={`absolute inset-0 h-full w-full object-cover ${reduced ? "" : "mise-l-ken"}`}
+              style={{
+                opacity: st.base === i ? 1 : 0,
+                transition: "opacity 900ms ease",
+                // pause, don't strip, the drift — class-toggling snapped the
+                // scale mid-crossfade and flickered on every beat change
+                animationPlayState: st.base === i ? "running" : "paused",
+              }}
             />
           ) : null,
         )}

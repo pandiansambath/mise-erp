@@ -369,7 +369,7 @@ function MobileTabBar({ onSearch }: { onSearch: () => void }) {
   return (
     <nav
       aria-label="Quick navigation"
-      className="mise-glass-panel fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line [padding-bottom:env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-paper/95 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md [padding-bottom:env(safe-area-inset-bottom)] lg:hidden"
     >
       {TABS.map((t) => {
         const active = pathname.startsWith(t.href);

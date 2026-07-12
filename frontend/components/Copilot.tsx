@@ -292,7 +292,7 @@ export function Copilot() {
 
       {open && (
         <div
-          className={`${closing ? "mise-copilot-out" : "mise-copilot-in"} mise-glass-panel fixed inset-x-2 bottom-2 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-2xl [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
+          className={`${closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-20 z-50 flex max-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
           role="dialog"
           aria-label="Mise Copilot"
         >

@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { spotlight, useDeepLink } from "@/components/fx";
+import ChefMascot from "@/components/auth/ChefMascot";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -24,6 +25,7 @@ export default function StockTakePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [applied, setApplied] = useState<{ n: number; loss: number; gain: number } | null>(null);
 
   // ⌘K "Start a stock take" (?focus=1) → spotlight the count sheet
   useDeepLink({ focus: () => spotlight("stock-count") }, !loading);
@@ -77,9 +79,12 @@ export default function StockTakePage() {
           notes: `Stock-take ${today()}`,
         });
       }
+      const loss = toApply.reduce((t, l) => t + Math.min(0, l.delta * (parseFloat(l.item.average_cost) || 0)), 0);
+      const gain = toApply.reduce((t, l) => t + Math.max(0, l.delta * (parseFloat(l.item.average_cost) || 0)), 0);
+      setApplied({ n: toApply.length, loss: Math.abs(loss), gain });
       setCounts({});
       await load();
-      setMsg(`Applied ${toApply.length} adjustment${toApply.length === 1 ? "" : "s"}. Stock reconciled.`);
+      setMsg(null);
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not apply counts");
     } finally {
@@ -97,6 +102,27 @@ export default function StockTakePage() {
       />
 
       {msg && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{msg}</p>}
+
+      {applied && (
+        <Card className="mise-pop-lg mise-feel mb-4 border-brand-400/30">
+          <div className="flex flex-wrap items-center gap-4">
+            <ChefMascot mood="serve" className="w-16 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-brand-300">Stock reconciled — {applied.n} adjustment{applied.n === 1 ? "" : "s"} applied</p>
+              <p className="text-xs text-fg-faint">the books now match the shelf</p>
+            </div>
+            <div className="flex gap-3 text-sm">
+              {applied.loss > 0 && (
+                <span className="mise-well rounded-lg px-3 py-1.5 text-rose-300">shrinkage −{format(String(applied.loss.toFixed(2)))}</span>
+              )}
+              {applied.gain > 0 && (
+                <span className="mise-well rounded-lg px-3 py-1.5 text-brand-300">found +{format(String(applied.gain.toFixed(2)))}</span>
+              )}
+              <button type="button" onClick={() => setApplied(null)} className="mise-press text-fg-faint hover:text-fg" aria-label="Dismiss">✕</button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Sticky summary */}
       <Card className="mb-4 flex flex-wrap items-center justify-between gap-3">

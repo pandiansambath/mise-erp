@@ -168,6 +168,13 @@ export default function Hero({ start }: { start: boolean }) {
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
             style={{ opacity: baseStill === "dish" ? 1 : 0, transition: "opacity 1000ms ease" }}
           />
+          {small && (
+            <span
+              className="mise-l-bandsmoke"
+              style={{ opacity: film === "playing" ? 1 : 0 }}
+              aria-hidden
+            />
+          )}
           <video
             ref={vidRef}
             muted

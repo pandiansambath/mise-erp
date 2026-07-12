@@ -56,11 +56,16 @@ export default function CineMedia({
     if (on !== undefined) return;
     const el = ref.current;
     if (!el) return;
+    // Hysteresis: arm at 30% visible, disarm only once FULLY off-screen —
+    // flapping at the 30% line mid-viewport made the stage flicker on scroll.
     const io = new IntersectionObserver(
       (entries) => {
-        for (const e of entries) setSeen(e.isIntersecting);
+        for (const e of entries) {
+          if (e.intersectionRatio >= 0.3) setSeen(true);
+          else if (!e.isIntersecting) setSeen(false);
+        }
       },
-      { threshold: 0.3 },
+      { threshold: [0, 0.3] },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -162,11 +167,23 @@ export default function CineMedia({
         alt=""
         loading="lazy"
         decoding="async"
-        className={`absolute inset-0 h-full w-full object-cover ${reduced || !active ? "" : "mise-l-ken"}`}
-        style={preStill ? { opacity: showPre ? 0 : 1, transition: "opacity 1000ms ease" } : undefined}
+        className={`absolute inset-0 h-full w-full object-cover ${reduced ? "" : "mise-l-ken"}`}
+        style={{
+          // pause (not remove) the drift off-screen — removing the class
+          // snapped the transform back to 1 and read as a flicker
+          animationPlayState: active ? "running" : "paused",
+          ...(preStill ? { opacity: showPre ? 0 : 1, transition: "opacity 1000ms ease" } : {}),
+        }}
       />
       {allowed ? (
         <>
+          {small && (
+            <span
+              className="mise-l-bandsmoke"
+              style={{ opacity: stage === "v0" || stage === "v1" ? 1 : 0 }}
+              aria-hidden
+            />
+          )}
           <video
             ref={v0}
             muted

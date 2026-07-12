@@ -75,7 +75,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 8 · Stock-take
 - [x] ⌘K deep link + spotlight
 - [x] Live variance chip per row while typing (was already live — verified)
-- [ ] Post-apply summary: total shrinkage Waffle
+- [x] Post-apply summary: total shrinkage Waffle (serve-chef card: n adjustments, shrinkage −£ / found +£ wells)
 - [x] Big neumorphic − / + steppers per row (tablet counting)
 
 ## 9 · Purchasing
@@ -166,7 +166,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 25 · Settings
 - [x] Raised-press buttons
 - [x] Section jump-nav pills (Display · Attendance rules · Payroll · Account) + wells/feel
-- [ ] Danger-zone red well card
+- [x] Danger-zone red well card (reset local device data + contact-support to close account)
 
 ## 26 · How-It-Works
 - [x] 13-topic hub + search + sims + tactile (Task C DONE) + books-chef tutor
