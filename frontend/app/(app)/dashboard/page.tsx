@@ -104,6 +104,7 @@ export default function DashboardPage() {
   const [low, setLow] = useState<LowStock[]>([]);
   const [week, setWeek] = useState<DayPoint[] | null>(null); // last 7 days, oldest first
   const [monthDays, setMonthDays] = useState<{ date: string; value: number }[]>([]); // ~5 weeks for the heatmap
+  const [tonight, setTonight] = useState<string[]>([]); // who's on the rota today
   const [curWeek, setCurWeek] = useState<PnL | null>(null);
   const [prevWeek, setPrevWeek] = useState<PnL | null>(null);
   const [setupDone, setSetupDone] = useState(true); // assume done → no flash; corrected in effect
@@ -157,6 +158,16 @@ export default function DashboardPage() {
     }
     if (seeInventory)
       jobs.push(api.get<LowStock[]>("/inventory/alerts/low-stock").then(setLow).catch(() => {}));
+    // who's cooking today — the rota says
+    {
+      const t = iso(ago(0));
+      jobs.push(
+        api
+          .get<{ employee_name: string }[]>(`/rota/shifts?date_from=${t}&date_to=${t}`)
+          .then((rows) => setTonight([...new Set(rows.map((r) => r.employee_name))]))
+          .catch(() => {}),
+      );
+    }
     Promise.all(jobs).finally(() => setLoading(false));
   }, [seeFinance, seeInventory]);
 
@@ -203,6 +214,15 @@ export default function DashboardPage() {
       />
 
       <p className="-mt-2 mb-5 text-xs text-fg-faint">
+        {tonight.length > 0 && (
+          <span className="mise-well mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-fg-soft">
+            <span aria-hidden>🧑‍🍳</span>
+            <b className="text-fg">{tonight.length}</b> on service today:{" "}
+            {tonight.slice(0, 3).map((n) => n.split(" ")[0]).join(", ")}
+            {tonight.length > 3 ? ` +${tonight.length - 3}` : ""}
+            <Link href="/rota" className="ml-1 text-brand-400 hover:underline">rota →</Link>
+          </span>
+        )}
         Time windows: <b className="text-fg-soft">Today</b> = since midnight ·{" "}
         <b className="text-fg-soft">Month</b> = 1st → today · <b className="text-fg-soft">This week vs last</b> ={" "}
         rolling last 7 days vs the 7 before. For any custom period, open{" "}

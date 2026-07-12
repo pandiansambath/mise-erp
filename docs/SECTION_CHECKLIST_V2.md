@@ -29,7 +29,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [x] Right-side gap fixed (empty-state card, never a hole)
 - [x] CalendarHeat "month rhythm" — GitHub-style takings heatmap, fed by the
       NEW /reports/sales-trend endpoint (dashboard's 7 pnl calls → 1 query)
-- [ ] Greeting row: "service tonight" hint from rota (who's on this evening)
+- [x] "N on service today: Wes, Sam +2" rota chip in the greeting row
 - [ ] Low-stock KPI → mini RadialBars preview on hover (glass popover)
 - [x] Chef empty states: shrugging maître fronts EVERY EmptyState app-wide
 
