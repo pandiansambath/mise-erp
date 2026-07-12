@@ -327,6 +327,48 @@ function AnnouncementBanner() {
   );
 }
 
+/** Phone-only bottom tab bar — thumb-reach navigation for the five daily stops. */
+function MobileTabBar({ onSearch }: { onSearch: () => void }) {
+  const pathname = usePathname();
+  const TABS = [
+    { href: "/dashboard", icon: "▦", label: "Home" },
+    { href: "/sales", icon: "🧾", label: "Sales" },
+    { href: "/inventory", icon: "📦", label: "Stock" },
+    { href: "/money", icon: "💰", label: "Money" },
+  ];
+  return (
+    <nav
+      aria-label="Quick navigation"
+      className="mise-glass-panel fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line [padding-bottom:env(safe-area-inset-bottom)] lg:hidden"
+    >
+      {TABS.map((t) => {
+        const active = pathname.startsWith(t.href);
+        return (
+          <Link
+            key={t.href}
+            href={t.href}
+            className={`mise-press flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
+              active ? "text-brand-400" : "text-fg-faint"
+            }`}
+          >
+            <span aria-hidden className={`text-lg leading-none ${active ? "" : "opacity-80"}`}>{t.icon}</span>
+            {t.label}
+            {active && <span aria-hidden className="mt-0.5 h-1 w-6 rounded-full bg-brand-500" />}
+          </Link>
+        );
+      })}
+      <button
+        type="button"
+        onClick={onSearch}
+        className="mise-press flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-fg-faint"
+      >
+        <span aria-hidden className="text-lg leading-none">⌕</span>
+        Search
+      </button>
+    </nav>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
@@ -487,6 +529,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Guided tour (walks through pages) + project-aware AI assistant. Both float
           on every page. The Copilot only appears when the hotel has AI enabled. */}
+      <MobileTabBar onSearch={() => setPaletteOpen(true)} />
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       {featureOn(hotel, "ai_copilot") && <Copilot />}
       <CommandPalette

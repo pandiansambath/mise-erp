@@ -280,7 +280,7 @@ export function Copilot() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Ask Mise Copilot"
-          className="mise-launcher-in group fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-brand-500 hover:shadow-xl active:scale-95 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6"
+          className="mise-launcher-in group fixed bottom-20 right-4 z-50 lg:bottom-6 lg:right-6 flex items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-brand-500 hover:shadow-xl active:scale-95 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
             <path d="M12 2.5l1.7 5.3a3 3 0 0 0 1.9 1.9L21 11.4l-5.3 1.7a3 3 0 0 0-1.9 1.9L12 20.3l-1.7-5.3a3 3 0 0 0-1.9-1.9L3 11.4l5.3-1.7a3 3 0 0 0 1.9-1.9z" />

@@ -210,5 +210,5 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 32 · App Shell
 - [x] ⌘K actions + glass palette + grouped nav
 - [ ] Notification center dropdown (bell → glass panel, mark-read)
-- [ ] Mobile bottom tab bar (5 tabs)
+- [x] Mobile bottom tab bar (Home/Sales/Stock/Money/Search, glass, safe-area)
 - [x] Keyboard shortcuts: g d/i/s/m/r/p jumps + ? opens ⌘K
