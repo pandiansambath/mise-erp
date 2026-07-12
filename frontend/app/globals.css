@@ -857,6 +857,19 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-spotlight { animation: none; }
 }
 
+/* Phone cinema band: the 16:9 film plays at FULL native sharpness (no crop —
+   cropping to 9:16 threw away two-thirds of the pixels and looked mushy).
+   It sits centred over the 9:16 still, top/bottom edges dissolved by a mask
+   so film and photo read as ONE scene. Element = the band box itself, so the
+   mask fades the actual video edges. */
+.mise-l-band {
+  aspect-ratio: 1284 / 716;
+  height: auto !important;
+  object-fit: cover;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
+}
+
 /* A soft light-bloom "breath" that swells over the cinema stage exactly when
    a film hands back to its still — the eye follows the light, not the swap. */
 @keyframes mise-l-bloom {

@@ -66,6 +66,31 @@ export default function CineMedia({
     return () => io.disconnect();
   }, [on]);
 
+  // Pre-warm: start fetching the films while the scene is still ~a screen
+  // away, so play() never waits on the network (preload="none" alone made
+  // every film stall on arrival — the "loading takes so much time" bug).
+  const warmed = useRef(false);
+  useEffect(() => {
+    if (!allowed) return;
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting && !warmed.current) {
+            warmed.current = true;
+            v0.current?.load();
+            v1.current?.load();
+            io.disconnect();
+          }
+        }
+      },
+      { rootMargin: "900px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [allowed]);
+
   const active = on !== undefined ? on : seen;
 
   // Play when active; rewind + re-arm when not.
@@ -150,7 +175,11 @@ export default function CineMedia({
             src={filmPath(videos[0], small)}
             onEnded={() => advance(0)}
             onError={() => setStage("settled")}
-            className="absolute inset-0 h-full w-full object-cover"
+            className={
+              small
+                ? "mise-l-band absolute left-0 top-1/2 w-full -translate-y-1/2"
+                : "absolute inset-0 h-full w-full object-cover"
+            }
             style={{ opacity: stage === "v0" ? 1 : 0, transition: "opacity 1100ms ease" }}
           />
           {videos[1] ? (
@@ -162,7 +191,11 @@ export default function CineMedia({
               src={filmPath(videos[1], small)}
               onEnded={() => advance(1)}
               onError={() => setStage("settled")}
-              className="absolute inset-0 h-full w-full object-cover"
+              className={
+                small
+                  ? "mise-l-band absolute left-0 top-1/2 w-full -translate-y-1/2"
+                  : "absolute inset-0 h-full w-full object-cover"
+              }
               style={{ opacity: stage === "v1" ? 1 : 0, transition: "opacity 1100ms ease" }}
             />
           ) : null}

@@ -135,7 +135,11 @@ function FilmLayer({
         src={filmPath(videos[0], small)}
         onEnded={advance}
         onError={onFail}
-        className="absolute inset-0 h-full w-full object-cover"
+        className={
+          small
+            ? "mise-l-band absolute left-0 top-1/2 w-full -translate-y-1/2"
+            : "absolute inset-0 h-full w-full object-cover"
+        }
         style={{ opacity: seg === "v1" ? 0 : 1, transition: "opacity 350ms ease" }}
       />
       {videos[1] ? (
@@ -147,7 +151,11 @@ function FilmLayer({
           src={filmPath(videos[1], small)}
           onEnded={onDone}
           onError={onDone}
-          className="absolute inset-0 h-full w-full object-cover"
+          className={
+            small
+              ? "mise-l-band absolute left-0 top-1/2 w-full -translate-y-1/2"
+              : "absolute inset-0 h-full w-full object-cover"
+          }
           style={{ opacity: seg === "v1" ? 1 : 0, transition: "opacity 350ms ease" }}
         />
       ) : null}
@@ -279,6 +287,34 @@ export default function Story() {
             fading={st.film.fading}
           />
         ) : null}
+
+        {/* Warm the NEXT beat's film into the HTTP cache while the current
+            still rests — by the time the user scrolls on, playback is instant
+            instead of waiting on the network ("loading takes so much time"). */}
+        {allowed && !st.film && BEATS[st.base + 1] && (
+          <video
+            key={`warm-${BEATS[st.base + 1].videos[0]}`}
+            src={filmPath(BEATS[st.base + 1].videos[0], small)}
+            preload="auto"
+            muted
+            playsInline
+            aria-hidden
+            tabIndex={-1}
+            className="hidden"
+          />
+        )}
+        {allowed && !st.film && st.base === 0 && (
+          <video
+            key="warm-first"
+            src={filmPath(BEATS[0].videos[0], small)}
+            preload="auto"
+            muted
+            playsInline
+            aria-hidden
+            tabIndex={-1}
+            className="hidden"
+          />
+        )}
 
         {/* smoke + bloom hide every film→still handoff */}
         {bloom > 0 && <HandoffVeil key={bloom} />}

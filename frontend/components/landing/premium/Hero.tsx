@@ -176,7 +176,11 @@ export default function Hero({ start }: { start: boolean }) {
             src={filmPath("fire-to-dish", small)}
             onEnded={() => setFilm("done")}
             onError={() => setFilm("done")}
-            className="absolute inset-0 h-full w-full object-cover"
+            className={
+              small
+                ? "mise-l-band absolute left-0 top-1/2 w-full -translate-y-1/2"
+                : "absolute inset-0 h-full w-full object-cover"
+            }
             style={{ opacity: film === "playing" ? 1 : 0, transition: "opacity 1000ms ease" }}
           />
           {/* smoke + bloom over the film→plate handoff */}
