@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
 import { useAuth } from "@/lib/auth";
@@ -203,6 +204,23 @@ export default function EmployeesPage() {
         </Card>
       )}
 
+      {employees.length > 1 && (
+        <Card className="mise-feel mb-6">
+          <h3 className="font-semibold text-fg">How the team is paid</h3>
+          <p className="text-xs text-fg-faint">hourly staff go on WEEKLY payroll runs; salaried on monthly</p>
+          <div className="mt-4">
+            <Donut
+              centerLabel="people"
+              centerValue={String(employees.length)}
+              segments={[
+                { label: "Hourly (weekly-paid)", value: employees.filter((e) => e.salary_type === "HOURLY").length, color: "#38bdf8" },
+                { label: "Monthly salary", value: employees.filter((e) => e.salary_type === "MONTHLY").length, color: "#10b981" },
+              ].filter((s) => s.value > 0)}
+            />
+          </div>
+        </Card>
+      )}
+
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -225,7 +243,12 @@ export default function EmployeesPage() {
                   return (
                     <tr key={e.id} className="border-b border-line">
                       <td className="px-5 py-3 text-fg-faint">{e.employee_code}</td>
-                      <td className="px-5 py-3 font-medium text-fg">{e.full_name}</td>
+                      <td className="px-5 py-3 font-medium text-fg">
+                        <span aria-hidden className="mise-raised mr-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold uppercase text-brand-300">
+                          {e.full_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("")}
+                        </span>
+                        {e.full_name}
+                      </td>
                       <td className="px-5 py-3 text-fg-faint">{e.job_title || "—"}</td>
                       <td className="px-5 py-3 text-right text-fg-soft">
                         {e.salary_type === "MONTHLY"

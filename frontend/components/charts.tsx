@@ -189,6 +189,7 @@ export function Donut({
   legend = true,
   formatValue = (v: number) => v.toLocaleString("en-GB"),
   onSegmentClick,
+  onSelect,
   className = "",
 }: {
   segments: DonutSegment[];
@@ -201,6 +202,9 @@ export function Donut({
   formatValue?: (v: number) => string;
   /** drill-down: called when a slice/legend row is clicked a second time */
   onSegmentClick?: (segment: DonutSegment) => void;
+  /** fires whenever the selected slice changes (null = deselected) — lets the
+      page show a SUB-CHART of what's inside the slice */
+  onSelect?: (segment: DonutSegment | null) => void;
   className?: string;
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.35);
@@ -214,9 +218,13 @@ export function Donut({
   const pick = (i: number, s: DonutSegment) => {
     if (sel === i) {
       if (onSegmentClick) onSegmentClick(s); // second tap = drill down
-      else setSel(null);
+      else {
+        setSel(null);
+        onSelect?.(null);
+      }
     } else {
       setSel(i);
+      onSelect?.(s);
     }
   };
   const active = sel != null ? segments[sel] : null;

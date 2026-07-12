@@ -842,6 +842,19 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   box-shadow: 0 24px 70px rgba(31, 26, 22, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
+/* The punch clock's ripple: a ring bursts out of the big button on every
+   punch — the most physical moment in the app. */
+@keyframes mise-punch-ring-k {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); opacity: 1; }
+  100% { box-shadow: 0 0 0 30px rgba(16, 185, 129, 0); opacity: 0; }
+}
+.mise-punch-ring {
+  animation: mise-punch-ring-k 700ms ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-punch-ring { animation: none; }
+}
+
 /* Running-low inventory rows breathe a soft amber — attention without alarm. */
 @keyframes mise-low-pulse-k {
   0%, 100% { background-color: transparent; }
@@ -852,15 +865,14 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   .mise-low-pulse { animation: none; background-color: rgba(245, 158, 11, 0.05); }
 }
 
-/* The auth-card chef blinks every few seconds — thin skin-toned lids scale
-   down over the eyes and snap back. */
-@keyframes mise-chef-blink-k {
-  0%, 93%, 100% { transform: scaleY(1); }
-  95.5%, 97.5% { transform: scaleY(24); }
+/* The chef medallion breathes — barely, like something alive. */
+@keyframes mise-chef-breathe-k {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.022); }
 }
-.mise-chef-blink { animation: mise-chef-blink-k 4.6s infinite; }
+.mise-chef-breathe { animation: mise-chef-breathe-k 4.8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .mise-chef-blink { animation: none; }
+  .mise-chef-breathe { animation: none; }
 }
 
 /* One-click actions land HERE: a copper ring swells around the form the palette

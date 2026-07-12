@@ -90,7 +90,7 @@ function LoginForm({ active }: { active: boolean }) {
       className={`mise-glass relative space-y-4 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
     >
       {/* the maître — watches your email, covers his eyes for the password */}
-      <div className="pointer-events-none absolute -top-[96px] left-1/2 w-40 -translate-x-1/2">
+      <div className="pointer-events-none absolute -top-16 left-1/2 w-28 -translate-x-1/2">
         <ChefMascot mood={chef.mood} look={chef.look} />
       </div>
       <div>
@@ -168,7 +168,7 @@ function SignupForm({ active }: { active: boolean }) {
       className={`mise-glass relative space-y-3.5 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
     >
       {/* the maître greets new houses too */}
-      <div className="pointer-events-none absolute -top-[96px] left-1/2 w-40 -translate-x-1/2">
+      <div className="pointer-events-none absolute -top-16 left-1/2 w-28 -translate-x-1/2">
         <ChefMascot mood={chef.mood} look={chef.look} />
       </div>
       <div>

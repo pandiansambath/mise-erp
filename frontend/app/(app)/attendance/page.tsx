@@ -7,6 +7,8 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { useHotelTime } from "@/lib/time";
 import { can } from "@/lib/permissions";
+import { Select } from "@/components/Select";
+import ChefMascot from "@/components/auth/ChefMascot";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -21,6 +23,10 @@ export default function AttendancePage() {
   const [rows, setRows] = useState<Record<string, AttendanceRow>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // The punch clock: who's at the pad + the press ripple
+  const [punchSel, setPunchSel] = useState("");
+  const [punchRipple, setPunchRipple] = useState(0);
 
   // Manual edit / back-date (for missed punches)
   const [editEmp, setEditEmp] = useState<Employee | null>(null);
@@ -151,6 +157,66 @@ export default function AttendancePage() {
       </div>
 
       {error && <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+
+      {/* ── THE PUNCH CLOCK — one big physical button, chef looking on ── */}
+      {isToday && canWrite && employees.length > 0 && (() => {
+        const emp = employees.find((e) => e.id === punchSel) ?? employees[0];
+        const r = rows[emp.id];
+        const state: { type: string | null; label: string; sub: string; tone: string } = !r?.clock_in
+          ? { type: "CLOCK_IN", label: "Clock in", sub: "start the shift", tone: "text-brand-300" }
+          : r.on_break
+            ? { type: "BREAK_END", label: "End break", sub: "back to the pass", tone: "text-amber-300" }
+            : !r.clock_out
+              ? { type: "CLOCK_OUT", label: "Clock out", sub: "wrap the shift", tone: "text-rose-300" }
+              : { type: null, label: "Done ✓", sub: `worked ${fmtHours(r.working_hours)}`, tone: "text-fg-faint" };
+        return (
+          <Card className="mise-feel mb-6">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="w-28 shrink-0 sm:w-32">
+                <ChefMascot mood={state.type === null ? "happy" : r?.on_break ? "cover" : "watch"} look={0} />
+              </div>
+              <div className="min-w-[12rem] flex-1">
+                <h3 className="font-semibold text-fg">Punch clock</h3>
+                <p className="mb-2 text-xs text-fg-faint">pick a person, press the button — that&apos;s the whole job</p>
+                <Select
+                  value={emp.id}
+                  onChange={setPunchSel}
+                  options={employees.map((e) => {
+                    const er = rows[e.id];
+                    const flag = !er?.clock_in ? "· not in yet" : er.on_break ? "· on break" : er.clock_out ? "· done" : "· working";
+                    return { value: e.id, label: `${e.full_name} ${flag}` };
+                  })}
+                />
+                {r?.clock_in && (
+                  <p className="mt-2 text-xs text-fg-faint">
+                    in {fmtTime(r.clock_in)}{r.break_minutes > 0 ? ` · break ${r.break_minutes}m` : ""}
+                    {r.clock_out ? ` · out ${fmtTime(r.clock_out)}` : ""}
+                  </p>
+                )}
+              </div>
+              <div className="relative mx-auto sm:mx-0">
+                {punchRipple > 0 && (
+                  <span key={punchRipple} aria-hidden className="mise-punch-ring absolute inset-0 rounded-full" />
+                )}
+                <button
+                  type="button"
+                  disabled={state.type === null}
+                  onClick={() => {
+                    setPunchRipple((n) => n + 1);
+                    if (state.type) punch(emp.id, state.type);
+                  }}
+                  className={`mise-raised mise-press relative grid h-36 w-36 place-items-center rounded-full text-center disabled:opacity-60 ${state.tone}`}
+                >
+                  <span>
+                    <span className="block text-xl font-bold">{state.label}</span>
+                    <span className="block text-[11px] text-fg-faint">{state.sub}</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
 
       <Card className="p-0">
         <div className="overflow-x-auto">

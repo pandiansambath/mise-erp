@@ -351,6 +351,9 @@ export default function MoneyPage() {
   const [pnl, setPnl] = useState<PnL | null>(null);
   const [openInfo, setOpenInfo] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // chart → sub-chart: the items inside the tapped stock category
+  const [catItems, setCatItems] = useState<Record<string, { label: string; value: number }[]>>({});
+  const [selCat, setSelCat] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -362,6 +365,22 @@ export default function MoneyPage() {
       })
       .then(setPnl)
       .catch(() => setErr("Could not load money insights — refresh to retry."));
+    // Per-item stock values, grouped by category — feeds the donut's sub-chart.
+    api
+      .get<{ name: string; category: string | null; current_stock: string; average_cost: string; is_active: boolean }[]>("/inventory/items")
+      .then((items) => {
+        const by: Record<string, { label: string; value: number }[]> = {};
+        for (const i of items) {
+          if (!i.is_active) continue;
+          const v = (parseFloat(i.current_stock) || 0) * (parseFloat(i.average_cost) || 0);
+          if (v <= 0) continue;
+          const cat = i.category?.trim() || "Uncategorised";
+          (by[cat] ??= []).push({ label: i.name, value: v });
+        }
+        for (const k of Object.keys(by)) by[k].sort((a, b) => b.value - a.value);
+        setCatItems(by);
+      })
+      .catch(() => {});
   }, []);
 
   if (err) return <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{err}</p>;
@@ -427,7 +446,8 @@ export default function MoneyPage() {
             />
           </div>
 
-          {/* Every £1 as 100 squares — the most beginner-readable proportion chart */}
+          {/* Every £1 as 100 squares — only when there IS money to split */}
+          {parseFloat(pnl.net_sales) > 0 && (
           <div className="mise-well mt-4 rounded-xl p-4">
             <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
               Every £1 you took in — square by square
@@ -441,6 +461,7 @@ export default function MoneyPage() {
               ]}
             />
           </div>
+          )}
 
           {/* Plain-English one-liner */}
           <div className="mise-well mt-4 rounded-xl px-4 py-3 text-sm text-fg-soft">
@@ -450,9 +471,9 @@ export default function MoneyPage() {
             <b className={parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}>{format(pnl.net_profit)}</b>.
           </div>
 
-          <div className="mt-3 space-y-2.5 text-sm">
+          <div className="mise-well mt-3 space-y-2.5 rounded-2xl p-3 text-sm">
             {/* 1 — money in */}
-            <div className="mise-well mise-feel flex items-center justify-between rounded-xl border-l-4 border-brand-500/60 px-3 py-2.5">
+            <div className="mise-raised mise-feel flex items-center justify-between rounded-xl border-l-4 border-brand-500/60 px-3 py-2.5">
               <span className="flex items-center text-fg">
                 <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-500/15 text-xs font-semibold text-brand-300">1</span>
                 Money in <span className="ml-1 text-xs text-fg-faint">· sales</span>
@@ -462,7 +483,7 @@ export default function MoneyPage() {
             </div>
 
             {/* 2 — cost of food */}
-            <div className="mise-well mise-feel flex items-center justify-between rounded-xl border-l-4 border-rose-400/50 px-3 py-2.5">
+            <div className="mise-raised mise-feel flex items-center justify-between rounded-xl border-l-4 border-rose-400/50 px-3 py-2.5">
               <span className="flex items-center text-fg">
                 <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-400/15 text-xs font-semibold text-rose-300">2</span>
                 Cost of the food you sold
@@ -482,7 +503,7 @@ export default function MoneyPage() {
             )}
 
             {/* = gross */}
-            <div className="mise-well mise-feel flex items-center justify-between rounded-xl px-3 py-2.5">
+            <div className="mise-raised mise-feel flex items-center justify-between rounded-xl px-3 py-2.5">
               <span className="flex flex-wrap items-center font-semibold text-fg">
                 = Gross profit
                 <InfoDot id="gross" open={openInfo === "gross"} onToggle={setOpenInfo} text="What's left after the direct cost of the food — but BEFORE rent and bills. (Money in − food cost.)" />
@@ -492,7 +513,7 @@ export default function MoneyPage() {
             </div>
 
             {/* 3 — running costs */}
-            <div className="mise-well mise-feel flex items-center justify-between rounded-xl border-l-4 border-rose-400/50 px-3 py-2.5">
+            <div className="mise-raised mise-feel flex items-center justify-between rounded-xl border-l-4 border-rose-400/50 px-3 py-2.5">
               <span className="flex items-center text-fg">
                 <span className="mr-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-400/15 text-xs font-semibold text-rose-300">3</span>
                 Running costs
@@ -690,12 +711,13 @@ export default function MoneyPage() {
             <p className="mt-3 text-sm text-fg-faint">No stock recorded yet.</p>
           ) : (
             <>
-            <p className="mt-1 text-[11px] text-fg-faint">tap a slice to see its share · tap again to open those items in Inventory</p>
+            <p className="mt-1 text-[11px] text-fg-faint">tap a slice → what&apos;s inside it appears below · tap again to open Inventory</p>
             <div className="mt-4">
               <Donut
                 centerLabel="on hand"
                 centerValue={format(data.stock_value.total)}
                 formatValue={(v) => format(String(v))}
+                onSelect={(s) => setSelCat(s?.label ?? null)}
                 onSegmentClick={(s) => router.push(`/inventory?cat=${encodeURIComponent(s.label)}`)}
                 segments={data.stock_value.by_category.map((c, i) => ({
                   label: c.category,
@@ -704,6 +726,27 @@ export default function MoneyPage() {
                 }))}
               />
             </div>
+            {selCat && (catItems[selCat]?.length ?? 0) > 0 && (
+              <div className="mise-well mise-pop mt-4 rounded-xl p-3">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Inside {selCat} — {catItems[selCat].length} item{catItems[selCat].length === 1 ? "" : "s"}
+                  </p>
+                  <Link href={`/inventory?cat=${encodeURIComponent(selCat)}`} className="text-[11px] font-medium text-brand-400 hover:underline">
+                    Open in Inventory →
+                  </Link>
+                </div>
+                <Bars
+                  items={catItems[selCat].slice(0, 8).map((x) => ({ ...x, color: "#d97742" }))}
+                  formatValue={(v) => format(String(v))}
+                />
+                {catItems[selCat].length > 8 && (
+                  <p className="mt-2 text-[11px] text-fg-faint">
+                    + {catItems[selCat].length - 8} more — see them all in Inventory
+                  </p>
+                )}
+              </div>
+            )}
             </>
           )}
         </Card>
