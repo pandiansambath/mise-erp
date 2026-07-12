@@ -202,9 +202,10 @@ announcements broadcast · g-key shortcuts + "?" palette.
       composer + withdraw, dismissible shell banner, audited)
 - [x] FEATURE: per-hotel health chips — Active (traded/logged in ≤3d) /
       Quiet (≤14d) / Dormant, from last_login + sales entries 7d
-- [ ] FEATURE: read-only impersonation ("view as hotel") — server-enforced, audited
-- [ ] FEATURE: operator audit tab (platform.* timeline)
-- [ ] FEATURE: signup funnel (onboarding-completed flag per hotel)
+- [x] FEATURE: read-only impersonation — 15-min `imp` token, EVERY write endpoint
+      refuses it server-side, purple in-app banner, audited, tested
+- [x] FEATURE: operator audit trail card (all platform.* actions, newest first)
+- [x] FEATURE: signup funnel — signed up → recorded first sale, with stalled count
 - [ ] Suspension notice on login for suspended hotels (they see WHY)
 
 ## 32 · App Shell

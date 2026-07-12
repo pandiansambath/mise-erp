@@ -32,6 +32,8 @@ async def get_current_user(
     user = await get_user_by_id(db, payload["sub"])
     if user is None or not user.is_active:
         raise _CREDENTIALS_EXC
+    # Operator "view as hotel" tokens are read-only; require() enforces it.
+    user.is_impersonated_session = bool(payload.get("imp"))  # transient, not persisted
     return user
 
 
@@ -39,6 +41,13 @@ def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
     """Dependency factory enforcing a single permission string."""
 
     async def checker(user: User = Depends(get_current_user)) -> User:
+        if getattr(user, "is_impersonated_session", False) and not (
+            permission.endswith(":read") or permission.endswith(":self")
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Read-only support view - changes are disabled while impersonating.",
+            )
         if not has_permission(user.role, permission):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

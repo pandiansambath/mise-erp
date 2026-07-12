@@ -22,7 +22,7 @@ type HotelRow = {
   created_at: string; has_logo: boolean; is_active: boolean;
   user_count: number; admin_email: string | null; plan: string; max_users: number;
   features: Record<string, boolean>;
-  last_active?: string | null; sales_entries_7d?: number;
+  last_active?: string | null; sales_entries_7d?: number; has_traded?: boolean;
 };
 
 /** Active = traded/logged in this week · Quiet = seen in 14d · Dormant = gone cold */
@@ -42,6 +42,37 @@ type Announcement = {
   id: string; message: string; level: string;
   expires_at: string | null; is_active: boolean; created_at: string | null;
 };
+
+/** The operator's own trail — every platform.* action, newest first. */
+function OperatorAuditCard() {
+  type Ev = { id: string; user_email: string; action: string; summary: string; created_at: string | null };
+  const [events, setEvents] = useState<Ev[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    api.get<{ events: Ev[] }>("/platform/audit").then((r) => setEvents(r.events)).catch(() => {});
+  }, []);
+  if (events.length === 0) return null;
+  return (
+    <Card className="mise-feel mb-6">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
+        <h3 className="font-semibold text-fg">🧾 Operator audit trail</h3>
+        <span className="text-xs text-fg-faint">{events.length} actions · {open ? "hide ▴" : "show ▾"}</span>
+      </button>
+      {open && (
+        <ul className="mise-fade mt-3 max-h-72 space-y-1.5 overflow-y-auto pr-1">
+          {events.map((e) => (
+            <li key={e.id} className="mise-well flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs">
+              <span className="min-w-0 flex-1 truncate text-fg">{e.summary}</span>
+              <span className="shrink-0 text-fg-faint">
+                {e.user_email} · {e.created_at ? new Date(e.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 /** 📣 Broadcast a banner into every hotel's app shell. */
 function AnnouncementsCard() {
@@ -325,6 +356,17 @@ function HotelCard({
           </button>
           <button
             type="button"
+            title="Open this hotel's app on a 15-minute READ-ONLY token (audited)"
+            onClick={async () => {
+              const r = await api.post<{ token: string }>(`/platform/hotels/${hotel.id}/impersonate`, {});
+              window.open(`/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
+            }}
+            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-violet-300"
+          >
+            👁 View as
+          </button>
+          <button
+            type="button"
             onClick={toggleSuspend}
             disabled={suspendBusy}
             className={`mise-press rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${
@@ -529,6 +571,41 @@ export default function ControlRoomPage() {
           </Card>
         </div>
       )}
+
+      {hotels.length > 0 && (
+        <Card className="mise-feel mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-semibold text-fg">Signup funnel</h3>
+            <span className="text-xs text-fg-faint">signed up → actually trading</span>
+          </div>
+          {(() => {
+            const traded = hotels.filter((h) => h.has_traded).length;
+            const pct = hotels.length > 0 ? (traded / hotels.length) * 100 : 0;
+            return (
+              <div className="mt-4 space-y-2">
+                <div className="mise-well flex items-center justify-between rounded-xl px-4 py-2.5 text-sm">
+                  <span className="text-fg-soft">Signed up</span>
+                  <b className="font-mono text-fg">{hotels.length}</b>
+                </div>
+                <div className="mise-well relative overflow-hidden rounded-xl px-4 py-2.5 text-sm">
+                  <span aria-hidden className="absolute inset-y-0 left-0 bg-brand-500/15 transition-all duration-700" style={{ width: `${pct}%` }} />
+                  <span className="relative flex items-center justify-between">
+                    <span className="text-fg-soft">Recorded their first sale</span>
+                    <b className="font-mono text-brand-300">{traded} · {pct.toFixed(0)}%</b>
+                  </span>
+                </div>
+                {hotels.length - traded > 0 && (
+                  <p className="text-[11px] text-fg-faint">
+                    {hotels.length - traded} hotel{hotels.length - traded === 1 ? " is" : "s are"} stalled at an empty dashboard — a call away from activating.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </Card>
+      )}
+
+      <OperatorAuditCard />
 
       <AnnouncementsCard />
 

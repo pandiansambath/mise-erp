@@ -84,3 +84,32 @@ async def test_suspend_blocks_login_and_reactivate_restores(
     assert r.status_code == 200 and r.json()["is_active"] is True
     r = await client.post("/api/auth/login", json={"email": "locked@x.com", "password": "password123"})
     assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_impersonation_token_is_read_only(client, make_user, auth_header, db, hotel):
+    owner = await _make_owner(make_user, db, email="op6@mise.com")
+    # the hotel's admin the operator will "view as"
+    await make_user("victim-admin@x.com", Role.SUPER_ADMIN.value)
+
+    r = await client.post(
+        f"/api/platform/hotels/{hotel.id}/impersonate", headers=auth_header(owner)
+    )
+    assert r.status_code == 200
+    imp = {"Authorization": f"Bearer {r.json()['token']}"}
+
+    # reads work…
+    ok = await client.get("/api/inventory/items", headers=imp)
+    assert ok.status_code == 200
+    # …writes are refused, clearly
+    blocked = await client.post(
+        "/api/inventory/items",
+        headers=imp,
+        json={"name": "Nope", "unit": "kg"},
+    )
+    assert blocked.status_code == 403
+    assert "read-only" in blocked.json()["detail"].lower()
+
+    # and the act itself is on the operator audit trail
+    trail = await client.get("/api/platform/audit", headers=auth_header(owner))
+    assert any(e["action"] == "platform.impersonate" for e in trail.json()["events"])

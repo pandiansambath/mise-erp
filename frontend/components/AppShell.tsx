@@ -278,6 +278,36 @@ function ShellAurora() {
   );
 }
 
+/** Purple ribbon while the operator is inside a hotel on a read-only token. */
+function ImpersonationBanner() {
+  const [imp, setImp] = useState(false);
+  useEffect(() => {
+    try {
+      const tok = localStorage.getItem("mise_token");
+      if (!tok) return;
+      const payload = JSON.parse(atob(tok.split(".")[1] ?? ""));
+      setImp(Boolean(payload?.imp));
+    } catch { /* not a JWT — ignore */ }
+  }, []);
+  if (!imp) return null;
+  return (
+    <div className="flex items-center justify-center gap-3 border-b border-violet-400/30 bg-violet-500/15 px-4 py-1.5 text-xs font-medium text-violet-200">
+      <span aria-hidden>🔍</span>
+      Read-only support view — changes are disabled · expires in ≤15 min
+      <button
+        type="button"
+        onClick={() => {
+          try { localStorage.removeItem("mise_token"); } catch { /* ignore */ }
+          window.location.assign("/login");
+        }}
+        className="mise-press rounded-md border border-violet-300/40 px-2 py-0.5 hover:bg-violet-400/10"
+      >
+        Leave
+      </button>
+    </div>
+  );
+}
+
 /** Operator broadcast banner — platform announcements shown to every hotel
  *  until they expire; each user can dismiss (remembered locally). */
 function AnnouncementBanner() {
@@ -522,6 +552,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* pb is generous so the floating "Ask Mise" launcher (bottom-right) never
             covers a page's last action button. */}
         <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8">
+          <ImpersonationBanner />
           <AnnouncementBanner />
           {children}
         </main>

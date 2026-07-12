@@ -17,11 +17,15 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(subject: str, role: str, expires_minutes: int | None = None) -> str:
+def create_access_token(
+    subject: str, role: str, expires_minutes: int | None = None, *, impersonated: bool = False
+) -> str:
     expire = datetime.now(UTC) + timedelta(
         minutes=expires_minutes or settings.access_token_expire_minutes
     )
-    payload = {"sub": str(subject), "role": role, "exp": expire}
+    payload: dict = {"sub": str(subject), "role": role, "exp": expire}
+    if impersonated:
+        payload["imp"] = True  # read-only support view — writes are refused server-side
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 

@@ -16,11 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit_service
+from app.audit.models import AuditEvent
 from app.auth import service as auth_service
 from app.auth.deps import get_current_user
 from app.auth.models import Role, User
 from app.core.database import get_db
-from app.core.security import hash_password
+from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
 from app.platform_admin import features as feat
 from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
@@ -98,6 +99,9 @@ async def list_hotels(
         .group_by(DailySales.hotel_id)
     )
     sales_7d = {hid: n for hid, n in sales_rows.all()}
+    # funnel signal: has this hotel EVER recorded a sale?
+    traded_rows = await db.execute(select(DailySales.hotel_id).distinct())
+    has_traded = {hid for (hid,) in traded_rows.all()}
 
     items = []
     for h in hotels:
@@ -117,6 +121,7 @@ async def list_hotels(
             "plan": h.plan,
             "max_users": feat.plan_max_users(h.plan),
             "features": _merged_features(h),
+            "has_traded": h.id in has_traded,
             "last_active": max(
                 (u.last_login for u in hu if u.last_login), default=None
             ).isoformat() if any(u.last_login for u in hu) else None,
@@ -333,6 +338,55 @@ async def active_announcements(
     )).scalars().all()
     live = [a for a in rows if a.expires_at is None or a.expires_at > now]
     return {"announcements": [_announcement_out(a) for a in live]}
+
+
+@router.post("/hotels/{hotel_id}/impersonate")
+async def impersonate_hotel(
+    hotel_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Read-only support view: a 15-minute token for the hotel's admin carrying
+    the `imp` claim — every write endpoint refuses it server-side. Audited."""
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel not found")
+    admin = (await db.execute(
+        select(User)
+        .where(User.hotel_id == hotel_id, User.role == Role.SUPER_ADMIN.value)
+        .order_by(User.created_at)
+    )).scalars().first()
+    if admin is None:
+        raise HTTPException(status_code=404, detail="Hotel has no admin user")
+    token = create_access_token(str(admin.id), admin.role, expires_minutes=15, impersonated=True)
+    await audit_service.record(
+        db, hotel_id=hotel_id, user=operator, action="platform.impersonate",
+        summary=f"Operator opened a 15-min READ-ONLY view as {admin.email}",
+        entity_type="user", entity_id=admin.id,
+    )
+    return {"token": token, "email": admin.email, "expires_minutes": 15}
+
+
+@router.get("/audit")
+async def platform_audit(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_owner),
+) -> dict:
+    """Every operator action across all hotels (platform.*), newest first."""
+    rows = (await db.execute(
+        select(AuditEvent)
+        .where(AuditEvent.action.like("platform.%"))
+        .order_by(AuditEvent.created_at.desc())
+        .limit(100)
+    )).scalars().all()
+    return {"events": [
+        {
+            "id": str(e.id), "hotel_id": str(e.hotel_id), "user_email": e.user_email,
+            "action": e.action, "summary": e.summary,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in rows
+    ]}
 
 
 @router.post("/hotels/{hotel_id}/suspend")
