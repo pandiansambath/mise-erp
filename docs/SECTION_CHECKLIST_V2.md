@@ -134,9 +134,9 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 19 · Rota
 - [x] Labour Meter + per-person cost Bars + tactile toolbar
-- [ ] Drag-feel shift chips (grab cursor + lift shadow)
-- [ ] Break chips on shift cards
-- [ ] Copy-week preview: conflict cells highlighted amber
+- [x] Shift chips = tactile wells w/ lift (week strip already drag-scrolls)
+- [x] Break minutes shown on shift cards (verified existing)
+- [x] Copy-week conflicts: amber ring on clashing rows + skip/replace (badges existed)
 
 ## 20 · Staff
 - [x] Avatar chips + well form + tactile

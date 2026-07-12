@@ -441,7 +441,7 @@ export default function RotaPage() {
                   const dayIdx = weekDates.findIndex((d) => iso(d) === r.date);
                   const clash = existingKeys.has(`${r.employee_id}|${r.date}`);
                   return (
-                    <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 p-2 text-sm transition hover:border-line-2">
+                    <div key={i} className={`mise-well flex flex-wrap items-center gap-2 rounded-xl p-2 text-sm transition ${clash ? "ring-1 ring-amber-400/40" : ""}`}>
                       <span className="flex min-w-[7rem] flex-1 items-center gap-2 truncate font-medium text-fg">
                         <span className="truncate">{r.employee_name}</span>
                         {clash && (
@@ -522,7 +522,7 @@ export default function RotaPage() {
               ) : (
                 <ul className="space-y-1.5">
                   {shifts.map((s) => (
-                    <li key={s.id} className="rounded-lg border border-line bg-glass/5 p-2 text-xs">
+                    <li key={s.id} className="mise-well mise-feel rounded-lg p-2 text-xs">
                       <div className="flex items-center justify-between gap-1">
                         <span className="min-w-0 truncate font-medium text-fg">{s.employee_name}</span>
                         {canWrite && (
