@@ -49,6 +49,10 @@ class ResetPassword(BaseModel):
     new_password: str = Field(min_length=8, max_length=72)  # bcrypt hard limit
 
 
+class SuspendBody(BaseModel):
+    active: bool  # False = suspend (logins blocked), True = reactivate
+
+
 def _merged_features(hotel: Hotel) -> dict[str, bool]:
     """Every registered feature resolved to on/off for this hotel."""
     return {f.key: hotel.feature_on(f.key) for f in feat.FEATURES}
@@ -227,3 +231,26 @@ async def reset_password(
         summary=f"Password reset for {target.email}", entity_type="user", entity_id=target.id,
     )
     return {"ok": True, "email": target.email}
+
+
+@router.post("/hotels/{hotel_id}/suspend")
+async def suspend_hotel(
+    hotel_id: uuid.UUID,
+    body: SuspendBody,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Suspend (block all logins) or reactivate a hotel. Data is untouched —
+    people just can't sign in while suspended."""
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel not found")
+    hotel.is_active = body.active
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=hotel_id, user=operator,
+        action="platform.suspend" if not body.active else "platform.reactivate",
+        summary=f"Hotel {'reactivated' if body.active else 'SUSPENDED'}: {hotel.name}",
+        entity_type="hotel", entity_id=hotel_id,
+    )
+    return {"is_active": hotel.is_active}

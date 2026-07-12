@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, ApiError } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Spinner, StatCard, Toggle } from "@/components/ui";
+import { Donut, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -28,31 +29,15 @@ const PLAN_TONE: Record<string, "slate" | "amber" | "green"> = {
   starter: "slate", pro: "amber", enterprise: "green",
 };
 
-function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-50 ${
-        on ? "bg-brand-500" : "bg-glass/20"
-      }`}
-    >
-      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${on ? "translate-x-4" : "translate-x-0.5"}`} />
-    </button>
-  );
-}
-
 function HotelCard({
-  hotel, features, plans, onToggle, onApplyPlan,
+  hotel, features, plans, onToggle, onApplyPlan, onSuspend,
 }: {
   hotel: HotelRow;
   features: FeatureDef[];
   plans: PlanDef[];
   onToggle: (key: string, value: boolean) => Promise<void>;
   onApplyPlan: (plan: string) => Promise<void>;
+  onSuspend: (active: boolean) => Promise<void>;
 }) {
   const confirm = useConfirm();
   const [resetOpen, setResetOpen] = useState(false);
@@ -64,6 +49,22 @@ function HotelCard({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [planSel, setPlanSel] = useState(hotel.plan);
   const [planBusy, setPlanBusy] = useState(false);
+  const [suspendBusy, setSuspendBusy] = useState(false);
+
+  async function toggleSuspend() {
+    const suspending = hotel.is_active;
+    const ok = await confirm({
+      title: suspending ? `Suspend ${hotel.name}?` : `Reactivate ${hotel.name}?`,
+      message: suspending
+        ? "Every user of this hotel is blocked from logging in until you reactivate. No data is deleted."
+        : "Users of this hotel will be able to log in again.",
+      confirmText: suspending ? "Suspend hotel" : "Reactivate",
+      tone: suspending ? "danger" : "default",
+    });
+    if (!ok) return;
+    setSuspendBusy(true);
+    try { await onSuspend(!suspending); } finally { setSuspendBusy(false); }
+  }
 
   async function applyPlan() {
     if (planSel === hotel.plan) return;
@@ -126,7 +127,7 @@ function HotelCard({
   }
 
   return (
-    <Card className="space-y-4">
+    <Card className="mise-feel space-y-4">
       {/* header */}
       <div className="flex items-start gap-3">
         {hotel.has_logo ? (
@@ -157,7 +158,7 @@ function HotelCard({
       </div>
 
       {/* plan */}
-      <div className="rounded-xl border border-line bg-paper-2/40 p-3">
+      <div className="mise-well rounded-xl p-3">
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">Subscription plan</p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-[9rem] flex-1">
@@ -171,7 +172,7 @@ function HotelCard({
             type="button"
             onClick={applyPlan}
             disabled={planBusy || planSel === hotel.plan}
-            className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+            className="mise-press rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
           >
             {planBusy ? "Applying…" : "Apply plan"}
           </button>
@@ -182,7 +183,7 @@ function HotelCard({
       </div>
 
       {/* feature toggles */}
-      <div className="rounded-xl border border-line bg-paper-2/40 p-3">
+      <div className="mise-well rounded-xl p-3">
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">Features</p>
         <div className="space-y-2">
           {features.map((f) => {
@@ -200,17 +201,31 @@ function HotelCard({
         </div>
       </div>
 
-      {/* password reset */}
+      {/* password reset + suspend */}
       <div>
-        <button
-          type="button"
-          onClick={openReset}
-          className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft transition hover:bg-paper-2"
-        >
-          🔑 {resetOpen ? "Close" : "Reset a password"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={openReset}
+            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
+          >
+            🔑 {resetOpen ? "Close" : "Reset a password"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleSuspend}
+            disabled={suspendBusy}
+            className={`mise-press rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${
+              hotel.is_active
+                ? "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                : "border-brand-500/40 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20"
+            }`}
+          >
+            {suspendBusy ? "…" : hotel.is_active ? "⛔ Suspend" : "▶ Reactivate"}
+          </button>
+        </div>
         {resetOpen && (
-          <div className="mise-fade mt-3 space-y-2 rounded-xl border border-line bg-paper-2/40 p-3">
+          <div className="mise-fade mise-well mt-3 space-y-2 rounded-xl p-3">
             {users === null ? (
               <p className="text-sm text-fg-faint">Loading users…</p>
             ) : users.length === 0 ? (
@@ -233,14 +248,14 @@ function HotelCard({
                     value={pw}
                     onChange={(e) => setPw(e.target.value)}
                     placeholder="temporary password"
-                    className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={submitReset}
                   disabled={busy || !targetId || pw.length < 8}
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   {busy ? "Setting…" : "Set password"}
                 </button>
@@ -311,6 +326,11 @@ export default function ControlRoomPage() {
     }
   }
 
+  async function suspend(hotelId: string, active: boolean) {
+    const res = await api.post<{ is_active: boolean }>(`/platform/hotels/${hotelId}/suspend`, { active });
+    setHotels((hs) => hs.map((h) => (h.id === hotelId ? { ...h, is_active: res.is_active } : h)));
+  }
+
   async function toggle(hotelId: string, key: string, value: boolean) {
     const prev = hotels;
     setHotels((hs) => hs.map((h) => (h.id === hotelId ? { ...h, features: { ...h.features, [key]: value } } : h)));
@@ -352,6 +372,52 @@ export default function ControlRoomPage() {
         <StatCard label="Features" value={String(features.length)} accent="amber" hint="per hotel" />
       </div>
 
+      {/* platform analytics — computed live from the fleet */}
+      {hotels.length > 0 && (
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="mise-feel">
+            <h3 className="font-semibold text-fg">Signups — last 12 months</h3>
+            <p className="text-xs text-fg-faint">new hotels joining Mise per month</p>
+            {(() => {
+              const now = new Date();
+              const months: string[] = [];
+              for (let i = 11; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              }
+              const counts = months.map(
+                (m) => hotels.filter((h) => h.created_at.slice(0, 7) === m).length,
+              );
+              return (
+                <div className="mise-well mt-4 rounded-xl p-4">
+                  <Sparkline data={counts} height={56} className="w-full" />
+                  <div className="mt-2 flex justify-between text-[10px] text-fg-faint">
+                    <span>{months[0]}</span>
+                    <span>{counts.reduce((s, n) => s + n, 0)} total</span>
+                    <span>{months[11]}</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </Card>
+          <Card className="mise-feel">
+            <h3 className="font-semibold text-fg">Fleet by plan</h3>
+            <p className="text-xs text-fg-faint">who&apos;s on which tier</p>
+            <div className="mt-4">
+              <Donut
+                centerLabel="hotels"
+                centerValue={String(hotels.length)}
+                segments={[
+                  { label: "Starter", value: hotels.filter((h) => h.plan === "starter").length, color: "#94a3b8" },
+                  { label: "Pro", value: hotels.filter((h) => h.plan === "pro").length, color: "#f59e0b" },
+                  { label: "Enterprise", value: hotels.filter((h) => h.plan === "enterprise").length, color: "#10b981" },
+                ].filter((s) => s.value > 0)}
+              />
+            </div>
+          </Card>
+        </div>
+      )}
+
       {plans.length > 0 && (
         <Card className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -362,14 +428,14 @@ export default function ControlRoomPage() {
             <button
               onClick={savePrices}
               disabled={savingPrices}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {savingPrices ? "Saving…" : "Save prices"}
             </button>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {plans.map((p) => (
-              <div key={p.key} className="rounded-xl border border-line bg-paper-2/40 p-3">
+              <div key={p.key} className="mise-well rounded-xl p-3">
                 <p className="flex items-center justify-between text-sm font-medium text-fg">
                   {p.label}
                   <span className="text-[11px] text-fg-faint">
@@ -380,7 +446,7 @@ export default function ControlRoomPage() {
                   value={priceEdits[p.key] ?? ""}
                   onChange={(e) => setPriceEdits({ ...priceEdits, [p.key]: e.target.value })}
                   placeholder="e.g. £79/mo"
-                  className="mt-2 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+                  className="mise-well mt-2 w-full rounded-lg px-3 py-2 text-sm outline-none"
                 />
               </div>
             ))}
@@ -394,7 +460,7 @@ export default function ControlRoomPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search hotels by name, city or admin email…"
-          className="w-full max-w-md rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25"
+          className="mise-well w-full max-w-md rounded-lg px-3 py-2 text-sm outline-none"
         />
       </div>
 
@@ -403,7 +469,7 @@ export default function ControlRoomPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {filtered.map((h) => (
-            <HotelCard key={h.id} hotel={h} features={features} plans={plans} onToggle={(k, v) => toggle(h.id, k, v)} onApplyPlan={(p) => applyPlan(h.id, p)} />
+            <HotelCard key={h.id} hotel={h} features={features} plans={plans} onToggle={(k, v) => toggle(h.id, k, v)} onApplyPlan={(p) => applyPlan(h.id, p)} onSuspend={(a) => suspend(h.id, a)} />
           ))}
         </div>
       )}

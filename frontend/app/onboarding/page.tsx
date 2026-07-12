@@ -313,8 +313,8 @@ function ImportStep({
             ))}
           </div>
           <div className="mt-4 flex gap-3">
-            <button onClick={() => setRows(null)} disabled={busy} className="rounded-xl border border-white/15 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5">Choose another</button>
-            <button onClick={commit} disabled={busy} className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
+            <button onClick={() => setRows(null)} disabled={busy} className="mise-press rounded-xl border border-white/15 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5">Choose another</button>
+            <button onClick={commit} disabled={busy} className="mise-press flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
               {busy ? "Adding…" : `Add all ${rows.length}`}
             </button>
           </div>
@@ -338,7 +338,7 @@ function ImportStep({
       <div className="mt-8 flex items-center justify-between">
         <button onClick={onNext} className="text-sm text-white/50 transition hover:text-white/80">Skip for now →</button>
         {done !== null && (
-          <button onClick={onNext} className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/15">Continue →</button>
+          <button onClick={onNext} className="mise-press rounded-xl bg-white/10 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/15">Continue →</button>
         )}
       </div>
     </div>
@@ -407,7 +407,7 @@ function CostsStep({ onNext }: { onNext: () => void }) {
       {saved && <p className="mise-pop-lg mt-3 text-sm font-medium text-emerald-300">✓ Saved</p>}
       <div className="mt-8 flex items-center justify-between">
         <button onClick={onNext} className="text-sm text-white/50 transition hover:text-white/80">Skip →</button>
-        <button onClick={save} disabled={busy} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
+        <button onClick={save} disabled={busy} className="mise-press rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
           {busy ? "Saving…" : "Save & continue →"}
         </button>
       </div>
@@ -466,7 +466,7 @@ function ReviewStep({ onNext, onRestart }: { onNext: () => void; onRestart: () =
           <button onClick={onNext} className="text-sm text-white/50 transition hover:text-white/80">
             I&apos;ll do it later →
           </button>
-          <button onClick={onRestart} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110">
+          <button onClick={onRestart} className="mise-press rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110">
             Import now →
           </button>
         </div>
@@ -518,7 +518,7 @@ function ReviewStep({ onNext, onRestart }: { onNext: () => void; onRestart: () =
           ← Back
         </button>
         {last ? (
-          <button onClick={onNext} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110">
+          <button onClick={onNext} className="mise-press rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-semibold text-white hover:brightness-110">
             Looks right →
           </button>
         ) : (

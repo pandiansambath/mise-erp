@@ -45,8 +45,14 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password"
         )
-    token = create_access_token(subject=str(user.id), role=user.role)
     hotel = await _hotel_or_404(db, user.hotel_id)
+    # Suspended hotel → nobody in it can log in (platform operator excepted).
+    if not hotel.is_active and not getattr(user, "is_platform_owner", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is suspended. Contact Mise support.",
+        )
+    token = create_access_token(subject=str(user.id), role=user.role)
     return TokenResponse(
         access_token=token,
         user=UserOut.model_validate(user),
