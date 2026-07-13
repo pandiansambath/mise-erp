@@ -84,7 +84,7 @@ function InfoDot({
           e.stopPropagation();
           onToggle(id);
         }}
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-line text-[10px] font-bold leading-none text-fg-faint transition-colors hover:border-brand-400 hover:text-brand-300"
+        className="ml-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-line text-[10px] font-bold leading-none text-fg-faint transition-colors hover:border-brand-400 hover:text-brand-300"
         aria-label="What does this mean?"
       >
         i

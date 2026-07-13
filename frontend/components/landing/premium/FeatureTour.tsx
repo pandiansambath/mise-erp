@@ -387,8 +387,8 @@ export default function FeatureTour() {
               >
                 <Reveal>
                   <div
-                    className={`rounded-2xl border p-6 backdrop-blur-sm transition-colors duration-500 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none ${
-                      active === i ? "border-brand-400/30 bg-white/[0.04]" : "border-white/10 bg-white/[0.02]"
+                    className={`rounded-2xl border p-6 transition-colors duration-500 lg:border-0 lg:bg-transparent lg:p-0 ${
+                      active === i ? "border-brand-400/30 bg-ink-900/80" : "border-white/10 bg-ink-900/60"
                     }`}
                   >
                     <span

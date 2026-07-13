@@ -727,7 +727,7 @@ export default function MoneyPage() {
               </p>
             ) : (
               <>
-                <div className="mt-3 grid grid-cols-3 gap-4">
+                <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-fg-faint">Ideal (menu)</p>
                     <p className="mt-1 text-2xl font-semibold text-fg">{fcv.ideal_pct}%</p>

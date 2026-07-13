@@ -1201,3 +1201,79 @@ html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transpa
 @media (prefers-reduced-motion: reduce) {
   .mise-l-nebula, .mise-l-nebula--rev, .mise-l-moon, .mise-l-star { animation: none; }
 }
+
+/* ── PHONE FLICKER KILL ──────────────────────────────────────────────────
+   Animated `filter` (aurora hue-melt) and N full-screen drifting stills force
+   per-frame re-rasterisation on mobile GPUs — the scroll flicker. Phones get
+   the static (still gorgeous) versions; desktop keeps the full melt. */
+@media (max-width: 767px) {
+  .mise-aurora-shift { animation: none; }
+  .mise-l-ken { animation-play-state: paused !important; }
+  .mise-l-nebula { filter: blur(16px); }
+  .mise-l-bandsmoke { filter: blur(14px); }
+}
+
+/* Sun rays sweeping behind the Copilot star. */
+@keyframes mise-l-rays-k { to { transform: rotate(360deg); } }
+.mise-l-rays {
+  position: absolute;
+  inset: -34px;
+  border-radius: 9999px;
+  background: repeating-conic-gradient(rgba(167, 243, 208, 0.16) 0deg 4deg, transparent 4deg 15deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent 52%, #000 60%, transparent 82%);
+  mask: radial-gradient(farthest-side, transparent 52%, #000 60%, transparent 82%);
+  animation: mise-l-rays-k 40s linear infinite;
+  will-change: transform;
+}
+/* The star breathes — a slow corona flare. */
+@keyframes mise-l-flare-k {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 0.95; transform: scale(1.18); }
+}
+.mise-l-flare { animation: mise-l-flare-k 7s ease-in-out infinite; will-change: transform, opacity; }
+
+/* A comet crossing the system, then a long quiet. */
+@keyframes mise-l-comet-k {
+  0%   { opacity: 0; transform: translate3d(-8vw, 0, 0) rotate(-24deg); }
+  3%   { opacity: 0.9; }
+  11%  { opacity: 0; transform: translate3d(46vw, 14vh, 0) rotate(-24deg); }
+  100% { opacity: 0; transform: translate3d(46vw, 14vh, 0) rotate(-24deg); }
+}
+.mise-l-comet {
+  position: absolute;
+  height: 2px;
+  width: 86px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.9));
+  box-shadow: 0 0 8px rgba(226, 232, 240, 0.5);
+  animation: mise-l-comet-k 17s linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Asteroid-belt debris: dashed elliptical rings, gently twinkling. */
+@keyframes mise-l-belt-k { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.75; } }
+.mise-l-belt { animation: mise-l-belt-k 6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-l-rays, .mise-l-flare, .mise-l-comet, .mise-l-belt { animation: none; }
+  .mise-l-comet { opacity: 0; }
+}
+
+/* Native date/time/week/month pickers, dressed for the house. The popup
+   calendar follows the app theme via color-scheme on the shell. */
+input[type="date"], input[type="time"], input[type="week"], input[type="month"] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+  border-radius: 6px;
+  padding: 2px;
+  transition: opacity 150ms ease, background 150ms ease;
+}
+input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--color-brand-400) 20%, transparent);
+}
+input::-webkit-datetime-edit-fields-wrapper { padding: 0; }

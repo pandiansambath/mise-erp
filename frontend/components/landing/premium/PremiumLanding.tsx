@@ -374,19 +374,24 @@ export default function PremiumLanding() {
     // never looks frozen), settles at 100, then the curtain lifts.
     const t0 = performance.now();
     let shown = 0;
+    let last = t0;
     let raf = 0;
-    const loop = () => {
+    // TIME-based easing (not per-frame): identical feel at any frame rate.
+    const loop = (now: number) => {
       if (cancelled) return;
-      const elapsed = performance.now() - t0;
-      const crawl = Math.min(88, elapsed / 45); // steady drift to 88% by ~4s
+      const dt = Math.min(100, now - last);
+      last = now;
+      const elapsed = now - t0;
+      const crawl = Math.min(88, elapsed / 30); // steady drift to 88% by ~2.6s
       const goal = real >= 1 ? 100 : Math.max(real * 100, Math.min(crawl, 88));
-      shown = Math.min(100, shown + Math.max(goal > shown ? 0.25 : 0, (goal - shown) * 0.085));
+      const k = 1 - Math.pow(0.9, dt / 16.7);
+      shown = Math.min(100, shown + Math.max(goal > shown ? dt * 0.02 : 0, (goal - shown) * k));
       setPct(Math.round(shown));
-      if (shown >= 99.4 && real >= 1 && elapsed >= 1100) {
+      if (shown >= 99.4 && real >= 1 && elapsed >= 900) {
         setPct(100);
         window.setTimeout(() => {
           if (!cancelled) setReady(true);
-        }, 320);
+        }, 300);
         return;
       }
       raf = requestAnimationFrame(loop);

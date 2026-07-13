@@ -161,11 +161,18 @@ function OrbitStage() {
         aria-hidden
       >
         <span className="absolute -inset-[12%] rounded-[50%] border border-white/5" />
+        {/* the asteroid belt: dashed debris rings, twinkling out of phase */}
+        <span className="mise-l-belt absolute -inset-[6%] rounded-[50%] border border-dashed border-white/15" />
+        <span className="mise-l-belt absolute -inset-[8%] rounded-[50%] border border-dotted border-copper-300/20" style={{ animationDelay: "3s" }} />
         <span className="absolute inset-[10%] rounded-[50%] border border-dashed border-white/[0.04]" />
       </div>
+      {/* two comets on long, offset journeys */}
+      <span className="mise-l-comet left-[4%] top-[16%]" style={{ animationDelay: "2.5s" }} aria-hidden />
+      <span className="mise-l-comet left-[38%] top-[6%]" style={{ animationDelay: "10.5s", animationDuration: "23s" }} aria-hidden />
       {/* the orb — the still centre of the system */}
       <div className="absolute left-1/2 top-1/2 z-10 h-20 w-20 -translate-x-1/2 -translate-y-1/2 sm:h-24 sm:w-24">
-        <span className="absolute -inset-9 rounded-full bg-brand-400/15 blur-2xl" />
+        <span className="mise-l-rays" aria-hidden />
+        <span className="mise-l-flare absolute -inset-9 rounded-full bg-brand-400/15 blur-2xl" />
         <span className="absolute -inset-4 rounded-full bg-copper-400/10 blur-xl" />
         <span
           className="mise-l-orb absolute inset-0 rounded-full"
@@ -208,6 +215,16 @@ function OrbitStage() {
                   boxShadow: `inset -5px -7px 12px rgba(0,0,0,0.6), inset 3px 4px 7px rgba(255,255,255,0.3), 0 0 16px ${s.hue}3d`,
                 }}
               />
+              {/* surface weather: faint latitude bands + a specular glint */}
+              <span
+                aria-hidden
+                className="absolute inset-0 overflow-hidden rounded-full opacity-25"
+                style={{
+                  background: "repeating-linear-gradient(14deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 7px)",
+                  mixBlendMode: "overlay",
+                }}
+              />
+              <span aria-hidden className="absolute left-[24%] top-[18%] h-1.5 w-1.5 rounded-full bg-white/80 blur-[1.5px]" />
               {/* the icon lives on the surface */}
               <span aria-hidden className="absolute inset-0 grid place-items-center text-base drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]">
                 {s.icon}
