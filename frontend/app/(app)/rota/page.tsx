@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars, Meter } from "@/components/charts";
@@ -144,6 +144,13 @@ export default function RotaPage() {
   // ── Jira-style drag & drop: pick a shift card up, drop it on another day ──
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropDay, setDropDay] = useState<string | null>(null);
+  // after a drop: which card just moved (glows), and the undo ticket
+  const [justMoved, setJustMoved] = useState<string | null>(null);
+  const [lastMove, setLastMove] = useState<{
+    newId: string; name: string; fromDate: string; toDate: string;
+    employee_id: string; start_time: string; end_time: string; break_minutes: number;
+  } | null>(null);
+  const moveTimer = useRef<number>(0);
 
   async function moveShift(id: string | null, targetDate: string) {
     setDropDay(null);
@@ -154,7 +161,7 @@ export default function RotaPage() {
     // optimistic: the card lands in its new day instantly
     setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: targetDate } : x)));
     try {
-      await api.post("/rota/shifts", {
+      const created = await api.post<Shift>("/rota/shifts", {
         employee_id: sh.employee_id,
         date: targetDate,
         start_time: sh.start_time,
@@ -163,11 +170,55 @@ export default function RotaPage() {
       });
       await api.delete(`/rota/shifts/${sh.id}`);
       await reload();
+      // mark the traveller + open the keep/undo ticket
+      setJustMoved(created.id);
+      setLastMove({
+        newId: created.id, name: sh.employee_name, fromDate, toDate: targetDate,
+        employee_id: sh.employee_id, start_time: sh.start_time, end_time: sh.end_time,
+        break_minutes: sh.break_minutes,
+      });
+      window.clearTimeout(moveTimer.current);
+      moveTimer.current = window.setTimeout(() => {
+        setLastMove(null);
+        setJustMoved(null);
+      }, 12000);
     } catch (err) {
       setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: fromDate } : x)));
       setMsg(err instanceof ApiError ? err.message : "Could not move the shift");
     }
   }
+
+  const undoMove = useCallback(async () => {
+    const m = lastMove;
+    if (!m) return;
+    setLastMove(null);
+    setJustMoved(null);
+    window.clearTimeout(moveTimer.current);
+    try {
+      await api.post("/rota/shifts", {
+        employee_id: m.employee_id, date: m.fromDate,
+        start_time: m.start_time, end_time: m.end_time, break_minutes: m.break_minutes,
+      });
+      await api.delete(`/rota/shifts/${m.newId}`);
+      await reload();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not undo the move");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMove]);
+
+  // Ctrl+Z / ⌘Z takes the move back while the ticket is showing
+  useEffect(() => {
+    if (!lastMove) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undoMove();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lastMove, undoMove]);
 
   // Load any source week's shifts into the editable preview, mapped onto THIS week's
   // matching weekdays. Source defaults to last week but can be stepped to any week.
@@ -294,7 +345,12 @@ export default function RotaPage() {
 
   if (loading && !labour) return <Spinner />;
 
-  const byDay = (d: Date) => shifts.filter((s) => s.date === iso(d));
+  // Day columns always sort by START TIME (ties: name) — a dropped shift slots
+  // into its time position, and no other card ever appears to jump.
+  const byDay = (d: Date) =>
+    shifts
+      .filter((s) => s.date === iso(d))
+      .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.employee_name.localeCompare(b.employee_name));
   const labourTone =
     !labour || parseFloat(labour.net_sales) <= 0
       ? "text-fg"
@@ -585,10 +641,15 @@ export default function RotaPage() {
                         setDropDay(null);
                       }}
                       title={canWrite ? "Drag onto another day to move this shift" : undefined}
-                      className={`mise-well mise-feel rounded-lg p-2 text-xs ${canWrite ? "cursor-grab active:cursor-grabbing" : ""} ${
+                      className={`mise-well mise-feel relative rounded-lg p-2 text-xs ${canWrite ? "cursor-grab active:cursor-grabbing" : ""} ${
                         dragId === s.id ? "opacity-40 ring-1 ring-brand-400/50" : ""
-                      }`}
+                      } ${justMoved === s.id ? "mise-spotlight ring-1 ring-copper-400/50" : ""}`}
                     >
+                      {justMoved === s.id && (
+                        <span className="absolute -right-1.5 -top-1.5 rounded-full bg-copper-500 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
+                          moved
+                        </span>
+                      )}
                       <div className="flex items-center justify-between gap-1">
                         <span className="min-w-0 truncate font-medium text-fg">{s.employee_name}</span>
                         {canWrite && (
@@ -608,6 +669,35 @@ export default function RotaPage() {
           );
         })}
       </div>
+
+      {lastMove && (
+        <div className="mise-pop fixed inset-x-4 bottom-24 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-copper-400/30 bg-paper-2/95 px-4 py-3 shadow-2xl shadow-black/50 backdrop-blur-xl lg:bottom-8">
+          <span aria-hidden>✥</span>
+          <p className="min-w-0 flex-1 text-sm text-fg">
+            Moved <b>{lastMove.name.split(" ")[0]}</b>{" "}
+            <span className="text-fg-faint">
+              {new Date(lastMove.fromDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} →{" "}
+              {new Date(lastMove.toDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })}
+            </span>{" "}
+            — keep it?
+          </p>
+          <button
+            type="button"
+            onClick={() => { setLastMove(null); setJustMoved(null); }}
+            className="mise-press shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            Keep ✓
+          </button>
+          <button
+            type="button"
+            onClick={undoMove}
+            className="mise-press shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-fg-soft"
+            title="Ctrl+Z / ⌘Z"
+          >
+            Undo ⌫
+          </button>
+        </div>
+      )}
 
       {labour && labour.by_employee.length > 0 && (
         <Card className="mise-feel mt-6">

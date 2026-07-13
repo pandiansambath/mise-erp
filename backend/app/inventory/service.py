@@ -416,9 +416,14 @@ async def rename_category(db: AsyncSession, hotel_id: uuid.UUID, old: str, new: 
     return result.rowcount or 0
 
 
-async def seed_starter_items(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
+async def seed_starter_items(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    chosen: list[tuple[str, str, str]] | None = None,
+) -> dict:
     """Create the curated starter catalogue (name + unit + category only) for a hotel.
-    Skips any name that already exists (active OR archived) so it's safe to re-run."""
+    `chosen` (from the preview picker) seeds only those rows — with the user's
+    edited categories. Skips any name that already exists (active OR archived)."""
     from app.inventory.starter import STARTER_ITEMS
 
     existing = {
@@ -429,7 +434,7 @@ async def seed_starter_items(db: AsyncSession, hotel_id: uuid.UUID) -> dict:
     }
     added: list[str] = []
     skipped: list[str] = []
-    for name, unit, category in STARTER_ITEMS:
+    for name, unit, category in chosen if chosen is not None else STARTER_ITEMS:
         nm = normalize_name(name)
         if nm.lower() in existing:
             skipped.append(nm)

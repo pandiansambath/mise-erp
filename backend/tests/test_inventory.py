@@ -388,3 +388,33 @@ async def test_item_pack_fields_roundtrip(client, make_user, auth_header):
     items = (await client.get("/api/inventory/items", headers=h)).json()
     oil = next(i for i in items if i["name"] == "Cooking Oil")
     assert oil["pack_unit"] == "box" and oil["pack_size"] == "12.000"
+
+
+@pytest.mark.asyncio
+async def test_seed_starter_preview_and_selective(client, make_user, auth_header):
+    """Preview lists the catalogue with exists flags; POSTing a chosen subset
+    (with an edited category) seeds exactly that."""
+    mgr = await make_user("seedpick@x.com", Role.MANAGER.value)
+    h = auth_header(mgr)
+
+    prev = await client.get("/api/inventory/seed-starter", headers=h)
+    assert prev.status_code == 200
+    rows = prev.json()["items"]
+    assert len(rows) > 10
+    assert all("exists" in r and "category" in r for r in rows)
+
+    res = await client.post(
+        "/api/inventory/seed-starter",
+        headers=h,
+        json={"items": [{"name": "Picker Basmati", "unit": "kg", "category": "My Grains"}]},
+    )
+    assert res.status_code == 200
+    assert res.json()["added"] == ["Picker Basmati"]
+
+    items = await client.get("/api/inventory/items", headers=h)
+    row = next(i for i in items.json() if i["name"] == "Picker Basmati")
+    assert row["category"] == "My Grains"
+
+    # preview now flags it as existing
+    prev2 = await client.get("/api/inventory/seed-starter", headers=h)
+    assert prev2.status_code == 200

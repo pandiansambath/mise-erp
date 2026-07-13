@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
@@ -15,7 +16,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import Column, TemplateSpec
 from app.inventory import export, service
-from app.inventory.models import MovementType
+from app.inventory.models import Item, MovementType
 from app.inventory.schemas import (
     CategoryRename,
     ItemCreate,
@@ -121,15 +122,52 @@ async def update_item(
     return ItemOut.model_validate(item)
 
 
+@router.get("/seed-starter")
+async def seed_starter_preview(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> dict:
+    """The starter catalogue, flagged with what this hotel already has — feeds
+    the pick-and-edit modal before anything is written."""
+    from app.inventory.starter import STARTER_ITEMS
+
+    existing = {
+        n.lower()
+        for (n,) in (
+            await db.execute(select(Item.name).where(Item.hotel_id == user.hotel_id))
+        ).all()
+    }
+    return {
+        "items": [
+            {"name": n, "unit": u, "category": c, "exists": n.lower() in existing}
+            for n, u, c in STARTER_ITEMS
+        ]
+    }
+
+
+class SeedItemIn(BaseModel):
+    name: str
+    unit: str
+    category: str = "Other"
+
+
+class SeedRequest(BaseModel):
+    items: list[SeedItemIn] = []
+
+
 @router.post("/seed-starter")
 async def seed_starter(
+    payload: SeedRequest | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("inventory:write")),
 ) -> dict:
     """One-click: add the curated starter catalogue (common restaurant items, name +
     unit + category only) so a new hotel isn't empty. Re-runnable — existing names
     are skipped. Prices/suppliers are left blank for the owner to set via Vendors."""
-    result = await service.seed_starter_items(db, user.hotel_id)
+    chosen = (
+        [(i.name, i.unit, i.category) for i in payload.items] if payload and payload.items else None
+    )
+    result = await service.seed_starter_items(db, user.hotel_id, chosen)
     if result["added"]:
         await audit.record(
             db, hotel_id=user.hotel_id, user=user, action="inventory.seed_starter",

@@ -294,24 +294,44 @@ export default function InventoryPage() {
     }
   }
 
-  // Add the curated starter catalogue (name + unit only) in one click, so a new
-  // hotel doesn't start with an empty inventory. Existing names are skipped.
+  // "Add common items" opens a pick-and-edit preview of the curated catalogue:
+  // untick anything you don't want, rename categories, THEN add.
+  type SeedRow = { name: string; unit: string; category: string; exists: boolean; include: boolean };
+  const [seedRows, setSeedRows] = useState<SeedRow[] | null>(null);
+
   async function addCommonItems() {
-    const ok = await confirm({
-      title: "Add common restaurant items?",
-      message:
-        "Adds a ready-made list of ~90 everyday items (vegetables, spices, dairy, rice, oils, packaging, cleaning…) — name + unit only. Prices and suppliers are left blank for you to set on the Vendors page. Anything already in your list is skipped, and you can edit or remove any item afterwards.",
-      confirmText: "Add items",
-    });
-    if (!ok) return;
     setSeeding(true);
     setError(null);
     try {
-      const res = await api.post<{ added: number; skipped: number }>("/inventory/seed-starter", {});
+      const res = await api.get<{ items: { name: string; unit: string; category: string; exists: boolean }[] }>(
+        "/inventory/seed-starter",
+      );
+      setSeedRows(res.items.map((r) => ({ ...r, include: !r.exists })));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load the starter list");
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  async function commitSeed() {
+    if (!seedRows) return;
+    const chosen = seedRows.filter((r) => r.include && !r.exists);
+    if (chosen.length === 0) {
+      setSeedRows(null);
+      return;
+    }
+    setSeeding(true);
+    setError(null);
+    try {
+      const res = await api.post<{ added: string[]; skipped: string[] }>("/inventory/seed-starter", {
+        items: chosen.map((r) => ({ name: r.name, unit: r.unit, category: r.category || "Other" })),
+      });
+      setSeedRows(null);
       await load();
       setNotice(
-        `Added ${res.added} item${res.added === 1 ? "" : "s"}` +
-          (res.skipped ? `, skipped ${res.skipped} already in your list.` : "."),
+        `Added ${res.added.length} item${res.added.length === 1 ? "" : "s"}` +
+          (res.skipped.length ? `, skipped ${res.skipped.length} already in your list.` : "."),
       );
       setTimeout(() => setNotice(null), 5000);
     } catch (err) {
@@ -320,6 +340,94 @@ export default function InventoryPage() {
       setSeeding(false);
     }
   }
+
+  const seedModal = seedRows && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSeedRows(null)} aria-hidden />
+      <div className="mise-pop-lg relative flex max-h-[86dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+        <div className="border-b border-line px-5 py-4">
+          <h3 className="font-semibold text-fg">✨ Common restaurant items — pick what you want</h3>
+          <p className="mt-1 text-xs text-fg-faint">
+            Untick anything you don&apos;t need, or rename a category (it applies to that whole group).
+            Greyed items are already in your kitchen. Prices &amp; suppliers stay blank for the Vendors page.
+          </p>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-3">
+          {[...new Set(seedRows.map((r) => r.category))].map((cat) => {
+            const rows = seedRows.filter((r) => r.category === cat);
+            const allOn = rows.every((r) => r.exists || r.include);
+            return (
+              <div key={cat} className="mb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={cat}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSeedRows((list) => list && list.map((r) => (r.category === cat ? { ...r, category: v } : r)));
+                    }}
+                    className="mise-well w-40 rounded-lg px-2.5 py-1 text-xs font-semibold text-fg outline-none"
+                    aria-label={`Rename category ${cat}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSeedRows((list) =>
+                        list && list.map((r) => (r.category === cat && !r.exists ? { ...r, include: !allOn } : r)),
+                      )
+                    }
+                    className="mise-press text-[11px] font-medium text-brand-400 hover:underline"
+                  >
+                    {allOn ? "untick all" : "tick all"}
+                  </button>
+                </div>
+                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                  {rows.map((r) => (
+                    <label
+                      key={r.name}
+                      className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm ${
+                        r.exists ? "opacity-45" : "mise-feel cursor-pointer hover:bg-glass/5"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={r.exists ? false : r.include}
+                        disabled={r.exists}
+                        onChange={() =>
+                          setSeedRows((list) =>
+                            list && list.map((x) => (x.name === r.name ? { ...x, include: !x.include } : x)),
+                          )
+                        }
+                        className="h-4 w-4 accent-emerald-500"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-fg">{r.name}</span>
+                      <span className="shrink-0 text-[11px] text-fg-faint">{r.exists ? "already added" : r.unit}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-3 border-t border-line px-5 py-3.5">
+          <p className="flex-1 text-xs text-fg-faint">
+            <b className="text-fg-soft">{seedRows.filter((r) => r.include && !r.exists).length}</b> selected of{" "}
+            {seedRows.filter((r) => !r.exists).length} available
+          </p>
+          <button type="button" onClick={() => setSeedRows(null)} className="mise-press rounded-lg border border-line px-4 py-2 text-sm text-fg-soft">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={commitSeed}
+            disabled={seeding || seedRows.filter((r) => r.include && !r.exists).length === 0}
+            className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {seeding ? "Adding…" : `Add ${seedRows.filter((r) => r.include && !r.exists).length} items`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   async function removeItem(item: Item) {
     // Look up how tied-in the item is, so the warning is specific + honest about
@@ -502,6 +610,7 @@ export default function InventoryPage() {
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
+        {seedModal}
         <PageHeader title="Inventory" subtitle="Items, stock levels, suppliers and weighted-average cost." />
         <div className="flex gap-2">
           <input
@@ -1078,6 +1187,22 @@ export default function InventoryPage() {
                               )}
                               {fmtQty(item.current_stock, item.unit)}
                             </span>
+                            {parseFloat(item.min_stock_level ?? "0") > 0 && (() => {
+                              // how full is the shelf vs its reorder line (2× min = "full")
+                              const cur = parseFloat(item.current_stock) || 0;
+                              const min = parseFloat(item.min_stock_level ?? "0") || 1;
+                              const pct = Math.max(4, Math.min(100, (cur / (min * 2)) * 100));
+                              return (
+                                <span className="mise-well ml-auto mt-1.5 block h-1 w-24 overflow-hidden rounded-full" aria-hidden>
+                                  <span
+                                    className={`block h-full rounded-full transition-[width] duration-500 ${
+                                      cur < min ? "bg-rose-400" : cur < min * 1.5 ? "bg-amber-400" : "bg-brand-500"
+                                    }`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </span>
+                              );
+                            })()}
                             <StockBar item={item} />
                             <p className="text-xs text-fg-faint">{item.min_stock_level ? `min ${fmtQty(item.min_stock_level, item.unit)}` : "no min"}</p>
                             {packLabel(item) && <p className="text-xs text-indigo-300">📦 {packLabel(item)}</p>}
