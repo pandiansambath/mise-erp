@@ -108,3 +108,17 @@ async def test_sales_trend_per_day(client, make_user, auth_header, db, hotel):
     assert [d["date"] for d in days] == ["2026-06-02", "2026-06-04"]
     assert days[0]["net"] == "700.00"
     assert days[1]["net"] == "500.00"
+
+
+@pytest.mark.asyncio
+async def test_pnl_pdf_snapshot(client, make_user, auth_header):
+    """The archive's monthly snapshot: a real PDF with the period in its name."""
+    mgr = await make_user("pnlpdf@x.com", Role.MANAGER.value)
+    r = await client.get(
+        "/api/reports/pnl.pdf?date_from=2026-06-01&date_to=2026-06-30",
+        headers=auth_header(mgr),
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/pdf")
+    assert r.content.startswith(b"%PDF")
+    assert "2026-06-01" in r.headers["content-disposition"]

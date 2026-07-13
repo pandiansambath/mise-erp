@@ -56,7 +56,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [x] Donut + Meters + Bars + print/export raised buttons
 - [x] Month-vs-month comparison mode (⇄ Compare: equal-length prior window, delta chips, margin pts)
 - [x] P&L lines count up on load (currency-aware AnimatedNumber)
-- [ ] Feature: monthly P&L PDF snapshot archive (needs backend)
+- [x] Feature: monthly P&L PDF snapshot archive (GET /reports/pnl.pdf branded one-pager + 12-month archive strip + ⬇ PDF button, tested)
 
 ## 6 · Payroll
 - [x] WEEKLY runs + cadence Segmented + tactile (a30475a)
@@ -184,8 +184,8 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 29 · Landing (public)
 - [x] Native-res films + mobile cinema band + zero-wait preload (50fa4a0)
-- [ ] Liquid-glass pass on feature cards + readability/contrast pass
-- [ ] Verify pricing cards read live plan prices from /platform/plans
+- [x] Liquid-glass pass on feature cards + readability pass (mise-liquid demo panel w/ high dark tint, brighter inactive copy)
+- [x] Verify pricing cards read live plan prices from /platform/plans (verified: fetch + price_hint per plan, £N/mo parse w/ fallback)
 
 ## 30 · Copilot (Ask Mise)
 - [x] Chef in the chat header — thinks while answering, beams when done

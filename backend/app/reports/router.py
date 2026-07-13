@@ -128,6 +128,23 @@ async def pnl_csv(
     )
 
 
+@router.get("/pnl.pdf")
+async def pnl_pdf(
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("reports:read")),
+) -> Response:
+    """The period's P&L as a one-page branded PDF — the monthly snapshot archive."""
+    data = await service.pnl(db, user.hotel_id, date_from, date_to)
+    fname = f"mise-pnl-{date_from}-to-{date_to}.pdf"
+    return Response(
+        content=export.to_pdf(data),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/pnl.xlsx")
 async def pnl_xlsx(
     date_from: date_type = Query(...),

@@ -387,7 +387,7 @@ export default function FeatureTour() {
               >
                 <Reveal>
                   <div
-                    className={`rounded-2xl border p-6 transition-colors duration-500 lg:border-0 lg:bg-transparent lg:p-0 ${
+                    className={`rounded-2xl border p-6 backdrop-blur-sm transition-colors duration-500 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none ${
                       active === i ? "border-brand-400/30 bg-white/[0.04]" : "border-white/10 bg-white/[0.02]"
                     }`}
                   >
@@ -400,14 +400,14 @@ export default function FeatureTour() {
                     </span>
                     <h3
                       className={`mt-4 font-display text-2xl transition-colors duration-500 sm:text-3xl ${
-                        active === i ? "text-white" : "text-slate-300 lg:text-slate-500"
+                        active === i ? "text-white" : "text-slate-300 lg:text-slate-400"
                       }`}
                     >
                       {f.title}
                     </h3>
                     <p
                       className={`mt-3 max-w-md leading-relaxed transition-colors duration-500 ${
-                        active === i ? "text-slate-300" : "text-slate-400 lg:text-slate-600"
+                        active === i ? "text-slate-300" : "text-slate-400 lg:text-slate-500"
                       }`}
                     >
                       {f.body}
@@ -425,7 +425,7 @@ export default function FeatureTour() {
           {/* right — the sticky morphing panel (desktop) */}
           <div className="hidden lg:block">
             <div className="sticky top-24">
-              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink-800/95 to-ink-900/95 shadow-2xl shadow-black/50 ring-1 ring-white/5">
+              <div className="mise-liquid relative overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-ink-800/90 to-ink-900/95 shadow-2xl shadow-black/50 ring-1 ring-white/10 backdrop-blur-xl">
                 <div className="flex items-center gap-1.5 border-b border-white/5 px-4 py-2.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
                   <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />

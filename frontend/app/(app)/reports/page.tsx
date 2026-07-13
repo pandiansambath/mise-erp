@@ -121,6 +121,13 @@ export default function ReportsPage() {
             ⬇ CSV
           </Button>
           <Button
+            variant="soft"
+            onClick={() => downloadFile(`/reports/pnl.pdf?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.pdf`)}
+            title="One-page branded P&L snapshot"
+          >
+            ⬇ PDF
+          </Button>
+          <Button
             variant={compare ? "primary" : "ghost"}
             onClick={toggleCompare}
             title="Put this period next to the equal-length period straight before it"
@@ -137,6 +144,33 @@ export default function ReportsPage() {
         total for this period. Pick a quick preset or set exact From/To dates.{" "}
         <Link href="/how-it-works" className="text-brand-400 underline">How is this worked out?</Link>
       </p>
+
+      {/* the snapshot archive: any past month's P&L, one tap, straight to PDF */}
+      <Card className="mise-feel mb-6">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-sm font-semibold text-fg">📂 Monthly snapshot archive</h3>
+          <span className="text-xs text-fg-faint">each opens that whole month as a one-page PDF</span>
+        </div>
+        <div className="mise-noscrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
+          {Array.from({ length: 12 }, (_, i) => {
+            const now = new Date();
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const f = localISODate(d);
+            const t = localISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+            const label = d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => downloadFile(`/reports/pnl.pdf?date_from=${f}&date_to=${t}`, `mise-pnl-${f.slice(0, 7)}.pdf`)}
+                className="mise-raised mise-press shrink-0 rounded-xl px-3 py-2 text-xs font-medium text-fg-soft"
+              >
+                {label} <span aria-hidden className="ml-1 text-fg-faint">⬇</span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
 
       {loading ? (
         <Spinner />

@@ -1,4 +1,4 @@
-"""Build downloadable CSV / Excel from a P&L dict."""
+"""Build downloadable CSV / Excel / PDF from a P&L dict."""
 import csv
 import io
 
@@ -96,3 +96,45 @@ def to_xlsx(pnl: dict) -> bytes:
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()
+
+
+def to_pdf(pnl: dict) -> bytes:
+    """One-page branded P&L snapshot — what the monthly archive hands back."""
+    from fpdf.enums import XPos, YPos
+
+    from app.core.pdf import branded_pdf, footer, ps
+
+    pdf = branded_pdf("Profit & Loss", f"{pnl['date_from']} to {pnl['date_to']}")
+
+    def line(label: str, value: str, *, bold: bool = False, gap: float = 0.0) -> None:
+        if gap:
+            pdf.set_y(pdf.get_y() + gap)
+        pdf.set_x(14)
+        pdf.set_font("Helvetica", "B" if bold else "", 10)
+        pdf.cell(120, 7.5, text=ps(label))
+        pdf.cell(60, 7.5, text=ps(value), align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    for label, key in _PNL_LINES:
+        line(label, str(pnl[key]), bold=key in ("net_sales", "gross_profit", "net_profit"))
+    for label, key in _PNL_PCTS:
+        line(label, f"{pnl[key]}%")
+    if pnl.get("waste_total") is not None:
+        line("Logged waste", str(pnl["waste_total"]))
+
+    if pnl["expense_breakdown"]:
+        pdf.set_y(pdf.get_y() + 4)
+        pdf.set_x(14)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, text="Expense breakdown", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("Helvetica", "", 9)
+        for c in pnl["expense_breakdown"]:
+            pdf.set_x(14)
+            pdf.cell(100, 6.5, text=ps(c["category_name"]))
+            pdf.cell(30, 6.5, text=ps(c["kind"].lower()), align="C")
+            pdf.cell(
+                50, 6.5, text=ps(str(c["total"])), align="R",
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+            )
+
+    footer(pdf)
+    return bytes(pdf.output())
