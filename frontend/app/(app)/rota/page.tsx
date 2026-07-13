@@ -387,17 +387,17 @@ export default function RotaPage() {
             </label>
             <label className="block sm:w-auto">
               <span className="block text-xs font-medium text-fg-faint">Start</span>
-              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-32" />
+              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:w-32" />
             </label>
             <label className="block sm:w-auto">
               <span className="block text-xs font-medium text-fg-faint">End</span>
-              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-32" />
+              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:w-32" />
             </label>
             <label className="block sm:w-auto">
               <span className="block text-xs font-medium text-fg-faint">Break (min)</span>
-              <input inputMode="numeric" value={brk} onChange={(e) => setBrk(numeric(e.target.value, { decimal: false }))} title="Unpaid break — deducted from paid hours" className="mt-1 w-full rounded-lg border border-line-2 bg-glass/5 px-3 py-2 text-sm text-fg outline-none focus:border-brand-500 sm:w-24" />
+              <input inputMode="numeric" value={brk} onChange={(e) => setBrk(numeric(e.target.value, { decimal: false }))} title="Unpaid break — deducted from paid hours" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:w-24" />
             </label>
-            <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+            <button type="submit" disabled={busy} className="mise-press rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {busy ? "Adding…" : "Add shift"}
             </button>
           </form>
@@ -415,11 +415,11 @@ export default function RotaPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-fg-faint">Copy from</span>
-              <button onClick={() => stepCopySource(-1)} disabled={copyBusy} className="rounded-md border border-line-2 px-2 py-1 text-xs text-fg-soft hover:bg-paper-2" aria-label="Earlier week">‹</button>
+              <button onClick={() => stepCopySource(-1)} disabled={copyBusy} className="mise-raised mise-press rounded-md px-2 py-1 text-xs text-fg-soft" aria-label="Earlier week">‹</button>
               <span className="min-w-[6rem] text-center text-xs font-medium text-fg">
                 {copySource ? `${fmtDM(copySource)} – ${fmtDM(addDays(copySource, 6))}` : ""}
               </span>
-              <button onClick={() => stepCopySource(1)} disabled={copyBusy || !canStepLater} title={!canStepLater ? "You can only copy from a past week" : undefined} className="rounded-md border border-line-2 px-2 py-1 text-xs text-fg-soft hover:bg-paper-2 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Later week">›</button>
+              <button onClick={() => stepCopySource(1)} disabled={copyBusy || !canStepLater} title={!canStepLater ? "You can only copy from a past week" : undefined} className="mise-raised mise-press rounded-md px-2 py-1 text-xs text-fg-soft disabled:cursor-not-allowed disabled:opacity-40" aria-label="Later week">›</button>
               <button onClick={() => { setCopyRows(null); setCopySource(null); }} className="ml-1 text-fg-faint hover:text-fg" aria-label="Cancel">✕</button>
             </div>
           </div>
@@ -453,9 +453,9 @@ export default function RotaPage() {
                       <span className="w-20 text-xs text-fg-faint">
                         {dayIdx >= 0 ? `${DAYS[dayIdx]} ${weekDates[dayIdx].getDate()}/${weekDates[dayIdx].getMonth() + 1}` : r.date}
                       </span>
-                      <input type="time" value={r.start_time} onChange={(e) => updateCopyRow(i, { start_time: e.target.value })} className="w-[4.6rem] rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
-                      <input type="time" value={r.end_time} onChange={(e) => updateCopyRow(i, { end_time: e.target.value })} className="w-[4.6rem] rounded-md border border-line-2 bg-transparent px-2 py-1 text-xs text-fg" />
-                      <input type="number" min={0} step={5} value={r.break_minutes} onChange={(e) => updateCopyRow(i, { break_minutes: parseInt(e.target.value, 10) || 0 })} className="w-14 rounded-md border border-line-2 bg-transparent px-2 py-1 text-center text-xs text-fg" />
+                      <input type="time" value={r.start_time} onChange={(e) => updateCopyRow(i, { start_time: e.target.value })} className="mise-well w-[4.6rem] rounded-md px-2 py-1 text-xs text-fg outline-none" />
+                      <input type="time" value={r.end_time} onChange={(e) => updateCopyRow(i, { end_time: e.target.value })} className="mise-well w-[4.6rem] rounded-md px-2 py-1 text-xs text-fg outline-none" />
+                      <input type="number" min={0} step={5} value={r.break_minutes} onChange={(e) => updateCopyRow(i, { break_minutes: parseInt(e.target.value, 10) || 0 })} className="mise-well w-14 rounded-md px-2 py-1 text-center text-xs text-fg outline-none" />
                       <button onClick={() => setCopyRows((rows) => rows && rows.filter((_, k) => k !== i))} className="text-fg-faint hover:text-rose-300" aria-label="Remove">✕</button>
                     </div>
                   );
@@ -490,7 +490,7 @@ export default function RotaPage() {
           )}
 
           <div className="mt-3 flex items-center gap-2">
-            <button onClick={applyCopy} disabled={copyBusy || copyRows.length === 0} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+            <button onClick={applyCopy} disabled={copyBusy || copyRows.length === 0} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {copyBusy ? "Copying…" : `Apply ${copyRows.length} shift${copyRows.length === 1 ? "" : "s"}`}
             </button>
             <button onClick={() => { setCopyRows(null); setCopySource(null); }} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2">Cancel</button>

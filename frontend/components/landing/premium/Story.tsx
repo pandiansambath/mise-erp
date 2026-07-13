@@ -275,10 +275,12 @@ export default function Story() {
               className={`absolute inset-0 h-full w-full object-cover ${reduced ? "" : "mise-l-ken"}`}
               style={{
                 opacity: st.base === i ? 1 : 0,
-                transition: "opacity 900ms ease",
                 // pause, don't strip, the drift — class-toggling snapped the
                 // scale mid-crossfade and flickered on every beat change
                 animationPlayState: st.base === i ? "running" : "paused",
+                // phone: defocus behind the rolling band (depth of field)
+                filter: small && st.film && !st.film.fading ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
+                transition: "opacity 900ms ease, filter 900ms ease",
               }}
             />
           ) : null,

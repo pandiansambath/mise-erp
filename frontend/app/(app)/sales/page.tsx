@@ -275,20 +275,20 @@ export default function SalesPage() {
               <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportFile} />
               <button
                 onClick={() => fileRef.current?.click()}
-                className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
                 title="Upload a day's sales (Excel/CSV) — checked strictly with exact errors"
               >
                 ⬆ Import
               </button>
               <button
                 onClick={() => downloadFile("/sales/sales-template.xlsx", "mise-sales-template.xlsx")}
-                className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
               >
                 ⬇ Template (Excel)
               </button>
               <button
                 onClick={() => downloadFile("/sales/sales-template.csv", "mise-sales-template.csv")}
-                className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
               >
                 CSV
               </button>
@@ -296,7 +296,7 @@ export default function SalesPage() {
           )}
           <button
             onClick={() => downloadFile(`/sales/days/${day}/sheet.pdf`, `sales-${day}.pdf`)}
-            className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
           >
             ⬇ PDF
           </button>
@@ -422,7 +422,7 @@ export default function SalesPage() {
                     inputMode="decimal"
                     required
                     placeholder="0.00"
-                    className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm"
+                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none"
                   />
                 </div>
                 <div className="w-full sm:w-32">
@@ -436,7 +436,7 @@ export default function SalesPage() {
                 </div>
                 <button
                   type="submit"
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
                 >
                   Add
                 </button>
@@ -478,7 +478,7 @@ export default function SalesPage() {
                           {canWrite && (
                             <button
                               onClick={() => removeLine(l.id)}
-                              className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2"
+                              className="mise-press rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2"
                             >
                               Remove
                             </button>
@@ -504,7 +504,7 @@ export default function SalesPage() {
                 onChange={(e) => { setOpening(numeric(e.target.value)); setCarried(false); }}
                 inputMode="decimal"
                 disabled={!canWrite}
-                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2"
+                className="mise-well mt-1 w-full rounded-lg px-3 py-2 outline-none"
               />
               {carried && (
                 <p className="mt-1 text-[11px] text-brand-400">
@@ -541,7 +541,7 @@ export default function SalesPage() {
                 inputMode="decimal"
                 disabled={!canWrite}
                 placeholder="physical count"
-                className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2"
+                className="mise-well mt-1 w-full rounded-lg px-3 py-2 outline-none"
               />
               {pad === "counted" && <TillKeypad value={counted} onChange={setCounted} onClose={() => setPad(null)} />}
             </div>
@@ -620,7 +620,7 @@ export default function SalesPage() {
                   await reloadChannels();
                 }}
                 inputMode="decimal"
-                className="w-14 rounded border border-line-2 bg-transparent px-2 py-1 text-right text-xs"
+                className="mise-well w-14 rounded-md px-2 py-1 text-right text-xs outline-none"
                 title="Commission %"
               />
               <span className="text-xs text-fg-faint">%</span>

@@ -444,7 +444,7 @@ export default function VendorsPage() {
             {canWrite && (
               <button
                 onClick={() => toggleActive(selectedVendor)}
-                className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                className="mise-press rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
               >
                 {selectedVendor.is_active ? "Deactivate" : "Reactivate"}
               </button>
@@ -540,7 +540,7 @@ export default function VendorsPage() {
                       return (
                         <>
                           {hasPack ? (
-                            <div className="inline-flex overflow-hidden rounded-lg border border-line-2 text-xs">
+                            <div className="mise-well inline-flex overflow-hidden rounded-lg text-xs">
                               <button type="button" onClick={() => setPiMode("unit")} className={`px-2.5 py-2 ${piMode === "unit" ? "bg-brand-600 text-white" : "text-fg-soft hover:bg-paper-2"}`}>£/{it!.unit}</button>
                               <button type="button" onClick={() => setPiMode("pack")} className={`px-2.5 py-2 ${piMode === "pack" ? "bg-brand-600 text-white" : "text-fg-soft hover:bg-paper-2"}`}>£/{it!.pack_unit}</button>
                             </div>

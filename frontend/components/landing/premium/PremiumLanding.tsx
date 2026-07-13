@@ -16,7 +16,7 @@ import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 import AiShowcase from "./AiShowcase";
 import Arrival from "./Arrival";
-import { Aurora, Counter, Magnetic, useDarkDocument } from "./bits";
+import { Aurora, Counter, filmPath, Magnetic, stillPath, useDarkDocument } from "./bits";
 import FeatureTour from "./FeatureTour";
 import FinalCta from "./FinalCta";
 import Hero from "./Hero";
@@ -310,23 +310,50 @@ function Footer() {
 export default function PremiumLanding() {
   useDarkDocument();
 
-  // A brief veil so the hero opening frame never pops in half-loaded. The
-  // hero opens on the FIRE (the entry film's first frame), so that's the
-  // image we wait for. Lifts on load or after 1.6s, whichever comes first.
+  // THE CURTAIN: the user may wait here, but once it lifts NOTHING lags.
+  // We fully load (not just start) everything the opening scene needs —
+  // hero stills, the ENTIRE hero film into cache, fonts — with a progress
+  // bar, then reveal. Hard cap so a dead network still gets in.
   const [ready, setReady] = useState(false);
+  const [pct, setPct] = useState(0);
   useEffect(() => {
-    const img = new Image();
-    img.src = "/experience/fire.jpg";
-    const dish = new Image();
-    dish.src = "/experience/dish.jpg"; // the film's destination — warm it too
-    const done = () => setReady(true);
-    if (img.complete) done();
-    else {
-      img.onload = done;
-      img.onerror = done;
-    }
-    const t = window.setTimeout(done, 1600);
-    return () => window.clearTimeout(t);
+    let cancelled = false;
+    const small = window.matchMedia("(max-width: 767px)").matches;
+    const img = (src: string) =>
+      new Promise<void>((res) => {
+        const im = new Image();
+        im.onload = () => res();
+        im.onerror = () => res();
+        im.src = src;
+      });
+    const jobs: { w: number; run: () => Promise<unknown> }[] = [
+      { w: 14, run: () => img(stillPath("fire", small)) },
+      { w: 14, run: () => img(stillPath("dish", small)) },
+      { w: 8, run: () => img(stillPath("sky", small)) },
+      { w: 8, run: () => (document.fonts ? document.fonts.ready : Promise.resolve()) },
+      // the whole entry film, buffered to the last frame — play() never stalls
+      { w: 56, run: () => fetch(filmPath("fire-to-dish", small), { cache: "force-cache" }).then((r) => r.blob()) },
+    ];
+    const total = jobs.reduce((t, j) => t + j.w, 0);
+    let done = 0;
+    Promise.all(
+      jobs.map((j) =>
+        j
+          .run()
+          .catch(() => {})
+          .then(() => {
+            done += j.w;
+            if (!cancelled) setPct(Math.round((done / total) * 100));
+          }),
+      ),
+    ).then(() => {
+      if (!cancelled) setReady(true);
+    });
+    const cap = window.setTimeout(() => setReady(true), 8000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(cap);
+    };
   }, []);
   usePreWarm(ready);
 
@@ -337,11 +364,20 @@ export default function PremiumLanding() {
         style={{ opacity: ready ? 0 : 1, visibility: ready ? "hidden" : "visible" }}
         aria-hidden
       >
-        <div className="flex flex-col items-center">
+        <div className="flex w-56 flex-col items-center">
           <Logo size={48} className="mise-pop-lg" />
           <p className="mt-4 font-display text-3xl text-white">Mise</p>
           <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.3em] text-copper-300/80">
             Every plate · Every penny
+          </p>
+          <div className="mt-6 h-1 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-brand-400 to-copper-300 transition-[width] duration-300 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="mt-2 font-mono text-[10px] text-slate-500">
+            {pct < 100 ? `mise en place… ${pct}%` : "service ✓"}
           </p>
         </div>
       </div>

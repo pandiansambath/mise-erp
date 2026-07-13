@@ -568,7 +568,7 @@ export default function ExpensesPage() {
           {isSuper && (
             <button
               onClick={() => setCatModal(true)}
-              className="flex w-full items-center justify-between rounded-xl border border-line bg-paper-2/60 px-4 py-3 text-sm text-fg-soft transition hover:border-brand-400/50 hover:bg-paper-2"
+              className="mise-raised mise-press flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm text-fg-soft"
             >
               <span className="flex items-center gap-2"><span aria-hidden>⚙</span> Manage categories</span>
               <span className="text-fg-faint">{categories.length} →</span>

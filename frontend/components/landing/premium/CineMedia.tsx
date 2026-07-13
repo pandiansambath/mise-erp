@@ -149,6 +149,8 @@ export default function CineMedia({
   // Before/while the film runs, show its opening world; settle on the
   // destination still only when the film lands (or when films are off).
   const showPre = allowed && preStill && stage !== "settled";
+  // phone: the 9:16 still falls out of focus while the 16:9 band plays
+  const rolling = small && (stage === "v0" || stage === "v1");
 
   return (
     <div ref={ref} className={`absolute inset-0 overflow-hidden ${className}`} aria-hidden>
@@ -159,7 +161,12 @@ export default function CineMedia({
           loading="lazy"
           decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
-          style={{ opacity: showPre ? 1 : 0, transition: "opacity 1000ms ease" }}
+          style={{
+            opacity: showPre ? 1 : 0,
+            filter: rolling ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
+            transform: rolling ? "scale(1.06)" : "none",
+            transition: "opacity 1000ms ease, filter 900ms ease, transform 900ms ease",
+          }}
         />
       ) : null}
       <img
@@ -172,7 +179,9 @@ export default function CineMedia({
           // pause (not remove) the drift off-screen — removing the class
           // snapped the transform back to 1 and read as a flicker
           animationPlayState: active ? "running" : "paused",
-          ...(preStill ? { opacity: showPre ? 0 : 1, transition: "opacity 1000ms ease" } : {}),
+          filter: rolling ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
+          transition: "opacity 1000ms ease, filter 900ms ease",
+          ...(preStill ? { opacity: showPre ? 0 : 1 } : {}),
         }}
       />
       {allowed ? (

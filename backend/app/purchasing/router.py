@@ -47,6 +47,7 @@ async def _po_out(db, po) -> POOut:
         id=po.id, vendor_id=po.vendor_id,
         vendor_name=await service.vendor_name(db, po.vendor_id),
         po_number=po.po_number, status=po.status, total_amount=po.total_amount,
+        expected_delivery=po.expected_delivery,
         receive_note=po.receive_note,
         items=await service.po_items(db, po.id),
     )

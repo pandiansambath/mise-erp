@@ -358,44 +358,134 @@ function AnnouncementBanner() {
 }
 
 /** Phone-only bottom tab bar — thumb-reach navigation for the five daily stops. */
-function MobileTabBar({ onSearch }: { onSearch: () => void }) {
+function MobileTabBar({ onSearch, items }: { onSearch: () => void; items: NavItem[] }) {
   const pathname = usePathname();
-  const TABS = [
+  const [sheet, setSheet] = useState(false);
+  useEffect(() => setSheet(false), [pathname]); // navigating closes the sheet
+
+  // Four anchor tabs around the centre launcher — only ones this user can see.
+  const has = new Set(items.map((n) => n.href));
+  const tabs = [
     { href: "/dashboard", icon: "▦", label: "Home" },
     { href: "/sales", icon: "🧾", label: "Sales" },
     { href: "/inventory", icon: "📦", label: "Stock" },
     { href: "/money", icon: "💰", label: "Money" },
-  ];
-  return (
-    <nav
-      aria-label="Quick navigation"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-paper/95 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md [padding-bottom:env(safe-area-inset-bottom)] lg:hidden"
-    >
-      {TABS.map((t) => {
-        const active = pathname.startsWith(t.href);
-        return (
-          <Link
-            key={t.href}
-            href={t.href}
-            className={`mise-press flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
-              active ? "text-brand-400" : "text-fg-faint"
-            }`}
-          >
-            <span aria-hidden className={`text-lg leading-none ${active ? "" : "opacity-80"}`}>{t.icon}</span>
-            {t.label}
-            {active && <span aria-hidden className="mt-0.5 h-1 w-6 rounded-full bg-brand-500" />}
-          </Link>
-        );
-      })}
-      <button
-        type="button"
-        onClick={onSearch}
-        className="mise-press flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-fg-faint"
+  ].filter((t) => t.href === "/dashboard" || has.has(t.href));
+  for (const n of items) {
+    if (tabs.length >= 4) break;
+    if (!tabs.some((t) => t.href === n.href)) tabs.push({ href: n.href, icon: n.icon, label: n.label.split(" ")[0] });
+  }
+
+  const Tab = ({ t }: { t: { href: string; icon: string; label: string } }) => {
+    const active = pathname.startsWith(t.href);
+    return (
+      <Link
+        key={t.href}
+        href={t.href}
+        className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
+          active ? "text-brand-300" : "text-fg-faint"
+        }`}
       >
-        <span aria-hidden className="text-lg leading-none">⌕</span>
-        Search
-      </button>
-    </nav>
+        <span
+          aria-hidden
+          className={`grid h-8 w-12 place-items-center rounded-xl text-lg leading-none transition-all duration-200 ${
+            active ? "mise-raised" : "opacity-80"
+          }`}
+        >
+          {t.icon}
+        </span>
+        {t.label}
+      </Link>
+    );
+  };
+
+  return (
+    <>
+      {/* the everything-sheet: every section this user can open, grouped */}
+      {sheet && (
+        <>
+          <div className="fixed inset-0 z-30 bg-black/55 backdrop-blur-[2px] lg:hidden" onClick={() => setSheet(false)} aria-hidden />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="All sections"
+            className="mise-drawer-in fixed inset-x-2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 max-h-[68dvh] overflow-y-auto overscroll-contain rounded-2xl border border-glass/15 bg-paper/[0.98] p-4 shadow-2xl shadow-black/60 backdrop-blur-xl lg:hidden"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setSheet(false);
+                onSearch();
+              }}
+              className="mise-well mise-press flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm text-fg-faint"
+            >
+              <span aria-hidden>⌕</span> Search or do anything…
+              <span className="ml-auto rounded-full bg-copper-500/15 px-2 py-0.5 text-[10px] font-medium text-copper-300">1-click</span>
+            </button>
+            {NAV_GROUPS.map((g) => {
+              const group = items.filter((n) => n.group === g);
+              if (!group.length) return null;
+              return (
+                <div key={g} className="mt-4">
+                  <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-fg-faint">{g}</p>
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {group.map((n) => {
+                      const active = pathname.startsWith(n.href);
+                      return (
+                        <Link
+                          key={n.href}
+                          href={n.href}
+                          className={`mise-raised mise-press flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center text-[10px] font-medium leading-tight ${
+                            active ? "text-brand-300 ring-1 ring-brand-400/40" : "text-fg-soft"
+                          }`}
+                        >
+                          <span aria-hidden className="text-lg leading-none">{n.icon}</span>
+                          <span className="line-clamp-2">{n.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <nav
+        aria-label="Quick navigation"
+        className="fixed inset-x-0 bottom-0 z-40 lg:hidden"
+      >
+        {/* the bar announces itself: a lit brand hairline above the shelf */}
+        <span aria-hidden className="block h-[2px] bg-gradient-to-r from-transparent via-brand-400/70 to-transparent" />
+        <div className="flex items-stretch justify-around border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(0,0,0,0.45)] backdrop-blur-md">
+          {tabs.slice(0, 2).map((t) => (
+            <Tab key={t.href} t={t} />
+          ))}
+          {/* centre launcher — raised out of the shelf, opens everything */}
+          <button
+            type="button"
+            onClick={() => setSheet((v) => !v)}
+            aria-label={sheet ? "Close sections" : "All sections"}
+            aria-expanded={sheet}
+            className="relative -mt-5 flex flex-col items-center px-2"
+          >
+            <span
+              className={`mise-press grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-600 text-xl text-white shadow-lg shadow-brand-500/40 ring-4 ring-paper transition-transform duration-200 ${
+                sheet ? "rotate-45" : ""
+              }`}
+              aria-hidden
+            >
+              ＋
+            </span>
+            <span className={`mt-1 pb-2 text-[10px] font-medium ${sheet ? "text-brand-300" : "text-fg-faint"}`}>All</span>
+          </button>
+          {tabs.slice(2, 4).map((t) => (
+            <Tab key={t.href} t={t} />
+          ))}
+        </div>
+      </nav>
+    </>
   );
 }
 
@@ -560,7 +650,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Guided tour (walks through pages) + project-aware AI assistant. Both float
           on every page. The Copilot only appears when the hotel has AI enabled. */}
-      <MobileTabBar onSearch={() => setPaletteOpen(true)} />
+      <MobileTabBar onSearch={() => setPaletteOpen(true)} items={navItems} />
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       {featureOn(hotel, "ai_copilot") && <Copilot />}
       <CommandPalette

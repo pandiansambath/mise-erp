@@ -161,7 +161,7 @@ export default function AttendancePage() {
           type="date"
           value={day}
           onChange={(e) => changeDay(e.target.value)}
-          className="rounded-lg border border-line-2 px-3 py-2 text-sm"
+          className="mise-well rounded-lg px-3 py-2 text-sm outline-none"
         />
         <span className="text-sm text-fg-faint">{present} present · {employees.length} staff</span>
         <span className="text-xs text-fg-faint">· times in {timeZone}</span>
@@ -169,13 +169,13 @@ export default function AttendancePage() {
         <div className="ml-auto flex gap-2">
           <button
             onClick={() => downloadFile(`/attendance/timesheet.pdf?on=${day}`, `timesheet-${day}.pdf`)}
-            className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
           >
             ⬇ PDF
           </button>
           <button
             onClick={() => downloadFile(`/attendance/timesheet.xlsx?on=${day}`, `timesheet-${day}.xlsx`)}
-            className="rounded-lg border border-line-2 px-3 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
           >
             ⬇ Excel
           </button>
@@ -383,13 +383,13 @@ export default function AttendancePage() {
             <p className="mt-0.5 text-sm text-fg-faint">{editEmp.full_name} · {day} · times in {timeZone}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <label className="text-sm text-fg-soft">Clock in
-                <input type="time" value={ci} onChange={(ev) => setCi(ev.target.value)} className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
+                <input type="time" value={ci} onChange={(ev) => setCi(ev.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
               </label>
               <label className="text-sm text-fg-soft">Clock out
-                <input type="time" value={co} onChange={(ev) => setCo(ev.target.value)} className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
+                <input type="time" value={co} onChange={(ev) => setCo(ev.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
               </label>
               <label className="col-span-2 text-sm text-fg-soft">Break (minutes)
-                <input type="number" min="0" value={brk} onChange={(ev) => setBrk(ev.target.value)} className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm" />
+                <input type="number" min="0" value={brk} onChange={(ev) => setBrk(ev.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
               </label>
               {previewMins !== null && (
                 <p className="mise-well col-span-2 rounded-lg px-3 py-2 text-xs text-fg-soft">
@@ -400,8 +400,8 @@ export default function AttendancePage() {
             </div>
             <p className="mt-2 text-xs text-fg-faint">Leave clock-in empty to mark the day absent.</p>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setEditEmp(null)} className="rounded-lg border border-line-2 px-3 py-1.5 text-sm text-fg-soft hover:bg-paper-2">Cancel</button>
-              <button onClick={saveEdit} disabled={savingEdit} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              <button onClick={() => setEditEmp(null)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm text-fg-soft">Cancel</button>
+              <button onClick={saveEdit} disabled={savingEdit} className="mise-press rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
                 {savingEdit ? "Saving…" : "Save"}
               </button>
             </div>

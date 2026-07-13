@@ -871,7 +871,7 @@ export default function PurchasingPage() {
                   value={recvNote}
                   onChange={(e) => setRecvNote(e.target.value)}
                   placeholder="e.g. vendor out of stock — sent 30 of 100"
-                  className="mt-1 w-full rounded-lg border border-line-2 bg-transparent px-3 py-2 text-sm"
+                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none"
                 />
               </label>
             )}

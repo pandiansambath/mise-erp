@@ -287,12 +287,12 @@ export default function PayrollPage() {
               <i>plan</i> (it forecasts cost); it doesn&apos;t pay anyone. Actual pay always comes from attendance.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-line bg-paper-2/50 p-3">
+              <div className="mise-well rounded-lg p-3">
                 <p className="font-semibold text-fg">Monthly-salary staff</p>
                 <p className="mt-1">Daily rate = monthly salary ÷ <b className="text-fg">working days</b>.</p>
                 <p>Pay = days present × daily rate <span className="text-fg-faint">(half-days at half)</span> + overtime.</p>
               </div>
-              <div className="rounded-lg border border-line bg-paper-2/50 p-3">
+              <div className="mise-well rounded-lg p-3">
                 <p className="font-semibold text-fg">Hourly staff</p>
                 <p className="mt-1">Pay = hours worked × hourly rate.</p>
                 <p className="text-fg-faint">Hours come from attendance; rate must be ≥ your minimum wage (set in <Link href="/settings" className="underline">Settings</Link>).</p>
@@ -323,7 +323,7 @@ export default function PayrollPage() {
               days/hours recorded there, which then flows into pay. Each run starts as a{" "}
               <b className="text-fg">Draft</b> → <b className="text-fg">Approve</b> → <b className="text-fg">Mark paid</b>; download a payslip PDF per person, or the whole run as one PDF.
             </p>
-            <p className="rounded-lg border border-line bg-paper-2/50 p-2.5 text-xs text-fg-faint">
+            <p className="mise-well rounded-lg p-2.5 text-xs text-fg-faint">
               <b className="text-fg-soft">Two &ldquo;salary&rdquo; places — no double-count.</b> This page (Payroll) works out
               exact <b className="text-fg-soft">per-person</b> pay and makes payslips, but it does <b className="text-fg-soft">not</b> post to your
               P&amp;L. Your P&amp;L / Money labour cost comes only from the <b className="text-fg-soft">&ldquo;Staff Salaries&rdquo;</b> line in{" "}
@@ -600,7 +600,7 @@ function PayslipRow({
               e.stopPropagation();
               downloadFile(`/payroll/${r.id}/payslip.pdf`, `payslip-${r.employee_name}-${r.pay_period}.pdf`);
             }}
-            className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
+            className="mise-press rounded-md border border-line px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
           >
             ⬇ PDF
           </button>
@@ -609,7 +609,7 @@ function PayslipRow({
           <td className="px-5 py-3 text-right">
             <div className="flex justify-end gap-1">
               {r.status === "DRAFT" && (
-                <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "approve"); }} className="rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2">Approve</button>
+                <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "approve"); }} className="mise-press rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2">Approve</button>
               )}
               {r.status === "APPROVED" && (
                 <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "pay"); }} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Mark paid</button>

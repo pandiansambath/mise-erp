@@ -178,7 +178,7 @@ export default function DocumentsPage() {
   if (loading) return <Spinner />;
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+    "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500/25";
 
   return (
     <div>
