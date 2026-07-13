@@ -961,67 +961,78 @@ export default function InventoryPage() {
         <Spinner />
       ) : (
         <>
-          {/* Where the stock money sits — activity-ring style, top items by £ on shelf */}
+          {/* ── the shelf, as a bento: rings + live vitals + the nudge ── */}
           {items.length > 0 && (() => {
-            const valued = items
-              .filter((i) => i.is_active)
+            const active = items.filter((i) => i.is_active);
+            const valued = active
               .map((i) => ({
                 label: i.name,
                 value: (parseFloat(i.current_stock) || 0) * (parseFloat(i.average_cost) || 0),
               }))
               .filter((x) => x.value > 0);
-            if (valued.length < 2) return null;
             const total = valued.reduce((s, x) => s + x.value, 0);
+            const lows = active.filter((i) => stockState(i).label === "running low").length;
+            const outs = active.filter((i) => stockState(i).label === "out of stock").length;
+            const cats = new Set(active.map((i) => i.category?.trim() || "Other")).size;
             return (
-              <Card className="mise-feel mb-4">
-                <div className="flex items-baseline justify-between">
-                  <h3 className="font-semibold text-fg">Where your stock money sits</h3>
-                  <span className="font-mono text-sm font-semibold text-copper-300">
-                    <AnimatedNumber value={total * CURRENCIES[currency].rate} prefix={CURRENCIES[currency].symbol} decimals={2} />
-                    <span className="ml-1 text-xs font-normal text-fg-faint">on the shelf</span>
-                  </span>
-                </div>
-                <p className="text-xs text-fg-faint">
-                  top 5 of {valued.length} valued items — tap one to jump to it in the table
-                </p>
-                <RadialBars
-                  className="mt-4"
-                  items={valued}
-                  formatValue={(v) => format(String(v))}
-                  onItemClick={(it) => {
-                    setQ(it.label);
-                    setStatusFilter("all");
-                    setCatFilter("all");
-                  }}
-                />
-              </Card>
-            );
-          })()}
-
-          {/* Reorder nudge — the shelf talks to you */}
-          {(() => {
-            const lows = items.filter((i) => i.is_active && stockState(i).label === "running low").length;
-            const outs = items.filter((i) => i.is_active && stockState(i).label === "out of stock").length;
-            if (lows + outs === 0) return null;
-            return (
-              <div className="mise-well mise-feel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/20 px-4 py-3">
-                <p className="text-sm text-fg">
-                  <span aria-hidden className="mr-1.5">🛎️</span>
-                  <b>{lows + outs}</b> item{lows + outs === 1 ? "" : "s"} need{lows + outs === 1 ? "s" : ""} ordering
-                  <span className="ml-1 text-xs text-fg-faint">
-                    ({lows} running low{outs > 0 ? ` · ${outs} out of stock` : ""})
-                  </span>
-                </p>
-                <div className="flex gap-2">
-                  {lows > 0 && (
-                    <button type="button" onClick={() => setStatusFilter("low")} className="mise-press rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/20">
-                      Show low
-                    </button>
-                  )}
-                  {outs > 0 && (
-                    <button type="button" onClick={() => setStatusFilter("out")} className="mise-press rounded-lg border border-rose-400/40 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-400/20">
-                      Show out
-                    </button>
+              <div className="mb-4 grid gap-4 lg:grid-cols-3">
+                {valued.length >= 2 && (
+                  <Card className="mise-feel lg:col-span-2">
+                    <div className="flex items-baseline justify-between">
+                      <h3 className="font-semibold text-fg">Where your stock money sits</h3>
+                      <span className="font-mono text-sm font-semibold text-copper-300">
+                        <AnimatedNumber value={total * CURRENCIES[currency].rate} prefix={CURRENCIES[currency].symbol} decimals={2} />
+                        <span className="ml-1 text-xs font-normal text-fg-faint">on the shelf</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-fg-faint">
+                      top 5 of {valued.length} valued items — tap one to jump to it in the table
+                    </p>
+                    <RadialBars
+                      className="mt-4"
+                      items={valued}
+                      formatValue={(v) => format(String(v))}
+                      onItemClick={(it) => {
+                        setQ(it.label);
+                        setStatusFilter("all");
+                        setCatFilter("all");
+                      }}
+                    />
+                  </Card>
+                )}
+                <div className={`flex flex-col gap-4 ${valued.length < 2 ? "lg:col-span-3" : ""}`}>
+                  <div className="grid flex-1 grid-cols-2 gap-3">
+                    {[
+                      { label: "items on the shelf", value: String(active.length), cls: "text-fg" },
+                      { label: "categories", value: String(cats), cls: "text-fg" },
+                      { label: "running low", value: String(lows), cls: lows ? "text-amber-300" : "text-fg-faint" },
+                      { label: "out of stock", value: String(outs), cls: outs ? "text-rose-300" : "text-fg-faint" },
+                    ].map((kpi) => (
+                      <div key={kpi.label} className="mise-well mise-feel flex flex-col justify-center rounded-2xl p-3.5">
+                        <p className={`font-mono text-2xl font-bold ${kpi.cls}`}>{kpi.value}</p>
+                        <p className="mt-0.5 text-[11px] leading-tight text-fg-faint">{kpi.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {lows + outs > 0 && (
+                    <div className="mise-well mise-feel rounded-2xl border border-amber-400/20 px-4 py-3">
+                      <p className="text-sm text-fg">
+                        <span aria-hidden className="mr-1.5">🛎️</span>
+                        <b>{lows + outs}</b> item{lows + outs === 1 ? "" : "s"} need{lows + outs === 1 ? "s" : ""} ordering
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        {lows > 0 && (
+                          <button type="button" onClick={() => setStatusFilter("low")} className="mise-press rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/20">
+                            Show {lows} low
+                          </button>
+                        )}
+                        {outs > 0 && (
+                          <button type="button" onClick={() => setStatusFilter("out")} className="mise-press rounded-lg border border-rose-400/40 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-400/20">
+                            Show {outs} out
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1136,7 +1147,61 @@ export default function InventoryPage() {
             <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-amber-400" /> near min</span>
             <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-brand-500" /> healthy</span>
           </p>
-          <Card className="p-0">
+          {/* phones: the shelf as cards — thumb-sized, no sideways table */}
+          <div className="space-y-2.5 lg:hidden">
+            {visible.length === 0 ? (
+              <Card><p className="py-6 text-center text-sm text-fg-faint">{items.length === 0 ? "No items yet — add your first above." : "Nothing matches the filters."}</p></Card>
+            ) : (
+              visible.map((item) => {
+                const st = stockState(item);
+                return (
+                  <Card key={item.id} className="mise-feel p-3.5">
+                    <div className="flex items-center gap-3">
+                      <span aria-hidden className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg">
+                        {categoryEmoji(item.category?.trim() || "Other")}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-fg">{item.name}</p>
+                        <p className="flex items-center gap-1.5 text-xs text-fg-faint">
+                          <span className={`inline-flex items-center gap-1 font-medium ${st.cls}`}>{st.dot} {st.label}</span>
+                          · {item.category || "Uncategorised"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-mono text-sm font-semibold text-fg">{fmtQty(item.current_stock, item.unit)}</p>
+                        <p className="text-[10px] text-fg-faint">{format(item.average_cost)} avg</p>
+                      </div>
+                    </div>
+                    <StockBar item={item} />
+                    <div className="mt-2.5 flex items-center gap-2">
+                      {item.best_vendor ? (
+                        <span className="min-w-0 truncate text-xs text-fg-soft"><span className="text-brand-400">★</span> {item.best_vendor}</span>
+                      ) : (
+                        <Link href="/vendors" className="text-xs text-amber-300">+ add supplier</Link>
+                      )}
+                      <span className="flex-1" />
+                      {canWrite && (
+                        <>
+                          <button
+                            onClick={() => orderItem(item)}
+                            disabled={(item.vendor_count ?? 0) === 0}
+                            className="mise-press rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-xs font-semibold text-brand-300 disabled:opacity-40"
+                          >
+                            🛒 Order
+                          </button>
+                          <button onClick={() => startEdit(item)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft">
+                            ✎
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+
+          <Card className="hidden p-0 lg:block">
             <div className="max-h-[62vh] overflow-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-paper">
@@ -1234,23 +1299,9 @@ export default function InventoryPage() {
                               )}
                               {fmtQty(item.current_stock, item.unit)}
                             </span>
-                            {parseFloat(item.min_stock_level ?? "0") > 0 && (() => {
-                              // how full is the shelf vs its reorder line (2× min = "full")
-                              const cur = parseFloat(item.current_stock) || 0;
-                              const min = parseFloat(item.min_stock_level ?? "0") || 1;
-                              const pct = Math.max(4, Math.min(100, (cur / (min * 2)) * 100));
-                              return (
-                                <span className="mise-well ml-auto mt-1.5 block h-1 w-24 overflow-hidden rounded-full" aria-hidden>
-                                  <span
-                                    className={`block h-full rounded-full transition-[width] duration-500 ${
-                                      cur < min ? "bg-rose-400" : cur < min * 1.5 ? "bg-amber-400" : "bg-brand-500"
-                                    }`}
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </span>
-                              );
-                            })()}
-                            <StockBar item={item} />
+                            <div className="ml-auto max-w-[8rem]">
+                              <StockBar item={item} />
+                            </div>
                             <p className="text-xs text-fg-faint">{item.min_stock_level ? `min ${fmtQty(item.min_stock_level, item.unit)}` : "no min"}</p>
                             {packLabel(item) && <p className="text-xs text-indigo-300">📦 {packLabel(item)}</p>}
                           </td>

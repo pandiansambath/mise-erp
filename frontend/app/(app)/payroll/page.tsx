@@ -148,12 +148,16 @@ export default function PayrollPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Period/cadence changes refresh IN PLACE — no full-page spinner, no scroll
+  // jump. The table just dims for a beat while the new period loads.
+  const [refreshing, setRefreshing] = useState(false);
+
   async function changePeriod(p: string, c: "MONTHLY" | "WEEKLY" = cadence) {
     if (!p) return;
     if (c === "WEEKLY") setWeek(p);
     else setPeriod(p);
-    setLoading(true);
-    await load(p).finally(() => setLoading(false));
+    setRefreshing(true);
+    await load(p).finally(() => setRefreshing(false));
   }
 
   async function switchCadence(c: "MONTHLY" | "WEEKLY") {
@@ -348,6 +352,7 @@ export default function PayrollPage() {
               ]}
             />
           </div>
+          {refreshing && <span className="mise-upload-ring mt-5 shrink-0" aria-label="Loading period" />}
           <div>
             <label className="block text-xs font-medium text-fg-faint">
               {cadence === "WEEKLY" ? "Week" : "Pay period"}
@@ -403,8 +408,8 @@ export default function PayrollPage() {
             </Button>
           )}
           {rows.length > 0 && (
-            <span className="ml-auto text-sm text-fg-faint">
-              Net total: <span className="font-semibold text-fg">{format(String(totalNet))}</span>
+            <span className="mise-raised ml-auto rounded-xl px-3.5 py-2 text-sm text-fg-faint">
+              Net total <span className="ml-1.5 font-mono font-semibold text-fg">{format(String(totalNet))}</span>
             </span>
           )}
         </div>
@@ -493,7 +498,7 @@ export default function PayrollPage() {
         </Card>
       )}
 
-      <Card className="p-0">
+      <Card className={`p-0 transition-opacity duration-300 ${refreshing ? "pointer-events-none opacity-50" : ""}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
