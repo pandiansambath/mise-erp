@@ -75,6 +75,182 @@ function OperatorAuditCard() {
 }
 
 /** 📣 Broadcast a banner into every hotel's app shell. */
+function JobBoardCard() {
+  type Row = {
+    id: string; hotel_name: string; title: string; status: string;
+    employment_type: string; location: string | null; created_at: string; applications: number;
+  };
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(
+    () =>
+      api.get<{ postings: Row[] }>("/platform/jobs").then((r) => setRows(r.postings)).catch(() => setRows([])),
+    [],
+  );
+
+  useEffect(() => {
+    if (open && rows === null) load();
+  }, [open, rows, load]);
+
+  async function setStatus(row: Row, status: string) {
+    await api.patch(`/platform/jobs/${row.id}`, { status }).catch(() => {});
+    await load();
+  }
+  async function remove(row: Row) {
+    await api.delete(`/platform/jobs/${row.id}`).catch(() => {});
+    await load();
+  }
+
+  return (
+    <Card className="mb-6">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
+        <div>
+          <h3 className="font-semibold text-fg">🧑‍💼 Job board</h3>
+          <p className="text-xs text-fg-faint">every vacancy on the public /careers board — close or remove anything, audited</p>
+        </div>
+        <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▼</span>
+      </button>
+      {open && (
+        <div className="mise-fade mt-4">
+          {rows === null ? (
+            <p className="py-3 text-center text-sm text-fg-faint">Loading…</p>
+          ) : rows.length === 0 ? (
+            <p className="py-3 text-center text-sm text-fg-faint">No postings anywhere yet.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {rows.map((r) => (
+                <li key={r.id} className="mise-well flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate">
+                    <b className="text-fg">{r.title}</b>{" "}
+                    <span className="text-fg-faint">· {r.hotel_name}{r.location ? ` · ${r.location}` : ""} · {r.applications} applicant{r.applications === 1 ? "" : "s"}</span>
+                  </span>
+                  <Badge tone={r.status === "OPEN" ? "green" : "slate"}>{r.status.toLowerCase()}</Badge>
+                  <button
+                    type="button"
+                    onClick={() => setStatus(r, r.status === "OPEN" ? "CLOSED" : "OPEN")}
+                    className="mise-raised mise-press rounded-lg px-2.5 py-1 text-xs font-medium text-fg-soft"
+                  >
+                    {r.status === "OPEN" ? "Close" : "Reopen"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(r)}
+                    className="mise-press rounded-lg border border-rose-500/40 px-2.5 py-1 text-xs font-medium text-rose-300 hover:bg-rose-500/10"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function OperatorsCard() {
+  type Op = { id: string; email: string; is_active: boolean; last_login: string | null; you: boolean };
+  const [ops, setOps] = useState<Op[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(
+    () => api.get<{ operators: Op[] }>("/platform/operators").then((r) => setOps(r.operators)).catch(() => setOps([])),
+    [],
+  );
+  useEffect(() => {
+    if (open && ops === null) load();
+  }, [open, ops, load]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api.post("/platform/operators", { email, password });
+      setEmail("");
+      setPassword("");
+      setMsg("Operator created ✓ — they sign in on the normal login page.");
+      await load();
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not create the operator");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setActive(op: Op, active: boolean) {
+    await api.patch(`/platform/operators/${op.id}`, { active }).catch(() => {});
+    await load();
+  }
+
+  return (
+    <Card className="mb-6">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
+        <div>
+          <h3 className="font-semibold text-fg">🔐 Operator accounts</h3>
+          <p className="text-xs text-fg-faint">who can open this Control Room — add a colleague, cut access instantly, all audited</p>
+        </div>
+        <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▼</span>
+      </button>
+      {open && (
+        <div className="mise-fade mt-4 space-y-3">
+          <form onSubmit={add} className="flex flex-wrap items-end gap-2">
+            <label className="block min-w-[14rem] flex-1">
+              <span className="text-xs font-medium text-fg-faint">Email</span>
+              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
+            </label>
+            <label className="block min-w-[12rem] flex-1">
+              <span className="text-xs font-medium text-fg-faint">Password (min 8)</span>
+              <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" minLength={8} required className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
+            </label>
+            <button type="submit" disabled={busy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+              {busy ? "Creating…" : "+ Add operator"}
+            </button>
+          </form>
+          {msg && <p className="text-xs text-brand-300">{msg}</p>}
+          {ops === null ? (
+            <p className="py-2 text-center text-sm text-fg-faint">Loading…</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {ops.map((op) => (
+                <li key={op.id} className="mise-well flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate text-fg">
+                    {op.email}
+                    {op.you && <span className="ml-2 rounded-full bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">you</span>}
+                  </span>
+                  <span className="text-[11px] text-fg-faint">
+                    {op.last_login ? `last in ${new Date(op.last_login).toLocaleDateString()}` : "never signed in"}
+                  </span>
+                  <Badge tone={op.is_active ? "green" : "red"}>{op.is_active ? "active" : "disabled"}</Badge>
+                  {!op.you && (
+                    <button
+                      type="button"
+                      onClick={() => setActive(op, !op.is_active)}
+                      className={`mise-press rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                        op.is_active
+                          ? "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                          : "border-brand-400/40 text-brand-300 hover:bg-brand-400/10"
+                      }`}
+                    >
+                      {op.is_active ? "Disable" : "Re-enable"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function AnnouncementsCard() {
   const confirm = useConfirm();
   const [list, setList] = useState<Announcement[]>([]);
@@ -648,6 +824,10 @@ export default function ControlRoomPage() {
       )}
 
       <OperatorAuditCard />
+
+      <JobBoardCard />
+
+      <OperatorsCard />
 
       <AnnouncementsCard />
 

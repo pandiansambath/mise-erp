@@ -113,3 +113,46 @@ async def test_impersonation_token_is_read_only(client, make_user, auth_header, 
     # and the act itself is on the operator audit trail
     trail = await client.get("/api/platform/audit", headers=auth_header(owner))
     assert any(e["action"] == "platform.impersonate" for e in trail.json()["events"])
+
+
+@pytest.mark.asyncio
+async def test_operator_accounts_lifecycle(client, make_user, auth_header, db):
+    """An operator can mint a second operator login; deactivating it blocks
+    login; you cannot deactivate yourself."""
+    boss = await make_user("op-boss@mise.com", Role.SUPER_ADMIN.value)
+    boss.is_platform_owner = True
+    await db.commit()
+    h = auth_header(boss)
+
+    created = await client.post(
+        "/api/platform/operators",
+        json={"email": "op-two@mise.com", "password": "secret-pass-9"},
+        headers=h,
+    )
+    assert created.status_code == 201
+
+    # the new operator really has platform powers
+    login = await client.post(
+        "/api/auth/login", json={"email": "op-two@mise.com", "password": "secret-pass-9"}
+    )
+    assert login.status_code == 200
+    tok = login.json()["access_token"]
+    fleet = await client.get("/api/platform/hotels", headers={"Authorization": f"Bearer {tok}"})
+    assert fleet.status_code == 200
+
+    # deactivate -> login refused; self-deactivation refused
+    two_id = created.json()["id"]
+    off = await client.patch(f"/api/platform/operators/{two_id}", json={"active": False}, headers=h)
+    assert off.status_code == 200 and off.json()["is_active"] is False
+    relogin = await client.post(
+        "/api/auth/login", json={"email": "op-two@mise.com", "password": "secret-pass-9"}
+    )
+    assert relogin.status_code in (401, 403)
+    me_off = await client.patch(
+        f"/api/platform/operators/{boss.id}", json={"active": False}, headers=h
+    )
+    assert me_off.status_code == 400
+
+    listing = await client.get("/api/platform/operators", headers=h)
+    emails = [o["email"] for o in listing.json()["operators"]]
+    assert "op-two@mise.com" in emails

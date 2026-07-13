@@ -294,6 +294,7 @@ function Footer() {
             <Link href="/signup" className="text-slate-400 transition hover:text-white">Register your hotel</Link>
             <a href="#copilot" className="text-slate-400 transition hover:text-white">Copilot</a>
             <a href="#pricing" className="text-slate-400 transition hover:text-white">Pricing</a>
+            <Link href="/careers" className="text-slate-400 transition hover:text-white">Job board</Link>
           </div>
         </div>
         <div className="mt-10 flex flex-col items-start justify-between gap-3 border-t border-white/5 pt-6 sm:flex-row sm:items-center">

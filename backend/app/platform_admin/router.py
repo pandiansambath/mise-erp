@@ -410,3 +410,186 @@ async def suspend_hotel(
         entity_type="hotel", entity_id=hotel_id,
     )
     return {"is_active": hotel.is_active}
+
+
+# ── job portal moderation ─────────────────────────────────────────────────────
+@router.get("/jobs")
+async def platform_jobs(
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Every posting across the fleet, with its hotel and applicant count."""
+    from sqlalchemy import func as safunc
+
+    from app.hotels.models import Hotel as HotelModel
+    from app.jobs.models import JobApplication, JobPosting
+
+    rows = (
+        await db.execute(
+            select(JobPosting, HotelModel.name)
+            .join(HotelModel, HotelModel.id == JobPosting.hotel_id)
+            .order_by(JobPosting.created_at.desc())
+        )
+    ).all()
+    counts = dict(
+        (
+            await db.execute(
+                select(JobApplication.posting_id, safunc.count(JobApplication.id)).group_by(
+                    JobApplication.posting_id
+                )
+            )
+        ).all()
+    )
+    return {
+        "postings": [
+            {
+                "id": str(p.id),
+                "hotel_name": name,
+                "title": p.title,
+                "status": p.status,
+                "employment_type": p.employment_type,
+                "location": p.location,
+                "created_at": p.created_at.isoformat(),
+                "applications": int(counts.get(p.id, 0)),
+            }
+            for p, name in rows
+        ]
+    }
+
+
+class PlatformJobPatch(BaseModel):
+    status: str  # OPEN | CLOSED
+
+
+@router.patch("/jobs/{posting_id}")
+async def platform_job_status(
+    posting_id: uuid.UUID,
+    payload: PlatformJobPatch,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    from app.jobs.models import JobPosting, JobStatus
+
+    if payload.status not in (JobStatus.OPEN.value, JobStatus.CLOSED.value):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Status must be OPEN or CLOSED")
+    posting = (
+        await db.execute(select(JobPosting).where(JobPosting.id == posting_id))
+    ).scalar_one_or_none()
+    if not posting:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Posting not found")
+    posting.status = payload.status
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.job_status",
+        summary=f"Job '{posting.title}' set {payload.status}",
+    )
+    return {"id": str(posting.id), "status": posting.status}
+
+
+@router.delete("/jobs/{posting_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def platform_job_delete(
+    posting_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> None:
+    from app.jobs.models import JobPosting
+
+    posting = (
+        await db.execute(select(JobPosting).where(JobPosting.id == posting_id))
+    ).scalar_one_or_none()
+    if not posting:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Posting not found")
+    title = posting.title
+    await db.delete(posting)
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.job_delete",
+        summary=f"Job '{title}' removed from the board",
+    )
+
+
+# ── operator accounts ────────────────────────────────────────────────────────
+@router.get("/operators")
+async def list_operators(
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    rows = (
+        (
+            await db.execute(
+                select(User).where(User.is_platform_owner.is_(True)).order_by(User.email)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "operators": [
+            {
+                "id": str(u.id),
+                "email": u.email,
+                "is_active": u.is_active,
+                "last_login": u.last_login.isoformat() if u.last_login else None,
+                "you": u.id == operator.id,
+            }
+            for u in rows
+        ]
+    }
+
+
+class OperatorIn(BaseModel):
+    email: str = Field(min_length=5, max_length=200)
+    password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/operators", status_code=status.HTTP_201_CREATED)
+async def create_operator(
+    payload: OperatorIn,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    from app.auth.models import Role
+    from app.auth.service import create_user, get_user_by_email
+
+    if await get_user_by_email(db, payload.email.strip().lower()):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account")
+    user = await create_user(
+        db, payload.email.strip().lower(), payload.password, Role.SUPER_ADMIN.value,
+        operator.hotel_id,
+    )
+    user.is_platform_owner = True
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.operator_add",
+        summary=f"Operator account created: {user.email}",
+    )
+    return {"id": str(user.id), "email": user.email}
+
+
+class OperatorPatch(BaseModel):
+    active: bool
+
+
+@router.patch("/operators/{operator_id}")
+async def set_operator_active(
+    operator_id: uuid.UUID,
+    payload: OperatorPatch,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    if operator_id == operator.id and not payload.active:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't deactivate yourself")
+    target = (
+        await db.execute(
+            select(User).where(User.id == operator_id, User.is_platform_owner.is_(True))
+        )
+    ).scalar_one_or_none()
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Operator not found")
+    target.is_active = payload.active
+    await db.commit()
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.operator_active",
+        summary=f"Operator {target.email} {'reactivated' if payload.active else 'deactivated'}",
+    )
+    return {"id": str(target.id), "is_active": target.is_active}

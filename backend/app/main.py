@@ -17,6 +17,8 @@ from app.events.router import router as events_router
 from app.expenses.router import router as expenses_router
 from app.hotels.router import router as hotels_router
 from app.inventory.router import router as inventory_router
+from app.jobs.router import public_router as jobs_public_router
+from app.jobs.router import router as jobs_router
 from app.notifications.router import router as notifications_router
 from app.party.router import router as party_router
 from app.payroll.router import router as payroll_router
@@ -78,6 +80,8 @@ def create_app() -> FastAPI:
     app.include_router(assistant_router, prefix="/api")
     app.include_router(notifications_router, prefix="/api")
     app.include_router(platform_router, prefix="/api")
+    app.include_router(jobs_router, prefix="/api")
+    app.include_router(jobs_public_router, prefix="/api")
 
     @app.get("/", tags=["root"])
     async def root() -> dict:
