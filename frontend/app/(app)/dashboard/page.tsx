@@ -276,13 +276,48 @@ export default function DashboardPage() {
             hint={`${kpis.month_net_margin_pct}% margin`}
             href="/reports"
           />
-          <StatCard
-            label="Low stock"
-            value={<AnimatedNumber value={kpis.low_stock_count} />}
-            accent={kpis.low_stock_count ? "rose" : "brand"}
-            hint={kpis.low_stock_count ? "Tap to see & reorder" : "All good"}
-            href="/inventory?filter=low"
-          />
+          <div className="group relative">
+            <StatCard
+              label="Low stock"
+              value={<AnimatedNumber value={kpis.low_stock_count} />}
+              accent={kpis.low_stock_count ? "rose" : "brand"}
+              hint={kpis.low_stock_count ? "Tap to see & reorder" : "All good"}
+              href="/inventory?filter=low"
+            />
+            {/* hover preview: the worst offenders as little how-empty rings */}
+            {low.length > 0 && (
+              <div className="mise-pop pointer-events-none invisible absolute right-0 top-full z-30 mt-2 w-64 rounded-2xl border border-glass/15 bg-shell/95 p-3 opacity-0 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-200 group-hover:visible group-hover:opacity-100 lg:block hidden">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+                  Emptiest shelves first
+                </p>
+                <div className="space-y-2">
+                  {low.slice(0, 5).map((l) => {
+                    const cur = parseFloat(l.current_stock) || 0;
+                    const min = parseFloat(l.min_stock_level) || 1;
+                    const pct = Math.max(0, Math.min(100, (cur / min) * 100));
+                    return (
+                      <div key={l.item_id} className="flex items-center gap-2.5">
+                        <svg viewBox="0 0 36 36" className="h-8 w-8 shrink-0 -rotate-90" aria-hidden>
+                          <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="5" />
+                          <circle
+                            cx="18" cy="18" r="14" fill="none"
+                            stroke={pct < 40 ? "#f43f5e" : "#f59e0b"}
+                            strokeWidth="5" strokeLinecap="round"
+                            strokeDasharray={`${(pct / 100) * 87.96} 87.96`}
+                          />
+                        </svg>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-fg">{l.name}</p>
+                          <p className="text-[10px] text-fg-faint">{l.current_stock} left · min {l.min_stock_level}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {low.length > 5 && <p className="mt-2 text-[10px] text-fg-faint">+{low.length - 5} more below minimum</p>}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

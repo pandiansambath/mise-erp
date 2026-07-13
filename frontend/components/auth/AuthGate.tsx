@@ -87,7 +87,7 @@ function LoginForm({ active }: { active: boolean }) {
     <form
       onSubmit={onSubmit}
       onAnimationEnd={() => setShake(false)}
-      className={`mise-glass relative space-y-4 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
+      className={`mise-glass mise-liquid relative space-y-4 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
     >
       {/* the maître — watches your email, covers his eyes for the password.
           In-flow (not absolute) so no container ever crops his toque. */}
@@ -166,7 +166,7 @@ function SignupForm({ active }: { active: boolean }) {
     <form
       onSubmit={onSubmit}
       onAnimationEnd={() => setShake(false)}
-      className={`mise-glass relative space-y-3.5 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
+      className={`mise-glass mise-liquid relative space-y-3.5 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
     >
       {/* the maître greets new houses too — in-flow, crop-proof on all devices */}
       <div className="mx-auto -mt-1 w-20 sm:w-24">

@@ -87,18 +87,22 @@ export default function NotificationBell() {
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next) {
-      refresh();
-      if (all.length) {
-        const merged = new Set(seen);
-        all.forEach((i) => merged.add(i.id));
-        setSeen(merged);
-        try { localStorage.setItem(SEEN_KEY, JSON.stringify([...merged])); } catch { /* ignore */ }
-      }
-    }
+    if (next) refresh();
   }
 
-  function go(route: string) {
+  function persistSeen(next: Set<string>) {
+    setSeen(next);
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+  }
+
+  function markAllRead() {
+    const merged = new Set(seen);
+    all.forEach((i) => merged.add(i.id));
+    persistSeen(merged);
+  }
+
+  function go(route: string, id?: string) {
+    if (id && !seen.has(id)) persistSeen(new Set(seen).add(id));
     if (!route) return;
     setOpen(false);
     router.push(route);
@@ -127,8 +131,19 @@ export default function NotificationBell() {
         <div className="mise-pop absolute right-0 z-50 mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-glass/15 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
           <div className="flex items-center justify-between border-b border-glass/10 px-4 py-3">
             <span className="text-sm font-semibold text-fg">Notifications</span>
-            <span className="rounded-full bg-glass/10 px-2 py-0.5 text-[11px] font-medium text-fg-faint">
-              {feed.alerts.length} alert{feed.alerts.length === 1 ? "" : "s"}
+            <span className="flex items-center gap-2">
+              {unseen > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="mise-press rounded-full border border-brand-400/30 bg-brand-400/10 px-2 py-0.5 text-[11px] font-medium text-brand-300"
+                >
+                  ✓ Mark all read
+                </button>
+              )}
+              <span className="rounded-full bg-glass/10 px-2 py-0.5 text-[11px] font-medium text-fg-faint">
+                {feed.alerts.length} alert{feed.alerts.length === 1 ? "" : "s"}
+              </span>
             </span>
           </div>
 
@@ -147,14 +162,17 @@ export default function NotificationBell() {
                   <button
                     key={n.id}
                     type="button"
-                    onClick={() => go(n.route)}
-                    className="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-glass/5"
+                    onClick={() => go(n.route, n.id)}
+                    className={`flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-glass/5 ${seen.has(n.id) ? "opacity-75" : ""}`}
                   >
                     <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-sm ring-1 ${SEV[n.severity] ?? SEV.info}`}>
                       {n.icon}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-fg">{n.title}</span>
+                      <span className="flex items-center gap-1.5">
+                        {!seen.has(n.id) && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" aria-label="unread" />}
+                        <span className="truncate text-sm font-medium text-fg">{n.title}</span>
+                      </span>
                       <span className="block truncate text-xs text-fg-soft">{n.body}</span>
                     </span>
                     <span aria-hidden className="mt-1 text-fg-faint">›</span>
@@ -173,15 +191,18 @@ export default function NotificationBell() {
                   <button
                     key={n.id}
                     type="button"
-                    onClick={() => go(n.route)}
-                    className="flex w-full items-start gap-3 border-t border-glass/5 px-4 py-2.5 text-left transition first:border-t-0 hover:bg-glass/5"
+                    onClick={() => go(n.route, n.id)}
+                    className={`flex w-full items-start gap-3 border-t border-glass/5 px-4 py-2.5 text-left transition first:border-t-0 hover:bg-glass/5 ${seen.has(n.id) ? "opacity-75" : ""}`}
                   >
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-glass/8 text-sm ring-1 ring-glass/10">
                       {n.icon}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium text-fg">{n.title}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          {!seen.has(n.id) && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" aria-label="unread" />}
+                          <span className="truncate text-sm font-medium text-fg">{n.title}</span>
+                        </span>
                         <span className="shrink-0 text-[10px] text-fg-faint">{timeAgo(n.at)}</span>
                       </span>
                       <span className="block truncate text-xs text-fg-soft">{n.body}</span>

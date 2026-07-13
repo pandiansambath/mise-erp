@@ -15,7 +15,7 @@ import {
   type PnL,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
-import { Bars, Donut, Meter, Waffle } from "@/components/charts";
+import { Bars, Donut, Meter, Waffle, Sparkline } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, useCurrency } from "@/lib/currency";
@@ -349,6 +349,8 @@ export default function MoneyPage() {
   const symbol = CURRENCIES[currency].symbol;
   const [data, setData] = useState<MoneyCentre | null>(null);
   const [pnl, setPnl] = useState<PnL | null>(null);
+  // order-by-order paid prices behind each price-rise alert
+  const [alertSparks, setAlertSparks] = useState<Record<string, number[]>>({});
   const [openInfo, setOpenInfo] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // chart → sub-chart: the items inside the tapped stock category
@@ -382,6 +384,19 @@ export default function MoneyPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const alerts = data?.price_alerts?.slice(0, 6) ?? [];
+    if (!alerts.length) return;
+    Promise.all(
+      alerts.map((a) =>
+        api
+          .get<{ date: string; price: string }[]>(`/reports/price-history/${a.item_id}`)
+          .then((pts) => [a.item_id, pts.map((x) => parseFloat(x.price) || 0)] as const)
+          .catch(() => [a.item_id, []] as const),
+      ),
+    ).then((entries) => setAlertSparks(Object.fromEntries(entries)));
+  }, [data?.price_alerts]);
 
   if (err) return <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{err}</p>;
   if (!data) return <Spinner />;
@@ -463,12 +478,49 @@ export default function MoneyPage() {
           </div>
           )}
 
-          {/* Plain-English one-liner */}
-          <div className="mise-well mt-4 rounded-xl px-4 py-3 text-sm text-fg-soft">
-            You took in <b className="text-fg">{format(pnl.net_sales)}</b>, spent{" "}
-            <b className="text-fg">{format(Number(pnl.cost_of_sales) + Number(pnl.operating_expenses))}</b>{" "}
-            (food + running) — so you keep{" "}
-            <b className={parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}>{format(pnl.net_profit)}</b>.
+          {/* The month's money story — the numbers as four plain sentences */}
+          <div className="mise-well mt-4 rounded-xl p-4">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">This month&apos;s money story</p>
+              <button
+                type="button"
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent("mise:ask", {
+                      detail: { prompt: "Tell me this month's money story — how are sales, costs and profit going, and what should I watch?" },
+                    }),
+                  )
+                }
+                className="mise-press shrink-0 rounded-full border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-[11px] font-medium text-brand-300"
+              >
+                ✨ Ask Mise to dig deeper
+              </button>
+            </div>
+            <div className="mt-2 space-y-1.5 text-sm leading-relaxed text-fg-soft">
+              <p>
+                You took in <b className="text-fg">{format(pnl.net_sales)}</b> so far
+                {parseFloat(pnl.commission) > 0 && (
+                  <> (after the delivery apps kept <b className="text-fg">{format(pnl.commission)}</b>)</>
+                )}
+                .
+              </p>
+              <p>
+                The kitchen ate <b className="text-fg">{format(pnl.cost_of_sales)}</b> of it ({pnl.food_cost_pct}% food cost
+                {parseFloat(pnl.food_cost_pct) <= 35 ? " — inside the healthy 25–35% band" : " — above the 35% line, worth a look"}
+                ), and running the place cost <b className="text-fg">{format(pnl.operating_expenses)}</b>.
+              </p>
+              {parseFloat(pnl.waste_total) > 0 && (
+                <p>
+                  <b className="text-rose-400">{format(pnl.waste_total)}</b> went in the bin as logged waste.
+                </p>
+              )}
+              <p>
+                That leaves{" "}
+                <b className={parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}>{format(pnl.net_profit)}</b>{" "}
+                in your pocket — <b className="text-fg">{Math.round(parseFloat(pnl.net_margin_pct) || 0)}p of every £1</b>{" "}
+                {parseFloat(pnl.net_profit) >= 0 ? "stays with you." : "— the month is currently loss-making."}
+              </p>
+            </div>
           </div>
 
           <div className="mise-well mt-3 space-y-2.5 rounded-2xl p-3 text-sm">
@@ -601,16 +653,38 @@ export default function MoneyPage() {
                 </p>
               </div>
             </div>
-            {/* progress: net sales vs break-even */}
+            {/* bullet chart: the actual bar racing a break-even target tick */}
             <div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-glass/10">
-                <div
-                  className={`h-full rounded-full ${gap != null && gap >= 0 ? "bg-brand-500" : "bg-amber-500"}`}
-                  style={{
-                    width: `${Math.min(100, (parseFloat(be.net_sales) / parseFloat(beSales || "1")) * 100 || 0)}%`,
-                  }}
-                />
-              </div>
+              {(() => {
+                const sold = parseFloat(be.net_sales) || 0;
+                const target = parseFloat(beSales || "0") || 0;
+                const max = Math.max(sold, target) * 1.15 || 1;
+                const soldPct = Math.min(100, (sold / max) * 100);
+                const targetPct = Math.min(97, (target / max) * 100);
+                return (
+                  <div>
+                    <div className="mise-well relative h-6 w-full overflow-hidden rounded-full">
+                      <div className="absolute inset-y-0 left-0 bg-amber-400/10" style={{ width: `${targetPct}%` }} />
+                      <div className="absolute inset-y-0 bg-brand-400/10" style={{ left: `${targetPct}%`, right: 0 }} />
+                      <div
+                        className={`absolute left-1 top-1/2 h-2.5 -translate-y-1/2 rounded-full transition-[width] duration-700 ${
+                          sold >= target ? "bg-brand-500" : "bg-amber-500"
+                        }`}
+                        style={{ width: `calc(${soldPct}% - 4px)` }}
+                      />
+                      <div
+                        className="absolute bottom-0 top-0 w-[3px] rounded bg-fg/70"
+                        style={{ left: `calc(${targetPct}% - 1.5px)` }}
+                        title={`break-even: ${format(beSales || "0")}`}
+                      />
+                    </div>
+                    <div className="mt-1 flex justify-between text-[10px] text-fg-faint">
+                      <span>0</span>
+                      <span style={{ marginLeft: `${Math.max(0, targetPct - 55)}%` }}>▲ break-even {format(beSales || "0")}</span>
+                    </div>
+                  </div>
+                );
+              })()}
               <p className="mt-2 text-sm text-fg-soft">
                 You&apos;ve sold <b className="text-fg">{format(be.net_sales)}</b>{" "}
                 {gap != null && gap >= 0 ? (
@@ -792,13 +866,23 @@ export default function MoneyPage() {
           <ul className="mt-3 divide-y divide-line">
             {data.price_alerts.map((a) => (
               <li key={a.item_id} className="flex items-center justify-between gap-3 py-2.5">
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-fg">{a.item_name}</span>
                   <span className="block text-xs text-fg-faint">
                     {format(a.prev_price)} → {format(a.latest_price)}
                     {a.vendor_name ? ` · ${a.vendor_name}` : ""} · {a.last_ordered}
                   </span>
                 </span>
+                {alertSparks[a.item_id] && alertSparks[a.item_id].length > 1 && (
+                  <span className="mise-well hidden shrink-0 rounded-lg px-2 py-1 sm:block" title="what you paid, order by order">
+                    <Sparkline
+                      data={alertSparks[a.item_id]}
+                      formatValue={(v) => format(String(v))}
+                      height={20}
+                      className="h-[20px] w-20"
+                    />
+                  </span>
+                )}
                 <Badge tone="red">▲ {a.change_pct}%</Badge>
               </li>
             ))}

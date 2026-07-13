@@ -30,7 +30,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 - [x] CalendarHeat "month rhythm" — GitHub-style takings heatmap, fed by the
       NEW /reports/sales-trend endpoint (dashboard's 7 pnl calls → 1 query)
 - [x] "N on service today: Wes, Sam +2" rota chip in the greeting row
-- [ ] Low-stock KPI → mini RadialBars preview on hover (glass popover)
+- [x] Low-stock KPI → hover glass popover w/ how-empty rings (worst 5, stock/min %, +N more)
 - [x] Chef empty states: shrugging maître fronts EVERY EmptyState app-wide
 
 ## 2 · Sales & Cash
@@ -48,9 +48,9 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 4 · Money
 - [x] Waterfall Bars + net counter + stock Donut + budget Meters + £1 Waffle
-- [ ] Break-even: bullet chart (actual bar vs target tick) instead of plain bar
-- [ ] Price-rise alerts: per-item mini Sparkline inline
-- [ ] Feature: monthly "money story" plain-English summary (copilot endpoint)
+- [x] Break-even: bullet chart (amber/green qualitative bands, actual bar, ▲ target tick w/ label)
+- [x] Price-rise alerts: per-item mini Sparkline inline (order-by-order paid prices, top 6)
+- [x] Feature: monthly "money story" plain-English summary (4-sentence narrative + ✨ Ask-Mise handoff via mise:ask)
 
 ## 5 · Reports (P&L)
 - [x] Donut + Meters + Bars + print/export raised buttons
@@ -180,7 +180,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 28 · Login / Signup
 - [x] Cinematic morph gate (f2f0d4f)
-- [ ] Liquid-glass form variant test
+- [x] Liquid-glass form variant (mise-liquid: drifting specular sheen + refractive rim on both auth forms)
 
 ## 29 · Landing (public)
 - [x] Native-res films + mobile cinema band + zero-wait preload (50fa4a0)
@@ -210,6 +210,6 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 32 · App Shell
 - [x] ⌘K actions + glass palette + grouped nav
-- [ ] Notification center dropdown (bell → glass panel, mark-read)
+- [x] Notification center dropdown (unread dots, per-item mark-read on click, ✓ Mark all read, read rows dimmed)
 - [x] Mobile bottom tab bar (Home/Sales/Stock/Money/Search, glass, safe-area)
 - [x] Keyboard shortcuts: g d/i/s/m/r/p jumps + ? opens ⌘K
