@@ -48,7 +48,8 @@ function CostDetail({
   onTag: (itemId: string, csv: string) => void;
 }) {
   const [data, setData] = useState<RecipeCostBreakdown | null>(() => _costCache.get(recipeId) ?? null);
-  const [whatIf, setWhatIf] = useState<number | null>(null); // what-if price slider
+  const [whatIf, setWhatIf] = useState<number | null>(null);
+  const [allergenEdit, setAllergenEdit] = useState<string | null>(null); // which ingredient's picker is open // what-if price slider
   const [costView, setCostView] = useState<"donut" | "map">("donut");
   const { format } = useCurrency();
   useEffect(() => {
@@ -92,8 +93,8 @@ function CostDetail({
           { label: `Batch (${data.servings} serves)`, value: format(data.total_cost), cls: "text-fg" },
         ].map((kpi) => (
           <div key={kpi.label} className="mise-well mise-feel rounded-xl p-3">
-            <p className="text-xs uppercase tracking-wide text-fg-faint">{kpi.label}</p>
-            <p className={`mt-1 text-lg font-semibold ${kpi.cls}`}>{kpi.value}</p>
+            <p className="text-[11px] leading-tight text-fg-faint">{kpi.label}</p>
+            <p className={`mt-1 font-mono text-lg font-semibold ${kpi.cls}`}>{kpi.value}</p>
           </div>
         ))}
       </div>
@@ -242,45 +243,73 @@ function CostDetail({
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-faint">
           🥜 Allergens — tag each ingredient
         </p>
-        <ul className="space-y-2.5">
+        <ul className="space-y-1">
           {data.ingredients.map((ing) => {
             const item = items.find((it) => it.id === ing.item_id);
             const reviewed = item?.allergens != null;
             const current = new Set(parseAllergens(item?.allergens));
+            const editingThis = allergenEdit === ing.item_id;
             return (
-              <li key={ing.item_id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <span className="w-36 shrink-0 truncate text-sm text-fg">{ing.item_name}</span>
-                <div className="flex flex-wrap gap-1">
+              <li key={ing.item_id} className="rounded-lg px-1.5 py-1 transition hover:bg-glass/[0.04]">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="w-36 shrink-0 truncate text-sm text-fg">{ing.item_name}</span>
+                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                    {!reviewed ? (
+                      <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                        not reviewed
+                      </span>
+                    ) : current.size === 0 ? (
+                      <span className="rounded-full bg-brand-500/15 px-2 py-0.5 text-[11px] font-medium text-brand-300">
+                        contains none ✓
+                      </span>
+                    ) : (
+                      [...current].map((code) => (
+                        <span key={code} className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-medium text-rose-300">
+                          {ALLERGENS.find((a) => a.code === code)?.label ?? code}
+                        </span>
+                      ))
+                    )}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => toggleAllergen(item, null)}
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
-                      reviewed && current.size === 0
-                        ? "bg-brand-600 text-white"
-                        : "border border-line-2 text-fg-faint hover:bg-glass/5"
-                    }`}
+                    onClick={() => setAllergenEdit(editingThis ? null : ing.item_id)}
+                    className="mise-press shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-medium text-brand-400 hover:bg-glass/5"
                   >
-                    none
+                    {editingThis ? "done" : "edit"}
                   </button>
-                  {ALLERGENS.map((a) => {
-                    const on = current.has(a.code);
-                    return (
-                      <button
-                        key={a.code}
-                        type="button"
-                        onClick={() => toggleAllergen(item, a.code)}
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
-                          on
-                            ? "bg-rose-500 text-white"
-                            : "border border-line-2 text-fg-soft hover:bg-glass/5"
-                        }`}
-                      >
-                        {a.label}
-                      </button>
-                    );
-                  })}
-                  {!reviewed && <span className="self-center text-[11px] text-amber-300">not reviewed</span>}
                 </div>
+                {editingThis && (
+                  <div className="mise-pop mt-1.5 flex flex-wrap gap-1 pb-1 pl-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleAllergen(item, null)}
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+                        reviewed && current.size === 0
+                          ? "bg-brand-600 text-white"
+                          : "border border-line-2 text-fg-faint hover:bg-glass/5"
+                      }`}
+                    >
+                      none
+                    </button>
+                    {ALLERGENS.map((a) => {
+                      const on = current.has(a.code);
+                      return (
+                        <button
+                          key={a.code}
+                          type="button"
+                          onClick={() => toggleAllergen(item, a.code)}
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${
+                            on
+                              ? "bg-rose-500 text-white"
+                              : "border border-line-2 text-fg-soft hover:bg-glass/5"
+                          }`}
+                        >
+                          {a.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -297,6 +326,33 @@ type NotePreviewLine = {
   item_id: string | null; item_name: string | null; matched_unit: string | null; confidence: number;
 };
 type IngredientOut = { item_id: string; quantity: string; unit: string };
+
+const DISH_EMOJI: Record<string, string> = {
+  Main: "🍛", Starter: "🥟", Dessert: "🍰", Beverage: "🥤", Side: "🥗",
+  Bread: "🫓", Rice: "🍚", Snack: "🍢", Soup: "🍜", Salad: "🥬",
+};
+const dishEmoji = (cat: string | null | undefined) => DISH_EMOJI[cat ?? ""] ?? "🍲";
+
+/** Margin as a little gauge — the number wearing its ring. */
+function MarginRing({ pct }: { pct: number }) {
+  const tone = pct >= 70 ? "#34d399" : pct >= 50 ? "#f59e0b" : "#f43f5e";
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <span className="relative grid h-10 w-10 shrink-0 place-items-center" title={`${pct}% profit margin`}>
+      <svg viewBox="0 0 36 36" className="absolute inset-0 -rotate-90" aria-hidden>
+        <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="3.5" />
+        <circle
+          cx="18" cy="18" r="15.5" fill="none"
+          stroke={tone} strokeWidth="3.5" strokeLinecap="round"
+          strokeDasharray={`${(clamped / 100) * 97.4} 97.4`}
+        />
+      </svg>
+      <span className="text-[9px] font-bold tabular-nums" style={{ color: tone }}>
+        {Math.round(pct)}%
+      </span>
+    </span>
+  );
+}
 
 const DEFAULT_CATEGORIES = [
   "Main", "Starter", "Dessert", "Beverage", "Side", "Bread", "Rice", "Snack", "Soup", "Salad",
@@ -568,13 +624,22 @@ export default function RecipesPage() {
   const dishCard = (dishName: string, variants: Recipe[]) => {
     const sorted = [...variants].sort((a, b) => a.servings_default - b.servings_default);
     return (
-      <Card key={dishName}>
-        <div className="mb-1">
-          <p className="font-semibold text-fg">{dishName}</p>
-          <p className="text-sm text-fg-faint">
-            {sorted[0].category || "Dish"}
-            {sorted.length > 1 && ` · ${sorted.length} serving sizes`}
-          </p>
+      <Card key={dishName} className="mise-feel group relative overflow-hidden">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-brand-400/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        />
+        <div className="mb-2 flex items-center gap-3">
+          <span aria-hidden className="mise-well grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl">
+            {dishEmoji(sorted[0].category)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold text-fg">{dishName}</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-faint">
+              <span className="rounded-full bg-glass/10 px-2 py-0.5">{sorted[0].category || "Dish"}</span>
+              {sorted.length > 1 && <span>{sorted.length} serving sizes</span>}
+            </p>
+          </div>
         </div>
         <div className="divide-y divide-line">
           {sorted.map((r) => {
@@ -591,7 +656,7 @@ export default function RecipesPage() {
                       serves {r.servings_default}
                     </span>
                     <span className="flex items-center gap-3">
-                      {pct !== null && <Badge tone={marginTone(pct)}>{pct}% margin</Badge>}
+                      {pct !== null && <MarginRing pct={pct} />}
                       <svg
                         width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -607,14 +672,14 @@ export default function RecipesPage() {
                       <>
                         <button
                           onClick={() => startEdit(r)}
-                          className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                          className="mise-press rounded-lg px-2 py-1 text-xs font-medium text-fg-faint transition hover:bg-glass/5 hover:text-fg"
                         >
-                          Edit
+                          ✎ Edit
                         </button>
                         <button
                           onClick={() => archiveRecipe(r)}
                           title="Archive (hide from recipes & costing)"
-                          className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                          className="mise-press rounded-lg px-2 py-1 text-xs font-medium text-fg-faint transition hover:bg-rose-400/10 hover:text-rose-300"
                         >
                           Archive
                         </button>

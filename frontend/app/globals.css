@@ -387,7 +387,9 @@ html:has(.mise-app) { background: #04120d; }
   to   { opacity: 1; transform: none; filter: blur(0); }
 }
 .mise-page {
-  animation: mise-page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* NO fill-mode: a retained transform/filter would turn this wrapper into
+     the containing block for every position:fixed modal inside the page. */
+  animation: mise-page-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ── Pop-in for dropdowns / modals ──────────────────────────────────────── */
@@ -1297,3 +1299,9 @@ input::-webkit-calendar-picker-indicator:hover {
   background: color-mix(in srgb, var(--color-brand-400) 20%, transparent);
 }
 input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+
+/* Keyboard focus gets the brand halo everywhere — premium and accessible. */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand-400) 65%, transparent);
+  outline-offset: 2px;
+}

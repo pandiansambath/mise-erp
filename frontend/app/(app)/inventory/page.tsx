@@ -399,8 +399,39 @@ export default function InventoryPage() {
                         }
                         className="h-4 w-4 accent-emerald-500"
                       />
-                      <span className="min-w-0 flex-1 truncate text-fg">{r.name}</span>
-                      <span className="shrink-0 text-[11px] text-fg-faint">{r.exists ? "already added" : r.unit}</span>
+                      {r.exists ? (
+                        <>
+                          <span className="min-w-0 flex-1 truncate text-fg">{r.name}</span>
+                          <span className="shrink-0 text-[11px] text-fg-faint">already added</span>
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            value={r.name}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSeedRows((list) => list && list.map((x) => (x === r ? { ...x, name: v } : x)));
+                            }}
+                            onClick={(e) => e.preventDefault()}
+                            className="mise-well min-w-0 flex-1 rounded-md px-2 py-1 text-sm text-fg outline-none"
+                            aria-label={`Rename ${r.name}`}
+                          />
+                          <select
+                            value={r.unit}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSeedRows((list) => list && list.map((x) => (x === r ? { ...x, unit: v } : x)));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mise-well shrink-0 rounded-md px-1.5 py-1 text-[11px] text-fg-soft outline-none"
+                            aria-label={`Unit for ${r.name}`}
+                          >
+                            {[...new Set([r.unit, "kg", "g", "litre", "ml", "piece", "packet", "roll", "box", "bottle", "tin", "bunch"])].map((u) => (
+                              <option key={u} value={u}>{u}</option>
+                            ))}
+                          </select>
+                        </>
+                      )}
                     </label>
                   ))}
                 </div>
@@ -1093,6 +1124,18 @@ export default function InventoryPage() {
             </div>
           </div>
 
+          <p className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-faint">
+            <span
+              className="mise-press inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-line text-[10px] font-bold"
+              title="The bar under each stock figure = how full the shelf is vs its reorder line. Red: below minimum — order now. Amber: within 1.5× of minimum — getting close. Green: healthy."
+            >
+              i
+            </span>
+            Shelf bar:
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-rose-400" /> below min</span>
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-amber-400" /> near min</span>
+            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-brand-500" /> healthy</span>
+          </p>
           <Card className="p-0">
             <div className="max-h-[62vh] overflow-auto">
               <table className="w-full text-sm">
@@ -1126,18 +1169,22 @@ export default function InventoryPage() {
                       return (
                         <Fragment key={item.id}>
                         <tr
-                          className={`border-b border-line transition hover:bg-glass/[0.04] ${
+                          className={`border-b border-line/60 transition even:bg-glass/[0.02] hover:bg-glass/[0.05] ${
                             hasHistory ? "cursor-pointer" : ""
                           } ${isOpen ? "bg-glass/[0.04]" : ""} ${st.label === "running low" ? "mise-low-pulse" : ""}`}
                           onClick={hasHistory ? () => toggleBreakdown(item) : undefined}
                           aria-expanded={hasHistory ? isOpen : undefined}
                         >
                           <td className="px-5 py-3">
-                            <p className="font-medium text-fg">
-                              <span aria-hidden className="mr-1.5">{categoryEmoji(item.category?.trim() || "Other")}</span>
-                              {item.name}
-                            </p>
-                            <p className="mt-0.5 text-xs text-fg-faint">{item.category || "Uncategorised"}</p>
+                            <div className="flex items-center gap-2.5">
+                              <span aria-hidden className="mise-well grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base">
+                                {categoryEmoji(item.category?.trim() || "Other")}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-fg">{item.name}</p>
+                                <p className="mt-0.5 truncate text-xs text-fg-faint">{item.category || "Uncategorised"}</p>
+                              </div>
+                            </div>
                           </td>
                           <td className="px-5 py-3">
                             <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${st.cls}`}>

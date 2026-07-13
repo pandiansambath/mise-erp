@@ -144,13 +144,14 @@ export default function RotaPage() {
   // ── Jira-style drag & drop: pick a shift card up, drop it on another day ──
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropDay, setDropDay] = useState<string | null>(null);
-  // after a drop: which card just moved (glows), and the undo ticket
-  const [justMoved, setJustMoved] = useState<string | null>(null);
-  const [lastMove, setLastMove] = useState<{
+  // every drop stacks a move ticket: it PERSISTS until you keep or undo it,
+  // each move can be undone on its own, Ctrl+Z pops the latest.
+  type Move = {
     newId: string; name: string; fromDate: string; toDate: string;
     employee_id: string; start_time: string; end_time: string; break_minutes: number;
-  } | null>(null);
-  const moveTimer = useRef<number>(0);
+  };
+  const [moves, setMoves] = useState<Move[]>([]);
+  const movedIds = useMemo(() => new Set(moves.map((m) => m.newId)), [moves]);
 
   async function moveShift(id: string | null, targetDate: string) {
     setDropDay(null);
@@ -170,30 +171,23 @@ export default function RotaPage() {
       });
       await api.delete(`/rota/shifts/${sh.id}`);
       await reload();
-      // mark the traveller + open the keep/undo ticket
-      setJustMoved(created.id);
-      setLastMove({
-        newId: created.id, name: sh.employee_name, fromDate, toDate: targetDate,
-        employee_id: sh.employee_id, start_time: sh.start_time, end_time: sh.end_time,
-        break_minutes: sh.break_minutes,
-      });
-      window.clearTimeout(moveTimer.current);
-      moveTimer.current = window.setTimeout(() => {
-        setLastMove(null);
-        setJustMoved(null);
-      }, 12000);
+      // stack the ticket — it stays until YOU decide
+      setMoves((list) => [
+        ...list,
+        {
+          newId: created.id, name: sh.employee_name, fromDate, toDate: targetDate,
+          employee_id: sh.employee_id, start_time: sh.start_time, end_time: sh.end_time,
+          break_minutes: sh.break_minutes,
+        },
+      ]);
     } catch (err) {
       setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: fromDate } : x)));
       setMsg(err instanceof ApiError ? err.message : "Could not move the shift");
     }
   }
 
-  const undoMove = useCallback(async () => {
-    const m = lastMove;
-    if (!m) return;
-    setLastMove(null);
-    setJustMoved(null);
-    window.clearTimeout(moveTimer.current);
+  const undoMove = useCallback(async (m: Move) => {
+    setMoves((list) => list.filter((x) => x.newId !== m.newId));
     try {
       await api.post("/rota/shifts", {
         employee_id: m.employee_id, date: m.fromDate,
@@ -205,20 +199,20 @@ export default function RotaPage() {
       setMsg(err instanceof ApiError ? err.message : "Could not undo the move");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastMove]);
+  }, []);
 
-  // Ctrl+Z / ⌘Z takes the move back while the ticket is showing
+  // Ctrl+Z / ⌘Z undoes the LATEST move while tickets are open
   useEffect(() => {
-    if (!lastMove) return;
+    if (moves.length === 0) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        undoMove();
+        undoMove(moves[moves.length - 1]);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lastMove, undoMove]);
+  }, [moves, undoMove]);
 
   // Load any source week's shifts into the editable preview, mapped onto THIS week's
   // matching weekdays. Source defaults to last week but can be stepped to any week.
@@ -643,9 +637,9 @@ export default function RotaPage() {
                       title={canWrite ? "Drag onto another day to move this shift" : undefined}
                       className={`mise-well mise-feel relative rounded-lg p-2 text-xs ${canWrite ? "cursor-grab active:cursor-grabbing" : ""} ${
                         dragId === s.id ? "opacity-40 ring-1 ring-brand-400/50" : ""
-                      } ${justMoved === s.id ? "mise-spotlight ring-1 ring-copper-400/50" : ""}`}
+                      } ${movedIds.has(s.id) ? "mise-spotlight ring-1 ring-copper-400/50" : ""}`}
                     >
-                      {justMoved === s.id && (
+                      {movedIds.has(s.id) && (
                         <span className="absolute -right-1.5 -top-1.5 rounded-full bg-copper-500 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
                           moved
                         </span>
@@ -670,32 +664,42 @@ export default function RotaPage() {
         })}
       </div>
 
-      {lastMove && (
-        <div className="mise-pop fixed inset-x-4 bottom-24 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-copper-400/30 bg-paper-2/95 px-4 py-3 shadow-2xl shadow-black/50 backdrop-blur-xl lg:bottom-8">
-          <span aria-hidden>✥</span>
-          <p className="min-w-0 flex-1 text-sm text-fg">
-            Moved <b>{lastMove.name.split(" ")[0]}</b>{" "}
-            <span className="text-fg-faint">
-              {new Date(lastMove.fromDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} →{" "}
-              {new Date(lastMove.toDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })}
-            </span>{" "}
-            — keep it?
-          </p>
-          <button
-            type="button"
-            onClick={() => { setLastMove(null); setJustMoved(null); }}
-            className="mise-press shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
-          >
-            Keep ✓
-          </button>
-          <button
-            type="button"
-            onClick={undoMove}
-            className="mise-press shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-fg-soft"
-            title="Ctrl+Z / ⌘Z"
-          >
-            Undo ⌫
-          </button>
+      {moves.length > 0 && (
+        <div className="mise-pop fixed left-1/2 top-20 z-50 w-[min(28rem,calc(100vw-1.5rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-copper-400/30 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+            <span aria-hidden>✥</span>
+            <p className="flex-1 text-sm font-semibold text-fg">
+              {moves.length === 1 ? "You moved a shift" : `You moved ${moves.length} shifts`} — keep them?
+            </p>
+            <button
+              type="button"
+              onClick={() => setMoves([])}
+              className="mise-press shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Keep all ✓
+            </button>
+          </div>
+          <ul className="max-h-52 overflow-y-auto overscroll-contain p-2">
+            {moves.map((m) => (
+              <li key={m.newId} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-glass/5">
+                <span className="min-w-0 flex-1 truncate text-fg">
+                  <b>{m.name.split(" ")[0]}</b>{" "}
+                  <span className="text-fg-faint">
+                    {new Date(m.fromDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} →{" "}
+                    {new Date(m.toDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} · {hhmm(m.start_time)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => undoMove(m)}
+                  className="mise-press shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:text-rose-300"
+                >
+                  Undo ⌫
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-line px-4 py-1.5 text-[10px] text-fg-faint">Ctrl+Z / ⌘Z undoes the latest · stays until you decide</p>
         </div>
       )}
 
