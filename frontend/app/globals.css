@@ -953,8 +953,27 @@ html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transpa
   aspect-ratio: 1284 / 716;
   height: auto !important;
   object-fit: cover;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
-  mask-image: linear-gradient(180deg, transparent 0%, #000 16%, #000 84%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+}
+
+/* While the phone band film plays, everything above and below it sinks into
+   near-black — the band's faded edges dissolve into darkness instead of
+   reading as a widescreen border. The window stays clear over the band. */
+.mise-l-bandveil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(2, 8, 6, 0.95) 0%,
+    rgba(2, 8, 6, 0.62) 29%,
+    transparent 42%,
+    transparent 58%,
+    rgba(2, 8, 6, 0.62) 71%,
+    rgba(2, 8, 6, 0.95) 100%
+  );
+  transition: opacity 900ms ease;
 }
 
 /* Smoke plumes hugging the phone band's top/bottom seams — the 16:9 film
@@ -1211,6 +1230,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transpa
   .mise-l-ken { animation-play-state: paused !important; }
   .mise-l-nebula { filter: blur(16px); }
   .mise-l-bandsmoke { filter: blur(14px); }
+  .mise-l-smoke span { width: 46vmax; height: 46vmax; filter: blur(18px); }
 }
 
 /* Sun rays sweeping behind the Copilot star. */

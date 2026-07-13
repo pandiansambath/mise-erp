@@ -127,6 +127,7 @@ function FilmLayer({
       className="absolute inset-0"
       style={{ opacity: seg === "warmup" || fading ? 0 : 1, transition: "opacity 900ms ease" }}
     >
+      {small && <span className="mise-l-bandveil" aria-hidden />}
       {small && <span className="mise-l-bandsmoke" aria-hidden />}
       <video
         ref={v0}

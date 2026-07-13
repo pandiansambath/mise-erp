@@ -151,7 +151,7 @@ export default function Hero({ start }: { start: boolean }) {
     <section ref={wrapRef} className="relative" style={{ height: "230vh" }}>
       <div className="sticky top-0 h-screen overflow-hidden bg-ink-950">
         {/* Act 1 backdrop — fire (film start) morphing into the dish (destination) */}
-        <div ref={filmRef} className="absolute inset-0" style={{ transformOrigin: "50% 42%" }}>
+        <div ref={filmRef} className="absolute inset-0 will-change-transform" style={{ transformOrigin: "50% 42%" }}>
           <img
             src={stillPath("fire", small)}
             alt=""
@@ -179,11 +179,10 @@ export default function Hero({ start }: { start: boolean }) {
             }}
           />
           {small && (
-            <span
-              className="mise-l-bandsmoke"
-              style={{ opacity: film === "playing" ? 1 : 0 }}
-              aria-hidden
-            />
+            <>
+              <span className="mise-l-bandveil" style={{ opacity: film === "playing" ? 1 : 0 }} aria-hidden />
+              <span className="mise-l-bandsmoke" style={{ opacity: film === "playing" ? 1 : 0 }} aria-hidden />
+            </>
           )}
           <video
             ref={vidRef}
@@ -210,7 +209,7 @@ export default function Hero({ start }: { start: boolean }) {
           alt=""
           loading="lazy"
           decoding="async"
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover will-change-[opacity]"
           style={{ opacity: 0 }}
         />
         {/* aurora breathing at the edges + embers rising off the plate */}
@@ -241,7 +240,7 @@ export default function Hero({ start }: { start: boolean }) {
         {/* Act 1 — headline */}
         <div
           ref={headRef}
-          className="absolute inset-x-0 top-[14vh] z-10 flex flex-col items-center px-6 text-center sm:top-[15vh]"
+          className="absolute inset-x-0 top-[14vh] z-10 flex flex-col items-center px-6 text-center sm:top-[15vh] will-change-[transform,opacity]"
         >
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3.5 py-1.5 font-mono text-[11px] tracking-[0.3em] text-copper-200 backdrop-blur">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
@@ -272,13 +271,13 @@ export default function Hero({ start }: { start: boolean }) {
 
         {/* Act 2 — the product rises */}
         <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center" style={{ perspective: "1400px" }}>
-          <div ref={dashRef} className="origin-bottom" style={{ transform: "translateY(66%) rotateX(18deg) scale(0.94)" }}>
+          <div ref={dashRef} className="origin-bottom will-change-transform" style={{ transform: "translateY(66%) rotateX(18deg) scale(0.94)" }}>
             <DashboardSim />
           </div>
         </div>
 
         {/* caption that appears with the dashboard */}
-        <div ref={capRef} className="pointer-events-none absolute inset-x-0 top-[7vh] z-10 text-center" style={{ opacity: 0 }}>
+        <div ref={capRef} className="pointer-events-none absolute inset-x-0 top-[7vh] z-10 text-center will-change-[opacity]" style={{ opacity: 0 }}>
           <p className="font-mono text-[11px] tracking-[0.35em] text-brand-300/90">THIS IS MISE</p>
           <p className="mt-2 font-display text-2xl text-white sm:text-3xl">
             Your whole operation, <em className="text-copper-200">live</em>.
@@ -288,7 +287,7 @@ export default function Hero({ start }: { start: boolean }) {
         {/* scroll cue — sits BELOW the rising dashboard so the window covers it */}
         <div
           ref={cueRef}
-          className="pointer-events-none absolute inset-x-0 bottom-6 z-[15] flex flex-col items-center gap-1.5 transition-opacity duration-300"
+          className="pointer-events-none absolute inset-x-0 bottom-6 z-[15] flex flex-col items-center gap-1.5 transition-opacity duration-300 will-change-[opacity]"
         >
           <span className="font-mono text-[10px] tracking-[0.35em] text-white/70">SCROLL</span>
           <span className="mise-scroll-chevron text-white/70">↓</span>

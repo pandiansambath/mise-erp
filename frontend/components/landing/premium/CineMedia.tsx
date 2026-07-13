@@ -186,11 +186,10 @@ export default function CineMedia({
       {allowed ? (
         <>
           {small && (
-            <span
-              className="mise-l-bandsmoke"
-              style={{ opacity: stage === "v0" || stage === "v1" ? 1 : 0 }}
-              aria-hidden
-            />
+            <>
+              <span className="mise-l-bandveil" style={{ opacity: rolling ? 1 : 0 }} aria-hidden />
+              <span className="mise-l-bandsmoke" style={{ opacity: rolling ? 1 : 0 }} aria-hidden />
+            </>
           )}
           <video
             ref={v0}
