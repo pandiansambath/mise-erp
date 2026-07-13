@@ -258,11 +258,36 @@ function SignupForm({ active }: { active: boolean }) {
   );
 }
 
+/** True once the browser holds a fully-decoded copy — backdrops fade in as a
+    whole frame instead of revealing top-to-bottom while the JPEG streams. */
+function useDecoded(src: string): boolean {
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const im = new Image();
+    const done = () => {
+      if (!cancelled) setOk(true);
+    };
+    im.src = src;
+    if (im.decode) im.decode().then(done).catch(done);
+    else {
+      im.onload = done;
+      im.onerror = done;
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+  return ok;
+}
+
 /* ──────────────────── the sliding cinema panel ──────────────────── */
 
 function CinePanel({ mode, onSwitch }: { mode: AuthMode; onSwitch: (m: AuthMode) => void }) {
   // The panel always pitches the OTHER door.
   const pitchSignup = mode === "login";
+  const tableOk = useDecoded("/experience/table.jpg");
+  const dawnOk = useDecoded("/experience/dawn.jpg");
   return (
     <div className="relative flex h-full flex-col justify-between overflow-hidden p-8 lg:p-10">
       {/* full-vibrancy film stills, crossfading with the mode */}
@@ -271,14 +296,14 @@ function CinePanel({ mode, onSwitch }: { mode: AuthMode; onSwitch: (m: AuthMode)
         alt=""
         decoding="async"
         className="mise-l-ken absolute inset-0 h-full w-full object-cover"
-        style={{ opacity: mode === "login" ? 1 : 0, transition: "opacity 700ms ease" }}
+        style={{ opacity: mode === "login" && tableOk ? 1 : 0, transition: "opacity 700ms ease" }}
       />
       <img
         src="/experience/dawn.jpg"
         alt=""
         decoding="async"
         className="mise-l-ken absolute inset-0 h-full w-full object-cover"
-        style={{ opacity: mode === "signup" ? 1 : 0, transition: "opacity 700ms ease" }}
+        style={{ opacity: mode === "signup" && dawnOk ? 1 : 0, transition: "opacity 700ms ease" }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/30 to-ink-950/60" />
 
@@ -372,6 +397,8 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   }, []);
 
   const isLogin = mode === "login";
+  const mTableOk = useDecoded("/experience/m/table.jpg");
+  const mDawnOk = useDecoded("/experience/m/dawn.jpg");
 
   return (
     <div className="mise-dark-page relative h-svh overflow-hidden bg-ink-950 text-slate-100">
@@ -431,14 +458,14 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
             alt=""
             decoding="async"
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
-            style={{ opacity: isLogin ? 1 : 0, transition: "opacity 700ms ease" }}
+            style={{ opacity: isLogin && mTableOk ? 1 : 0, transition: "opacity 700ms ease" }}
           />
           <img
             src="/experience/m/dawn.jpg"
             alt=""
             decoding="async"
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
-            style={{ opacity: isLogin ? 0 : 1, transition: "opacity 700ms ease" }}
+            style={{ opacity: !isLogin && mDawnOk ? 1 : 0, transition: "opacity 700ms ease" }}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-ink-950/80 via-ink-950/35 to-ink-950/90" />
         </div>

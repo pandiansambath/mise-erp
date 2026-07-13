@@ -162,9 +162,8 @@ export default function Hero({ start }: { start: boolean }) {
               opacity: baseStill === "fire" ? 1 : 0,
               // phone: fall out of focus behind the band — the film becomes
               // the focal plane instead of a pasted rectangle
-              filter: small && film === "playing" ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
-              transform: small && film === "playing" ? "scale(1.06)" : "none",
-              transition: "opacity 1000ms ease, filter 900ms ease, transform 900ms ease",
+              filter: small && film === "playing" ? "blur(7px) brightness(0.88)" : "none",
+              transition: "opacity 1000ms ease, filter 900ms ease",
             }}
           />
           <img
@@ -175,7 +174,7 @@ export default function Hero({ start }: { start: boolean }) {
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
             style={{
               opacity: baseStill === "dish" ? 1 : 0,
-              filter: small && film === "playing" ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
+              filter: small && film === "playing" ? "blur(7px) brightness(0.88)" : "none",
               transition: "opacity 1000ms ease, filter 900ms ease",
             }}
           />

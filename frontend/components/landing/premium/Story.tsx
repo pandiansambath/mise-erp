@@ -185,6 +185,19 @@ export default function Story() {
     setAllowed(!reduced && !conn?.saveData);
   }, [reduced]);
 
+  // Fast scrolls must never land on an undecoded (black) layer: keep the
+  // neighbours decoded and ready before they're asked to show.
+  useEffect(() => {
+    if (!small) return;
+    for (const i of [st.base - 2, st.base - 1, st.base + 1, st.base + 2]) {
+      const b = BEATS[i];
+      if (!b) continue;
+      const im = new Image();
+      im.src = stillPath(b.still, small);
+      im.decode?.().catch(() => {});
+    }
+  }, [st.base, small]);
+
   // The copy block nearest the viewport centre owns the stage.
   useEffect(() => {
     const io = new IntersectionObserver(
@@ -265,7 +278,7 @@ export default function Story() {
             the action mounted — five resident full-screen layers is too much
             GPU memory for small devices. */}
         {BEATS.map((b, i) =>
-          !small || Math.abs(i - st.base) <= 1 || st.film?.to === i ? (
+          !small || Math.abs(i - st.base) <= 2 || st.film?.to === i ? (
             <img
               key={b.still}
               src={stillPath(b.still, small)}
@@ -279,7 +292,7 @@ export default function Story() {
                 // scale mid-crossfade and flickered on every beat change
                 animationPlayState: st.base === i ? "running" : "paused",
                 // phone: defocus behind the rolling band (depth of field)
-                filter: small && st.film && !st.film.fading ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
+                filter: small && st.film && !st.film.fading ? "blur(7px) brightness(0.88)" : "none",
                 transition: "opacity 900ms ease, filter 900ms ease",
               }}
             />

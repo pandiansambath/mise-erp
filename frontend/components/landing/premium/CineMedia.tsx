@@ -163,9 +163,8 @@ export default function CineMedia({
           className="absolute inset-0 h-full w-full object-cover"
           style={{
             opacity: showPre ? 1 : 0,
-            filter: rolling ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
-            transform: rolling ? "scale(1.06)" : "none",
-            transition: "opacity 1000ms ease, filter 900ms ease, transform 900ms ease",
+            filter: rolling ? "blur(7px) brightness(0.88)" : "none",
+            transition: "opacity 1000ms ease, filter 900ms ease",
           }}
         />
       ) : null}
@@ -179,7 +178,7 @@ export default function CineMedia({
           // pause (not remove) the drift off-screen — removing the class
           // snapped the transform back to 1 and read as a flicker
           animationPlayState: active ? "running" : "paused",
-          filter: rolling ? "blur(18px) brightness(0.75) saturate(1.15)" : "none",
+          filter: rolling ? "blur(7px) brightness(0.88)" : "none",
           transition: "opacity 1000ms ease, filter 900ms ease",
           ...(preStill ? { opacity: showPre ? 0 : 1 } : {}),
         }}

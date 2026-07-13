@@ -674,6 +674,11 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
    long pages. The intrinsic size keeps the scrollbar stable. */
 .mise-cv { content-visibility: auto; contain-intrinsic-size: auto 900px; }
 .mise-cv-screen { content-visibility: auto; contain-intrinsic-size: auto 100vh; }
+/* Phones: late CV paints showed as black flashes on fast scrolls — paint
+   everything up-front there instead (the heavy assets are pre-warmed anyway). */
+@media (max-width: 767px) {
+  .mise-cv, .mise-cv-screen { content-visibility: visible; }
+}
 
 /* Embers/steam motes drifting up through the hero — pure transform/opacity. */
 @keyframes mise-l-mote {

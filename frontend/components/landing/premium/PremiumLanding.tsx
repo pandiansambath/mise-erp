@@ -311,47 +311,92 @@ export default function PremiumLanding() {
   useDarkDocument();
 
   // THE CURTAIN: the user may wait here, but once it lifts NOTHING lags.
-  // We fully load (not just start) everything the opening scene needs —
-  // hero stills, the ENTIRE hero film into cache, fonts — with a progress
-  // bar, then reveal. Hard cap so a dead network still gets in.
+  // Real, continuous progress: the hero film is streamed chunk-by-chunk into
+  // cache (its bytes drive most of the bar) and the shown % is eased every
+  // frame — no jumps, a minimum on-screen beat, and an 8s hard cap.
   const [ready, setReady] = useState(false);
   const [pct, setPct] = useState(0);
   useEffect(() => {
     let cancelled = false;
     const small = window.matchMedia("(max-width: 767px)").matches;
-    const img = (src: string) =>
+
+    const weights: Record<string, number> = { fire: 0.12, dish: 0.12, sky: 0.05, fonts: 0.05, film: 0.66 };
+    const parts: Record<string, number> = { fire: 0, dish: 0, sky: 0, fonts: 0, film: 0 };
+    let real = 0; // 0..1
+    const bump = (k: string, v: number) => {
+      parts[k] = Math.max(parts[k], Math.min(1, v));
+      real = Object.keys(weights).reduce((t, kk) => t + weights[kk] * parts[kk], 0);
+    };
+
+    const img = (key: string, src: string) =>
       new Promise<void>((res) => {
         const im = new Image();
-        im.onload = () => res();
-        im.onerror = () => res();
+        const done = () => {
+          bump(key, 1);
+          res();
+        };
+        im.onload = done;
+        im.onerror = done;
         im.src = src;
       });
-    const jobs: { w: number; run: () => Promise<unknown> }[] = [
-      { w: 14, run: () => img(stillPath("fire", small)) },
-      { w: 14, run: () => img(stillPath("dish", small)) },
-      { w: 8, run: () => img(stillPath("sky", small)) },
-      { w: 8, run: () => (document.fonts ? document.fonts.ready : Promise.resolve()) },
-      // the whole entry film, buffered to the last frame — play() never stalls
-      { w: 56, run: () => fetch(filmPath("fire-to-dish", small), { cache: "force-cache" }).then((r) => r.blob()) },
-    ];
-    const total = jobs.reduce((t, j) => t + j.w, 0);
-    let done = 0;
-    Promise.all(
-      jobs.map((j) =>
-        j
-          .run()
-          .catch(() => {})
-          .then(() => {
-            done += j.w;
-            if (!cancelled) setPct(Math.round((done / total) * 100));
-          }),
-      ),
-    ).then(() => {
-      if (!cancelled) setReady(true);
-    });
+
+    const filmJob = async () => {
+      try {
+        const r = await fetch(filmPath("fire-to-dish", small), { cache: "force-cache" });
+        const len = Number(r.headers.get("content-length")) || 0;
+        if (r.body && len > 0) {
+          const reader = r.body.getReader();
+          let got = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            got += value?.length ?? 0;
+            bump("film", got / len);
+          }
+        } else {
+          await r.blob();
+        }
+      } catch {
+        /* offline — the cap lets them in */
+      }
+      bump("film", 1);
+    };
+
+    Promise.all([
+      img("fire", stillPath("fire", small)),
+      img("dish", stillPath("dish", small)),
+      img("sky", stillPath("sky", small)),
+      (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => bump("fonts", 1)),
+      filmJob(),
+    ]).catch(() => {});
+
+    // eased display: glides toward real progress (with a gentle crawl so it
+    // never looks frozen), settles at 100, then the curtain lifts.
+    const t0 = performance.now();
+    let shown = 0;
+    let raf = 0;
+    const loop = () => {
+      if (cancelled) return;
+      const elapsed = performance.now() - t0;
+      const crawl = Math.min(88, elapsed / 45); // steady drift to 88% by ~4s
+      const goal = real >= 1 ? 100 : Math.max(real * 100, Math.min(crawl, 88));
+      shown = Math.min(100, shown + Math.max(goal > shown ? 0.25 : 0, (goal - shown) * 0.085));
+      setPct(Math.round(shown));
+      if (shown >= 99.4 && real >= 1 && elapsed >= 1100) {
+        setPct(100);
+        window.setTimeout(() => {
+          if (!cancelled) setReady(true);
+        }, 320);
+        return;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
     const cap = window.setTimeout(() => setReady(true), 8000);
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf);
       window.clearTimeout(cap);
     };
   }, []);
