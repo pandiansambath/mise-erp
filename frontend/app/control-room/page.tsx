@@ -431,6 +431,19 @@ export default function ControlRoomPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [sel, setSel] = useState<string | null>(null); // drawer: the hotel under the glass
+  const [healthFilter, setHealthFilter] = useState<"all" | "Active" | "Quiet" | "Dormant" | "suspended">("all");
+  const [sortKey, setSortKey] = useState<"name" | "health" | "last" | "sales" | "users">("health");
+  const [sortDir, setSortDir] = useState<1 | -1>(1);
+  // the console clock — UTC, ticking
+  const [utc, setUtc] = useState("");
+  const [nowTs] = useState(() => Date.now()); // frozen at mount — render-pure "days ago" math
+  useEffect(() => {
+    const tick = () => setUtc(new Date().toISOString().slice(11, 19));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const load = useCallback(async () => {
     const [f, p, h] = await Promise.all([
@@ -500,11 +513,29 @@ export default function ControlRoomPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return hotels;
-    return hotels.filter((h) =>
-      h.name.toLowerCase().includes(s) || (h.admin_email ?? "").toLowerCase().includes(s) || (h.city ?? "").toLowerCase().includes(s),
+    const rank: Record<string, number> = { Active: 0, Quiet: 1, Dormant: 2 };
+    let list = hotels.filter(
+      (h) =>
+        !s ||
+        h.name.toLowerCase().includes(s) ||
+        (h.admin_email ?? "").toLowerCase().includes(s) ||
+        (h.city ?? "").toLowerCase().includes(s),
     );
-  }, [hotels, q]);
+    if (healthFilter === "suspended") list = list.filter((h) => !h.is_active);
+    else if (healthFilter !== "all") list = list.filter((h) => h.is_active && healthOf(h).label === healthFilter);
+    const val = (h: HotelRow): number | string => {
+      if (sortKey === "name") return h.name.toLowerCase();
+      if (sortKey === "health") return rank[healthOf(h).label] ?? 3;
+      if (sortKey === "last") return h.last_active ? -new Date(h.last_active).getTime() : Infinity;
+      if (sortKey === "sales") return -(h.sales_entries_7d ?? 0);
+      return -h.user_count;
+    };
+    return [...list].sort((a, b) => {
+      const va = val(a);
+      const vb = val(b);
+      return (va < vb ? -1 : va > vb ? 1 : 0) * sortDir;
+    });
+  }, [hotels, q, healthFilter, sortKey, sortDir]);
 
   if (!user?.is_platform_owner) return <Spinner />; // layout redirects; this is a flash-guard
   if (loading) return <Spinner />;
@@ -514,7 +545,18 @@ export default function ControlRoomPage() {
   const active = hotels.filter((h) => h.is_active).length;
 
   return (
-    <div>
+    <div className="mise-cr-grid -m-4 p-4 sm:-m-6 sm:p-6">
+      {/* the console strip — mono, dense, always-on telemetry */}
+      <div className="mise-well mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">
+        <span className="flex items-center gap-2 text-fg">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-brand-400" />
+          MISE CONTROL
+        </span>
+        <span>fleet {hotels.length}</span>
+        <span className="text-brand-300">{active} up</span>
+        {hotels.length - active > 0 && <span className="text-rose-300">{hotels.length - active} suspended</span>}
+        <span className="ml-auto tabular-nums">{utc} UTC</span>
+      </div>
       <PageHeader title="All hotels" subtitle="Every restaurant on Mise — flip features, reset access, all in one place." />
 
       {err && <Card className="mb-4"><p className="text-sm text-rose-400">{err}</p></Card>}
@@ -646,24 +688,139 @@ export default function ControlRoomPage() {
         </Card>
       )}
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search hotels by name, city or admin email…"
           className="mise-well w-full max-w-md rounded-lg px-3 py-2 text-sm outline-none"
         />
+        {(["all", "Active", "Quiet", "Dormant", "suspended"] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setHealthFilter(f)}
+            className={`mise-press rounded-full px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide transition ${
+              healthFilter === f ? "mise-raised text-fg" : "text-fg-faint hover:text-fg-soft"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
       </div>
 
       {filtered.length === 0 ? (
-        <Card><p className="text-sm text-fg-faint">No hotels match &ldquo;{q}&rdquo;.</p></Card>
+        <Card><p className="text-sm text-fg-faint">No hotels match.</p></Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((h) => (
-            <HotelCard key={h.id} hotel={h} features={features} plans={plans} onToggle={(k, v) => toggle(h.id, k, v)} onApplyPlan={(p) => applyPlan(h.id, p)} onSuspend={(a) => suspend(h.id, a)} />
-          ))}
-        </div>
+        <Card className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.14em] text-fg-faint">
+                  {(
+                    [
+                      ["name", "Hotel"],
+                      ["health", "Status"],
+                      ["last", "Last active"],
+                      ["sales", "Sales 7d"],
+                      ["users", "Users"],
+                    ] as const
+                  ).map(([k, label]) => (
+                    <th key={k} className="px-4 py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (sortKey === k) setSortDir((d) => (d === 1 ? -1 : 1));
+                          else {
+                            setSortKey(k);
+                            setSortDir(1);
+                          }
+                        }}
+                        className="uppercase tracking-[0.14em] hover:text-fg-soft"
+                      >
+                        {label} {sortKey === k ? (sortDir === 1 ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                  ))}
+                  <th className="px-4 py-2.5">Plan</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((h) => {
+                  const hp = healthOf(h);
+                  const days = h.last_active
+                    ? Math.max(0, Math.floor((nowTs - new Date(h.last_active).getTime()) / 86400000))
+                    : null;
+                  return (
+                    <tr
+                      key={h.id}
+                      onClick={() => setSel(h.id)}
+                      className={`cursor-pointer border-b border-line transition hover:bg-glass/5 ${!h.is_active ? "opacity-60" : ""}`}
+                    >
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium text-fg">{h.name}</p>
+                        <p className="text-[11px] text-fg-faint">
+                          {h.city ? `${h.city} · ` : ""}
+                          {h.admin_email ?? "no admin"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {!h.is_active ? <Badge tone="red">suspended</Badge> : <Badge tone={hp.tone}>{hp.label}</Badge>}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-fg-soft">
+                        {days == null ? "never" : days === 0 ? "today" : `${days}d ago`}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-fg-soft">{h.sales_entries_7d ?? 0}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-fg-soft">
+                        {h.user_count}/{h.max_users >= 100000 ? "∞" : h.max_users}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="rounded-full bg-glass/10 px-2 py-0.5 font-mono text-[10px] uppercase text-fg-soft">
+                          {h.plan}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-fg-faint">›</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
+
+      {/* the drawer: one hotel under the glass, full controls */}
+      {sel && (() => {
+        const h = hotels.find((x) => x.id === sel);
+        if (!h) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" onClick={() => setSel(null)} aria-hidden />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Manage ${h.name}`}
+              className="mise-drawer-in fixed inset-y-0 right-0 z-50 w-[32rem] max-w-full overflow-y-auto overscroll-contain border-l border-glass/15 bg-shell p-4 shadow-2xl shadow-black/60"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">Hotel console</p>
+                <button type="button" onClick={() => setSel(null)} className="mise-press rounded-lg px-2 py-1 text-fg-faint hover:text-fg" aria-label="Close">
+                  ✕
+                </button>
+              </div>
+              <HotelCard
+                hotel={h}
+                features={features}
+                plans={plans}
+                onToggle={(k, v) => toggle(h.id, k, v)}
+                onApplyPlan={(pl) => applyPlan(h.id, pl)}
+                onSuspend={(a) => suspend(h.id, a)}
+              />
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

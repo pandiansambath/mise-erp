@@ -196,8 +196,8 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 31 · 🛰️ CONTROL ROOM (UI + FEATURES — user priority)
 - [x] Suspend/reactivate + login block
 - [x] Signups Sparkline + fleet-by-plan Donut + tactile pass
-- [ ] UI: dark ops-console identity (denser, mono-heavy, "NASA" feel)
-- [ ] Hotel table w/ sort/filter + per-hotel Drawer (replaces long cards)
+- [x] UI: dark ops-console identity (MISE CONTROL telemetry strip w/ live UTC clock, engineering-grid backdrop, mono table)
+- [x] Hotel table w/ sort/filter + per-hotel Drawer (health chips filter, 5 sortable columns, row → slide-in drawer w/ full HotelCard)
 - [x] FEATURE: announcements/broadcast (platform_announcements table, operator
       composer + withdraw, dismissible shell banner, audited)
 - [x] FEATURE: per-hotel health chips — Active (traded/logged in ≤3d) /
@@ -206,7 +206,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
       refuses it server-side, purple in-app banner, audited, tested
 - [x] FEATURE: operator audit trail card (all platform.* actions, newest first)
 - [x] FEATURE: signup funnel — signed up → recorded first sale, with stalled count
-- [ ] Suspension notice on login for suspended hotels (they see WHY)
+- [x] Suspension notice on login (amber 🔒 block: data safe, why, support email)
 
 ## 32 · App Shell
 - [x] ⌘K actions + glass palette + grouped nav

@@ -1135,3 +1135,11 @@ html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transpa
 }
 .mise-shake { animation: mise-shake 420ms ease; }
 @media (prefers-reduced-motion: reduce) { .mise-shake { animation: none; } }
+
+/* Ops-console backdrop: a faint engineering grid behind the Control Room. */
+.mise-cr-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 158, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 158, 0.05) 1px, transparent 1px);
+  background-size: 36px 36px;
+}

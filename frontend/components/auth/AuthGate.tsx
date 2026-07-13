@@ -125,9 +125,19 @@ function LoginForm({ active }: { active: boolean }) {
         />
       </div>
       {error && (
-        <p role="alert" className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200">
-          {error}
-        </p>
+        /suspended/i.test(error) ? (
+          <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-200">
+            <p className="font-semibold">🔒 This restaurant&apos;s account is suspended</p>
+            <p className="mt-1 text-xs text-amber-200/80">
+              Your data is safe — access is paused by the Mise team (usually billing). Email{" "}
+              <a href="mailto:support@mise.app" className="underline">support@mise.app</a> and we&apos;ll sort it out.
+            </p>
+          </div>
+        ) : (
+          <p role="alert" className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200">
+            {error}
+          </p>
+        )
       )}
       <SubmitButton busy={busy} busyLabel="Signing in…">Sign in</SubmitButton>
     </form>
