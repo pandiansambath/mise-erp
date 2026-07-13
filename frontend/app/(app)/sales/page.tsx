@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
-import { CalendarHeat, Donut, Waffle, type DonutSegment } from "@/components/charts";
+import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
@@ -38,6 +38,11 @@ export default function SalesPage() {
   // add-line form
   const [channelId, setChannelId] = useState("");
   const [gross, setGross] = useState("");
+  // 🧮 big-key till pad — which field it types into
+  const [pad, setPad] = useState<null | "gross" | "counted">(null);
+  // per-channel gross over the trailing 7 days (for the channel tiles)
+  const [chanTrend, setChanTrend] = useState<Record<string, number[]> | null>(null);
+  const [trendLabels, setTrendLabels] = useState<string[]>([]);
   const [method, setMethod] = useState("CARD");
 
   // cash form
@@ -103,6 +108,26 @@ export default function SalesPage() {
     setLoading(true);
     await loadDay(d).finally(() => setLoading(false));
   }
+
+  // Channel tiles' sparklines: the trailing week, loaded quietly after paint.
+  useEffect(() => {
+    const days: string[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(localISODate(d));
+    }
+    setTrendLabels(days.map((d) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })));
+    Promise.all(days.map((d) => api.get<DaySummary>(`/sales/days/${d}`).catch(() => null))).then((list) => {
+      const map: Record<string, number[]> = {};
+      list.forEach((sm, i) => {
+        sm?.lines.forEach((l) => {
+          (map[l.channel_name] ??= Array(7).fill(0))[i] += parseFloat(l.gross_amount) || 0;
+        });
+      });
+      setChanTrend(map);
+    });
+  }, []);
 
   async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -315,6 +340,34 @@ export default function SalesPage() {
               </div>
             )}
           </div>
+          {chanTrend && Object.keys(chanTrend).length > 0 && (
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                Each channel&apos;s week — last 7 days
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(chanTrend)
+                  .sort((a, b) => b[1][6] - a[1][6])
+                  .slice(0, 6)
+                  .map(([name, data]) => (
+                    <div key={name} className="mise-well mise-feel rounded-xl p-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate text-sm font-medium text-fg">{name}</span>
+                        <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                        <span className="font-mono text-sm text-fg-soft">{format(String(data[6]))}</span>
+                      </div>
+                      <Sparkline
+                        data={data}
+                        labels={trendLabels}
+                        formatValue={(v) => format(String(v))}
+                        height={26}
+                        className="mt-2 h-[26px] w-full"
+                      />
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
 
@@ -351,7 +404,18 @@ export default function SalesPage() {
                   />
                 </div>
                 <div className="w-full sm:w-32">
-                  <label className="block text-sm font-medium text-fg-soft">Gross</label>
+                  <label className="flex items-center justify-between text-sm font-medium text-fg-soft">
+                    Gross
+                    <button
+                      type="button"
+                      onClick={() => setPad((c) => (c === "gross" ? null : "gross"))}
+                      className={`mise-press rounded-md px-1.5 text-base leading-none ${pad === "gross" ? "text-brand-300" : "text-fg-faint"}`}
+                      title="Big-key till pad"
+                      aria-label="Toggle keypad"
+                    >
+                      🧮
+                    </button>
+                  </label>
                   <input
                     value={gross}
                     onChange={(e) => setGross(numeric(e.target.value))}
@@ -377,6 +441,7 @@ export default function SalesPage() {
                   Add
                 </button>
               </form>
+              {pad === "gross" && <TillKeypad value={gross} onChange={setGross} onClose={() => setPad(null)} />}
               {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
             </Card>
           )}
@@ -456,7 +521,20 @@ export default function SalesPage() {
               <span>{format(summary.expected_cash)}</span>
             </div>
             <div>
-              <label className="block text-fg-faint">Counted at close</label>
+              <label className="flex items-center justify-between text-fg-faint">
+                Counted at close
+                {canWrite && (
+                  <button
+                    type="button"
+                    onClick={() => setPad((c) => (c === "counted" ? null : "counted"))}
+                    className={`mise-press rounded-md px-1.5 text-base leading-none ${pad === "counted" ? "text-brand-300" : "text-fg-faint"}`}
+                    title="Big-key till pad"
+                    aria-label="Toggle keypad"
+                  >
+                    🧮
+                  </button>
+                )}
+              </label>
               <input
                 value={counted}
                 onChange={(e) => setCounted(numeric(e.target.value))}
@@ -465,6 +543,7 @@ export default function SalesPage() {
                 placeholder="physical count"
                 className="mt-1 w-full rounded-lg border border-line-2 px-3 py-2"
               />
+              {pad === "counted" && <TillKeypad value={counted} onChange={setCounted} onClose={() => setPad(null)} />}
             </div>
             {varianceNum != null && (
               varianceNum === 0 ? (
@@ -549,6 +628,50 @@ export default function SalesPage() {
           )}
         />
       )}
+    </div>
+  );
+}
+
+/** Big neumorphic number pad — counting cash with thumbs, not a fiddly input. */
+function TillKeypad({
+  value,
+  onChange,
+  onClose,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onClose: () => void;
+}) {
+  const press = (k: string) => {
+    if (k === "⌫") return onChange(value.slice(0, -1));
+    if (k === "." && value.includes(".")) return;
+    const next = (value === "0" && k !== "." ? "" : value) + (k === "." && !value ? "0." : k);
+    if (/^\d*(\.\d{0,2})?$/.test(next)) onChange(next);
+  };
+  return (
+    <div className="mise-pop mt-3 max-w-xs">
+      <div className="mise-well flex items-center justify-between rounded-xl px-4 py-2">
+        <span className="font-mono text-2xl font-bold tabular-nums text-fg">{value || "0"}</span>
+        <button type="button" onClick={() => onChange("")} className="text-xs text-fg-faint hover:text-fg">
+          clear
+        </button>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"].map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => press(k)}
+            className="mise-raised mise-press h-14 rounded-2xl text-xl font-semibold text-fg"
+            aria-label={k === "⌫" ? "Delete last digit" : k}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+      <button type="button" onClick={onClose} className="mt-1.5 w-full py-1 text-center text-xs text-fg-faint hover:text-fg">
+        hide keypad
+      </button>
     </div>
   );
 }

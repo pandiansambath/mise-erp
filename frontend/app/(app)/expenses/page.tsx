@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
@@ -10,7 +11,7 @@ import {
   type Item,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
-import { Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
+import { Bars, Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
@@ -60,6 +61,8 @@ export default function ExpensesPage() {
   const [summary, setSummary] = useState<ExpenseSummary | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // recurring detection: the last ~3 months, scanned quietly once
+  const [recurring, setRecurring] = useState<{ name: string; amount: number; months: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,6 +120,36 @@ export default function ExpensesPage() {
       return next;
     });
   }
+
+  // Recurring detection: same category, near-same amount, in 2+ different
+  // months of the last 90 days -> "this looks like a standing bill".
+  useEffect(() => {
+    const start = new Date();
+    start.setDate(start.getDate() - 90);
+    api
+      .get<Expense[]>(`/expenses?date_from=${localISODate(start)}&date_to=${today()}`)
+      .then((all) => {
+        const groups = new Map<string, { amount: number; months: Set<string> }>();
+        for (const e of all) {
+          const amt = parseFloat(e.amount) || 0;
+          if (amt <= 0) continue;
+          // bucket amounts to +/-5% so a small VAT wobble still matches
+          const bucket = Math.round(Math.log(amt) / Math.log(1.05));
+          const key = `${e.category_name}|${bucket}`;
+          const g = groups.get(key) ?? { amount: amt, months: new Set<string>() };
+          g.months.add(e.date.slice(0, 7));
+          groups.set(key, g);
+        }
+        setRecurring(
+          [...groups.entries()]
+            .filter(([, g]) => g.months.size >= 2)
+            .map(([key, g]) => ({ name: key.split("|")[0], amount: g.amount, months: g.months.size }))
+            .sort((a, b) => b.amount - a.amount)
+            .slice(0, 4),
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   // Petty cash = small ad-hoc cash spends (cash to staff, bought something outside).
   // It's just a cash expense in a "Petty cash" category, so it flows into the P&L.
@@ -273,6 +306,59 @@ export default function ExpensesPage() {
           </Card>
         </div>
       )}
+
+      {recurring.length > 0 && (
+        <Card className="mise-feel mt-6 border-copper-500/25">
+          <h2 className="text-sm font-semibold text-fg">🔁 These look like standing bills</h2>
+          <p className="text-xs text-fg-faint">
+            Same category, near-same amount, seen in more than one of the last 3 months. Put them in{" "}
+            <Link href="/profile" className="text-brand-400 underline">Profile → Monthly overheads</Link> and they post
+            themselves — no more remembering the rent.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {recurring.map((r) => (
+              <div key={r.name + r.amount} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-sm">
+                <span className="text-fg">{r.name}</span>
+                <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                <span className="font-mono text-fg-soft">~{format(String(r.amount))}</span>
+                <span className="text-[10px] text-fg-faint">× {r.months} months</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {(() => {
+        // The petty-cash drawer: every small cash spend in this range, largest first.
+        const petty = expenses.filter((e) => e.category_name.toLowerCase() === "petty cash");
+        if (petty.length === 0) return null;
+        const total = petty.reduce((t, e) => t + (parseFloat(e.amount) || 0), 0);
+        return (
+          <Card className="mise-feel mt-6">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-semibold text-fg">🪙 Petty-cash drawer</h2>
+              <span className="font-mono text-sm text-fg-soft">{format(String(total))} total</span>
+            </div>
+            <p className="text-xs text-fg-faint">small cash spends this period, largest first</p>
+            <div className="mise-well mt-4 rounded-xl p-3">
+              <Bars
+                formatValue={(v) => format(String(v))}
+                items={[...petty]
+                  .sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0))
+                  .slice(0, 8)
+                  .map((e) => ({
+                    label: `${e.date.slice(5)} · ${(e.description || "petty cash").slice(0, 28)}`,
+                    value: parseFloat(e.amount) || 0,
+                    color: "#f59e0b",
+                  }))}
+              />
+              {petty.length > 8 && (
+                <p className="mt-2 text-[11px] text-fg-faint">+{petty.length - 8} more smaller spends</p>
+              )}
+            </div>
+          </Card>
+        );
+      })()}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* LEFT — the data (breakdown + entries) */}

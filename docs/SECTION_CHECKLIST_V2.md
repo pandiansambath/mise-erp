@@ -35,16 +35,16 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 2 · Sales & Cash
 - [x] CalendarHeat on sales page (takings rhythm, last 10 weeks)
-- [ ] Channel cards → mise-well tiles w/ per-channel Sparkline (7d)
+- [x] Channel cards → mise-well tiles w/ per-channel Sparkline (7d, dotted leaders, today's figure)
 - [x] Payment-method split Waffle (how it was paid)
-- [ ] Till-count keypad: big neumorphic number pad for counting cash (touch!)
+- [x] Till-count keypad: big neumorphic number pad (🧮 toggle on Gross AND Counted-at-close, 2dp guard)
 - [x] "vs same weekday last week" delta chip beside the date picker
 
 ## 3 · Expenses
 - [x] Donut + share bars + wells (562112c) · [x] Treemap expense map
 - [x] Fixed-vs-variable Waffle (each square = 1% of spend)
-- [ ] Petty-cash drawer visual (notes/coins breakdown as Bars)
-- [ ] Feature: recurring-expense detection ("Rent looks monthly — auto-remind?")
+- [x] Petty-cash drawer visual (per-spend Bars, largest first, period total)
+- [x] Feature: recurring-expense detection (90-day scan, same category ±5% amount in 2+ months → overheads nudge)
 
 ## 4 · Money
 - [x] Waterfall Bars + net counter + stock Donut + budget Meters + £1 Waffle
@@ -93,7 +93,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 11 · Price Comparison
 - [x] AreaChart history + tactile
-- [ ] Multi-vendor overlay lines (one per vendor, same item)
+- [x] Multi-vendor overlay lines (step-lines from the price-change log, legend w/ dotted leaders + now-price)
 - [x] Switch & save strip: N items off their cheapest supplier = £X/unit saved
 
 ## 12 · Waste

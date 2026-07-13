@@ -17,6 +17,81 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 
+const OVERLAY_COLORS = ["#10b981", "#38bdf8", "#f59e0b", "#a78bfa", "#f43f5e", "#94a3b8"];
+
+/** Every vendor's quoted price for THIS item over time — one step-line per
+ *  vendor, so you can see who drifted expensive and when the lines crossed. */
+function VendorOverlay({ changes }: { changes: PriceChange[] }) {
+  const { format } = useCurrency();
+  const byVendor = new Map<string, { t: number; p: number }[]>();
+  for (const c of changes) {
+    const t = new Date(c.at).getTime();
+    const pr = parseFloat(c.new_price) || 0;
+    if (!byVendor.has(c.vendor_name)) byVendor.set(c.vendor_name, []);
+    byVendor.get(c.vendor_name)!.push({ t, p: pr });
+  }
+  for (const pts of byVendor.values()) pts.sort((a, b) => a.t - b.t);
+  if (byVendor.size < 2) return null;
+
+  const all = [...byVendor.values()].flat();
+  const t0 = Math.min(...all.map((x) => x.t));
+  const t1 = Math.max(...all.map((x) => x.t));
+  const pMin = Math.min(...all.map((x) => x.p));
+  const pMax = Math.max(...all.map((x) => x.p));
+  const spanT = Math.max(1, t1 - t0);
+  const spanP = Math.max(0.01, pMax - pMin);
+  const X = (t: number) => 2 + ((t - t0) / spanT) * 92; // leave room to run to the edge
+  const Y = (pr: number) => 34 - ((pr - pMin) / spanP) * 28;
+
+  const series = [...byVendor.entries()].map(([name, pts], i) => {
+    // step-after: a price holds until the vendor moves it
+    let d = `M ${X(pts[0].t)} ${Y(pts[0].p)}`;
+    for (let k = 1; k < pts.length; k++) d += ` H ${X(pts[k].t)} V ${Y(pts[k].p)}`;
+    d += " H 98";
+    return { name, d, color: OVERLAY_COLORS[i % OVERLAY_COLORS.length], last: pts[pts.length - 1].p, n: pts.length };
+  });
+
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+        Every supplier&apos;s price, overlaid — where the lines cross is where switching paid
+      </p>
+      <div className="mise-well mt-3 rounded-xl p-3">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="h-36 w-full" aria-hidden>
+          {[6, 20, 34].map((y) => (
+            <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="currentColor" strokeOpacity="0.08" vectorEffect="non-scaling-stroke" />
+          ))}
+          {series.map((sr) => (
+            <path
+              key={sr.name}
+              d={sr.d}
+              fill="none"
+              stroke={sr.color}
+              strokeWidth="2"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+              opacity="0.9"
+            />
+          ))}
+        </svg>
+      </div>
+      <div className="mt-2 space-y-1">
+        {series
+          .sort((a, b) => a.last - b.last)
+          .map((sr) => (
+            <div key={sr.name} className="flex items-baseline gap-2 text-xs">
+              <span className="h-2 w-2 shrink-0 self-center rounded-full" style={{ background: sr.color }} />
+              <span className="text-fg-soft">{sr.name}</span>
+              <span className="mb-1 flex-1 border-b border-dotted border-line" />
+              <span className="font-mono text-fg">{format(String(sr.last))}</span>
+              <span className="text-fg-faint">now · {sr.n} change{sr.n === 1 ? "" : "s"}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 /** What you actually paid over time — self-drawing area line from the chart kit. */
 function PriceHistoryChart({ points }: { points: PricePoint[] }) {
   const { format } = useCurrency();
@@ -221,6 +296,7 @@ export default function PriceComparisonPage() {
               From your received purchase orders — green line falling is good, red line climbing is money leaking.
             </p>
             <PriceHistoryChart points={history} />
+            <VendorOverlay changes={changeLog} />
           </Card>
 
           {changeLog.length > 0 && (
