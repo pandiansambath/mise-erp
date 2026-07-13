@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmProvider } from "@/components/confirm";
 import { Logo } from "@/components/Logo";
+import { ThemeSwitcher } from "@/components/AppShell";
 import { Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
@@ -48,6 +49,7 @@ export default function ControlRoomLayout({ children }: { children: React.ReactN
           Operator
         </span>
         <span className="ml-auto hidden text-sm text-fg-faint md:inline">{user.email}</span>
+        <ThemeSwitcher />
         <button
           onClick={logout}
           className="rounded-lg border border-glass/15 px-3 py-1.5 text-sm font-medium text-fg-soft transition hover:bg-glass/5"

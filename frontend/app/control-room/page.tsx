@@ -47,19 +47,21 @@ type Announcement = {
 function OperatorAuditCard() {
   type Ev = { id: string; user_email: string; action: string; summary: string; created_at: string | null };
   const [events, setEvents] = useState<Ev[]>([]);
-  const [open, setOpen] = useState(false);
   useEffect(() => {
     api.get<{ events: Ev[] }>("/platform/audit").then((r) => setEvents(r.events)).catch(() => {});
   }, []);
   if (events.length === 0) return null;
   return (
-    <Card className="mise-feel mb-6">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
-        <h3 className="font-semibold text-fg">🧾 Operator audit trail</h3>
-        <span className="text-xs text-fg-faint">{events.length} actions · {open ? "hide ▴" : "show ▾"}</span>
-      </button>
-      {open && (
-        <ul className="mise-fade mt-3 max-h-72 space-y-1.5 overflow-y-auto pr-1">
+    <Card className="mise-feel mb-6 p-0">
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <h3 className="font-semibold text-fg">🧾 Operator audit trail</h3>
+          <span className="text-xs text-fg-faint">
+            {events.length} actions · <span className="group-open:hidden">show ▾</span>
+            <span className="hidden group-open:inline">hide ▴</span>
+          </span>
+        </summary>
+        <ul className="mise-fade max-h-72 space-y-1.5 overflow-y-auto px-5 pb-4 pr-6">
           {events.map((e) => (
             <li key={e.id} className="mise-well flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs">
               <span className="min-w-0 flex-1 truncate text-fg">{e.summary}</span>
@@ -69,7 +71,7 @@ function OperatorAuditCard() {
             </li>
           ))}
         </ul>
-      )}
+      </details>
     </Card>
   );
 }
@@ -156,6 +158,9 @@ function OperatorsCard() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [pwFor, setPwFor] = useState<string | null>(null); // row with the reset box open
+  const [newPw, setNewPw] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -189,6 +194,19 @@ function OperatorsCard() {
     await load();
   }
 
+  async function savePassword(op: Op) {
+    if (newPw.length < 8) return;
+    setMsg(null);
+    try {
+      await api.patch(`/platform/operators/${op.id}`, { password: newPw });
+      setMsg(`Password updated for ${op.email} ✓`);
+      setPwFor(null);
+      setNewPw("");
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.message : "Could not update the password");
+    }
+  }
+
   return (
     <Card className="mb-6">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
@@ -207,7 +225,17 @@ function OperatorsCard() {
             </label>
             <label className="block min-w-[12rem] flex-1">
               <span className="text-xs font-medium text-fg-faint">Password (min 8)</span>
-              <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" minLength={8} required className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
+              <span className="relative mt-1 block">
+                <input value={password} onChange={(e) => setPassword(e.target.value)} type={showPw ? "text" : "password"} minLength={8} required className="mise-well w-full rounded-lg py-2 pl-3 pr-10 text-sm outline-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                  className="mise-press absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-fg-faint hover:text-fg"
+                >
+                  {showPw ? "🙈" : "👁"}
+                </button>
+              </span>
             </label>
             <button type="submit" disabled={busy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
               {busy ? "Creating…" : "+ Add operator"}
@@ -228,6 +256,17 @@ function OperatorsCard() {
                     {op.last_login ? `last in ${new Date(op.last_login).toLocaleDateString()}` : "never signed in"}
                   </span>
                   <Badge tone={op.is_active ? "green" : "red"}>{op.is_active ? "active" : "disabled"}</Badge>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPwFor((cur) => (cur === op.id ? null : op.id));
+                      setNewPw("");
+                    }}
+                    title="Set a new password for this operator"
+                    className="mise-press rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:text-fg"
+                  >
+                    🔑 Reset pw
+                  </button>
                   {!op.you && (
                     <button
                       type="button"
@@ -240,6 +279,25 @@ function OperatorsCard() {
                     >
                       {op.is_active ? "Disable" : "Re-enable"}
                     </button>
+                  )}
+                  {pwFor === op.id && (
+                    <span className="mise-pop flex w-full items-center gap-2 pt-1.5">
+                      <input
+                        value={newPw}
+                        onChange={(e) => setNewPw(e.target.value)}
+                        type="text"
+                        placeholder="new password (min 8)"
+                        className="mise-well min-w-0 flex-1 rounded-lg px-3 py-1.5 text-xs outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => savePassword(op)}
+                        disabled={newPw.length < 8}
+                        className="mise-press shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                    </span>
                   )}
                 </li>
               ))}
@@ -333,6 +391,14 @@ function AnnouncementsCard() {
               <span className="flex shrink-0 items-center gap-2">
                 {a.is_active ? <Badge tone="green">live</Badge> : <Badge tone="slate">off</Badge>}
                 {a.expires_at && <span className="text-[11px] text-fg-faint">until {a.expires_at.slice(0, 10)}</span>}
+                <button
+                  type="button"
+                  onClick={() => { setMessage(a.message); setLevel(a.level === "warn" ? "warn" : "info"); }}
+                  title="Copy this message back into the composer — tweak and re-broadcast"
+                  className="mise-press rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:text-fg"
+                >
+                  ↺ Reuse
+                </button>
                 {a.is_active && (
                   <button type="button" onClick={() => withdraw(a)} className="mise-press rounded-md border border-rose-500/40 px-2 py-0.5 text-xs text-rose-300 hover:bg-rose-500/10">
                     withdraw
@@ -981,14 +1047,22 @@ export default function ControlRoomPage() {
               role="dialog"
               aria-modal="true"
               aria-label={`Manage ${h.name}`}
-              className="mise-drawer-in fixed inset-y-0 right-0 z-50 w-[32rem] max-w-full overflow-y-auto overscroll-contain border-l border-glass/15 bg-shell p-4 shadow-2xl shadow-black/60"
+              className="mise-pop-lg fixed left-1/2 top-1/2 z-50 flex max-h-[92dvh] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-glass/10 bg-shell shadow-2xl shadow-black/60"
             >
-              <div className="mb-3 flex items-center justify-between">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">Hotel console</p>
-                <button type="button" onClick={() => setSel(null)} className="mise-press rounded-lg px-2 py-1 text-fg-faint hover:text-fg" aria-label="Close">
+              <div className="flex items-center gap-3 border-b border-line bg-gradient-to-r from-brand-500/10 via-transparent to-transparent px-5 py-4">
+                <span aria-hidden className="mise-well grid h-12 w-12 shrink-0 place-items-center rounded-2xl font-display text-xl font-bold text-fg">
+                  {h.name.slice(0, 1).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate font-display text-xl font-semibold text-fg">{h.name}</h2>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">Hotel console</p>
+                </div>
+                <span className="rounded-full bg-glass/10 px-2 py-0.5 font-mono text-[10px] uppercase text-fg-soft">{h.plan}</span>
+                <button type="button" onClick={() => setSel(null)} className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-xl text-fg-faint hover:bg-glass/5 hover:text-fg" aria-label="Close">
                   ✕
                 </button>
               </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
               <HotelCard
                 hotel={h}
                 features={features}
@@ -997,6 +1071,7 @@ export default function ControlRoomPage() {
                 onApplyPlan={(pl) => applyPlan(h.id, pl)}
                 onSuspend={(a) => suspend(h.id, a)}
               />
+              </div>
             </div>
           </>
         );

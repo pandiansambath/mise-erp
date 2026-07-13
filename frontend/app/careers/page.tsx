@@ -286,12 +286,14 @@ export default function CareersPage() {
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.3em] text-slate-500 sm:block">
             The hospitality job board
           </span>
-          <Link
-            href="/signup"
-            className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3.5 py-2 text-[13px] font-semibold text-emerald-300 transition hover:bg-emerald-400/20"
-          >
-            Hiring? Run your hotel on Mise
-          </Link>
+          <span className="rounded-lg p-[1.5px]" style={{ background: "linear-gradient(100deg, #34d399, #38bdf8, #a78bfa)" }}>
+            <Link
+              href="/signup"
+              className="block rounded-[6.5px] bg-ink-950 px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-ink-900"
+            >
+              Hiring? Run your hotel on Mise
+            </Link>
+          </span>
         </nav>
       </header>
 
@@ -299,8 +301,18 @@ export default function CareersPage() {
       <section className="relative overflow-hidden pb-10 pt-32 sm:pt-36">
         <div className="mise-dots pointer-events-none absolute inset-0" aria-hidden />
         <div
-          className="pointer-events-none absolute left-1/2 top-0 h-[420px] w-[780px] -translate-x-1/2 -translate-y-1/3 rounded-full opacity-60 blur-3xl"
-          style={{ background: "radial-gradient(closest-side, rgba(16,185,129,0.25), rgba(234,183,138,0.1), transparent 70%)" }}
+          className="pointer-events-none absolute -left-24 top-0 h-[380px] w-[520px] rounded-full opacity-50 blur-3xl"
+          style={{ background: "radial-gradient(closest-side, rgba(167,139,250,0.32), transparent 70%)" }}
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute left-1/2 top-0 h-[420px] w-[720px] -translate-x-1/2 -translate-y-1/3 rounded-full opacity-55 blur-3xl"
+          style={{ background: "radial-gradient(closest-side, rgba(16,185,129,0.3), rgba(56,189,248,0.14), transparent 70%)" }}
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -right-24 top-24 h-[360px] w-[520px] rounded-full opacity-45 blur-3xl"
+          style={{ background: "radial-gradient(closest-side, rgba(244,63,94,0.26), rgba(245,158,11,0.16), transparent 70%)" }}
           aria-hidden
         />
         <div className="relative mx-auto max-w-6xl px-5 sm:px-6">
@@ -308,7 +320,14 @@ export default function CareersPage() {
             Careers · powered by Mise
           </p>
           <h1 className="mt-3 font-display text-4xl leading-[1.05] text-white sm:text-6xl">
-            Work where the <em className="mise-hero-text not-italic">fire</em> is.
+            Work where the{" "}
+            <em
+              className="bg-clip-text not-italic text-transparent"
+              style={{ backgroundImage: "linear-gradient(100deg, #fbbf24, #fb7185 45%, #a78bfa 90%)" }}
+            >
+              fire
+            </em>{" "}
+            is.
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-400 sm:text-base">
             Open roles across independent hotels &amp; restaurants running on Mise — kitchens,
@@ -326,26 +345,43 @@ export default function CareersPage() {
                 className="w-full rounded-2xl border border-white/10 bg-white/[0.05] py-3 pl-10 pr-4 text-sm text-white outline-none backdrop-blur transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
               />
             </div>
-            {types.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setType(t)}
-                className={`rounded-full px-3.5 py-2 text-xs font-medium transition ${
-                  type === t
-                    ? "bg-emerald-500 text-ink-950"
-                    : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]"
-                }`}
-              >
-                {t === "all" ? "All roles" : TYPE_LABEL[t] ?? t}
-              </button>
-            ))}
-            {jobs && (
-              <span className="ml-auto font-mono text-[11px] text-slate-500">
-                {filtered.length} open role{filtered.length === 1 ? "" : "s"}
-              </span>
-            )}
+            {types.map((t) => {
+              const c = { all: "#34d399", FULL_TIME: "#34d399", PART_TIME: "#38bdf8", CASUAL: "#fbbf24", APPRENTICESHIP: "#a78bfa" }[t] ?? "#34d399";
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className="rounded-full px-3.5 py-2 text-xs font-medium transition"
+                  style={
+                    type === t
+                      ? { background: c, color: "#04120d" }
+                      : { border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#cbd5e1" }
+                  }
+                >
+                  {t === "all" ? "All roles" : TYPE_LABEL[t] ?? t}
+                </button>
+              );
+            })}
           </div>
+
+          {jobs && jobs.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              {[
+                { n: filtered.length, label: filtered.length === 1 ? "open role" : "open roles", c: "#34d399" },
+                { n: new Set(jobs.map((j) => j.hotel_name)).size, label: "kitchens hiring", c: "#a78bfa" },
+                { n: new Set(jobs.map((j) => j.location || j.city || "UK")).size, label: "locations", c: "#fbbf24" },
+              ].map((st) => (
+                <span
+                  key={st.label}
+                  className="inline-flex items-baseline gap-1.5 rounded-full border px-3.5 py-1.5 text-xs"
+                  style={{ borderColor: `${st.c}44`, background: `${st.c}14`, color: st.c }}
+                >
+                  <b className="font-mono text-sm">{st.n}</b> {st.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -369,25 +405,37 @@ export default function CareersPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((j, i) => {
-              const hue = hueFor(j.hotel_name);
+              const hue = HUES[i % HUES.length];
               return (
                 <button
                   key={j.id}
                   type="button"
                   onClick={() => openDetail(j.id)}
-                  style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
-                  className="mise-pop group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-left transition duration-300 hover:-translate-y-1 hover:border-emerald-400/30 hover:bg-white/[0.05] hover:shadow-2xl hover:shadow-emerald-500/5"
+                  style={{
+                    animationDelay: `${Math.min(i, 8) * 60}ms`,
+                    background: `radial-gradient(130% 90% at 15% 0%, ${hue}14, rgba(255,255,255,0.03) 55%)`,
+                    borderColor: `${hue}30`,
+                  }}
+                  className="mise-pop group relative overflow-hidden rounded-3xl border p-5 text-left transition duration-300 hover:-translate-y-1 hover:shadow-2xl"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = `0 24px 48px -20px ${hue}55`;
+                    e.currentTarget.style.borderColor = `${hue}66`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "";
+                    e.currentTarget.style.borderColor = `${hue}30`;
+                  }}
                 >
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]"
                     style={{ background: `linear-gradient(90deg, transparent, ${hue}, transparent)` }}
                   />
                   <div className="flex items-center gap-3">
                     <span
                       aria-hidden
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-bold text-ink-950"
-                      style={{ background: `linear-gradient(135deg, ${hue}, ${hue}99)` }}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-bold text-ink-950 shadow-lg"
+                      style={{ background: `linear-gradient(135deg, ${hue}, ${hue}88)`, boxShadow: `0 8px 20px -8px ${hue}88` }}
                     >
                       {monogram(j.hotel_name)}
                     </span>
@@ -414,7 +462,7 @@ export default function CareersPage() {
                       </span>
                     )}
                   </div>
-                  <p className="mt-4 text-xs font-semibold text-emerald-300 opacity-0 transition group-hover:opacity-100">
+                  <p className="mt-4 text-xs font-semibold opacity-0 transition group-hover:opacity-100" style={{ color: hue }}>
                     View &amp; apply →
                   </p>
                 </button>

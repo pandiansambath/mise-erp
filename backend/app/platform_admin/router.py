@@ -567,17 +567,20 @@ async def create_operator(
 
 
 class OperatorPatch(BaseModel):
-    active: bool
+    active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 @router.patch("/operators/{operator_id}")
-async def set_operator_active(
+async def update_operator(
     operator_id: uuid.UUID,
     payload: OperatorPatch,
     db: AsyncSession = Depends(get_db),
     operator: User = Depends(require_platform_owner),
 ) -> dict:
-    if operator_id == operator.id and not payload.active:
+    from app.core.security import hash_password
+
+    if operator_id == operator.id and payload.active is False:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't deactivate yourself")
     target = (
         await db.execute(
@@ -586,10 +589,16 @@ async def set_operator_active(
     ).scalar_one_or_none()
     if not target:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Operator not found")
-    target.is_active = payload.active
+    changes: list[str] = []
+    if payload.active is not None:
+        target.is_active = payload.active
+        changes.append("reactivated" if payload.active else "deactivated")
+    if payload.password:
+        target.password_hash = hash_password(payload.password)
+        changes.append("password reset")
     await db.commit()
     await audit_service.record(
-        db, hotel_id=operator.hotel_id, user=operator, action="platform.operator_active",
-        summary=f"Operator {target.email} {'reactivated' if payload.active else 'deactivated'}",
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.operator_update",
+        summary=f"Operator {target.email}: {', '.join(changes) or 'no changes'}",
     )
     return {"id": str(target.id), "is_active": target.is_active}

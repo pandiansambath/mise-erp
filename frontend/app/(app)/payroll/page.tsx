@@ -339,7 +339,7 @@ export default function PayrollPage() {
       </Card>
 
       <Card className="mise-feel mb-6">
-        <div className="flex flex-wrap items-end gap-3">
+        <div key={cadence} className="mise-cadence-in flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs font-medium text-fg-faint">Pay cadence</label>
             <Segmented

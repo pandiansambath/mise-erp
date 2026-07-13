@@ -1315,3 +1315,12 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .mise-moved-glow { animation: none; box-shadow: 0 0 0 2px rgba(217, 119, 66, 0.6); }
 }
+
+/* Cadence/period switch: the whole control cluster dissolves in from a soft
+   blur — the eye reads one smooth swap instead of tracking parts moving. */
+@keyframes mise-cadence-in-k {
+  from { opacity: 0; filter: blur(7px); }
+  to   { opacity: 1; filter: blur(0); }
+}
+.mise-cadence-in { animation: mise-cadence-in-k 380ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .mise-cadence-in { animation: none; } }

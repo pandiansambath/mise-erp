@@ -72,7 +72,7 @@ function CurrencySwitcher() {
   );
 }
 
-function ThemeSwitcher() {
+export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const keys = Object.keys(THEMES) as ThemeKey[];

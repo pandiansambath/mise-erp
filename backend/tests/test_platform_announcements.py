@@ -156,3 +156,15 @@ async def test_operator_accounts_lifecycle(client, make_user, auth_header, db):
     listing = await client.get("/api/platform/operators", headers=h)
     emails = [o["email"] for o in listing.json()["operators"]]
     assert "op-two@mise.com" in emails
+
+    # reset the password + reactivate -> the NEW password signs in
+    reset = await client.patch(
+        f"/api/platform/operators/{two_id}",
+        json={"active": True, "password": "fresh-pass-77"},
+        headers=h,
+    )
+    assert reset.status_code == 200 and reset.json()["is_active"] is True
+    fresh = await client.post(
+        "/api/auth/login", json={"email": "op-two@mise.com", "password": "fresh-pass-77"}
+    )
+    assert fresh.status_code == 200
