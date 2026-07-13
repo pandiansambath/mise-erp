@@ -173,8 +173,8 @@ export default function CommandPalette({
   return (
     <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Command palette">
       <div className="mise-fade-in absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="mise-palette-in absolute inset-x-2 top-2 sm:inset-x-auto sm:left-1/2 sm:top-[16vh] sm:w-[min(600px,92vw)] sm:-translate-x-1/2">
-        <div className="mise-glass-panel overflow-hidden rounded-2xl">
+      <div className="absolute inset-x-2 top-2 sm:inset-x-auto sm:left-1/2 sm:top-[16vh] sm:w-[min(600px,92vw)] sm:-translate-x-1/2">
+        <div className="mise-palette-in mise-glass-panel overflow-hidden rounded-2xl">
           <div className="mise-well m-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
             <span aria-hidden className="text-fg-faint">⌕</span>
             <input

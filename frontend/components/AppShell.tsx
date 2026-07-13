@@ -600,7 +600,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-glass/10 bg-shell/70 px-4 py-3 backdrop-blur-xl lg:px-8">
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-glass/10 bg-shell/70 px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-8">
+          <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-brand-400/30 to-transparent" />
           <button
             type="button"
             aria-label="Open menu"
@@ -631,10 +632,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             ⌕
           </button>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
             <NotificationBell />
             <ThemeSwitcher />
-            <CurrencySwitcher />
+            <div className="hidden sm:block">
+              <CurrencySwitcher />
+            </div>
             <UserMenu />
           </div>
         </header>

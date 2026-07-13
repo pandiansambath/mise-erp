@@ -90,7 +90,7 @@ function InfoDot({
         i
       </button>
       {open && (
-        <span className="absolute left-1/2 top-6 z-40 w-64 -translate-x-1/2 rounded-lg border border-line bg-paper-2 p-3 text-left text-xs font-normal normal-case leading-relaxed text-fg-soft shadow-xl shadow-black/40">
+        <span className="fixed inset-x-4 top-24 z-50 rounded-xl border border-line bg-paper-2 p-3 text-left text-xs font-normal normal-case leading-relaxed text-fg-soft shadow-xl shadow-black/40 sm:absolute sm:inset-x-auto sm:left-1/2 sm:top-6 sm:z-40 sm:w-64 sm:-translate-x-1/2 sm:rounded-lg">
           {text}
         </span>
       )}
