@@ -1148,3 +1148,54 @@ html { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 158, 0.35) transpa
     linear-gradient(90deg, rgba(148, 163, 158, 0.05) 1px, transparent 1px);
   background-size: 36px 36px;
 }
+
+/* ── Copilot solar system (landing) ────────────────────────────────────── */
+/* Nebula fog slowly revolving around the sun — two counter-rotating layers. */
+@keyframes mise-l-neb-k { to { transform: rotate(360deg); } }
+.mise-l-nebula {
+  position: absolute;
+  inset: -14%;
+  pointer-events: none;
+  border-radius: 9999px;
+  background:
+    radial-gradient(36% 28% at 30% 40%, rgba(16, 185, 129, 0.17), transparent 70%),
+    radial-gradient(30% 24% at 68% 62%, rgba(234, 183, 138, 0.13), transparent 70%),
+    radial-gradient(24% 20% at 56% 26%, rgba(56, 189, 248, 0.09), transparent 70%);
+  filter: blur(24px);
+  animation: mise-l-neb-k 90s linear infinite;
+  will-change: transform;
+}
+.mise-l-nebula--rev {
+  animation-duration: 140s;
+  animation-direction: reverse;
+  background:
+    radial-gradient(30% 26% at 62% 34%, rgba(167, 139, 250, 0.1), transparent 70%),
+    radial-gradient(34% 26% at 34% 66%, rgba(16, 185, 129, 0.1), transparent 70%);
+}
+
+/* A moon riding its planet's ring — the parent is rotated+squashed into the
+   ring's ellipse, so this circular path traces the ring exactly. */
+@keyframes mise-l-moon-k {
+  from { transform: translate(-50%, -50%) rotate(0turn) translateX(var(--moon-r, 26px)); }
+  to   { transform: translate(-50%, -50%) rotate(1turn) translateX(var(--moon-r, 26px)); }
+}
+.mise-l-moon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  animation: mise-l-moon-k 5s linear infinite;
+  will-change: transform;
+}
+
+/* Distant stars breathing. */
+@keyframes mise-l-twinkle-k { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.7; } }
+.mise-l-star {
+  position: absolute;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  animation: mise-l-twinkle-k var(--tw, 3.4s) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-l-nebula, .mise-l-nebula--rev, .mise-l-moon, .mise-l-star { animation: none; }
+}

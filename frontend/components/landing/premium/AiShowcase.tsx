@@ -52,15 +52,26 @@ const POWERS = [
 // front of or behind the orb. Refs + one rAF while on screen — zero React
 // re-renders, transform/opacity only.
 
+// Each department is a PLANET: its own hue, a tilted ring (four orbit
+// orientations cycling), and a moon riding that ring at its own pace.
 const SATELLITES = [
-  { icon: "🧾", label: "Bills" },
-  { icon: "✍️", label: "Recipes" },
-  { icon: "📦", label: "Stock" },
-  { icon: "🗓", label: "Rota" },
-  { icon: "💷", label: "Sales" },
-  { icon: "📈", label: "P&L" },
-  { icon: "📎", label: "Docs" },
-  { icon: "🔮", label: "Forecasts" },
+  { icon: "🧾", label: "Bills", hue: "#f59e0b" },
+  { icon: "✍️", label: "Recipes", hue: "#f43f5e" },
+  { icon: "📦", label: "Stock", hue: "#10b981" },
+  { icon: "🗓", label: "Rota", hue: "#38bdf8" },
+  { icon: "💷", label: "Sales", hue: "#a78bfa" },
+  { icon: "📈", label: "P&L", hue: "#34d399" },
+  { icon: "📎", label: "Docs", hue: "#eab308" },
+  { icon: "🔮", label: "Forecasts", hue: "#22d3ee" },
+];
+const RING_TILTS = [0, 45, 90, 135]; // the four orbit orientations
+
+const STARS = [
+  { l: "6%", t: "18%", s: 2, d: 0, tw: 3.2 }, { l: "14%", t: "72%", s: 1.5, d: 1.1, tw: 4.1 },
+  { l: "24%", t: "10%", s: 1.5, d: 0.6, tw: 3.8 }, { l: "38%", t: "84%", s: 2, d: 1.8, tw: 3.1 },
+  { l: "52%", t: "6%", s: 1.5, d: 0.3, tw: 4.4 }, { l: "64%", t: "88%", s: 2, d: 2.3, tw: 3.6 },
+  { l: "76%", t: "14%", s: 1.5, d: 1.4, tw: 4 }, { l: "88%", t: "64%", s: 2, d: 0.9, tw: 3.3 },
+  { l: "93%", t: "30%", s: 1.5, d: 2, tw: 4.2 }, { l: "45%", t: "94%", s: 1.5, d: 0.2, tw: 3.9 },
 ];
 
 function OrbitStage() {
@@ -124,13 +135,34 @@ function OrbitStage() {
   }, []);
 
   return (
-    <div ref={stageRef} id="orbit-stage" className="relative mx-auto h-[240px] w-full max-w-3xl sm:h-[280px]">
-      {/* the elliptical track, faint */}
+    <div ref={stageRef} id="orbit-stage" className="relative mx-auto h-[270px] w-full max-w-3xl sm:h-[320px]">
+      {/* the galaxy: revolving nebula fog + distant stars */}
+      <span className="mise-l-nebula" aria-hidden />
+      <span className="mise-l-nebula mise-l-nebula--rev" aria-hidden />
+      {STARS.map((st, i) => (
+        <span
+          key={i}
+          className="mise-l-star"
+          style={{
+            left: st.l,
+            top: st.t,
+            width: st.s,
+            height: st.s,
+            animationDelay: `${st.d}s`,
+            ["--tw" as string]: `${st.tw}s`,
+          }}
+          aria-hidden
+        />
+      ))}
+      {/* the elliptical track + a fainter outer companion */}
       <div
         ref={trackRef}
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-white/10"
         aria-hidden
-      />
+      >
+        <span className="absolute -inset-[12%] rounded-[50%] border border-white/5" />
+        <span className="absolute inset-[10%] rounded-[50%] border border-dashed border-white/[0.04]" />
+      </div>
       {/* the orb — the still centre of the system */}
       <div className="absolute left-1/2 top-1/2 z-10 h-20 w-20 -translate-x-1/2 -translate-y-1/2 sm:h-24 sm:w-24">
         <span className="absolute -inset-9 rounded-full bg-brand-400/15 blur-2xl" />
@@ -153,20 +185,66 @@ function OrbitStage() {
           }}
         />
       </div>
-      {/* the satellites — everything Copilot touches, in orbit */}
-      {SATELLITES.map((s, i) => (
-        <div
-          key={s.label}
-          ref={(el) => {
-            satRefs.current[i] = el;
-          }}
-          className="absolute left-1/2 top-1/2 flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-ink-900/85 px-3 py-1.5 text-xs text-slate-200 shadow-lg shadow-black/40 backdrop-blur will-change-transform"
-          style={{ opacity: 0 }}
-        >
-          <span aria-hidden>{s.icon}</span>
-          {s.label}
-        </div>
-      ))}
+      {/* the planets — every department Copilot touches, each a world of its
+          own: spherical shading, a tilted ring, and a moon riding the ring */}
+      {SATELLITES.map((s, i) => {
+        const tilt = RING_TILTS[i % RING_TILTS.length];
+        return (
+          <div
+            key={s.label}
+            ref={(el) => {
+              satRefs.current[i] = el;
+            }}
+            className="absolute left-1/2 top-1/2 flex flex-col items-center will-change-transform"
+            style={{ opacity: 0 }}
+          >
+            <div className="relative h-11 w-11">
+              {/* the sphere */}
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.85), ${s.hue}cc 34%, ${s.hue}55 62%, rgba(3,10,8,0.85) 88%)`,
+                  boxShadow: `inset -5px -7px 12px rgba(0,0,0,0.6), inset 3px 4px 7px rgba(255,255,255,0.3), 0 0 16px ${s.hue}3d`,
+                }}
+              />
+              {/* the icon lives on the surface */}
+              <span aria-hidden className="absolute inset-0 grid place-items-center text-base drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]">
+                {s.icon}
+              </span>
+              {/* the tilted ring + its moon — one of four orbit orientations;
+                  the squashed parent turns the moon's circle into the ring's
+                  exact ellipse */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -inset-2.5"
+                style={{ transform: `rotate(${tilt}deg) scaleY(0.36)` }}
+              >
+                <span
+                  className="absolute inset-0 rounded-[50%] border"
+                  style={{ borderColor: `${s.hue}59`, boxShadow: `0 0 8px ${s.hue}26, inset 0 0 8px ${s.hue}1a` }}
+                />
+                <span
+                  className="mise-l-moon"
+                  style={{
+                    animationDuration: `${3.6 + i * 0.9}s`,
+                    animationDirection: i % 2 ? "reverse" : "normal",
+                    ["--moon-r" as string]: "33px",
+                  }}
+                >
+                  <i
+                    className="block h-[5px] w-[5px] rounded-full"
+                    style={{ background: s.hue, boxShadow: `0 0 7px ${s.hue}` }}
+                  />
+                </span>
+              </span>
+            </div>
+            <span className="mt-2 whitespace-nowrap rounded-full border border-white/10 bg-ink-900/85 px-2 py-0.5 text-[10px] font-medium text-slate-200 shadow-lg shadow-black/40 backdrop-blur">
+              {s.label}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
