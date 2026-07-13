@@ -244,6 +244,43 @@ export default function AttendancePage() {
         );
       })()}
 
+      {/* the floor, live: who's on right now — breathing presence chips */}
+      {(() => {
+        const on = employees.filter((e) => {
+          const r = rows[e.id];
+          return r?.clock_in && !r.clock_out;
+        });
+        if (on.length === 0) return null;
+        return (
+          <div className="mise-well mb-4 flex flex-wrap items-center gap-2 rounded-2xl p-2.5">
+            <span className="px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-fg-faint">
+              On the floor now
+            </span>
+            {on.map((e) => {
+              const r = rows[e.id];
+              return (
+                <span
+                  key={e.id}
+                  className={`mise-raised inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    r?.on_break ? "text-amber-300" : "text-brand-300"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 animate-pulse rounded-full ${r?.on_break ? "bg-amber-400" : "bg-brand-400"}`}
+                    aria-hidden
+                  />
+                  {e.full_name.split(" ")[0]}
+                  {r?.on_break && <span className="text-[10px] opacity-80">break</span>}
+                </span>
+              );
+            })}
+            <span className="ml-auto px-1 text-[11px] text-fg-faint">
+              {on.length} in · {on.filter((e) => rows[e.id]?.on_break).length} on break
+            </span>
+          </div>
+        );
+      })()}
+
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

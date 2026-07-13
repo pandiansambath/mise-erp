@@ -214,6 +214,40 @@ export default function PartyOrderPage() {
         </p>
       )}
 
+      {recipes.length > 0 && (
+        <div className="mise-well mt-4 flex items-center gap-1 overflow-x-auto rounded-2xl p-2 text-xs sm:gap-2 sm:p-2.5">
+          {(
+            [
+              ["1", "Pick dishes", rows.length > 0],
+              ["2", "Price & margin", rows.length > 0 && totalPrice > 0],
+              ["3", editingId ? "Update quote" : "Save / PDF", false],
+            ] as [string, string, boolean][]
+          ).map(([n, label, done], i, arr) => {
+            const activeStep = rows.length === 0 ? 0 : totalPrice > 0 ? 2 : 1;
+            const isActive = i === activeStep;
+            return (
+              <div key={n} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
+                <div
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2.5 py-2 transition-all duration-300 ${
+                    isActive ? "mise-raised text-fg" : done ? "text-brand-300" : "text-fg-faint"
+                  }`}
+                >
+                  <span
+                    className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+                      done ? "bg-brand-500/20 text-brand-300" : isActive ? "bg-brand-600 text-white" : "bg-glass/10"
+                    }`}
+                  >
+                    {done ? "✓" : n}
+                  </span>
+                  <span className="truncate font-medium">{label}</span>
+                </div>
+                {i < arr.length - 1 && <span aria-hidden className="shrink-0 text-fg-faint">›</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {recipes.length === 0 ? (
         <Card className="mt-4">
           <p className="text-sm text-fg-soft">

@@ -141,6 +141,34 @@ export default function RotaPage() {
     await reload();
   }
 
+  // ── Jira-style drag & drop: pick a shift card up, drop it on another day ──
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropDay, setDropDay] = useState<string | null>(null);
+
+  async function moveShift(id: string | null, targetDate: string) {
+    setDropDay(null);
+    setDragId(null);
+    const sh = shifts.find((x) => x.id === id);
+    if (!sh || sh.date === targetDate) return;
+    const fromDate = sh.date;
+    // optimistic: the card lands in its new day instantly
+    setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: targetDate } : x)));
+    try {
+      await api.post("/rota/shifts", {
+        employee_id: sh.employee_id,
+        date: targetDate,
+        start_time: sh.start_time,
+        end_time: sh.end_time,
+        break_minutes: sh.break_minutes,
+      });
+      await api.delete(`/rota/shifts/${sh.id}`);
+      await reload();
+    } catch (err) {
+      setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: fromDate } : x)));
+      setMsg(err instanceof ApiError ? err.message : "Could not move the shift");
+    }
+  }
+
   // Load any source week's shifts into the editable preview, mapped onto THIS week's
   // matching weekdays. Source defaults to last week but can be stepped to any week.
   async function loadCopyFrom(sourceStart: Date) {
@@ -498,6 +526,11 @@ export default function RotaPage() {
         </Card>
       )}
 
+      {canWrite && (
+        <p className="mb-1.5 text-[11px] text-fg-faint">
+          ✥ drag any shift card onto another day to move it — like a board ticket
+        </p>
+      )}
       {/* A horizontal week strip: each day is at least 170px so the shift cards
           never get crushed. Grab-and-drag (hand cursor) to scroll left/right. */}
       <div
@@ -512,7 +545,23 @@ export default function RotaPage() {
           const shifts = byDay(d);
           const isToday = iso(d) === iso(new Date());
           return (
-            <Card key={i} className={`min-w-[170px] flex-1 p-3 ${isToday ? "ring-1 ring-brand-500/40" : ""}`}>
+            <Card
+              key={i}
+              onDragOver={(e: React.DragEvent) => {
+                if (!dragId) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dropDay !== iso(d)) setDropDay(iso(d));
+              }}
+              onDragLeave={() => setDropDay((cur) => (cur === iso(d) ? null : cur))}
+              onDrop={(e: React.DragEvent) => {
+                e.preventDefault();
+                moveShift(dragId, iso(d));
+              }}
+              className={`min-w-[170px] flex-1 p-3 transition-all duration-150 ${isToday ? "ring-1 ring-brand-500/40" : ""} ${
+                dropDay === iso(d) ? "bg-brand-400/5 ring-2 ring-brand-400/60" : ""
+              }`}
+            >
               <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-fg">
                 <span>{DAYS[i]} <span className="text-fg-faint">{d.getDate()}/{d.getMonth() + 1}</span></span>
                 {shifts.length > 0 && <span className="text-[10px] font-normal text-fg-faint">{shifts.length}</span>}
@@ -522,7 +571,24 @@ export default function RotaPage() {
               ) : (
                 <ul className="space-y-1.5">
                   {shifts.map((s) => (
-                    <li key={s.id} className="mise-well mise-feel rounded-lg p-2 text-xs">
+                    <li
+                      key={s.id}
+                      draggable={canWrite}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onDragStart={(e) => {
+                        setDragId(s.id);
+                        e.dataTransfer.setData("text/plain", s.id);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setDropDay(null);
+                      }}
+                      title={canWrite ? "Drag onto another day to move this shift" : undefined}
+                      className={`mise-well mise-feel rounded-lg p-2 text-xs ${canWrite ? "cursor-grab active:cursor-grabbing" : ""} ${
+                        dragId === s.id ? "opacity-40 ring-1 ring-brand-400/50" : ""
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-1">
                         <span className="min-w-0 truncate font-medium text-fg">{s.employee_name}</span>
                         {canWrite && (

@@ -237,19 +237,20 @@ export default function DashboardPage() {
         }
       />
 
-      <p className="-mt-2 mb-5 text-xs text-fg-faint">
+      <div className="-mt-2 mb-5 space-y-2 text-xs text-fg-faint">
+        <div className="flex flex-wrap items-center gap-2">
         {checksDone != null && checksDone < 7 && new Date().getHours() >= 10 && (
-          <Link href="/food-safety" className="mise-well mise-press mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-amber-300 hover:text-amber-200">
+          <Link href="/food-safety" className="mise-well mise-press inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-amber-300 hover:text-amber-200">
             🌡 {checksDone}/7 safety checks logged today →
           </Link>
         )}
         {dueToday > 0 && (
-          <Link href="/purchasing" className="mise-well mise-press mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sky-300 hover:text-sky-200">
+          <Link href="/purchasing" className="mise-well mise-press inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sky-300 hover:text-sky-200">
             🚚 {dueToday} deliver{dueToday === 1 ? "y" : "ies"} due today →
           </Link>
         )}
         {tonight.length > 0 && (
-          <span className="mise-well mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-fg-soft">
+          <span className="mise-well inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-fg-soft">
             <span aria-hidden>🧑‍🍳</span>
             <b className="text-fg">{tonight.length}</b> on service today:{" "}
             {tonight.slice(0, 3).map((n) => n.split(" ")[0]).join(", ")}
@@ -257,11 +258,14 @@ export default function DashboardPage() {
             <Link href="/rota" className="ml-1 text-brand-400 hover:underline">rota →</Link>
           </span>
         )}
+        </div>
+        <p className="leading-relaxed">
         Time windows: <b className="text-fg-soft">Today</b> = since midnight ·{" "}
         <b className="text-fg-soft">Month</b> = 1st → today · <b className="text-fg-soft">This week vs last</b> ={" "}
         rolling last 7 days vs the 7 before. For any custom period, open{" "}
         <Link href="/reports" className="text-brand-400 underline">Reports</Link>.
-      </p>
+        </p>
+      </div>
 
       {!setupDone && kpis && kpis.recipe_count === 0 && Number(kpis.month_net_sales) === 0 && Number(kpis.month_expenses) === 0 && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-500/30 bg-brand-500/10 px-4 py-3">
@@ -294,47 +298,56 @@ export default function DashboardPage() {
             hint={`${kpis.month_net_margin_pct}% margin`}
             href="/reports"
           />
-          <div className="group relative">
-            <StatCard
-              label="Low stock"
-              value={<AnimatedNumber value={kpis.low_stock_count} />}
-              accent={kpis.low_stock_count ? "rose" : "brand"}
-              hint={kpis.low_stock_count ? "Tap to see & reorder" : "All good"}
-              href="/inventory?filter=low"
-            />
-            {/* hover preview: the worst offenders as little how-empty rings */}
-            {low.length > 0 && (
-              <div className="mise-pop pointer-events-none invisible absolute right-0 top-full z-30 mt-2 w-64 rounded-2xl border border-glass/15 bg-shell/95 p-3 opacity-0 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-200 group-hover:visible group-hover:opacity-100 lg:block hidden">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
-                  Emptiest shelves first
-                </p>
-                <div className="space-y-2">
-                  {low.slice(0, 5).map((l) => {
-                    const cur = parseFloat(l.current_stock) || 0;
-                    const min = parseFloat(l.min_stock_level) || 1;
-                    const pct = Math.max(0, Math.min(100, (cur / min) * 100));
-                    return (
-                      <div key={l.item_id} className="flex items-center gap-2.5">
-                        <svg viewBox="0 0 36 36" className="h-8 w-8 shrink-0 -rotate-90" aria-hidden>
-                          <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="5" />
-                          <circle
-                            cx="18" cy="18" r="14" fill="none"
-                            stroke={pct < 40 ? "#f43f5e" : "#f59e0b"}
-                            strokeWidth="5" strokeLinecap="round"
-                            strokeDasharray={`${(pct / 100) * 87.96} 87.96`}
-                          />
-                        </svg>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-fg">{l.name}</p>
-                          <p className="text-[10px] text-fg-faint">{l.current_stock} left · min {l.min_stock_level}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {low.length > 5 && <p className="mt-2 text-[10px] text-fg-faint">+{low.length - 5} more below minimum</p>}
+          {/* the flip card: number in front, the emptiest shelves behind —
+              contained in its own footprint, nothing overlays the page */}
+          <div className="group relative h-full [perspective:1000px]">
+            <div
+              className={`relative h-full transition-transform duration-500 [transform-style:preserve-3d] ${
+                low.length > 0 ? "lg:group-hover:[transform:rotateY(180deg)]" : ""
+              }`}
+            >
+              <div className="h-full [backface-visibility:hidden]">
+                <StatCard
+                  label="Low stock"
+                  value={<AnimatedNumber value={kpis.low_stock_count} />}
+                  accent={kpis.low_stock_count ? "rose" : "brand"}
+                  hint={kpis.low_stock_count ? "Tap to see & reorder" : "All good"}
+                  href="/inventory?filter=low"
+                />
               </div>
-            )}
+              {low.length > 0 && (
+                <div className="absolute inset-0 hidden [backface-visibility:hidden] [transform:rotateY(180deg)] lg:block">
+                  <Card className="h-full overflow-hidden p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-faint">Emptiest shelves</p>
+                    <div className="mt-1.5 space-y-1">
+                      {low.slice(0, 3).map((l) => {
+                        const cur = parseFloat(l.current_stock) || 0;
+                        const min = parseFloat(l.min_stock_level) || 1;
+                        const pct = Math.max(0, Math.min(100, (cur / min) * 100));
+                        return (
+                          <div key={l.item_id} className="flex items-center gap-2">
+                            <svg viewBox="0 0 36 36" className="h-5 w-5 shrink-0 -rotate-90" aria-hidden>
+                              <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="6" />
+                              <circle
+                                cx="18" cy="18" r="14" fill="none"
+                                stroke={pct < 40 ? "#f43f5e" : "#f59e0b"}
+                                strokeWidth="6" strokeLinecap="round"
+                                strokeDasharray={`${(pct / 100) * 87.96} 87.96`}
+                              />
+                            </svg>
+                            <p className="min-w-0 flex-1 truncate text-xs font-medium text-fg">{l.name}</p>
+                            <p className="shrink-0 text-[10px] tabular-nums text-fg-faint">{l.current_stock}/{l.min_stock_level}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <Link href="/inventory?filter=low" className="mt-1.5 block text-[11px] font-medium text-brand-400 hover:underline">
+                      {low.length > 3 ? `+${low.length - 3} more — reorder →` : "reorder →"}
+                    </Link>
+                  </Card>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
