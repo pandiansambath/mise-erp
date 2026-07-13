@@ -324,14 +324,14 @@ export default function InventoryPage() {
     setSeeding(true);
     setError(null);
     try {
-      const res = await api.post<{ added: string[]; skipped: string[] }>("/inventory/seed-starter", {
+      const res = await api.post<{ added: number; skipped: number }>("/inventory/seed-starter", {
         items: chosen.map((r) => ({ name: r.name, unit: r.unit, category: r.category || "Other" })),
       });
       setSeedRows(null);
       await load();
       setNotice(
-        `Added ${res.added.length} item${res.added.length === 1 ? "" : "s"}` +
-          (res.skipped.length ? `, skipped ${res.skipped.length} already in your list.` : "."),
+        `Added ${res.added} item${res.added === 1 ? "" : "s"}` +
+          (res.skipped ? `, skipped ${res.skipped} already in your list.` : "."),
       );
       setTimeout(() => setNotice(null), 5000);
     } catch (err) {

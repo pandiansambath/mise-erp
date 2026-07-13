@@ -409,7 +409,7 @@ async def test_seed_starter_preview_and_selective(client, make_user, auth_header
         json={"items": [{"name": "Picker Basmati", "unit": "kg", "category": "My Grains"}]},
     )
     assert res.status_code == 200
-    assert res.json()["added"] == ["Picker Basmati"]
+    assert res.json()["added"] == 1
 
     items = await client.get("/api/inventory/items", headers=h)
     row = next(i for i in items.json() if i["name"] == "Picker Basmati")
