@@ -7,6 +7,7 @@ import {
   downloadFile,
   postForm,
   type Item,
+  type ItemSuppliers,
   type Vendor,
   type VendorItem,
 } from "@/lib/api";
@@ -43,10 +44,16 @@ export default function VendorsPage() {
   const detailRef = useRef<HTMLDivElement>(null);
 
   // add-vendor form
-  const [spend, setSpend] = useState<{ vendor_name: string; total: string }[]>([]);
+  const [spend, setSpend] = useState<
+    { vendor_name: string; total: string; orders?: number; price_rises?: number }[]
+  >([]);
+  // item_id -> the cheapest price ANY vendor quotes (for the emerald cell)
+  const [cheapest, setCheapest] = useState<Record<string, number>>({});
   useEffect(() => {
     api
-      .get<{ vendors: { vendor_name: string; total: string }[] }>("/vendors/spend?days=90")
+      .get<{ vendors: { vendor_name: string; total: string; orders?: number; price_rises?: number }[] }>(
+        "/vendors/spend?days=90",
+      )
       .then((r) => setSpend(r.vendors))
       .catch(() => {});
   }, []);
@@ -68,6 +75,17 @@ export default function VendorsPage() {
     return Promise.all([
       api.get<Vendor[]>("/vendors").then(setVendors),
       api.get<Item[]>("/inventory/items").then(setItems),
+      api
+        .get<ItemSuppliers[]>("/purchasing/item-suppliers")
+        .then((rows) => {
+          const map: Record<string, number> = {};
+          for (const r of rows) {
+            const prices = r.vendors.map((v) => parseFloat(v.price_per_unit) || Infinity);
+            if (prices.length > 1) map[r.item_id] = Math.min(...prices);
+          }
+          setCheapest(map);
+        })
+        .catch(() => {}),
     ]);
   }
 
@@ -347,6 +365,24 @@ export default function VendorsPage() {
               }))}
             />
           </div>
+          {/* the scorecard: how often you order them, how often they raise prices */}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {spend.slice(0, 6).map((x) => (
+              <div key={x.vendor_name} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-xs">
+                <span className="truncate font-medium text-fg">{x.vendor_name}</span>
+                <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                <span className="shrink-0 text-fg-soft">{x.orders ?? 0} order{(x.orders ?? 0) === 1 ? "" : "s"}</span>
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 font-medium ${
+                    (x.price_rises ?? 0) > 0 ? "bg-rose-500/15 text-rose-300" : "bg-brand-500/15 text-brand-300"
+                  }`}
+                  title="times this vendor moved a price UP in the last 90 days"
+                >
+                  {(x.price_rises ?? 0) > 0 ? `▲ ${x.price_rises} rise${x.price_rises === 1 ? "" : "s"}` : "no rises ✓"}
+                </span>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
@@ -434,7 +470,18 @@ export default function VendorsPage() {
                     ) : vendorItems.map((vi) => (
                       <tr key={vi.id} className="border-b border-line transition hover:bg-glass/[0.03]">
                         <td className="px-4 py-2 font-medium text-fg">{itemName(vi.item_id)}</td>
-                        <td className="px-4 py-2 text-right text-fg-soft">
+                        <td
+                          className={`px-4 py-2 text-right ${
+                            cheapest[vi.item_id] != null && (parseFloat(vi.price_per_unit) || 0) <= cheapest[vi.item_id]
+                              ? "bg-emerald-500/10 font-medium text-emerald-300"
+                              : "text-fg-soft"
+                          }`}
+                          title={
+                            cheapest[vi.item_id] != null && (parseFloat(vi.price_per_unit) || 0) <= cheapest[vi.item_id]
+                              ? "Cheapest quote for this item across all your vendors"
+                              : undefined
+                          }
+                        >
                           {format(vi.price_per_unit)}
                           {(() => {
                             const it = items.find((i) => i.id === vi.item_id);

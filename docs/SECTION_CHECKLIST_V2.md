@@ -88,8 +88,8 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 10 · Vendors
 - [x] Feel cards + well inputs + tactile import buttons
 - [x] Spend-per-vendor Bars ("who gets your money", 90d received POs)
-- [ ] Price-list table: cheapest-cell emerald highlight
-- [ ] Feature: vendor scorecard (price-rise count 90d, order count)
+- [x] Price-list table: cheapest-cell emerald highlight (vs all vendors via /purchasing/item-suppliers)
+- [x] Feature: vendor scorecard (/vendors/spend now returns orders + price_rises; chips under the spend Bars)
 
 ## 11 · Price Comparison
 - [x] AreaChart history + tactile
@@ -110,7 +110,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 14 · Party Order
 - [x] Tactile buttons + feel cards
 - [x] Per-quote cost-vs-profit split bar on every quote card
-- [ ] Feature: quote → printable PDF (print stylesheet)
+- [x] Feature: quote → printable PDF (verified existing: ⬇ Download PDF per saved quote → GET /party-quotes/{id}.pdf)
 
 ## 15 · Allergens
 - [x] Menu-safety Donut + feel cards

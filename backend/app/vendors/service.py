@@ -278,17 +278,23 @@ async def compare_vendor_prices(
     }
 
 async def spend_by_vendor(db: AsyncSession, hotel_id: uuid.UUID, days: int) -> list[dict]:
-    """Total received-PO value per vendor in the last `days` — one query."""
+    """Per-vendor scorecard for the last `days`: received-PO spend + order count
+    + how many times they moved a price UP (from the price_history trail)."""
     from datetime import UTC, datetime, timedelta
 
     from sqlalchemy import func as safunc
 
     from app.purchasing.models import POStatus, PurchaseOrder
-    from app.vendors.models import Vendor
+    from app.vendors.models import PriceHistory, Vendor
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
     rows = await db.execute(
-        select(Vendor.id, Vendor.name, safunc.sum(PurchaseOrder.total_amount))
+        select(
+            Vendor.id,
+            Vendor.name,
+            safunc.sum(PurchaseOrder.total_amount),
+            safunc.count(PurchaseOrder.id),
+        )
         .join(PurchaseOrder, PurchaseOrder.vendor_id == Vendor.id)
         .where(
             PurchaseOrder.hotel_id == hotel_id,
@@ -298,7 +304,24 @@ async def spend_by_vendor(db: AsyncSession, hotel_id: uuid.UUID, days: int) -> l
         .group_by(Vendor.id, Vendor.name)
         .order_by(safunc.sum(PurchaseOrder.total_amount).desc())
     )
+    rises = await db.execute(
+        select(PriceHistory.vendor_id, safunc.count(PriceHistory.id))
+        .where(
+            PriceHistory.hotel_id == hotel_id,
+            PriceHistory.created_at >= cutoff,
+            PriceHistory.old_price.is_not(None),
+            PriceHistory.new_price > PriceHistory.old_price,
+        )
+        .group_by(PriceHistory.vendor_id)
+    )
+    rise_by_vendor = {vid: n for vid, n in rises.all()}
     return [
-        {"vendor_id": str(vid), "vendor_name": name, "total": str(total)}
-        for vid, name, total in rows.all()
+        {
+            "vendor_id": str(vid),
+            "vendor_name": name,
+            "total": str(total),
+            "orders": int(orders),
+            "price_rises": int(rise_by_vendor.get(vid, 0)),
+        }
+        for vid, name, total, orders in rows.all()
     ]
