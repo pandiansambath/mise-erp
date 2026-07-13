@@ -366,16 +366,16 @@ export default function PayrollPage() {
               )}
             </label>
             {cadence === "WEEKLY" ? (
-              <input type="week" value={week} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 rounded-lg px-3 py-2 text-sm" />
+              <input type="week" value={week} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 w-44 rounded-lg px-3 py-2 text-sm" />
             ) : (
-              <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 rounded-lg px-3 py-2 text-sm" />
+              <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 w-44 rounded-lg px-3 py-2 text-sm" />
             )}
-            {cadence === "WEEKLY" && <p className="mt-1 text-[11px] text-fg-faint">{weekLabel(week)}</p>}
+            <p className="mt-1 min-h-[15px] text-[11px] text-fg-faint">{cadence === "WEEKLY" ? weekLabel(week) : ""}</p>
           </div>
           {canWrite && (
             <>
-              {cadence === "MONTHLY" && (
-                <div className="w-32">
+              {(
+                <div className={`w-32 transition-all duration-300 ${cadence === "WEEKLY" ? "pointer-events-none opacity-35" : ""}`}>
                   <label className="block text-xs font-medium text-fg-faint">
                     Working days
                     <InfoDot

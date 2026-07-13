@@ -12,7 +12,7 @@ import {
   type PurchaseByVendorRow,
   type ReceiptLine,
 } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Card, PageHeader, Spinner } from "@/components/ui";
 import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
@@ -540,7 +540,7 @@ export default function InventoryPage() {
   }
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+    "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none transition-shadow focus:ring-2 focus:ring-brand-500/30";
 
   const categoryOptions = [
     ...new Set([...STD_CATEGORIES, ...(items.map((i) => i.category).filter(Boolean) as string[])]),
@@ -1266,22 +1266,22 @@ export default function InventoryPage() {
                                 href="/price-comparison"
                                 onClick={(e) => e.stopPropagation()}
                                 title="This item has suppliers but none is chosen — pick which one to use"
-                                className="inline-flex transition hover:opacity-80"
+                                className="mise-press inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-semibold text-amber-500 transition hover:bg-amber-400/20 dark:text-amber-300"
                               >
-                                <Badge tone="amber">★ choose supplier</Badge>
+                                ★ choose{(item.vendor_count ?? 0) > 1 ? ` · ${item.vendor_count}` : ""}
                               </Link>
                             ) : (
                               <Link
                                 href="/vendors"
                                 onClick={(e) => e.stopPropagation()}
                                 title="No vendor sells this yet — add a price for it on the Vendors page"
-                                className="inline-flex transition hover:opacity-80"
+                                className="mise-press inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-fg-faint transition hover:border-amber-400/40 hover:text-amber-500 dark:hover:text-amber-300"
                               >
-                                <Badge tone="amber">+ add supplier</Badge>
+                                + supplier
                               </Link>
                             )}
-                            {multiVendor && (
-                              <span className="ml-2 inline-flex items-center rounded-full border border-brand-400/30 bg-brand-400/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
+                            {multiVendor && item.best_vendor && (
+                              <span className="ml-2 inline-flex items-center whitespace-nowrap rounded-full border border-brand-400/30 bg-brand-400/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
                                 {item.purchase_vendor_count} suppliers
                               </span>
                             )}

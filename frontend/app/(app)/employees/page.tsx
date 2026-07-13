@@ -113,7 +113,7 @@ export default function EmployeesPage() {
   if (loading) return <Spinner />;
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-line-2 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25";
+    "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none transition-shadow focus:ring-2 focus:ring-brand-500/30";
 
   return (
     <div>
@@ -216,7 +216,7 @@ export default function EmployeesPage() {
                 {saving ? "Saving…" : editingId ? "Save changes" : "Add employee"}
               </button>
               {editingId && (
-                <button type="button" onClick={reset} className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2">
+                <button type="button" onClick={reset} className="mise-raised mise-press rounded-lg px-4 py-2 text-sm font-medium text-fg-soft">
                   Cancel
                 </button>
               )}

@@ -153,51 +153,63 @@ export default function RotaPage() {
   const [moves, setMoves] = useState<Move[]>([]);
   const movedIds = useMemo(() => new Set(moves.map((m) => m.newId)), [moves]);
 
-  async function moveShift(id: string | null, targetDate: string) {
+  function moveShift(id: string | null, targetDate: string) {
     setDropDay(null);
     setDragId(null);
     const sh = shifts.find((x) => x.id === id);
     if (!sh || sh.date === targetDate) return;
     const fromDate = sh.date;
-    // optimistic: the card lands in its new day instantly
-    setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: targetDate } : x)));
-    try {
-      const created = await api.post<Shift>("/rota/shifts", {
-        employee_id: sh.employee_id,
-        date: targetDate,
-        start_time: sh.start_time,
-        end_time: sh.end_time,
+    // INSTANT: card lands + ticket appears in the same frame; the server
+    // settles in the background and quietly swaps in the real id.
+    const tempId = `tmp-${sh.id}-${targetDate}`; // unique: the id changes once the server settles
+    setShifts((list) => list.map((x) => (x.id === id ? { ...x, id: tempId, date: targetDate } : x)));
+    setMoves((list) => [
+      ...list,
+      {
+        newId: tempId, name: sh.employee_name, fromDate, toDate: targetDate,
+        employee_id: sh.employee_id, start_time: sh.start_time, end_time: sh.end_time,
         break_minutes: sh.break_minutes,
-      });
-      await api.delete(`/rota/shifts/${sh.id}`);
-      await reload();
-      // stack the ticket — it stays until YOU decide
-      setMoves((list) => [
-        ...list,
-        {
-          newId: created.id, name: sh.employee_name, fromDate, toDate: targetDate,
-          employee_id: sh.employee_id, start_time: sh.start_time, end_time: sh.end_time,
+      },
+    ]);
+    (async () => {
+      try {
+        const created = await api.post<Shift>("/rota/shifts", {
+          employee_id: sh.employee_id,
+          date: targetDate,
+          start_time: sh.start_time,
+          end_time: sh.end_time,
           break_minutes: sh.break_minutes,
-        },
-      ]);
-    } catch (err) {
-      setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: fromDate } : x)));
-      setMsg(err instanceof ApiError ? err.message : "Could not move the shift");
-    }
+        });
+        await api.delete(`/rota/shifts/${sh.id}`);
+        setShifts((list) => list.map((x) => (x.id === tempId ? created : x)));
+        setMoves((list) => list.map((m) => (m.newId === tempId ? { ...m, newId: created.id } : m)));
+        reload().catch(() => {}); // labour totals refresh quietly
+      } catch (err) {
+        setShifts((list) => list.map((x) => (x.id === tempId ? { ...x, id: sh.id, date: fromDate } : x)));
+        setMoves((list) => list.filter((m) => m.newId !== tempId));
+        setMsg(err instanceof ApiError ? err.message : "Could not move the shift");
+      }
+    })();
   }
 
-  const undoMove = useCallback(async (m: Move) => {
+  const undoMove = useCallback((m: Move) => {
+    // INSTANT: ticket line goes, card slides home; the server follows.
     setMoves((list) => list.filter((x) => x.newId !== m.newId));
-    try {
-      await api.post("/rota/shifts", {
-        employee_id: m.employee_id, date: m.fromDate,
-        start_time: m.start_time, end_time: m.end_time, break_minutes: m.break_minutes,
-      });
-      await api.delete(`/rota/shifts/${m.newId}`);
-      await reload();
-    } catch (err) {
-      setMsg(err instanceof ApiError ? err.message : "Could not undo the move");
-    }
+    setShifts((list) => list.map((x) => (x.id === m.newId ? { ...x, date: m.fromDate } : x)));
+    (async () => {
+      try {
+        const restored = await api.post<Shift>("/rota/shifts", {
+          employee_id: m.employee_id, date: m.fromDate,
+          start_time: m.start_time, end_time: m.end_time, break_minutes: m.break_minutes,
+        });
+        if (!m.newId.startsWith("tmp-")) await api.delete(`/rota/shifts/${m.newId}`);
+        setShifts((list) => list.map((x) => (x.id === m.newId ? restored : x)));
+        reload().catch(() => {});
+      } catch (err) {
+        setMsg(err instanceof ApiError ? err.message : "Could not undo the move");
+        reload().catch(() => {});
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -576,7 +588,45 @@ export default function RotaPage() {
         </Card>
       )}
 
-      {canWrite && (
+      {moves.length > 0 && (
+        <div className="mise-pop mise-raised mb-3 overflow-hidden rounded-2xl border border-copper-400/30">
+          <div className="flex items-center gap-2.5 bg-gradient-to-r from-copper-500/15 via-copper-500/5 to-transparent px-4 py-2.5">
+            <span aria-hidden className="mise-moved-glow grid h-7 w-7 place-items-center rounded-full bg-copper-500/20 text-sm">✥</span>
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+              {moves.length === 1 ? "1 shift moved" : `${moves.length} shifts moved`}
+              <span className="ml-2 hidden text-[11px] font-normal text-fg-faint sm:inline">Ctrl+Z undoes the latest · stays until you decide</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setMoves([])}
+              className="mise-press shrink-0 rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+            >
+              Keep all ✓
+            </button>
+          </div>
+          <div className="mise-noscrollbar flex gap-2 overflow-x-auto px-3 py-2.5">
+            {moves.map((m) => (
+              <span key={m.newId} className="mise-well flex shrink-0 items-center gap-2 rounded-xl py-1.5 pl-3 pr-1.5 text-xs">
+                <span className="text-fg">
+                  <b>{m.name.split(" ")[0]}</b>{" "}
+                  <span className="text-fg-faint">
+                    {new Date(m.fromDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} →{" "}
+                    {new Date(m.toDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => undoMove(m)}
+                  className="mise-press rounded-lg border border-line px-2 py-1 text-[11px] font-medium text-fg-soft hover:border-rose-400/40 hover:text-rose-300"
+                >
+                  ⌫
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {canWrite && moves.length === 0 && (
         <p className="mb-1.5 text-[11px] text-fg-faint">
           ✥ drag any shift card onto another day to move it — like a board ticket
         </p>
@@ -637,7 +687,7 @@ export default function RotaPage() {
                       title={canWrite ? "Drag onto another day to move this shift" : undefined}
                       className={`mise-well mise-feel relative rounded-lg p-2 text-xs ${canWrite ? "cursor-grab active:cursor-grabbing" : ""} ${
                         dragId === s.id ? "opacity-40 ring-1 ring-brand-400/50" : ""
-                      } ${movedIds.has(s.id) ? "mise-spotlight ring-1 ring-copper-400/50" : ""}`}
+                      } ${movedIds.has(s.id) ? "mise-moved-glow" : ""}`}
                     >
                       {movedIds.has(s.id) && (
                         <span className="absolute -right-1.5 -top-1.5 rounded-full bg-copper-500 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
@@ -663,45 +713,6 @@ export default function RotaPage() {
           );
         })}
       </div>
-
-      {moves.length > 0 && (
-        <div className="mise-pop fixed left-1/2 top-20 z-50 w-[min(28rem,calc(100vw-1.5rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-copper-400/30 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
-          <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-            <span aria-hidden>✥</span>
-            <p className="flex-1 text-sm font-semibold text-fg">
-              {moves.length === 1 ? "You moved a shift" : `You moved ${moves.length} shifts`} — keep them?
-            </p>
-            <button
-              type="button"
-              onClick={() => setMoves([])}
-              className="mise-press shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
-            >
-              Keep all ✓
-            </button>
-          </div>
-          <ul className="max-h-52 overflow-y-auto overscroll-contain p-2">
-            {moves.map((m) => (
-              <li key={m.newId} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-glass/5">
-                <span className="min-w-0 flex-1 truncate text-fg">
-                  <b>{m.name.split(" ")[0]}</b>{" "}
-                  <span className="text-fg-faint">
-                    {new Date(m.fromDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} →{" "}
-                    {new Date(m.toDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} · {hhmm(m.start_time)}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => undoMove(m)}
-                  className="mise-press shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:text-rose-300"
-                >
-                  Undo ⌫
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="border-t border-line px-4 py-1.5 text-[10px] text-fg-faint">Ctrl+Z / ⌘Z undoes the latest · stays until you decide</p>
-        </div>
-      )}
 
       {labour && labour.by_employee.length > 0 && (
         <Card className="mise-feel mt-6">

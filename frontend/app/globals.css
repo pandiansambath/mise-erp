@@ -1305,3 +1305,13 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   outline: 2px solid color-mix(in srgb, var(--color-brand-400) 65%, transparent);
   outline-offset: 2px;
 }
+
+/* A moved board card keeps breathing copper until its move is kept or undone. */
+@keyframes mise-moved-glow-k {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(217, 119, 66, 0.55), 0 0 10px rgba(217, 119, 66, 0.25); }
+  50%      { box-shadow: 0 0 0 2px rgba(217, 119, 66, 0.75), 0 0 18px rgba(217, 119, 66, 0.45); }
+}
+.mise-moved-glow { animation: mise-moved-glow-k 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mise-moved-glow { animation: none; box-shadow: 0 0 0 2px rgba(217, 119, 66, 0.6); }
+}

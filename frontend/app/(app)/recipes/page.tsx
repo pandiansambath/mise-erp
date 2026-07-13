@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, postForm, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { Bars, Donut, Treemap } from "@/components/charts";
@@ -365,7 +365,19 @@ export default function RecipesPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // the dish stage: which recipe is open in the full-width modal
+  const [stage, setStage] = useState<{ id: string; name: string; category: string | null; servings: number; pct: number | null } | null>(null);
+  const openStage = useCallback(
+    (id: string) => {
+      const r = recipes.find((x) => x.id === id);
+      if (!r) return;
+      setStage({
+        id: r.id, name: r.name, category: r.category, servings: r.servings_default,
+        pct: r.profit_margin ? parseFloat(r.profit_margin) : null,
+      });
+    },
+    [recipes],
+  );
 
   // New/edit-recipe form
   const [showForm, setShowForm] = useState(false);
@@ -470,12 +482,12 @@ export default function RecipesPage() {
     const id = new URLSearchParams(window.location.search).get("open");
     if (!id || !recipes.some((r) => r.id === id)) return;
     didDeepLink.current = true;
-    setOpenId(id);
+    openStage(id);
     setTimeout(
       () => document.getElementById(`recipe-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
       120,
     );
-  }, [recipes]);
+  }, [recipes, openStage]);
 
   // Autofill: typing a dish name that already exists copies its ingredients in
   // (editable) — so the same dish at a new serve-size doesn't need re-entry.
@@ -577,9 +589,8 @@ export default function RecipesPage() {
         }
       }
       await reload();
-      const newId = recipe.id;
       resetForm();
-      setOpenId(newId);
+      openStage(recipe.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save recipe");
     } finally {
@@ -644,12 +655,11 @@ export default function RecipesPage() {
         <div className="divide-y divide-line">
           {sorted.map((r) => {
             const pct = r.profit_margin ? parseFloat(r.profit_margin) : null;
-            const open = openId === r.id;
             return (
               <div key={r.id} id={`recipe-${r.id}`} className={r.is_active ? "" : "opacity-70"}>
                 <div className="flex items-center gap-2 py-2.5">
                   <button
-                    onClick={() => setOpenId(open ? null : r.id)}
+                    onClick={() => setStage({ id: r.id, name: dishName, category: sorted[0].category, servings: r.servings_default, pct })}
                     className="flex flex-1 items-center justify-between text-left"
                   >
                     <span className="flex items-center gap-2 text-sm font-medium text-fg-soft">
@@ -661,9 +671,9 @@ export default function RecipesPage() {
                         width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
                         aria-hidden
-                        className={`text-fg-faint transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+                        className="text-fg-faint transition-transform duration-300 group-hover/row:translate-x-0.5"
                       >
-                        <path d="M6 9l6 6 6-6" />
+                        <path d="M9 6l6 6-6 6" />
                       </svg>
                     </span>
                   </button>
@@ -694,11 +704,7 @@ export default function RecipesPage() {
                       </button>
                     ))}
                 </div>
-                {open && (
-                  <div className="border-t border-line pb-2 pt-3">
-                    <CostDetail recipeId={r.id} items={items} onTag={tagAllergens} />
-                  </div>
-                )}
+
               </div>
             );
           })}
@@ -709,6 +715,36 @@ export default function RecipesPage() {
 
   return (
     <div>
+      {stage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`${stage.name} costing`}>
+          <div className="mise-fade absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={() => setStage(null)} aria-hidden />
+          <div className="mise-pop-lg relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-glass/10 bg-paper shadow-2xl shadow-black/60">
+            <div className="flex items-center gap-3 border-b border-line bg-gradient-to-r from-brand-500/10 via-transparent to-transparent px-5 py-4">
+              <span aria-hidden className="mise-well grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-2xl">
+                {dishEmoji(stage.category)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate font-display text-xl font-semibold text-fg">{stage.name}</h2>
+                <p className="text-xs text-fg-faint">
+                  {stage.category || "Dish"} · serves {stage.servings}
+                </p>
+              </div>
+              {stage.pct !== null && <MarginRing pct={stage.pct} />}
+              <button
+                type="button"
+                onClick={() => setStage(null)}
+                aria-label="Close"
+                className="mise-press ml-1 grid h-9 w-9 shrink-0 place-items-center rounded-xl text-fg-faint hover:bg-glass/5 hover:text-fg"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+              <CostDetail recipeId={stage.id} items={items} onTag={tagAllergens} />
+            </div>
+          </div>
+        </div>
+      )}
       <PageHeader title="Recipes" subtitle="Cost per plate and profit margin for each dish." />
 
       {canWrite && (
