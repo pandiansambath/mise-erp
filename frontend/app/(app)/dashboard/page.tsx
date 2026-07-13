@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { api, type DashboardKpis, type PnL } from "@/lib/api";
+import { api, type DashboardKpis, type PnL, type POSummary } from "@/lib/api";
 import { AreaChart, Bars, CalendarHeat, Donut, Meter, type DonutSegment } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
@@ -105,6 +105,7 @@ export default function DashboardPage() {
   const [week, setWeek] = useState<DayPoint[] | null>(null); // last 7 days, oldest first
   const [monthDays, setMonthDays] = useState<{ date: string; value: number }[]>([]); // ~5 weeks for the heatmap
   const [tonight, setTonight] = useState<string[]>([]); // who's on the rota today
+  const [dueToday, setDueToday] = useState(0); // POs the vendor promised for today (or missed)
   const [checksDone, setChecksDone] = useState<number | null>(null); // today's safety checks
   const [curWeek, setCurWeek] = useState<PnL | null>(null);
   const [prevWeek, setPrevWeek] = useState<PnL | null>(null);
@@ -159,6 +160,18 @@ export default function DashboardPage() {
     }
     if (seeInventory)
       jobs.push(api.get<LowStock[]>("/inventory/alerts/low-stock").then(setLow).catch(() => {}));
+    if (can(role, "indent:read"))
+      jobs.push(
+        api
+          .get<POSummary[]>("/purchasing/purchase-orders")
+          .then((pos) => {
+            const t = new Date().toISOString().slice(0, 10);
+            setDueToday(
+              pos.filter((p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery <= t).length,
+            );
+          })
+          .catch(() => {}),
+      );
     // safety pulse: how many of today's 7 daily checks are logged?
     {
       const t0 = iso(ago(0));
@@ -180,7 +193,7 @@ export default function DashboardPage() {
       );
     }
     Promise.all(jobs).finally(() => setLoading(false));
-  }, [seeFinance, seeInventory]);
+  }, [seeFinance, seeInventory, role]);
 
   // Where this week's net sales went: costs, expenses, and what was kept.
   const donut = useMemo<DonutSegment[] | null>(() => {
@@ -228,6 +241,11 @@ export default function DashboardPage() {
         {checksDone != null && checksDone < 7 && new Date().getHours() >= 10 && (
           <Link href="/food-safety" className="mise-well mise-press mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-amber-300 hover:text-amber-200">
             🌡 {checksDone}/7 safety checks logged today →
+          </Link>
+        )}
+        {dueToday > 0 && (
+          <Link href="/purchasing" className="mise-well mise-press mr-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sky-300 hover:text-sky-200">
+            🚚 {dueToday} deliver{dueToday === 1 ? "y" : "ies"} due today →
           </Link>
         )}
         {tonight.length > 0 && (

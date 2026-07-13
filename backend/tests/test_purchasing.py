@@ -248,3 +248,27 @@ async def test_partial_receive_records_short_delivery(db, hotel):
     refetched = await inv.get_item(db, rice.id, hotel.id)
     assert refetched.current_stock == Decimal("30.000")
     assert (await service.po_items(db, po.id))[0]["received_qty"] == Decimal("30.000")
+
+
+@pytest.mark.asyncio
+async def test_set_expected_delivery(client, make_user, auth_header, db, hotel):
+    """PATCH a PO's expected-delivery date; it comes back on the summary list too."""
+    rice, chicken, v1, v2 = await _setup_catalog(db, hotel.id)
+    indent = await service.create_indent(
+        db, hotel.id, [{"item_id": rice.id, "required_qty": Decimal("2")}]
+    )
+    po = (await service.generate_pos(db, indent))["purchase_orders"][0]
+    mgr = await make_user("podue@x.com", Role.MANAGER.value)
+
+    res = await client.patch(
+        f"/api/purchasing/purchase-orders/{po.id}",
+        headers=auth_header(mgr),
+        json={"expected_delivery": "2026-07-20"},
+    )
+    assert res.status_code == 200
+    assert res.json()["expected_delivery"] == "2026-07-20"
+
+    listing = await client.get("/api/purchasing/purchase-orders", headers=auth_header(mgr))
+    assert listing.status_code == 200
+    row = next(r for r in listing.json() if r["id"] == str(po.id))
+    assert row["expected_delivery"] == "2026-07-20"

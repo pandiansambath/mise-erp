@@ -26,6 +26,7 @@ from app.purchasing.schemas import (
     POOut,
     POReceiveRequest,
     POSummary,
+    POUpdateRequest,
     ReorderSuggestion,
 )
 from app.vendors import service as vendor_service
@@ -260,6 +261,23 @@ async def get_po(
     po = await service.get_po(db, po_id, user.hotel_id)
     if po is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
+    return await _po_out(db, po)
+
+
+@router.patch("/purchase-orders/{po_id}", response_model=POOut)
+async def update_po(
+    po_id: uuid.UUID,
+    payload: POUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:write")),
+) -> POOut:
+    """Set the order's expected-delivery date (the dashboard chases it for you)."""
+    po = await service.get_po(db, po_id, user.hotel_id)
+    if not po:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PO not found")
+    po.expected_delivery = payload.expected_delivery
+    await db.commit()
+    await db.refresh(po)
     return await _po_out(db, po)
 
 

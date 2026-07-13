@@ -248,9 +248,15 @@ function ImportStep({
   const [done, setDone] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const [dragOver, setDragOver] = useState(false);
+
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
+    await readFile(file);
+  }
+
+  async function readFile(file: File | undefined) {
     if (!file) return;
     setBusy(true);
     setErr(null);
@@ -299,7 +305,7 @@ function ImportStep({
           <p className="mt-1 text-sm text-white/60">You can always add more later from the app.</p>
         </div>
       ) : rows ? (
-        <div className="mt-6 rounded-2xl border border-white/15 bg-white/5 p-4">
+        <div className="mise-pop-lg mt-6 rounded-2xl border border-white/15 bg-white/5 p-4">
           <p className="text-sm text-white/70">I found <span className="font-semibold text-white">{rows.length}</span> {noun}. Review and add:</p>
           <div className="mise-slide-stagger mt-3 max-h-52 space-y-1 overflow-y-auto pr-1 text-sm">
             {rows.slice(0, 60).map((r, i) => (
@@ -327,12 +333,27 @@ function ImportStep({
           <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={onFile} />
           <button
             onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              readFile(e.dataTransfer.files?.[0]);
+            }}
             disabled={busy}
-            className="group flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/20 bg-white/[0.03] px-6 py-10 text-center transition hover:border-emerald-400/50 hover:bg-white/[0.06] disabled:opacity-60"
+            className={`group flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition disabled:opacity-60 ${
+              dragOver
+                ? "border-emerald-400/70 bg-emerald-400/10"
+                : "border-white/20 bg-white/[0.03] hover:border-emerald-400/50 hover:bg-white/[0.06]"
+            } ${busy ? "mise-shimmer" : ""}`}
           >
-            <span className="text-3xl">{busy ? "⏳" : "📄"}</span>
-            <span className="mt-2 font-medium text-white">{busy ? "Reading your file…" : "Upload PDF, Excel, CSV or a photo"}</span>
-            <span className="mt-1 text-xs text-white/45">The AI reads it and fills this in for you</span>
+            {busy ? <span className="mise-upload-ring" aria-hidden /> : <span className="text-3xl">📄</span>}
+            <span className="mt-2 font-medium text-white">
+              {busy ? "Reading your file…" : dragOver ? "Drop it here —" : "Drop a file here, or tap to choose"}
+            </span>
+            <span className="mt-1 text-xs text-white/45">
+              {busy ? "the AI is turning it into rows" : "PDF, Excel, CSV or a photo — the AI reads it and fills this in for you"}
+            </span>
           </button>
           {err && <p className="mt-3 text-sm text-rose-300">{err}</p>}
         </div>

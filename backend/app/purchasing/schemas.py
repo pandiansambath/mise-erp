@@ -53,6 +53,7 @@ class POOut(BaseModel):
     po_number: str
     status: str
     total_amount: Decimal
+    expected_delivery: date_type | None = None
     receive_note: str | None = None
     items: list[POItemOut]
 
@@ -63,6 +64,12 @@ class POReceiveLine(BaseModel):
     # Actual unit price from the vendor bill (optional). When update_prices is set,
     # this becomes the vendor's new price for the item + a price-history row.
     unit_price: Decimal | None = Field(default=None, ge=0)
+
+
+class POUpdateRequest(BaseModel):
+    """When is this order actually arriving? Feeds the dashboard's due-today chip."""
+
+    expected_delivery: date_type | None = None
 
 
 class POReceiveRequest(BaseModel):
@@ -83,6 +90,7 @@ class POSummary(BaseModel):
     po_number: str
     status: str
     total_amount: Decimal
+    expected_delivery: date_type | None = None
     indent_id: uuid.UUID | None = None  # groups POs by the purchase run they came from
 
 

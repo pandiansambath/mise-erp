@@ -15,6 +15,7 @@ import {
   type SupplierOption,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
@@ -61,6 +62,7 @@ export default function PurchasingPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [indents, setIndents] = useState<Indent[]>([]);
   const [pos, setPos] = useState<POSummary[]>([]);
+  const [todayStr] = useState(() => new Date().toISOString().slice(0, 10)); // frozen at mount
   const [loading, setLoading] = useState(true);
   const [lines, setLines] = useState<Line[]>([]);
   // item_id -> every vendor pricing it (cheapest first), for the line picker
@@ -554,6 +556,19 @@ export default function PurchasingPage() {
                                 {indentConsol[ind.id].vendor_count} vendor{indentConsol[ind.id].vendor_count === 1 ? "" : "s"} · <b className="text-fg-soft">{format(indentConsol[ind.id].grand_total)}</b>
                               </span>
                             </div>
+                            {indentConsol[ind.id].vendors.length > 1 && (
+                              // who's getting how much of this indent — at a glance
+                              <div className="mise-well mb-2 rounded-lg p-2.5">
+                                <Bars
+                                  formatValue={(v) => format(String(v))}
+                                  items={indentConsol[ind.id].vendors.map((v) => ({
+                                    label: v.vendor_name || v.po_number,
+                                    value: parseFloat(v.subtotal) || 0,
+                                    color: "#d97742",
+                                  }))}
+                                />
+                              </div>
+                            )}
                             <div className="space-y-1.5">
                               {indentConsol[ind.id].vendors.map((v) => (
                                 <div key={v.po_id} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-paper-2/40 px-2.5 py-1.5">
@@ -662,11 +677,39 @@ export default function PurchasingPage() {
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block text-sm font-semibold text-fg">{format(po.total_amount)}</span>
-                        <Badge tone={poTone[po.status] ?? "slate"}>{po.status}</Badge>
+                        <span className="flex items-center justify-end gap-1.5">
+                          {po.status !== "RECEIVED" && po.expected_delivery && (() => {
+                            const t = todayStr;
+                            return po.expected_delivery < t ? (
+                              <Badge tone="red">overdue</Badge>
+                            ) : po.expected_delivery === t ? (
+                              <Badge tone="amber">due today</Badge>
+                            ) : null;
+                          })()}
+                          <Badge tone={poTone[po.status] ?? "slate"}>{po.status}</Badge>
+                        </span>
                       </span>
                     </button>
                     {open && (
                       <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
+                        {po.status !== "RECEIVED" && canApprove && (
+                          <label className="flex flex-wrap items-center gap-2 text-xs text-fg-faint">
+                            🚚 Expected delivery
+                            <input
+                              type="date"
+                              value={po.expected_delivery ?? ""}
+                              onChange={async (e) => {
+                                const v = e.target.value || null;
+                                try {
+                                  await api.patch(`/purchasing/purchase-orders/${po.id}`, { expected_delivery: v });
+                                  setPos((list) => list.map((x) => (x.id === po.id ? { ...x, expected_delivery: v } : x)));
+                                } catch { /* leave as-was */ }
+                              }}
+                              className="mise-well rounded-lg px-2 py-1 text-xs text-fg outline-none"
+                            />
+                            {po.expected_delivery && <span>the dashboard will chase it on the day</span>}
+                          </label>
+                        )}
                         {busy && !detail ? (
                           <p className="py-1 text-center text-sm text-fg-faint">Loading items…</p>
                         ) : detail && detail.items.length > 0 ? (

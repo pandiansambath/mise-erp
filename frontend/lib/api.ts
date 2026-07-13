@@ -412,6 +412,7 @@ export interface POSummary {
   po_number: string;
   status: string;
   total_amount: string;
+  expected_delivery?: string | null; // when the vendor said it lands
   indent_id?: string | null; // the purchase run this PO belongs to
 }
 

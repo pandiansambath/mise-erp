@@ -437,10 +437,11 @@ export function Copilot() {
             {loading && (
               <div className="flex justify-start gap-2">
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-[13px] text-white shadow-sm" aria-hidden>✨</span>
-                <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-glass/10 bg-paper-3 px-4 py-3.5">
+                <div className="mise-shimmer flex items-center gap-2 rounded-2xl rounded-bl-md border border-glass/10 bg-paper-3 px-4 py-3">
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" />
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" style={{ animationDelay: "0.2s" }} />
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" style={{ animationDelay: "0.4s" }} />
+                  <span className="text-xs text-fg-faint">cooking an answer…</span>
                 </div>
               </div>
             )}

@@ -81,9 +81,9 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 9 · Purchasing
 - [x] Tactile buttons (879d060)
 - [x] Pipeline strip: Indents raised → Approved → POs out → Received (tactile stages w/ counts)
-- [ ] Consolidated view: per-vendor subtotal Bars
+- [x] Consolidated view: per-vendor subtotal Bars (who gets how much of the indent, inside the orders panel)
 - [x] Receive drawer: old→new price chips (strikethrough → input + "new") — verified existing
-- [ ] Feature: expected-delivery date on PO + "due today" chip on dashboard
+- [x] Feature: expected-delivery date on PO + "due today" chip (PATCH /purchase-orders/{id}, date picker per PO, overdue/due-today badges, 🚚 dashboard chip, tested)
 
 ## 10 · Vendors
 - [x] Feel cards + well inputs + tactile import buttons
@@ -174,7 +174,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 
 ## 27 · Onboarding
 - [x] Press-feel CTAs
-- [ ] Import flow polish: upload → parsed preview → confirm morph
+- [x] Import flow polish: drag-drop zone + shimmer/ring while AI reads + preview pops in (mise-pop-lg) → confirm morph
 - [x] Finish screen: ember-confetti burst + serve-chef presenting the dashboard
 - [x] Welcome step: chef welcome pose greets new owners
 
@@ -190,7 +190,7 @@ announcements broadcast · g-key shortcuts + "?" palette.
 ## 30 · Copilot (Ask Mise)
 - [x] Chef in the chat header — thinks while answering, beams when done
 - [x] Chat panel = theme-aware liquid glass (.mise-glass-panel)
-- [ ] Typing shimmer + message polish (Copilot Body plan continues)
+- [x] Typing shimmer + message polish (shimmering 'cooking an answer…' thinking bubble)
 - [ ] Then brain/hands/legs/ears per [[nirai-copilot-body-plan]]
 
 ## 31 · 🛰️ CONTROL ROOM (UI + FEATURES — user priority)
