@@ -76,10 +76,13 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
             f"Your Mise sign-in code is {user.otp_code}. It expires in 10 minutes. "
             "If this wasn't you, change your password.",
             html=notify.render_email(
-                heading="Your sign-in code 🔐",
-                intro="Enter this code to finish signing in. It expires in 10 minutes — "
-                "if this wasn't you, change your password now.",
-                rows=[("Code", user.otp_code)],
+                badge="🔐 Two-step sign-in",
+                heading="Your sign-in code",
+                intro="You're one code away from your kitchen. Enter it on the sign-in "
+                "screen and you're in.",
+                rows=[("Your code", user.otp_code)],
+                footnote="Expires in 10 minutes. Wasn't you? Change your password now — "
+                "your account stayed locked without this code.",
             ),
         )
         return JSONResponse({"twofa_required": True})
@@ -106,8 +109,10 @@ async def _security_login_alert(user: User) -> None:
             f"Your Mise account was signed in at {when}. If this wasn't you, "
             "reset your password immediately.",
             html=notify.render_email(
+                badge="🛡️ Security",
                 heading="New sign-in to your account",
-                intro="If this was you, no action needed. If not, reset your password now.",
+                intro="You asked us to watch the door — here's the knock. If this was "
+                "you, carry on; if not, reset your password right away.",
                 rows=[("When", when), ("Account", user.email)],
                 cta_label="Reset my password",
                 cta_url=f"{settings.app_base_url}/forgot-password",
@@ -189,12 +194,15 @@ async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_
         f"Welcome to Mise, {hotel.name} — confirm your email to open ✉️",
         f"Welcome to Mise, {hotel.name}! Confirm your email to open your kitchen: {verify_url}",
         html=notify.render_email(
-            heading=f"One click and you're in, {hotel.name} 🎉",
+            badge="🎉 Welcome to Mise",
+            heading=f"One click and you're in, {hotel.name}",
             intro=(
-                "Your account is ready — live food-cost, menu margins, stock, "
-                "purchasing and payroll in one place. Confirm this is your email "
-                "and your kitchen opens immediately."
+                "Great restaurants run on great numbers — and yours are about to get "
+                "sharper. Live food-cost, menu margins, stock, purchasing and payroll, "
+                "all in one place. Confirm this is your email and your kitchen opens "
+                "immediately."
             ),
+            footnote="Didn't sign up to Mise? You can safely ignore this email.",
             rows=[
                 ("Restaurant", hotel.name),
                 ("Owner login", payload.email),
@@ -341,8 +349,11 @@ async def resend_verification(payload: EmailOnly, db: AsyncSession = Depends(get
             "Your Mise verification link ✉️",
             f"Confirm your email to open Mise: {verify_url}",
             html=notify.render_email(
+                badge="✉️ Verification link",
                 heading="Here's that link again",
-                intro="One click confirms your email and opens your Mise kitchen.",
+                intro="One click confirms your email and opens your Mise kitchen — "
+                "your inventory, recipes and live P&L are waiting.",
+                footnote="Didn't request this? You can safely ignore it.",
                 cta_label="Confirm email & open Mise",
                 cta_url=verify_url,
             ),
@@ -364,11 +375,14 @@ async def forgot_password(payload: EmailOnly, db: AsyncSession = Depends(get_db)
             "Reset your Mise password 🔑",
             f"Choose a new password (link valid for 1 hour): {reset_url}",
             html=notify.render_email(
+                badge="🔑 Password reset",
                 heading="Let's get you back in",
                 intro=(
                     "Someone (hopefully you) asked to reset this account's password. "
-                    "The link works for 1 hour — if it wasn't you, just ignore this."
+                    "One click, choose a new one, and you're back at the pass."
                 ),
+                footnote="The link works for 1 hour. If this wasn't you, "
+                "just ignore this email — your password stays unchanged.",
                 cta_label="Choose a new password",
                 cta_url=reset_url,
                 accent="#d97742",

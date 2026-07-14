@@ -316,7 +316,8 @@ async def create_announcement(
             f"Mise announcement: {body.message.strip()[:80]}",
             body.message.strip(),
             html=notify.render_email(
-                heading="A note from Mise HQ 📣",
+                badge="📣 Announcement",
+                heading="A note from Mise HQ",
                 intro=body.message.strip(),
                 accent="#0ea5e9" if body.level == "info" else "#d97742",
             ),

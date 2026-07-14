@@ -317,8 +317,11 @@ async def public_apply(
         f"{application.applicant_name} just applied for '{posting.title}'. "
         f"Review the application in Mise → Hiring.",
         html=notify.render_email(
-            heading="You have a new applicant 🎉",
-            intro=f"Someone just applied to your <b>{posting.title}</b> vacancy.",
+            badge="🧑‍🍳 New applicant",
+            heading="Someone wants to join your team!",
+            intro=f"Your <b>{posting.title}</b> vacancy is doing its job — a fresh "
+            "application just landed in your pipeline. Great teams are built on "
+            "quick replies, so strike while it's hot.",
             rows=[
                 ("Applicant", application.applicant_name),
                 ("Role", posting.title),

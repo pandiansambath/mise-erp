@@ -136,9 +136,11 @@ async def upsert_vendor_item(
             f"{vendor_name} moved {item_name} from {old_price} to {price_per_unit} "
             f"(+{pct:.1f}%). Your dish margins that use it just changed.",
             html=notify.render_email(
-                heading="A supplier just raised a price 📈",
-                intro=f"<b>{vendor_name}</b> moved <b>{item_name}</b> up — dishes "
-                "using it are now costlier to plate.",
+                badge="📈 Price rise",
+                heading="A supplier just raised a price",
+                intro=f"<b>{vendor_name}</b> moved <b>{item_name}</b> up — every dish "
+                "using it is now costlier to plate. You caught it the moment it "
+                "happened; most kitchens find out at month-end.",
                 rows=[
                     ("Item", str(item_name)),
                     ("Supplier", str(vendor_name)),

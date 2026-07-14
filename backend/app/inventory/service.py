@@ -230,9 +230,11 @@ async def record_movement(
             f"{item.name} just dropped to {new_stock} {item.unit} "
             f"(minimum {item.min_stock_level}). Time to reorder.",
             html=notify.render_email(
-                heading="An item just went low 📉",
-                intro=f"<b>{item.name}</b> crossed below its minimum level — "
-                "reorder before service feels it.",
+                badge="📉 Low stock",
+                heading="An item just crossed its minimum",
+                intro=f"<b>{item.name}</b> dipped below the line you set — "
+                "reorder now and service never feels it. That's the whole point "
+                "of minimum levels, and yours just worked.",
                 rows=[
                     ("Item", item.name),
                     ("Now", f"{new_stock} {item.unit}"),
