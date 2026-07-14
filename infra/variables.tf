@@ -27,7 +27,7 @@ variable "resend_api_key" {
 
 variable "email_from" {
   type    = string
-  default = "Mise <onboarding@resend.dev>"
+  default = "Mise <accounts@milagurestaurant.com>" # domain verified in Resend 2026-07-14
 }
 
 # Optional Mise Copilot LLM (Google Gemini, free tier). Empty = the assistant
