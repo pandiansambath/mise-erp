@@ -94,11 +94,12 @@ async def test_full_order_lifecycle(client, make_user, auth_header, monkeypatch,
 
     from app.sales.models import SalesChannel, SalesLine
 
+    hid = owner.hotel_id  # capture BEFORE expire_all — expired attrs can't lazy-load in async
     db.expire_all()
     channel = (
         await db.execute(
             select(SalesChannel).where(
-                SalesChannel.hotel_id == owner.hotel_id, SalesChannel.name == "Online Orders"
+                SalesChannel.hotel_id == hid, SalesChannel.name == "Online Orders"
             )
         )
     ).scalar_one()
