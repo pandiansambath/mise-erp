@@ -171,11 +171,14 @@ async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_
     if await service.get_user_by_email(db, payload.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account")
     country = payload.country.upper()
+    plan = payload.plan if feat.is_valid_plan(payload.plan) else feat.DEFAULT_PLAN
     hotel = Hotel(
         name=payload.hotel_name.strip(),
         country=country,
         city=payload.city,
         base_currency=_CURRENCY_BY_COUNTRY.get(country, "GBP"),
+        plan=plan,
+        features=feat.plan_features(plan),  # the preset shapes their dashboard
     )
     db.add(hotel)
     await db.flush()

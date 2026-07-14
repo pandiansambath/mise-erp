@@ -104,7 +104,7 @@ class Plan:
 # Starter turns off the AI + HR + premium modules; Pro/Enterprise get everything.
 _STARTER_OFF: tuple[str, ...] = (
     "ai_copilot", "party_orders", "food_safety", "documents", "price_comparison",
-    "rota", "attendance", "employees", "payroll",
+    "rota", "attendance", "employees", "payroll", "delivery",
 )
 
 PLANS: tuple[Plan, ...] = (
@@ -115,6 +115,7 @@ PLANS: tuple[Plan, ...] = (
             "Inventory, recipes & live costing",
             "Vendors & purchasing (with consolidated POs)",
             "Sales, expenses & a real-time P&L",
+            "Online ordering page (pickup)",
             "Up to 3 users",
         ),
     ),
@@ -123,6 +124,7 @@ PLANS: tuple[Plan, ...] = (
         "The full operating system — AI, people, purchasing & scanning.",
         (
             "Everything in Starter",
+            "Delivery & live rider tracking",
             "AI Copilot + bill & handwritten-recipe scanning",
             "Payroll, rota & attendance",
             "Documents, food safety & price comparison",

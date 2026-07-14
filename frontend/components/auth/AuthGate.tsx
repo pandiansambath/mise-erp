@@ -255,6 +255,7 @@ function SignupForm({ active }: { active: boolean }) {
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
   const [sent, setSent] = useState(false); // account made → go check the inbox
+  const [plan, setPlan] = useState("pro"); // shapes the dashboard from day one
   const chef = useChefMood(email.length || hotelName.length);
 
   async function onSubmit(e: React.FormEvent) {
@@ -263,7 +264,7 @@ function SignupForm({ active }: { active: boolean }) {
     setError(null);
     chef.setBusyHappy(true);
     try {
-      await registerHotel({ hotel_name: hotelName, country, city: city || undefined, email, password });
+      await registerHotel({ hotel_name: hotelName, country, city: city || undefined, email, password, plan });
       setSent(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register. Is the server running?");
@@ -377,6 +378,30 @@ function SignupForm({ active }: { active: boolean }) {
           {error}
         </p>
       )}
+      <div>
+        <span className={authLabel}>Your plan (change any time)</span>
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+          {[
+            ["starter", "Starter", "money + stock"],
+            ["pro", "Pro", "everything"],
+            ["enterprise", "Enterprise", "unlimited"],
+          ].map(([key, label, hint]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPlan(key)}
+              className={`rounded-xl border px-2 py-2 text-center transition ${
+                plan === key
+                  ? "border-emerald-400/60 bg-emerald-400/10"
+                  : "border-white/10 bg-white/[0.03] hover:border-white/25"
+              }`}
+            >
+              <span className="block text-xs font-semibold text-white">{label}</span>
+              <span className="block text-[10px] text-slate-400">{hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <SubmitButton busy={busy} busyLabel="Creating your restaurant…">Create my restaurant</SubmitButton>
     </form>
   );

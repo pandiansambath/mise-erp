@@ -19,6 +19,7 @@ export interface RegisterHotelInput {
   city?: string;
   email: string;
   password: string;
+  plan?: string; // starter | pro | enterprise — shapes the new dashboard
 }
 
 interface AuthState {

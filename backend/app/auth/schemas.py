@@ -27,6 +27,8 @@ class RegisterHotel(BaseModel):
     city: str | None = None
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    # Chosen at signup; shapes the dashboard (validated against the plan registry).
+    plan: str = "pro"
 
 
 class UserOut(BaseModel):
