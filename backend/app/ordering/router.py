@@ -9,8 +9,8 @@ import secrets
 import uuid
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,6 +61,12 @@ class MenuItemOut(BaseModel):
     emoji: str | None
     is_available: bool
     recipe_id: uuid.UUID | None
+    photo_key: str | None = Field(default=None, exclude=True)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def has_photo(self) -> bool:
+        return bool(self.photo_key)
 
 
 class PublicOrderLine(BaseModel):
@@ -117,6 +123,8 @@ def _order_out(o: Order, rider_name: str | None = None) -> dict:
 class OrderingSettings(BaseModel):
     prep_minutes: int | None = Field(default=None, ge=5, le=180)
     ordering_paused: bool | None = None
+    delivery_fee: Decimal | None = Field(default=None, ge=0, le=Decimal("99"))
+    delivery_min_order: Decimal | None = Field(default=None, ge=0, le=Decimal("999"))
 
 
 @router.get("/settings")
@@ -124,7 +132,12 @@ async def get_settings(
     db: AsyncSession = Depends(get_db), user: User = Depends(require("orders:read"))
 ) -> dict:
     hotel = await db.get(Hotel, user.hotel_id)
-    return {"prep_minutes": hotel.prep_minutes, "ordering_paused": hotel.ordering_paused}
+    return {
+        "prep_minutes": hotel.prep_minutes,
+        "ordering_paused": hotel.ordering_paused,
+        "delivery_fee": str(hotel.delivery_fee),
+        "delivery_min_order": str(hotel.delivery_min_order),
+    }
 
 
 @router.patch("/settings")
@@ -138,8 +151,17 @@ async def patch_settings(
         hotel.prep_minutes = payload.prep_minutes
     if payload.ordering_paused is not None:
         hotel.ordering_paused = payload.ordering_paused
+    if payload.delivery_fee is not None:
+        hotel.delivery_fee = payload.delivery_fee
+    if payload.delivery_min_order is not None:
+        hotel.delivery_min_order = payload.delivery_min_order
     await db.commit()
-    return {"prep_minutes": hotel.prep_minutes, "ordering_paused": hotel.ordering_paused}
+    return {
+        "prep_minutes": hotel.prep_minutes,
+        "ordering_paused": hotel.ordering_paused,
+        "delivery_fee": str(hotel.delivery_fee),
+        "delivery_min_order": str(hotel.delivery_min_order),
+    }
 
 
 # ── hotel side: menu ─────────────────────────────────────────────────────────
@@ -466,6 +488,31 @@ async def _record_sale(db: AsyncSession, order: Order) -> None:
         await db.rollback()
 
 
+@router.post("/menu/{item_id}/photo")
+async def upload_menu_photo(
+    item_id: uuid.UUID,
+    photo: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> dict:
+    """A real photo of THIS kitchen's dish — beats the stock library every time."""
+    from app.core.storage import get_storage
+
+    item = (
+        await db.execute(
+            select(MenuItem).where(MenuItem.id == item_id, MenuItem.hotel_id == user.hotel_id)
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Menu item not found")
+    data = await photo.read()
+    if not data or len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Photo must be under 5 MB")
+    item.photo_key = get_storage().save(user.hotel_id, item.id, photo.filename or "dish.jpg", data)
+    await db.commit()
+    return {"ok": True, "has_photo": True}
+
+
 @router.get("/orders/{order_id}/proof")
 async def order_proof(
     order_id: uuid.UUID,
@@ -507,7 +554,9 @@ async def public_menu(hotel_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -
     return {
         "hotel": {"id": str(hotel.id), "name": hotel.name, "city": hotel.city,
                   "currency": hotel.base_currency,
-                  "prep_minutes": hotel.prep_minutes, "paused": hotel.ordering_paused},
+                  "prep_minutes": hotel.prep_minutes, "paused": hotel.ordering_paused,
+                  "delivery_fee": str(hotel.delivery_fee),
+                  "delivery_min_order": str(hotel.delivery_min_order)},
         "menu": [MenuItemOut.model_validate(m).model_dump(mode="json") for m in items],
     }
 
@@ -579,6 +628,13 @@ async def place_order(
                 unit_price=m.price, quantity=qty, line_total=line,
             )
         )
+    if payload.fulfilment == "DELIVERY":
+        if subtotal < hotel.delivery_min_order:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Delivery needs a minimum order of £{hotel.delivery_min_order}",
+            )
+        order.delivery_fee = hotel.delivery_fee
     order.subtotal = subtotal
     order.total = subtotal + order.delivery_fee
     if payload.fulfilment == "DELIVERY":
@@ -635,6 +691,22 @@ async def place_order(
     )
     return {"id": str(order.id), "code": order.code, "status": order.status,
             "total": str(order.total), "pay_url": pay_url}
+
+
+@public_router.get("/menu-photo/{item_id}")
+async def public_menu_photo(item_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    from fastapi import Response
+
+    from app.core.storage import get_storage
+
+    item = await db.get(MenuItem, item_id)
+    if item is None or not item.photo_key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No photo")
+    return Response(
+        content=get_storage().read(item.photo_key),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @public_router.get("/track/{order_id}")

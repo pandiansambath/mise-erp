@@ -23,6 +23,7 @@ type MenuItem = {
   emoji: string | null;
   is_available: boolean;
   recipe_id: string | null;
+  has_photo?: boolean;
 };
 type OrderLine = { name: string; quantity: number; unit_price: string; line_total: string };
 type Order = {
@@ -331,6 +332,7 @@ function MenuTab() {
 function MenuRow({ m, onChanged }: { m: MenuItem; onChanged: () => void }) {
   const [price, setPrice] = useState(m.price);
   const [avail, setAvail] = useState(m.is_available);
+  const [photoVer, setPhotoVer] = useState(0); // cache-bust after an upload
 
   async function save(patch: Record<string, unknown>) {
     await api.patch(`/ordering/menu/${m.id}`, patch).catch(() => {});
@@ -339,12 +341,34 @@ function MenuRow({ m, onChanged }: { m: MenuItem; onChanged: () => void }) {
 
   return (
     <div className="flex flex-wrap items-center gap-3 py-2.5">
-      {dishPhoto(m.name) ? (
+      {m.has_photo || dishPhoto(m.name) ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={dishPhoto(m.name)!} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+        <img
+          src={m.has_photo ? `${API_BASE}/api/public/order/menu-photo/${m.id}?v=${photoVer}` : dishPhoto(m.name)!}
+          alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg object-cover"
+        />
       ) : (
         <span className="text-lg" aria-hidden>{m.emoji || "🍽️"}</span>
       )}
+      <label className="mise-press cursor-pointer rounded-md px-1 text-fg-faint hover:text-fg" title="Upload your own dish photo">
+        📷
+        <input
+          type="file" accept="image/*" className="hidden"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const fd = new FormData();
+            fd.append("photo", f);
+            await fetch(`${API_BASE}/api/ordering/menu/${m.id}/photo`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${localStorage.getItem("mise_token") ?? ""}` },
+              body: fd,
+            }).catch(() => {});
+            setPhotoVer((v) => v + 1);
+            onChanged();
+          }}
+        />
+      </label>
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium ${avail ? "text-fg" : "text-fg-faint line-through"}`}>
           {m.name} {m.recipe_id && <span title="Linked to a costed recipe">🧾</span>}
@@ -505,6 +529,8 @@ export default function OrdersPage() {
   const [soundOn, setSoundOn] = useState(false);
   const [prep, setPrep] = useState("20");
   const [paused, setPaused] = useState(false);
+  const [fee, setFee] = useState("0");
+  const [minOrder, setMinOrder] = useState("0");
   const timer = useRef<number | null>(null);
   const knownIds = useRef<Set<string> | null>(null);
   const soundRef = useRef(false);
@@ -513,8 +539,11 @@ export default function OrdersPage() {
   useEffect(() => {
     api.get<RiderRow[]>("/ordering/riders").then(setRiders).catch(() => {});
     api
-      .get<{ prep_minutes: number; ordering_paused: boolean }>("/ordering/settings")
-      .then((s) => { setPrep(String(s.prep_minutes)); setPaused(s.ordering_paused); })
+      .get<{ prep_minutes: number; ordering_paused: boolean; delivery_fee: string; delivery_min_order: string }>("/ordering/settings")
+      .then((s) => {
+        setPrep(String(s.prep_minutes)); setPaused(s.ordering_paused);
+        setFee(s.delivery_fee); setMinOrder(s.delivery_min_order);
+      })
       .catch(() => {});
   }, []);
 
@@ -634,6 +663,26 @@ export default function OrdersPage() {
               className="mise-well w-14 rounded-md px-2 py-1 text-center text-xs text-fg outline-none"
             />
             min <span className="text-fg-faint">(customers see this)</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-fg-soft">
+            🛵 fee £
+            <input
+              value={fee}
+              onChange={(e) => setFee(e.target.value.replace(/[^0-9.]/g, ""))}
+              onBlur={() => api.patch("/ordering/settings", { delivery_fee: fee || "0" }).catch(() => {})}
+              aria-label="Delivery fee"
+              className="mise-well w-14 rounded-md px-2 py-1 text-center text-xs text-fg outline-none"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs text-fg-soft">
+            🧺 min £
+            <input
+              value={minOrder}
+              onChange={(e) => setMinOrder(e.target.value.replace(/[^0-9.]/g, ""))}
+              onBlur={() => api.patch("/ordering/settings", { delivery_min_order: minOrder || "0" }).catch(() => {})}
+              aria-label="Minimum delivery order"
+              className="mise-well w-14 rounded-md px-2 py-1 text-center text-xs text-fg outline-none"
+            />
           </label>
           <button
             type="button"

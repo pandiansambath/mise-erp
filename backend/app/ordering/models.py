@@ -42,6 +42,8 @@ class MenuItem(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     category: Mapped[str] = mapped_column(String(60), nullable=False, default="Mains")
     emoji: Mapped[str | None] = mapped_column(String(8))
+    # Hotel-uploaded dish photo (storage key). Falls back to the bundled library.
+    photo_key: Mapped[str | None] = mapped_column(String(255))
     is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     recipe_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recipes.id"))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

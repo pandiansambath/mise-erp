@@ -29,6 +29,7 @@ type MenuItem = {
   price: string;
   category: string;
   emoji: string | null;
+  has_photo?: boolean;
 };
 type HotelInfo = {
   id: string;
@@ -37,6 +38,8 @@ type HotelInfo = {
   currency: string;
   prep_minutes?: number;
   paused?: boolean;
+  delivery_fee?: string;
+  delivery_min_order?: string;
 };
 type Tracked = {
   id: string;
@@ -205,10 +208,10 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
                   const qty = cart[m.id] ?? 0;
                   return (
                     <div key={m.id} className={`mise-feel flex items-center gap-3 rounded-2xl border p-3 transition ${qty ? "border-brand-400/50 bg-brand-500/5" : "border-line bg-paper"}`}>
-                      {dishPhoto(m.name) ? (
+                      {m.has_photo || dishPhoto(m.name) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={dishPhoto(m.name)!}
+                          src={m.has_photo ? `${API_BASE}/api/public/order/menu-photo/${m.id}` : dishPhoto(m.name)!}
                           alt={m.name}
                           loading="lazy"
                           className="h-[72px] w-[72px] shrink-0 rounded-xl object-cover shadow-md"
@@ -412,6 +415,23 @@ function CheckoutSheet({
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note to the kitchen (allergies, spice level…)" aria-label="Note" className={inputCls} />
 
           {error && <p className="rounded-xl bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-400">{error}</p>}
+
+          {fulfilment === "DELIVERY" && (
+            <div className="mise-well space-y-1 rounded-xl px-3.5 py-2.5 text-sm">
+              <p className="flex justify-between text-fg-soft">
+                <span>🛵 Delivery fee</span><span className="font-mono">{cur}{hotel.delivery_fee ?? "0"}</span>
+              </p>
+              <p className="flex justify-between font-bold text-fg">
+                <span>Total</span>
+                <span className="font-mono">{cur}{(parseFloat(total) + parseFloat(hotel.delivery_fee ?? "0")).toFixed(2)}</span>
+              </p>
+              {parseFloat(hotel.delivery_min_order ?? "0") > parseFloat(total) && (
+                <p className="text-xs font-semibold text-amber-500">
+                  🧺 minimum delivery order is {cur}{hotel.delivery_min_order} — add a little more
+                </p>
+              )}
+            </div>
+          )}
 
           {/* how they pay */}
           <div className="grid grid-cols-2 gap-2">

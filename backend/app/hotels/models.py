@@ -49,6 +49,13 @@ class Hotel(Base):
     # busy-mode switch (paused = the public page shows closed, orders refused).
     prep_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     ordering_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Delivery economics (Ph3): flat fee added to delivery orders + basket floor.
+    delivery_fee: Mapped[Decimal] = mapped_column(
+        Numeric(8, 2), nullable=False, default=Decimal("0")
+    )
+    delivery_min_order: Mapped[Decimal] = mapped_column(
+        Numeric(8, 2), nullable=False, default=Decimal("0")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
