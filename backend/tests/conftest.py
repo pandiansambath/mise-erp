@@ -100,10 +100,12 @@ def make_user(db, hotel):
         hotel_id=None,
     ):
         user = await create_user(db, email, password, role, hotel_id or hotel.id)
+        # fixture accounts mirror the migration's grandfathering (pre-email era)
+        user.email_verified = True
         if not is_active:
             user.is_active = False
-            await db.commit()
-            await db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         return user
 
     return _make

@@ -1,8 +1,11 @@
 """Auth & user-management endpoints. User management is hotel-scoped."""
+import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import service
@@ -21,8 +24,9 @@ from app.auth.schemas import (
     UserUpdate,
 )
 from app.core import notify
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
 from app.platform_admin import features as feat
 
@@ -52,6 +56,11 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account is suspended. Contact Mise support.",
+        )
+    if not user.email_verified and not getattr(user, "is_platform_owner", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email first — check your inbox (or resend the link).",
         )
     user.last_login = datetime.now(UTC)
     await db.commit()
@@ -83,6 +92,25 @@ async def register_hotel(
         db, payload.email, payload.password, Role.SUPER_ADMIN.value, hotel.id
     )
     await db.refresh(hotel)  # create_user committed; reload before serialising
+    # New owners must click the emailed link before the app opens.
+    user.email_verified = False
+    user.verify_token = secrets.token_urlsafe(32)
+    await db.commit()
+    verify_url = f"{settings.app_base_url}/verify-email?token={user.verify_token}"
+    await notify.send_email(
+        payload.email,
+        "Confirm your email to open Mise ✉️",
+        f"Welcome to Mise, {hotel.name}! Confirm your email to open your kitchen: {verify_url}",
+        html=notify.render_email(
+            heading=f"One click and you're in, {hotel.name} 🎉",
+            intro=(
+                "Confirm this is your email and your Mise kitchen opens immediately — "
+                "inventory, recipes, live P&L, the lot."
+            ),
+            cta_label="Confirm email & open Mise",
+            cta_url=verify_url,
+        ),
+    )
     # Welcome email (styled). No-ops without a provider key; on the free Resend tier
     # it only reaches your own verified address until a sending domain is verified.
     await notify.send_email(
@@ -200,3 +228,100 @@ async def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user = await service.update_user(db, user, role=payload.role, is_active=payload.is_active)
     return UserOut.model_validate(user)
+
+
+# ── real-email flows: verify / resend / forgot / reset ───────────────────────
+class VerifyRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=64)
+
+
+@router.post("/verify-email", response_model=TokenResponse)
+async def verify_email(payload: VerifyRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    """The emailed link lands here: flip verified, clear the token, sign them in."""
+    user = (
+        await db.execute(select(User).where(User.verify_token == payload.token))
+    ).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That link is invalid or already used")
+    user.email_verified = True
+    user.verify_token = None
+    user.last_login = datetime.now(UTC)
+    await db.commit()
+    hotel = await _hotel_or_404(db, user.hotel_id)
+    token = create_access_token(subject=str(user.id), role=user.role)
+    return TokenResponse(
+        access_token=token, user=UserOut.model_validate(user), hotel=HotelOut.model_validate(hotel)
+    )
+
+
+class EmailOnly(BaseModel):
+    email: str = Field(min_length=5, max_length=200)
+
+
+@router.post("/resend-verification")
+async def resend_verification(payload: EmailOnly, db: AsyncSession = Depends(get_db)) -> dict:
+    """Always answers OK (no account enumeration); sends only when it applies."""
+    user = await service.get_user_by_email(db, payload.email.strip().lower())
+    if user and not user.email_verified:
+        user.verify_token = user.verify_token or secrets.token_urlsafe(32)
+        await db.commit()
+        verify_url = f"{settings.app_base_url}/verify-email?token={user.verify_token}"
+        await notify.send_email(
+            user.email,
+            "Your Mise verification link ✉️",
+            f"Confirm your email to open Mise: {verify_url}",
+            html=notify.render_email(
+                heading="Here's that link again",
+                intro="One click confirms your email and opens your Mise kitchen.",
+                cta_label="Confirm email & open Mise",
+                cta_url=verify_url,
+            ),
+        )
+    return {"ok": True}
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: EmailOnly, db: AsyncSession = Depends(get_db)) -> dict:
+    """Always answers OK. A real account gets a 60-minute reset link."""
+    user = await service.get_user_by_email(db, payload.email.strip().lower())
+    if user and user.is_active:
+        user.reset_token = secrets.token_urlsafe(32)
+        user.reset_expires = datetime.now(UTC) + timedelta(minutes=60)
+        await db.commit()
+        reset_url = f"{settings.app_base_url}/reset-password?token={user.reset_token}"
+        await notify.send_email(
+            user.email,
+            "Reset your Mise password 🔑",
+            f"Choose a new password (link valid for 1 hour): {reset_url}",
+            html=notify.render_email(
+                heading="Let's get you back in",
+                intro=(
+                    "Someone (hopefully you) asked to reset this account's password. "
+                    "The link works for 1 hour — if it wasn't you, just ignore this."
+                ),
+                cta_label="Choose a new password",
+                cta_url=reset_url,
+                accent="#d97742",
+            ),
+        )
+    return {"ok": True}
+
+
+class ResetRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    user = (
+        await db.execute(select(User).where(User.reset_token == payload.token))
+    ).scalar_one_or_none()
+    if not user or not user.reset_expires or user.reset_expires < datetime.now(UTC):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That link is invalid or has expired")
+    user.password_hash = hash_password(payload.password)
+    user.reset_token = None
+    user.reset_expires = None
+    user.email_verified = True  # they proved inbox ownership
+    await db.commit()
+    return {"ok": True, "message": "Password updated — sign in with the new one."}

@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     # logged and no-op'd, so the app runs fine without a provider configured.
     resend_api_key: str = ""
     email_from: str = "Mise <alerts@mise.local>"
+    # Public URL of the app — verification/reset links in emails point here.
+    app_base_url: str = "https://milagurestaurant.com"
 
     # Mise Copilot — the in-app AI assistant. A free Google AI Studio key activates
     # the LLM (Gemini Flash: free tier, 1M context, native tools). With no key the

@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { PasswordInput, SubmitButton, authInput, authLabel } from "@/components/auth/bits";
 import ChefMascot, { type ChefMood } from "@/components/auth/ChefMascot";
@@ -124,7 +124,21 @@ function LoginForm({ active }: { active: boolean }) {
           onShowChange={chef.setPwShown}
         />
       </div>
-      {error && (
+      {error && /verify your email/i.test(error) ? (
+        <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-200">
+          <p className="font-semibold">✉️ One click left — verify your email</p>
+          <p className="mt-1 text-xs text-amber-200/80">
+            We sent a link to <b>{email}</b> when you signed up. Click it and you&apos;re in.
+          </p>
+          <button
+            type="button"
+            onClick={() => api.post("/auth/resend-verification", { email }).catch(() => {})}
+            className="mise-press mt-2 rounded-lg border border-amber-400/40 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-400/10"
+          >
+            Resend the link
+          </button>
+        </div>
+      ) : error && (
         /suspended/i.test(error) ? (
           <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-200">
             <p className="font-semibold">🔒 This restaurant&apos;s account is suspended</p>
@@ -140,6 +154,11 @@ function LoginForm({ active }: { active: boolean }) {
         )
       )}
       <SubmitButton busy={busy} busyLabel="Signing in…">Sign in</SubmitButton>
+      <p className="text-center">
+        <Link href="/forgot-password" className="text-xs text-slate-400 underline-offset-2 transition hover:text-white hover:underline">
+          Forgot your password?
+        </Link>
+      </p>
     </form>
   );
 }
@@ -154,6 +173,7 @@ function SignupForm({ active }: { active: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
+  const [sent, setSent] = useState(false); // account made → go check the inbox
   const chef = useChefMood(email.length || hotelName.length);
 
   async function onSubmit(e: React.FormEvent) {
@@ -163,6 +183,7 @@ function SignupForm({ active }: { active: boolean }) {
     chef.setBusyHappy(true);
     try {
       await registerHotel({ hotel_name: hotelName, country, city: city || undefined, email, password });
+      setSent(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register. Is the server running?");
       setShake(true);
@@ -170,6 +191,28 @@ function SignupForm({ active }: { active: boolean }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (sent) {
+    return (
+      <div className="mise-glass mise-liquid relative space-y-4 rounded-3xl p-6 text-center sm:p-7">
+        <ChefMascot mood="point" className="mx-auto w-24" />
+        <h2 className="font-display text-2xl text-white">Check your inbox ✉️</h2>
+        <p className="text-sm leading-relaxed text-slate-300">
+          We sent a confirmation link to <b className="text-white">{email}</b>.
+          One click and your kitchen opens — it also proves alerts and reports
+          can reach you later.
+        </p>
+        <button
+          type="button"
+          onClick={() => api.post("/auth/resend-verification", { email }).catch(() => {})}
+          className="mise-press rounded-xl border border-white/15 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+        >
+          Resend the email
+        </button>
+        <p className="text-[11px] text-slate-500">wrong address? just sign up again with the right one</p>
+      </div>
+    );
   }
 
   return (

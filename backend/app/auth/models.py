@@ -40,6 +40,14 @@ class User(Base):
     is_platform_owner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Stamped on every successful login — staff visibility + hotel health.
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Real-email era: new OWNER signups must click the emailed link before the
+    # app opens. Existing accounts were grandfathered True by the migration.
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # One pending token at a time per purpose; hashed-equivalent randomness via
+    # secrets.token_urlsafe. Cleared once used.
+    verify_token: Mapped[str | None] = mapped_column(String(64), index=True)
+    reset_token: Mapped[str | None] = mapped_column(String(64), index=True)
+    reset_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -78,17 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [sweepThenGo]
   );
 
-  const registerHotel = useCallback(
-    async (input: RegisterHotelInput) => {
-      const res = await api.post<TokenResponse>("/auth/register-hotel", input);
-      setToken(res.access_token);
-      setUser(res.user);
-      setHotel(res.hotel);
-      // New hotel → guided onboarding (import data → prefilled dashboard).
-      await sweepThenGo("/onboarding");
-    },
-    [sweepThenGo]
-  );
+  const registerHotel = useCallback(async (input: RegisterHotelInput) => {
+    // Real-email era: the account is created but the door opens from the
+    // VERIFICATION EMAIL (the verify page stores the session + routes to
+    // onboarding). The signup form shows the check-your-inbox panel.
+    await api.post<TokenResponse>("/auth/register-hotel", input);
+  }, []);
 
   const refreshHotel = useCallback(async () => {
     try {

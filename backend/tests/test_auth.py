@@ -36,12 +36,13 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
     assert body["hotel"]["name"] == "Spice Garden"
     assert body["hotel"]["base_currency"] == "INR"  # derived from country
 
-    # the new owner can immediately log in
+    # real-email era: login is gated until the emailed link is clicked
     login = await client.post(
         "/api/auth/login",
         json={"email": "owner@spicegarden.com", "password": "StrongPass123"},
     )
-    assert login.status_code == 200
+    assert login.status_code == 403
+    assert "verify" in login.json()["detail"].lower()
 
     # duplicate email is rejected
     dup = await client.post(
