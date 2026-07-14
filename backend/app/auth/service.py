@@ -50,6 +50,10 @@ async def create_user(
     user = User(
         email=email, password_hash=hash_password(password), role=role,
         hotel_id=hotel_id, preferred_name=name,
+        # In-app creations (staff logins, operators, seeds) are owner-vouched —
+        # no inbox to prove. Only register-hotel flips this back to False and
+        # gates the door behind the emailed link.
+        email_verified=True,
     )
     db.add(user)
     await db.commit()
