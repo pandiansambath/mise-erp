@@ -85,11 +85,22 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
   const [tracked, setTracked] = useState<Tracked | null>(null);
 
   useEffect(() => {
-    const tid = new URLSearchParams(window.location.search).get("track");
+    // A reload must NOT lose the order: remember it locally per hotel and
+    // reopen tracking for any still-live order (?track= wins, e.g. after
+    // the Stripe redirect).
+    const remembered = localStorage.getItem(`mise_order_${hotelId}`);
+    const tid = new URLSearchParams(window.location.search).get("track") ?? remembered;
     if (tid) {
       fetch(`${API_BASE}/api/public/order/track/${tid}`)
         .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then(setTracked)
+        .then((d) => {
+          if (["NEW", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(d.status)) {
+            localStorage.setItem(`mise_order_${hotelId}`, d.id);
+            setTracked(d);
+          } else if (remembered === d.id) {
+            localStorage.removeItem(`mise_order_${hotelId}`); // finished — let go
+          }
+        })
         .catch(() => {});
       window.history.replaceState(null, "", window.location.pathname);
     }
@@ -186,7 +197,16 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
           </div>
         )}
         {tracked ? (
-          <TrackPanel t={tracked} cur={cur} dark={!THEMES[theme].light} onNewOrder={() => { setTracked(null); setCart({}); }} />
+          <TrackPanel
+            t={tracked}
+            cur={cur}
+            dark={!THEMES[theme].light}
+            onNewOrder={() => {
+              try { localStorage.removeItem(`mise_order_${hotelId}`); } catch { /* ok */ }
+              setTracked(null);
+              setCart({});
+            }}
+          />
         ) : menu === null ? (
           <div className="space-y-3">
             {[0, 1, 2, 3].map((i) => (
@@ -277,7 +297,11 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
           cur={cur}
           total={total}
           onClose={() => setCheckout(false)}
-          onPlaced={(t) => { setCheckout(false); setTracked(t); }}
+          onPlaced={(t) => {
+            try { localStorage.setItem(`mise_order_${hotelId}`, t.id); } catch { /* private mode */ }
+            setCheckout(false);
+            setTracked(t);
+          }}
         />
       )}
     </div>

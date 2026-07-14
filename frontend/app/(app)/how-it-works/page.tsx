@@ -299,6 +299,55 @@ export default function HowItWorksPage() {
 
       <div className="mise-slide-stagger mt-5 space-y-4">
         <Topic
+          q={q} keywords="roles permissions who can see access manager staff kitchen accountant cashier rider login accounts"
+          icon="👥" title="Roles — who can see what" tag="Team"
+          ask="Explain the difference between the roles in Mise and what each one can access, with examples."
+        >
+          <p>
+            Every login you create (in <b>Staff</b>) carries a role, and the role decides which
+            sections that person sees and what they can change. The idea: <b>everyone gets exactly
+            the tools of their job — and nothing that isn&apos;t their business</b> (a cashier never
+            sees payroll; a chef never sees your P&amp;L).
+          </p>
+          <div className="mt-3 space-y-3">
+            {[
+              ["👑", "Super Admin (you — the owner)",
+               "Everything, everywhere. The only role that can create logins, change Settings, manage Billing and run the money end-to-end.",
+               "sees: every section · does: everything"],
+              ["🧭", "Manager",
+               "Runs the floor day-to-day. Example: your restaurant manager opening and closing the venue.",
+               "sees: inventory, vendors, purchasing (and approves POs), recipes, sales, expenses, reports, employees, rota, attendance, hiring, online orders, documents · can view (not run) payroll · cannot: create logins, change settings/billing"],
+              ["🍳", "Kitchen Manager (head chef)",
+               "Owns the kitchen, not the money. Example: your chef costing a new dish and raising a stock order.",
+               "sees: inventory (view), recipes (edit), purchasing requests, the live online-orders board · cannot: sales, payroll, reports, people admin"],
+              ["🧾", "Accountant",
+               "Owns the money paperwork. Example: the person who runs month-end.",
+               "sees: payroll (runs it), vendor payments, expenses, reports, employee records, documents · cannot: edit stock or recipes, take orders"],
+              ["💷", "Cashier",
+               "The till. Example: whoever banks the day's takings.",
+               "sees: sales & cash entry + the online-orders board · nothing else"],
+              ["🙋", "Staff",
+               "Self-service only. Example: a waiter checking their shifts.",
+               "sees: My Space — their own attendance, hours and payslips · nothing about the business"],
+              ["🛵", "Rider (special door)",
+               "Not an app login at all — delivery staff sign in at /rider with a phone + PIN you issue on the Orders → Riders tab.",
+               "sees: only the delivery they're assigned right now · their GPS streams to the customer only while carrying an order"],
+            ].map(([e, name, blurb, access]) => (
+              <div key={name as string} className="mise-well rounded-xl px-3.5 py-3">
+                <p className="text-sm font-semibold text-fg">{e} {name}</p>
+                <p className="mt-0.5 text-sm text-fg-soft">{blurb}</p>
+                <p className="mt-1 text-xs leading-relaxed text-fg-faint">{access}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-fg-faint">
+            Rule of thumb baked into the system: <b>“write” includes “read”</b> (someone who can
+            edit recipes can obviously view them), and anything a role can&apos;t use is hidden from
+            their sidebar entirely — less clutter, fewer mistakes.
+          </p>
+        </Topic>
+
+        <Topic
           q={q} keywords="stock average price blend cost"
           icon="📦" title="Inventory — weighted-average cost" tag="Inventory"
           ask="In simple words, how is weighted-average cost calculated in Mise? Give a quick example."
