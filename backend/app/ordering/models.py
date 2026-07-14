@@ -94,6 +94,13 @@ class Order(Base):
     )
     # The rider carrying this delivery (assigned by the kitchen on READY).
     rider_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("riders.id"))
+    # Money: COD (settle at door/counter) or ONLINE (Stripe checkout, test mode).
+    payment_method: Mapped[str] = mapped_column(String(10), nullable=False, default="COD")
+    payment_status: Mapped[str] = mapped_column(String(10), nullable=False, default="UNPAID")
+    stripe_session_id: Mapped[str | None] = mapped_column(String(80))
+    # Swiggy-style handover proof: the customer's per-order PIN + doorstep photo.
+    delivery_pin: Mapped[str | None] = mapped_column(String(6))
+    proof_key: Mapped[str | None] = mapped_column(String(255))
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     delivery_fee: Mapped[Decimal] = mapped_column(
         Numeric(8, 2), nullable=False, default=Decimal("0")

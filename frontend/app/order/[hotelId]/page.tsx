@@ -46,6 +46,9 @@ type Tracked = {
   total: string;
   address_lat: string | null;
   address_lng: string | null;
+  delivery_pin?: string | null;
+  payment_method?: string;
+  payment_status?: string;
   rider?: { name: string; lat: string | null; lng: string | null } | null;
   items: { name: string; quantity: number; line_total: string }[];
 };
@@ -79,6 +82,14 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
   const [tracked, setTracked] = useState<Tracked | null>(null);
 
   useEffect(() => {
+    const tid = new URLSearchParams(window.location.search).get("track");
+    if (tid) {
+      fetch(`${API_BASE}/api/public/order/track/${tid}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then(setTracked)
+        .catch(() => {});
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     fetch(`${API_BASE}/api/public/order/${hotelId}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => { setHotel(d.hotel); setMenu(d.menu); })
@@ -290,6 +301,7 @@ function CheckoutSheet({
   const [address, setAddress] = useState("");
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [note, setNote] = useState("");
+  const [payment, setPayment] = useState<"COD" | "ONLINE">("COD");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -311,6 +323,7 @@ function CheckoutSheet({
           address_lat: fulfilment === "DELIVERY" && pin ? pin.lat.toFixed(6) : undefined,
           address_lng: fulfilment === "DELIVERY" && pin ? pin.lng.toFixed(6) : undefined,
           note: note || undefined,
+          payment,
           items: lines.map((m) => ({ menu_item_id: m.id, quantity: cart[m.id] })),
         }),
       });
@@ -320,6 +333,10 @@ function CheckoutSheet({
         localStorage.setItem("mise_cust_name", name);
         localStorage.setItem("mise_cust_phone", phone);
       } catch { /* private mode */ }
+      if (body.pay_url) {
+        window.location.assign(body.pay_url); // Stripe's hosted card page
+        return;
+      }
       const track = await fetch(`${API_BASE}/api/public/order/track/${body.id}`);
       onPlaced(await track.json());
     } catch (err) {
@@ -396,6 +413,24 @@ function CheckoutSheet({
 
           {error && <p className="rounded-xl bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-400">{error}</p>}
 
+          {/* how they pay */}
+          <div className="grid grid-cols-2 gap-2">
+            {([["COD", "💵 Pay at the door", "cash or card to the rider"],
+               ["ONLINE", "💳 Pay online now", "secure Stripe card page"]] as const).map(([k, t, d]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setPayment(k)}
+                className={`mise-press rounded-xl px-3 py-2.5 text-left transition ${
+                  payment === k ? "bg-brand-600 text-white" : "mise-raised"
+                }`}
+              >
+                <span className={`block text-xs font-bold ${payment === k ? "text-white" : "text-fg"}`}>{t}</span>
+                <span className={`block text-[10px] ${payment === k ? "text-white/80" : "text-fg-faint"}`}>{d}</span>
+              </button>
+            ))}
+          </div>
+
           {/* trust row — why it's safe to order here */}
           <div className="grid grid-cols-3 gap-2 text-center">
             {[
@@ -454,6 +489,19 @@ function TrackPanel({ t, cur, dark, onNewOrder }: { t: Tracked; cur: string; dar
             <p className="mt-1 text-xs text-fg-faint">
               {t.fulfilment === "PICKUP" ? "quote it at the counter" : "the rider will quote it"} · {cur}{t.total}
             </p>
+            {t.delivery_pin && (
+              <div className="mise-well mt-5 rounded-2xl border border-brand-400/30 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-400">
+                  🔐 your delivery PIN — tell the rider at the door
+                </p>
+                <p className="mt-1 font-mono text-3xl font-bold tracking-[0.35em] text-fg">{t.delivery_pin}</p>
+              </div>
+            )}
+            {t.payment_status === "PAID" && (
+              <p className="mt-3 inline-block rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-500">
+                💳 paid ✓
+              </p>
+            )}
             {t.status === "OUT_FOR_DELIVERY" && t.rider?.lat && t.rider?.lng && (
               <div className="mt-5 text-left">
                 <LiveMap

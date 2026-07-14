@@ -77,6 +77,7 @@ class PublicOrderIn(BaseModel):
     address_lat: Decimal | None = None
     address_lng: Decimal | None = None
     note: str | None = Field(default=None, max_length=500)
+    payment: str = "COD"  # COD | ONLINE (Stripe hosted checkout, test mode)
     items: list[PublicOrderLine] = Field(min_length=1, max_length=50)
 
 
@@ -97,6 +98,9 @@ def _order_out(o: Order, rider_name: str | None = None) -> dict:
         "delivery_fee": str(o.delivery_fee),
         "total": str(o.total),
         "created_at": o.created_at.isoformat() if o.created_at else None,
+        "payment_method": o.payment_method,
+        "payment_status": o.payment_status,
+        "has_proof": bool(o.proof_key),
         "items": [
             {
                 "name": i.name,
@@ -526,6 +530,32 @@ async def place_order(
         )
     order.subtotal = subtotal
     order.total = subtotal + order.delivery_fee
+    if payload.fulfilment == "DELIVERY":
+        # Swiggy-style handover code: the customer reads it to the rider at the
+        # door — per-order and secret until the rider is actually outside.
+        order.delivery_pin = f"{secrets.randbelow(10000):04d}"
+    pay_url: str | None = None
+    if payload.payment == "ONLINE" and settings.stripe_secret_key:
+        from app.billing.router import _stripe
+
+        session = await _stripe(
+            "POST", "/checkout/sessions",
+            mode="payment",
+            success_url=f"{settings.app_base_url}/order/{hotel_id}?track={order.id}",
+            cancel_url=f"{settings.app_base_url}/order/{hotel_id}?track={order.id}",
+            **{
+                "line_items[0][price_data][currency]": "gbp",
+                "line_items[0][price_data][product_data][name]":
+                    f"Order {order.code} — {hotel.name}",
+                "line_items[0][price_data][unit_amount]": str(int(order.total * 100)),
+                "line_items[0][quantity]": "1",
+                "metadata[order_id]": str(order.id),
+                "payment_intent_data[metadata][order_id]": str(order.id),
+            },
+        )
+        order.payment_method = "ONLINE"
+        order.stripe_session_id = session["id"]
+        pay_url = session["url"]
     await db.commit()
 
     # Ring the kitchen (owners/managers with the new_order alert on).
@@ -553,7 +583,7 @@ async def place_order(
         background=True,
     )
     return {"id": str(order.id), "code": order.code, "status": order.status,
-            "total": str(order.total)}
+            "total": str(order.total), "pay_url": pay_url}
 
 
 @public_router.get("/track/{order_id}")
@@ -562,6 +592,10 @@ async def track_order(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
     out = _order_out(order)
+    if order.fulfilment == "DELIVERY" and order.status in (
+        OrderStatus.READY.value, OrderStatus.OUT_FOR_DELIVERY.value,
+    ):
+        out["delivery_pin"] = order.delivery_pin
     # The live map: while the rider is rolling, ship their latest beacon.
     if order.rider_id and order.status == OrderStatus.OUT_FOR_DELIVERY.value:
         rider = await db.get(Rider, order.rider_id)

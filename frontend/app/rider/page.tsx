@@ -54,6 +54,9 @@ export default function RiderPage() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pinIn, setPinIn] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [handErr, setHandErr] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
   const lastPost = useRef(0);
 
@@ -245,14 +248,64 @@ export default function RiderPage() {
                 <span className="mise-well rounded-xl px-3 py-3 text-center text-xs text-fg-faint">no pin — use the address</span>
               )}
             </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => act(leg === "kitchen" ? `/rider/orders/${job.id}/pickup` : `/rider/orders/${job.id}/deliver`)}
-              className="mise-press mt-3 w-full rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-brand-500/25 disabled:opacity-60"
-            >
-              {leg === "kitchen" ? "✅ Picked up — heading out" : "🎉 Delivered!"}
-            </button>
+            {leg === "kitchen" ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => act(`/rider/orders/${job.id}/pickup`)}
+                className="mise-press mt-3 w-full rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-brand-500/25 disabled:opacity-60"
+              >
+                ✅ Picked up — heading out
+              </button>
+            ) : (
+              <div className="mt-3 space-y-2 border-t border-line pt-3">
+                <p className="text-xs font-semibold text-fg-soft">
+                  🔐 Handover proof — ask the customer for their PIN, snap the food at the door:
+                </p>
+                <input
+                  value={pinIn}
+                  onChange={(e) => setPinIn(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  inputMode="numeric"
+                  placeholder="customer PIN"
+                  aria-label="Customer PIN"
+                  className="mise-well w-full rounded-xl px-3.5 py-3 text-center font-mono text-xl tracking-[0.3em] text-fg outline-none"
+                />
+                <label className={`mise-press block cursor-pointer rounded-xl px-3 py-3 text-center text-sm font-semibold ${photo ? "bg-emerald-500/15 text-emerald-500" : "mise-raised text-fg-soft"}`}>
+                  {photo ? "📸 photo ready ✓ (tap to retake)" : "📸 Take doorstep photo"}
+                  <input
+                    type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {handErr && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{handErr}</p>}
+                <button
+                  type="button"
+                  disabled={busy || pinIn.length < 4 || !photo}
+                  onClick={async () => {
+                    setBusy(true);
+                    setHandErr(null);
+                    try {
+                      const fd = new FormData();
+                      fd.append("pin", pinIn);
+                      fd.append("photo", photo!);
+                      const r = await fetch(`${API_BASE}/api/rider/orders/${job.id}/deliver`, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ""}` },
+                        body: fd,
+                      });
+                      if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? "Could not complete");
+                      setPinIn(""); setPhoto(null);
+                      load();
+                    } catch (e2) {
+                      setHandErr(e2 instanceof Error ? e2.message : "Could not complete");
+                    } finally { setBusy(false); }
+                  }}
+                  className="mise-press w-full rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-brand-500/25 disabled:opacity-60"
+                >
+                  🎉 Delivered — complete order
+                </button>
+              </div>
+            )}
             <p className="mt-2 text-center text-[11px] text-fg-faint">
               📡 your location streams to the customer&apos;s live map while you ride
             </p>

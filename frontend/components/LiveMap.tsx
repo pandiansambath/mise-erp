@@ -4,9 +4,13 @@
 // The rider marker eases between GPS beacons (rAF lerp) so it FLOWS like
 // Zomato instead of teleporting every poll. Free CARTO tiles, no keys.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+
+// 🛰️ Esri World Imagery — free satellite tiles (attribution required).
+const SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SAT_ATTRIB = "© Esri, Maxar, Earthstar Geographics";
 
 const HOME = L.divIcon({
   className: "",
@@ -33,16 +37,13 @@ export default function LiveMap({
   const homeRef = useRef<L.Marker | null>(null);
   const riderRef = useRef<L.Marker | null>(null);
   const animRef = useRef<number | null>(null);
+  const tilesRef = useRef<L.TileLayer | null>(null);
+  const [sat, setSat] = useState(true);
 
   useEffect(() => {
     if (!boxRef.current || mapRef.current) return;
     const map = L.map(boxRef.current, { zoomControl: false }).setView([52.5, -1.9], 6);
-    L.tileLayer(
-      dark
-        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-      { maxZoom: 19, attribution: "© OSM © CARTO" },
-    ).addTo(map);
+    tilesRef.current = L.tileLayer(SAT, { maxZoom: 19, attribution: SAT_ATTRIB }).addTo(map);
     mapRef.current = map;
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
@@ -95,5 +96,32 @@ export default function LiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rider?.lat, rider?.lng]);
 
-  return <div ref={boxRef} className="h-60 w-full overflow-hidden rounded-2xl border border-line" />;
+  function flipTiles() {
+    const map = mapRef.current;
+    if (!map || !tilesRef.current) return;
+    map.removeLayer(tilesRef.current);
+    const next = !sat;
+    tilesRef.current = next
+      ? L.tileLayer(SAT, { maxZoom: 19, attribution: SAT_ATTRIB }).addTo(map)
+      : L.tileLayer(
+          dark
+            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+          { maxZoom: 19, attribution: "© OSM © CARTO" },
+        ).addTo(map);
+    setSat(next);
+  }
+
+  return (
+    <div className="relative">
+      <div ref={boxRef} className="h-60 w-full overflow-hidden rounded-2xl border border-line" />
+      <button
+        type="button"
+        onClick={flipTiles}
+        className="absolute right-2 top-2 z-[500] rounded-lg bg-black/60 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur"
+      >
+        {sat ? "🗺️" : "🛰️"}
+      </button>
+    </div>
+  );
 }

@@ -4,11 +4,12 @@ the GPS beacon that powers everyone's live maps.
 `rider_router` — the rider's own endpoints (rider JWT, role=RIDER).
 Management endpoints live on the hotel's /ordering router (orders:write).
 """
+import secrets as _secrets
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -159,9 +160,13 @@ async def rider_pickup(
 @rider_router.post("/orders/{order_id}/deliver")
 async def rider_deliver(
     order_id: uuid.UUID,
+    pin: str = Form(..., min_length=4, max_length=6),
+    photo: UploadFile = File(...),
     rider: Rider = Depends(get_current_rider),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    """Swiggy-style handover: the CUSTOMER's per-order PIN + a doorstep photo
+    (food at the door, number visible) — only then does the order complete."""
     order = (
         await db.execute(
             select(Order).where(Order.id == order_id, Order.rider_id == rider.id)
@@ -169,7 +174,19 @@ async def rider_deliver(
     ).scalar_one_or_none()
     if order is None or order.status != OrderStatus.OUT_FOR_DELIVERY.value:
         raise HTTPException(status.HTTP_409_CONFLICT, "This order isn't out with you")
+    if not order.delivery_pin or not _secrets.compare_digest(order.delivery_pin, pin.strip()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Wrong PIN — ask the customer for theirs")
+    data = await photo.read()
+    if not data or len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Photo must be under 8 MB")
+    from app.core.storage import get_storage
+
+    order.proof_key = get_storage().save(
+        order.hotel_id, order.id, photo.filename or "proof.jpg", data
+    )
     order.status = OrderStatus.COMPLETED.value
+    if order.payment_method == "COD":
+        order.payment_status = "PAID"  # settled cash-at-door
     await db.commit()
     # the delivered order books itself into the money engine, same as the board
     from app.ordering.router import _record_sale

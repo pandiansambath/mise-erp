@@ -55,8 +55,20 @@ async def test_rider_delivery_lifecycle(client, make_user, auth_header):
     assert body["rider"]["name"] == "Ravi"
     assert body["rider"]["lat"] == "51.499000"
 
-    # delivered -> COMPLETED (and the sale books itself, same as the board)
-    done = await client.post(f"/api/rider/orders/{oid}/deliver", headers=rhdr)
+    # handover needs the CUSTOMER's PIN (public tracking reveals it) + a photo
+    pin = (await client.get(f"/api/public/order/track/{oid}")).json()["delivery_pin"]
+    assert pin and len(pin) == 4
+    wrong = await client.post(
+        f"/api/rider/orders/{oid}/deliver", headers=rhdr,
+        data={"pin": "0000" if pin != "0000" else "1111"},
+        files={"photo": ("door.jpg", b"fake-jpeg-bytes", "image/jpeg")},
+    )
+    assert wrong.status_code == 400
+    done = await client.post(
+        f"/api/rider/orders/{oid}/deliver", headers=rhdr,
+        data={"pin": pin},
+        files={"photo": ("door.jpg", b"fake-jpeg-bytes", "image/jpeg")},
+    )
     assert done.status_code == 200 and done.json()["status"] == "COMPLETED"
 
     # a rider can't touch another kitchen's orders (wrong-rider 409/404 path)

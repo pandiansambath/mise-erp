@@ -20,6 +20,7 @@ import hmac
 import json
 import logging
 import time
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -191,6 +192,16 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
     obj = event.get("data", {}).get("object", {})
 
     if etype == "checkout.session.completed":
+        # One-time ORDER payments carry metadata.order_id (no customer needed).
+        order_id = (obj.get("metadata") or {}).get("order_id")
+        if order_id:
+            from app.ordering.models import Order
+
+            order = await db.get(Order, uuid.UUID(order_id))
+            if order:
+                order.payment_status = "PAID"
+                await db.commit()
+            return {"received": True}
         hotel = await _hotel_by_customer(db, obj.get("customer", ""))
         if hotel:
             hotel.stripe_subscription_id = obj.get("subscription")

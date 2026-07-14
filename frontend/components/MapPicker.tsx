@@ -11,6 +11,10 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+// 🛰️ Esri World Imagery — free satellite tiles (attribution required).
+const SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SAT_ATTRIB = "© Esri, Maxar, Earthstar Geographics";
+
 const PIN = L.divIcon({
   className: "",
   html: '<div style="font-size:32px;line-height:1;transform:translate(-50%,-100%);filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));">📍</div>',
@@ -41,6 +45,8 @@ export default function MapPicker({
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
+  const tilesRef = useRef<L.TileLayer | null>(null);
+  const [sat, setSat] = useState(true);
   const revAbort = useRef<AbortController | null>(null);
   const [placed, setPlaced] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -66,7 +72,7 @@ export default function MapPicker({
   useEffect(() => {
     if (!boxRef.current || mapRef.current) return;
     const map = L.map(boxRef.current, { zoomControl: true }).setView(UK_CENTRE, 6);
-    L.tileLayer(dark ? TILES.dark : TILES.light, { maxZoom: 20, attribution: ATTRIB }).addTo(map);
+    tilesRef.current = L.tileLayer(SAT, { maxZoom: 19, attribution: SAT_ATTRIB }).addTo(map);
 
     function place(lat: number, lng: number, fill = true) {
       if (markerRef.current) {
@@ -122,6 +128,22 @@ export default function MapPicker({
     );
   }
 
+  function flipTiles() {
+    const map = mapRef.current;
+    if (!map || !tilesRef.current) return;
+    map.removeLayer(tilesRef.current);
+    const next = !sat;
+    tilesRef.current = next
+      ? L.tileLayer(SAT, { maxZoom: 19, attribution: SAT_ATTRIB }).addTo(map)
+      : L.tileLayer(
+          dark
+            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+          { maxZoom: 19, attribution: "© OSM © CARTO" },
+        ).addTo(map);
+    setSat(next);
+  }
+
   return (
     <div className="space-y-1.5">
       <div ref={boxRef} className="h-64 w-full overflow-hidden rounded-xl border border-line" />
@@ -133,6 +155,13 @@ export default function MapPicker({
               : "📍 pin set — the address filled itself, edit it freely"
             : "tap the map to drop a pin on your door — the address fills itself"}
         </p>
+        <button
+          type="button"
+          onClick={flipTiles}
+          className="mise-raised mise-press shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-fg-soft"
+        >
+          {sat ? "🗺️ Streets" : "🛰️ Satellite"}
+        </button>
         <button
           type="button"
           onClick={useMyLocation}
