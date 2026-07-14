@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # Public URL of the app — verification/reset links in emails point here.
     app_base_url: str = "https://milagurestaurant.com"
 
+    # Stripe billing (TEST MODE for now — sk_test_/whsec_ keys, no real money).
+    # Empty keys = billing endpoints answer 503 and the app runs fine without it.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id: str = ""  # the Mise Pro monthly price (created in Stripe)
+
     # Mise Copilot — the in-app AI assistant. A free Google AI Studio key activates
     # the LLM (Gemini Flash: free tier, 1M context, native tools). With no key the
     # assistant degrades gracefully to deterministic glossary + navigation answers,

@@ -8,6 +8,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
 import { Brand } from "@/components/Brand";
+import { ThemeSwitcher } from "@/components/AppShell";
+import { THEMES, themeVars, useTheme } from "@/lib/theme";
 
 type Job = {
   id: string;
@@ -29,12 +31,24 @@ const TYPE_LABEL: Record<string, string> = {
   CASUAL: "Casual",
   APPRENTICESHIP: "Apprenticeship",
 };
-const TYPE_TONE: Record<string, string> = {
-  FULL_TIME: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
-  PART_TIME: "border-sky-400/30 bg-sky-400/10 text-sky-300",
-  CASUAL: "border-amber-400/30 bg-amber-400/10 text-amber-300",
-  APPRENTICESHIP: "border-violet-400/30 bg-violet-400/10 text-violet-300",
+const TYPE_HUE: Record<string, string> = {
+  FULL_TIME: "#10b981",
+  PART_TIME: "#38bdf8",
+  CASUAL: "#f59e0b",
+  APPRENTICESHIP: "#a78bfa",
 };
+/** Tinted, bordered chip that stays readable on light AND dark themes. */
+function TypeChip({ type }: { type: string }) {
+  const c = TYPE_HUE[type] ?? "#10b981";
+  return (
+    <span
+      className="rounded-full border px-2.5 py-1 text-[10px] font-semibold text-fg"
+      style={{ borderColor: `${c}55`, background: `${c}1f` }}
+    >
+      {TYPE_LABEL[type] ?? type}
+    </span>
+  );
+}
 
 const monogram = (name: string) =>
   name
@@ -74,7 +88,7 @@ function HiringMarquee({ jobs, onPick }: { jobs: Job[]; onPick: (id: string) => 
   if (jobs.length < 3) return null;
   const reel = jobs.slice(0, 12);
   return (
-    <div className="mise-marquee-mask relative mt-10 overflow-hidden border-y border-white/5 py-3">
+    <div className="mise-marquee-mask relative mt-10 overflow-hidden border-y border-glass/10 py-3">
       <div className="mise-marquee items-center gap-2.5">
         {[0, 1].map((copy) => (
           <div key={copy} className="flex items-center gap-2.5 pr-2.5" aria-hidden={copy === 1}>
@@ -86,7 +100,7 @@ function HiringMarquee({ jobs, onPick }: { jobs: Job[]; onPick: (id: string) => 
                   type="button"
                   tabIndex={copy === 1 ? -1 : 0}
                   onClick={() => onPick(j.id)}
-                  className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1.5 pl-1.5 pr-3.5 text-xs text-slate-300 transition hover:border-white/25 hover:text-white"
+                  className="mise-raised mise-press flex shrink-0 items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 text-xs text-fg-soft transition hover:text-fg"
                 >
                   <span
                     aria-hidden
@@ -95,8 +109,8 @@ function HiringMarquee({ jobs, onPick }: { jobs: Job[]; onPick: (id: string) => 
                   >
                     {monogram(j.hotel_name)}
                   </span>
-                  <b className="font-medium text-white">{j.title}</b>
-                  <span className="text-slate-500">· {j.location || j.city || "UK"}</span>
+                  <b className="font-medium text-fg">{j.title}</b>
+                  <span className="text-fg-faint">· {j.location || j.city || "UK"}</span>
                 </button>
               );
             })}
@@ -151,7 +165,7 @@ function ApplyModal({ job, onClose }: { job: JobDetail; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true">
       <div className="mise-fade absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden />
-      <div className="mise-pop-lg relative flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-ink-900 shadow-2xl shadow-black/60">
+      <div className="mise-pop-lg relative flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-glass/15 bg-paper-2 shadow-2xl shadow-black/50">
         {done ? (
           <div className="relative flex flex-col items-center overflow-hidden px-8 py-14 text-center">
             {/* ember-confetti: colour sparks rise from the check and burn out */}
@@ -169,66 +183,66 @@ function ApplyModal({ job, onClose }: { job: JobDetail; onClose: () => void }) {
                 />
               ))}
             </span>
-            <span className="mise-pop-lg grid h-16 w-16 place-items-center rounded-full bg-emerald-500/15 text-3xl">✓</span>
-            <h3 className="mt-5 font-display text-2xl text-white">Application sent</h3>
-            <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
-              <b className="text-slate-200">{job.hotel_name}</b> has your application for{" "}
-              <b className="text-slate-200">{job.title}</b>. They&apos;ll reach out on the details you left.
+            <span className="mise-pop-lg grid h-16 w-16 place-items-center rounded-full bg-brand-500/15 text-3xl">✓</span>
+            <h3 className="mt-5 font-display text-2xl text-fg">Application sent</h3>
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-fg-soft">
+              <b className="text-fg">{job.hotel_name}</b> has your application for{" "}
+              <b className="text-fg">{job.title}</b>. They&apos;ll reach out on the details you left.
             </p>
             <button
               type="button"
               onClick={onClose}
-              className="mise-press mt-7 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 px-6 py-2.5 text-sm font-semibold text-ink-950"
+              className="mise-press mt-7 rounded-xl bg-gradient-to-r from-brand-500 to-brand-400 px-6 py-2.5 text-sm font-semibold text-white"
             >
               Back to the board
             </button>
           </div>
         ) : (
           <>
-            <div className="border-b border-white/5 px-6 py-4">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-300/80">
+            <div className="border-b border-glass/10 px-6 py-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-brand-400">
                 Apply · {job.hotel_name}
               </p>
-              <h3 className="mt-0.5 font-display text-xl text-white">{job.title}</h3>
+              <h3 className="mt-0.5 font-display text-xl text-fg">{job.title}</h3>
             </div>
             <form onSubmit={submit} className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-6 py-5">
               <div className="grid gap-3.5 sm:grid-cols-2">
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-400">Your name *</span>
+                  <span className="text-xs font-medium text-fg-soft">Your name *</span>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
                     minLength={2}
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                    className="mise-well mt-1 w-full rounded-xl px-3.5 py-2.5 text-sm text-fg outline-none transition focus:ring-2 focus:ring-brand-400/30"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-slate-400">Email *</span>
+                  <span className="text-xs font-medium text-fg-soft">Email *</span>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                    className="mise-well mt-1 w-full rounded-xl px-3.5 py-2.5 text-sm text-fg outline-none transition focus:ring-2 focus:ring-brand-400/30"
                   />
                 </label>
               </div>
               <label className="block">
-                <span className="text-xs font-medium text-slate-400">Phone</span>
+                <span className="text-xs font-medium text-fg-soft">Phone</span>
                 <input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                  className="mise-well mt-1 w-full rounded-xl px-3.5 py-2.5 text-sm text-fg outline-none transition focus:ring-2 focus:ring-brand-400/30"
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-medium text-slate-400">Why you? (a few lines)</span>
+                <span className="text-xs font-medium text-fg-soft">Why you? (a few lines)</span>
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
-                  className="mt-1 w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                  className="mise-well mt-1 w-full resize-none rounded-xl px-3.5 py-2.5 text-sm text-fg outline-none transition focus:ring-2 focus:ring-brand-400/30"
                 />
               </label>
               {/* resume dropzone */}
@@ -252,16 +266,16 @@ function ApplyModal({ job, onClose }: { job: JobDetail; onClose: () => void }) {
                 }}
                 className={`flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed px-4 py-4 transition ${
                   dragOver
-                    ? "border-emerald-400/70 bg-emerald-400/10"
-                    : "border-white/15 bg-white/[0.03] hover:border-emerald-400/40"
+                    ? "border-brand-400/70 bg-brand-400/10"
+                    : "border-line bg-glass/5 hover:border-brand-400/40"
                 }`}
               >
                 <span aria-hidden className="text-2xl">{file ? "📄" : "📎"}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-white">
+                  <span className="block truncate text-sm font-medium text-fg">
                     {file ? file.name : "Attach your CV / resume"}
                   </span>
-                  <span className="text-[11px] text-slate-500">PDF, Word or a photo — up to 5 MB</span>
+                  <span className="text-[11px] text-fg-faint">PDF, Word or a photo — up to 5 MB</span>
                 </span>
                 {file && (
                   <button
@@ -270,7 +284,7 @@ function ApplyModal({ job, onClose }: { job: JobDetail; onClose: () => void }) {
                       e.stopPropagation();
                       setFile(null);
                     }}
-                    className="shrink-0 text-xs text-slate-400 hover:text-rose-300"
+                    className="shrink-0 text-xs text-fg-faint hover:text-rose-400"
                   >
                     remove
                   </button>
@@ -288,11 +302,11 @@ function ApplyModal({ job, onClose }: { job: JobDetail; onClose: () => void }) {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="mise-press flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 px-5 py-3 text-sm font-semibold text-ink-950 shadow-lg shadow-emerald-500/20 disabled:opacity-60"
+                  className="mise-press flex-1 rounded-xl bg-gradient-to-r from-brand-500 to-brand-400 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/20 disabled:opacity-60"
                 >
                   {busy ? "Sending…" : "Send application"}
                 </button>
-                <button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-5 py-3 text-sm text-slate-300">
+                <button type="button" onClick={onClose} className="mise-raised mise-press rounded-xl px-5 py-3 text-sm text-fg-soft">
                   Cancel
                 </button>
               </div>
@@ -314,8 +328,10 @@ export default function CareersPage() {
   const [applying, setApplying] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const { theme } = useTheme();
+  const themed = { ...themeVars(theme), colorScheme: THEMES[theme].light ? "light" : ("dark" as const) };
+
   useEffect(() => {
-    document.documentElement.classList.add("dark");
     fetch(`${API_BASE}/api/public/jobs`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setJobs)
@@ -360,20 +376,26 @@ export default function CareersPage() {
   );
 
   return (
-    <div className="mise-dark-page min-h-screen bg-ink-950 text-slate-100">
+    <div
+      data-mode={THEMES[theme].light ? "light" : "dark"}
+      style={themed}
+      className="mise-app min-h-screen bg-shell text-fg"
+    >
       {/* nav */}
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/5 bg-ink-950/90 backdrop-blur-xl">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-6">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-glass/10 bg-shell/85 backdrop-blur-xl">
+        <nav className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-4 sm:px-6">
           <Link href="/" aria-label="Mise home">
-            <Brand size={28} wordClassName="text-lg text-white" />
+            <Brand size={28} wordClassName="text-lg text-fg" />
           </Link>
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.3em] text-slate-500 sm:block">
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.3em] text-fg-faint sm:block">
             The hospitality job board
           </span>
+          <span className="ml-auto" />
+          <ThemeSwitcher />
           <span className="rounded-lg p-[1.5px]" style={{ background: "linear-gradient(100deg, #34d399, #38bdf8, #a78bfa)" }}>
             <Link
               href="/signup"
-              className="block rounded-[6.5px] bg-ink-950 px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-ink-900"
+              className="block rounded-[6.5px] bg-shell px-3.5 py-2 text-[13px] font-semibold text-fg transition hover:bg-paper"
             >
               Hiring? Run your hotel on Mise
             </Link>
@@ -400,10 +422,10 @@ export default function CareersPage() {
           aria-hidden
         />
         <div className="relative mx-auto max-w-6xl px-5 sm:px-6">
-          <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-emerald-300/80">
+          <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-brand-400">
             Careers · powered by Mise
           </p>
-          <h1 className="mt-3 font-display text-4xl leading-[1.05] text-white sm:text-6xl">
+          <h1 className="mt-3 font-display text-4xl leading-[1.05] text-fg sm:text-6xl">
             Work where the{" "}
             <em
               className="bg-clip-text not-italic text-transparent"
@@ -413,7 +435,7 @@ export default function CareersPage() {
             </em>{" "}
             is.
           </h1>
-          <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-400 sm:text-base">
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-fg-soft sm:text-base">
             Open roles across independent hotels &amp; restaurants running on Mise — kitchens,
             floors and front desks that take their craft (and their people) seriously.
           </p>
@@ -421,17 +443,17 @@ export default function CareersPage() {
           {/* search + filters */}
           <div className="mt-8 flex flex-wrap items-center gap-2.5">
             <div className="relative w-full max-w-md">
-              <span aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">⌕</span>
+              <span aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-fg-faint">⌕</span>
               <input
                 ref={searchRef}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search roles, hotels, cities…"
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] py-3 pl-10 pr-10 text-sm text-white outline-none backdrop-blur transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                className="mise-well w-full rounded-2xl py-3 pl-10 pr-10 text-sm text-fg outline-none transition focus:ring-2 focus:ring-brand-400/30"
               />
               <kbd
                 aria-hidden
-                className="pointer-events-none absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-white/15 bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-slate-400 sm:block"
+                className="mise-raised pointer-events-none absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-fg-faint sm:block"
               >
                 /
               </kbd>
@@ -443,12 +465,8 @@ export default function CareersPage() {
                   key={t}
                   type="button"
                   onClick={() => setType(t)}
-                  className="rounded-full px-3.5 py-2 text-xs font-medium transition"
-                  style={
-                    type === t
-                      ? { background: c, color: "#04120d" }
-                      : { border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#cbd5e1" }
-                  }
+                  className={`mise-press rounded-full px-3.5 py-2 text-xs font-medium transition ${type === t ? "" : "mise-raised text-fg-soft"}`}
+                  style={type === t ? { background: c, color: "#04120d" } : undefined}
                 >
                   {t === "all" ? "All roles" : TYPE_LABEL[t] ?? t}
                 </button>
@@ -484,14 +502,14 @@ export default function CareersPage() {
         {jobs === null ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="mise-shimmer h-44 rounded-3xl border border-white/5 bg-white/[0.03]" />
+              <div key={i} className="mise-shimmer h-44 rounded-3xl border border-line bg-paper" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-8 py-16 text-center">
+          <div className="mise-well rounded-3xl px-8 py-16 text-center">
             <p className="text-4xl" aria-hidden>🧑‍🍳</p>
-            <h2 className="mt-4 font-display text-2xl text-white">No open roles right now</h2>
-            <p className="mx-auto mt-2 max-w-sm text-sm text-slate-400">
+            <h2 className="mt-4 font-display text-2xl text-fg">No open roles right now</h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-fg-soft">
               Kitchens hire fast — check back soon, or tell your favourite local their hotel
               should be running on Mise.
             </p>
@@ -509,11 +527,11 @@ export default function CareersPage() {
                   onClick={() => openDetail(j.id)}
                   style={{
                     animationDelay: `${Math.min(i, 8) * 60}ms`,
-                    background: `radial-gradient(130% 90% at 15% 0%, ${hue}14, rgba(255,255,255,0.03) 55%)`,
+                    background: `radial-gradient(130% 90% at 15% 0%, ${hue}22, var(--color-paper) 55%)`,
                     borderColor: `${hue}30`,
                     ["--spot" as string]: `${hue}26`,
                   }}
-                  className="mise-pop mise-tilt-card group relative overflow-hidden rounded-3xl border p-5 text-left"
+                  className="mise-pop mise-tilt-card mise-feel group relative overflow-hidden rounded-3xl border p-5 text-left"
                   onMouseMove={tiltMove}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = `0 24px 48px -20px ${hue}55`;
@@ -549,19 +567,17 @@ export default function CareersPage() {
                       {monogram(j.hotel_name)}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm text-slate-400">{j.hotel_name}</p>
-                      <p className="truncate text-[11px] text-slate-500">
+                      <p className="truncate text-sm text-fg-soft">{j.hotel_name}</p>
+                      <p className="truncate text-[11px] text-fg-faint">
                         📍 {j.location || j.city || "UK"} · {daysAgo(j.created_at)}
                       </p>
                     </div>
                   </div>
-                  <h3 className="mt-4 font-display text-xl leading-snug text-white">{j.title}</h3>
+                  <h3 className="mt-4 font-display text-xl leading-snug text-fg">{j.title}</h3>
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${TYPE_TONE[j.employment_type] ?? "border-white/10 text-slate-300"}`}>
-                      {TYPE_LABEL[j.employment_type] ?? j.employment_type}
-                    </span>
+                    <TypeChip type={j.employment_type} />
                     {j.department && (
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-slate-300">
+                      <span className="mise-raised rounded-full px-2.5 py-1 text-[10px] font-medium text-fg-soft">
                         {j.department}
                       </span>
                     )}
@@ -582,10 +598,10 @@ export default function CareersPage() {
       </main>
 
       {/* footer */}
-      <footer className="border-t border-white/5 py-8">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 text-xs text-slate-600 sm:px-6">
+      <footer className="border-t border-glass/10 py-8">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 text-xs text-fg-faint sm:px-6">
           <p>© {new Date().getFullYear()} Mise · every plate, every penny</p>
-          <Link href="/" className="text-slate-500 transition hover:text-white">mise for hotels →</Link>
+          <Link href="/" className="transition hover:text-fg">mise for hotels →</Link>
         </div>
       </footer>
 
@@ -593,8 +609,8 @@ export default function CareersPage() {
       {detail && !applying && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true">
           <div className="mise-fade absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDetail(null)} aria-hidden />
-          <div className="mise-pop-lg relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-ink-900 shadow-2xl shadow-black/60">
-            <div className="flex items-start gap-4 border-b border-white/5 px-6 py-5">
+          <div className="mise-pop-lg relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-glass/15 bg-paper-2 shadow-2xl shadow-black/50">
+            <div className="flex items-start gap-4 border-b border-glass/10 px-6 py-5">
               <span
                 aria-hidden
                 className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-sm font-bold text-ink-950"
@@ -603,8 +619,8 @@ export default function CareersPage() {
                 {monogram(detail.hotel_name)}
               </span>
               <div className="min-w-0 flex-1">
-                <h2 className="font-display text-2xl leading-tight text-white">{detail.title}</h2>
-                <p className="mt-1 text-sm text-slate-400">
+                <h2 className="font-display text-2xl leading-tight text-fg">{detail.title}</h2>
+                <p className="mt-1 text-sm text-fg-soft">
                   {detail.hotel_name} · 📍 {detail.location || detail.city || "UK"}
                 </p>
               </div>
@@ -612,18 +628,16 @@ export default function CareersPage() {
                 type="button"
                 onClick={() => setDetail(null)}
                 aria-label="Close"
-                className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-xl text-slate-400 hover:bg-white/5 hover:text-white"
+                className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-xl text-fg-faint hover:bg-glass/10 hover:text-fg"
               >
                 ✕
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
               <div className="flex flex-wrap gap-1.5">
-                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${TYPE_TONE[detail.employment_type] ?? "border-white/10 text-slate-300"}`}>
-                  {TYPE_LABEL[detail.employment_type] ?? detail.employment_type}
-                </span>
+                <TypeChip type={detail.employment_type} />
                 {detail.department && (
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-slate-300">
+                  <span className="mise-raised rounded-full px-2.5 py-1 text-[10px] font-medium text-fg-soft">
                     {detail.department}
                   </span>
                 )}
@@ -638,15 +652,15 @@ export default function CareersPage() {
                   </span>
                 )}
               </div>
-              <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-slate-300">
+              <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-fg-soft">
                 {detail.description || "Ask us anything about the role when you apply."}
               </p>
             </div>
-            <div className="border-t border-white/5 px-6 py-4">
+            <div className="border-t border-glass/10 px-6 py-4">
               <button
                 type="button"
                 onClick={() => setApplying(true)}
-                className="mise-press w-full rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 px-5 py-3 text-sm font-semibold text-ink-950 shadow-lg shadow-emerald-500/20"
+                className="mise-press w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-400 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/20"
               >
                 Apply for this role →
               </button>

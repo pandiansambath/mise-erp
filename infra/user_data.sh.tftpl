@@ -55,6 +55,9 @@ services:
       AWS_REGION: "${region}"
       RESEND_API_KEY: "${resend_api_key}"
       EMAIL_FROM: "${email_from}"
+      STRIPE_SECRET_KEY: "${stripe_secret_key}"
+      STRIPE_WEBHOOK_SECRET: "${stripe_webhook_secret}"
+      STRIPE_PRICE_ID: "${stripe_price_id}"
       GEMINI_API_KEY: "${gemini_api_key}"
       GEMINI_API_KEY_2: "${gemini_api_key_2}"
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"]

@@ -30,6 +30,25 @@ variable "email_from" {
   default = "Mise <accounts@milagurestaurant.com>" # domain verified in Resend 2026-07-14
 }
 
+# Stripe billing (TEST MODE keys for now). Empty = billing endpoints answer 503,
+# the rest of the app runs fine without it.
+variable "stripe_secret_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "stripe_webhook_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "stripe_price_id" {
+  type    = string
+  default = ""
+}
+
 # Optional Mise Copilot LLM (Google Gemini, free tier). Empty = the assistant
 # runs in deterministic fallback mode (glossary + navigation), app fine without it.
 variable "gemini_api_key" {

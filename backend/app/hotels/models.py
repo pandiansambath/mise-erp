@@ -40,6 +40,11 @@ class Hotel(Base):
     features: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Subscription plan (starter | pro | enterprise) — sets the feature preset + limits.
     plan: Mapped[str] = mapped_column(String(20), nullable=False, default="pro")
+    # Stripe billing (test mode): who this hotel is at Stripe + where the
+    # subscription stands. "free" = never subscribed (grandfathered/testing).
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(64))
+    subscription_status: Mapped[str] = mapped_column(String(20), nullable=False, default="free")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

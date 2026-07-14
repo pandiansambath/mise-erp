@@ -85,6 +85,44 @@ export default function SettingsPage() {
     api.patch("/auth/me/notifications", { twofa_email: next }).catch(() => setTwofa(!next));
   }
 
+  // Stripe billing (test mode) — owner only.
+  const [billing, setBilling] = useState<{
+    configured: boolean;
+    status: string;
+    has_customer: boolean;
+    test_mode: boolean;
+  } | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingBanner, setBillingBanner] = useState<"success" | "cancelled" | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get<typeof billing>("/billing/status").then(setBilling).catch(() => setBilling(null));
+    const flag = new URLSearchParams(window.location.search).get("billing");
+    if (flag === "success" || flag === "cancelled") {
+      setBillingBanner(flag);
+      window.history.replaceState(null, "", "/settings"); // don't re-announce on refresh
+    }
+  }, [isAdmin]);
+
+  async function goToStripe(path: "/billing/checkout" | "/billing/portal") {
+    setBillingBusy(true);
+    try {
+      const r = await api.post<{ url: string }>(path, {});
+      window.location.assign(r.url); // Stripe hosts the page; card details never touch us
+    } catch {
+      setBillingBusy(false);
+    }
+  }
+
+  const SUB_TONE: Record<string, string> = {
+    free: "bg-line/40 text-fg-soft",
+    trialing: "bg-sky-500/15 text-sky-400",
+    active: "bg-emerald-500/15 text-emerald-400",
+    past_due: "bg-amber-500/15 text-amber-500",
+    canceled: "bg-rose-500/15 text-rose-400",
+  };
+
   useEffect(() => {
     if (hotel) {
       setAllowance(String(hotel.break_allowance_minutes ?? 0));
@@ -131,7 +169,9 @@ export default function SettingsPage() {
         {[
           ["#s-display", "💱 Display"],
           ["#s-alerts", "🔔 Email & 2FA"],
-          ...(isAdmin ? [["#s-attendance", "⏱️ Attendance rules"], ["#s-payroll", "💷 Payroll"]] : []),
+          ...(isAdmin
+            ? [["#s-billing", "💳 Billing"], ["#s-attendance", "⏱️ Attendance rules"], ["#s-payroll", "💷 Payroll"]]
+            : []),
           ["#s-account", "👤 Account"],
         ].map(([href, label]) => (
           <a key={href} href={href} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft">
@@ -224,6 +264,73 @@ export default function SettingsPage() {
           </p>
         </div>
       </Card>
+
+      {isAdmin && (
+        <Card className="mise-feel mb-6" id="s-billing">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-semibold text-fg">Billing</h3>
+            {billing && (
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
+                  SUB_TONE[billing.status] ?? SUB_TONE.free
+                }`}
+              >
+                {billing.status === "free" ? "no subscription" : billing.status.replace("_", " ")}
+              </span>
+            )}
+          </div>
+          {billingBanner === "success" && (
+            <p className="mise-tick-in mt-3 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-500">
+              🎉 Subscription started — welcome to Mise Pro! Stripe will email your invoices.
+            </p>
+          )}
+          {billingBanner === "cancelled" && (
+            <p className="mt-3 rounded-xl bg-line/30 px-3.5 py-2.5 text-sm text-fg-soft">
+              Checkout closed — nothing was charged. Come back any time.
+            </p>
+          )}
+          <p className="mt-1 text-sm text-fg-faint">
+            Mise Pro: £49/month per venue, 14-day free trial. Payments run on Stripe&apos;s
+            hosted checkout — your card details never touch our servers.
+          </p>
+          {billing?.test_mode && (
+            <p className="mise-well mt-3 rounded-xl px-3.5 py-2.5 text-xs text-fg-soft">
+              🧪 <b>Test mode</b> — no real money. Use card{" "}
+              <code className="font-mono text-fg">4242 4242 4242 4242</code>, any future expiry,
+              any CVC. Card <code className="font-mono text-fg">4000 0000 0000 0341</code> fails
+              on purpose (to try the past-due flow).
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-3">
+            {billing && !billing.configured ? (
+              <p className="text-sm text-fg-faint">Billing isn&apos;t configured on this server yet.</p>
+            ) : (
+              <>
+                {billing && (billing.status === "free" || billing.status === "canceled") && (
+                  <button
+                    type="button"
+                    disabled={billingBusy}
+                    onClick={() => goToStripe("/billing/checkout")}
+                    className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    {billingBusy ? "Opening Stripe…" : "Start 14-day free trial →"}
+                  </button>
+                )}
+                {billing?.has_customer && (
+                  <button
+                    type="button"
+                    disabled={billingBusy}
+                    onClick={() => goToStripe("/billing/portal")}
+                    className="mise-raised mise-press rounded-lg px-4 py-2 text-sm font-medium text-fg-soft"
+                  >
+                    Manage billing (card, invoices, cancel)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </Card>
+      )}
 
       {isAdmin && (
         <Card className="mise-feel mb-6" id="s-attendance">

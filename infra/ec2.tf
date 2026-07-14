@@ -50,6 +50,9 @@ resource "aws_instance" "app" {
     s3_bucket      = aws_s3_bucket.uploads.bucket
     resend_api_key = var.resend_api_key
     email_from     = var.email_from
+    stripe_secret_key     = var.stripe_secret_key
+    stripe_webhook_secret = var.stripe_webhook_secret
+    stripe_price_id       = var.stripe_price_id
     gemini_api_key   = var.gemini_api_key
     gemini_api_key_2 = var.gemini_api_key_2
     caddyfile        = local.caddyfile

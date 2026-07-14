@@ -9,6 +9,7 @@ from app.api.health import router as health_router
 from app.assistant.router import router as assistant_router
 from app.audit.router import router as audit_router
 from app.auth.router import router as auth_router
+from app.billing.router import router as billing_router
 from app.core.config import settings
 from app.documents.router import router as documents_router
 from app.employees.router import attendance_router
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
+    app.include_router(billing_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
     app.include_router(inventory_router, prefix="/api")
     app.include_router(vendors_router, prefix="/api")

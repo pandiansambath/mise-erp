@@ -137,6 +137,9 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
           TF_VAR_app_secret_key: ${{ secrets.APP_SECRET_KEY }}
           TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
+          TF_VAR_stripe_secret_key: ${{ secrets.STRIPE_SECRET_KEY }}
+          TF_VAR_stripe_webhook_secret: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TF_VAR_stripe_price_id: ${{ secrets.STRIPE_PRICE_ID }}
           TF_VAR_gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           TF_VAR_gemini_api_key_2: ${{ secrets.GEMINI_API_KEY_2 }}
           # HTTPS: set repo variables SITE_DOMAIN + ACME_EMAIL once DNS points at
