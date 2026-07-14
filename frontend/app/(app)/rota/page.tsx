@@ -143,6 +143,26 @@ export default function RotaPage() {
 
   // ── Jira-style drag & drop: pick a shift card up, drop it on another day ──
   const [dragId, setDragId] = useState<string | null>(null);
+  // ✏️ in-place shift editor: tap a name → edit times/break right there
+  const [editId, setEditId] = useState<string | null>(null);
+  const [eStart, setEStart] = useState("");
+  const [eEnd, setEEnd] = useState("");
+  const [eBreak, setEBreak] = useState("0");
+  const [eBusy, setEBusy] = useState(false);
+
+  async function saveEdit(id: string) {
+    setEBusy(true);
+    try {
+      await api.patch(`/rota/shifts/${id}`, {
+        start_time: eStart, end_time: eEnd,
+        break_minutes: parseInt(eBreak || "0", 10),
+      });
+      setEditId(null);
+      await reload(); // fresh hours/cost come computed from the server
+    } catch { /* keep the editor open so nothing is lost */ } finally {
+      setEBusy(false);
+    }
+  }
   const [dropDay, setDropDay] = useState<string | null>(null);
   // every drop stacks a move ticket: it PERSISTS until you keep or undo it,
   // each move can be undone on its own, Ctrl+Z pops the latest.
@@ -695,16 +715,56 @@ export default function RotaPage() {
                         </span>
                       )}
                       <div className="flex items-center justify-between gap-1">
-                        <span className="min-w-0 truncate font-medium text-fg">{s.employee_name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!canWrite) return;
+                            if (editId === s.id) { setEditId(null); return; }
+                            setEditId(s.id);
+                            setEStart(s.start_time.slice(0, 5));
+                            setEEnd(s.end_time.slice(0, 5));
+                            setEBreak(String(s.break_minutes ?? 0));
+                          }}
+                          title={canWrite ? "Tap to edit this shift in place" : undefined}
+                          className={`min-w-0 truncate text-left font-medium text-fg ${canWrite ? "underline-offset-2 hover:underline" : ""}`}
+                        >
+                          {s.employee_name} {canWrite && <span aria-hidden className="text-[9px] text-fg-faint">✏️</span>}
+                        </button>
                         {canWrite && (
                           <button onClick={() => removeShift(s.id)} aria-label="Remove shift" className="shrink-0 text-fg-faint hover:text-rose-300">✕</button>
                         )}
                       </div>
-                      <div className="mt-0.5 text-fg-soft">
-                        {hhmm(s.start_time)}–{hhmm(s.end_time)}
-                        {s.break_minutes > 0 && <span className="text-fg-faint"> · {s.break_minutes}m brk</span>}
-                      </div>
-                      <div className="text-fg-faint">{s.hours}h · {format(s.cost)}</div>
+                      {editId === s.id ? (
+                        <div className="mise-cadence-in mt-1.5 space-y-1.5 border-t border-line pt-1.5">
+                          <div className="flex items-center gap-1">
+                            <input type="time" value={eStart} onChange={(e) => setEStart(e.target.value)} aria-label="Start time" className="mise-well w-full rounded-md px-1.5 py-1 text-[11px] text-fg outline-none" />
+                            <span className="text-fg-faint">–</span>
+                            <input type="time" value={eEnd} onChange={(e) => setEEnd(e.target.value)} aria-label="End time" className="mise-well w-full rounded-md px-1.5 py-1 text-[11px] text-fg outline-none" />
+                          </div>
+                          <label className="flex items-center gap-1.5 text-[10px] text-fg-faint">
+                            break
+                            <input value={eBreak} onChange={(e) => setEBreak(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" aria-label="Break minutes" className="mise-well w-12 rounded-md px-1.5 py-1 text-center text-[11px] text-fg outline-none" />
+                            min
+                          </label>
+                          <div className="flex gap-1.5">
+                            <button type="button" disabled={eBusy || !eStart || !eEnd || eEnd <= eStart} onClick={() => saveEdit(s.id)} className="mise-press flex-1 rounded-md bg-brand-600 px-2 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">
+                              {eBusy ? "Saving…" : "Save ✓"}
+                            </button>
+                            <button type="button" onClick={() => setEditId(null)} className="mise-raised mise-press rounded-md px-2 py-1.5 text-[11px] text-fg-soft">✕</button>
+                          </div>
+                          {eEnd && eStart && eEnd <= eStart && (
+                            <p className="text-[10px] text-rose-400">end must be after start</p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="mt-0.5 text-fg-soft">
+                            {hhmm(s.start_time)}–{hhmm(s.end_time)}
+                            {s.break_minutes > 0 && <span className="text-fg-faint"> · {s.break_minutes}m brk</span>}
+                          </div>
+                          <div className="text-fg-faint">{s.hours}h · {format(s.cost)}</div>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>

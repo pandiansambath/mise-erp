@@ -5,6 +5,7 @@ from datetime import time as time_type
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
@@ -92,6 +93,41 @@ async def list_shifts(
 ) -> list[ShiftOut]:
     rows = await service.list_shifts(db, user.hotel_id, date_from, date_to)
     return [ShiftOut.model_validate(r) for r in rows]
+
+
+class ShiftPatch(BaseModel):
+    start_time: time_type | None = None
+    end_time: time_type | None = None
+    break_minutes: int | None = Field(default=None, ge=0, le=480)
+    notes: str | None = Field(default=None, max_length=120)
+
+
+@router.patch("/shifts/{shift_id}", response_model=ShiftOut)
+async def update_shift(
+    shift_id: uuid.UUID,
+    payload: ShiftPatch,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> ShiftOut:
+    """Edit a shift IN PLACE (times/break/notes) — no more delete-and-re-add."""
+    sh = await service.get_shift(db, shift_id, user.hotel_id)
+    if sh is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Shift not found")
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        if v is not None:
+            setattr(sh, k, v)
+    if sh.end_time <= sh.start_time:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "End must be after start")
+    await db.commit()
+    rows = await service.list_shifts(db, user.hotel_id, sh.date, sh.date)
+    row = next(r for r in rows if str(r["id"]) == str(shift_id))
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="shift.edit",
+        summary=f"Shift edited: {row['employee_name']} {sh.date} "
+                f"{sh.start_time}-{sh.end_time}",
+        entity_type="shift", entity_id=shift_id,
+    )
+    return ShiftOut.model_validate(row)
 
 
 @router.delete("/shifts/{shift_id}", status_code=status.HTTP_204_NO_CONTENT)
