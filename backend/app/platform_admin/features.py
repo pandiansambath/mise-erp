@@ -53,6 +53,7 @@ FEATURES: tuple[Feature, ...] = (
     Feature("attendance", "Attendance", "Clock-in, days & hours worked."),
     Feature("employees", "Employees", "Staff records, salaries, visas."),
     Feature("payroll", "Payroll", "Run pay, advances and payslips."),
+    Feature("ordering", "Online Ordering", "Public menu + pickup/delivery orders."),
 )
 
 _BY_KEY = {f.key: f for f in FEATURES}

@@ -23,6 +23,7 @@ PERMISSIONS: dict[str, list[str]] = {
         "indent:approve",
         "sales:write",
         "sales:config",
+        "orders:write",
         "expenses:write",
         "documents:write",
         "reports:write",
@@ -32,6 +33,8 @@ PERMISSIONS: dict[str, list[str]] = {
         "recipes:write",
         "indent:write",
         "stock:read",
+        # The chef RUNS the live online-orders board (accept → cook → ready).
+        "orders:write",
     ],
     Role.ACCOUNTANT.value: [
         "payroll:write",
@@ -46,6 +49,7 @@ PERMISSIONS: dict[str, list[str]] = {
     Role.CASHIER.value: [
         "sales:write",
         "cash:write",
+        "orders:write",
     ],
     Role.STAFF.value: [
         "attendance:self",

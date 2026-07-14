@@ -34,11 +34,12 @@ const PERMISSIONS: Record<string, string[]> = {
     "recipes:write",
     "indent:approve",
     "sales:read",
+    "orders:write",
     "reports:read",
   ],
-  KITCHEN_MANAGER: ["inventory:read", "recipes:write", "indent:write", "stock:read"],
+  KITCHEN_MANAGER: ["inventory:read", "recipes:write", "indent:write", "stock:read", "orders:write"],
   ACCOUNTANT: ["payroll:write", "vendor_payments:write", "vendors:read", "recipes:read", "reports:read"],
-  CASHIER: ["sales:write", "cash:write"],
+  CASHIER: ["sales:write", "cash:write", "orders:write"],
   STAFF: ["attendance:self", "payroll:self"],
 };
 

@@ -25,6 +25,7 @@ ALERT_DEFAULTS: dict[str, bool] = {
     "low_stock": True,         # an item crossed below its minimum level
     "broadcast": True,         # a platform (Mise HQ) announcement
     "security_login": False,   # every sign-in to your account (quiet by default)
+    "new_order": True,         # a customer placed an online order
 }
 
 

@@ -185,8 +185,14 @@ jobs:
             --document-name AWS-RunShellScript --parameters file://rollout.json \
             --query Command.CommandId --output text)
           echo "SSM command: $CMD"
-          aws ssm wait command-executed --command-id "$CMD" --instance-id "$IID" || true
-          ST=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$IID" --query Status --output text)
+          # `aws ssm wait` gives up after ~100s, but a box-replace boot (cloud-init
+          # + first image pulls) can take several minutes — poll up to 12 min.
+          for i in $(seq 1 72); do
+            ST=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$IID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$ST" in Success|Failed|Cancelled|TimedOut|DeliveryTimedOut) break;; esac
+            echo "rollout $ST ($i/72)…"; sleep 10
+          done
           echo "----- rollout output -----"
           aws ssm get-command-invocation --command-id "$CMD" --instance-id "$IID" --query StandardOutputContent --output text
           echo "----- rollout status: $ST -----"

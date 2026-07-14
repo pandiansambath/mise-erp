@@ -9,6 +9,8 @@ import { numeric } from "@/lib/sanitize";
 
 // Settings → Email alerts: what lands in your inbox is YOUR call, per action.
 const ALERTS: { key: string; emoji: string; title: string; desc: string }[] = [
+  { key: "new_order", emoji: "🛎️", title: "New online order",
+    desc: "a customer places a pickup or delivery order from your public menu" },
   { key: "job_application", emoji: "🧑‍🍳", title: "New job applicant",
     desc: "someone applies to one of your vacancies on the careers board" },
   { key: "price_rise", emoji: "📈", title: "Supplier price rise",
