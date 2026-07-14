@@ -45,6 +45,10 @@ class Hotel(Base):
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), index=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(64))
     subscription_status: Mapped[str] = mapped_column(String(20), nullable=False, default="free")
+    # Online ordering (Ph2a): the prep estimate customers see, and the kitchen's
+    # busy-mode switch (paused = the public page shows closed, orders refused).
+    prep_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
+    ordering_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

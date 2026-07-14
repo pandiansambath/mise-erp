@@ -321,6 +321,27 @@ function MenuRow({ m, onChanged }: { m: MenuItem; onChanged: () => void }) {
   );
 }
 
+/* ── the new-order chime: two bright notes from a bare oscillator (no audio
+      file needed). The AudioContext is created on the toggle CLICK — browsers
+      only allow sound after a user gesture. ── */
+const audioRef: { ctx: AudioContext | null } = { ctx: null };
+function chime() {
+  const ctx = audioRef.ctx;
+  if (!ctx) return;
+  [0, 0.18].forEach((delay, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = i === 0 ? 880 : 1320; // A5 → E6, a cheerful "ding-ding"
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.28, ctx.currentTime + delay + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + delay + 0.5);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(ctx.currentTime + delay);
+    osc.stop(ctx.currentTime + delay + 0.55);
+  });
+}
+
 /* ── the page ── */
 export default function OrdersPage() {
   const { hotel } = useAuth();
@@ -328,12 +349,43 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [vitals, setVitals] = useState<Vitals | null>(null);
   const [copied, setCopied] = useState(false);
+  const [soundOn, setSoundOn] = useState(false);
+  const [prep, setPrep] = useState("20");
+  const [paused, setPaused] = useState(false);
   const timer = useRef<number | null>(null);
+  const knownIds = useRef<Set<string> | null>(null);
+  const soundRef = useRef(false);
+  useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
+
+  useEffect(() => {
+    api
+      .get<{ prep_minutes: number; ordering_paused: boolean }>("/ordering/settings")
+      .then((s) => { setPrep(String(s.prep_minutes)); setPaused(s.ordering_paused); })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     api
       .get<{ orders: Order[]; vitals: Vitals }>("/ordering/orders")
-      .then((r) => { setOrders(r.orders); setVitals(r.vitals); })
+      .then((r) => {
+        // ring the bell for orders we've never seen before (not the first load)
+        if (knownIds.current) {
+          const fresh = r.orders.filter(
+            (o) => o.status === "NEW" && !knownIds.current!.has(o.id),
+          );
+          if (fresh.length > 0) {
+            if (soundRef.current) chime();
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              new Notification(`🛎️ New order ${fresh[0].code}`, {
+                body: `${fresh[0].customer_name} · £${fresh[0].total}`,
+              });
+            }
+          }
+        }
+        knownIds.current = new Set(r.orders.map((o) => o.id));
+        setOrders(r.orders);
+        setVitals(r.vitals);
+      })
       .catch(() => setOrders([]));
   }, []);
 
@@ -407,6 +459,62 @@ export default function OrdersPage() {
           Share it on Instagram, WhatsApp status, your window sticker — customers order
           straight from the browser, no app install.
         </p>
+        {/* kitchen switches: prep estimate · busy pause · new-order sound */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-3">
+          <label className="flex items-center gap-2 text-xs text-fg-soft">
+            ⏱️ Ready in ~
+            <input
+              value={prep}
+              onChange={(e) => setPrep(e.target.value.replace(/\D/g, "").slice(0, 3))}
+              onBlur={() => {
+                const v = Math.min(180, Math.max(5, parseInt(prep || "20", 10)));
+                setPrep(String(v));
+                api.patch("/ordering/settings", { prep_minutes: v }).catch(() => {});
+              }}
+              aria-label="Prep minutes"
+              className="mise-well w-14 rounded-md px-2 py-1 text-center text-xs text-fg outline-none"
+            />
+            min <span className="text-fg-faint">(customers see this)</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !paused;
+              setPaused(next);
+              api.patch("/ordering/settings", { ordering_paused: next }).catch(() => setPaused(!next));
+            }}
+            className={`mise-press rounded-lg px-3 py-1.5 text-xs font-semibold ${
+              paused
+                ? "bg-amber-500/15 text-amber-500"
+                : "mise-raised text-fg-soft"
+            }`}
+          >
+            {paused ? "⏸️ Paused — tap to reopen" : "▶️ Taking orders — tap to pause"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!soundOn) {
+                type AC = typeof AudioContext;
+                const Ctx: AC =
+                  window.AudioContext ??
+                  (window as unknown as { webkitAudioContext: AC }).webkitAudioContext;
+                audioRef.ctx = audioRef.ctx ?? new Ctx();
+                audioRef.ctx.resume().catch(() => {});
+                chime(); // audible confirmation the bell works
+                if (typeof Notification !== "undefined" && Notification.permission === "default") {
+                  Notification.requestPermission().catch(() => {});
+                }
+              }
+              setSoundOn((v) => !v);
+            }}
+            className={`mise-press rounded-lg px-3 py-1.5 text-xs font-semibold ${
+              soundOn ? "bg-brand-500/15 text-brand-400" : "mise-raised text-fg-soft"
+            }`}
+          >
+            {soundOn ? "🔔 Bell on" : "🔕 Bell off — tap to arm"}
+          </button>
+        </div>
       </Card>
 
       {/* tabs */}

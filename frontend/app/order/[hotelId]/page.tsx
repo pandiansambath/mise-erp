@@ -25,7 +25,14 @@ type MenuItem = {
   category: string;
   emoji: string | null;
 };
-type HotelInfo = { id: string; name: string; city: string | null; currency: string };
+type HotelInfo = {
+  id: string;
+  name: string;
+  city: string | null;
+  currency: string;
+  prep_minutes?: number;
+  paused?: boolean;
+};
 type Tracked = {
   id: string;
   code: string;
@@ -131,7 +138,8 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
               <div className="min-w-0 flex-1">
                 <h1 className="truncate font-display text-lg leading-tight text-fg">{hotel.name}</h1>
                 <p className="text-[11px] text-fg-faint">
-                  {hotel.city ? `📍 ${hotel.city} · ` : ""}order online — no app needed
+                  {hotel.city ? `📍 ${hotel.city} · ` : ""}
+                  {hotel.paused ? "paused right now" : `⏱️ ready in ~${hotel.prep_minutes ?? 20} min`}
                 </p>
               </div>
             </>
@@ -143,6 +151,17 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
       </header>
 
       <main className="mx-auto max-w-3xl px-4 pt-6 sm:px-6">
+        {!tracked && hotel?.paused && (
+          <div className="mise-well mb-5 flex items-center gap-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3">
+            <span className="text-2xl" aria-hidden>🍳</span>
+            <div>
+              <p className="text-sm font-semibold text-fg">The kitchen is slammed right now</p>
+              <p className="text-xs text-fg-faint">
+                New orders are paused for a short while — check back in a few minutes.
+              </p>
+            </div>
+          </div>
+        )}
         {tracked ? (
           <TrackPanel t={tracked} cur={cur} onNewOrder={() => { setTracked(null); setCart({}); }} />
         ) : menu === null ? (
@@ -199,7 +218,7 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
       </main>
 
       {/* sticky cart bar */}
-      {!tracked && count > 0 && (
+      {!tracked && !hotel?.paused && count > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-40 p-3 sm:p-4">
           <button
             type="button"

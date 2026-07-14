@@ -54,6 +54,9 @@ FEATURES: tuple[Feature, ...] = (
     Feature("employees", "Employees", "Staff records, salaries, visas."),
     Feature("payroll", "Payroll", "Run pay, advances and payslips."),
     Feature("ordering", "Online Ordering", "Public menu + pickup/delivery orders."),
+    # The Pro upsell: rider door, live GPS tracking, delivery fees. Pickup
+    # ordering stays in every plan; this flag sells the full delivery stack.
+    Feature("delivery", "Delivery & Live Tracking", "Riders, GPS tracking, delivery fees."),
 )
 
 _BY_KEY = {f.key: f for f in FEATURES}

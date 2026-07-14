@@ -117,3 +117,34 @@ async def test_order_guards(client, make_user, auth_header):
     denied = await client.post("/api/ordering/menu", headers=auth_header(staff),
                                json={"name": "Nope", "price": "1.00"})
     assert denied.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_busy_pause_blocks_orders_and_prep_is_public(client, make_user, auth_header):
+    owner = await make_user("busy@x.com", Role.SUPER_ADMIN.value)
+    hdr = auth_header(owner)
+    dish = await _menu_item(client, hdr, name="Biryani", price="11.00")
+
+    # the prep estimate is visible on the public menu
+    r = await client.patch("/api/ordering/settings", headers=hdr, json={"prep_minutes": 35})
+    assert r.status_code == 200 and r.json()["prep_minutes"] == 35
+    pub = await client.get(f"/api/public/order/{owner.hotel_id}")
+    assert pub.json()["hotel"]["prep_minutes"] == 35
+
+    # pause -> the public door politely refuses
+    await client.patch("/api/ordering/settings", headers=hdr, json={"ordering_paused": True})
+    blocked = await client.post(
+        f"/api/public/order/{owner.hotel_id}",
+        json={"customer_name": "Sam", "phone": "07700", "fulfilment": "PICKUP",
+              "items": [{"menu_item_id": dish["id"], "quantity": 1}]},
+    )
+    assert blocked.status_code == 423
+
+    # reopen -> orders flow again
+    await client.patch("/api/ordering/settings", headers=hdr, json={"ordering_paused": False})
+    ok = await client.post(
+        f"/api/public/order/{owner.hotel_id}",
+        json={"customer_name": "Sam", "phone": "07700", "fulfilment": "PICKUP",
+              "items": [{"menu_item_id": dish["id"], "quantity": 1}]},
+    )
+    assert ok.status_code == 201

@@ -104,6 +104,35 @@ def _order_out(o: Order) -> dict:
     }
 
 
+# ── hotel side: kitchen settings (prep estimate + busy switch) ───────────────
+class OrderingSettings(BaseModel):
+    prep_minutes: int | None = Field(default=None, ge=5, le=180)
+    ordering_paused: bool | None = None
+
+
+@router.get("/settings")
+async def get_settings(
+    db: AsyncSession = Depends(get_db), user: User = Depends(require("orders:read"))
+) -> dict:
+    hotel = await db.get(Hotel, user.hotel_id)
+    return {"prep_minutes": hotel.prep_minutes, "ordering_paused": hotel.ordering_paused}
+
+
+@router.patch("/settings")
+async def patch_settings(
+    payload: OrderingSettings,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> dict:
+    hotel = await db.get(Hotel, user.hotel_id)
+    if payload.prep_minutes is not None:
+        hotel.prep_minutes = payload.prep_minutes
+    if payload.ordering_paused is not None:
+        hotel.ordering_paused = payload.ordering_paused
+    await db.commit()
+    return {"prep_minutes": hotel.prep_minutes, "ordering_paused": hotel.ordering_paused}
+
+
 # ── hotel side: menu ─────────────────────────────────────────────────────────
 @router.get("/menu", response_model=list[MenuItemOut])
 async def list_menu(
@@ -325,7 +354,8 @@ async def public_menu(hotel_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -
     )
     return {
         "hotel": {"id": str(hotel.id), "name": hotel.name, "city": hotel.city,
-                  "currency": hotel.base_currency},
+                  "currency": hotel.base_currency,
+                  "prep_minutes": hotel.prep_minutes, "paused": hotel.ordering_paused},
         "menu": [MenuItemOut.model_validate(m).model_dump(mode="json") for m in items],
     }
 
@@ -337,6 +367,11 @@ async def place_order(
     hotel = await db.get(Hotel, hotel_id)
     if hotel is None or not hotel.is_active:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "This kitchen isn't taking orders")
+    if hotel.ordering_paused:
+        raise HTTPException(
+            status.HTTP_423_LOCKED,
+            "The kitchen is slammed right now and has paused new orders — try again shortly",
+        )
     if payload.fulfilment not in FULFILMENTS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown fulfilment")
     if payload.fulfilment == "DELIVERY" and not (payload.address_text or "").strip():
