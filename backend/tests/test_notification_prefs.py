@@ -54,6 +54,8 @@ async def test_twofa_email_flow(client, make_user, auth_header, db):
     assert step1.json() == {"twofa_required": True}
     assert "access_token" not in step1.json()
 
+    # the app wrote the code in ITS session — drop our stale identity-map copy
+    db.expire_all()
     user = (await db.execute(select(User).where(User.email == "twofa@x.com"))).scalar_one()
     assert user.otp_code and len(user.otp_code) == 6
 
@@ -95,8 +97,10 @@ async def test_twofa_code_burns_after_five_wrong_guesses(client, make_user, auth
         "/api/auth/me/notifications", headers=auth_header(u), json={"twofa_email": True}
     )
     await client.post("/api/auth/login", json={"email": "burn@x.com", "password": "password123"})
+    db.expire_all()  # read the code the APP just wrote, not our cached copy
     user = (await db.execute(select(User).where(User.email == "burn@x.com"))).scalar_one()
     real_code = user.otp_code
+    assert real_code, "login should have minted an OTP"
     guess = "000000" if real_code != "000000" else "999999"
     for _ in range(5):
         r = await client.post("/api/auth/login-otp", json={"email": "burn@x.com", "code": guess})
