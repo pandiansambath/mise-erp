@@ -25,7 +25,9 @@ interface AuthState {
   user: UserOut | null;
   hotel: Hotel | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  /** Resolves "otp" when the account has two-step sign-in — call loginOtp next. */
+  login: (email: string, password: string) => Promise<"ok" | "otp">;
+  loginOtp: (email: string, code: string) => Promise<void>;
   registerHotel: (input: RegisterHotelInput) => Promise<void>;
   refreshHotel: () => Promise<void>;
   logout: () => void;
@@ -66,9 +68,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [router]
   );
 
-  const login = useCallback(
-    async (email: string, password: string) => {
-      const res = await api.post<TokenResponse>("/auth/login", { email, password });
+  // Shared tail of both sign-in steps: store the session and enter the app.
+  const adoptSession = useCallback(
+    async (res: TokenResponse) => {
       setToken(res.access_token);
       setUser(res.user);
       setHotel(res.hotel);
@@ -76,6 +78,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await sweepThenGo(res.user.is_platform_owner ? "/control-room" : "/dashboard");
     },
     [sweepThenGo]
+  );
+
+  const login = useCallback(
+    async (email: string, password: string): Promise<"ok" | "otp"> => {
+      const res = await api.post<TokenResponse & { twofa_required?: boolean }>("/auth/login", {
+        email,
+        password,
+      });
+      // Two-step accounts get a 6-digit code by email instead of a session.
+      if (res.twofa_required) return "otp";
+      await adoptSession(res);
+      return "ok";
+    },
+    [adoptSession]
+  );
+
+  const loginOtp = useCallback(
+    async (email: string, code: string) => {
+      const res = await api.post<TokenResponse>("/auth/login-otp", { email, code });
+      await adoptSession(res);
+    },
+    [adoptSession]
   );
 
   const registerHotel = useCallback(async (input: RegisterHotelInput) => {
@@ -102,7 +126,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, hotel, loading, login, registerHotel, refreshHotel, logout }}>
+    <AuthContext.Provider
+      value={{ user, hotel, loading, login, loginOtp, registerHotel, refreshHotel, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1324,3 +1324,36 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 }
 .mise-cadence-in { animation: mise-cadence-in-k 380ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .mise-cadence-in { animation: none; } }
+
+/* ── Careers board: living hero + tactile cards ─────────────────────────── */
+/* Aurora blobs drift on a transform-only loop (compositor-cheap: the blur is
+   rasterised once, then just moved). Phones + reduced-motion keep them still. */
+@keyframes mise-blob-drift-k {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(34px, -20px, 0) scale(1.06); }
+  66%      { transform: translate3d(-26px, 16px, 0) scale(0.97); }
+}
+.mise-blob-drift { animation: mise-blob-drift-k 18s ease-in-out infinite; will-change: transform; }
+.mise-blob-drift-b { animation-duration: 24s; animation-delay: -8s; }
+.mise-blob-drift-c { animation-duration: 21s; animation-delay: -14s; }
+@media (max-width: 767px), (prefers-reduced-motion: reduce) {
+  .mise-blob-drift, .mise-blob-drift-b, .mise-blob-drift-c { animation: none; }
+}
+
+/* Job cards: cursor-tracked spotlight (via --mx/--my custom props) + a soft
+   3D tilt written inline by JS. The transition makes the reset feel liquid. */
+.mise-tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 0.25s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.mise-tilt-card .mise-spotlight {
+  background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 50%),
+    var(--spot, rgba(255, 255, 255, 0.10)), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.mise-tilt-card:hover .mise-spotlight { opacity: 1; }
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .mise-tilt-card { transition: none; }
+  .mise-tilt-card .mise-spotlight { display: none; }
+}

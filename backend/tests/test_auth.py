@@ -31,7 +31,9 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
     )
     assert resp.status_code == 201
     body = resp.json()
-    assert body["access_token"]
+    # No token until the emailed link is clicked — a signup response with a
+    # working token would let anyone skip the verification gate entirely.
+    assert "access_token" not in body
     assert body["user"]["role"] == "SUPER_ADMIN"
     assert body["hotel"]["name"] == "Spice Garden"
     assert body["hotel"]["base_currency"] == "INR"  # derived from country

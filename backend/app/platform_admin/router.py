@@ -303,6 +303,26 @@ async def create_announcement(
         db, hotel_id=operator.hotel_id, user=operator, action="platform.announce",
         summary=f"Broadcast ({body.level}): {body.message[:120]}", entity_type="platform",
     )
+    # Besides the in-app banner, email each hotel's admins who opted in.
+    from app.core import notify
+
+    hotel_ids = (
+        (await db.execute(select(Hotel.id).where(Hotel.is_active.is_(True)))).scalars().all()
+    )
+    for hid in hotel_ids:
+        await notify.email_hotel_admins(
+            db,
+            hid,
+            f"Mise announcement: {body.message.strip()[:80]}",
+            body.message.strip(),
+            html=notify.render_email(
+                heading="A note from Mise HQ 📣",
+                intro=body.message.strip(),
+                accent="#0ea5e9" if body.level == "info" else "#d97742",
+            ),
+            pref_key="broadcast",
+            background=True,
+        )
     return _announcement_out(a)
 
 

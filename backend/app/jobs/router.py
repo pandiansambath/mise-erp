@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import notify
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.storage import get_storage
 from app.hotels.models import Hotel
@@ -307,4 +309,26 @@ async def public_apply(
         application.resume_filename = resume.filename
     db.add(application)
     await db.commit()
+    # Heads-up to the hiring team (their Settings → Email alerts toggle decides).
+    await notify.email_hotel_admins(
+        db,
+        posting.hotel_id,
+        f"New applicant for {posting.title}: {application.applicant_name}",
+        f"{application.applicant_name} just applied for '{posting.title}'. "
+        f"Review the application in Mise → Hiring.",
+        html=notify.render_email(
+            heading="You have a new applicant 🎉",
+            intro=f"Someone just applied to your <b>{posting.title}</b> vacancy.",
+            rows=[
+                ("Applicant", application.applicant_name),
+                ("Role", posting.title),
+                ("Email", application.email),
+                ("CV attached", "Yes" if application.resume_key else "No"),
+            ],
+            cta_label="Open the pipeline",
+            cta_url=f"{settings.app_base_url}/hiring",
+        ),
+        pref_key="job_application",
+        background=True,
+    )
     return {"ok": True, "message": "Application received — the team will be in touch."}

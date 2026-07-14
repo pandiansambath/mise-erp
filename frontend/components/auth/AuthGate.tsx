@@ -59,12 +59,15 @@ function useChefMood(typedLen: number) {
 /* ─────────────────────────── forms ─────────────────────────── */
 
 function LoginForm({ active }: { active: boolean }) {
-  const { login } = useAuth();
+  const { login, loginOtp } = useAuth();
   const [email, setEmail] = useState("owner@nirai.com");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
+  // Two-step sign-in: password accepted → a 6-digit code is in their inbox.
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState("");
   const chef = useChefMood(email.length);
 
   async function onSubmit(e: React.FormEvent) {
@@ -73,7 +76,12 @@ function LoginForm({ active }: { active: boolean }) {
     setError(null);
     chef.setBusyHappy(true);
     try {
-      await login(email, password);
+      const outcome = await login(email, password);
+      if (outcome === "otp") {
+        setOtpStep(true);
+        setOtp("");
+        chef.setBusyHappy(false);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not log in. Is the server running?");
       setShake(true);
@@ -81,6 +89,79 @@ function LoginForm({ active }: { active: boolean }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onSubmitOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await loginOtp(email, otp.trim());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "That code didn't work.");
+      setShake(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (otpStep) {
+    return (
+      <form
+        onSubmit={onSubmitOtp}
+        onAnimationEnd={() => setShake(false)}
+        className={`mise-glass mise-liquid relative space-y-4 rounded-3xl p-6 text-center sm:p-7 ${shake ? "mise-shake" : ""}`}
+      >
+        <div className="mx-auto -mt-1 w-24 sm:w-28">
+          <ChefMascot mood="point" />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl text-white">Enter your sign-in code 🔐</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            We emailed a 6-digit code to <b className="text-white">{email}</b>. It works for 10
+            minutes.
+          </p>
+        </div>
+        <input
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          autoFocus
+          placeholder="••••••"
+          aria-label="6-digit sign-in code"
+          className="mx-auto block w-44 rounded-xl border border-white/10 bg-white/[0.04] py-3 text-center font-mono text-2xl tracking-[0.4em] text-white outline-none focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+        />
+        {error && (
+          <p role="alert" className="rounded-xl bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-300">
+            {error}
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={busy || otp.length !== 6}
+          className="mise-press w-full rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 px-4 py-2.5 text-sm font-semibold text-ink-950 disabled:opacity-60"
+        >
+          {busy ? "Checking…" : "Sign in"}
+        </button>
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <button
+            type="button"
+            onClick={() => { setOtpStep(false); setError(null); }}
+            className="underline-offset-2 hover:text-white hover:underline"
+          >
+            ← back
+          </button>
+          <button
+            type="button"
+            onClick={() => { login(email, password).catch(() => {}); setOtp(""); }}
+            className="underline-offset-2 hover:text-white hover:underline"
+          >
+            Send a fresh code
+          </button>
+        </div>
+      </form>
+    );
   }
 
   return (

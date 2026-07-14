@@ -51,6 +51,61 @@ function daysAgo(iso: string): string {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
 }
+const isFresh = (iso: string) => Date.now() - new Date(iso).getTime() < 3 * 86400000;
+
+/* Cursor-tracked spotlight + 3D tilt — direct style writes (no re-renders),
+   CSS handles the liquid reset; touch devices skip it entirely (hover:none). */
+function tiltMove(e: React.MouseEvent<HTMLElement>) {
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  const px = (e.clientX - r.left) / r.width;
+  const py = (e.clientY - r.top) / r.height;
+  el.style.setProperty("--mx", `${px * 100}%`);
+  el.style.setProperty("--my", `${py * 100}%`);
+  el.style.transform =
+    `perspective(900px) rotateY(${(px - 0.5) * 6}deg) rotateX(${(0.5 - py) * 6}deg) translateY(-4px)`;
+}
+function tiltReset(e: React.MouseEvent<HTMLElement>) {
+  e.currentTarget.style.transform = "";
+}
+
+/* The ticker under the hero — real roles gliding by, pause on hover. */
+function HiringMarquee({ jobs, onPick }: { jobs: Job[]; onPick: (id: string) => void }) {
+  if (jobs.length < 3) return null;
+  const reel = jobs.slice(0, 12);
+  return (
+    <div className="mise-marquee-mask relative mt-10 overflow-hidden border-y border-white/5 py-3">
+      <div className="mise-marquee items-center gap-2.5">
+        {[0, 1].map((copy) => (
+          <div key={copy} className="flex items-center gap-2.5 pr-2.5" aria-hidden={copy === 1}>
+            {reel.map((j) => {
+              const hue = hueFor(j.hotel_name);
+              return (
+                <button
+                  key={`${copy}-${j.id}`}
+                  type="button"
+                  tabIndex={copy === 1 ? -1 : 0}
+                  onClick={() => onPick(j.id)}
+                  className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1.5 pl-1.5 pr-3.5 text-xs text-slate-300 transition hover:border-white/25 hover:text-white"
+                >
+                  <span
+                    aria-hidden
+                    className="grid h-6 w-6 place-items-center rounded-full text-[9px] font-bold text-ink-950"
+                    style={{ background: hue }}
+                  >
+                    {monogram(j.hotel_name)}
+                  </span>
+                  <b className="font-medium text-white">{j.title}</b>
+                  <span className="text-slate-500">· {j.location || j.city || "UK"}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* ─────────────────────── apply modal ─────────────────────── */
 
@@ -98,8 +153,23 @@ function ApplyModal({ job, onClose }: { job: JobDetail; onClose: () => void }) {
       <div className="mise-fade absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div className="mise-pop-lg relative flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-ink-900 shadow-2xl shadow-black/60">
         {done ? (
-          <div className="flex flex-col items-center px-8 py-14 text-center">
-            <span className="grid h-16 w-16 place-items-center rounded-full bg-emerald-500/15 text-3xl">✓</span>
+          <div className="relative flex flex-col items-center overflow-hidden px-8 py-14 text-center">
+            {/* ember-confetti: colour sparks rise from the check and burn out */}
+            <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-1/3">
+              {HUES.concat(HUES).map((c, i) => (
+                <i
+                  key={i}
+                  className="mise-confetti absolute block h-1.5 w-1.5 rounded-full"
+                  style={{
+                    left: `${8 + ((i * 83) % 84)}%`,
+                    background: c,
+                    animationDelay: `${(i % 6) * 120}ms`,
+                    boxShadow: `0 0 8px ${c}`,
+                  }}
+                />
+              ))}
+            </span>
+            <span className="mise-pop-lg grid h-16 w-16 place-items-center rounded-full bg-emerald-500/15 text-3xl">✓</span>
             <h3 className="mt-5 font-display text-2xl text-white">Application sent</h3>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
               <b className="text-slate-200">{job.hotel_name}</b> has your application for{" "}
@@ -242,6 +312,7 @@ export default function CareersPage() {
   const [type, setType] = useState<string>("all");
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [applying, setApplying] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
@@ -249,6 +320,19 @@ export default function CareersPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setJobs)
       .catch(() => setJobs([]));
+  }, []);
+
+  // "/" jumps to search from anywhere on the board (job-board muscle memory).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   async function openDetail(id: string) {
@@ -301,17 +385,17 @@ export default function CareersPage() {
       <section className="relative overflow-hidden pb-10 pt-32 sm:pt-36">
         <div className="mise-dots pointer-events-none absolute inset-0" aria-hidden />
         <div
-          className="pointer-events-none absolute -left-24 top-0 h-[380px] w-[520px] rounded-full opacity-50 blur-3xl"
+          className="mise-blob-drift pointer-events-none absolute -left-24 top-0 h-[380px] w-[520px] rounded-full opacity-50 blur-3xl"
           style={{ background: "radial-gradient(closest-side, rgba(167,139,250,0.32), transparent 70%)" }}
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute left-1/2 top-0 h-[420px] w-[720px] -translate-x-1/2 -translate-y-1/3 rounded-full opacity-55 blur-3xl"
+          className="mise-blob-drift mise-blob-drift-b pointer-events-none absolute left-1/2 top-0 ml-[-360px] mt-[-140px] h-[420px] w-[720px] rounded-full opacity-55 blur-3xl"
           style={{ background: "radial-gradient(closest-side, rgba(16,185,129,0.3), rgba(56,189,248,0.14), transparent 70%)" }}
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -right-24 top-24 h-[360px] w-[520px] rounded-full opacity-45 blur-3xl"
+          className="mise-blob-drift mise-blob-drift-c pointer-events-none absolute -right-24 top-24 h-[360px] w-[520px] rounded-full opacity-45 blur-3xl"
           style={{ background: "radial-gradient(closest-side, rgba(244,63,94,0.26), rgba(245,158,11,0.16), transparent 70%)" }}
           aria-hidden
         />
@@ -339,11 +423,18 @@ export default function CareersPage() {
             <div className="relative w-full max-w-md">
               <span aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">⌕</span>
               <input
+                ref={searchRef}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search roles, hotels, cities…"
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] py-3 pl-10 pr-4 text-sm text-white outline-none backdrop-blur transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.05] py-3 pl-10 pr-10 text-sm text-white outline-none backdrop-blur transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
               />
+              <kbd
+                aria-hidden
+                className="pointer-events-none absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-white/15 bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-slate-400 sm:block"
+              >
+                /
+              </kbd>
             </div>
             {types.map((t) => {
               const c = { all: "#34d399", FULL_TIME: "#34d399", PART_TIME: "#38bdf8", CASUAL: "#fbbf24", APPRENTICESHIP: "#a78bfa" }[t] ?? "#34d399";
@@ -383,6 +474,9 @@ export default function CareersPage() {
             </div>
           )}
         </div>
+
+        {/* live reel of real roles gliding by — the board breathes before you scroll */}
+        {jobs && <HiringMarquee jobs={jobs} onPick={openDetail} />}
       </section>
 
       {/* the board */}
@@ -403,7 +497,9 @@ export default function CareersPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          // key={type}: switching a filter replays the staggered pop — the board
+          // answers the click with motion, not a mute reshuffle
+          <div key={type} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((j, i) => {
               const hue = HUES[i % HUES.length];
               return (
@@ -415,22 +511,35 @@ export default function CareersPage() {
                     animationDelay: `${Math.min(i, 8) * 60}ms`,
                     background: `radial-gradient(130% 90% at 15% 0%, ${hue}14, rgba(255,255,255,0.03) 55%)`,
                     borderColor: `${hue}30`,
+                    ["--spot" as string]: `${hue}26`,
                   }}
-                  className="mise-pop group relative overflow-hidden rounded-3xl border p-5 text-left transition duration-300 hover:-translate-y-1 hover:shadow-2xl"
+                  className="mise-pop mise-tilt-card group relative overflow-hidden rounded-3xl border p-5 text-left"
+                  onMouseMove={tiltMove}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = `0 24px 48px -20px ${hue}55`;
                     e.currentTarget.style.borderColor = `${hue}66`;
                   }}
                   onMouseLeave={(e) => {
+                    tiltReset(e);
                     e.currentTarget.style.boxShadow = "";
                     e.currentTarget.style.borderColor = `${hue}30`;
                   }}
                 >
+                  {/* cursor-tracked spotlight (CSS vars set in tiltMove) */}
+                  <span aria-hidden className="mise-spotlight pointer-events-none absolute inset-0" />
                   <span
                     aria-hidden
                     className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]"
                     style={{ background: `linear-gradient(90deg, transparent, ${hue}, transparent)` }}
                   />
+                  {isFresh(j.created_at) && (
+                    <span
+                      className="absolute right-4 top-4 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide text-ink-950"
+                      style={{ background: hue, boxShadow: `0 0 14px ${hue}88` }}
+                    >
+                      NEW
+                    </span>
+                  )}
                   <div className="flex items-center gap-3">
                     <span
                       aria-hidden

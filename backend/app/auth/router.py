@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,8 +63,29 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email first — check your inbox (or resend the link).",
         )
+    # Two-step sign-in: password OK → a 6-digit code goes to the inbox and the
+    # session only starts at /login-otp. (Platform owners keep the fast door.)
+    if user.twofa_email and not getattr(user, "is_platform_owner", False):
+        user.otp_code = f"{secrets.randbelow(1_000_000):06d}"
+        user.otp_expires = datetime.now(UTC) + timedelta(minutes=10)
+        user.otp_attempts = 0
+        await db.commit()
+        await notify.send_email(
+            user.email,
+            f"{user.otp_code} is your Mise sign-in code",
+            f"Your Mise sign-in code is {user.otp_code}. It expires in 10 minutes. "
+            "If this wasn't you, change your password.",
+            html=notify.render_email(
+                heading="Your sign-in code 🔐",
+                intro="Enter this code to finish signing in. It expires in 10 minutes — "
+                "if this wasn't you, change your password now.",
+                rows=[("Code", user.otp_code)],
+            ),
+        )
+        return JSONResponse({"twofa_required": True})
     user.last_login = datetime.now(UTC)
     await db.commit()
+    await _security_login_alert(user)
     token = create_access_token(subject=str(user.id), role=user.role)
     return TokenResponse(
         access_token=token,
@@ -72,11 +94,75 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
     )
 
 
-@router.post("/register-hotel", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register_hotel(
-    payload: RegisterHotel, db: AsyncSession = Depends(get_db)
-) -> TokenResponse:
-    """Public self-signup: create a hotel + its first Super Admin, then log them in."""
+async def _security_login_alert(user: User) -> None:
+    """'New sign-in' heads-up — only for users who switched the alert ON."""
+    if not notify.wants(user, "security_login"):
+        return
+    when = datetime.now(UTC).strftime("%d %b %Y, %H:%M UTC")
+    notify.fire(
+        notify.send_email(
+            user.email,
+            "New sign-in to your Mise account",
+            f"Your Mise account was signed in at {when}. If this wasn't you, "
+            "reset your password immediately.",
+            html=notify.render_email(
+                heading="New sign-in to your account",
+                intro="If this was you, no action needed. If not, reset your password now.",
+                rows=[("When", when), ("Account", user.email)],
+                cta_label="Reset my password",
+                cta_url=f"{settings.app_base_url}/forgot-password",
+                accent="#d97742",
+            ),
+        )
+    )
+
+
+class OtpRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=200)
+    code: str = Field(min_length=6, max_length=6)
+
+
+@router.post("/login-otp", response_model=TokenResponse)
+async def login_otp(payload: OtpRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    """Step 2 of two-step sign-in: the emailed 6-digit code opens the session."""
+    user = await service.get_user_by_email(db, payload.email.strip().lower())
+    bad = HTTPException(status.HTTP_401_UNAUTHORIZED, "That code is wrong or has expired")
+    if (
+        not user
+        or not user.is_active
+        or not user.otp_code
+        or not user.otp_expires
+        or user.otp_expires < datetime.now(UTC)
+    ):
+        raise bad
+    if not secrets.compare_digest(user.otp_code, payload.code):
+        # 5 wrong guesses burns the code — back to the password step.
+        user.otp_attempts += 1
+        if user.otp_attempts >= 5:
+            user.otp_code = None
+            user.otp_expires = None
+        await db.commit()
+        raise bad
+    user.otp_code = None
+    user.otp_expires = None
+    user.otp_attempts = 0
+    user.last_login = datetime.now(UTC)
+    await db.commit()
+    await _security_login_alert(user)
+    hotel = await _hotel_or_404(db, user.hotel_id)
+    token = create_access_token(subject=str(user.id), role=user.role)
+    return TokenResponse(
+        access_token=token,
+        user=UserOut.model_validate(user),
+        hotel=HotelOut.model_validate(hotel),
+    )
+
+
+@router.post("/register-hotel", status_code=status.HTTP_201_CREATED)
+async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_db)) -> dict:
+    """Public self-signup: create the hotel + its first Super Admin. NO token is
+    returned — the session starts from the verification email's link (returning
+    one here would let the unverified skip the gate entirely)."""
     if await service.get_user_by_email(db, payload.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account")
     country = payload.country.upper()
@@ -96,50 +182,34 @@ async def register_hotel(
     user.email_verified = False
     user.verify_token = secrets.token_urlsafe(32)
     await db.commit()
+    # ONE welcome-and-verify email: the confirm button is the door.
     verify_url = f"{settings.app_base_url}/verify-email?token={user.verify_token}"
     await notify.send_email(
         payload.email,
-        "Confirm your email to open Mise ✉️",
+        f"Welcome to Mise, {hotel.name} — confirm your email to open ✉️",
         f"Welcome to Mise, {hotel.name}! Confirm your email to open your kitchen: {verify_url}",
         html=notify.render_email(
             heading=f"One click and you're in, {hotel.name} 🎉",
             intro=(
-                "Confirm this is your email and your Mise kitchen opens immediately — "
-                "inventory, recipes, live P&L, the lot."
-            ),
-            cta_label="Confirm email & open Mise",
-            cta_url=verify_url,
-        ),
-    )
-    # Welcome email (styled). No-ops without a provider key; on the free Resend tier
-    # it only reaches your own verified address until a sending domain is verified.
-    await notify.send_email(
-        payload.email,
-        f"Welcome to Mise, {hotel.name}! 🎉",
-        f"Your restaurant '{hotel.name}' is set up on Mise. Sign in to start tracking "
-        "every plate and every penny.",
-        html=notify.render_email(
-            heading=f"Welcome aboard, {hotel.name}! 🎉",
-            intro=(
-                "Your account is ready. Mise gives you live food-cost, menu margins, "
-                "stock, purchasing and UK-compliance tools — all in one place. "
-                "Sign in and add your first items to see the money picture light up."
+                "Your account is ready — live food-cost, menu margins, stock, "
+                "purchasing and payroll in one place. Confirm this is your email "
+                "and your kitchen opens immediately."
             ),
             rows=[
                 ("Restaurant", hotel.name),
                 ("Owner login", payload.email),
                 ("Currency", hotel.base_currency),
             ],
-            cta_label="Open Mise",
-            cta_url="http://18.133.95.137/login",
+            cta_label="Confirm email & open Mise",
+            cta_url=verify_url,
         ),
     )
-    token = create_access_token(subject=str(user.id), role=user.role)
-    return TokenResponse(
-        access_token=token,
-        user=UserOut.model_validate(user),
-        hotel=HotelOut.model_validate(hotel),
-    )
+    return {
+        "ok": True,
+        "message": "Account created — confirm the email we just sent to open your kitchen.",
+        "user": UserOut.model_validate(user).model_dump(mode="json"),
+        "hotel": HotelOut.model_validate(hotel).model_dump(mode="json"),
+    }
 
 
 @router.get("/me", response_model=MeResponse)
@@ -325,3 +395,46 @@ async def reset_password(payload: ResetRequest, db: AsyncSession = Depends(get_d
     user.email_verified = True  # they proved inbox ownership
     await db.commit()
     return {"ok": True, "message": "Password updated — sign in with the new one."}
+
+
+# ── Settings → Email alerts & two-step sign-in ────────────────────────────────
+class NotificationPatch(BaseModel):
+    prefs: dict[str, bool] | None = None
+    twofa_email: bool | None = None
+
+
+def _merged_prefs(user: User) -> dict[str, bool]:
+    stored = user.email_prefs or {}
+    return {k: bool(stored.get(k, default)) for k, default in notify.ALERT_DEFAULTS.items()}
+
+
+@router.get("/me/notifications")
+async def get_notifications(current: User = Depends(get_current_user)) -> dict:
+    """The user's email-alert switches (merged with defaults) + 2FA state."""
+    return {"prefs": _merged_prefs(current), "twofa_email": current.twofa_email}
+
+
+@router.patch("/me/notifications")
+async def patch_notifications(
+    payload: NotificationPatch,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if payload.prefs is not None:
+        unknown = set(payload.prefs) - set(notify.ALERT_DEFAULTS)
+        if unknown:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Unknown alert keys: {', '.join(sorted(unknown))}",
+            )
+        merged = dict(current.email_prefs or {})
+        merged.update(payload.prefs)
+        current.email_prefs = merged
+    if payload.twofa_email is not None:
+        current.twofa_email = payload.twofa_email
+        if not payload.twofa_email:  # switching OFF clears any pending code
+            current.otp_code = None
+            current.otp_expires = None
+    await db.commit()
+    await db.refresh(current)
+    return {"prefs": _merged_prefs(current), "twofa_email": current.twofa_email}

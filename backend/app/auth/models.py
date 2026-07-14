@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Uuid, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -48,6 +48,14 @@ class User(Base):
     verify_token: Mapped[str | None] = mapped_column(String(64), index=True)
     reset_token: Mapped[str | None] = mapped_column(String(64), index=True)
     reset_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Per-user email-alert switches: {"job_application": bool, ...}. None/missing
+    # keys fall back to notify.ALERT_DEFAULTS — we only store overrides.
+    email_prefs: Mapped[dict | None] = mapped_column(JSON)
+    # Two-step sign-in: a 6-digit code lands in the inbox on every login.
+    twofa_email: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    otp_code: Mapped[str | None] = mapped_column(String(6))
+    otp_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    otp_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

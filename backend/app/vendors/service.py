@@ -113,6 +113,45 @@ async def upsert_vendor_item(
 
     await db.commit()
     await db.refresh(vi)
+
+    # Price went UP on an existing line → email the owners who opted in.
+    if old_price is not None and price_per_unit > old_price and hotel_id is not None:
+        from app.core import notify
+        from app.inventory.models import Item
+
+        names = (
+            await db.execute(
+                select(Item.name, Vendor.name)
+                .select_from(Item)
+                .join(Vendor, Vendor.id == vendor_id)
+                .where(Item.id == item_id)
+            )
+        ).first()
+        item_name, vendor_name = names if names else ("an item", "a supplier")
+        pct = (price_per_unit - old_price) / old_price * 100
+        await notify.email_hotel_admins(
+            db,
+            hotel_id,
+            f"Price rise: {item_name} up {pct:.1f}% at {vendor_name}",
+            f"{vendor_name} moved {item_name} from {old_price} to {price_per_unit} "
+            f"(+{pct:.1f}%). Your dish margins that use it just changed.",
+            html=notify.render_email(
+                heading="A supplier just raised a price 📈",
+                intro=f"<b>{vendor_name}</b> moved <b>{item_name}</b> up — dishes "
+                "using it are now costlier to plate.",
+                rows=[
+                    ("Item", str(item_name)),
+                    ("Supplier", str(vendor_name)),
+                    ("Old price", f"{old_price}"),
+                    ("New price", f"{price_per_unit}  (+{pct:.1f}%)"),
+                ],
+                cta_label="Review supplier prices",
+                cta_url=f"{notify.settings.app_base_url}/vendors",
+                accent="#d97742",
+            ),
+            pref_key="price_rise",
+            background=True,
+        )
     return vi
 
 

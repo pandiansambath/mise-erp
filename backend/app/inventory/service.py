@@ -196,6 +196,14 @@ async def record_movement(
             item.current_stock, item.average_cost, delta, unit_cost
         )
 
+    # Crossing the minimum line (from above it to at/below it) fires ONE alert —
+    # not a nag on every movement while already low.
+    crossed_low = (
+        item.min_stock_level is not None
+        and item.current_stock > item.min_stock_level
+        and new_stock <= item.min_stock_level
+    )
+
     item.current_stock = new_stock
     movement = StockMovement(
         item_id=item.id,
@@ -211,6 +219,32 @@ async def record_movement(
     db.add(movement)
     await db.commit()
     await db.refresh(movement)
+
+    if crossed_low:
+        from app.core import notify
+
+        await notify.email_hotel_admins(
+            db,
+            item.hotel_id,
+            f"Low stock: {item.name} is at {new_stock} {item.unit}",
+            f"{item.name} just dropped to {new_stock} {item.unit} "
+            f"(minimum {item.min_stock_level}). Time to reorder.",
+            html=notify.render_email(
+                heading="An item just went low 📉",
+                intro=f"<b>{item.name}</b> crossed below its minimum level — "
+                "reorder before service feels it.",
+                rows=[
+                    ("Item", item.name),
+                    ("Now", f"{new_stock} {item.unit}"),
+                    ("Minimum", f"{item.min_stock_level} {item.unit}"),
+                ],
+                cta_label="Open inventory",
+                cta_url=f"{notify.settings.app_base_url}/inventory",
+                accent="#d97742",
+            ),
+            pref_key="low_stock",
+            background=True,
+        )
     return movement
 
 

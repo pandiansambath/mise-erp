@@ -7,6 +7,41 @@ import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { numeric } from "@/lib/sanitize";
 
+// Settings → Email alerts: what lands in your inbox is YOUR call, per action.
+const ALERTS: { key: string; emoji: string; title: string; desc: string }[] = [
+  { key: "job_application", emoji: "🧑‍🍳", title: "New job applicant",
+    desc: "someone applies to one of your vacancies on the careers board" },
+  { key: "price_rise", emoji: "📈", title: "Supplier price rise",
+    desc: "a vendor moves a price UP — every dish using that item just got costlier" },
+  { key: "low_stock", emoji: "📉", title: "Low stock",
+    desc: "an item crosses below its minimum level — time to reorder" },
+  { key: "broadcast", emoji: "📣", title: "Mise announcements",
+    desc: "important platform notes from the Mise team" },
+  { key: "security_login", emoji: "🛡️", title: "Every sign-in",
+    desc: "a heads-up email each time your account is opened (quiet by default)" },
+];
+
+function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={onToggle}
+      className={`mise-press relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
+        on ? "bg-brand-500" : "mise-well bg-line/60"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+          on ? "translate-x-[22px]" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
+
 export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
   const { user, hotel, refreshHotel } = useAuth();
@@ -20,6 +55,35 @@ export default function SettingsPage() {
   const [minWage, setMinWage] = useState("11.44");
   const [savingWage, setSavingWage] = useState(false);
   const [savedWage, setSavedWage] = useState(false);
+
+  // Email alerts + two-step sign-in (per-user, stored server-side).
+  const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
+  const [twofa, setTwofa] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ prefs: Record<string, boolean>; twofa_email: boolean }>("/auth/me/notifications")
+      .then((r) => {
+        setPrefs(r.prefs);
+        setTwofa(r.twofa_email);
+      })
+      .catch(() => setPrefs({}));
+  }, []);
+
+  function togglePref(key: string) {
+    if (!prefs) return;
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next); // optimistic — the switch answers instantly
+    api.patch("/auth/me/notifications", { prefs: { [key]: next[key] } }).catch(() => {
+      setPrefs(prefs); // roll back on failure
+    });
+  }
+
+  function toggleTwofa() {
+    const next = !twofa;
+    setTwofa(next);
+    api.patch("/auth/me/notifications", { twofa_email: next }).catch(() => setTwofa(!next));
+  }
 
   useEffect(() => {
     if (hotel) {
@@ -66,6 +130,7 @@ export default function SettingsPage() {
       <div className="mise-well mb-6 flex flex-wrap gap-1.5 rounded-xl p-1.5">
         {[
           ["#s-display", "💱 Display"],
+          ["#s-alerts", "🔔 Email & 2FA"],
           ...(isAdmin ? [["#s-attendance", "⏱️ Attendance rules"], ["#s-payroll", "💷 Payroll"]] : []),
           ["#s-account", "👤 Account"],
         ].map(([href, label]) => (
@@ -108,6 +173,56 @@ export default function SettingsPage() {
             .map((c) => `${CURRENCIES[c].symbol}${CURRENCIES[c].rate}`)
             .join("  ·  ")}
         </p>
+      </Card>
+
+      <Card className="mise-feel mb-6" id="s-alerts">
+        <h3 className="font-semibold text-fg">Email alerts</h3>
+        <p className="mt-1 text-sm text-fg-faint">
+          Sent from <b className="text-fg-soft">accounts@milagurestaurant.com</b> to{" "}
+          <b className="text-fg-soft">{user?.email}</b>. Pick exactly which moments deserve an
+          email — everything else stays in the app.
+        </p>
+        <div className="mt-4 space-y-1">
+          {ALERTS.map((a) => (
+            <div
+              key={a.key}
+              className="flex items-center justify-between gap-4 rounded-xl px-3 py-2.5 transition hover:bg-fg/[0.03]"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 text-lg" aria-hidden>{a.emoji}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-fg">{a.title}</p>
+                  <p className="text-xs text-fg-faint">{a.desc}</p>
+                </div>
+              </div>
+              {prefs ? (
+                <Switch on={!!prefs[a.key]} onToggle={() => togglePref(a.key)} label={a.title} />
+              ) : (
+                <span className="h-6 w-11 animate-pulse rounded-full bg-line/50" />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 border-t border-line pt-4">
+          <div className="flex items-center justify-between gap-4 rounded-xl px-3 py-2.5">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-0.5 text-lg" aria-hidden>🔐</span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-fg">Two-step sign-in (2FA)</p>
+                <p className="text-xs text-fg-faint">
+                  after your password, a 6-digit code lands in your inbox — even a stolen
+                  password can&apos;t open your kitchen
+                </p>
+              </div>
+            </div>
+            <Switch on={twofa} onToggle={toggleTwofa} label="Two-step sign-in" />
+          </div>
+          <p className="mt-2 px-3 text-xs text-fg-faint">
+            📱 SMS codes to your phone are coming later (needs an SMS provider) — email codes
+            work today.
+          </p>
+        </div>
       </Card>
 
       {isAdmin && (
