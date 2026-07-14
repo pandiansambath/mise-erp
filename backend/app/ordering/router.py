@@ -431,9 +431,60 @@ async def _record_sale(db: AsyncSession, order: Order) -> None:
                 else:
                     ds.qty_sold += line.quantity
         await db.commit()
+
+        # AUTOPILOT: recipe-linked items eat their ingredients out of stock —
+        # the online order drives inventory, costing and P&L with zero typing.
+        from app.inventory import service as inv_service
+        from app.inventory.models import Item, MovementType
+        from app.recipes.models import RecipeIngredient
+
+        for line in order.items:
+            rid = recipe_by_menu.get(line.menu_item_id) if menu_ids else None
+            if not rid:
+                continue
+            ingredients = (
+                await db.execute(
+                    select(RecipeIngredient).where(RecipeIngredient.recipe_id == rid)
+                )
+            ).scalars().all()
+            for ing in ingredients:
+                item = await db.get(Item, ing.item_id)
+                if item is None or item.hotel_id != order.hotel_id:
+                    continue
+                need = ing.quantity * line.quantity
+                # never block on a stock shortfall — deduct what's there
+                qty = min(need, item.current_stock)
+                if qty <= 0:
+                    continue
+                await inv_service.record_movement(
+                    db, item, MovementType.CONSUMPTION.value, qty,
+                    notes=f"Online order {order.code}",
+                    reference_id=order.id, reference_type="online_order",
+                )
     except Exception:  # noqa: BLE001 — booking the sale must never break the board
         log.exception("online order -> sales bridge failed for %s", order.code)
         await db.rollback()
+
+
+@router.get("/orders/{order_id}/proof")
+async def order_proof(
+    order_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:read")),
+):
+    """The rider's doorstep photo — dispute-proof evidence, kitchen eyes only."""
+    from fastapi import Response
+
+    from app.core.storage import get_storage
+
+    order = (
+        await db.execute(
+            select(Order).where(Order.id == order_id, Order.hotel_id == user.hotel_id)
+        )
+    ).scalar_one_or_none()
+    if order is None or not order.proof_key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No proof photo on this order")
+    return Response(content=get_storage().read(order.proof_key), media_type="image/jpeg")
 
 
 # ── public side ───────────────────────────────────────────────────────────────

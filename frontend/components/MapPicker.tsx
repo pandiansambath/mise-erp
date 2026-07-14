@@ -109,23 +109,33 @@ export default function MapPicker({
       | null;
     if (!navigator.geolocation || !map) return;
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
+    // The FIRST fix is often wifi-coarse; keep watching up to 8s while the
+    // device refines, moving the pin as accuracy improves. Stop early at 25m.
+    let best = Number.POSITIVE_INFINITY;
+    const wid = navigator.geolocation.watchPosition(
       (pos) => {
-        setLocating(false);
         const { latitude, longitude, accuracy: acc } = pos.coords;
+        if (acc >= best) return; // only ever improve
+        best = acc;
         setAccuracy(Math.round(acc));
-        // honest uncertainty: the browser gives a RADIUS, we show it
         if (circleRef.current) circleRef.current.setLatLng([latitude, longitude]).setRadius(acc);
         else
           circleRef.current = L.circle([latitude, longitude], {
             radius: acc, color: "#38bdf8", weight: 1.5, fillOpacity: 0.12,
           }).addTo(map);
-        map.setView([latitude, longitude], acc > 300 ? 14 : 17);
+        map.setView([latitude, longitude], acc > 300 ? 14 : acc > 60 ? 16 : 18);
         map._misePlace?.(latitude, longitude);
+        if (acc <= 25) stop();
       },
-      () => setLocating(false),
-      { enableHighAccuracy: true, timeout: 10000 },
+      () => stop(),
+      { enableHighAccuracy: true, maximumAge: 0 },
     );
+    const timer = window.setTimeout(() => stop(), 8000);
+    function stop() {
+      navigator.geolocation.clearWatch(wid);
+      window.clearTimeout(timer);
+      setLocating(false);
+    }
   }
 
   function flipTiles() {

@@ -9,7 +9,7 @@
 // switches, and one-click import from priced recipes.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { API_BASE, api } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { dishPhoto } from "@/lib/dishPhoto";
@@ -41,6 +41,9 @@ type Order = {
   total: string;
   created_at: string | null;
   rider_name?: string | null;
+  payment_method?: string;
+  payment_status?: string;
+  has_proof?: boolean;
   items: OrderLine[];
 };
 type RiderRow = {
@@ -146,6 +149,26 @@ function OrderCard({ o, onMove, riders, onAssign }: {
             )}
             {o.note && <p className="sm:col-span-2">📝 “{o.note}”</p>}
             {o.rider_name && <p>🛵 rider: <b className="text-fg-soft">{o.rider_name}</b></p>}
+            <p>
+              {o.payment_status === "PAID"
+                ? <span className="font-semibold text-emerald-500">💳 paid ✓{o.payment_method === "COD" ? " (at door)" : ""}</span>
+                : <span className="text-amber-500">💵 collect {o.payment_method === "COD" ? "cash/card at handover" : "— awaiting online payment"}</span>}
+            </p>
+            {o.has_proof && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const r = await fetch(`${API_BASE}/api/ordering/orders/${o.id}/proof`, {
+                    headers: { Authorization: `Bearer ${localStorage.getItem("mise_token") ?? ""}` },
+                  });
+                  if (!r.ok) return;
+                  window.open(URL.createObjectURL(await r.blob()), "_blank");
+                }}
+                className="text-left font-semibold text-brand-400 underline-offset-2 hover:underline"
+              >
+                📸 view doorstep proof
+              </button>
+            )}
           </div>
           {/* READY delivery + no rider yet → assign one of the online riders */}
           {o.fulfilment === "DELIVERY" && o.status === "READY" && !o.rider_name && onAssign && (

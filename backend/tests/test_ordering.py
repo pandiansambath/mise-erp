@@ -169,3 +169,45 @@ async def test_busy_pause_blocks_orders_and_prep_is_public(client, make_user, au
               "items": [{"menu_item_id": dish["id"], "quantity": 1}]},
     )
     assert ok.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_autopilot_deducts_ingredients_on_completion(client, make_user, auth_header, db):
+    """ONE-STOP: a completed online order eats its recipe's ingredients out of
+    stock automatically (clamped, never blocking)."""
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from app.inventory.models import Item
+    from app.recipes.models import Recipe, RecipeIngredient
+
+    owner = await make_user("autopilot@x.com", Role.SUPER_ADMIN.value)
+    hdr = auth_header(owner)
+    hid = owner.hotel_id
+
+    chicken = Item(hotel_id=hid, name="Chicken", unit="kg", current_stock=Decimal("10"))
+    db.add(chicken)
+    recipe = Recipe(hotel_id=hid, name="Butter Chicken", selling_price=Decimal("12.50"))
+    db.add(recipe)
+    await db.flush()
+    db.add(RecipeIngredient(recipe_id=recipe.id, item_id=chicken.id, quantity=Decimal("0.5")))
+    await db.commit()
+    chicken_id, recipe_id = chicken.id, recipe.id
+
+    dish = await client.post(
+        "/api/ordering/menu", headers=hdr,
+        json={"name": "Butter Chicken", "price": "12.50", "recipe_id": str(recipe_id)},
+    )
+    placed = await client.post(
+        f"/api/public/order/{hid}",
+        json={"customer_name": "Ana", "phone": "07700", "fulfilment": "PICKUP",
+              "items": [{"menu_item_id": dish.json()["id"], "quantity": 4}]},
+    )
+    oid = placed.json()["id"]
+    for nxt in ["CONFIRMED", "PREPARING", "READY", "COMPLETED"]:
+        await client.patch(f"/api/ordering/orders/{oid}", headers=hdr, json={"status": nxt})
+
+    db.expire_all()
+    fresh = (await db.execute(select(Item).where(Item.id == chicken_id))).scalar_one()
+    assert fresh.current_stock == Decimal("8.000")  # 10 - 4×0.5
