@@ -92,6 +92,8 @@ class Order(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=OrderStatus.NEW.value, index=True
     )
+    # The rider carrying this delivery (assigned by the kitchen on READY).
+    rider_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("riders.id"))
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     delivery_fee: Mapped[Decimal] = mapped_column(
         Numeric(8, 2), nullable=False, default=Decimal("0")

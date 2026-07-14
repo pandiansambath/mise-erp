@@ -17,6 +17,10 @@ const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
   loading: () => <div className="mise-shimmer h-52 w-full rounded-xl border border-line" />,
 });
+const LiveMap = dynamic(() => import("@/components/LiveMap"), {
+  ssr: false,
+  loading: () => <div className="mise-shimmer h-60 w-full rounded-2xl border border-line" />,
+});
 
 type MenuItem = {
   id: string;
@@ -40,6 +44,9 @@ type Tracked = {
   status: string;
   fulfilment: string;
   total: string;
+  address_lat: string | null;
+  address_lng: string | null;
+  rider?: { name: string; lat: string | null; lng: string | null } | null;
   items: { name: string; quantity: number; line_total: string }[];
 };
 
@@ -165,7 +172,7 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
           </div>
         )}
         {tracked ? (
-          <TrackPanel t={tracked} cur={cur} onNewOrder={() => { setTracked(null); setCart({}); }} />
+          <TrackPanel t={tracked} cur={cur} dark={!THEMES[theme].light} onNewOrder={() => { setTracked(null); setCart({}); }} />
         ) : menu === null ? (
           <div className="space-y-3">
             {[0, 1, 2, 3].map((i) => (
@@ -422,7 +429,7 @@ function CheckoutSheet({
 }
 
 /* ── live tracking ── */
-function TrackPanel({ t, cur, onNewOrder }: { t: Tracked; cur: string; onNewOrder: () => void }) {
+function TrackPanel({ t, cur, dark, onNewOrder }: { t: Tracked; cur: string; dark: boolean; onNewOrder: () => void }) {
   const rejected = t.status === "REJECTED" || t.status === "CANCELLED";
   const idx = JOURNEY.indexOf(t.status);
   const steps = t.fulfilment === "PICKUP" ? JOURNEY.filter((s) => s !== "OUT_FOR_DELIVERY") : JOURNEY;
@@ -447,6 +454,18 @@ function TrackPanel({ t, cur, onNewOrder }: { t: Tracked; cur: string; onNewOrde
             <p className="mt-1 text-xs text-fg-faint">
               {t.fulfilment === "PICKUP" ? "quote it at the counter" : "the rider will quote it"} · {cur}{t.total}
             </p>
+            {t.status === "OUT_FOR_DELIVERY" && t.rider?.lat && t.rider?.lng && (
+              <div className="mt-5 text-left">
+                <LiveMap
+                  dark={dark}
+                  home={t.address_lat && t.address_lng ? { lat: parseFloat(t.address_lat), lng: parseFloat(t.address_lng) } : null}
+                  rider={{ lat: parseFloat(t.rider.lat), lng: parseFloat(t.rider.lng) }}
+                />
+                <p className="mt-1.5 text-center text-[11px] text-fg-faint">
+                  🛵 <b className="text-fg-soft">{t.rider.name}</b> is riding to you — live
+                </p>
+              </div>
+            )}
             <div className="mt-6 space-y-0 text-left">
               {steps.map((s, i) => {
                 const stepIdx = JOURNEY.indexOf(s);

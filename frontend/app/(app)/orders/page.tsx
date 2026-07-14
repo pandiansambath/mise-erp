@@ -40,7 +40,12 @@ type Order = {
   delivery_fee: string;
   total: string;
   created_at: string | null;
+  rider_name?: string | null;
   items: OrderLine[];
+};
+type RiderRow = {
+  id: string; name: string; phone: string;
+  is_active: boolean; online: boolean; last_seen: string | null;
 };
 type Vitals = { today_orders: number; today_revenue: string; live: number };
 
@@ -79,7 +84,12 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(m / 60)}h ${m % 60}m ago`;
 }
 
-function OrderCard({ o, onMove }: { o: Order; onMove: (id: string, status: string) => void }) {
+function OrderCard({ o, onMove, riders, onAssign }: {
+  o: Order;
+  onMove: (id: string, status: string) => void;
+  riders?: RiderRow[];
+  onAssign?: (orderId: string, riderId: string) => void;
+}) {
   const [open, setOpen] = useState(o.status === "NEW");
   const meta = STATUS_META[o.status] ?? STATUS_META.NEW;
   const nexts = FLOW[o.status] ?? [];
@@ -135,7 +145,30 @@ function OrderCard({ o, onMove }: { o: Order; onMove: (id: string, status: strin
               </p>
             )}
             {o.note && <p className="sm:col-span-2">📝 “{o.note}”</p>}
+            {o.rider_name && <p>🛵 rider: <b className="text-fg-soft">{o.rider_name}</b></p>}
           </div>
+          {/* READY delivery + no rider yet → assign one of the online riders */}
+          {o.fulfilment === "DELIVERY" && o.status === "READY" && !o.rider_name && onAssign && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-fg-soft">Assign rider:</span>
+              {(riders ?? []).filter((r) => r.is_active).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => onAssign(o.id, r.id)}
+                  className={`mise-press rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    r.online ? "bg-emerald-500/15 text-emerald-500" : "mise-raised text-fg-faint"
+                  }`}
+                  title={r.online ? "online now" : "offline — will see it when they sign in"}
+                >
+                  {r.online ? "🟢" : "⚪"} {r.name}
+                </button>
+              ))}
+              {(riders ?? []).filter((r) => r.is_active).length === 0 && (
+                <span className="text-xs text-fg-faint">no riders yet — add them in the Riders tab</span>
+              )}
+            </div>
+          )}
           {nexts.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {nexts.map((s) => (
@@ -327,6 +360,96 @@ function MenuRow({ m, onChanged }: { m: MenuItem; onChanged: () => void }) {
   );
 }
 
+/* ── riders manager ── */
+function RidersTab() {
+  const [riders, setRiders] = useState<RiderRow[] | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.get<RiderRow[]>("/ordering/riders").then(setRiders).catch(() => setRiders([]));
+  }, []);
+  useEffect(load, [load]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.post("/ordering/riders", { name, phone, pin });
+      setName(""); setPhone(""); setPin("");
+      load();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Could not add the rider");
+    } finally { setBusy(false); }
+  }
+
+  const inputCls = "mise-well rounded-lg px-3 py-2 text-sm text-fg outline-none";
+  return (
+    <div className="space-y-5">
+      <Card className="mise-feel">
+        <h3 className="font-semibold text-fg">Add a rider</h3>
+        <p className="mt-1 text-sm text-fg-faint">
+          They sign in at <b className="text-fg-soft">milagurestaurant.com/rider</b> with this
+          phone + PIN — no email, no app install. Their location streams to customers only
+          while they carry an order.
+        </p>
+        <form onSubmit={add} className="mt-3 grid gap-2 sm:grid-cols-[1fr_150px_100px_auto]">
+          <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} placeholder="Rider name" aria-label="Rider name" className={inputCls} />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="Phone" aria-label="Phone" inputMode="tel" className={inputCls} />
+          <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} required minLength={4} placeholder="PIN" aria-label="PIN" className={`${inputCls} text-center font-mono`} />
+          <button type="submit" disabled={busy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">Add</button>
+        </form>
+        {err && <p className="mt-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{err}</p>}
+      </Card>
+      {riders === null ? (
+        <div className="mise-shimmer h-24 rounded-2xl border border-line bg-paper" />
+      ) : riders.length === 0 ? (
+        <Card className="mise-feel text-center">
+          <p className="text-3xl" aria-hidden>🛵</p>
+          <p className="mt-2 font-semibold text-fg">No riders yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-fg-faint">Add your delivery staff above — each gets a phone+PIN login for the rider page.</p>
+        </Card>
+      ) : (
+        <Card className="mise-feel">
+          <h3 className="font-semibold text-fg">Your riders</h3>
+          <div className="mt-2 divide-y divide-line">
+            {riders.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                <span aria-hidden>{r.online ? "🟢" : "⚪"}</span>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-medium ${r.is_active ? "text-fg" : "text-fg-faint line-through"}`}>{r.name}</p>
+                  <p className="text-xs text-fg-faint">📞 {r.phone}{r.last_seen ? ` · seen ${new Date(r.last_seen).toLocaleTimeString()}` : ""}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => api.patch(`/ordering/riders/${r.id}`, { is_active: !r.is_active }).then(load).catch(() => {})}
+                  className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft"
+                >
+                  {r.is_active ? "Disable" : "Enable"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = window.prompt(`New PIN for ${r.name} (4-8 digits):`);
+                    if (p && /^\d{4,8}$/.test(p)) api.patch(`/ordering/riders/${r.id}`, { pin: p }).then(load).catch(() => {});
+                  }}
+                  className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft"
+                >
+                  🔑 PIN
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 /* ── the new-order chime: two bright notes from a bare oscillator (no audio
       file needed). The AudioContext is created on the toggle CLICK — browsers
       only allow sound after a user gesture. ── */
@@ -351,10 +474,11 @@ function chime() {
 /* ── the page ── */
 export default function OrdersPage() {
   const { hotel } = useAuth();
-  const [tab, setTab] = useState<"board" | "menu">("board");
+  const [tab, setTab] = useState<"board" | "menu" | "riders">("board");
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [vitals, setVitals] = useState<Vitals | null>(null);
   const [copied, setCopied] = useState(false);
+  const [riders, setRiders] = useState<RiderRow[]>([]);
   const [soundOn, setSoundOn] = useState(false);
   const [prep, setPrep] = useState("20");
   const [paused, setPaused] = useState(false);
@@ -364,6 +488,7 @@ export default function OrdersPage() {
   useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
 
   useEffect(() => {
+    api.get<RiderRow[]>("/ordering/riders").then(setRiders).catch(() => {});
     api
       .get<{ prep_minutes: number; ordering_paused: boolean }>("/ordering/settings")
       .then((s) => { setPrep(String(s.prep_minutes)); setPaused(s.ordering_paused); })
@@ -400,6 +525,11 @@ export default function OrdersPage() {
     timer.current = window.setInterval(load, 8000); // the board breathes on its own
     return () => { if (timer.current) window.clearInterval(timer.current); };
   }, [load]);
+
+  async function assign(orderId: string, riderId: string) {
+    await api.post(`/ordering/orders/${orderId}/assign`, { rider_id: riderId }).catch(() => {});
+    load();
+  }
 
   async function move(id: string, status: string) {
     // optimistic: the card jumps immediately, the poll settles the truth
@@ -529,6 +659,7 @@ export default function OrdersPage() {
           [
             ["board", `🔥 Live board${vitals?.live ? ` · ${vitals.live}` : ""}`],
             ["menu", "🍽️ Menu"],
+            ["riders", "🛵 Riders"],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -546,6 +677,8 @@ export default function OrdersPage() {
 
       {tab === "menu" ? (
         <MenuTab />
+      ) : tab === "riders" ? (
+        <RidersTab />
       ) : orders === null ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
@@ -564,7 +697,7 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-3">
           {live.map((o) => (
-            <OrderCard key={o.id} o={o} onMove={move} />
+            <OrderCard key={o.id} o={o} onMove={move} riders={riders} onAssign={assign} />
           ))}
           {done.length > 0 && (
             <details className="pt-2">

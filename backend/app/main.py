@@ -21,6 +21,7 @@ from app.inventory.router import router as inventory_router
 from app.jobs.router import public_router as jobs_public_router
 from app.jobs.router import router as jobs_router
 from app.notifications.router import router as notifications_router
+from app.ordering.rider_router import rider_router
 from app.ordering.router import public_router as ordering_public_router
 from app.ordering.router import router as ordering_router
 from app.party.router import router as party_router
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(billing_router, prefix="/api")
     app.include_router(ordering_router, prefix="/api")
     app.include_router(ordering_public_router, prefix="/api")
+    app.include_router(rider_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
     app.include_router(inventory_router, prefix="/api")
     app.include_router(vendors_router, prefix="/api")

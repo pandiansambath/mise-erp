@@ -23,6 +23,7 @@ const PLANS = [
       "Inventory, recipes & live per-gram costing",
       "Vendors & purchasing — consolidated POs",
       "Sales, expenses & a real-time P&L",
+      "Online ordering page (pickup)",
       "Up to 3 users",
       "Email support",
     ],
@@ -36,6 +37,7 @@ const PLANS = [
     cta: "Start free",
     features: [
       "Everything in Starter",
+      "Delivery & live rider tracking",
       "AI Copilot + bill & handwritten-recipe scanning",
       "Payroll, rota & attendance",
       "Documents, food safety & price comparison",

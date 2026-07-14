@@ -21,6 +21,8 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.hotels.models import Hotel
 from app.ordering.models import ORDER_FLOW, MenuItem, Order, OrderItem, OrderStatus
+from app.ordering.rider_models import Rider
+from app.ordering.rider_router import build_management_endpoints
 
 log = logging.getLogger("mise.ordering")
 router = APIRouter(prefix="/ordering", tags=["ordering"])
@@ -78,9 +80,10 @@ class PublicOrderIn(BaseModel):
     items: list[PublicOrderLine] = Field(min_length=1, max_length=50)
 
 
-def _order_out(o: Order) -> dict:
+def _order_out(o: Order, rider_name: str | None = None) -> dict:
     return {
         "id": str(o.id),
+        "rider_name": rider_name,
         "code": o.code,
         "status": o.status,
         "fulfilment": o.fulfilment,
@@ -305,7 +308,19 @@ async def list_orders(
             )
         ).scalar_one(),
     }
-    return {"orders": [_order_out(o) for o in rows], "vitals": vitals}
+    rider_ids = {o.rider_id for o in rows if o.rider_id}
+    names: dict = {}
+    if rider_ids:
+        names = {
+            r.id: r.name
+            for r in (
+                await db.execute(select(Rider).where(Rider.id.in_(rider_ids)))
+            ).scalars().all()
+        }
+    return {
+        "orders": [_order_out(o, names.get(o.rider_id)) for o in rows],
+        "vitals": vitals,
+    }
 
 
 class OrderPatch(BaseModel):
@@ -546,4 +561,19 @@ async def track_order(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -
     order = await db.get(Order, order_id)
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
-    return _order_out(order)
+    out = _order_out(order)
+    # The live map: while the rider is rolling, ship their latest beacon.
+    if order.rider_id and order.status == OrderStatus.OUT_FOR_DELIVERY.value:
+        rider = await db.get(Rider, order.rider_id)
+        if rider:
+            out["rider"] = {
+                "name": rider.name,
+                "lat": str(rider.last_lat) if rider.last_lat is not None else None,
+                "lng": str(rider.last_lng) if rider.last_lng is not None else None,
+                "seen": rider.last_seen.isoformat() if rider.last_seen else None,
+            }
+    return out
+
+
+# hotel-side rider management + assignment endpoints (defined in rider_router)
+build_management_endpoints(router, require)
