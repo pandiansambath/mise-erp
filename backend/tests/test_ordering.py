@@ -18,7 +18,7 @@ async def _menu_item(client, hdr, name="Butter Chicken", price="12.50", **extra)
 
 
 @pytest.mark.asyncio
-async def test_full_order_lifecycle(client, make_user, auth_header, monkeypatch):
+async def test_full_order_lifecycle(client, make_user, auth_header, monkeypatch, db):
     sent: list[tuple[str, str]] = []
 
     async def fake_send(to, subject, text, html=None):
@@ -86,6 +86,26 @@ async def test_full_order_lifecycle(client, make_user, auth_header, monkeypatch)
     # the customer tracked it publicly the whole time
     track = await client.get(f"/api/public/order/track/{oid}")
     assert track.status_code == 200 and track.json()["status"] == "COMPLETED"
+
+    # ONE-STOP: the completed order booked itself into the money engine
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from app.sales.models import SalesChannel, SalesLine
+
+    db.expire_all()
+    channel = (
+        await db.execute(
+            select(SalesChannel).where(
+                SalesChannel.hotel_id == owner.hotel_id, SalesChannel.name == "Online Orders"
+            )
+        )
+    ).scalar_one()
+    line = (
+        await db.execute(select(SalesLine).where(SalesLine.channel_id == channel.id))
+    ).scalar_one()
+    assert line.gross_amount == Decimal("28.20")
 
 
 @pytest.mark.asyncio

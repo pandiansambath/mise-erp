@@ -10,6 +10,7 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
 import { ThemeSwitcher } from "@/components/AppShell";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
+import { dishPhoto } from "@/lib/dishPhoto";
 
 // Leaflet touches `window` at import time — load it only in the browser.
 const MapPicker = dynamic(() => import("@/components/MapPicker"), {
@@ -80,13 +81,14 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
   // A placed order keeps polling so the customer watches it move.
   useEffect(() => {
     if (!tracked) return;
+    let closed = false; // a late response must NOT resurrect a closed panel
     const t = window.setInterval(() => {
       fetch(`${API_BASE}/api/public/order/track/${tracked.id}`)
         .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then(setTracked)
+        .then((d) => { if (!closed) setTracked(d); })
         .catch(() => {});
     }, 6000);
-    return () => window.clearInterval(t);
+    return () => { closed = true; window.clearInterval(t); };
   }, [tracked?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cur = SYMBOL[hotel?.currency ?? "GBP"] ?? "£";
@@ -184,8 +186,18 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
                 {items.map((m) => {
                   const qty = cart[m.id] ?? 0;
                   return (
-                    <div key={m.id} className={`mise-feel flex items-center gap-3 rounded-2xl border p-3.5 transition ${qty ? "border-brand-400/50 bg-brand-500/5" : "border-line bg-paper"}`}>
-                      <span className="text-2xl" aria-hidden>{m.emoji || "🍽️"}</span>
+                    <div key={m.id} className={`mise-feel flex items-center gap-3 rounded-2xl border p-3 transition ${qty ? "border-brand-400/50 bg-brand-500/5" : "border-line bg-paper"}`}>
+                      {dishPhoto(m.name) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={dishPhoto(m.name)!}
+                          alt={m.name}
+                          loading="lazy"
+                          className="h-[72px] w-[72px] shrink-0 rounded-xl object-cover shadow-md"
+                        />
+                      ) : (
+                        <span className="grid h-[72px] w-[72px] shrink-0 place-items-center rounded-xl bg-glass/10 text-3xl" aria-hidden>{m.emoji || "🍽️"}</span>
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-fg">{m.name}</p>
                         {m.description && (
@@ -239,6 +251,7 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
         <CheckoutSheet
           hotel={hotel}
           menu={menu}
+          dark={!THEMES[theme].light}
           cart={cart}
           cur={cur}
           total={total}
@@ -252,9 +265,10 @@ export default function PublicOrderPage({ params }: { params: Promise<{ hotelId:
 
 /* ── checkout ── */
 function CheckoutSheet({
-  hotel, menu, cart, cur, total, onClose, onPlaced,
+  hotel, menu, cart, cur, total, dark, onClose, onPlaced,
 }: {
   hotel: HotelInfo;
+  dark: boolean;
   menu: MenuItem[];
   cart: Record<string, number>;
   cur: string;
@@ -262,8 +276,9 @@ function CheckoutSheet({
   onClose: () => void;
   onPlaced: (t: Tracked) => void;
 }) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  // returning customers: their details are waiting (saved locally on order)
+  const [name, setName] = useState(() => localStorage.getItem("mise_cust_name") ?? "");
+  const [phone, setPhone] = useState(() => localStorage.getItem("mise_cust_phone") ?? "");
   const [fulfilment, setFulfilment] = useState<"PICKUP" | "DELIVERY">("PICKUP");
   const [address, setAddress] = useState("");
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
@@ -294,6 +309,10 @@ function CheckoutSheet({
       });
       const body = await r.json().catch(() => null);
       if (!r.ok) throw new Error(body?.detail ?? "Could not place the order");
+      try {
+        localStorage.setItem("mise_cust_name", name);
+        localStorage.setItem("mise_cust_phone", phone);
+      } catch { /* private mode */ }
       const track = await fetch(`${API_BASE}/api/public/order/track/${body.id}`);
       onPlaced(await track.json());
     } catch (err) {
@@ -359,15 +378,31 @@ function CheckoutSheet({
                 className={`${inputCls} resize-none`}
               />
               {/* the pin makes the typed address PRECISE — riders love it */}
-              <MapPicker onPick={(lat, lng) => setPin({ lat, lng })} />
+              <MapPicker
+                dark={dark}
+                onPick={(lat, lng) => setPin({ lat, lng })}
+                onAddress={(a) => setAddress(a)}
+              />
             </>
           )}
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note to the kitchen (allergies, spice level…)" aria-label="Note" className={inputCls} />
 
           {error && <p className="rounded-xl bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-400">{error}</p>}
-          <p className="text-[11px] leading-relaxed text-fg-faint">
-            💳 Pay at the counter / on delivery for now — online payment is coming soon.
-          </p>
+
+          {/* trust row — why it's safe to order here */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              ["💵", "Cash on delivery", "or card at the counter"],
+              ["📞", "Kitchen confirms", "they call if anything's up"],
+              ["🔒", "Details stay private", "only this kitchen sees them"],
+            ].map(([e, t, d]) => (
+              <div key={t} className="mise-well rounded-xl px-2 py-2.5">
+                <p className="text-base" aria-hidden>{e}</p>
+                <p className="mt-0.5 text-[11px] font-semibold leading-tight text-fg">{t}</p>
+                <p className="text-[10px] leading-tight text-fg-faint">{d}</p>
+              </div>
+            ))}
+          </div>
           <div className="flex gap-3 pb-1">
             <button
               type="submit"

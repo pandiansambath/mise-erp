@@ -4,6 +4,7 @@
 `public_router` — the customer side (NO auth): browse a hotel's menu, place an
                   order (prices come from OUR db, never the client), track it.
 """
+import logging
 import secrets
 import uuid
 from decimal import Decimal
@@ -21,6 +22,7 @@ from app.core.database import get_db
 from app.hotels.models import Hotel
 from app.ordering.models import ORDER_FLOW, MenuItem, Order, OrderItem, OrderStatus
 
+log = logging.getLogger("mise.ordering")
 router = APIRouter(prefix="/ordering", tags=["ordering"])
 public_router = APIRouter(prefix="/public/order", tags=["ordering-public"])
 
@@ -332,7 +334,87 @@ async def move_order(
         )
     order.status = payload.status
     await db.commit()
+    if payload.status == OrderStatus.COMPLETED.value:
+        await _record_sale(db, order)
     return _order_out(order)
+
+
+async def _record_sale(db: AsyncSession, order: Order) -> None:
+    """One-stop magic: a COMPLETED online order books itself into the money
+    engine — the 'Online Orders' sales channel gets a line (feeds Sales & Cash,
+    Money and the P&L), and recipe-linked items bump DishSale so menu
+    engineering learns what actually sells. Best-effort: never blocks the flow."""
+    from datetime import UTC, datetime
+
+    from app.sales.models import DailySales, DishSale, SalesChannel, SalesLine
+
+    try:
+        today = datetime.now(UTC).date()
+        channel = (
+            await db.execute(
+                select(SalesChannel).where(
+                    SalesChannel.hotel_id == order.hotel_id,
+                    SalesChannel.name == "Online Orders",
+                )
+            )
+        ).scalar_one_or_none()
+        if channel is None:
+            channel = SalesChannel(hotel_id=order.hotel_id, name="Online Orders")
+            db.add(channel)
+            await db.flush()
+        day = (
+            await db.execute(
+                select(DailySales).where(
+                    DailySales.hotel_id == order.hotel_id, DailySales.date == today
+                )
+            )
+        ).scalar_one_or_none()
+        if day is None:
+            day = DailySales(hotel_id=order.hotel_id, date=today)
+            db.add(day)
+            await db.flush()
+        db.add(
+            SalesLine(
+                daily_sales_id=day.id,
+                channel_id=channel.id,
+                gross_amount=order.total,
+                payment_method="CASH",  # pay-at-counter/delivery for now
+                notes=f"Online order {order.code}",
+            )
+        )
+        # recipe-linked lines feed menu engineering (popularity × margin)
+        menu_ids = [i.menu_item_id for i in order.items if i.menu_item_id]
+        if menu_ids:
+            rows = (
+                await db.execute(select(MenuItem).where(MenuItem.id.in_(menu_ids)))
+            ).scalars().all()
+            recipe_by_menu = {m.id: m.recipe_id for m in rows if m.recipe_id}
+            for line in order.items:
+                rid = recipe_by_menu.get(line.menu_item_id)
+                if not rid:
+                    continue
+                ds = (
+                    await db.execute(
+                        select(DishSale).where(
+                            DishSale.hotel_id == order.hotel_id,
+                            DishSale.recipe_id == rid,
+                            DishSale.date == today,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if ds is None:
+                    db.add(
+                        DishSale(
+                            hotel_id=order.hotel_id, recipe_id=rid,
+                            date=today, qty_sold=line.quantity,
+                        )
+                    )
+                else:
+                    ds.qty_sold += line.quantity
+        await db.commit()
+    except Exception:  # noqa: BLE001 — booking the sale must never break the board
+        log.exception("online order -> sales bridge failed for %s", order.code)
+        await db.rollback()
 
 
 # ── public side ───────────────────────────────────────────────────────────────

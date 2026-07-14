@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { dishPhoto } from "@/lib/dishPhoto";
 
 type MenuItem = {
   id: string;
@@ -282,7 +283,12 @@ function MenuRow({ m, onChanged }: { m: MenuItem; onChanged: () => void }) {
 
   return (
     <div className="flex flex-wrap items-center gap-3 py-2.5">
-      <span className="text-lg" aria-hidden>{m.emoji || "🍽️"}</span>
+      {dishPhoto(m.name) ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={dishPhoto(m.name)!} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <span className="text-lg" aria-hidden>{m.emoji || "🍽️"}</span>
+      )}
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium ${avail ? "text-fg" : "text-fg-faint line-through"}`}>
           {m.name} {m.recipe_id && <span title="Linked to a costed recipe">🧾</span>}
