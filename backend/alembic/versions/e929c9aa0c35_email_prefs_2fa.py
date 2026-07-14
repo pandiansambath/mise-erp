@@ -1,6 +1,6 @@
 """Email-alert preferences + email-OTP two-step sign-in.
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: e929c9aa0c35
 Revises: f9d0e1f2a3b4
 Create Date: 2026-07-14
 """
@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "a1b2c3d4e5f6"
+revision: str = "e929c9aa0c35"
 down_revision: str | None = "f9d0e1f2a3b4"
 branch_labels = None
 depends_on = None
