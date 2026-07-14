@@ -191,7 +191,11 @@ async def test_autopilot_deducts_ingredients_on_completion(client, make_user, au
     recipe = Recipe(hotel_id=hid, name="Butter Chicken", selling_price=Decimal("12.50"))
     db.add(recipe)
     await db.flush()
-    db.add(RecipeIngredient(recipe_id=recipe.id, item_id=chicken.id, quantity=Decimal("0.5")))
+    db.add(
+        RecipeIngredient(
+            recipe_id=recipe.id, item_id=chicken.id, quantity=Decimal("0.5"), unit="kg"
+        )
+    )
     await db.commit()
     chicken_id, recipe_id = chicken.id, recipe.id
 
