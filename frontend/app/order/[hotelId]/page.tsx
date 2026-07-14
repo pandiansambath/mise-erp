@@ -5,11 +5,17 @@
 // leave a name + phone, and watch the order move through the kitchen live.
 // Theme-aware like /careers (dark premium by default, switcher in the header).
 
+import dynamic from "next/dynamic";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
-import { Brand } from "@/components/Brand";
 import { ThemeSwitcher } from "@/components/AppShell";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
+
+// Leaflet touches `window` at import time — load it only in the browser.
+const MapPicker = dynamic(() => import("@/components/MapPicker"), {
+  ssr: false,
+  loading: () => <div className="mise-shimmer h-52 w-full rounded-xl border border-line" />,
+});
 
 type MenuItem = {
   id: string;
@@ -241,6 +247,7 @@ function CheckoutSheet({
   const [phone, setPhone] = useState("");
   const [fulfilment, setFulfilment] = useState<"PICKUP" | "DELIVERY">("PICKUP");
   const [address, setAddress] = useState("");
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -260,6 +267,8 @@ function CheckoutSheet({
           phone,
           fulfilment,
           address_text: fulfilment === "DELIVERY" ? address : undefined,
+          address_lat: fulfilment === "DELIVERY" && pin ? pin.lat.toFixed(6) : undefined,
+          address_lng: fulfilment === "DELIVERY" && pin ? pin.lng.toFixed(6) : undefined,
           note: note || undefined,
           items: lines.map((m) => ({ menu_item_id: m.id, quantity: cart[m.id] })),
         }),
@@ -320,15 +329,19 @@ function CheckoutSheet({
           <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} placeholder="Your name *" aria-label="Your name" className={inputCls} />
           <input value={phone} onChange={(e) => setPhone(e.target.value)} required minLength={5} inputMode="tel" placeholder="Phone (the kitchen may call) *" aria-label="Phone" className={inputCls} />
           {fulfilment === "DELIVERY" && (
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              required
-              rows={2}
-              placeholder="Delivery address — street, door, postcode *"
-              aria-label="Delivery address"
-              className={`${inputCls} resize-none`}
-            />
+            <>
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                required
+                rows={2}
+                placeholder="Delivery address — street, door, postcode *"
+                aria-label="Delivery address"
+                className={`${inputCls} resize-none`}
+              />
+              {/* the pin makes the typed address PRECISE — riders love it */}
+              <MapPicker onPick={(lat, lng) => setPin({ lat, lng })} />
+            </>
           )}
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note to the kitchen (allergies, spice level…)" aria-label="Note" className={inputCls} />
 

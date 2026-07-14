@@ -32,6 +32,8 @@ type Order = {
   customer_name: string;
   phone: string;
   address_text: string | null;
+  address_lat: string | null;
+  address_lng: string | null;
   note: string | null;
   subtotal: string;
   delivery_fee: string;
@@ -116,7 +118,21 @@ function OrderCard({ o, onMove }: { o: Order; onMove: (id: string, status: strin
           </ul>
           <div className="mt-2 grid gap-1 text-xs text-fg-faint sm:grid-cols-2">
             <p>📞 {o.phone}</p>
-            {o.address_text && <p>📍 {o.address_text}</p>}
+            {o.address_text && (
+              <p>
+                📍 {o.address_text}
+                {o.address_lat && o.address_lng && (
+                  <a
+                    href={`https://maps.google.com/?q=${o.address_lat},${o.address_lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-1.5 font-semibold text-brand-400 underline-offset-2 hover:underline"
+                  >
+                    open map ↗
+                  </a>
+                )}
+              </p>
+            )}
             {o.note && <p className="sm:col-span-2">📝 “{o.note}”</p>}
           </div>
           {nexts.length > 0 && (

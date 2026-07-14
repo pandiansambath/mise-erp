@@ -85,6 +85,8 @@ def _order_out(o: Order) -> dict:
         "customer_name": o.customer_name,
         "phone": o.phone,
         "address_text": o.address_text,
+        "address_lat": str(o.address_lat) if o.address_lat is not None else None,
+        "address_lng": str(o.address_lng) if o.address_lng is not None else None,
         "note": o.note,
         "subtotal": str(o.subtotal),
         "delivery_fee": str(o.delivery_fee),
