@@ -13,6 +13,10 @@ type Activity = {
   route: string; at: string; who: string;
 };
 type Feed = { alerts: Alert[]; activity: Activity[]; count: number };
+type ChatUnread = {
+  chat_id: string; other_hotel: string; last_message: string | null;
+  last_message_at: string | null; unread: number;
+};
 
 const SEEN_KEY = "mise.notif.seen";
 
@@ -50,6 +54,7 @@ export default function NotificationBell() {
   const [feed, setFeed] = useState<Feed>({ alerts: [], activity: [], count: 0 });
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState<Set<string>>(new Set());
+  const [chats, setChats] = useState<ChatUnread[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
@@ -58,6 +63,12 @@ export default function NotificationBell() {
       setFeed({ alerts: res.alerts || [], activity: res.activity || [], count: res.count || 0 });
     } catch {
       /* header must never break — ignore transient errors */
+    }
+    try {
+      const cs = await api.get<ChatUnread[]>("/talent/chats");
+      setChats(cs.filter((c) => c.unread > 0));
+    } catch {
+      /* chat is optional — never break the bell */
     }
   }, []);
 
@@ -82,7 +93,8 @@ export default function NotificationBell() {
   }, [open]);
 
   const all = [...feed.alerts, ...feed.activity];
-  const unseen = all.filter((i) => !seen.has(i.id)).length;
+  const chatUnread = chats.reduce((t, c) => t + c.unread, 0);
+  const unseen = all.filter((i) => !seen.has(i.id)).length + chatUnread;
 
   function toggle() {
     const next = !open;
@@ -148,8 +160,36 @@ export default function NotificationBell() {
           </div>
 
           <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
-            {all.length === 0 && (
+            {all.length === 0 && chats.length === 0 && (
               <p className="px-4 py-8 text-center text-sm text-fg-faint">You&apos;re all caught up 🎉</p>
+            )}
+
+            {/* 💬 Unread messages — grouped by hotel */}
+            {chats.length > 0 && (
+              <>
+                <p className="sticky top-0 bg-shell/95 px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-brand-300/80 backdrop-blur">
+                  💬 Messages · {chatUnread} new
+                </p>
+                {chats.map((c) => (
+                  <button
+                    key={c.chat_id}
+                    type="button"
+                    onClick={() => { setOpen(false); router.push(`/messages?chat=${c.chat_id}`); }}
+                    className="flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-glass/5"
+                  >
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-[11px] font-bold text-white">
+                      {c.other_hotel.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-fg">{c.other_hotel}</span>
+                        <span className="grid h-4 min-w-4 shrink-0 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white">{c.unread}</span>
+                      </span>
+                      <span className="truncate text-xs text-fg-faint">{c.last_message ?? "new message"}</span>
+                    </span>
+                  </button>
+                ))}
+              </>
             )}
 
             {/* Needs attention */}

@@ -1357,3 +1357,11 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   .mise-tilt-card { transition: none; }
   .mise-tilt-card .mise-spotlight { display: none; }
 }
+
+/* Subtle chat backdrop — faint dotted texture so the message thread reads as a
+   proper conversation surface, in both themes. */
+.mise-chat-bg {
+  background-color: color-mix(in srgb, var(--color-shell) 60%, transparent);
+  background-image: radial-gradient(color-mix(in srgb, var(--color-fg) 5%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
+}

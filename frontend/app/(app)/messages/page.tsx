@@ -191,14 +191,17 @@ function MessagesInner() {
         <div className={`flex flex-col ${openId ? "flex" : "hidden sm:flex"}`}>
           {openId ? (
             <>
-              <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-                <button type="button" onClick={() => setOpenId(null)} className="sm:hidden text-fg-faint">←</button>
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs font-bold text-white">
+              <div className="flex items-center gap-3 border-b border-line bg-gradient-to-r from-brand-500/10 to-transparent px-4 py-3">
+                <button type="button" onClick={() => setOpenId(null)} className="mise-press sm:hidden text-lg text-fg-faint">←</button>
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs font-bold text-white shadow-lg shadow-brand-500/20">
                   {monogram(openName)}
                 </span>
-                <p className="text-sm font-semibold text-fg">{openName}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-fg">{openName}</p>
+                  <p className="text-[10px] text-fg-faint">🔒 messages saved &amp; private to your two hotels</p>
+                </div>
               </div>
-              <div ref={threadRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto bg-shell/40 px-4 py-4">
+              <div ref={threadRef} className="mise-chat-bg min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-4">
                 {msgs.map((m) => {
                   const showDay = dayBreaks.has(m.id);
                   return (
@@ -207,7 +210,7 @@ function MessagesInner() {
                         <p className="my-3 text-center text-[10px] font-semibold uppercase tracking-wide text-fg-faint">{dayLabel(m.created_at)}</p>
                       )}
                       <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${m.mine ? "rounded-br-sm bg-brand-600 text-white" : "mise-well rounded-bl-sm text-fg"}`}>
+                        <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${m.mine ? "rounded-br-sm bg-gradient-to-br from-brand-600 to-brand-500 text-white shadow-brand-500/20" : "mise-well rounded-bl-sm text-fg"}`}>
                           {!m.mine && <p className="mb-0.5 text-[10px] font-semibold text-brand-400">{m.sender_name}</p>}
                           <p className="whitespace-pre-wrap break-words">{m.body}</p>
                           <p className={`mt-0.5 text-right text-[9px] ${m.mine ? "text-white/70" : "text-fg-faint"}`}>{timeShort(m.created_at)}</p>
