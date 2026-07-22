@@ -111,27 +111,44 @@ def generate_timesheet_xlsx(rows: list[dict], hotel, day) -> bytes:
 
 
 def generate_range_xlsx(rows: list[dict], hotel, date_from, date_to) -> bytes:
-    """Any-range export: one row per person per day, plus a per-person totals tab."""
+    """Any-range export: one row per person per day, plus a per-person totals tab.
+
+    style_table owns the title/header rows (data starts at row 4), so we write
+    cells from r=4 down — matching generate_timesheet_xlsx."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Attendance"
-    ws.append(["Date", "Employee", "Status", "In", "Out", "Break (min)", "Hours"])
     totals: dict[str, dict] = {}
-    for r in rows:
-        ws.append([
-            str(r.get("date", "")), r.get("employee_name", ""), r.get("status", ""),
-            _hm(r.get("clock_in")), _hm(r.get("clock_out")),
-            r.get("break_minutes") or 0, float(r.get("working_hours") or 0),
-        ])
-        t = totals.setdefault(r.get("employee_name", "?"), {"days": 0, "hours": 0.0})
+    r = 4
+    for row in rows:
+        ws.cell(row=r, column=1, value=str(row.get("date", "")))
+        ws.cell(row=r, column=2, value=row.get("employee_name", ""))
+        ws.cell(row=r, column=3, value=row.get("status", ""))
+        ws.cell(row=r, column=4, value=_hm(row.get("clock_in")))
+        ws.cell(row=r, column=5, value=_hm(row.get("clock_out")))
+        ws.cell(row=r, column=6, value=row.get("break_minutes") or 0)
+        ws.cell(row=r, column=7, value=float(row.get("working_hours") or 0))
+        t = totals.setdefault(row.get("employee_name", "?"), {"days": 0, "hours": 0.0})
         t["days"] += 1
-        t["hours"] += float(r.get("working_hours") or 0)
-    style_table(ws)
+        t["hours"] += float(row.get("working_hours") or 0)
+        r += 1
+    style_table(
+        ws, title=f"{hotel.name} — Attendance", subtitle=f"{date_from} to {date_to}",
+        headers=["Date", "Employee", "Status", "In", "Out", "Break (min)", "Hours"],
+        n_rows=len(rows), widths=[13, 24, 12, 10, 10, 12, 10], right_cols={6, 7},
+    )
     ws2 = wb.create_sheet("Totals by person")
-    ws2.append(["Employee", "Recorded days", "Total hours"])
+    r2 = 4
     for name, t in sorted(totals.items()):
-        ws2.append([name, t["days"], round(t["hours"], 2)])
-    style_table(ws2)
+        ws2.cell(row=r2, column=1, value=name)
+        ws2.cell(row=r2, column=2, value=t["days"])
+        ws2.cell(row=r2, column=3, value=round(t["hours"], 2))
+        r2 += 1
+    style_table(
+        ws2, title="Totals by person", subtitle=f"{date_from} to {date_to}",
+        headers=["Employee", "Recorded days", "Total hours"],
+        n_rows=len(totals), widths=[28, 16, 14], right_cols={2, 3},
+    )
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
