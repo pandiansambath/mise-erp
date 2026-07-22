@@ -451,28 +451,97 @@ function LendStaffSection({ canWrite }: { canWrite: boolean }) {
       )}
 
       {posts && posts.length > 0 && (
-        <div className="mt-4 divide-y divide-line">
-          {posts.map((p) => (
-            <div key={p.id} className="flex flex-wrap items-center gap-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className={`text-sm font-medium ${p.status === "OPEN" ? "text-fg" : "text-fg-faint line-through"}`}>
-                  {p.worker_name} <span className="text-fg-faint">· {p.role_title}</span>
-                </p>
-                {p.blurb && <p className="truncate text-xs text-fg-faint">{p.blurb}</p>}
-              </div>
-              {p.day_rate && <span className="font-mono text-xs text-copper-300">£{p.day_rate}/day</span>}
-              {canWrite && (
-                <>
-                  <button type="button" onClick={() => api.patch(`/talent/posts/${p.id}`, {}).then(load)} className="mise-raised mise-press rounded-lg px-2.5 py-1.5 text-xs text-fg-soft">
-                    {p.status === "OPEN" ? "Close" : "Reopen"}
-                  </button>
-                  <button type="button" onClick={() => api.delete(`/talent/posts/${p.id}`).then(load)} className="mise-press rounded-lg px-2 py-1.5 text-xs text-fg-faint hover:text-rose-400">✕</button>
-                </>
-              )}
-            </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {posts.map((p, i) => (
+            <PostCard key={p.id} p={p} hue={LEND_HUES[i % LEND_HUES.length]} canWrite={canWrite} onChanged={load} />
           ))}
         </div>
       )}
     </Card>
+  );
+}
+
+const LEND_HUES = ["#10b981", "#38bdf8", "#f59e0b", "#a78bfa", "#f43f5e", "#22d3ee"];
+const lendMono = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
+
+function PostCard({ p, hue, canWrite, onChanged }: {
+  p: StaffPost; hue: string; canWrite: boolean; onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [f, setF] = useState({
+    worker_name: p.worker_name, role_title: p.role_title,
+    blurb: p.blurb ?? "", skills: p.skills ?? "", day_rate: p.day_rate ?? "",
+  });
+  const open = p.status === "OPEN";
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api.patch(`/talent/posts/${p.id}`, { ...f, day_rate: f.day_rate || null });
+      setEditing(false);
+      onChanged(); // board reflects the edit on its next load
+    } finally { setBusy(false); }
+  }
+
+  const inp = "mise-well w-full rounded-lg px-2.5 py-1.5 text-sm text-fg outline-none";
+
+  return (
+    <div
+      className={`mise-feel group relative overflow-hidden rounded-2xl border p-4 transition ${open ? "" : "opacity-60"}`}
+      style={{ background: `radial-gradient(120% 80% at 12% 0%, ${hue}14, transparent 60%)`, borderColor: `${hue}33` }}
+    >
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]" style={{ background: `linear-gradient(90deg, transparent, ${hue}, transparent)` }} />
+      {editing ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input value={f.worker_name} onChange={(e) => setF({ ...f, worker_name: e.target.value })} placeholder="Name" className={inp} />
+            <input value={f.role_title} onChange={(e) => setF({ ...f, role_title: e.target.value })} placeholder="Role" className={inp} />
+          </div>
+          <input value={f.skills} onChange={(e) => setF({ ...f, skills: e.target.value })} placeholder="Skills (comma-separated)" className={inp} />
+          <textarea value={f.blurb} onChange={(e) => setF({ ...f, blurb: e.target.value })} rows={2} placeholder="A line about them" className={`${inp} resize-none`} />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-fg-faint">£</span>
+            <input value={f.day_rate} onChange={(e) => setF({ ...f, day_rate: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="day rate" className={`${inp} w-24`} />
+            <span className="text-xs text-fg-faint">/day</span>
+            <span className="flex-1" />
+            <button type="button" disabled={busy} onClick={save} className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{busy ? "…" : "Save ✓"}</button>
+            <button type="button" onClick={() => setEditing(false)} className="mise-raised mise-press rounded-lg px-2.5 py-1.5 text-xs text-fg-soft">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start gap-3">
+            <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-bold text-ink-950 shadow-lg" style={{ background: `linear-gradient(135deg, ${hue}, ${hue}88)`, boxShadow: `0 8px 20px -8px ${hue}88` }}>
+              {lendMono(p.worker_name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-display text-lg leading-tight text-fg">{p.worker_name}</p>
+              <p className="truncate text-xs text-fg-faint">{p.role_title}</p>
+            </div>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${open ? "bg-emerald-500/15 text-emerald-500" : "bg-line/40 text-fg-faint"}`}>
+              {open ? "● live" : "closed"}
+            </span>
+          </div>
+          {p.blurb && <p className="mt-2.5 line-clamp-2 text-sm text-fg-soft">{p.blurb}</p>}
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {(p.skills ?? "").split(",").filter(Boolean).slice(0, 4).map((sk) => (
+              <span key={sk} className="rounded-full border border-line bg-glass/5 px-2.5 py-0.5 text-[10px] font-medium text-fg-soft">{sk.trim()}</span>
+            ))}
+            {p.day_rate && <span className="rounded-full border border-copper-400/30 bg-copper-500/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-copper-300">£{p.day_rate}/day</span>}
+          </div>
+          {canWrite && (
+            <div className="mt-3 flex items-center gap-2 border-t border-line pt-2.5">
+              <button type="button" onClick={() => setEditing(true)} className="mise-raised mise-press rounded-lg px-2.5 py-1 text-xs font-medium text-fg-soft">✏️ Edit</button>
+              <button type="button" onClick={() => api.patch(`/talent/posts/${p.id}`, { toggle_status: true }).then(onChanged)} className="mise-raised mise-press rounded-lg px-2.5 py-1 text-xs font-medium text-fg-soft">
+                {open ? "Close" : "Reopen"}
+              </button>
+              <span className="flex-1" />
+              <button type="button" onClick={() => api.delete(`/talent/posts/${p.id}`).then(onChanged)} className="mise-press rounded-lg px-2 py-1 text-xs text-fg-faint hover:text-rose-400">🗑</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

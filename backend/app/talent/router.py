@@ -121,12 +121,25 @@ async def create_post(
     return _post_out(post)
 
 
+class StaffPostEdit(BaseModel):
+    worker_name: str | None = Field(default=None, min_length=2, max_length=120)
+    role_title: str | None = Field(default=None, min_length=2, max_length=80)
+    blurb: str | None = Field(default=None, max_length=1000)
+    skills: str | None = Field(default=None, max_length=300)
+    day_rate: Decimal | None = Field(default=None, ge=0, le=Decimal("9999"))
+    toggle_status: bool = False  # flip OPEN/CLOSED
+
+
 @router.patch("/posts/{post_id}")
-async def toggle_post(
+async def edit_post(
     post_id: uuid.UUID,
+    payload: StaffPostEdit,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("employees:write")),
 ) -> dict:
+    """Edit a lent-staff post in place (name/role/blurb/skills/rate) or toggle
+    its OPEN/CLOSED status. The public careers board shows the change on its
+    next load — everyone stays in sync."""
     post = (
         await db.execute(
             select(StaffPost).where(StaffPost.id == post_id, StaffPost.hotel_id == user.hotel_id)
@@ -134,10 +147,15 @@ async def toggle_post(
     ).scalar_one_or_none()
     if post is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
-    post.status = (
-        StaffPostStatus.CLOSED.value
-        if post.status == StaffPostStatus.OPEN.value
-        else StaffPostStatus.OPEN.value
+    data = payload.model_dump(exclude_unset=True)
+    for field in ("worker_name", "role_title", "blurb", "skills", "day_rate"):
+        if field in data and data[field] is not None:
+            setattr(post, field, data[field])
+    if payload.toggle_status:
+        post.status = (
+            StaffPostStatus.CLOSED.value
+            if post.status == StaffPostStatus.OPEN.value
+            else StaffPostStatus.OPEN.value
     )
     await db.commit()
     return _post_out(post)

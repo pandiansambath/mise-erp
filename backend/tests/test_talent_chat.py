@@ -31,6 +31,20 @@ async def test_staff_post_appears_on_public_board(client, make_user, auth_header
     assert board.status_code == 200
     assert any(p["worker_name"] == "Arjun" and p["hotel_name"] for p in board.json())
 
+    # EDIT the post in place — the public board reflects it
+    pid = made.json()["id"]
+    edited = await client.patch(f"/api/talent/posts/{pid}", headers=h,
+                                json={"worker_name": "Arjun Kumar", "day_rate": "95"})
+    assert edited.status_code == 200 and edited.json()["worker_name"] == "Arjun Kumar"
+    board2 = await client.get("/api/public/talent")
+    row = next(p for p in board2.json() if p["id"] == pid)
+    assert row["worker_name"] == "Arjun Kumar" and row["day_rate"] == "95.00"
+
+    # toggle closed → drops off the public board
+    await client.patch(f"/api/talent/posts/{pid}", headers=h, json={"toggle_status": True})
+    board3 = await client.get("/api/public/talent")
+    assert not any(p["id"] == pid for p in board3.json())
+
 
 @pytest.mark.asyncio
 async def test_chat_is_persisted_and_two_sided(client, make_user, auth_header, db):
