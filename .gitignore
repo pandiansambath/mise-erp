@@ -99,6 +99,8 @@ ui_ideas/
 backups/
 *.sql
 *.sql.gz
+# Off-AWS S3 asset mirror — CLIENT DATA (resumes, docs, photos), never commit
+docs/recovery/s3-mirror/
 ssm_backup.json
 
 # Real client data drops (used for AI autofill testing) — never commit

@@ -41,5 +41,21 @@ gunzip -c backups/<file>.sql.gz | grep -c 'CREATE TABLE'   # tables
 gunzip -c backups/<file>.sql.gz | grep -cE 'COPY |INSERT'  # data blocks
 ```
 
+## Off-AWS asset mirror
+Every uploaded file (dish photos, resumes, chat attachments, doorstep proof, doc
+onboarding) lives in the S3 bucket. Mirror it OUT of AWS alongside the DB dump:
+```
+aws s3 sync s3://mise-uploads-765607524925 docs/recovery/s3-mirror/ --exclude "db-backups/*"
+```
+`docs/recovery/s3-mirror/` is gitignored (client data). A full recreate restores the DB
+dump AND `aws s3 sync docs/recovery/s3-mirror/ s3://<new-bucket>/` into the new bucket.
+
+## One-shot full backup
+```
+bash scripts/backup_all.sh     # DB dump → S3 → local, then S3 asset mirror
+```
+
 ## Latest known-good backup
-- `mise-db-20260626-183744.sql.gz` — 29 tables with data. In S3 `db-backups/` + local `backups/`.
+- `mise-db-20260722-122837.sql.gz` — 43 tables with data. In S3 `db-backups/` + local
+  `backups/`. S3 asset mirror pulled to `docs/recovery/s3-mirror/` (same day).
+- Prior: `mise-db-20260626-183744.sql.gz` — 29 tables.
