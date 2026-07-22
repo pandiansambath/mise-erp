@@ -1,17 +1,23 @@
 """Talent board (staff lending) + persisted hotel-to-hotel chat."""
+import itertools
+
 import pytest
 
 from app.auth.models import Role
 from app.hotels.models import Hotel
 
+_other_seq = itertools.count(1)
+
 
 async def _second_hotel_owner(db, make_user):
-    """A user in a DIFFERENT hotel — the other side of a chat."""
-    h2 = Hotel(name="Second Spice", country="GB", base_currency="GBP", city="Leeds")
+    """A user in a DIFFERENT hotel — the other side of a chat. Unique per call
+    so a test can spin up several 'other' hotels without email/name clashes."""
+    n = next(_other_seq)
+    h2 = Hotel(name=f"Second Spice {n}", country="GB", base_currency="GBP", city="Leeds")
     db.add(h2)
     await db.commit()
     await db.refresh(h2)
-    owner = await make_user("owner2@second.com", Role.SUPER_ADMIN.value, hotel_id=h2.id)
+    owner = await make_user(f"owner2_{n}@second.com", Role.SUPER_ADMIN.value, hotel_id=h2.id)
     return h2, owner
 
 
