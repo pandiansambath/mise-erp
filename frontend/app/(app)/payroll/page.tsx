@@ -412,7 +412,7 @@ export default function PayrollPage() {
           A person&apos;s type is set on their <Link href="/employees" className="text-brand-400 underline">Employees</Link> card.
           If dates ever overlap someone&apos;s existing pay, Mise blocks the run and tells you.
         </p>
-        <div key={cadence} className="mise-cadence-in flex flex-wrap items-end gap-3">
+        <div key={cadence} className="mise-cadence-in flex flex-wrap items-end gap-x-3 gap-y-2">
           <div>
             <label className="block text-xs font-medium text-fg-faint">Pay cadence</label>
             <Segmented
@@ -443,7 +443,6 @@ export default function PayrollPage() {
             ) : (
               <input type="month" value={period} onChange={(e) => changePeriod(e.target.value)} className="mise-well mt-1 w-44 rounded-lg px-3 py-2 text-sm" />
             )}
-            <p className="mt-1 min-h-[15px] text-[11px] text-fg-faint">{cadence === "WEEKLY" ? weekLabel(week) : ""}</p>
           </div>
           {canWrite && (
             <>
@@ -486,6 +485,9 @@ export default function PayrollPage() {
             </span>
           )}
         </div>
+        {cadence === "WEEKLY" && (
+          <p className="mt-2 text-[11px] text-fg-faint">📅 {weekLabel(week)}</p>
+        )}
         {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
       </Card>
 

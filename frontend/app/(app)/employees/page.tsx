@@ -428,9 +428,16 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
                 )}
                 <span className="text-xs text-fg-faint">{status.role.replace(/_/g, " ").toLowerCase()}</span>
               </div>
-              {!status.email_verified && (
+              {!status.email_verified ? (
                 <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
-                  They can&apos;t sign in until they click the verification link. Resend it if it went astray.
+                  🔴 <b>Live status:</b> not confirmed yet — they can&apos;t sign in until they click
+                  the verification link Mise emailed. Resend it if it went astray.
+                </p>
+              ) : (
+                <p className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-500">
+                  🟢 <b>Live status:</b> this inbox is confirmed. (Accounts made before verification
+                  existed — your early test logins — were grandfathered as verified; every login
+                  created from now must confirm live before it works.)
                 </p>
               )}
 

@@ -856,6 +856,14 @@ export function CalendarHeat({
   }
   const DOW = ["M", "T", "W", "T", "F", "S", "S"];
   let cellIdx = 0;
+  // Month label above each week whose Monday opens a new month — so dates are
+  // readable at a glance (mobile can't hover). GitHub-contribution style.
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthLabels = weeks.map((week, wi) => {
+    const m = week[0].getMonth();
+    const prev = wi > 0 ? weeks[wi - 1][0].getMonth() : -1;
+    return m !== prev ? MON[m] : "";
+  });
   return (
     <div
       ref={(el) => {
@@ -865,12 +873,18 @@ export function CalendarHeat({
       className={`relative flex gap-1.5 ${className}`}
     >
       <ChartTip tip={tip} />
-      <div className="grid grid-rows-7 gap-1 pr-0.5 text-[9px] leading-none text-fg-faint">
+      <div className="grid grid-rows-7 gap-1 pr-0.5 pt-[14px] text-[9px] leading-none text-fg-faint">
         {DOW.map((d, i) => (
           <span key={i} className="flex h-4 items-center">{d}</span>
         ))}
       </div>
-      <div className="flex gap-1 overflow-x-auto">
+      <div className="overflow-x-auto">
+      <div className="mb-1 flex gap-1">
+        {monthLabels.map((lbl, i) => (
+          <span key={i} className="w-4 shrink-0 text-[9px] leading-none text-fg-faint">{lbl}</span>
+        ))}
+      </div>
+      <div className="flex gap-1">
         {weeks.map((week, wi) => (
           <div key={wi} className="grid grid-rows-7 gap-1">
             {week.map((d) => {
@@ -903,6 +917,7 @@ export function CalendarHeat({
             })}
           </div>
         ))}
+      </div>
       </div>
     </div>
   );

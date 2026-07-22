@@ -527,7 +527,7 @@ function AttendanceHistoryCard({ employees, format }: {
             className="mt-1"
             value={empId}
             onChange={setEmpId}
-            options={[{ value: "", label: "Choose a person\u2026" },
+            options={[{ value: "", label: "Choose a person…" },
               ...employees.map((e) => ({ value: e.id, label: e.full_name }))]}
           />
         </div>
@@ -540,14 +540,14 @@ function AttendanceHistoryCard({ employees, format }: {
             options={[
               { value: "WEEK", label: "Last 7 days" },
               { value: "MONTH", label: "Last 30 days" },
-              { value: "CUSTOM", label: "From\u2192to" },
+              { value: "CUSTOM", label: "From→to" },
             ]}
           />
         </div>
         {mode === "CUSTOM" && (
           <div className="flex items-center gap-1.5">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="From" />
-            <span className="text-fg-faint">\u2192</span>
+            <span className="text-fg-faint">→</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="To" />
           </div>
         )}
@@ -555,12 +555,12 @@ function AttendanceHistoryCard({ employees, format }: {
           <Button variant="secondary" onClick={() => downloadFile(
             `/attendance/range.xlsx?date_from=${from}&date_to=${to}&employee_id=${empId}`,
             `attendance-${hist?.employee.name ?? "person"}-${from}-to-${to}.xlsx`)}>
-            \u2b07 Download
+            ⬇ Download
           </Button>
         )}
       </div>
 
-      {busy && <p className="mt-4 text-sm text-fg-faint">Loading\u2026</p>}
+      {busy && <p className="mt-4 text-sm text-fg-faint">Loading…</p>}
       {hist && !busy && (
         <div className="mise-cadence-in mt-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -578,7 +578,7 @@ function AttendanceHistoryCard({ employees, format }: {
             ))}
           </div>
           <p className="mt-1.5 text-center text-[11px] text-fg-faint">
-            indicative pay = {hist.totals.basis} \u00b7 the real, overlap-checked run lives in{" "}
+            indicative pay = {hist.totals.basis} · the real, overlap-checked run lives in{" "}
             <Link href="/payroll" className="text-brand-400 underline">Payroll</Link>
           </p>
 
@@ -611,7 +611,7 @@ function AttendanceHistoryCard({ employees, format }: {
                           {d.status.replace("_", "-").toLowerCase()}
                         </td>
                         <td className="px-3 py-2 text-fg-faint">
-                          {d.clock_in ? `${d.clock_in.slice(11, 16)}\u2013${d.clock_out ? d.clock_out.slice(11, 16) : "\u2026"}` : "\u2014"}
+                          {d.clock_in ? `${d.clock_in.slice(11, 16)}–${d.clock_out ? d.clock_out.slice(11, 16) : "…"}` : "—"}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-fg">{d.working_hours ?? "0"}h</td>
                       </tr>
