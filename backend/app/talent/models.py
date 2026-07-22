@@ -89,6 +89,10 @@ class ChatMessage(Base):
     sender_hotel_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("hotels.id"), nullable=False)
     sender_name: Mapped[str] = mapped_column(String(120), nullable=False)  # who typed it
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # Optional attachment (image or document) stored safely in S3 like resumes.
+    attachment_key: Mapped[str | None] = mapped_column(String(255))
+    attachment_name: Mapped[str | None] = mapped_column(String(255))
+    attachment_type: Mapped[str | None] = mapped_column(String(60))  # MIME
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

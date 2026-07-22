@@ -19,6 +19,8 @@ class Hotel(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Public @handle for the hotel-to-hotel network (global search + chat). Unique.
+    username: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
     country: Mapped[str] = mapped_column(String(2), nullable=False, default="GB")  # ISO-2
     city: Mapped[str | None] = mapped_column(String(80))
     base_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="GBP")

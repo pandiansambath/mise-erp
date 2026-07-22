@@ -5,6 +5,7 @@
 `public_router` — the public "available staff" board on the careers site
                   (no auth for browsing; resume download requires a hotel login).
 """
+import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -23,6 +24,29 @@ from app.talent.models import Chat, ChatMessage, StaffPost, StaffPostStatus
 
 router = APIRouter(prefix="/talent", tags=["talent"])
 public_router = APIRouter(prefix="/public/talent", tags=["talent-public"])
+
+USERNAME_RE = re.compile(r"^[a-z0-9_]{3,40}$")
+CHAT_FILE_EXTS = {".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
+CHAT_FILE_MAX_MB = 8
+
+
+def _slug_from_name(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:32] or "hotel"
+    return base
+
+
+def _msg_out(m: "ChatMessage", me: uuid.UUID) -> dict:
+    return {
+        "id": str(m.id),
+        "mine": m.sender_hotel_id == me,
+        "sender_name": m.sender_name,
+        "body": m.body,
+        "created_at": m.created_at.isoformat(),
+        "attachment_name": m.attachment_name,
+        "attachment_type": m.attachment_type,
+        "has_attachment": bool(m.attachment_key),
+        "is_image": bool(m.attachment_type and m.attachment_type.startswith("image/")),
+    }
 
 RESUME_EXTS = {".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"}
 RESUME_MAX_MB = 5
@@ -210,6 +234,99 @@ async def download_resume(
     )
 
 
+
+# ── hotel username (the @handle for global search + chat) ────────────────────
+class UsernameIn(BaseModel):
+    username: str = Field(min_length=3, max_length=40)
+
+
+@router.get("/me/username")
+async def get_my_username(
+    db: AsyncSession = Depends(get_db), user: User = Depends(require("employees:read"))
+) -> dict:
+    hotel = await db.get(Hotel, user.hotel_id)
+    suggestion = hotel.username or _slug_from_name(hotel.name)
+    return {"username": hotel.username, "suggestion": suggestion, "hotel_name": hotel.name}
+
+
+@router.post("/me/username")
+async def set_my_username(
+    payload: UsernameIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    handle = payload.username.strip().lower()
+    if not USERNAME_RE.match(handle):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Username must be 3-40 lowercase letters, numbers or underscores",
+        )
+    clash = (
+        await db.execute(
+            select(Hotel).where(Hotel.username == handle, Hotel.id != user.hotel_id)
+        )
+    ).scalar_one_or_none()
+    if clash:
+        raise HTTPException(status.HTTP_409_CONFLICT, "That username is taken")
+    hotel = await db.get(Hotel, user.hotel_id)
+    hotel.username = handle
+    await db.commit()
+    return {"username": handle}
+
+
+@router.get("/hotels/search")
+async def search_hotels(
+    q: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> list[dict]:
+    """Find other hotels by @username or name — the global directory for chat."""
+    needle = q.strip().lstrip("@").lower()
+    if len(needle) < 2:
+        return []
+    rows = (
+        await db.execute(
+            select(Hotel).where(
+                Hotel.id != user.hotel_id,
+                Hotel.is_active.is_(True),
+                or_(
+                    Hotel.username.ilike(f"%{needle}%"),
+                    Hotel.name.ilike(f"%{needle}%"),
+                ),
+            ).limit(30)
+        )
+    ).scalars().all()
+    return [
+        {
+            "hotel_id": str(h.id),
+            "name": h.name,
+            "username": h.username,
+            "city": h.city,
+        }
+        for h in rows
+    ]
+
+
+class OpenWithIn(BaseModel):
+    hotel_id: uuid.UUID
+
+
+@router.post("/chats/open-with")
+async def open_chat_with(
+    payload: OpenWithIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> dict:
+    """Start (or reopen) a chat with any hotel found via search."""
+    if payload.hotel_id == user.hotel_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That's your own hotel")
+    other = await db.get(Hotel, payload.hotel_id)
+    if other is None or not other.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    chat = await _get_or_create_chat(db, user.hotel_id, other.id, None)
+    return {"chat_id": str(chat.id)}
+
+
 # ── chat: persisted hotel-to-hotel threads ───────────────────────────────────
 def _pair(a: uuid.UUID, b: uuid.UUID) -> tuple[uuid.UUID, uuid.UUID]:
     """Order the pair so (a,b) and (b,a) map to the same chat."""
@@ -323,16 +440,7 @@ async def get_messages(
     return {
         "chat_id": str(chat.id),
         "other_hotel": other.name if other else "Unknown",
-        "messages": [
-            {
-                "id": str(m.id),
-                "mine": m.sender_hotel_id == user.hotel_id,
-                "sender_name": m.sender_name,
-                "body": m.body,
-                "created_at": m.created_at.isoformat(),
-            }
-            for m in msgs
-        ],
+        "messages": [_msg_out(m, user.hotel_id) for m in msgs],
     }
 
 
@@ -383,3 +491,66 @@ async def unread_count(
         n = (await db.execute(select(ChatMessage).where(and_(*conds)))).scalars().all()
         total += len(n)
     return {"unread": total}
+
+
+@router.post("/chats/{chat_id}/attach", status_code=status.HTTP_201_CREATED)
+async def attach_file(
+    chat_id: uuid.UUID,
+    caption: str = Form(default=""),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> dict:
+    """Send an image or document into a chat — stored safely in S3."""
+    chat = await db.get(Chat, chat_id)
+    if chat is None or user.hotel_id not in (chat.hotel_a, chat.hotel_b):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Chat not found")
+    fname = file.filename or "file"
+    ext = ("." + fname.rsplit(".", 1)[-1].lower()) if "." in fname else ""
+    if ext not in CHAT_FILE_EXTS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "File must be an image or PDF/Word doc"
+        )
+    data = await file.read()
+    if len(data) > CHAT_FILE_MAX_MB * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"File exceeds {CHAT_FILE_MAX_MB} MB"
+        )
+    msg = ChatMessage(
+        chat_id=chat.id,
+        sender_hotel_id=user.hotel_id,
+        sender_name=user.preferred_name or user.email.split("@")[0],
+        body=caption.strip(),
+        attachment_name=fname,
+        attachment_type=file.content_type or "application/octet-stream",
+    )
+    msg_id = msg.id or uuid.uuid4()
+    msg.id = msg_id
+    msg.attachment_key = get_storage().save(user.hotel_id, msg_id, fname, data)
+    db.add(msg)
+    chat.last_message_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(msg)
+    return _msg_out(msg, user.hotel_id)
+
+
+@router.get("/chats/{chat_id}/attachment/{message_id}")
+async def get_attachment(
+    chat_id: uuid.UUID,
+    message_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> Response:
+    """Download/view a chat attachment — only the two hotels in the chat can."""
+    chat = await db.get(Chat, chat_id)
+    if chat is None or user.hotel_id not in (chat.hotel_a, chat.hotel_b):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Chat not found")
+    msg = await db.get(ChatMessage, message_id)
+    if msg is None or msg.chat_id != chat_id or not msg.attachment_key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No attachment")
+    data = get_storage().read(msg.attachment_key)
+    return Response(
+        content=data,
+        media_type=msg.attachment_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{msg.attachment_name or "file"}"'},
+    )

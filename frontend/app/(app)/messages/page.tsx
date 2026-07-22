@@ -6,7 +6,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { API_BASE, api, postForm } from "@/lib/api";
 import { PageHeader } from "@/components/ui";
 
 type ChatSummary = {
@@ -23,7 +23,11 @@ type Msg = {
   sender_name: string;
   body: string;
   created_at: string;
+  has_attachment?: boolean;
+  is_image?: boolean;
+  attachment_name?: string | null;
 };
+type HotelHit = { hotel_id: string; name: string; username: string | null; city: string | null };
 
 const monogram = (name: string) =>
   name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
@@ -50,6 +54,11 @@ function MessagesInner() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sq, setSq] = useState("");
+  const [hits, setHits] = useState<HotelHit[]>([]);
+  const [uploading, setUploading] = useState(false);
   const openRef = useRef<string | null>(null);
   useEffect(() => { openRef.current = openId; }, [openId]);
 
@@ -101,6 +110,34 @@ function MessagesInner() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [msgs.length, openId]);
 
+  async function runSearch(q: string) {
+    setSq(q);
+    if (q.trim().length < 2) { setHits([]); return; }
+    try { setHits(await api.get<HotelHit[]>(`/talent/hotels/search?q=${encodeURIComponent(q)}`)); }
+    catch { setHits([]); }
+  }
+
+  async function startChatWith(hotelId: string) {
+    try {
+      const r = await api.post<{ chat_id: string }>("/talent/chats/open-with", { hotel_id: hotelId });
+      setSearchOpen(false); setSq(""); setHits([]);
+      setOpenId(r.chat_id);
+      loadChats();
+    } catch { /* ignore */ }
+  }
+
+  async function sendFile(file: File) {
+    if (!openId) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await postForm(`/talent/chats/${openId}/attach`, fd);
+      loadThread(openId);
+      loadChats();
+    } finally { setUploading(false); }
+  }
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const body = draft.trim();
@@ -141,7 +178,12 @@ function MessagesInner() {
       <div className="mise-feel grid h-[70vh] grid-cols-1 overflow-hidden rounded-2xl border border-line bg-paper sm:grid-cols-[300px_1fr]">
         {/* chat list */}
         <div className={`flex flex-col border-line sm:border-r ${openId ? "hidden sm:flex" : "flex"}`}>
-          <div className="border-b border-line px-4 py-3 text-sm font-semibold text-fg">Chats</div>
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <span className="text-sm font-semibold text-fg">Chats</span>
+            <button type="button" onClick={() => setSearchOpen(true)} className="mise-press rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white" title="Find a hotel by @username">
+              ＋ New
+            </button>
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {chats === null ? (
               <p className="p-4 text-sm text-fg-faint">Loading…</p>
@@ -212,7 +254,26 @@ function MessagesInner() {
                       <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
                         <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${m.mine ? "rounded-br-sm bg-gradient-to-br from-brand-600 to-brand-500 text-white shadow-brand-500/20" : "mise-well rounded-bl-sm text-fg"}`}>
                           {!m.mine && <p className="mb-0.5 text-[10px] font-semibold text-brand-400">{m.sender_name}</p>}
-                          <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                          {m.has_attachment && (
+                            m.is_image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={`${API_BASE}/api/talent/chats/${openId}/attachment/${m.id}`}
+                                alt={m.attachment_name ?? "image"}
+                                className="mb-1 max-h-60 w-auto cursor-pointer rounded-lg"
+                                onClick={() => window.open(`${API_BASE}/api/talent/chats/${openId}/attachment/${m.id}`, "_blank")}
+                              />
+                            ) : (
+                              <a
+                                href={`${API_BASE}/api/talent/chats/${openId}/attachment/${m.id}`}
+                                target="_blank" rel="noreferrer"
+                                className={`mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs ${m.mine ? "bg-white/15" : "bg-fg/5"}`}
+                              >
+                                📎 <span className="truncate underline">{m.attachment_name ?? "file"}</span>
+                              </a>
+                            )
+                          )}
+                          {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                           <p className={`mt-0.5 text-right text-[9px] ${m.mine ? "text-white/70" : "text-fg-faint"}`}>{timeShort(m.created_at)}</p>
                         </div>
                       </div>
@@ -224,6 +285,23 @@ function MessagesInner() {
                 )}
               </div>
               <form onSubmit={send} className="flex items-center gap-2 border-t border-line px-3 py-3">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*,.pdf,.doc,.docx"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) sendFile(f); e.target.value = ""; }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="mise-press grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg text-fg-soft hover:bg-fg/5 disabled:opacity-50"
+                  aria-label="Attach file"
+                  title="Send an image or document"
+                >
+                  {uploading ? "⏳" : "📎"}
+                </button>
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -250,6 +328,51 @@ function MessagesInner() {
           )}
         </div>
       </div>
+
+      {searchOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-24" role="dialog" aria-modal="true">
+          <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSearchOpen(false)} aria-hidden />
+          <div className="mise-pop-lg relative w-full max-w-md overflow-hidden rounded-3xl border border-line bg-paper-2 shadow-2xl shadow-black/40">
+            <div className="border-b border-line px-4 py-3">
+              <p className="text-sm font-semibold text-fg">Find a hotel to message</p>
+              <p className="text-xs text-fg-faint">Search by their @username or name.</p>
+            </div>
+            <div className="p-3">
+              <input
+                autoFocus
+                value={sq}
+                onChange={(e) => runSearch(e.target.value)}
+                placeholder="@username or hotel name…"
+                className="mise-well w-full rounded-xl px-3.5 py-2.5 text-sm text-fg outline-none"
+              />
+              <div className="mt-2 max-h-72 overflow-y-auto">
+                {sq.trim().length >= 2 && hits.length === 0 && (
+                  <p className="px-2 py-6 text-center text-sm text-fg-faint">No hotels found.</p>
+                )}
+                {hits.map((h) => (
+                  <button
+                    key={h.hotel_id}
+                    type="button"
+                    onClick={() => startChatWith(h.hotel_id)}
+                    className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition hover:bg-fg/5"
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-[11px] font-bold text-white">
+                      {monogram(h.name)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-fg">{h.name}</span>
+                      <span className="block truncate text-xs text-fg-faint">
+                        {h.username ? `@${h.username}` : "no username"}{h.city ? ` · ${h.city}` : ""}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-brand-400">Chat →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

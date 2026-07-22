@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
@@ -57,6 +57,30 @@ export default function SettingsPage() {
   const [minWage, setMinWage] = useState("11.44");
   const [savingWage, setSavingWage] = useState(false);
   const [savedWage, setSavedWage] = useState(false);
+
+  // Hotel @username for the global chat directory.
+  const [username, setUsername] = useState("");
+  const [unameSuggestion, setUnameSuggestion] = useState("");
+  const [unameMsg, setUnameMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [unameBusy, setUnameBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get<{ username: string | null; suggestion: string }>("/talent/me/username")
+      .then((r) => { setUsername(r.username ?? ""); setUnameSuggestion(r.suggestion); })
+      .catch(() => {});
+  }, [isAdmin]);
+
+  async function saveUsername() {
+    setUnameBusy(true); setUnameMsg(null);
+    try {
+      const r = await api.post<{ username: string }>("/talent/me/username", { username });
+      setUsername(r.username);
+      setUnameMsg({ ok: true, text: "Saved — other hotels can find you at @" + r.username });
+    } catch (e) {
+      setUnameMsg({ ok: false, text: e instanceof ApiError ? e.message : "Could not save" });
+    } finally { setUnameBusy(false); }
+  }
 
   // Email alerts + two-step sign-in (per-user, stored server-side).
   const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
@@ -171,6 +195,7 @@ export default function SettingsPage() {
         {[
           ["#s-display", "💱 Display"],
           ["#s-alerts", "🔔 Email & 2FA"],
+          ...(isAdmin ? [["#s-handle", "🆔 Hotel handle"]] : []),
           ...(isAdmin
             ? [["#s-billing", "💳 Billing"], ["#s-attendance", "⏱️ Attendance rules"], ["#s-payroll", "💷 Payroll"]]
             : []),
@@ -388,6 +413,41 @@ export default function SettingsPage() {
             </button>
             {savedWage && <span className="text-sm text-brand-400">Saved ✓</span>}
           </form>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card className="mise-feel mb-6" id="s-handle">
+          <h3 className="font-semibold text-fg">🆔 Your hotel handle (@username)</h3>
+          <p className="mt-1 text-sm text-fg-faint">
+            Pick a unique handle so other Mise hotels can find you in{" "}
+            <b className="text-fg-soft">Messages → New</b> and start a chat about lending or
+            hiring staff. 3–40 lowercase letters, numbers or underscores.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-fg-faint">@</span>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+              placeholder={unameSuggestion || "your_hotel"}
+              className="mise-well w-56 rounded-lg px-3 py-2 text-sm text-fg outline-none"
+            />
+            <button
+              onClick={saveUsername}
+              disabled={unameBusy || username.length < 3}
+              className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              {unameBusy ? "Saving…" : "Save handle"}
+            </button>
+            {!username && unameSuggestion && (
+              <button onClick={() => setUsername(unameSuggestion)} className="text-xs text-brand-400 underline">
+                use @{unameSuggestion}
+              </button>
+            )}
+          </div>
+          {unameMsg && (
+            <p className={`mt-2 text-sm ${unameMsg.ok ? "text-emerald-500" : "text-rose-400"}`}>{unameMsg.text}</p>
+          )}
         </Card>
       )}
 

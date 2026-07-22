@@ -95,3 +95,56 @@ async def test_chat_is_persisted_and_two_sided(client, make_user, auth_header, d
     self_chat = await client.post("/api/talent/chats/open", headers=ha,
                                   json={"staff_post_id": post_id})
     assert self_chat.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_username_global_search_and_chat_attachment(client, make_user, auth_header, db):
+    a_owner = await make_user("uname-a@x.com", Role.SUPER_ADMIN.value)
+    ha = auth_header(a_owner)
+    _h2, b_owner = await _second_hotel_owner(db, make_user)
+    hb = auth_header(b_owner)
+
+    # A sets a username (validated + unique)
+    bad = await client.post("/api/talent/me/username", headers=ha, json={"username": "No Spaces!"})
+    assert bad.status_code == 422
+    ok = await client.post("/api/talent/me/username", headers=ha, json={"username": "milagu_hq"})
+    assert ok.status_code == 200 and ok.json()["username"] == "milagu_hq"
+
+    # B can't steal it
+    clash = await client.post("/api/talent/me/username", headers=hb, json={"username": "milagu_hq"})
+    assert clash.status_code == 409
+
+    # B searches for A by @username and finds them
+    found = await client.get("/api/talent/hotels/search?q=milagu", headers=hb)
+    assert found.status_code == 200
+    hit = next(h for h in found.json() if h["username"] == "milagu_hq")
+    assert hit["name"] == "Test Hotel"
+
+    # B opens a chat with A directly (no staff post needed)
+    opened = await client.post("/api/talent/chats/open-with", headers=hb,
+                               json={"hotel_id": hit["hotel_id"]})
+    assert opened.status_code == 200
+    chat_id = opened.json()["chat_id"]
+
+    # B sends an image attachment; it lands in the thread
+    att = await client.post(
+        f"/api/talent/chats/{chat_id}/attach", headers=hb,
+        data={"caption": "the rota"},
+        files={"file": ("rota.png", b"\x89PNG\r\n\x1a\nfake", "image/png")},
+    )
+    assert att.status_code == 201
+    body = att.json()
+    assert body["has_attachment"] and body["is_image"] and body["attachment_name"] == "rota.png"
+
+    # A sees it in the thread and can download it
+    thread = await client.get(f"/api/talent/chats/{chat_id}/messages", headers=ha)
+    msg = next(m for m in thread.json()["messages"] if m["has_attachment"])
+    dl = await client.get(f"/api/talent/chats/{chat_id}/attachment/{msg['id']}", headers=ha)
+    assert dl.status_code == 200 and dl.content.startswith(b"\x89PNG")
+
+    # a THIRD hotel can't peek at the attachment
+    _h3, c_owner = await _second_hotel_owner(db, make_user)
+    intruder = await client.get(
+        f"/api/talent/chats/{chat_id}/attachment/{msg['id']}", headers=auth_header(c_owner)
+    )
+    assert intruder.status_code == 404
