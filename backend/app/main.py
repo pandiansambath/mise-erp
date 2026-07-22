@@ -34,6 +34,8 @@ from app.rota.router import router as rota_router
 from app.safety.router import router as safety_router
 from app.sales.router import router as sales_router
 from app.selfservice.router import router as selfservice_router
+from app.talent.router import public_router as talent_public_router
+from app.talent.router import router as talent_router
 from app.vendors.router import router as vendors_router
 
 
@@ -67,6 +69,8 @@ def create_app() -> FastAPI:
     app.include_router(ordering_router, prefix="/api")
     app.include_router(ordering_public_router, prefix="/api")
     app.include_router(rider_router, prefix="/api")
+    app.include_router(talent_router, prefix="/api")
+    app.include_router(talent_public_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
     app.include_router(inventory_router, prefix="/api")
     app.include_router(vendors_router, prefix="/api")

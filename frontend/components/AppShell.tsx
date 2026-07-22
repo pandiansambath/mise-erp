@@ -51,6 +51,7 @@ const NAV: NavItem[] = [
   { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read", feature: "attendance", group: "People", keywords: "punch clock present" },
   { href: "/rota", label: "Rota", icon: "🗓️", perm: "employees:read", feature: "rota", group: "People", keywords: "shifts schedule week" },
   { href: "/hiring", label: "Hiring", icon: "🧑‍💼", perm: "employees:read", feature: "employees", group: "People", keywords: "jobs vacancy recruit applicants careers board" },
+  { href: "/messages", label: "Messages", icon: "💬", perm: "employees:read", group: "People", keywords: "chat hotels staff lending talent whatsapp" },
   { href: "/staff", label: "Staff", icon: "👥", perm: "users:read", group: "People", keywords: "users accounts roles" },
   { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents", group: "Admin", keywords: "files certificates" },
   { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read", group: "Admin", keywords: "history who changed" },

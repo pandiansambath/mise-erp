@@ -320,8 +320,15 @@ function ApplyModal({ job, onClose }: { job: JobDetail; onClose: () => void }) {
 
 /* ─────────────────────── the board ─────────────────────── */
 
+type StaffPost = {
+  id: string; hotel_name: string | null; worker_name: string; role_title: string;
+  blurb: string; skills: string | null; available_from: string | null;
+  available_until: string | null; day_rate: string | null; has_resume: boolean;
+};
+
 export default function CareersPage() {
   const [jobs, setJobs] = useState<Job[] | null>(null);
+  const [staff, setStaff] = useState<StaffPost[] | null>(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState<string>("all");
   const [detail, setDetail] = useState<JobDetail | null>(null);
@@ -336,6 +343,10 @@ export default function CareersPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setJobs)
       .catch(() => setJobs([]));
+    fetch(`${API_BASE}/api/public/talent`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setStaff)
+      .catch(() => setStaff([]));
   }, []);
 
   // "/" jumps to search from anywhere on the board (job-board muscle memory).
@@ -596,6 +607,64 @@ export default function CareersPage() {
           </div>
         )}
       </main>
+
+      {/* ── Available staff (hotels lending their people) ── */}
+      {staff && staff.length > 0 && (
+        <section className="relative mx-auto max-w-6xl px-5 pb-24 sm:px-6">
+          <div className="mb-5">
+            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-emerald-300/80">
+              🤝 Staff sharing · hotel to hotel
+            </p>
+            <h2 className="mt-2 font-display text-3xl text-fg">Available staff to borrow</h2>
+            <p className="mt-1 max-w-xl text-sm text-fg-faint">
+              Quiet week? Short-staffed? Hotels on Mise lend their people to each other.
+              Sign in to your hotel and chat directly.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {staff.map((p, i) => {
+              const hue = HUES[i % HUES.length];
+              return (
+                <div
+                  key={p.id}
+                  className="mise-pop group relative overflow-hidden rounded-3xl border p-5"
+                  style={{ background: `radial-gradient(130% 90% at 15% 0%, ${hue}14, rgba(255,255,255,0.03) 55%)`, borderColor: `${hue}30`, animationDelay: `${Math.min(i, 8) * 60}ms` }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-bold text-ink-950" style={{ background: `linear-gradient(135deg, ${hue}, ${hue}88)` }}>
+                      {monogram(p.worker_name)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate font-display text-lg text-fg">{p.worker_name}</p>
+                      <p className="truncate text-xs text-fg-faint">{p.role_title} · {p.hotel_name}</p>
+                    </div>
+                  </div>
+                  {p.blurb && <p className="mt-3 line-clamp-2 text-sm text-fg-soft">{p.blurb}</p>}
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {(p.skills ?? "").split(",").filter(Boolean).slice(0, 4).map((sk) => (
+                      <span key={sk} className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-fg-soft">{sk.trim()}</span>
+                    ))}
+                    {p.day_rate && (
+                      <span className="rounded-full border border-copper-400/30 bg-copper-500/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-copper-200">£{p.day_rate}/day</span>
+                    )}
+                  </div>
+                  {(p.available_from || p.available_until) && (
+                    <p className="mt-2 text-[11px] text-fg-faint">
+                      🗓️ free {p.available_from ?? "now"}{p.available_until ? ` → ${p.available_until}` : ""}
+                    </p>
+                  )}
+                  <Link
+                    href={`/messages?post=${p.id}`}
+                    className="mise-press mt-4 block rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 px-4 py-2.5 text-center text-sm font-semibold text-ink-950"
+                  >
+                    💬 Chat with {p.hotel_name ?? "this hotel"}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* footer */}
       <footer className="border-t border-glass/10 py-8">

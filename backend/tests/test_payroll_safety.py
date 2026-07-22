@@ -255,7 +255,7 @@ async def test_attendance_history_range_and_export(client, make_user, auth_heade
 
     from app.employees import service as es
 
-    acct = await make_user("att1@x.com", Role.ACCOUNTANT.value)
+    acct = await make_user("att1@x.com", Role.SUPER_ADMIN.value)
     h = auth_header(acct)
     emp = await es.create_employee(
         db, hotel.id, full_name="Rita", salary_type="HOURLY", hourly_rate=Decimal("12.00")

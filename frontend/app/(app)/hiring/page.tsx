@@ -6,8 +6,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, downloadFile } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { api, ApiError, postForm, downloadFile } from "@/lib/api";
+import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -207,6 +207,8 @@ export default function HiringPage() {
 
       {error && <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
+      <LendStaffSection canWrite={canWrite} />
+
       {canWrite && (
         <div className="mb-6">
           {!showForm ? (
@@ -376,5 +378,101 @@ export default function HiringPage() {
         </div>
       )}
     </div>
+  );
+}
+
+
+/* ── Lend staff: post idle people to the hotel-to-hotel talent board ── */
+type StaffPost = {
+  id: string; worker_name: string; role_title: string; blurb: string;
+  skills: string | null; available_from: string | null; available_until: string | null;
+  day_rate: string | null; has_resume: boolean; status: string;
+};
+
+function LendStaffSection({ canWrite }: { canWrite: boolean }) {
+  const [posts, setPosts] = useState<StaffPost[] | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [f, setF] = useState({ worker_name: "", role_title: "", blurb: "", skills: "",
+    available_from: "", available_until: "", day_rate: "" });
+  const [resume, setResume] = useState<File | null>(null);
+
+  const load = useCallback(() => {
+    api.get<StaffPost[]>("/talent/posts").then(setPosts).catch(() => setPosts([]));
+  }, []);
+  useEffect(load, [load]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      Object.entries(f).forEach(([k, v]) => { if (v) fd.append(k, v); });
+      if (resume) fd.append("resume", resume);
+      await postForm("/talent/posts", fd);
+      setF({ worker_name: "", role_title: "", blurb: "", skills: "", available_from: "", available_until: "", day_rate: "" });
+      setResume(null);
+      setShowForm(false);
+      load();
+    } finally { setSaving(false); }
+  }
+
+  const inputCls = "mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none";
+
+  return (
+    <Card className="mise-feel mb-6 border-emerald-500/20">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-semibold text-fg">🤝 Lend staff to other hotels</h3>
+          <p className="mt-0.5 text-sm text-fg-faint">
+            Quiet week? Post a free team member — other Mise hotels see them on the public
+            Careers board and message you directly. Their chat with you is saved forever.
+          </p>
+        </div>
+        {canWrite && (
+          <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "+ Post a person"}</Button>
+        )}
+      </div>
+
+      {showForm && canWrite && (
+        <form onSubmit={submit} className="mise-pop mt-4 grid gap-3 sm:grid-cols-2">
+          <input required minLength={2} placeholder="Worker name *" value={f.worker_name} onChange={(e) => setF({ ...f, worker_name: e.target.value })} className={inputCls} />
+          <input required minLength={2} placeholder="Role (Chef, Waiter…) *" value={f.role_title} onChange={(e) => setF({ ...f, role_title: e.target.value })} className={inputCls} />
+          <input placeholder="Skills, comma-separated (tandoor, grill…)" value={f.skills} onChange={(e) => setF({ ...f, skills: e.target.value })} className={`${inputCls} sm:col-span-2`} />
+          <textarea placeholder="A line about them (optional)" value={f.blurb} onChange={(e) => setF({ ...f, blurb: e.target.value })} rows={2} className={`${inputCls} resize-none sm:col-span-2`} />
+          <label className="text-xs text-fg-faint">Free from<input type="date" value={f.available_from} onChange={(e) => setF({ ...f, available_from: e.target.value })} className={`${inputCls} mt-1`} /></label>
+          <label className="text-xs text-fg-faint">Free until<input type="date" value={f.available_until} onChange={(e) => setF({ ...f, available_until: e.target.value })} className={`${inputCls} mt-1`} /></label>
+          <label className="text-xs text-fg-faint">Day rate £ (optional)<input inputMode="decimal" value={f.day_rate} onChange={(e) => setF({ ...f, day_rate: e.target.value.replace(/[^0-9.]/g, "") })} className={`${inputCls} mt-1`} /></label>
+          <label className="text-xs text-fg-faint">Resume (optional)<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={(e) => setResume(e.target.files?.[0] ?? null)} className="mt-1 block w-full text-xs text-fg-soft" /></label>
+          <div className="sm:col-span-2">
+            <Button type="submit" disabled={saving}>{saving ? "Posting…" : "Post to the board ✓"}</Button>
+          </div>
+        </form>
+      )}
+
+      {posts && posts.length > 0 && (
+        <div className="mt-4 divide-y divide-line">
+          {posts.map((p) => (
+            <div key={p.id} className="flex flex-wrap items-center gap-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-medium ${p.status === "OPEN" ? "text-fg" : "text-fg-faint line-through"}`}>
+                  {p.worker_name} <span className="text-fg-faint">· {p.role_title}</span>
+                </p>
+                {p.blurb && <p className="truncate text-xs text-fg-faint">{p.blurb}</p>}
+              </div>
+              {p.day_rate && <span className="font-mono text-xs text-copper-300">£{p.day_rate}/day</span>}
+              {canWrite && (
+                <>
+                  <button type="button" onClick={() => api.patch(`/talent/posts/${p.id}`, {}).then(load)} className="mise-raised mise-press rounded-lg px-2.5 py-1.5 text-xs text-fg-soft">
+                    {p.status === "OPEN" ? "Close" : "Reopen"}
+                  </button>
+                  <button type="button" onClick={() => api.delete(`/talent/posts/${p.id}`).then(load)} className="mise-press rounded-lg px-2 py-1.5 text-xs text-fg-faint hover:text-rose-400">✕</button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
