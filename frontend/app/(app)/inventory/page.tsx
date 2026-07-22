@@ -1177,7 +1177,7 @@ export default function InventoryPage() {
                       {item.best_vendor ? (
                         <span className="min-w-0 truncate text-xs text-fg-soft"><span className="text-brand-400">★</span> {item.best_vendor}</span>
                       ) : (
-                        <Link href="/vendors" className="text-xs text-amber-300">+ add supplier</Link>
+                        <Link href="/vendors?new=1" className="text-xs text-amber-300">+ add supplier</Link>
                       )}
                       <span className="flex-1" />
                       {canWrite && (
@@ -1272,7 +1272,7 @@ export default function InventoryPage() {
                               </Link>
                             ) : (
                               <Link
-                                href="/vendors"
+                                href="/vendors?new=1"
                                 onClick={(e) => e.stopPropagation()}
                                 title="No vendor sells this yet — add a price for it on the Vendors page"
                                 className="mise-press inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-fg-faint transition hover:border-amber-400/40 hover:text-amber-500 dark:hover:text-amber-300"

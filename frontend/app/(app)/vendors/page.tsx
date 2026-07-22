@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars } from "@/components/charts";
+import { spotlight, useDeepLink } from "@/components/fx";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -98,6 +99,10 @@ export default function VendorsPage() {
       if (focus) selectVendor(focus);
     });
   }, []);
+
+  // Deep link from Inventory's "+ add supplier": /vendors?new=1 lands the user
+  // ON the add-vendor form, scrolled in, ringed, first field focused.
+  useDeepLink({ new: () => spotlight("vendor-form") }, !loading);
 
   function selectVendor(id: string) {
     setSelected(id);

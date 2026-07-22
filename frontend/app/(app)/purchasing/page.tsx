@@ -129,6 +129,8 @@ export default function PurchasingPage() {
     const vendorId = params.get("vendor");
     if (vendorId) setVendorPick((prev) => ({ ...prev, [itemId]: vendorId }));
     window.history.replaceState(null, "", window.location.pathname); // one-shot
+    // land the user IN the composer: scroll to it, ring it, focus the first field
+    spotlight("indent-form");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
