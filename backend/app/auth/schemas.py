@@ -38,6 +38,7 @@ class UserOut(BaseModel):
     email: EmailStr
     role: str
     is_active: bool
+    email_verified: bool = True
     preferred_name: str | None = None
     is_platform_owner: bool = False
     last_login: datetime | None = None

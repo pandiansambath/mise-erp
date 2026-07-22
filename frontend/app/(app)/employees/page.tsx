@@ -122,7 +122,7 @@ export default function EmployeesPage() {
 
   return (
     <div>
-      <PageHeader title="Employees" subtitle="Your team, pay details, and UK compliance." />
+      <PageHeader title="Employees" subtitle="Your team — pay, UK compliance, and each person’s login & access (verify, email, password, history) on their 🔐 Login button." />
 
       {alerts.length > 0 && (
         <Card className="mise-feel mb-6 border-amber-400/30">

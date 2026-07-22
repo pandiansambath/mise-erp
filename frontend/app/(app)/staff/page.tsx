@@ -94,7 +94,7 @@ export default function StaffPage() {
   if (denied) {
     return (
       <div>
-        <PageHeader title="Staff" />
+        <PageHeader title="Roles & Access" />
         <Card>
           <p className="py-6 text-center text-sm text-fg-faint">
             You don&apos;t have permission to manage staff. Ask your Super Admin.
@@ -110,7 +110,7 @@ export default function StaffPage() {
     <div>
       <PageHeader
         title="Staff"
-        subtitle="People who can log in to this restaurant, and what they can do."
+        subtitle="Who can sign in here and what they can access. To create a login or manage someone’s email, password, verification or history, open their card on the Employees page."
       />
 
       {canWrite && (
@@ -243,11 +243,18 @@ export default function StaffPage() {
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        {u.is_active ? (
-                          <Badge tone="green">Active</Badge>
-                        ) : (
-                          <Badge tone="red">Inactive</Badge>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {u.is_active ? (
+                            <Badge tone="green">Active</Badge>
+                          ) : (
+                            <Badge tone="red">Inactive</Badge>
+                          )}
+                          {u.email_verified === false ? (
+                            <Badge tone="amber">⚠ email unverified</Badge>
+                          ) : (
+                            <Badge tone="green">✓ email verified</Badge>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-xs text-fg-faint">
                         {u.last_login

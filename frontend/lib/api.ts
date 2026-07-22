@@ -144,6 +144,7 @@ export interface UserOut {
   email: string;
   role: string;
   is_active: boolean;
+  email_verified?: boolean; // live inbox-confirmation status
   preferred_name?: string | null;
   is_platform_owner?: boolean; // the Mise operator — unlocks the Control Room
   last_login?: string | null;
