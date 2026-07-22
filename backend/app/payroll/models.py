@@ -39,7 +39,11 @@ class Payroll(Base):
     employee_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    pay_period: Mapped[str] = mapped_column(String(10), nullable=False)  # 2026-06 or 2026-W23
+    # "2026-06" (month) · "2026-W23" (ISO week) · "2026-07-05→2026-08-04" (custom)
+    pay_period: Mapped[str] = mapped_column(String(30), nullable=False)
+    # Exact dates this run covers — the overlap guard's source of truth.
+    period_start: Mapped[date | None] = mapped_column(Date)
+    period_end: Mapped[date | None] = mapped_column(Date)
     pay_period_type: Mapped[str] = mapped_column(String(10), nullable=False, default="MONTHLY")
     working_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     days_present: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

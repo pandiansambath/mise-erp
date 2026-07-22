@@ -90,9 +90,12 @@ async def test_process_hourly(db, hotel):
         await emp_service.set_attendance(
             db, emp, date(2026, 6, d), status="PRESENT", working_hours_value=Decimal("8")
         )
-    rec = await service.process_payroll(db, emp, "2026-06")
+    rec = await service.process_payroll(
+        db, emp, None, date_from=date(2026, 6, 1), date_to=date(2026, 6, 30)
+    )
     assert rec.total_hours == Decimal("40.00")
     assert rec.gross_pay == Decimal("480.00")
+    assert rec.pay_period == "2026-06-01\u21922026-06-30"  # custom label
 
 
 # ── Weekly runs ─────────────────────────────────────────────────────────────
@@ -206,7 +209,7 @@ async def test_hourly_below_min_wage_blocked_via_api(client, make_user, auth_hea
     resp = await client.post(
         "/api/payroll/process",
         headers=auth_header(acct),
-        json={"pay_period": "2026-06", "employee_id": str(emp.id)},
+        json={"pay_period": "2026-W23", "employee_id": str(emp.id)},
     )
     assert resp.status_code == 400  # below UK minimum wage
 
@@ -224,6 +227,6 @@ async def test_configurable_min_wage_allows_lower_rate(client, make_user, auth_h
     resp = await client.post(
         "/api/payroll/process",
         headers=auth_header(acct),
-        json={"pay_period": "2026-06", "employee_id": str(emp.id)},
+        json={"pay_period": "2026-W23", "employee_id": str(emp.id)},
     )
-    assert resp.status_code == 200  # 9.00 ≥ configured 8.00
+    assert resp.status_code == 200  # 9.00 >= configured 8.00

@@ -24,7 +24,17 @@ async def process(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:write")),
 ) -> list[PayrollRow]:
-    weekly = service.is_weekly(payload.pay_period)
+    custom = bool(payload.date_from and payload.date_to)
+    if not custom and not payload.pay_period:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Pick a month, a week, or a custom date range"
+        )
+    if custom and not payload.employee_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Custom date ranges are per-person — pick the employee first",
+        )
+    weekly = bool(payload.pay_period) and service.is_weekly(payload.pay_period)
     if payload.employee_id:
         emp = await get_employee(db, payload.employee_id, user.hotel_id)
         if emp is None:
@@ -41,29 +51,45 @@ async def process(
                     status.HTTP_400_BAD_REQUEST,
                     "No hourly-paid staff to run weekly payroll for.",
                 )
+        else:
+            # THE DOUBLE-PAY FIX: a monthly run pays monthly-salaried staff ONLY.
+            # Hourly staff are paid by their weekly (or custom) runs; including
+            # them here would pay the same hours twice.
+            employees = [e for e in employees if e.salary_type == "MONTHLY"]
+            if not employees:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "No monthly-salaried staff for a monthly run - hourly staff "
+                    "are paid via weekly runs.",
+                )
 
     hotel = await db.get(Hotel, user.hotel_id)
     min_wage = hotel.min_hourly_rate if hotel else calculator.MIN_WAGE_UK
 
     try:
         for emp in employees:
-            await service.process_payroll(
+            rec = await service.process_payroll(
                 db, emp, payload.pay_period,
+                date_from=payload.date_from,
+                date_to=payload.date_to,
                 working_days=payload.working_days,
                 other_deductions=payload.other_deductions,
                 processed_by=user.id,
                 min_wage=min_wage,
             )
+    except service.AlreadyPaidError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     except calculator.MinWageError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    rows = await service.list_payroll(db, user.hotel_id, payload.pay_period)
+    period_label = payload.pay_period or rec.pay_period
+    rows = await service.list_payroll(db, user.hotel_id, period_label)
     net_total = sum((r["net_pay"] for r in rows), Decimal("0"))
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="payroll.run",
-        summary=f"Ran payroll for {payload.pay_period}: {len(rows)} staff, net £{net_total}",
+        summary=f"Ran payroll for {period_label}: {len(rows)} staff, net £{net_total}",
         entity_type="payroll",
     )
     return [PayrollRow.model_validate(r) for r in rows]
@@ -136,6 +162,10 @@ async def _set_status(db, payroll_id, user, new_status) -> PayrollRow:
     if rec is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Payroll not found")
     await service.set_status(db, rec, new_status)
+    emp = await get_employee(db, rec.employee_id, user.hotel_id)
+    if emp and new_status in (PayrollStatus.APPROVED.value, PayrollStatus.PAID.value):
+        # ONE-STOP: approved wages appear in Expenses automatically (idempotent).
+        await service.post_salary_expense(db, rec, emp.full_name)
     rows = await service.list_payroll(db, user.hotel_id, rec.pay_period)
     row = next(r for r in rows if r["id"] == rec.id)
     verb = new_status.lower()
@@ -164,6 +194,80 @@ async def payslip_pdf(
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.post("/preview")
+async def preview(
+    payload: ProcessRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:read")),
+) -> dict:
+    """Dry run for ONE employee: days worked, hours, pay and any already-paid
+    clash - nothing is saved. The UI shows this before the human commits."""
+    if not payload.employee_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Preview needs an employee")
+    emp = await get_employee(db, payload.employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    hotel = await db.get(Hotel, user.hotel_id)
+    try:
+        return await service.preview_payroll(
+            db, emp, payload.pay_period,
+            date_from=payload.date_from,
+            date_to=payload.date_to,
+            working_days=payload.working_days,
+            other_deductions=payload.other_deductions,
+            min_wage=hotel.min_hourly_rate if hotel else calculator.MIN_WAGE_UK,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+@router.get("/history/{employee_id}")
+async def employee_history(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:read")),
+) -> dict:
+    """A person's complete pay record - every run ever: weekly, monthly, custom."""
+    emp = await get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    rows = await service.history(db, user.hotel_id, employee_id)
+    return {
+        "employee": {
+            "id": str(emp.id), "name": emp.full_name, "salary_type": emp.salary_type,
+            "monthly_salary": str(emp.monthly_salary) if emp.monthly_salary else None,
+            "hourly_rate": str(emp.hourly_rate) if emp.hourly_rate else None,
+        },
+        "runs": [
+            {**r, "id": str(r["id"]), "total_hours": str(r["total_hours"]),
+             "gross_pay": str(r["gross_pay"]), "net_pay": str(r["net_pay"]),
+             "advance_deduction": str(r["advance_deduction"]),
+             "other_deductions": str(r["other_deductions"])}
+            for r in rows
+        ],
+    }
+
+
+@router.get("/history/{employee_id}/statement.pdf")
+async def employee_statement_pdf(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:read")),
+) -> Response:
+    """One PDF with every payslip this person ever received."""
+    emp = await get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    items = await service.history_records(db, user.hotel_id, employee_id)
+    hotel = await db.get(Hotel, user.hotel_id)
+    pdf = payslip.generate_consolidated(items, hotel)
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition":
+                 f'attachment; filename="pay-statement-{emp.employee_code}.pdf"'},
     )
 
 

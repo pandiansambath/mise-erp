@@ -98,6 +98,21 @@ function InfoDot({
   );
 }
 
+type PayPreview = {
+  employee_name: string; salary_type: string; pay_period: string;
+  period_start: string; period_end: string;
+  days_present: number; half_days: number; total_hours: string;
+  gross_pay: string; advance_deduction: string; other_deductions: string; net_pay: string;
+  already_paid: { pay_period: string; status: string; net_pay: string }[];
+};
+type PayHistory = {
+  employee: { id: string; name: string; salary_type: string;
+    monthly_salary: string | null; hourly_rate: string | null };
+  runs: { id: string; pay_period: string; pay_period_type: string;
+    period_start: string; period_end: string; days_present: number;
+    total_hours: string; gross_pay: string; net_pay: string; status: string }[];
+};
+
 export default function PayrollPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
@@ -257,6 +272,56 @@ export default function PayrollPage() {
     }
   }
 
+  // ── Run ONE person (with dry-run preview) + per-person pay history ──
+  const [oneEmp, setOneEmp] = useState("");
+  const [oneMode, setOneMode] = useState<"MONTH" | "WEEK" | "CUSTOM">("MONTH");
+  const [oneMonth, setOneMonth] = useState(thisMonth());
+  const [oneWeek, setOneWeek] = useState(thisWeek());
+  const [oneFrom, setOneFrom] = useState("");
+  const [oneTo, setOneTo] = useState("");
+  const [onePrev, setOnePrev] = useState<PayPreview | null>(null);
+  const [oneBusy, setOneBusy] = useState(false);
+  const [oneErr, setOneErr] = useState<string | null>(null);
+  const [oneDone, setOneDone] = useState<string | null>(null);
+
+  function oneBody() {
+    const base: Record<string, unknown> = {
+      employee_id: oneEmp, working_days: parseInt(workingDays || "26", 10),
+    };
+    if (oneMode === "MONTH") base.pay_period = oneMonth;
+    else if (oneMode === "WEEK") base.pay_period = oneWeek;
+    else { base.date_from = oneFrom; base.date_to = oneTo; }
+    return base;
+  }
+
+  async function previewOne() {
+    setOneBusy(true); setOneErr(null); setOneDone(null); setOnePrev(null);
+    try {
+      setOnePrev(await api.post<PayPreview>("/payroll/preview", oneBody()));
+    } catch (err) {
+      setOneErr(err instanceof ApiError ? err.message : "Could not preview");
+    } finally { setOneBusy(false); }
+  }
+
+  async function runOne() {
+    setOneBusy(true); setOneErr(null);
+    try {
+      await api.post("/payroll/process", oneBody());
+      setOneDone(onePrev ? `Paid ${onePrev.employee_name} £${onePrev.net_pay} ✓` : "Run complete ✓");
+      setOnePrev(null);
+      await changePeriod(active);
+    } catch (err) {
+      setOneErr(err instanceof ApiError ? err.message : "Could not run");
+    } finally { setOneBusy(false); }
+  }
+
+  const [histEmp, setHistEmp] = useState("");
+  const [hist, setHist] = useState<PayHistory | null>(null);
+  useEffect(() => {
+    if (!histEmp) { setHist(null); return; }
+    api.get<PayHistory>(`/payroll/history/${histEmp}`).then(setHist).catch(() => setHist(null));
+  }, [histEmp]);
+
   const sortedRows = sort.sortRows(rows, (r, k) =>
     k === "employee"
       ? r.employee_name
@@ -328,17 +393,25 @@ export default function PayrollPage() {
               <b className="text-fg">Draft</b> → <b className="text-fg">Approve</b> → <b className="text-fg">Mark paid</b>; download a payslip PDF per person, or the whole run as one PDF.
             </p>
             <p className="mise-well rounded-lg p-2.5 text-xs text-fg-faint">
-              <b className="text-fg-soft">Two &ldquo;salary&rdquo; places — no double-count.</b> This page (Payroll) works out
-              exact <b className="text-fg-soft">per-person</b> pay and makes payslips, but it does <b className="text-fg-soft">not</b> post to your
-              P&amp;L. Your P&amp;L / Money labour cost comes only from the <b className="text-fg-soft">&ldquo;Staff Salaries&rdquo;</b> line in{" "}
-              <Link href="/profile" className="text-brand-400 underline">Profile → Monthly overheads</Link> (a single monthly figure you set).
-              Use Payroll to pay people accurately; use that overhead line for the P&amp;L number.
+              <b className="text-fg-soft">Payroll now feeds your Expenses automatically.</b> The moment you{" "}
+              <b className="text-fg-soft">approve</b> a payslip, its net pay is booked into{" "}
+              <Link href="/expenses" className="text-brand-400 underline">Expenses</Link> under{" "}
+              <b className="text-fg-soft">Staff Salaries</b> (look for the &ldquo;from payroll&rdquo; line) — so your P&amp;L
+              labour cost is always the real wages you approved. <b className="text-fg-soft">Don&apos;t</b> also type a
+              Staff Salaries amount in Profile → overheads — that would count wages twice.
             </p>
           </div>
         )}
       </Card>
 
       <Card className="mise-feel mb-6">
+        <p className="mb-3 rounded-xl border border-amber-400/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs leading-relaxed text-fg-soft">
+          <b className="text-fg">Who lands in which run (so nobody is paid twice):</b>{" "}
+          <b className="text-fg">Monthly</b> runs pay <b className="text-fg">monthly-salaried</b> staff only ·{" "}
+          <b className="text-fg">Weekly</b> runs pay <b className="text-fg">hourly (weekly-paid)</b> staff only.
+          A person&apos;s type is set on their <Link href="/employees" className="text-brand-400 underline">Employees</Link> card.
+          If dates ever overlap someone&apos;s existing pay, Mise blocks the run and tells you.
+        </p>
         <div key={cadence} className="mise-cadence-in flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs font-medium text-fg-faint">Pay cadence</label>
@@ -414,6 +487,169 @@ export default function PayrollPage() {
           )}
         </div>
         {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+      </Card>
+
+      {canWrite && (
+        <Card className="mise-feel mb-6">
+          <h3 className="font-semibold text-fg">👤 Run pay for ONE person</h3>
+          <p className="mt-1 text-sm text-fg-faint">
+            For individual schedules — paid on the 18th, paid every Sunday, catching up a missed
+            week. Pick the person, pick the dates, <b className="text-fg-soft">preview first</b>, then run.
+            If they were already paid for those dates, Mise stops you.
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="w-52">
+              <label className="block text-xs font-medium text-fg-faint">Employee</label>
+              <Select
+                className="mt-1"
+                value={oneEmp}
+                onChange={(v) => { setOneEmp(v); setOnePrev(null); setOneDone(null); }}
+                options={[{ value: "", label: "Choose…" }, ...employees.map((e) => ({
+                  value: e.id,
+                  label: `${e.full_name} · ${e.salary_type === "HOURLY" ? "weekly-paid" : "monthly"}`,
+                }))]}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-fg-faint">Pay for</label>
+              <Segmented
+                className="mt-1"
+                value={oneMode}
+                onChange={(v) => { setOneMode(v as "MONTH" | "WEEK" | "CUSTOM"); setOnePrev(null); }}
+                options={[
+                  { value: "MONTH", label: "A month" },
+                  { value: "WEEK", label: "A week" },
+                  { value: "CUSTOM", label: "From→to" },
+                ]}
+              />
+            </div>
+            {oneMode === "MONTH" && (
+              <input type="month" value={oneMonth} onChange={(e) => { setOneMonth(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-3 py-2 text-sm" aria-label="Month" />
+            )}
+            {oneMode === "WEEK" && (
+              <input type="week" value={oneWeek} onChange={(e) => { setOneWeek(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-3 py-2 text-sm" aria-label="Week" />
+            )}
+            {oneMode === "CUSTOM" && (
+              <div className="flex items-center gap-1.5">
+                <input type="date" value={oneFrom} onChange={(e) => { setOneFrom(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="From" />
+                <span className="text-fg-faint">→</span>
+                <input type="date" value={oneTo} onChange={(e) => { setOneTo(e.target.value); setOnePrev(null); }} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="To" />
+              </div>
+            )}
+            <Button
+              onClick={previewOne}
+              disabled={oneBusy || !oneEmp || (oneMode === "CUSTOM" && (!oneFrom || !oneTo))}
+            >
+              {oneBusy ? "…" : "Preview 👁"}
+            </Button>
+          </div>
+          {oneErr && (
+            <p className="mise-shake mt-3 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-300">
+              ⛔ {oneErr}
+            </p>
+          )}
+          {oneDone && <p className="mise-tick-in mt-3 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 text-sm font-semibold text-emerald-500">{oneDone}</p>}
+          {onePrev && (
+            <div className="mise-pop mt-4 rounded-2xl border border-brand-400/30 bg-brand-500/5 p-4">
+              <p className="text-sm font-semibold text-fg">
+                {onePrev.employee_name} · {onePrev.period_start} → {onePrev.period_end}
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  ["Days present", String(onePrev.days_present)],
+                  ["Hours", onePrev.total_hours],
+                  ["Gross", format(onePrev.gross_pay)],
+                  ["Advances", `−${format(onePrev.advance_deduction)}`],
+                  ["NET PAY", format(onePrev.net_pay)],
+                ].map(([l, v], i) => (
+                  <div key={l} className={`mise-well rounded-xl p-2.5 text-center ${i === 4 ? "ring-1 ring-brand-400/40" : ""}`}>
+                    <p className={`font-mono text-base font-bold ${i === 4 ? "text-brand-400" : "text-fg"}`}>{v}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-fg-faint">{l}</p>
+                  </div>
+                ))}
+              </div>
+              {onePrev.already_paid.length > 0 ? (
+                <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-500">
+                  ⚠️ Already paid for these dates: {onePrev.already_paid.map((a) => `${a.pay_period} (£${a.net_pay}, ${a.status.toLowerCase()})`).join(", ")} — running again would be a double payment, so it&apos;s blocked.
+                </p>
+              ) : (
+                <div className="mt-3 flex items-center gap-3">
+                  <Button onClick={runOne} disabled={oneBusy}>
+                    {oneBusy ? "Running…" : `✓ Looks right — pay ${format(onePrev.net_pay)}`}
+                  </Button>
+                  <button type="button" onClick={() => setOnePrev(null)} className="text-sm text-fg-faint underline-offset-2 hover:underline">cancel</button>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card className="mise-feel mb-6">
+        <h3 className="font-semibold text-fg">📖 Pay history by person</h3>
+        <p className="mt-1 text-sm text-fg-faint">
+          The permanent record — every run they ever had (weekly, monthly or custom), whatever
+          period the page above is showing. Download any payslip, or their whole history as one PDF.
+        </p>
+        <div className="mt-3 w-64">
+          <Select
+            value={histEmp}
+            onChange={setHistEmp}
+            options={[{ value: "", label: "Choose a person…" }, ...employees.map((e) => ({ value: e.id, label: e.full_name }))]}
+          />
+        </div>
+        {hist && (
+          <div className="mise-cadence-in mt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-fg-soft">
+                <b className="text-fg">{hist.employee.name}</b> · {hist.employee.salary_type === "HOURLY"
+                  ? `weekly-paid · ${format(hist.employee.hourly_rate ?? "0")}/hr`
+                  : `monthly · ${format(hist.employee.monthly_salary ?? "0")}/mo`} · {hist.runs.length} run{hist.runs.length === 1 ? "" : "s"}
+              </p>
+              {hist.runs.length > 0 && (
+                <Button variant="secondary" onClick={() => downloadFile(`/payroll/history/${histEmp}/statement.pdf`, `pay-statement-${hist.employee.name}.pdf`)}>
+                  ⬇ Full statement PDF
+                </Button>
+              )}
+            </div>
+            {hist.runs.length === 0 ? (
+              <p className="mise-well mt-3 rounded-xl p-4 text-sm text-fg-faint">No pay runs yet for this person.</p>
+            ) : (
+              <>
+                <div className="mt-4">
+                  <Bars
+                    items={[...hist.runs].reverse().map((r) => ({
+                      label: r.pay_period.replace("→", "→\u200b"),
+                      value: Math.max(0, parseFloat(r.net_pay) || 0),
+                      color: r.pay_period_type === "WEEKLY" ? "#38bdf8" : "#d97742",
+                    }))}
+                  />
+                  <p className="mt-1 text-center text-[10px] text-fg-faint">net pay per run · <span className="text-copper-400">■</span> monthly · <span className="text-sky-400">■</span> weekly</p>
+                </div>
+                <div className="mt-3 divide-y divide-line">
+                  {hist.runs.map((r) => (
+                    <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 text-sm">
+                      <span className="w-44 font-mono text-fg">{r.pay_period}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.pay_period_type === "WEEKLY" ? "bg-sky-500/15 text-sky-400" : "bg-copper-500/15 text-copper-400"}`}>
+                        {r.pay_period_type === "WEEKLY" ? "weekly" : r.pay_period.includes("→") ? "custom" : "monthly"}
+                      </span>
+                      <span className="text-fg-faint">{r.days_present}d · {r.total_hours}h</span>
+                      <span className="ml-auto font-mono font-bold text-fg">{format(r.net_pay)}</span>
+                      <Badge tone={r.status === "PAID" ? "green" : r.status === "APPROVED" ? "slate" : "amber"}>{r.status.toLowerCase()}</Badge>
+                      <button
+                        type="button"
+                        onClick={() => downloadFile(`/payroll/${r.id}/payslip.pdf`, `payslip-${hist.employee.name}-${r.pay_period}.pdf`)}
+                        className="mise-press rounded-lg px-2 py-1 text-xs font-semibold text-brand-400 hover:bg-brand-500/10"
+                      >
+                        ⬇ PDF
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </Card>
 
       {canWrite && (

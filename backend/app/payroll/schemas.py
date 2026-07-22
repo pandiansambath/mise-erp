@@ -7,8 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProcessRequest(BaseModel):
-    # YYYY-MM (monthly) or YYYY-Wnn (ISO week, for weekly-paid hourly staff)
-    pay_period: str = Field(pattern=r"^\d{4}-(\d{2}|W\d{2})$")
+    # YYYY-MM (monthly) or YYYY-Wnn (ISO week, for weekly-paid hourly staff).
+    # For ONE employee you may instead send a custom date range (from→to) —
+    # that's how "paid on the 18th" / "paid every Sunday" schedules run.
+    pay_period: str | None = Field(default=None, pattern=r"^\d{4}-(\d{2}|W\d{2})$")
+    date_from: date_type | None = None
+    date_to: date_type | None = None
     employee_id: uuid.UUID | None = None  # None = all active employees
     working_days: int = Field(default=26, gt=0, le=31)
     other_deductions: Decimal = Field(default=Decimal("0"), ge=0)

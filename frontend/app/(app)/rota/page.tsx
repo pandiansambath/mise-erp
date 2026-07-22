@@ -145,6 +145,8 @@ export default function RotaPage() {
   const [dragId, setDragId] = useState<string | null>(null);
   // ✏️ in-place shift editor: tap a name → edit times/break right there
   const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDay, setEditDay] = useState("");
   const [eStart, setEStart] = useState("");
   const [eEnd, setEEnd] = useState("");
   const [eBreak, setEBreak] = useState("0");
@@ -158,6 +160,7 @@ export default function RotaPage() {
         break_minutes: parseInt(eBreak || "0", 10),
       });
       setEditId(null);
+      setEditName("");
       await reload(); // fresh hours/cost come computed from the server
     } catch { /* keep the editor open so nothing is lost */ } finally {
       setEBusy(false);
@@ -719,52 +722,32 @@ export default function RotaPage() {
                           type="button"
                           onClick={() => {
                             if (!canWrite) return;
-                            if (editId === s.id) { setEditId(null); return; }
                             setEditId(s.id);
+                            setEditName(s.employee_name);
+                            setEditDay(s.date);
                             setEStart(s.start_time.slice(0, 5));
                             setEEnd(s.end_time.slice(0, 5));
                             setEBreak(String(s.break_minutes ?? 0));
                           }}
-                          title={canWrite ? "Tap to edit this shift in place" : undefined}
-                          className={`min-w-0 truncate text-left font-medium text-fg ${canWrite ? "underline-offset-2 hover:underline" : ""}`}
+                          title={canWrite ? "Edit this shift" : undefined}
+                          className="flex min-w-0 items-center gap-1.5 text-left font-medium text-fg"
                         >
-                          {s.employee_name} {canWrite && <span aria-hidden className="text-[9px] text-fg-faint">✏️</span>}
+                          <span className="truncate">{s.employee_name}</span>
+                          {canWrite && (
+                            <span className="mise-raised shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-semibold text-brand-400">
+                              ✏️ edit
+                            </span>
+                          )}
                         </button>
                         {canWrite && (
                           <button onClick={() => removeShift(s.id)} aria-label="Remove shift" className="shrink-0 text-fg-faint hover:text-rose-300">✕</button>
                         )}
                       </div>
-                      {editId === s.id ? (
-                        <div className="mise-cadence-in mt-1.5 space-y-1.5 border-t border-line pt-1.5">
-                          <div className="flex items-center gap-1">
-                            <input type="time" value={eStart} onChange={(e) => setEStart(e.target.value)} aria-label="Start time" className="mise-well w-full rounded-md px-1.5 py-1 text-[11px] text-fg outline-none" />
-                            <span className="text-fg-faint">–</span>
-                            <input type="time" value={eEnd} onChange={(e) => setEEnd(e.target.value)} aria-label="End time" className="mise-well w-full rounded-md px-1.5 py-1 text-[11px] text-fg outline-none" />
-                          </div>
-                          <label className="flex items-center gap-1.5 text-[10px] text-fg-faint">
-                            break
-                            <input value={eBreak} onChange={(e) => setEBreak(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" aria-label="Break minutes" className="mise-well w-12 rounded-md px-1.5 py-1 text-center text-[11px] text-fg outline-none" />
-                            min
-                          </label>
-                          <div className="flex gap-1.5">
-                            <button type="button" disabled={eBusy || !eStart || !eEnd || eEnd <= eStart} onClick={() => saveEdit(s.id)} className="mise-press flex-1 rounded-md bg-brand-600 px-2 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">
-                              {eBusy ? "Saving…" : "Save ✓"}
-                            </button>
-                            <button type="button" onClick={() => setEditId(null)} className="mise-raised mise-press rounded-md px-2 py-1.5 text-[11px] text-fg-soft">✕</button>
-                          </div>
-                          {eEnd && eStart && eEnd <= eStart && (
-                            <p className="text-[10px] text-rose-400">end must be after start</p>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="mt-0.5 text-fg-soft">
-                            {hhmm(s.start_time)}–{hhmm(s.end_time)}
-                            {s.break_minutes > 0 && <span className="text-fg-faint"> · {s.break_minutes}m brk</span>}
-                          </div>
-                          <div className="text-fg-faint">{s.hours}h · {format(s.cost)}</div>
-                        </>
-                      )}
+                      <div className="mt-0.5 text-fg-soft">
+                        {hhmm(s.start_time)}–{hhmm(s.end_time)}
+                        {s.break_minutes > 0 && <span className="text-fg-faint"> · {s.break_minutes}m brk</span>}
+                      </div>
+                      <div className="text-fg-faint">{s.hours}h · {format(s.cost)}</div>
                     </li>
                   ))}
                 </ul>
@@ -793,6 +776,50 @@ export default function RotaPage() {
             Rates: each person&apos;s hourly rate (salaried estimated at monthly ÷ 173h). Labour % = cost ÷ net sales.
           </p>
         </Card>
+      )}
+
+      {/* ✏️ shift editor — a proper centered modal (nothing clips, nothing hides) */}
+      {editId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditId(null)} aria-hidden />
+          <div className="mise-pop-lg relative w-full max-w-sm rounded-3xl border border-line bg-paper-2 p-6 shadow-2xl shadow-black/40">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-400">✏️ edit shift</p>
+            <h3 className="mt-1 font-display text-xl text-fg">{editName}</h3>
+            <p className="text-xs text-fg-faint">{editDay}</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs font-medium text-fg-faint">Starts</span>
+                <input type="time" value={eStart} onChange={(e) => setEStart(e.target.value)} className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-base text-fg outline-none" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-fg-faint">Ends</span>
+                <input type="time" value={eEnd} onChange={(e) => setEEnd(e.target.value)} className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-base text-fg outline-none" />
+              </label>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-sm text-fg-soft">
+              Break
+              <input value={eBreak} onChange={(e) => setEBreak(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" className="mise-well w-20 rounded-xl px-3 py-2 text-center text-fg outline-none" aria-label="Break minutes" />
+              minutes
+            </label>
+            {eEnd && eStart && eEnd <= eStart && (
+              <p className="mt-2 rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-400">end must be after start</p>
+            )}
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                disabled={eBusy || !eStart || !eEnd || eEnd <= eStart}
+                onClick={() => saveEdit(editId)}
+                className="mise-press flex-1 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {eBusy ? "Saving…" : "Save changes ✓"}
+              </button>
+              <button type="button" onClick={() => setEditId(null)} className="mise-raised mise-press rounded-xl px-4 py-3 text-sm text-fg-soft">
+                Cancel
+              </button>
+            </div>
+            <p className="mt-2 text-center text-[10px] text-fg-faint">hours &amp; cost recompute automatically on save</p>
+          </div>
+        </div>
       )}
     </div>
   );

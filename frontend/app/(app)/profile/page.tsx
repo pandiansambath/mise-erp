@@ -126,7 +126,11 @@ export default function ProfilePage() {
       api.get<Expense[]>(`/expenses?date_from=${iso(from)}&date_to=${iso(new Date())}`),
     ])
       .then(([cats, exps]) => {
-        const fixed = cats.filter((c) => c.kind === "FIXED" && c.is_active);
+        // Staff Salaries is EXCLUDED here on purpose: approved payroll posts real
+        // wages into Expenses automatically — typing it again would double-count.
+        const fixed = cats.filter(
+          (c) => c.kind === "FIXED" && c.is_active && c.name !== "Staff Salaries"
+        );
         setFixedCats(fixed);
         setRecent(exps);
         const pre: Record<string, string> = {};

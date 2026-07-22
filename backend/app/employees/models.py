@@ -62,6 +62,10 @@ class Employee(Base):
     )
     monthly_salary: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     hourly_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    # Personal pay schedule (informational, drives the payroll due-list):
+    # monthly staff: day-of-month they're paid (1-28) · weekly staff: weekday (0=Mon…6=Sun).
+    pay_day: Mapped[int | None] = mapped_column(Integer)
+    pay_weekday: Mapped[int | None] = mapped_column(Integer)
     # UK compliance
     ni_number: Mapped[str | None] = mapped_column(String(20))  # National Insurance
     visa_expiry_date: Mapped[date | None] = mapped_column(Date)  # NULL if UK/EU citizen

@@ -468,6 +468,8 @@ export interface Employee {
   salary_type: string;
   monthly_salary: string | null;
   hourly_rate: string | null;
+  pay_day?: number | null;
+  pay_weekday?: number | null;
   mobile: string | null;
   ni_number: string | null;
   visa_expiry_date: string | null;

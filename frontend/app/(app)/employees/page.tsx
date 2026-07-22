@@ -18,6 +18,8 @@ const EMPTY = {
   salary_type: "MONTHLY",
   monthly_salary: "",
   hourly_rate: "",
+  pay_day: "",
+  pay_weekday: "",
   mobile: "",
   ni_number: "",
   visa_expiry_date: "",
@@ -66,6 +68,8 @@ export default function EmployeesPage() {
       salary_type: e.salary_type,
       monthly_salary: e.monthly_salary ?? "",
       hourly_rate: e.hourly_rate ?? "",
+      pay_day: e.pay_day != null ? String(e.pay_day) : "",
+      pay_weekday: e.pay_weekday != null ? String(e.pay_weekday) : "",
       mobile: e.mobile ?? "",
       ni_number: e.ni_number ?? "",
       visa_expiry_date: e.visa_expiry_date ?? "",
@@ -181,15 +185,39 @@ export default function EmployeesPage() {
               />
             </div>
             {form.salary_type === "MONTHLY" ? (
-              <div>
-                <label className="block text-sm font-medium text-fg-soft">Monthly salary</label>
-                <input value={form.monthly_salary} onChange={(e) => setForm({ ...form, monthly_salary: numeric(e.target.value) })} inputMode="decimal" className={inputCls} />
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Monthly salary</label>
+                  <input value={form.monthly_salary} onChange={(e) => setForm({ ...form, monthly_salary: numeric(e.target.value) })} inputMode="decimal" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Usually paid on</label>
+                  <Select
+                    className="mt-1"
+                    value={form.pay_day}
+                    onChange={(v) => setForm({ ...form, pay_day: v })}
+                    options={[{ value: "", label: "— (month end)" }, ...Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `the ${i + 1}${[1, 21].includes(i + 1) ? "st" : [2, 22].includes(i + 1) ? "nd" : [3, 23].includes(i + 1) ? "rd" : "th"}` }))]}
+                  />
+                  <p className="mt-1 text-[11px] text-fg-faint">their personal pay date — shown on payroll</p>
+                </div>
+              </>
             ) : (
-              <div>
-                <label className="block text-sm font-medium text-fg-soft">Hourly rate</label>
-                <input value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: numeric(e.target.value) })} inputMode="decimal" className={inputCls} />
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Hourly rate</label>
+                  <input value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: numeric(e.target.value) })} inputMode="decimal" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">Usually paid every</label>
+                  <Select
+                    className="mt-1"
+                    value={form.pay_weekday}
+                    onChange={(v) => setForm({ ...form, pay_weekday: v })}
+                    options={[{ value: "", label: "— (any day)" }, ...["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, i) => ({ value: String(i), label: d }))]}
+                  />
+                  <p className="mt-1 text-[11px] text-fg-faint">weekly-paid staff can be paid on ANY weekday — even Sunday</p>
+                </div>
+              </>
             )}
             <div>
               <label className="block text-sm font-medium text-fg-soft">Mobile</label>

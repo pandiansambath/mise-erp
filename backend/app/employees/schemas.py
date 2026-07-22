@@ -19,6 +19,10 @@ class EmployeeCreate(BaseModel):
     salary_type: str = SalaryType.MONTHLY.value
     monthly_salary: Decimal | None = Field(default=None, ge=0)
     hourly_rate: Decimal | None = Field(default=None, ge=0)
+    # Personal pay schedule: monthly staff get paid on this day-of-month (1-28);
+    # weekly staff on this weekday (0=Mon .. 6=Sun). Informational + due-list.
+    pay_day: int | None = Field(default=None, ge=1, le=28)
+    pay_weekday: int | None = Field(default=None, ge=0, le=6)
     mobile: str | None = None
     address: str | None = None
     emergency_contact: str | None = None
@@ -43,6 +47,8 @@ class EmployeeUpdate(BaseModel):
     salary_type: str | None = None
     monthly_salary: Decimal | None = Field(default=None, ge=0)
     hourly_rate: Decimal | None = Field(default=None, ge=0)
+    pay_day: int | None = Field(default=None, ge=1, le=28)
+    pay_weekday: int | None = Field(default=None, ge=0, le=6)
     mobile: str | None = None
     address: str | None = None
     emergency_contact: str | None = None
@@ -65,6 +71,8 @@ class EmployeeOut(BaseModel):
     salary_type: str
     monthly_salary: Decimal | None
     hourly_rate: Decimal | None
+    pay_day: int | None = None
+    pay_weekday: int | None = None
     mobile: str | None
     ni_number: str | None
     visa_expiry_date: date_type | None
