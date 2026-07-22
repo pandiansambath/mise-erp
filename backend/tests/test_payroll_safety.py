@@ -150,11 +150,12 @@ async def test_approved_payroll_books_a_salary_expense(
     await client.post(f"/api/payroll/{pid}/approve", headers=h)
     await client.post(f"/api/payroll/{pid}/approve", headers=h)  # idempotency probe
 
+    hid = hotel.id  # capture BEFORE expire_all — expired attrs can't lazy-load in async
     db.expire_all()
     rows = (
         await db.execute(
             select(Expense).where(
-                Expense.hotel_id == hotel.id, Expense.description.contains("[payroll:")
+                Expense.hotel_id == hid, Expense.description.contains("[payroll:")
             )
         )
     ).scalars().all()
@@ -190,3 +191,57 @@ async def test_history_endpoint_and_statement_pdf(client, make_user, auth_header
     pdf = await client.get(f"/api/payroll/history/{emp.id}/statement.pdf", headers=h)
     assert pdf.status_code == 200
     assert pdf.content[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
+async def test_fixed_expense_duplicate_guard_and_carry_forward(
+    client, make_user, auth_header, db, hotel
+):
+    """Rent twice in one month → 409 warning (force overrides). A MONTHLY
+    recurring expense materialises next month's copy automatically."""
+    from datetime import date as d
+    from datetime import timedelta
+
+    acct = await make_user("exp1@x.com", Role.ACCOUNTANT.value)
+    h = auth_header(acct)
+    cats = (await client.get("/api/expenses/categories", headers=h)).json()
+    rent = next(c for c in cats if c["name"] == "Rent")
+
+    first = await client.post(
+        "/api/expenses", headers=h,
+        json={"category_id": rent["id"], "date": d.today().isoformat(),
+              "amount": "1200", "payment_method": "BANK"},
+    )
+    assert first.status_code == 201
+
+    dup = await client.post(
+        "/api/expenses", headers=h,
+        json={"category_id": rent["id"], "date": d.today().isoformat(),
+              "amount": "1200", "payment_method": "BANK"},
+    )
+    assert dup.status_code == 409
+    assert "already logged this month" in dup.json()["detail"]
+
+    forced = await client.post(
+        "/api/expenses?force=true", headers=h,
+        json={"category_id": rent["id"], "date": d.today().isoformat(),
+              "amount": "50", "payment_method": "BANK"},
+    )
+    assert forced.status_code == 201
+
+    # carry-forward: a recurring gas bill dated ~2 months ago spawns copies
+    gas = next(c for c in cats if c["name"] == "Gas")
+    old = (d.today() - timedelta(days=63)).isoformat()
+    made = await client.post(
+        "/api/expenses?force=true", headers=h,
+        json={"category_id": gas["id"], "date": old, "amount": "180",
+              "payment_method": "BANK", "is_recurring": True, "recurrence": "MONTHLY"},
+    )
+    assert made.status_code == 201
+    listing = (await client.get("/api/expenses", headers=h)).json()
+    gas_rows = [e for e in listing if e["category_name"] == "Gas"]
+    assert len(gas_rows) >= 3  # original + at least 2 auto-materialised months
+    assert any(e["auto_added"] for e in gas_rows)
+    # idempotent: listing again creates nothing new
+    listing2 = (await client.get("/api/expenses", headers=h)).json()
+    assert len([e for e in listing2 if e["category_name"] == "Gas"]) == len(gas_rows)
