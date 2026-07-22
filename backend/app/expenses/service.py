@@ -89,6 +89,81 @@ async def ensure_default_categories(db: AsyncSession, hotel_id: uuid.UUID) -> No
     await db.commit()
 
 
+def _next_month(d: date_type) -> date_type:
+    """Same day next month, clamped to that month's length (31 Jan → 28 Feb)."""
+    import calendar
+
+    year = d.year + (d.month == 12)
+    month = (d.month % 12) + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date_type(year, month, day)
+
+
+async def materialize_recurring(db: AsyncSession, hotel_id: uuid.UUID) -> int:
+    """Carry recurring costs forward: every MONTHLY-recurring expense that is the
+    latest in its chain spawns next month's copy once that date arrives. Runs
+    lazily whenever the list is viewed — idempotent (the chain link is unique),
+    capped, and best-effort. Turning is_recurring OFF stops the chain."""
+    today = date_type.today()
+    rows = await db.execute(
+        select(Expense).where(
+            Expense.hotel_id == hotel_id,
+            Expense.is_recurring.is_(True),
+            Expense.recurrence == "MONTHLY",
+        )
+    )
+    all_rec = list(rows.scalars().all())
+    has_successor = {e.recurred_from for e in all_rec if e.recurred_from}
+    created = 0
+    for e in all_rec:
+        cur = e
+        # walk forward from the latest link only
+        if cur.id in has_successor:
+            continue
+        for _ in range(12):  # cap: never explode on ancient rows
+            nxt = _next_month(cur.date)
+            if nxt > today:
+                break
+            copy = Expense(
+                hotel_id=hotel_id,
+                category_id=cur.category_id,
+                date=nxt,
+                amount=cur.amount,
+                vat_amount=cur.vat_amount,
+                description=cur.description,
+                vendor_id=cur.vendor_id,
+                payment_method=cur.payment_method,
+                is_recurring=True,
+                recurrence="MONTHLY",
+                recurred_from=cur.id,
+            )
+            db.add(copy)
+            await db.flush()
+            created += 1
+            cur = copy
+    if created:
+        await db.commit()
+    return created
+
+
+async def month_duplicates(
+    db: AsyncSession, hotel_id: uuid.UUID, category_id: uuid.UUID, on: date_type
+) -> list[Expense]:
+    """Existing expenses in the SAME fixed category and calendar month — the
+    'rent already logged, don't double-spend' warning."""
+    start = on.replace(day=1)
+    end = _next_month(start)
+    rows = await db.execute(
+        select(Expense).where(
+            Expense.hotel_id == hotel_id,
+            Expense.category_id == category_id,
+            Expense.date >= start,
+            Expense.date < end,
+        )
+    )
+    return list(rows.scalars().all())
+
+
 # ── Expenses ────────────────────────────────────────────────────────────────
 async def create_expense(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Expense:
     exp = Expense(hotel_id=hotel_id, **fields)
@@ -141,8 +216,13 @@ async def list_expenses(
     if category_id:
         stmt = stmt.where(Expense.category_id == category_id)
     rows = await db.execute(stmt.order_by(Expense.date.desc()))
-    return [
-        {
+    out = []
+    for e, c in rows.all():
+        desc = e.description or ""
+        from_payroll = "[payroll:" in desc
+        if from_payroll:
+            desc = desc.split("[payroll:")[0].strip()
+        out.append({
             "id": e.id,
             "category_id": e.category_id,
             "category_name": c.name,
@@ -150,12 +230,14 @@ async def list_expenses(
             "date": e.date,
             "amount": e.amount,
             "vat_amount": e.vat_amount,
-            "description": e.description,
+            "description": desc or None,
             "payment_method": e.payment_method,
             "is_recurring": e.is_recurring,
-        }
-        for e, c in rows.all()
-    ]
+            "recurrence": e.recurrence,
+            "auto_added": e.recurred_from is not None,
+            "from_payroll": from_payroll,
+        })
+    return out
 
 
 async def summary(

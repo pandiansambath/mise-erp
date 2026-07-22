@@ -77,6 +77,8 @@ export default function ExpensesPage() {
   // are summed into the saved total, and the split is recorded in the description.
   const [extra, setExtra] = useState("");
   const [extraReason, setExtraReason] = useState("");
+  const [repeats, setRepeats] = useState(false); // auto-log again every month
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // ⌘K "Add an expense" (?new=1) → scroll, ring-pulse and focus the form
   useDeepLink({ new: () => spotlight("expense-form") }, !loading);
@@ -182,23 +184,60 @@ export default function ExpensesPage() {
         ex > 0
           ? `${description ? description + " — " : ""}£${base.toFixed(2)} base + £${ex.toFixed(2)} extra${extraReason ? ` (${extraReason})` : ""}`
           : description || null;
-      await api.post<Expense>("/expenses", {
+      const body = {
         category_id: categoryId,
         date,
         amount: total,
         vat_amount: vat || "0",
         payment_method: method,
         description: desc,
-      });
+        is_recurring: repeats,
+        recurrence: repeats ? "MONTHLY" : null,
+      };
+      if (editingId) {
+        await api.patch(`/expenses/${editingId}`, body);
+      } else {
+        try {
+          await api.post<Expense>("/expenses", body);
+        } catch (err) {
+          // Same fixed cost twice in a month → the server warns. Human decides.
+          if (err instanceof ApiError && err.status === 409) {
+            const sure = await confirm({
+              title: "Possible double-count",
+              message: `${err.message} Log it anyway?`,
+              confirmText: "Log anyway",
+              tone: "danger",
+            });
+            if (!sure) return;
+            await api.post<Expense>(`/expenses?force=true`, body);
+          } else {
+            throw err;
+          }
+        }
+      }
       setAmount("");
       setVat("");
       setDescription("");
       setExtra("");
       setExtraReason("");
+      setRepeats(false);
+      setEditingId(null);
       await loadData(from, to);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add expense");
     }
+  }
+
+  function startEdit(exp: Expense) {
+    setEditingId(exp.id);
+    setCategoryId(exp.category_id);
+    setDate(exp.date);
+    setAmount(exp.amount);
+    setVat(exp.vat_amount !== "0.00" && exp.vat_amount !== "0" ? exp.vat_amount : "");
+    setMethod(exp.payment_method);
+    setDescription(exp.description ?? "");
+    setRepeats(exp.is_recurring);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function remove(id: string) {
@@ -479,9 +518,23 @@ export default function ExpensesPage() {
                           {x.payment_method && (
                             <Badge tone="slate">{METHOD_LABEL[x.payment_method] ?? x.payment_method}</Badge>
                           )}
+                          {x.from_payroll && (
+                            <Badge tone="green">💷 from payroll</Badge>
+                          )}
+                          {x.auto_added && (
+                            <Badge tone="green">🔁 auto-added</Badge>
+                          )}
+                          {x.is_recurring && !x.auto_added && (
+                            <Badge tone="amber">🔁 repeats monthly</Badge>
+                          )}
                         </td>
                         <td className="px-5 py-3 text-right font-mono font-medium text-fg">{format(x.amount)}</td>
                         <td className="px-5 py-3 text-right">
+                          {canWrite && !x.from_payroll && (
+                            <Button size="sm" variant="ghost" onClick={() => startEdit(x)} title="Edit this entry in the form">
+                              ✏️ Edit
+                            </Button>
+                          )}
                           {canWrite && (
                             <Button size="sm" variant="ghost" onClick={() => remove(x.id)}>
                               Remove
@@ -501,7 +554,13 @@ export default function ExpensesPage() {
         <div className="space-y-4 self-start lg:sticky lg:top-4">
           {canWrite && (
             <Card id="expense-form">
-              <h3 className="mb-3 font-semibold text-fg">Add expense</h3>
+              <h3 className="mb-3 font-semibold text-fg">{editingId ? "✏️ Edit expense" : "Add expense"}</h3>
+              {editingId && (
+                <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
+                  Editing an existing entry — Save updates it in place.{" "}
+                  <button type="button" className="underline" onClick={() => { setEditingId(null); setAmount(""); setDescription(""); setRepeats(false); }}>cancel</button>
+                </p>
+              )}
               <form onSubmit={addExpense} className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-fg-soft">Category</label>
@@ -552,9 +611,17 @@ export default function ExpensesPage() {
                   <label className="block text-sm font-medium text-fg-soft">Description</label>
                   <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
                 </div>
+                <label className="col-span-2 flex items-start gap-2 text-sm text-fg-soft">
+                  <input type="checkbox" checked={repeats} onChange={(e) => setRepeats(e.target.checked)} className="mt-0.5" />
+                  <span>
+                    🔁 <b className="text-fg">Repeats every month</b> — Mise will log this again
+                    automatically next month (rent, gas, internet…). Untick the badge on any
+                    auto-added copy to stop the chain.
+                  </span>
+                </label>
                 <div className="col-span-2 flex flex-wrap items-center gap-2">
                   <Button type="submit" variant="primary">
-                    Add expense
+                    {editingId ? "Save changes ✓" : "Add expense"}
                   </Button>
                   <Button type="button" variant="soft" onClick={startPettyCash} title="Cash to staff, or something bought outside">
                     ＋ Petty cash

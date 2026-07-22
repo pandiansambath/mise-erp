@@ -75,6 +75,9 @@ class ExpenseOut(BaseModel):
     description: str | None
     payment_method: str
     is_recurring: bool
+    recurrence: str | None = None
+    auto_added: bool = False
+    from_payroll: bool = False
 
 
 class CategoryTotal(BaseModel):

@@ -749,6 +749,9 @@ export interface Expense {
   description: string | null;
   payment_method: string;
   is_recurring: boolean;
+  recurrence?: string | null;
+  auto_added?: boolean;
+  from_payroll?: boolean;
 }
 
 export interface ExpenseSummary {

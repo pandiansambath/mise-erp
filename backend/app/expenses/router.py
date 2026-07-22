@@ -74,6 +74,12 @@ async def list_expenses(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("expenses:read")),
 ) -> list[ExpenseOut]:
+    # Carry-forward: recurring costs whose next month has arrived appear
+    # automatically the moment anyone opens the list. Never blocks the view.
+    try:
+        await service.materialize_recurring(db, user.hotel_id)
+    except Exception:  # noqa: BLE001
+        await db.rollback()
     rows = await service.list_expenses(
         db, user.hotel_id, date_from=date_from, date_to=date_to, category_id=category_id
     )
@@ -83,11 +89,27 @@ async def list_expenses(
 @router.post("", response_model=ExpenseOut, status_code=status.HTTP_201_CREATED)
 async def create_expense(
     payload: ExpenseCreate,
+    force: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("expenses:write")),
 ) -> ExpenseOut:
-    if await service.get_category(db, payload.category_id, user.hotel_id) is None:
+    cat_check = await service.get_category(db, payload.category_id, user.hotel_id)
+    if cat_check is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
+    # Fixed costs (rent, gas…) happen ONCE a month — a second entry in the same
+    # month is almost always a double-count. Warn (409); the UI confirms + forces.
+    if cat_check.kind == "FIXED" and not force:
+        dups = await service.month_duplicates(
+            db, user.hotel_id, payload.category_id, payload.date
+        )
+        if dups:
+            d0 = dups[0]
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"{cat_check.name} is already logged this month — "
+                f"£{d0.amount} on {d0.date.strftime('%d %b')}. Logging it again "
+                "would double-count the cost.",
+            )
     exp = await service.create_expense(
         db, user.hotel_id, created_by=user.id, **payload.model_dump(exclude_none=True)
     )
@@ -110,6 +132,9 @@ async def create_expense(
             "description": exp.description,
             "payment_method": exp.payment_method,
             "is_recurring": exp.is_recurring,
+            "recurrence": exp.recurrence,
+            "auto_added": exp.recurred_from is not None,
+            "from_payroll": False,
         }
     )
 
@@ -138,6 +163,9 @@ async def update_expense(
             "description": exp.description,
             "payment_method": exp.payment_method,
             "is_recurring": exp.is_recurring,
+            "recurrence": exp.recurrence,
+            "auto_added": exp.recurred_from is not None,
+            "from_payroll": False,
         }
     )
 

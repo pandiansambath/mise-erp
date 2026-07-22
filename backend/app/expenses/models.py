@@ -68,6 +68,9 @@ class Expense(Base):
     payment_method: Mapped[str] = mapped_column(String(20), nullable=False, default="BANK")
     is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     recurrence: Mapped[str | None] = mapped_column(String(10))  # MONTHLY | WEEKLY | None
+    # Carry-forward chain: this row was auto-created from that one. The LATEST
+    # link in a chain is the one that spawns next month's copy.
+    recurred_from: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("expenses.id"))
     receipt_url: Mapped[str | None] = mapped_column(String(500))
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
