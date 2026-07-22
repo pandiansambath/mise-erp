@@ -295,9 +295,10 @@ async def test_strict_staff_email_verification_and_admin_controls(
     admin = await make_user("boss@x.com", Role.SUPER_ADMIN.value)
     h = auth_header(admin)
     emp = await es.create_employee(db, hotel.id, full_name="Priya")
+    emp_id = emp.id  # capture BEFORE any expire_all — the URLs reuse it later
 
     made = await client.post(
-        f"/api/employees/{emp.id}/account", headers=h,
+        f"/api/employees/{emp_id}/account", headers=h,
         json={"email": "priya@staff.com", "password": "StaffPass123", "role": "STAFF"},
     )
     assert made.status_code == 200
@@ -309,12 +310,11 @@ async def test_strict_staff_email_verification_and_admin_controls(
     assert blocked.status_code == 403
 
     # admin sees the unverified chip
-    login_status = await client.get(f"/api/employees/{emp.id}/login", headers=h)
+    login_status = await client.get(f"/api/employees/{emp_id}/login", headers=h)
     assert login_status.json()["login"]["email_verified"] is False
     assert login_status.json()["login"]["email"] == "priya@staff.com"
 
     # verify via the token the email carried
-    hid = hotel.id
     db.expire_all()
     u = (await db.execute(_select(User).where(User.email == "priya@staff.com"))).scalar_one()
     assert u.verify_token
@@ -326,12 +326,12 @@ async def test_strict_staff_email_verification_and_admin_controls(
     assert now_in.status_code == 200
 
     # admin controls: change email → back to unverified
-    ce = await client.post(f"/api/employees/{emp.id}/login/email", headers=h,
+    ce = await client.post(f"/api/employees/{emp_id}/login/email", headers=h,
                            json={"email": "priya2@staff.com"})
     assert ce.status_code == 200 and ce.json()["login"]["email_verified"] is False
 
     # reset password (staff notified, not emailed the password)
-    rp = await client.post(f"/api/employees/{emp.id}/login/password", headers=h,
+    rp = await client.post(f"/api/employees/{emp_id}/login/password", headers=h,
                            json={"password": "BrandNew456"})
     assert rp.status_code == 200
 
@@ -339,7 +339,7 @@ async def test_strict_staff_email_verification_and_admin_controls(
     db.expire_all()
     u2 = (await db.execute(_select(User).where(User.email == "priya2@staff.com"))).scalar_one()
     await client.post("/api/auth/verify-email", json={"token": u2.verify_token})
-    await client.post(f"/api/employees/{emp.id}/login/active", headers=h,
+    await client.post(f"/api/employees/{emp_id}/login/active", headers=h,
                       json={"is_active": False})
     dead = await client.post(
         "/api/auth/login", json={"email": "priya2@staff.com", "password": "BrandNew456"}
@@ -347,7 +347,6 @@ async def test_strict_staff_email_verification_and_admin_controls(
     assert dead.status_code == 401  # inactive users can't authenticate
 
     # the audit history tells the whole story
-    hist = await client.get(f"/api/employees/{emp.id}/history", headers=h)
+    hist = await client.get(f"/api/employees/{emp_id}/history", headers=h)
     actions = {e["action"] for e in hist.json()["events"]}
     assert {"staff.account_created", "staff.email_changed", "staff.password_reset"} <= actions
-    assert hid == hotel.id
