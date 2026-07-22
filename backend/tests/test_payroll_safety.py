@@ -279,3 +279,75 @@ async def test_attendance_history_range_and_export(client, make_user, auth_heade
     )
     assert xlsx.status_code == 200
     assert xlsx.content[:2] == b"PK"  # xlsx is a zip
+
+
+@pytest.mark.asyncio
+async def test_strict_staff_email_verification_and_admin_controls(
+    client, make_user, auth_header, db, hotel
+):
+    """New staff logins must verify before entering; the admin can see status,
+    resend, change email, reset password, deactivate — all audited."""
+    from sqlalchemy import select as _select
+
+    from app.auth.models import User
+    from app.employees import service as es
+
+    admin = await make_user("boss@x.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    emp = await es.create_employee(db, hotel.id, full_name="Priya")
+
+    made = await client.post(
+        f"/api/employees/{emp.id}/account", headers=h,
+        json={"email": "priya@staff.com", "password": "StaffPass123", "role": "STAFF"},
+    )
+    assert made.status_code == 200
+
+    # unverified → login blocked
+    blocked = await client.post(
+        "/api/auth/login", json={"email": "priya@staff.com", "password": "StaffPass123"}
+    )
+    assert blocked.status_code == 403
+
+    # admin sees the unverified chip
+    login_status = await client.get(f"/api/employees/{emp.id}/login", headers=h)
+    assert login_status.json()["login"]["email_verified"] is False
+    assert login_status.json()["login"]["email"] == "priya@staff.com"
+
+    # verify via the token the email carried
+    hid = hotel.id
+    db.expire_all()
+    u = (await db.execute(_select(User).where(User.email == "priya@staff.com"))).scalar_one()
+    assert u.verify_token
+    ok = await client.post("/api/auth/verify-email", json={"token": u.verify_token})
+    assert ok.status_code == 200
+    now_in = await client.post(
+        "/api/auth/login", json={"email": "priya@staff.com", "password": "StaffPass123"}
+    )
+    assert now_in.status_code == 200
+
+    # admin controls: change email → back to unverified
+    ce = await client.post(f"/api/employees/{emp.id}/login/email", headers=h,
+                           json={"email": "priya2@staff.com"})
+    assert ce.status_code == 200 and ce.json()["login"]["email_verified"] is False
+
+    # reset password (staff notified, not emailed the password)
+    rp = await client.post(f"/api/employees/{emp.id}/login/password", headers=h,
+                           json={"password": "BrandNew456"})
+    assert rp.status_code == 200
+
+    # verify the new email, then deactivate → login refused even though verified
+    db.expire_all()
+    u2 = (await db.execute(_select(User).where(User.email == "priya2@staff.com"))).scalar_one()
+    await client.post("/api/auth/verify-email", json={"token": u2.verify_token})
+    await client.post(f"/api/employees/{emp.id}/login/active", headers=h,
+                      json={"is_active": False})
+    dead = await client.post(
+        "/api/auth/login", json={"email": "priya2@staff.com", "password": "BrandNew456"}
+    )
+    assert dead.status_code == 401  # inactive users can't authenticate
+
+    # the audit history tells the whole story
+    hist = await client.get(f"/api/employees/{emp.id}/history", headers=h)
+    actions = {e["action"] for e in hist.json()["events"]}
+    assert {"staff.account_created", "staff.email_changed", "staff.password_reset"} <= actions
+    assert hid == hotel.id

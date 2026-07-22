@@ -185,11 +185,13 @@ async def test_create_login_for_employee(client, make_user, auth_header):
     assert resp.status_code == 200
     assert resp.json()["user_id"] is not None
 
-    # the new staff login works
-    login = await client.post(
+    # STRICT EMAIL: a brand-new staff login is UNVERIFIED — sign-in is blocked
+    # until they click the verification link the account creation emailed.
+    blocked = await client.post(
         "/api/auth/login", json={"email": "selvi@nirai.com", "password": "StaffPass123"}
     )
-    assert login.status_code == 200
+    assert blocked.status_code == 403
+    assert "verify" in blocked.json()["detail"].lower()
 
     # duplicate email is rejected
     dup = await client.post(

@@ -45,3 +45,24 @@ async def list_events(db: AsyncSession, hotel_id: uuid.UUID, limit: int = 150) -
         .limit(limit)
     )
     return list(rows.scalars().all())
+
+
+async def list_for_entity(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    entity_type: str,
+    entity_id: uuid.UUID,
+    limit: int = 100,
+) -> list[AuditEvent]:
+    """Audit trail for ONE entity (e.g. an employee) — newest first."""
+    rows = await db.execute(
+        select(AuditEvent)
+        .where(
+            AuditEvent.hotel_id == hotel_id,
+            AuditEvent.entity_type == entity_type,
+            AuditEvent.entity_id == entity_id,
+        )
+        .order_by(desc(AuditEvent.created_at))
+        .limit(limit)
+    )
+    return list(rows.scalars().all())

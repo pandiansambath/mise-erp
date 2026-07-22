@@ -78,10 +78,117 @@ async def create_account_for_employee(
         db, email=email, password=password, role=role, hotel_id=emp.hotel_id,
         preferred_name=first_name,
     )
+    # STRICT EMAIL (2026-07-15): new staff logins must verify before they can
+    # sign in — a mistyped address must never reach the app. Existing accounts
+    # (created before this) stay grandfathered as verified.
+    await _mark_unverified_and_email(db, user, hotel_name=None)
     emp.user_id = user.id
     await db.commit()
     await db.refresh(emp)
     return emp
+
+
+async def _mark_unverified_and_email(db, user, hotel_name: str | None) -> None:
+    """Flip a user to unverified, mint a token, and email the verify link."""
+    import secrets as _secrets
+
+    from app.core import notify
+    from app.core.config import settings
+
+    user.email_verified = False
+    user.verify_token = _secrets.token_urlsafe(32)
+    await db.flush()
+    verify_url = f"{settings.app_base_url}/verify-email?token={user.verify_token}"
+    await notify.send_email(
+        user.email,
+        "Confirm your email to access Mise \u2709\ufe0f",
+        f"Your manager set up a Mise login for you. Confirm your email to sign in: {verify_url}",
+        html=notify.render_email(
+            badge="\u2709\ufe0f Verify your email",
+            heading="One click to activate your Mise login",
+            intro="Your manager created a Mise account for you. Confirm this is your "
+            "email and you can sign in — this keeps payslips and alerts reaching the "
+            "right inbox.",
+            cta_label="Confirm email & activate",
+            cta_url=verify_url,
+            footnote="If you weren't expecting this, you can ignore it.",
+        ),
+    )
+
+
+async def staff_login_status(db, emp: Employee) -> dict | None:
+    """The linked login's email + verified + active state (for the admin UI)."""
+    if not emp.user_id:
+        return None
+    from app.auth.models import User
+
+    u = await db.get(User, emp.user_id)
+    if u is None:
+        return None
+    return {
+        "user_id": str(u.id),
+        "email": u.email,
+        "role": u.role,
+        "email_verified": u.email_verified,
+        "is_active": u.is_active,
+        "last_login": u.last_login.isoformat() if u.last_login else None,
+    }
+
+
+async def change_staff_email(db, emp: Employee, new_email: str) -> None:
+    """Admin changes a staff email → must re-verify; login blocked till they do."""
+    from app.auth import service as auth_service
+    from app.auth.models import User
+
+    if not emp.user_id:
+        raise AccountError("This employee has no login yet")
+    existing = await auth_service.get_user_by_email(db, new_email)
+    if existing and existing.id != emp.user_id:
+        raise AccountError("That email already has an account")
+    u = await db.get(User, emp.user_id)
+    u.email = new_email.strip().lower()
+    await _mark_unverified_and_email(db, u, hotel_name=None)
+    await db.commit()
+
+
+async def reset_staff_password(db, emp: Employee, new_password: str) -> None:
+    """Admin sets a new password → notify the staff (never email the password)."""
+    from app.auth.models import User
+    from app.core import notify
+    from app.core.config import settings
+    from app.core.security import hash_password
+
+    if not emp.user_id:
+        raise AccountError("This employee has no login yet")
+    u = await db.get(User, emp.user_id)
+    u.password_hash = hash_password(new_password)
+    await db.commit()
+    await notify.send_email(
+        u.email,
+        "Your Mise password was changed \ud83d\udd11",
+        "Your manager set a new password on your Mise account. Ask them for it, or "
+        f"reset it yourself: {settings.app_base_url}/forgot-password",
+        html=notify.render_email(
+            badge="\ud83d\udd11 Password changed",
+            heading="Your admin set a new password",
+            intro="For your security we never email passwords \u2014 your manager will "
+            "give you the new one directly. If this wasn't expected, secure your "
+            "account with the button below.",
+            cta_label="Reset my password",
+            cta_url=f"{settings.app_base_url}/forgot-password",
+            accent="#d97742",
+        ),
+    )
+
+
+async def set_staff_active(db, emp: Employee, active: bool) -> None:
+    from app.auth.models import User
+
+    if not emp.user_id:
+        raise AccountError("This employee has no login yet")
+    u = await db.get(User, emp.user_id)
+    u.is_active = active
+    await db.commit()
 
 
 async def get_employee(

@@ -3,6 +3,7 @@ import uuid
 from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
@@ -103,7 +104,154 @@ async def create_employee_account(
         )
     except service.AccountError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="staff.account_created",
+        summary=f"Login created for {emp.full_name} ({payload.email}) — verification sent",
+        entity_type="employee", entity_id=emp.id,
+    )
     return EmployeeOut.model_validate(emp)
+
+
+# ── Staff-login management (superadmin/manager) + strict email verification ──
+class StaffEmailIn(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+
+class StaffPasswordIn(BaseModel):
+    password: str = Field(min_length=8, max_length=128)
+
+
+class StaffActiveIn(BaseModel):
+    is_active: bool
+
+
+@router.get("/{employee_id}/login")
+async def staff_login(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> dict:
+    """The linked login's email + verified/active state (drives the admin chips)."""
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    return {"login": await service.staff_login_status(db, emp)}
+
+
+@router.post("/{employee_id}/login/email")
+async def change_email(
+    employee_id: uuid.UUID,
+    payload: StaffEmailIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    try:
+        await service.change_staff_email(db, emp, payload.email)
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="staff.email_changed",
+        summary=f"Email for {emp.full_name} changed to {payload.email} — re-verification sent",
+        entity_type="employee", entity_id=emp.id,
+    )
+    return {"login": await service.staff_login_status(db, emp)}
+
+
+@router.post("/{employee_id}/login/password")
+async def reset_password(
+    employee_id: uuid.UUID,
+    payload: StaffPasswordIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    try:
+        await service.reset_staff_password(db, emp, payload.password)
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="staff.password_reset",
+        summary=f"Password reset for {emp.full_name} by admin — staff notified by email",
+        entity_type="employee", entity_id=emp.id,
+    )
+    return {"ok": True}
+
+
+@router.post("/{employee_id}/login/active")
+async def set_active(
+    employee_id: uuid.UUID,
+    payload: StaffActiveIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    try:
+        await service.set_staff_active(db, emp, payload.is_active)
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    verb = "reactivated" if payload.is_active else "deactivated"
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action=f"staff.{verb}",
+        summary=f"Login for {emp.full_name} {verb}",
+        entity_type="employee", entity_id=emp.id,
+    )
+    return {"login": await service.staff_login_status(db, emp)}
+
+
+@router.post("/{employee_id}/login/resend-verification")
+async def resend_verification(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None or not emp.user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No login for this employee")
+    from app.auth.models import User as UserModel
+
+    u = await db.get(UserModel, emp.user_id)
+    if u.email_verified:
+        return {"already_verified": True}
+    await service._mark_unverified_and_email(db, u, hotel_name=None)
+    await db.commit()
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="staff.verification_resent",
+        summary=f"Verification email resent to {emp.full_name}",
+        entity_type="employee", entity_id=emp.id,
+    )
+    return {"sent": True}
+
+
+@router.get("/{employee_id}/history")
+async def employee_history(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> dict:
+    """The admin action timeline for this employee (added, email set, verified,
+    password reset, (de)activated…) — a clean audit story on the Employees page."""
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    events = await audit.list_for_entity(db, user.hotel_id, "employee", employee_id)
+    return {
+        "events": [
+            {
+                "action": e.action,
+                "summary": e.summary,
+                "by": e.user_email,
+                "at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in events
+        ]
+    }
 
 
 # ── Attendance ────────────────────────────────────────────────────────────
