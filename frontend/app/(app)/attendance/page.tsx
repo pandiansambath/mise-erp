@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import Link from "next/link";
+import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { Bars, CalendarHeat } from "@/components/charts";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { useHotelTime } from "@/lib/time";
@@ -11,6 +13,31 @@ import { Select } from "@/components/Select";
 import ChefMascot from "@/components/auth/ChefMascot";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const daysAgoISO = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+
+type AttHistory = {
+  employee: { id: string; name: string; salary_type: string };
+  date_from: string;
+  date_to: string;
+  totals: {
+    present: number; half_days: number; absent: number; recorded_days: number;
+    total_hours: string; indicative_pay: string; basis: string;
+  };
+  days: {
+    date: string; status: string; working_hours: string | null;
+    clock_in: string | null; clock_out: string | null; break_minutes: number;
+  }[];
+};
+
+const STATUS_TONE: Record<string, string> = {
+  PRESENT: "text-emerald-500",
+  HALF_DAY: "text-amber-500",
+  ABSENT: "text-rose-400",
+};
 
 export default function AttendancePage() {
   const { user } = useAuth();
@@ -176,13 +203,23 @@ export default function AttendancePage() {
           <button
             onClick={() => downloadFile(`/attendance/timesheet.xlsx?on=${day}`, `timesheet-${day}.xlsx`)}
             className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
+            title="Just this one day"
           >
-            ⬇ Excel
+            ⬇ Excel (day)
+          </button>
+          <button
+            onClick={() => downloadFile(`/attendance/range.xlsx?date_from=${daysAgoISO(29)}&date_to=${today()}`, `attendance-last-30-days.xlsx`)}
+            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
+            title="Everyone, last 30 days"
+          >
+            ⬇ Last 30 days
           </button>
         </div>
       </div>
 
       {error && <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+
+      <AttendanceHistoryCard employees={employees} format={format} />
 
       {/* ── THE PUNCH CLOCK — one big physical button, chef looking on ── */}
       {isToday && canWrite && employees.length > 0 && (() => {
@@ -446,5 +483,148 @@ export default function AttendancePage() {
         </div>
       )}
     </div>
+  );
+}
+
+
+/* ── Per-person attendance history: any range, charts, totals, download ── */
+function AttendanceHistoryCard({ employees, format }: {
+  employees: Employee[];
+  format: (v: string) => string;
+}) {
+  const [empId, setEmpId] = useState("");
+  const [mode, setMode] = useState<"WEEK" | "MONTH" | "CUSTOM">("MONTH");
+  const [from, setFrom] = useState(daysAgoISO(29));
+  const [to, setTo] = useState(today());
+  const [hist, setHist] = useState<AttHistory | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function applyMode(m: "WEEK" | "MONTH" | "CUSTOM") {
+    setMode(m);
+    if (m === "WEEK") { setFrom(daysAgoISO(6)); setTo(today()); }
+    else if (m === "MONTH") { setFrom(daysAgoISO(29)); setTo(today()); }
+  }
+
+  const load = useCallback(() => {
+    if (!empId) { setHist(null); return; }
+    setBusy(true);
+    api.get<AttHistory>(`/attendance/history/${empId}?date_from=${from}&date_to=${to}`)
+      .then(setHist).catch(() => setHist(null)).finally(() => setBusy(false));
+  }, [empId, from, to]);
+  useEffect(load, [load]);
+
+  return (
+    <Card className="mise-feel mb-6">
+      <h3 className="font-semibold text-fg">📖 Attendance history by person</h3>
+      <p className="mt-1 text-sm text-fg-faint">
+        No more clicking day by day — pick a person and a range and see the whole picture:
+        every day, total hours, and the pay it would earn. Download it too.
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="w-56">
+          <label className="block text-xs font-medium text-fg-faint">Person</label>
+          <Select
+            className="mt-1"
+            value={empId}
+            onChange={setEmpId}
+            options={[{ value: "", label: "Choose a person\u2026" },
+              ...employees.map((e) => ({ value: e.id, label: e.full_name }))]}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-fg-faint">Range</label>
+          <Segmented
+            className="mt-1"
+            value={mode}
+            onChange={(v) => applyMode(v as "WEEK" | "MONTH" | "CUSTOM")}
+            options={[
+              { value: "WEEK", label: "Last 7 days" },
+              { value: "MONTH", label: "Last 30 days" },
+              { value: "CUSTOM", label: "From\u2192to" },
+            ]}
+          />
+        </div>
+        {mode === "CUSTOM" && (
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="From" />
+            <span className="text-fg-faint">\u2192</span>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="To" />
+          </div>
+        )}
+        {empId && (
+          <Button variant="secondary" onClick={() => downloadFile(
+            `/attendance/range.xlsx?date_from=${from}&date_to=${to}&employee_id=${empId}`,
+            `attendance-${hist?.employee.name ?? "person"}-${from}-to-${to}.xlsx`)}>
+            \u2b07 Download
+          </Button>
+        )}
+      </div>
+
+      {busy && <p className="mt-4 text-sm text-fg-faint">Loading\u2026</p>}
+      {hist && !busy && (
+        <div className="mise-cadence-in mt-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {[
+              ["Present", String(hist.totals.present), "text-emerald-500"],
+              ["Half-days", String(hist.totals.half_days), "text-amber-500"],
+              ["Absent", String(hist.totals.absent), "text-rose-400"],
+              ["Total hours", hist.totals.total_hours, "text-fg"],
+              ["Indicative pay", format(hist.totals.indicative_pay), "text-brand-400"],
+            ].map(([l, v, c]) => (
+              <div key={l} className="mise-well rounded-xl p-2.5 text-center">
+                <p className={`font-mono text-base font-bold ${c}`}>{v}</p>
+                <p className="text-[10px] uppercase tracking-wide text-fg-faint">{l}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-center text-[11px] text-fg-faint">
+            indicative pay = {hist.totals.basis} \u00b7 the real, overlap-checked run lives in{" "}
+            <Link href="/payroll" className="text-brand-400 underline">Payroll</Link>
+          </p>
+
+          {hist.days.length > 0 ? (
+            <>
+              <div className="mt-4">
+                <CalendarHeat
+                  days={hist.days.map((d) => ({
+                    date: d.date,
+                    value: d.status === "PRESENT" ? 2 : d.status === "HALF_DAY" ? 1 : 0,
+                  }))}
+                  formatValue={(v) => (v === 2 ? "present" : v === 1 ? "half-day" : "absent")}
+                />
+              </div>
+              <div className="mt-4">
+                <Bars items={[...hist.days].reverse().map((d) => ({
+                  label: d.date.slice(5),
+                  value: parseFloat(d.working_hours ?? "0") || 0,
+                  color: d.status === "PRESENT" ? "#10b981" : d.status === "HALF_DAY" ? "#f59e0b" : "#f43f5e",
+                }))} formatValue={(v) => `${v}h`} />
+                <p className="mt-1 text-center text-[10px] text-fg-faint">hours worked each day</p>
+              </div>
+              <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-line">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-line">
+                    {hist.days.map((d) => (
+                      <tr key={d.date}>
+                        <td className="px-3 py-2 font-mono text-fg-soft">{d.date}</td>
+                        <td className={`px-3 py-2 font-semibold ${STATUS_TONE[d.status] ?? "text-fg-faint"}`}>
+                          {d.status.replace("_", "-").toLowerCase()}
+                        </td>
+                        <td className="px-3 py-2 text-fg-faint">
+                          {d.clock_in ? `${d.clock_in.slice(11, 16)}\u2013${d.clock_out ? d.clock_out.slice(11, 16) : "\u2026"}` : "\u2014"}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-fg">{d.working_hours ?? "0"}h</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <p className="mise-well mt-3 rounded-xl p-4 text-sm text-fg-faint">No attendance recorded in this range.</p>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

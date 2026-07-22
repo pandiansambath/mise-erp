@@ -315,6 +315,78 @@ async def list_attendance_for_employee(
     return [_attendance_row(a, e, allowance, ppm) for a, e in pairs]
 
 
+async def attendance_history(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    employee_id: uuid.UUID,
+    date_from: date_type,
+    date_to: date_type,
+) -> dict:
+    """One person's attendance over ANY range + totals + an indicative pay figure
+    (their rate × the recorded time — labelled indicative; real pay runs live in
+    Payroll with its overlap guard)."""
+    emp = await get_employee(db, employee_id, hotel_id)
+    if emp is None:
+        return {}
+    allowance, ppm = await _break_policy(db, hotel_id)
+    rows = await db.execute(
+        select(Attendance, Employee)
+        .join(Employee, Attendance.employee_id == Employee.id)
+        .where(
+            Attendance.employee_id == employee_id,
+            Attendance.date >= date_from,
+            Attendance.date <= date_to,
+        )
+        .order_by(Attendance.date.desc())
+    )
+    days = [_attendance_row(a, e, allowance, ppm) for a, e in rows.all()]
+    present = sum(1 for d in days if d["status"] == "PRESENT")
+    half = sum(1 for d in days if d["status"] == "HALF_DAY")
+    absent = sum(1 for d in days if d["status"] == "ABSENT")
+    total_hours = sum((Decimal(str(d["working_hours"] or 0)) for d in days), Decimal("0"))
+    if emp.salary_type == "HOURLY" and emp.hourly_rate:
+        indicative = (total_hours * emp.hourly_rate).quantize(Decimal("0.01"))
+        basis = f"{total_hours}h × £{emp.hourly_rate}/h"
+    elif emp.monthly_salary:
+        daily = emp.monthly_salary / Decimal("26")
+        indicative = (daily * (present + Decimal("0.5") * half)).quantize(Decimal("0.01"))
+        basis = f"{present}d + {half}×half at £{daily.quantize(Decimal('0.01'))}/day (salary ÷ 26)"
+    else:
+        indicative, basis = Decimal("0"), "no rate set on the employee"
+    return {
+        "employee": {
+            "id": str(emp.id), "name": emp.full_name, "salary_type": emp.salary_type,
+            "pay_day": emp.pay_day, "pay_weekday": emp.pay_weekday,
+        },
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "totals": {
+            "present": present, "half_days": half, "absent": absent,
+            "recorded_days": len(days), "total_hours": str(total_hours),
+            "indicative_pay": str(indicative), "basis": basis,
+        },
+        "days": days,
+    }
+
+
+async def list_attendance_range(
+    db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
+) -> list[dict]:
+    """Everyone's attendance across a range (for the range export)."""
+    allowance, ppm = await _break_policy(db, hotel_id)
+    rows = await db.execute(
+        select(Attendance, Employee)
+        .join(Employee, Attendance.employee_id == Employee.id)
+        .where(
+            Attendance.hotel_id == hotel_id,
+            Attendance.date >= date_from,
+            Attendance.date <= date_to,
+        )
+        .order_by(Attendance.date, Employee.full_name)
+    )
+    return [_attendance_row(a, e, allowance, ppm) for a, e in rows.all()]
+
+
 async def list_attendance(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> list[dict]:
     allowance, ppm = await _break_policy(db, hotel_id)
     rows = await db.execute(

@@ -152,6 +152,43 @@ async def timesheet_xlsx(
     )
 
 
+@attendance_router.get("/history/{employee_id}")
+async def attendance_history(
+    employee_id: uuid.UUID,
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> dict:
+    """One person, ANY range — full timeline + totals + indicative pay."""
+    out = await service.attendance_history(db, user.hotel_id, employee_id, date_from, date_to)
+    if not out:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    return out
+
+
+@attendance_router.get("/range.xlsx")
+async def attendance_range_xlsx(
+    date_from: date_type = Query(...),
+    date_to: date_type = Query(...),
+    employee_id: uuid.UUID | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> Response:
+    """The download: everyone (or one person) across any date range."""
+    rows = await service.list_attendance_range(db, user.hotel_id, date_from, date_to)
+    if employee_id:
+        rows = [r for r in rows if str(r.get("employee_id")) == str(employee_id)]
+    hotel = await db.get(Hotel, user.hotel_id)
+    xlsx = timesheet.generate_range_xlsx(rows, hotel, date_from, date_to)
+    return Response(
+        content=xlsx,
+        media_type=XLSX_MIME,
+        headers={"Content-Disposition":
+                 f'attachment; filename="attendance-{date_from}-to-{date_to}.xlsx"'},
+    )
+
+
 @attendance_router.post("/punch", response_model=AttendanceOut)
 async def punch(
     payload: PunchRequest,

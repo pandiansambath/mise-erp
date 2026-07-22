@@ -245,3 +245,37 @@ async def test_fixed_expense_duplicate_guard_and_carry_forward(
     # idempotent: listing again creates nothing new
     listing2 = (await client.get("/api/expenses", headers=h)).json()
     assert len([e for e in listing2 if e["category_name"] == "Gas"]) == len(gas_rows)
+
+
+@pytest.mark.asyncio
+async def test_attendance_history_range_and_export(client, make_user, auth_header, db, hotel):
+    """Per-person attendance history over a range: totals + indicative pay, and a
+    range xlsx download."""
+    from datetime import date as d
+
+    from app.employees import service as es
+
+    acct = await make_user("att1@x.com", Role.ACCOUNTANT.value)
+    h = auth_header(acct)
+    emp = await es.create_employee(
+        db, hotel.id, full_name="Rita", salary_type="HOURLY", hourly_rate=Decimal("12.00")
+    )
+    for day in (6, 7, 8):
+        await es.set_attendance(db, emp, d(2026, 7, day), status="PRESENT",
+                                working_hours_value=Decimal("8"))
+
+    hist = await client.get(
+        f"/api/attendance/history/{emp.id}?date_from=2026-07-01&date_to=2026-07-31", headers=h
+    )
+    assert hist.status_code == 200
+    body = hist.json()
+    assert body["employee"]["name"] == "Rita"
+    assert body["totals"]["present"] == 3
+    assert body["totals"]["total_hours"] == "24.00"
+    assert body["totals"]["indicative_pay"] == "288.00"  # 24h × £12
+
+    xlsx = await client.get(
+        "/api/attendance/range.xlsx?date_from=2026-07-01&date_to=2026-07-31", headers=h
+    )
+    assert xlsx.status_code == 200
+    assert xlsx.content[:2] == b"PK"  # xlsx is a zip

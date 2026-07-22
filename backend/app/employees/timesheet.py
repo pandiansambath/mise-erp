@@ -108,3 +108,30 @@ def generate_timesheet_xlsx(rows: list[dict], hotel, day) -> bytes:
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()
+
+
+def generate_range_xlsx(rows: list[dict], hotel, date_from, date_to) -> bytes:
+    """Any-range export: one row per person per day, plus a per-person totals tab."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Attendance"
+    ws.append(["Date", "Employee", "Status", "In", "Out", "Break (min)", "Hours"])
+    totals: dict[str, dict] = {}
+    for r in rows:
+        ws.append([
+            str(r.get("date", "")), r.get("employee_name", ""), r.get("status", ""),
+            _hm(r.get("clock_in")), _hm(r.get("clock_out")),
+            r.get("break_minutes") or 0, float(r.get("working_hours") or 0),
+        ])
+        t = totals.setdefault(r.get("employee_name", "?"), {"days": 0, "hours": 0.0})
+        t["days"] += 1
+        t["hours"] += float(r.get("working_hours") or 0)
+    style_table(ws)
+    ws2 = wb.create_sheet("Totals by person")
+    ws2.append(["Employee", "Recorded days", "Total hours"])
+    for name, t in sorted(totals.items()):
+        ws2.append([name, t["days"], round(t["hours"], 2)])
+    style_table(ws2)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
