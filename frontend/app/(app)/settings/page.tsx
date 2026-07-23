@@ -44,6 +44,15 @@ function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; la
   );
 }
 
+// The alert sender is accounts@<our-domain>; derive it from the current host so
+// it stays correct on any domain (takes the registrable domain, so a hotel
+// subdomain like acme.dineai.cloud still shows accounts@dineai.cloud).
+function senderEmail(): string {
+  if (typeof window === "undefined") return "accounts@mise.app";
+  const domain = window.location.hostname.split(".").slice(-2).join(".");
+  return `accounts@${domain}`;
+}
+
 export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
   const { user, hotel, refreshHotel } = useAuth();
@@ -245,7 +254,7 @@ export default function SettingsPage() {
       <Card className="mise-feel mb-6" id="s-alerts">
         <h3 className="font-semibold text-fg">Email alerts</h3>
         <p className="mt-1 text-sm text-fg-faint">
-          Sent from <b className="text-fg-soft">accounts@milagurestaurant.com</b> to{" "}
+          Sent from <b className="text-fg-soft">{senderEmail()}</b> to{" "}
           <b className="text-fg-soft">{user?.email}</b>. Pick exactly which moments deserve an
           email — everything else stays in the app.
         </p>

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import require, require_feature
 from app.auth.models import User
 from app.core import notify
+from app.core.config import settings
 from app.core.database import get_db
 from app.hotels.models import Hotel
 from app.safety import pdf as safety_pdf
@@ -59,7 +60,7 @@ async def create_log(
                     ("Logged by", user.email),
                 ],
                 cta_label="Open Food Safety",
-                cta_url="http://18.133.95.137/food-safety",
+                cta_url=f"{settings.app_base_url.rstrip('/')}/food-safety",
                 accent="#e11d48",
             ),
         )

@@ -89,6 +89,10 @@ def render_email(
     email a proud independent restaurant is happy to receive. `badge` is a
     short chip line above the heading (e.g. "🎉 New applicant"); `footnote`
     adds a quiet line under the CTA (e.g. how long a link lasts)."""
+    # Footer brand link follows the configured public URL, so it's correct on
+    # whatever domain we're served from (no hard-coded host).
+    base_url = (settings.app_base_url or "https://mise.app").rstrip("/")
+    base_host = base_url.split("//", 1)[-1]
     badge_html = ""
     if badge:
         badge_html = (
@@ -152,8 +156,8 @@ def render_email(
             You're running your kitchen the smart way — this is Mise keeping you a step ahead.
           </p>
           <p style="margin:6px 0 0;color:#94a3b8;font-size:11px;line-height:1.5;">
-            Sent by Mise, the restaurant ERP · <a href="https://milagurestaurant.com"
-            style="color:#059669;text-decoration:none;font-weight:600;">milagurestaurant.com</a>
+            Sent by Mise, the restaurant ERP · <a href="{base_url}"
+            style="color:#059669;text-decoration:none;font-weight:600;">{base_host}</a>
             · You receive these because you manage a venue on Mise — tune them any time in
             Settings → Email alerts.
           </p>

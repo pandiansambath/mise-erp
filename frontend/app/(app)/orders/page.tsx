@@ -435,12 +435,14 @@ function RidersTab() {
   }
 
   const inputCls = "mise-well rounded-lg px-3 py-2 text-sm text-fg outline-none";
+  // Follows whatever domain the app is served from (works after any domain move).
+  const originHost = typeof window !== "undefined" ? window.location.host : "your site";
   return (
     <div className="space-y-5">
       <Card className="mise-feel">
         <h3 className="font-semibold text-fg">Add a rider</h3>
         <p className="mt-1 text-sm text-fg-faint">
-          They sign in at <b className="text-fg-soft">milagurestaurant.com/rider</b> with this
+          They sign in at <b className="text-fg-soft">{originHost}/rider</b> with this
           phone + PIN — no email, no app install. Their location streams to customers only
           while they carry an order.
         </p>
@@ -590,7 +592,8 @@ export default function OrdersPage() {
     load();
   }
 
-  const shareUrl = hotel ? `https://milagurestaurant.com/order/${hotel.id}` : "";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const shareUrl = hotel ? `${origin}/order/${hotel.id}` : "";
   const live = (orders ?? []).filter((o) => FLOW[o.status]);
   const done = (orders ?? []).filter((o) => !FLOW[o.status]);
 

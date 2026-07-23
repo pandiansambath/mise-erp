@@ -17,6 +17,11 @@ locals {
   # re-issue → no rate-limit risk → the redirect is safe.
   caddy_global = var.domain == "" ? "" : "{\n${var.acme_email != "" ? "\temail ${var.acme_email}\n" : ""}}\n\n"
   caddyfile    = "${local.caddy_global}${local.caddy_site} {\n\thandle /api/* {\n\t\treverse_proxy backend:8000\n\t}\n\thandle {\n\t\treverse_proxy frontend:3000\n\t}\n}\n"
+
+  # Public base URL for the backend (email verify/reset links, alert CTAs). Driven
+  # by the domain so it's always correct after a domain move. Emitted as a compose
+  # env line only when a domain is set; empty domain → backend keeps its own default.
+  app_base_url_env = var.domain != "" ? "\n      APP_BASE_URL: \"https://${var.domain}\"" : ""
 }
 
 resource "aws_instance" "app" {
@@ -56,6 +61,7 @@ resource "aws_instance" "app" {
     gemini_api_key   = var.gemini_api_key
     gemini_api_key_2 = var.gemini_api_key_2
     caddyfile        = local.caddyfile
+    app_base_url_env = local.app_base_url_env
   })
   # Re-run cloud-init (pull new images + restart) whenever the images change.
   # (Normal deploys pin images to :latest, so user_data is stable and the box is
