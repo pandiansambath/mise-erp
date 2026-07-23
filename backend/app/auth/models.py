@@ -56,6 +56,10 @@ class User(Base):
     otp_code: Mapped[str | None] = mapped_column(String(6))
     otp_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     otp_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Permanent-removal tombstone. Set when a Super Admin purges the login: the row
+    # stays (so history resolves to "Removed user") but is anonymised, can't sign in,
+    # and is hidden from the roster. NULL = a normal, live account.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

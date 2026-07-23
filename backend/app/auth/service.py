@@ -1,7 +1,9 @@
 """Auth/user database operations."""
+import secrets
 import uuid
+from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
@@ -62,10 +64,55 @@ async def create_user(
 
 
 async def list_users(db: AsyncSession, hotel_id: uuid.UUID) -> list[User]:
+    """Live users only — permanently-removed (tombstoned) logins never appear."""
     result = await db.execute(
-        select(User).where(User.hotel_id == hotel_id).order_by(User.created_at)
+        select(User)
+        .where(User.hotel_id == hotel_id, User.deleted_at.is_(None))
+        .order_by(User.created_at)
     )
     return list(result.scalars().all())
+
+
+async def count_super_admins(
+    db: AsyncSession, hotel_id: uuid.UUID, *, exclude_id: uuid.UUID | None = None
+) -> int:
+    """Live (non-tombstoned) Super Admins in a hotel, optionally excluding one — a
+    hotel must never be left with zero Super-Admin accounts."""
+    q = select(User.id).where(
+        User.hotel_id == hotel_id,
+        User.role == "SUPER_ADMIN",
+        User.deleted_at.is_(None),
+    )
+    if exclude_id is not None:
+        q = q.where(User.id != exclude_id)
+    return len((await db.execute(q)).scalars().all())
+
+
+async def purge_user(db: AsyncSession, user: User) -> str:
+    """Permanently remove a login: anonymise it (frees the email, destroys the
+    password), detach it from any employee, and tombstone the row so history still
+    resolves to 'Removed user'. Returns the original email (for the audit trail).
+    Guards live in the router (super-admin only, not self / operator / last admin)."""
+    original_email = user.email
+    # Keep the employment record; just drop the login link (raw UPDATE avoids a
+    # cross-module import of the Employee model).
+    await db.execute(text("UPDATE employees SET user_id = NULL WHERE user_id = :uid"),
+                     {"uid": user.id})
+    user.email = f"removed-{secrets.token_hex(6)}@removed.invalid"
+    user.preferred_name = "Removed user"
+    user.password_hash = hash_password(secrets.token_urlsafe(24))  # unusable — no one has it
+    user.is_active = False
+    user.email_verified = False
+    user.verify_token = None
+    user.reset_token = None
+    user.reset_expires = None
+    user.otp_code = None
+    user.otp_expires = None
+    user.otp_attempts = 0
+    user.twofa_email = False
+    user.deleted_at = datetime.now(UTC)
+    await db.commit()
+    return original_email
 
 
 async def update_user(

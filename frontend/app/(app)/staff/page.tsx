@@ -15,6 +15,7 @@ export default function StaffPage() {
   const confirm = useConfirm();
   const canWrite = can(user?.role, "users:write");
   const canRead = can(user?.role, "users:read");
+  const isSuperAdmin = user?.role === "SUPER_ADMIN"; // only they can permanently remove a login
 
   const [users, setUsers] = useState<UserOut[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -89,6 +90,26 @@ export default function StaffPage() {
     if (!ok) return;
     await api.patch<UserOut>(`/auth/users/${u.id}`, { is_active: !u.is_active });
     await load();
+  }
+
+  async function removePermanently(u: UserOut) {
+    const ok = await confirm({
+      title: "Permanently remove this login?",
+      message:
+        `${u.email} will be removed for good — the email is freed, the password destroyed, ` +
+        `and they can never sign in again. This CANNOT be undone. Their past actions stay ` +
+        `in your records, shown as “Removed user”. (To only block sign-in for now, use ` +
+        `Deactivate instead.)`,
+      confirmText: "Remove permanently",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/auth/users/${u.id}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove the account");
+    }
   }
 
   if (denied) {
@@ -268,6 +289,15 @@ export default function StaffPage() {
                             className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
                           >
                             {u.is_active ? "Deactivate" : "Activate"}
+                          </button>
+                        )}
+                        {isSuperAdmin && !isSelf && !u.is_platform_owner && (
+                          <button
+                            onClick={() => removePermanently(u)}
+                            title="Permanently remove this login — cannot be undone"
+                            className="mise-press ml-2 rounded-md border border-rose-500/40 px-2.5 py-1 text-xs font-medium text-rose-400 hover:bg-rose-500/10"
+                          >
+                            Remove
                           </button>
                         )}
                       </td>

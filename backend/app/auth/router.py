@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit import service as audit
 from app.auth import service
 from app.auth.deps import get_current_user, require
 from app.auth.models import Role, User
@@ -309,6 +310,45 @@ async def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user = await service.update_user(db, user, role=payload.role, is_active=payload.is_active)
     return UserOut.model_validate(user)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
+async def remove_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require("users:write")),
+) -> dict:
+    """PERMANENTLY remove a login (Super Admin only). Unlike Deactivate (reversible),
+    this anonymises the account, frees the email, destroys the password and hides it
+    from the roster forever. History is preserved — past actions show 'Removed user'."""
+    if admin.role != Role.SUPER_ADMIN.value:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only a Super Admin can permanently remove a login"
+        )
+    target = await service.get_user_by_id(db, user_id)
+    if target is None or target.hotel_id != admin.hotel_id or target.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if target.is_platform_owner:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "The platform operator account can't be removed"
+        )
+    if target.id == admin.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't remove your own account")
+    if target.role == Role.SUPER_ADMIN.value and (
+        await service.count_super_admins(db, admin.hotel_id, exclude_id=target.id) == 0
+    ):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Add another Super Admin before removing this one — a hotel must keep at least one.",
+        )
+    target_id = target.id  # capture before purge commits (expired attrs can't lazy-load)
+    removed_email = await service.purge_user(db, target)
+    await audit.record(
+        db, hotel_id=admin.hotel_id, user=admin, action="user.remove",
+        summary=f"Permanently removed login {removed_email}",
+        entity_type="user", entity_id=target_id,
+    )
+    return {"removed": True, "email": removed_email}
 
 
 # ── real-email flows: verify / resend / forgot / reset ───────────────────────
