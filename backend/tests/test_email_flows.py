@@ -10,6 +10,7 @@ async def test_signup_requires_verification_then_link_opens_the_app(client, db):
         "/api/auth/register-hotel",
         json={
             "hotel_name": "Verify Palace",
+            "username": "verifypalace",
             "email": "owner@verifypalace.com",
             "password": "password123",
             "country": "GB",

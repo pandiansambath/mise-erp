@@ -36,6 +36,11 @@ const PROMISES = [
   "A real-time P&L from day one",
 ];
 
+/** hotel name → a valid @handle suggestion (lowercase, letters/numbers only). */
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 40);
+}
+
 /** Shared chef-mood logic: watches typed fields, covers eyes on password. */
 function useChefMood(typedLen: number) {
   const [typingFocus, setTypingFocus] = useState(false);
@@ -247,6 +252,8 @@ function LoginForm({ active }: { active: boolean }) {
 function SignupForm({ active }: { active: boolean }) {
   const { registerHotel } = useAuth();
   const [hotelName, setHotelName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameEdited, setUsernameEdited] = useState(false);
   const [country, setCountry] = useState("GB");
   const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
@@ -255,6 +262,7 @@ function SignupForm({ active }: { active: boolean }) {
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(false);
   const [sent, setSent] = useState(false); // account made → go check the inbox
+  const [siteUrl, setSiteUrl] = useState<string | null>(null); // their live subdomain
   const [plan, setPlan] = useState("pro"); // shapes the dashboard from day one
   const chef = useChefMood(email.length || hotelName.length);
 
@@ -264,7 +272,10 @@ function SignupForm({ active }: { active: boolean }) {
     setError(null);
     chef.setBusyHappy(true);
     try {
-      await registerHotel({ hotel_name: hotelName, country, city: city || undefined, email, password, plan });
+      const res = await registerHotel({
+        hotel_name: hotelName, username, country, city: city || undefined, email, password, plan,
+      });
+      setSiteUrl(res.site_url ?? null);
       setSent(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register. Is the server running?");
@@ -285,6 +296,23 @@ function SignupForm({ active }: { active: boolean }) {
           One click and your kitchen opens — it also proves alerts and reports
           can reach you later.
         </p>
+        {siteUrl && (
+          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-left">
+            <p className="text-sm font-semibold text-emerald-200">🌐 Your own site is ready</p>
+            <p className="mt-1 text-xs text-slate-300">
+              This restaurant now has its own web address. After confirming your email,
+              log in there:
+            </p>
+            <a
+              href={siteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mise-press mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/30"
+            >
+              {siteUrl.replace(/^https?:\/\//, "")} →
+            </a>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => api.post("/auth/resend-verification", { email }).catch(() => {})}
@@ -316,7 +344,10 @@ function SignupForm({ active }: { active: boolean }) {
         <input
           id="su-hotel"
           value={hotelName}
-          onChange={(e) => setHotelName(e.target.value)}
+          onChange={(e) => {
+            setHotelName(e.target.value);
+            if (!usernameEdited) setUsername(slugify(e.target.value)); // auto-suggest the handle
+          }}
           onFocus={() => chef.setTypingFocus(true)}
           onBlur={() => chef.setTypingFocus(false)}
           required
@@ -324,6 +355,28 @@ function SignupForm({ active }: { active: boolean }) {
           placeholder="e.g. NIRAI"
           className={`mt-1.5 ${authInput}`}
         />
+      </div>
+      <div>
+        <label htmlFor="su-username" className={authLabel}>Your web address</label>
+        <input
+          id="su-username"
+          value={username}
+          onChange={(e) => { setUsername(slugify(e.target.value)); setUsernameEdited(true); }}
+          onFocus={() => chef.setTypingFocus(true)}
+          onBlur={() => chef.setTypingFocus(false)}
+          required
+          minLength={3}
+          disabled={!active}
+          placeholder="nirai"
+          className={`mt-1.5 ${authInput}`}
+        />
+        <p className="mt-1 text-[11px] text-slate-400">
+          {username.length >= 3 ? (
+            <>Your own site → <b className="text-emerald-300">{username}.dineai.cloud</b></>
+          ) : (
+            "3–40 lowercase letters / numbers / _ — becomes your own live site address."
+          )}
+        </p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>

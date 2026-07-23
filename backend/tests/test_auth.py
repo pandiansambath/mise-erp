@@ -24,6 +24,7 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
         "/api/auth/register-hotel",
         json={
             "hotel_name": "Spice Garden",
+            "username": "spicegarden",
             "country": "IN",
             "email": "owner@spicegarden.com",
             "password": "StrongPass123",
@@ -37,6 +38,9 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
     assert body["user"]["role"] == "SUPER_ADMIN"
     assert body["hotel"]["name"] == "Spice Garden"
     assert body["hotel"]["base_currency"] == "INR"  # derived from country
+    # their own live subdomain, reserved at signup
+    assert body["site_url"].startswith("https://spicegarden.")
+    assert body["subdomain"].startswith("spicegarden.")
 
     # real-email era: login is gated until the emailed link is clicked
     login = await client.post(
@@ -49,9 +53,26 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
     # duplicate email is rejected
     dup = await client.post(
         "/api/auth/register-hotel",
-        json={"hotel_name": "X", "country": "GB", "email": "owner@spicegarden.com", "password": "StrongPass123"},
+        json={"hotel_name": "X", "username": "xhotel", "country": "GB",
+              "email": "owner@spicegarden.com", "password": "StrongPass123"},
     )
     assert dup.status_code == 409
+
+    # username is now mandatory
+    missing = await client.post(
+        "/api/auth/register-hotel",
+        json={"hotel_name": "No Handle", "country": "GB",
+              "email": "a@nohandle.com", "password": "StrongPass123"},
+    )
+    assert missing.status_code == 422
+
+    # duplicate username is rejected
+    duph = await client.post(
+        "/api/auth/register-hotel",
+        json={"hotel_name": "Copy", "username": "spicegarden", "country": "GB",
+              "email": "c@copy.com", "password": "StrongPass123"},
+    )
+    assert duph.status_code == 409
 
 
 @pytest.mark.asyncio

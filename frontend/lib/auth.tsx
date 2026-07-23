@@ -15,11 +15,17 @@ import {
 
 export interface RegisterHotelInput {
   hotel_name: string;
+  username: string; // @handle → <username>.dineai.cloud (mandatory)
   country: string;
   city?: string;
   email: string;
   password: string;
   plan?: string; // starter | pro | enterprise — shapes the new dashboard
+}
+
+export interface RegisterHotelResult {
+  site_url?: string; // https://<handle>.dineai.cloud — their live front door
+  subdomain?: string;
 }
 
 interface AuthState {
@@ -29,7 +35,7 @@ interface AuthState {
   /** Resolves "otp" when the account has two-step sign-in — call loginOtp next. */
   login: (email: string, password: string) => Promise<"ok" | "otp">;
   loginOtp: (email: string, code: string) => Promise<void>;
-  registerHotel: (input: RegisterHotelInput) => Promise<void>;
+  registerHotel: (input: RegisterHotelInput) => Promise<RegisterHotelResult>;
   refreshHotel: () => Promise<void>;
   logout: () => void;
 }
@@ -106,8 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const registerHotel = useCallback(async (input: RegisterHotelInput) => {
     // Real-email era: the account is created but the door opens from the
     // VERIFICATION EMAIL (the verify page stores the session + routes to
-    // onboarding). The signup form shows the check-your-inbox panel.
-    await api.post<TokenResponse>("/auth/register-hotel", input);
+    // onboarding). The signup form shows the check-your-inbox panel + their
+    // brand-new subdomain (returned here).
+    return await api.post<RegisterHotelResult>("/auth/register-hotel", input);
   }, []);
 
   const refreshHotel = useCallback(async () => {

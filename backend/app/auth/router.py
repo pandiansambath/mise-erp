@@ -1,4 +1,5 @@
 """Auth & user-management endpoints. User management is hotel-scoped."""
+import re
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.site import base_domain
 from app.audit import service as audit
 from app.auth import service
 from app.auth.deps import get_current_user, require
@@ -171,10 +173,20 @@ async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_
     one here would let the unverified skip the gate entirely)."""
     if await service.get_user_by_email(db, payload.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account")
+    # Mandatory @handle → their own subdomain, reserved at signup.
+    handle = payload.username.strip().lower()
+    if not re.match(r"^[a-z0-9_]{3,40}$", handle):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Username must be 3-40 lowercase letters, numbers or underscores",
+        )
+    if (await db.execute(select(Hotel).where(Hotel.username == handle))).scalar_one_or_none():
+        raise HTTPException(status.HTTP_409_CONFLICT, "That username is already taken")
     country = payload.country.upper()
     plan = payload.plan if feat.is_valid_plan(payload.plan) else feat.DEFAULT_PLAN
     hotel = Hotel(
         name=payload.hotel_name.strip(),
+        username=handle,  # their live subdomain from day one
         country=country,
         city=payload.city,
         base_currency=_CURRENCY_BY_COUNTRY.get(country, "GBP"),
@@ -216,11 +228,15 @@ async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_
             cta_url=verify_url,
         ),
     )
+    base = base_domain() or "dineai.cloud"
     return {
         "ok": True,
         "message": "Account created — confirm the email we just sent to open your kitchen.",
         "user": UserOut.model_validate(user).model_dump(mode="json"),
         "hotel": HotelOut.model_validate(hotel).model_dump(mode="json"),
+        # Their own live front door — shown on the signup success panel.
+        "subdomain": f"{handle}.{base}",
+        "site_url": f"https://{handle}.{base}",
     }
 
 

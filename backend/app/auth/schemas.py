@@ -23,6 +23,9 @@ class ChangePassword(BaseModel):
 class RegisterHotel(BaseModel):
     """Public self-signup: creates a new hotel + its first Super Admin."""
     hotel_name: str = Field(min_length=1, max_length=120)
+    # The @handle → <username>.dineai.cloud. Mandatory now: every new hotel gets
+    # its own live subdomain the moment it signs up.
+    username: str = Field(min_length=3, max_length=40)
     country: str = Field(default="GB", min_length=2, max_length=2)
     city: str | None = None
     email: EmailStr
