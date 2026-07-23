@@ -16,8 +16,11 @@ This file is the migration-specific plan + running checklist.
 - ✅ Phase 1–2: new account bootstrapped, repo pointers flipped, `SITE_DOMAIN` deleted (HTTP build).
 - ✅ Phase 3: full stack built by the Deploy workflow (VPC/EC2/RDS/S3/ECR/EIP/IAM incl. Textract). Box healthy.
 - ✅ Phase 4: DB restored (drop-schema + load; backend then `alembic upgrade head` → `75bcb684ebd8`; counts match: hotels 18 / users 37 / items 714 / vendor_items 973). S3 assets synced (55 objects, byte-identical; leaked old `caddy-data` certs removed).
-- ⏳ Phase 5+: awaiting user sign-off on the temp URL, then `dineai.cloud` DNS → HTTPS → Resend → registrar redirect → decommission old.
-- ⚠️ At final cutover: take a FRESH dump from the OLD account (needs old creds temporarily) to capture data since 2026-07-22, re-restore, then flip DNS.
+- ✅ Phase 5: `dineai.cloud` DNS (A `@`/`www`/`*` → EIP) live; **HTTPS** on apex + www (managed) + `*.dineai.cloud` (on-demand per-host certs).
+- ✅ Phase 6: **email** cut to a NEW Resend account, sender `accounts@dineai.cloud` (verified); `RESEND_API_KEY` secret + `email_from` swapped.
+- ✅ Phase 7: **security** — SSH :22 closed (SSM only), HSTS + security headers, CORS locked to the domain.
+- ✅ Phase 8: **subdomains** — on-demand TLS + `/api/public/tls-check` ask hook + `frontend/middleware.ts` host routing (careers.→/careers, controlroom.→/control-room). To add one: extend `RESERVED_SUBDOMAINS` (backend/app/api/site.py) + `SUBDOMAIN_ROUTES` (middleware.ts).
+- ☐ USER-managed: registrar redirect `milagurestaurant.com → dineai.cloud` + shutdown of the OLD account's Mise resources. **Do NOT touch the old account** (holds unrelated projects).
 
 ---
 
