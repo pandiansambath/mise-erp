@@ -8,7 +8,7 @@
 # Usually invoked remotely from a workstation via SSM (see backup_db_remote.sh).
 set -euo pipefail
 
-BUCKET="${S3_BUCKET:-mise-uploads-765607524925}"
+BUCKET="${S3_BUCKET:-mise-uploads-887514555232}"
 REGION="${AWS_REGION:-eu-west-2}"
 PG_IMAGE="postgres:16"   # match the RDS major version
 

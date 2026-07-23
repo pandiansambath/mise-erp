@@ -10,7 +10,7 @@ concurrency:
 
 env:
   AWS_REGION: eu-west-2
-  STATE_BUCKET: mise-tfstate-765607524925
+  STATE_BUCKET: mise-tfstate-887514555232
 
 jobs:
   # ── Test gate: nothing deploys unless backend + frontend are green ──

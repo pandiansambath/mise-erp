@@ -18,6 +18,15 @@ decommission the old account. Nothing is destroyed until the new stack is green.
 
 Cutover order: **stand up → restore → verify (temp) → DNS → HTTPS → email → verify (live) → decommission.**
 
+## Cost posture (low-cost mandate)
+
+The new account is pay-as-you-go, but the stack is deliberately near-$0:
+- **EC2 `t3.micro`** + **RDS `db.t4g.micro`** + 20GB each → all **free tier** (750h/mo + 20GB, 12 months, fresh on the new account).
+- **No NAT gateway, no load balancer, single Elastic IP** (free while attached). These are the usual silent cost killers — we have none.
+- **S3** ~0.1 MB of assets → pennies. **Textract** is the only pay-per-use service (the reason for the account).
+- **RDS automated-backup retention kept at 0** for now — we already run our own `pg_dump` backups frequently (see [BACKUP.md](BACKUP.md)), so we're covered. 7-day PITR is *free* at our DB size and can be switched on any time after reviewing the first month's bill.
+- Decision rule (user): watch this month's bill → low = add niceties, high = optimise.
+
 ---
 
 ## What changes ("what we regenerate")

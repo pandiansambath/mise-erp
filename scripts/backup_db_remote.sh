@@ -7,7 +7,7 @@
 set -euo pipefail
 
 REGION="${AWS_REGION:-eu-west-2}"
-BUCKET="${S3_BUCKET:-mise-uploads-765607524925}"
+BUCKET="${S3_BUCKET:-mise-uploads-887514555232}"
 IID=$(aws ec2 describe-instances --region "$REGION" \
   --filters "Name=tag:Name,Values=mise-app" "Name=instance-state-name,Values=running" \
   --query "Reservations[0].Instances[0].InstanceId" --output text)

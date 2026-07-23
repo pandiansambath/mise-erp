@@ -4,7 +4,7 @@
 # can recreate the whole stack on a fresh AWS account if this free one is lost.
 set -euo pipefail
 REGION="${AWS_REGION:-eu-west-2}"
-BUCKET="${S3_BUCKET:-mise-uploads-765607524925}"
+BUCKET="${S3_BUCKET:-mise-uploads-887514555232}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "==> 1/2  Database dump"

@@ -11,7 +11,7 @@ terraform {
   # Remote state in S3 so CI runs share state. The bucket is created (idempotently)
   # by the deploy workflow before `terraform init`.
   backend "s3" {
-    bucket  = "mise-tfstate-765607524925"
+    bucket  = "mise-tfstate-887514555232"
     key     = "mise/eu-west-2/terraform.tfstate"
     region  = "eu-west-2"
     encrypt = true
