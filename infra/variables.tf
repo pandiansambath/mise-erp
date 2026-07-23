@@ -27,7 +27,7 @@ variable "resend_api_key" {
 
 variable "email_from" {
   type    = string
-  default = "Mise <accounts@milagurestaurant.com>" # domain verified in Resend 2026-07-14
+  default = "Mise <accounts@dineai.cloud>" # dineai.cloud verified in Resend 2026-07-23 (new acct)
 }
 
 # Stripe billing (TEST MODE keys for now). Empty = billing endpoints answer 503,
