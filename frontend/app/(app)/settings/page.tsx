@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type LandingConfig } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
@@ -53,6 +53,44 @@ function senderEmail(): string {
   return `accounts@${domain}`;
 }
 
+const PREVIEW_THEMES: Record<string, { bg: string; fg: string; sub: string; line: string }> = {
+  dark: { bg: "#0a0f0d", fg: "#f1f5f4", sub: "#9aa8a3", line: "rgba(255,255,255,0.12)" },
+  light: { bg: "#f7f8f7", fg: "#0f1a17", sub: "#5b6b66", line: "rgba(0,0,0,0.10)" },
+  warm: { bg: "#f6f1e7", fg: "#2a2218", sub: "#7a6c57", line: "rgba(0,0,0,0.10)" },
+};
+
+/** A compact live mirror of the /s/[handle] landing — updates as you type. */
+function LandingPreview({ name, land }: { name: string; land: LandingConfig }) {
+  const t = PREVIEW_THEMES[land.theme ?? "dark"] ?? PREVIEW_THEMES.dark;
+  const accent = land.accent || "#059669";
+  const mono = (name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2) || "M").toUpperCase();
+  return (
+    <div className="overflow-hidden rounded-xl border border-line" style={{ background: t.bg, color: t.fg }}>
+      <div
+        className="flex flex-col items-center gap-2 px-4 py-6 text-center"
+        style={{ background: `radial-gradient(60% 50% at 50% -10%, ${accent}22, transparent 70%)` }}
+      >
+        <div
+          className="grid h-12 w-12 place-items-center rounded-xl text-sm font-bold text-white"
+          style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)` }}
+        >
+          {mono}
+        </div>
+        <p className="text-xl font-bold">{name}</p>
+        {land.tagline && <p className="text-xs" style={{ color: t.sub }}>{land.tagline}</p>}
+        {land.about && <p className="mt-1 max-w-xs text-[11px] leading-relaxed" style={{ color: t.sub }}>{land.about}</p>}
+        {land.quote && <p className="mt-1 max-w-xs text-[11px] italic" style={{ color: t.fg }}>“{land.quote}”</p>}
+        <div className="mt-3 flex gap-2">
+          <span className="rounded-lg px-4 py-1.5 text-[11px] font-semibold text-white" style={{ background: accent }}>Log in →</span>
+          {land.show_order && (
+            <span className="rounded-lg border px-4 py-1.5 text-[11px] font-semibold" style={{ borderColor: t.line, color: t.fg }}>Order online</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
   const { user, hotel, refreshHotel } = useAuth();
@@ -90,6 +128,28 @@ export default function SettingsPage() {
       setUnameMsg({ ok: false, text: e instanceof ApiError ? e.message : "Could not save" });
     } finally { setUnameBusy(false); }
   }
+
+  // Public landing page (<username>.dineai.cloud) — customizable branding.
+  const [land, setLand] = useState<LandingConfig>({});
+  const [landBusy, setLandBusy] = useState(false);
+  const [landSaved, setLandSaved] = useState(false);
+  useEffect(() => { if (hotel?.landing) setLand(hotel.landing); }, [hotel?.landing]);
+  function setL<K extends keyof LandingConfig>(k: K, v: LandingConfig[K]) {
+    setLand((p) => ({ ...p, [k]: v }));
+    setLandSaved(false);
+  }
+  async function saveLanding() {
+    setLandBusy(true);
+    try {
+      await api.patch("/hotels/me", { landing: land });
+      await refreshHotel();
+      setLandSaved(true);
+    } catch { /* keep the form; a transient failure shouldn't wipe edits */ }
+    finally { setLandBusy(false); }
+  }
+  const siteHost = hotel?.username
+    ? `${hotel.username}.${typeof window !== "undefined" ? window.location.hostname.split(".").slice(-2).join(".") : "dineai.cloud"}`
+    : null;
 
   // Email alerts + two-step sign-in (per-user, stored server-side).
   const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
@@ -204,7 +264,7 @@ export default function SettingsPage() {
         {[
           ["#s-display", "💱 Display"],
           ["#s-alerts", "🔔 Email & 2FA"],
-          ...(isAdmin ? [["#s-handle", "🆔 Hotel handle"]] : []),
+          ...(isAdmin ? [["#s-handle", "🆔 Hotel handle"], ["#s-site", "🌐 Public page"]] : []),
           ...(isAdmin
             ? [["#s-billing", "💳 Billing"], ["#s-attendance", "⏱️ Attendance rules"], ["#s-payroll", "💷 Payroll"]]
             : []),
@@ -457,6 +517,108 @@ export default function SettingsPage() {
           {unameMsg && (
             <p className={`mt-2 text-sm ${unameMsg.ok ? "text-emerald-500" : "text-rose-400"}`}>{unameMsg.text}</p>
           )}
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card className="mise-feel mb-6" id="s-site">
+          <h3 className="font-semibold text-fg">🌐 Your public page</h3>
+          <p className="mt-1 text-sm text-fg-faint">
+            The branded page shown at{" "}
+            {siteHost ? (
+              <a href={`https://${siteHost}`} target="_blank" rel="noreferrer" className="text-brand-400 underline">
+                {siteHost}
+              </a>
+            ) : (
+              <span>your subdomain — set a handle above first</span>
+            )}
+            . Customize it below; it goes live the moment you save.
+          </p>
+
+          <div className="mt-4 grid gap-5 md:grid-cols-2">
+            {/* editor */}
+            <div className="space-y-3">
+              <div>
+                <span className="text-xs font-medium text-fg-soft">Theme</span>
+                <div className="mt-1 flex gap-1.5">
+                  {(["dark", "light", "warm"] as const).map((th) => {
+                    const on = (land.theme ?? "dark") === th;
+                    return (
+                      <button
+                        key={th}
+                        type="button"
+                        onClick={() => setL("theme", th)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs capitalize ${on ? "border-brand-500 bg-brand-500/10 text-fg" : "border-line text-fg-faint hover:bg-paper-2"}`}
+                      >
+                        {th}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-fg-soft">Accent</span>
+                <input
+                  type="color"
+                  value={land.accent || "#059669"}
+                  onChange={(e) => setL("accent", e.target.value)}
+                  className="h-8 w-12 cursor-pointer rounded border border-line bg-transparent"
+                />
+                <span className="text-xs text-fg-faint">{land.accent || "#059669"}</span>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-fg-soft">Tagline</label>
+                <input
+                  value={land.tagline || ""}
+                  maxLength={90}
+                  onChange={(e) => setL("tagline", e.target.value)}
+                  placeholder="e.g. Authentic South-Indian, since 1998"
+                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-fg-soft">About</label>
+                <textarea
+                  value={land.about || ""}
+                  maxLength={400}
+                  rows={3}
+                  onChange={(e) => setL("about", e.target.value)}
+                  placeholder="A short paragraph about your restaurant…"
+                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-fg-soft">Quote (optional)</label>
+                <input
+                  value={land.quote || ""}
+                  maxLength={140}
+                  onChange={(e) => setL("quote", e.target.value)}
+                  placeholder="A line you love — shown in italics"
+                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-fg-soft">
+                <input type="checkbox" checked={!!land.show_order} onChange={(e) => setL("show_order", e.target.checked)} />
+                Show an “Order online” button
+              </label>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={saveLanding}
+                  disabled={landBusy}
+                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {landBusy ? "Saving…" : "Save public page"}
+                </button>
+                {landSaved && <span className="text-sm text-emerald-500">✓ Saved — it’s live</span>}
+              </div>
+            </div>
+
+            {/* live preview */}
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-fg-faint">Live preview</p>
+              <LandingPreview name={hotel?.name || "Your restaurant"} land={land} />
+            </div>
+          </div>
         </Card>
       )}
 

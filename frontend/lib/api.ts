@@ -150,9 +150,19 @@ export interface UserOut {
   last_login?: string | null;
 }
 
+export interface LandingConfig {
+  tagline?: string;
+  about?: string;
+  quote?: string;
+  accent?: string; // hex brand colour
+  theme?: "dark" | "light" | "warm";
+  show_order?: boolean; // show an "Order online" button
+}
+
 export interface Hotel {
   id: string;
   name: string;
+  username?: string | null; // @handle → <username>.dineai.cloud
   country: string;
   city: string | null;
   base_currency: string;
@@ -161,6 +171,19 @@ export interface Hotel {
   min_hourly_rate?: string; // configurable minimum wage floor (payroll rejects below)
   has_logo?: boolean; // an uploaded brand logo replaces the default Mise mark
   features?: Record<string, boolean>; // per-hotel entitlements (missing = enabled)
+  landing?: LandingConfig; // customizable public-page config
+}
+
+/** Public landing payload for <handle>.dineai.cloud (GET /public/hotel-landing/{h}). */
+export interface HotelLanding {
+  hotel_id: string;
+  name: string;
+  username: string | null;
+  city: string | null;
+  has_logo: boolean;
+  logo_url: string | null;
+  order_url: string;
+  landing: Required<LandingConfig>;
 }
 
 /** Whether a feature is on for a hotel (missing / true = enabled). */

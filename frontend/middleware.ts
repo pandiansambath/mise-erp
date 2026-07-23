@@ -32,16 +32,14 @@ export function middleware(req: NextRequest) {
   const sub = subLabel(req.headers.get("host") || "");
   if (!sub) return NextResponse.next();
 
-  const base = SUBDOMAIN_ROUTES[sub];
-  // Unknown subdomain (e.g. a hotel @handle) → serve the app as-is for now.
-  if (!base) return NextResponse.next();
-
-  // Only the subdomain ROOT maps to the section (careers.dineai.cloud → /careers).
-  // Every other path passes through untouched, so relative links inside the app
-  // (/login, /control-room/…) keep working instead of 404-ing under the section.
+  // Only the subdomain ROOT is rewritten; every other path passes through so
+  // people can sign in (/login), order (/order/…), etc. from their subdomain
+  // without those relative links 404-ing.
   if (pathname === "/") {
     const url = req.nextUrl.clone();
-    url.pathname = base;
+    // A known function subdomain → its section (careers → /careers). Anything else
+    // is treated as a hotel @handle → that hotel's branded landing page.
+    url.pathname = SUBDOMAIN_ROUTES[sub] ?? `/s/${sub}`;
     return NextResponse.rewrite(url);
   }
   return NextResponse.next();

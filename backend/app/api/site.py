@@ -7,7 +7,7 @@ subdomains at us and exhausting Let's Encrypt rate limits — we only mint certs
 for hosts we recognise: the apex, our reserved function subdomains, and live
 hotel @handles.
 """
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,17 @@ from app.core.database import get_db
 from app.hotels.models import Hotel
 
 router = APIRouter(prefix="/public", tags=["public-site"])
+
+# Defaults for the customizable per-hotel landing page (<handle>.dineai.cloud).
+# A hotel stores only its overrides in Hotel.landing; missing keys fall back here.
+LANDING_DEFAULTS: dict = {
+    "tagline": "",       # short hero line under the name
+    "about": "",         # a paragraph about the place
+    "quote": "",         # a chef / owner quote
+    "accent": "#059669", # brand colour (hex)
+    "theme": "dark",     # dark | light | warm
+    "show_order": False, # show an "Order online" button
+}
 
 # Function-specific subdomains that always resolve. The frontend middleware maps
 # each to an app section (careers.<domain> -> /careers, etc.). Anything not in
@@ -80,3 +91,30 @@ async def tls_check(domain: str = "", db: AsyncSession = Depends(get_db)) -> Res
     return Response(
         status_code=status.HTTP_200_OK if exists else status.HTTP_404_NOT_FOUND
     )
+
+
+@router.get("/hotel-landing/{handle}")
+async def hotel_landing(handle: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """Public branding + landing config for a hotel subdomain (<handle>.dineai.cloud).
+    No auth — this renders the hotel's own front door before anyone logs in."""
+    hotel = (
+        await db.execute(
+            select(Hotel).where(
+                func.lower(Hotel.username) == handle.strip().lower(),
+                Hotel.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such site")
+    cfg = {**LANDING_DEFAULTS, **(hotel.landing or {})}
+    return {
+        "hotel_id": str(hotel.id),
+        "name": hotel.name,
+        "username": hotel.username,
+        "city": hotel.city,
+        "has_logo": bool(hotel.logo_key),
+        "logo_url": f"/api/hotels/{hotel.id}/logo" if hotel.logo_key else None,
+        "order_url": f"/order/{hotel.id}",
+        "landing": cfg,
+    }

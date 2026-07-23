@@ -38,3 +38,31 @@ async def test_tls_check_gates_cert_issuance(client, db, monkeypatch):
     assert await code("evil.com") == 404
     assert await code("a.b.dineai.cloud") == 404
     assert await code("") == 400
+
+
+@pytest.mark.asyncio
+async def test_hotel_landing_public(client, db):
+    from app.hotels.models import Hotel
+
+    h = Hotel(
+        name="Milagu Kitchen", country="GB", base_currency="GBP", city="London",
+        username="milagukitchen",
+        landing={"tagline": "Fire & spice", "accent": "#ff5500", "show_order": True},
+    )
+    db.add(h)
+    await db.commit()
+
+    r = await client.get("/api/public/hotel-landing/milagukitchen")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "Milagu Kitchen"
+    assert body["username"] == "milagukitchen"
+    assert body["order_url"].endswith(f"/order/{body['hotel_id']}")
+    # stored overrides + merged defaults
+    assert body["landing"]["tagline"] == "Fire & spice"
+    assert body["landing"]["accent"] == "#ff5500"
+    assert body["landing"]["show_order"] is True
+    assert body["landing"]["theme"] == "dark"  # default filled in
+
+    # unknown handle → 404
+    assert (await client.get("/api/public/hotel-landing/nope")).status_code == 404

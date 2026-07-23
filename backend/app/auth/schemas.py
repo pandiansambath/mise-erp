@@ -57,6 +57,7 @@ class HotelOut(BaseModel):
 
     id: uuid.UUID
     name: str
+    username: str | None = None  # the @handle → <username>.dineai.cloud
     country: str
     city: str | None
     base_currency: str
@@ -66,6 +67,7 @@ class HotelOut(BaseModel):
     plan: str = "pro"
     has_logo: bool = False
     features: dict = Field(default_factory=dict)
+    landing: dict = Field(default_factory=dict)  # customizable public-page config
 
 
 class HotelUpdate(BaseModel):
@@ -75,6 +77,7 @@ class HotelUpdate(BaseModel):
     break_allowance_minutes: int | None = Field(default=None, ge=0, le=600)
     break_penalty_per_min: Decimal | None = Field(default=None, ge=0)
     min_hourly_rate: Decimal | None = Field(default=None, ge=0)
+    landing: dict | None = None  # customizable public-page config (tagline/about/accent/…)
 
 
 class TokenResponse(BaseModel):

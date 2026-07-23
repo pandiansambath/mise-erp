@@ -40,6 +40,9 @@ class Hotel(Base):
     # Per-hotel feature entitlements (key -> bool). Missing key = default (enabled).
     # Managed by the platform operator from the Control Room.
     features: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Customizable public landing page shown at <username>.dineai.cloud
+    # (tagline/about/quote/accent/theme/show_order). Empty {} = sensible defaults.
+    landing: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Subscription plan (starter | pro | enterprise) — sets the feature preset + limits.
     plan: Mapped[str] = mapped_column(String(20), nullable=False, default="pro")
     # Stripe billing (test mode): who this hotel is at Stripe + where the
