@@ -7,6 +7,18 @@ follow-on feature: a **subdomain per hotel** (`<hotel>.dineai.cloud`).
 Pairs with [RECREATE.md](RECREATE.md) (generic rebuild) and [BACKUP.md](BACKUP.md) (data).
 This file is the migration-specific plan + running checklist.
 
+## Live status (2026-07-23)
+
+**New account:** `887514555232` (user PandianS), region `eu-west-2`.
+**New Elastic IP:** `18.171.43.0` (temp verification URL: http://18.171.43.0 ).
+**Verified dump used:** `mise-db-20260722-122837.sql.gz` (43 tables / 4862 rows).
+
+- ✅ Phase 1–2: new account bootstrapped, repo pointers flipped, `SITE_DOMAIN` deleted (HTTP build).
+- ✅ Phase 3: full stack built by the Deploy workflow (VPC/EC2/RDS/S3/ECR/EIP/IAM incl. Textract). Box healthy.
+- ✅ Phase 4: DB restored (drop-schema + load; backend then `alembic upgrade head` → `75bcb684ebd8`; counts match: hotels 18 / users 37 / items 714 / vendor_items 973). S3 assets synced (55 objects, byte-identical; leaked old `caddy-data` certs removed).
+- ⏳ Phase 5+: awaiting user sign-off on the temp URL, then `dineai.cloud` DNS → HTTPS → Resend → registrar redirect → decommission old.
+- ⚠️ At final cutover: take a FRESH dump from the OLD account (needs old creds temporarily) to capture data since 2026-07-22, re-restore, then flip DNS.
+
 ---
 
 ## Guiding principle — parallel cutover, zero data loss
