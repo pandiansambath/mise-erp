@@ -15,12 +15,21 @@ locals {
   # When a domain is set: automatic HTTPS + the normal http→https redirect. Certs now
   # persist across box replacement (restored from S3 in user_data), so deploys don't
   # re-issue → no rate-limit risk → the redirect is safe.
-  caddy_global = var.domain == "" ? "" : "{\n${var.acme_email != "" ? "\temail ${var.acme_email}\n" : ""}}\n\n"
+  # Global block: ACME email + the on-demand-TLS ask hook. When a hotel/function
+  # subdomain (*.domain) is first hit, Caddy asks the backend whether to mint a
+  # cert for it — so only known hosts get certs (no rate-limit abuse).
+  caddy_ask    = var.domain == "" ? "" : "\ton_demand_tls {\n\t\task http://backend:8000/api/public/tls-check\n\t}\n"
+  caddy_global = var.domain == "" ? "" : "{\n${var.acme_email != "" ? "\temail ${var.acme_email}\n" : ""}${local.caddy_ask}}\n\n"
   # Security response headers on every site: HSTS (force HTTPS for a year, incl.
   # hotel subdomains), no MIME sniffing, deny cross-site framing (clickjacking),
   # a privacy-preserving referrer policy, and hide the Server banner.
   caddy_headers = "\theader {\n\t\tStrict-Transport-Security \"max-age=31536000; includeSubDomains\"\n\t\tX-Content-Type-Options nosniff\n\t\tX-Frame-Options SAMEORIGIN\n\t\tReferrer-Policy strict-origin-when-cross-origin\n\t\t-Server\n\t}\n"
-  caddyfile     = "${local.caddy_global}${local.caddy_site} {\n${local.caddy_headers}\thandle /api/* {\n\t\treverse_proxy backend:8000\n\t}\n\thandle {\n\t\treverse_proxy frontend:3000\n\t}\n}\n"
+  # Shared site body: security headers + reverse-proxy routing (API vs frontend).
+  caddy_body    = "${local.caddy_headers}\thandle /api/* {\n\t\treverse_proxy backend:8000\n\t}\n\thandle {\n\t\treverse_proxy frontend:3000\n\t}\n"
+  # Wildcard site block for hotel/function subdomains: same routing, but certs are
+  # issued on-demand (one per hostname on first visit) instead of up front.
+  caddy_subs    = var.domain == "" ? "" : "\n*.${var.domain} {\n\ttls {\n\t\ton_demand\n\t}\n${local.caddy_body}}\n"
+  caddyfile     = "${local.caddy_global}${local.caddy_site} {\n${local.caddy_body}}\n${local.caddy_subs}"
 
   # Public base URL for the backend (email verify/reset links, alert CTAs). Driven
   # by the domain so it's always correct after a domain move. Emitted as a compose
