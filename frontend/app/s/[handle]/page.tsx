@@ -5,6 +5,7 @@
 // the subdomain root here; /login etc. still pass through so people can sign in.
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { API_BASE, type HotelLanding } from "@/lib/api";
 
@@ -43,7 +44,7 @@ export default function HotelLandingPage() {
            className="flex flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-lg font-semibold">This site isn’t set up yet</p>
         <p className="text-sm text-white/50">No hotel is using the handle “{handle}”.</p>
-        <a href="/" className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/15">Go to Mise →</a>
+        <a href="https://dineai.cloud" className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/15">Go to Mise →</a>
       </div>
     );
   }
@@ -89,17 +90,17 @@ export default function HotelLandingPage() {
 
         {/* actions */}
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-          <a href="/login"
+          <Link href="/login"
              className="rounded-xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
              style={{ background: accent }}>
             Log in →
-          </a>
+          </Link>
           {L.show_order && (
-            <a href={data.order_url}
+            <Link href={data.order_url}
                className="rounded-xl border px-6 py-3 text-sm font-semibold transition"
                style={{ borderColor: t.line, color: t.fg }}>
               Order online
-            </a>
+            </Link>
           )}
         </div>
 

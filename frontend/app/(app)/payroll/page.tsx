@@ -228,6 +228,26 @@ export default function PayrollPage() {
     await load(active);
   }
 
+  async function remove(id: string) {
+    const row = rows.find((r) => r.id === id);
+    const ok = await confirm({
+      title: "Remove this payslip?",
+      message:
+        `This deletes ${row ? row.employee_name + "’s" : "this"} payslip for the period and, if it ` +
+        `was already approved or paid, reverses the matching entry in Expenses so your P&L stays ` +
+        `correct. Use it to undo a mistaken run — you can run payroll again afterwards.`,
+      confirmText: "Remove payslip",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/payroll/${id}`);
+      await load(active);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove the payslip");
+    }
+  }
+
   async function approveAll() {
     const drafts = rows.filter((r) => r.status === "DRAFT").length;
     if (!drafts) return;
@@ -765,6 +785,7 @@ export default function PayrollPage() {
                     open={expanded === r.id}
                     onToggle={() => setExpanded((cur) => (cur === r.id ? null : r.id))}
                     onAct={act}
+                    onRemove={remove}
                   />
                 ))
               )}
@@ -811,6 +832,7 @@ function PayslipRow({
   open,
   onToggle,
   onAct,
+  onRemove,
 }: {
   r: PayrollRow;
   canWrite: boolean;
@@ -818,6 +840,7 @@ function PayslipRow({
   open: boolean;
   onToggle: () => void;
   onAct: (id: string, action: "approve" | "pay") => void;
+  onRemove: (id: string) => void;
 }) {
   const overtime = parseFloat(r.overtime_pay) || 0;
   const basic = (parseFloat(r.gross_pay) || 0) - overtime;
@@ -857,6 +880,13 @@ function PayslipRow({
               {r.status === "APPROVED" && (
                 <button onClick={(e) => { e.stopPropagation(); onAct(r.id, "pay"); }} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Mark paid</button>
               )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onRemove(r.id); }}
+                title="Safely remove this payslip (also reverses its salary expense)"
+                className="mise-press rounded-md border border-rose-500/40 px-2 py-1 text-xs font-medium text-rose-400 hover:bg-rose-500/10"
+              >
+                Remove
+              </button>
             </div>
           </td>
         )}

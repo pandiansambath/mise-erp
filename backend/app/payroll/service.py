@@ -468,6 +468,25 @@ async def post_salary_expense(db: AsyncSession, rec: Payroll, employee_name: str
         await db.rollback()
 
 
+async def remove_payroll(db: AsyncSession, rec: Payroll) -> None:
+    """Safely delete a payroll record AND reverse its auto-posted salary expense
+    (matched by the [payroll:{id}] marker) so the P&L never keeps a phantom cost.
+    Works at any status — the escape hatch for a mistaken run."""
+    from app.expenses.models import Expense
+
+    marker = f"[payroll:{rec.id}]"
+    for exp in (
+        await db.execute(
+            select(Expense).where(
+                Expense.hotel_id == rec.hotel_id, Expense.description.contains(marker)
+            )
+        )
+    ).scalars().all():
+        await db.delete(exp)
+    await db.delete(rec)
+    await db.commit()
+
+
 async def list_payroll_for_employee(
     db: AsyncSession, hotel_id: uuid.UUID, employee_id: uuid.UUID
 ) -> list[dict]:

@@ -230,3 +230,47 @@ async def test_configurable_min_wage_allows_lower_rate(client, make_user, auth_h
         json={"pay_period": "2026-W23", "employee_id": str(emp.id)},
     )
     assert resp.status_code == 200  # 9.00 >= configured 8.00
+
+
+@pytest.mark.asyncio
+async def test_remove_payslip_reverses_salary_expense(client, make_user, auth_header, db, hotel):
+    from sqlalchemy import select
+
+    from app.expenses.models import Expense
+
+    acct = await make_user("acctrm@nirai.com", Role.ACCOUNTANT.value)
+    emp = await emp_service.create_employee(
+        db, hotel.id, full_name="Remo", salary_type="MONTHLY", monthly_salary=Decimal("3000")
+    )
+    await emp_service.set_attendance(db, emp, date(2026, 6, 2), status="PRESENT")
+    h = auth_header(acct)
+
+    rows = (
+        await client.post(
+            "/api/payroll/process", headers=h, json={"pay_period": "2026-06", "working_days": 1}
+        )
+    ).json()
+    pid = rows[0]["id"]
+
+    # approve → a matching salary expense is auto-posted
+    assert (await client.post(f"/api/payroll/{pid}/approve", headers=h)).status_code == 200
+    marker = f"[payroll:{pid}]"
+    db.expire_all()
+    got = (
+        await db.execute(select(Expense).where(Expense.description.contains(marker)))
+    ).scalars().all()
+    assert len(got) == 1
+
+    # remove → payslip gone AND its salary expense reversed (books stay correct)
+    r = await client.delete(f"/api/payroll/{pid}", headers=h)
+    assert r.status_code == 200 and r.json()["removed"] is True
+
+    after = (await client.get("/api/payroll?pay_period=2026-06", headers=h)).json()
+    assert all(row["id"] != pid for row in after)
+    assert (await client.get(f"/api/payroll/{pid}/payslip.pdf", headers=h)).status_code == 404
+
+    db.expire_all()
+    gone = (
+        await db.execute(select(Expense).where(Expense.description.contains(marker)))
+    ).scalars().all()
+    assert len(gone) == 0

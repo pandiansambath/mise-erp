@@ -157,6 +157,30 @@ async def mark_paid(
     return await _set_status(db, payroll_id, user, PayrollStatus.PAID.value)
 
 
+@router.delete("/{payroll_id}")
+async def remove(
+    payroll_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:write")),
+) -> dict:
+    """Safely remove a payslip (any status) — also reverses its auto-posted salary
+    expense so the P&L stays correct. The undo for a mistaken run."""
+    rec = await service.get_payroll(db, payroll_id, user.hotel_id)
+    if rec is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Payroll not found")
+    period = rec.pay_period
+    net = rec.net_pay
+    emp = await get_employee(db, rec.employee_id, user.hotel_id)
+    name = emp.full_name if emp else "staff"
+    await service.remove_payroll(db, rec)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="payroll.remove",
+        summary=f"Removed payslip: {name} £{net} ({period})",
+        entity_type="payroll", entity_id=payroll_id,
+    )
+    return {"removed": True}
+
+
 async def _set_status(db, payroll_id, user, new_status) -> PayrollRow:
     rec = await service.get_payroll(db, payroll_id, user.hotel_id)
     if rec is None:
