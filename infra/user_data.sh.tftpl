@@ -49,7 +49,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://mise:${db_password}@${db_host}:5432/mise"
       SECRET_KEY: "${app_secret_key}"
       ENVIRONMENT: "production"${app_base_url_env}
-      CORS_ORIGINS: '["*"]'
+      CORS_ORIGINS: '${cors_origins}'
       STORAGE_BACKEND: "s3"
       S3_BUCKET: "${s3_bucket}"
       AWS_REGION: "${region}"

@@ -16,12 +16,21 @@ locals {
   # persist across box replacement (restored from S3 in user_data), so deploys don't
   # re-issue → no rate-limit risk → the redirect is safe.
   caddy_global = var.domain == "" ? "" : "{\n${var.acme_email != "" ? "\temail ${var.acme_email}\n" : ""}}\n\n"
-  caddyfile    = "${local.caddy_global}${local.caddy_site} {\n\thandle /api/* {\n\t\treverse_proxy backend:8000\n\t}\n\thandle {\n\t\treverse_proxy frontend:3000\n\t}\n}\n"
+  # Security response headers on every site: HSTS (force HTTPS for a year, incl.
+  # hotel subdomains), no MIME sniffing, deny cross-site framing (clickjacking),
+  # a privacy-preserving referrer policy, and hide the Server banner.
+  caddy_headers = "\theader {\n\t\tStrict-Transport-Security \"max-age=31536000; includeSubDomains\"\n\t\tX-Content-Type-Options nosniff\n\t\tX-Frame-Options SAMEORIGIN\n\t\tReferrer-Policy strict-origin-when-cross-origin\n\t\t-Server\n\t}\n"
+  caddyfile     = "${local.caddy_global}${local.caddy_site} {\n${local.caddy_headers}\thandle /api/* {\n\t\treverse_proxy backend:8000\n\t}\n\thandle {\n\t\treverse_proxy frontend:3000\n\t}\n}\n"
 
   # Public base URL for the backend (email verify/reset links, alert CTAs). Driven
   # by the domain so it's always correct after a domain move. Emitted as a compose
   # env line only when a domain is set; empty domain → backend keeps its own default.
   app_base_url_env = var.domain != "" ? "\n      APP_BASE_URL: \"https://${var.domain}\"" : ""
+
+  # CORS: lock the API to our own domain(s) instead of "*". The app's own frontend
+  # is same-origin (served by Caddy) so this doesn't affect it — it only stops other
+  # websites' JS from calling our API. Empty domain (IP mode) keeps "*" for dev.
+  cors_origins = var.domain != "" ? "[\"https://${var.domain}\",\"https://www.${var.domain}\"]" : "[\"*\"]"
 }
 
 resource "aws_instance" "app" {
@@ -62,6 +71,7 @@ resource "aws_instance" "app" {
     gemini_api_key_2 = var.gemini_api_key_2
     caddyfile        = local.caddyfile
     app_base_url_env = local.app_base_url_env
+    cors_origins     = local.cors_origins
   })
   # Re-run cloud-init (pull new images + restart) whenever the images change.
   # (Normal deploys pin images to :latest, so user_data is stable and the box is
