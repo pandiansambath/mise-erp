@@ -97,12 +97,12 @@ async def tls_check(domain: str = "", db: AsyncSession = Depends(get_db)) -> Res
 async def hotel_landing(handle: str, db: AsyncSession = Depends(get_db)) -> dict:
     """Public branding + landing config for a hotel subdomain (<handle>.dineai.cloud).
     No auth — this renders the hotel's own front door before anyone logs in."""
+    # Match tls-check exactly (handle only, no is_active gate): if the handle is
+    # good enough to mint a cert, it's good enough to render its landing. (A
+    # genuinely-suspended hotel would be gated in BOTH places, together.)
     hotel = (
         await db.execute(
-            select(Hotel).where(
-                func.lower(Hotel.username) == handle.strip().lower(),
-                Hotel.is_active.is_(True),
-            )
+            select(Hotel).where(func.lower(Hotel.username) == handle.strip().lower())
         )
     ).scalar_one_or_none()
     if hotel is None:
