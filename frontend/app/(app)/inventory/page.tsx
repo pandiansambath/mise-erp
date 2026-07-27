@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
+import { DetailSheet, DetailStats } from "@/components/DetailSheet";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -503,6 +504,10 @@ export default function InventoryPage() {
       setError(err instanceof ApiError ? err.message : "Could not remove item");
     }
   }
+
+  // The item whose detail sheet is open (click a row -> opens in place).
+  const openItem = items.find((i) => i.id === expanded) ?? null;
+  const openRows = expanded ? breakdown[expanded] : undefined;
 
   function orderItem(item: Item) {
     router.push(`/purchasing?item=${item.id}`);
@@ -1332,143 +1337,6 @@ export default function InventoryPage() {
                             </div>
                           </td>
                         </tr>
-                        {isOpen && (
-                          <tr className="border-b border-line bg-paper-2">
-                            <td colSpan={6} className="px-5 pb-4 pt-1">
-                              <div className="mise-panel-in rounded-2xl border border-line bg-paper-2 p-4">
-                                <div className="flex items-center justify-between">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                                    🏷 Purchases by supplier
-                                  </p>
-                                  {rows && rows.length > 0 && (
-                                    <span className="text-xs text-fg-faint">
-                                      {rows.length} recent purchase{rows.length === 1 ? "" : "s"}
-                                    </span>
-                                  )}
-                                </div>
-                                {bdLoading === item.id ? (
-                                  <p className="mt-3 text-xs text-fg-faint">Loading…</p>
-                                ) : rows && rows.length > 0 ? (
-                                  <>
-                                    {(priceHist[item.id]?.length ?? 0) >= 2 && (
-                                      <div className="mise-well mt-3 rounded-xl p-3">
-                                        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                                          Price you paid per {item.unit} — over time
-                                        </p>
-                                        <AreaChart
-                                          data={priceHist[item.id].map((p) => parseFloat(p.price) || 0)}
-                                          labels={priceHist[item.id].map((p) => p.date)}
-                                          color={
-                                            (parseFloat(priceHist[item.id][priceHist[item.id].length - 1].price) || 0) >
-                                            (parseFloat(priceHist[item.id][0].price) || 0)
-                                              ? "#f43f5e"
-                                              : "#10b981"
-                                          }
-                                          height={90}
-                                          formatValue={(v) => format(String(v))}
-                                        />
-                                      </div>
-                                    )}
-                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                      {rows.map((r, idx) => (
-                                        <div
-                                          key={idx}
-                                          role={r.vendor ? "button" : undefined}
-                                          tabIndex={r.vendor ? 0 : undefined}
-                                          onClick={r.vendor && r.vendor_id ? () => router.push(`/vendors?focus=${r.vendor_id}`) : undefined}
-                                          title={r.vendor ? `View ${r.vendor} on the Vendors page` : undefined}
-                                          className={`mise-well flex items-center justify-between rounded-xl px-3.5 py-2.5 ${
-                                            r.vendor ? "mise-feel cursor-pointer" : ""
-                                          }`}
-                                        >
-                                          <div className="flex min-w-0 items-center gap-3">
-                                            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500/15 text-base text-brand-300">🏷</span>
-                                            <div className="min-w-0">
-                                              <p className="truncate font-medium text-fg">
-                                                {r.vendor ?? "No supplier recorded"}
-                                                {r.vendor && <span aria-hidden className="ml-1 text-brand-300">›</span>}
-                                              </p>
-                                              <p className="text-xs text-fg-faint">
-                                                {new Date(r.received_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                              </p>
-                                            </div>
-                                          </div>
-                                          <div className="shrink-0 pl-2 text-right">
-                                            <p className="font-semibold text-fg">{fmtQty(r.quantity, item.unit)}</p>
-                                            {r.unit_cost != null && (
-                                              <p className="font-mono text-xs text-brand-300">{format(r.unit_cost)}/{item.unit}</p>
-                                            )}
-                                            {r.reference_id && (
-                                              <button
-                                                onClick={(e) => { e.stopPropagation(); toggleReceipt(r.reference_id!); }}
-                                                className="mt-1 text-[11px] font-medium text-brand-300 hover:underline"
-                                                title="See everything received on this delivery"
-                                              >
-                                                {openReceipt === r.reference_id ? "▾ hide delivery" : "🔗 full delivery"}
-                                              </button>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {openReceipt && (
-                                      <div className="mise-panel-in mt-3 rounded-xl border border-brand-400/30 bg-paper-3 p-3">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                                          📦 The chain — everything received together on this delivery
-                                        </p>
-                                        {receiptLoading && !receipts[openReceipt] ? (
-                                          <p className="mt-2 text-xs text-fg-faint">Loading…</p>
-                                        ) : receipts[openReceipt] && receipts[openReceipt].length > 0 ? (
-                                          <div className="mt-2 divide-y divide-line/50">
-                                            {receipts[openReceipt].map((l, i) => (
-                                              <div key={i} className="flex items-center justify-between py-1.5 text-sm">
-                                                <span className="min-w-0 truncate text-fg-soft">
-                                                  {l.item_name}
-                                                  {l.item_name.toLowerCase() === item.name.toLowerCase() && (
-                                                    <span className="ml-1 text-brand-300">(this item)</span>
-                                                  )}
-                                                  {l.vendor && <span className="ml-1 text-fg-faint">· {l.vendor}</span>}
-                                                </span>
-                                                <span className="shrink-0 pl-2 text-right">
-                                                  <b className="text-fg">{fmtQty(l.quantity, l.unit)}</b>
-                                                  {l.unit_cost != null && (
-                                                    <span className="ml-2 font-mono text-xs text-brand-300">{format(l.unit_cost)}/{l.unit}</span>
-                                                  )}
-                                                </span>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="mt-2 text-xs text-fg-faint">Just this item was on that delivery.</p>
-                                        )}
-                                      </div>
-                                    )}
-                                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-xs text-fg-faint">
-                                      <span>On hand <b className="font-semibold text-fg-soft">{fmtQty(item.current_stock, item.unit)}</b></span>
-                                      <span>Avg cost <b className="font-semibold text-fg-soft">{format(item.average_cost)}/{item.unit}</b></span>
-                                      <span>Bought (recent) <b className="font-semibold text-fg-soft">{fmtQty(rows.reduce((s, r) => s + parseFloat(r.quantity || "0"), 0), item.unit)}</b></span>
-                                      <span>Last received <b className="font-semibold text-fg-soft">{new Date(rows[0].received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</b></span>
-                                    </div>
-                                    <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
-                                      Stock from different suppliers mixes into one pool — so Mise values your {fmtQty(item.current_stock, item.unit)} on hand at the weighted-average {format(item.average_cost)}/{item.unit} rather than guessing whose stock is left.
-                                    </p>
-                                    <div className="mt-3">
-                                      <Link
-                                        href={`/purchasing?item=${item.id}`}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-brand-400/20"
-                                      >
-                                        🛒 Order / view in Purchasing →
-                                      </Link>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <p className="mt-3 text-xs text-fg-faint">No purchase history yet.</p>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
                         </Fragment>
                       );
                     })
@@ -1516,6 +1384,172 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      {/* Item detail — opens in place, with room for the full story */}
+      <DetailSheet
+        open={!!openItem}
+        onClose={() => { setExpanded(null); setOpenReceipt(null); }}
+        width="lg"
+        title={openItem ? openItem.name : ""}
+        subtitle={
+          openItem
+            ? `${fmtQty(openItem.current_stock, openItem.unit)} on hand · avg ${format(openItem.average_cost)}/${openItem.unit}`
+            : ""
+        }
+      >
+        {openItem && (
+          <>
+            <DetailStats
+              stats={[
+                { label: "On hand", value: fmtQty(openItem.current_stock, openItem.unit) },
+                { label: "Avg cost", value: `${format(openItem.average_cost)}` },
+                {
+                  label: "Stock value",
+                  value: format(
+                    String((parseFloat(openItem.current_stock) || 0) * (parseFloat(openItem.average_cost) || 0)),
+                  ),
+                },
+                { label: "Min level", value: openItem.min_stock_level ?? "—" },
+                { label: "Category", value: openItem.category || "—" },
+                { label: "Suppliers", value: String(openItem.vendor_count ?? 0) },
+              ]}
+            />
+            <div className="mt-5">
+                              <div className="mise-panel-in">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                                    🏷 Purchases by supplier
+                                  </p>
+                                  {openRows && openRows.length > 0 && (
+                                    <span className="text-xs text-fg-faint">
+                                      {openRows.length} recent purchase{openRows.length === 1 ? "" : "s"}
+                                    </span>
+                                  )}
+                                </div>
+                                {bdLoading === openItem.id ? (
+                                  <p className="mt-3 text-xs text-fg-faint">Loading…</p>
+                                ) : openRows && openRows.length > 0 ? (
+                                  <>
+                                    {(priceHist[openItem.id]?.length ?? 0) >= 2 && (
+                                      <div className="mise-well mt-3 rounded-xl p-3">
+                                        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                                          Price you paid per {openItem.unit} — over time
+                                        </p>
+                                        <AreaChart
+                                          data={priceHist[openItem.id].map((p) => parseFloat(p.price) || 0)}
+                                          labels={priceHist[openItem.id].map((p) => p.date)}
+                                          color={
+                                            (parseFloat(priceHist[openItem.id][priceHist[openItem.id].length - 1].price) || 0) >
+                                            (parseFloat(priceHist[openItem.id][0].price) || 0)
+                                              ? "#f43f5e"
+                                              : "#10b981"
+                                          }
+                                          height={90}
+                                          formatValue={(v) => format(String(v))}
+                                        />
+                                      </div>
+                                    )}
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                      {openRows.map((r, idx) => (
+                                        <div
+                                          key={idx}
+                                          role={r.vendor ? "button" : undefined}
+                                          tabIndex={r.vendor ? 0 : undefined}
+                                          onClick={r.vendor && r.vendor_id ? () => router.push(`/vendors?focus=${r.vendor_id}`) : undefined}
+                                          title={r.vendor ? `View ${r.vendor} on the Vendors page` : undefined}
+                                          className={`mise-well flex items-center justify-between rounded-xl px-3.5 py-2.5 ${
+                                            r.vendor ? "mise-feel cursor-pointer" : ""
+                                          }`}
+                                        >
+                                          <div className="flex min-w-0 items-center gap-3">
+                                            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500/15 text-base text-brand-300">🏷</span>
+                                            <div className="min-w-0">
+                                              <p className="truncate font-medium text-fg">
+                                                {r.vendor ?? "No supplier recorded"}
+                                                {r.vendor && <span aria-hidden className="ml-1 text-brand-300">›</span>}
+                                              </p>
+                                              <p className="text-xs text-fg-faint">
+                                                {new Date(r.received_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="shrink-0 pl-2 text-right">
+                                            <p className="font-semibold text-fg">{fmtQty(r.quantity, openItem.unit)}</p>
+                                            {r.unit_cost != null && (
+                                              <p className="font-mono text-xs text-brand-300">{format(r.unit_cost)}/{openItem.unit}</p>
+                                            )}
+                                            {r.reference_id && (
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); toggleReceipt(r.reference_id!); }}
+                                                className="mt-1 text-[11px] font-medium text-brand-300 hover:underline"
+                                                title="See everything received on this delivery"
+                                              >
+                                                {openReceipt === r.reference_id ? "▾ hide delivery" : "🔗 full delivery"}
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {openReceipt && (
+                                      <div className="mise-panel-in mt-3 rounded-xl border border-brand-400/30 bg-paper-3 p-3">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                                          📦 The chain — everything received together on this delivery
+                                        </p>
+                                        {receiptLoading && !receipts[openReceipt] ? (
+                                          <p className="mt-2 text-xs text-fg-faint">Loading…</p>
+                                        ) : receipts[openReceipt] && receipts[openReceipt].length > 0 ? (
+                                          <div className="mt-2 divide-y divide-line/50">
+                                            {receipts[openReceipt].map((l, i) => (
+                                              <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                                                <span className="min-w-0 truncate text-fg-soft">
+                                                  {l.item_name}
+                                                  {l.item_name.toLowerCase() === openItem.name.toLowerCase() && (
+                                                    <span className="ml-1 text-brand-300">(this openItem)</span>
+                                                  )}
+                                                  {l.vendor && <span className="ml-1 text-fg-faint">· {l.vendor}</span>}
+                                                </span>
+                                                <span className="shrink-0 pl-2 text-right">
+                                                  <b className="text-fg">{fmtQty(l.quantity, l.unit)}</b>
+                                                  {l.unit_cost != null && (
+                                                    <span className="ml-2 font-mono text-xs text-brand-300">{format(l.unit_cost)}/{l.unit}</span>
+                                                  )}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="mt-2 text-xs text-fg-faint">Just this openItem was on that delivery.</p>
+                                        )}
+                                      </div>
+                                    )}
+                                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-xs text-fg-faint">
+                                      <span>On hand <b className="font-semibold text-fg-soft">{fmtQty(openItem.current_stock, openItem.unit)}</b></span>
+                                      <span>Avg cost <b className="font-semibold text-fg-soft">{format(openItem.average_cost)}/{openItem.unit}</b></span>
+                                      <span>Bought (recent) <b className="font-semibold text-fg-soft">{fmtQty(openRows.reduce((s, r) => s + parseFloat(r.quantity || "0"), 0), openItem.unit)}</b></span>
+                                      <span>Last received <b className="font-semibold text-fg-soft">{new Date(openRows[0].received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</b></span>
+                                    </div>
+                                    <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
+                                      Stock from different suppliers mixes into one pool — so Mise values your {fmtQty(openItem.current_stock, openItem.unit)} on hand at the weighted-average {format(openItem.average_cost)}/{openItem.unit} rather than guessing whose stock is left.
+                                    </p>
+                                    <div className="mt-3">
+                                      <Link
+                                        href={`/purchasing?openItem=${openItem.id}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-brand-400/20"
+                                      >
+                                        🛒 Order / view in Purchasing →
+                                      </Link>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <p className="mt-3 text-xs text-fg-faint">No purchase history yet.</p>
+                                )}
+                              </div>
+            </div>
+          </>
+        )}
+      </DetailSheet>
     </div>
   );
 }
