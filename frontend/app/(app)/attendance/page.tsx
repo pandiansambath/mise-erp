@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeRangePicker } from "@/components/RangeControls";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
 import Link from "next/link";
@@ -545,11 +546,15 @@ function AttendanceHistoryCard({ employees, format }: {
           />
         </div>
         {mode === "CUSTOM" && (
-          <div className="flex items-center gap-1.5">
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="From" />
-            <span className="text-fg-faint">→</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mise-well rounded-lg px-2.5 py-2 text-sm" aria-label="To" />
-          </div>
+          // Same CloudWatch-style picker as the money screens: quick presets,
+          // relative windows ("last 6 weeks") and absolute dates in one control.
+          <TimeRangePicker
+            range={{ from, to }}
+            onChange={(r) => {
+              setFrom(r.from);
+              setTo(r.to);
+            }}
+          />
         )}
         {empId && (
           <Button variant="secondary" onClick={() => downloadFile(
