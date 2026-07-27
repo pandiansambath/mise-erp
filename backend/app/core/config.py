@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     gemini_api_key_2: str = ""
     assistant_model: str = "gemini-2.5-flash"
 
+    # Claude on Amazon Bedrock — the Copilot's brain for document understanding
+    # (bills, handwritten recipes) and the in-app assistant. Runs on the instance
+    # role, so there's no key: client images never leave our own AWS account.
+    # Model access is granted once in the Bedrock console.
+    bedrock_model_id: str = "anthropic.claude-sonnet-5"
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

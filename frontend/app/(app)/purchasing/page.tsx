@@ -15,6 +15,7 @@ import {
   type SupplierOption,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { DetailSheet } from "@/components/DetailSheet";
 import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
@@ -388,6 +389,12 @@ export default function PurchasingPage() {
   // Group POs by the purchase run (indent) they came from, so each run offers a
   // consolidated PDF alongside its per-vendor orders. (Hook must run before any
   // early return.) Keeps the panel's newest-first order (first appearance wins).
+  // Whatever row is open — its detail renders in a sheet, in place.
+  const openIndentObj = indents.find((i) => i.id === openIndent) ?? null;
+  const openPoObj = pos.find((o) => o.id === openPo) ?? null;
+  const openPoDetail = openPo ? poDetail[openPo] : undefined;
+  const openPoBusy = poBusy === openPo;
+
   const poGroups = useMemo(() => {
     const byIndent = new Map<string, POSummary[]>();
     const order: string[] = [];
@@ -533,92 +540,6 @@ export default function PurchasingPage() {
                       </span>
                       <Badge tone={indentTone[ind.status] ?? "slate"}>{ind.status}</Badge>
                     </button>
-                    {open && (
-                      <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
-                        <ul className="space-y-1.5">
-                          {ind.items.map((it) => (
-                            <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
-                              <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
-                              <span className="shrink-0 text-right">
-                                <span className="text-fg">{it.required_qty} {it.unit}</span>
-                                {it.vendor_name && <span className="ml-2 text-xs text-brand-300">→ {it.vendor_name}</span>}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                        {/* Once ordered: the POs this indent produced — one PDF per
-                            vendor + ONE consolidated PDF for the whole indent. */}
-                        {ind.status === "ORDERED" && indentConsol[ind.id] && indentConsol[ind.id].po_count > 0 && (
-                          <div className="rounded-xl border border-brand-500/30 bg-brand-500/[0.06] p-3">
-                            <div className="mb-2 flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">
-                                Orders from this indent
-                              </span>
-                              <span className="text-xs text-fg-faint">
-                                {indentConsol[ind.id].vendor_count} vendor{indentConsol[ind.id].vendor_count === 1 ? "" : "s"} · <b className="text-fg-soft">{format(indentConsol[ind.id].grand_total)}</b>
-                              </span>
-                            </div>
-                            {indentConsol[ind.id].vendors.length > 1 && (
-                              // who's getting how much of this indent — at a glance
-                              <div className="mise-well mb-2 rounded-lg p-2.5">
-                                <Bars
-                                  formatValue={(v) => format(String(v))}
-                                  items={indentConsol[ind.id].vendors.map((v) => ({
-                                    label: v.vendor_name || v.po_number,
-                                    value: parseFloat(v.subtotal) || 0,
-                                    color: "#d97742",
-                                  }))}
-                                />
-                              </div>
-                            )}
-                            <div className="space-y-1.5">
-                              {indentConsol[ind.id].vendors.map((v) => (
-                                <div key={v.po_id} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-paper-2/40 px-2.5 py-1.5">
-                                  <span className="min-w-0 truncate text-sm text-fg">
-                                    {v.vendor_name || "—"} <span className="text-xs text-fg-faint">· {v.po_number} · {format(v.subtotal)}</span>
-                                  </span>
-                                  <button
-                                    onClick={() => downloadFile(`/purchasing/purchase-orders/${v.po_id}/pdf`, `${v.po_number}.pdf`)}
-                                    className="shrink-0 rounded-md border border-line px-2 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
-                                  >
-                                    ⬇ PDF
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                            <button
-                              onClick={() => downloadFile(`/purchasing/indents/${ind.id}/consolidated.pdf`, `consolidated-${ind.date}.pdf`)}
-                              className="mt-2.5 w-full rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2 text-sm font-semibold text-brand-300 transition hover:bg-brand-500/20"
-                            >
-                              🧾 Download consolidated PDF (all vendors)
-                            </button>
-                            <p className="mt-1.5 text-[11px] text-fg-faint">
-                              Receiving &amp; short-delivery notes are on each order in the <b className="text-fg-soft">Purchase orders</b> panel.
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex gap-2">
-                          {canApprove && ind.status !== "ORDERED" && (
-                            <button
-                              onClick={() => generate(ind.id)}
-                              className="flex-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-2 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
-                            >
-                              ✓ Approve &amp; generate purchase orders
-                            </button>
-                          )}
-                          {canApprove && (
-                            <button
-                              onClick={() => deleteIndent(ind.id)}
-                              title="Delete this indent"
-                              className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-fg-faint transition hover:bg-rose-400/10 hover:text-rose-300"
-                            >
-                              🗑 Delete
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })
@@ -692,83 +613,6 @@ export default function PurchasingPage() {
                         </span>
                       </span>
                     </button>
-                    {open && (
-                      <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
-                        {po.status !== "RECEIVED" && canApprove && (
-                          <label className="flex flex-wrap items-center gap-2 text-xs text-fg-faint">
-                            🚚 Expected delivery
-                            <input
-                              type="date"
-                              value={po.expected_delivery ?? ""}
-                              onChange={async (e) => {
-                                const v = e.target.value || null;
-                                try {
-                                  await api.patch(`/purchasing/purchase-orders/${po.id}`, { expected_delivery: v });
-                                  setPos((list) => list.map((x) => (x.id === po.id ? { ...x, expected_delivery: v } : x)));
-                                } catch { /* leave as-was */ }
-                              }}
-                              className="mise-well rounded-lg px-2 py-1 text-xs text-fg outline-none"
-                            />
-                            {po.expected_delivery && <span>the dashboard will chase it on the day</span>}
-                          </label>
-                        )}
-                        {busy && !detail ? (
-                          <p className="py-1 text-center text-sm text-fg-faint">Loading items…</p>
-                        ) : detail && detail.items.length > 0 ? (
-                          <ul className="space-y-1.5">
-                            {detail.items.map((it) => (
-                              <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
-                                <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
-                                <span className="shrink-0 text-fg-faint">
-                                  {it.ordered_qty} × {format(it.unit_price)}
-                                  {po.status === "RECEIVED" && it.received_qty !== it.ordered_qty && (
-                                    <span className="ml-2 font-medium text-rose-300">· got {it.received_qty}</span>
-                                  )}
-                                  <span className="ml-2 font-medium text-fg">{format(it.line_total)}</span>
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="py-1 text-center text-sm text-fg-faint">No line items.</p>
-                        )}
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf`, `${po.po_number}.pdf`)}
-                            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
-                          >
-                            ⬇ {po.status === "RECEIVED" ? "PO (ordered)" : "PDF"}
-                          </button>
-                          {po.status === "RECEIVED" && (
-                            <button
-                              onClick={() => downloadFile(`/purchasing/purchase-orders/${po.id}/pdf?received=1`, `${po.po_number}-received.pdf`)}
-                              title="What actually arrived (ordered vs received + the note)"
-                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
-                            >
-                              ⬇ Received note
-                            </button>
-                          )}
-                          {canApprove && po.status !== "RECEIVED" && (
-                            <button
-                              onClick={() => detail && openReceive(detail)}
-                              disabled={!detail}
-                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft disabled:opacity-50"
-                            >
-                              ✓ Receive into stock
-                            </button>
-                          )}
-                          {canApprove && po.status !== "RECEIVED" && (
-                            <button
-                              onClick={() => revertPo(po)}
-                              title="Send this PO back to its indent (re-opens it to edit/regenerate)"
-                              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-faint transition hover:bg-amber-400/10 hover:text-amber-300"
-                            >
-                              ↩ Revert to indent
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -886,6 +730,193 @@ export default function PurchasingPage() {
           </div>
         </div>
       )}
+
+      {/* Indent detail — opens in place */}
+      <DetailSheet
+        open={!!openIndentObj}
+        onClose={() => setOpenIndent(null)}
+        width="lg"
+        title={openIndentObj ? `Indent · ${openIndentObj.date}` : ""}
+        subtitle={openIndentObj ? `${openIndentObj.items.length} item${openIndentObj.items.length === 1 ? "" : "s"} · ${openIndentObj.status.toLowerCase()}` : ""}
+      >
+        {openIndentObj && (
+          <div>
+                      <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
+                        <ul className="space-y-1.5">
+                          {openIndentObj.items.map((it) => (
+                            <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
+                              <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
+                              <span className="shrink-0 text-right">
+                                <span className="text-fg">{it.required_qty} {it.unit}</span>
+                                {it.vendor_name && <span className="ml-2 text-xs text-brand-300">→ {it.vendor_name}</span>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        {/* Once ordered: the POs this indent produced — one PDF per
+                            vendor + ONE consolidated PDF for the whole indent. */}
+                        {openIndentObj.status === "ORDERED" && indentConsol[openIndentObj.id] && indentConsol[openIndentObj.id].po_count > 0 && (
+                          <div className="rounded-xl border border-brand-500/30 bg-brand-500/[0.06] p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-brand-300">
+                                Orders from this indent
+                              </span>
+                              <span className="text-xs text-fg-faint">
+                                {indentConsol[openIndentObj.id].vendor_count} vendor{indentConsol[openIndentObj.id].vendor_count === 1 ? "" : "s"} · <b className="text-fg-soft">{format(indentConsol[openIndentObj.id].grand_total)}</b>
+                              </span>
+                            </div>
+                            {indentConsol[openIndentObj.id].vendors.length > 1 && (
+                              // who's getting how much of this indent — at a glance
+                              <div className="mise-well mb-2 rounded-lg p-2.5">
+                                <Bars
+                                  formatValue={(v) => format(String(v))}
+                                  items={indentConsol[openIndentObj.id].vendors.map((v) => ({
+                                    label: v.vendor_name || v.po_number,
+                                    value: parseFloat(v.subtotal) || 0,
+                                    color: "#d97742",
+                                  }))}
+                                />
+                              </div>
+                            )}
+                            <div className="space-y-1.5">
+                              {indentConsol[openIndentObj.id].vendors.map((v) => (
+                                <div key={v.po_id} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-paper-2/40 px-2.5 py-1.5">
+                                  <span className="min-w-0 truncate text-sm text-fg">
+                                    {v.vendor_name || "—"} <span className="text-xs text-fg-faint">· {v.po_number} · {format(v.subtotal)}</span>
+                                  </span>
+                                  <button
+                                    onClick={() => downloadFile(`/purchasing/purchase-orders/${v.po_id}/pdf`, `${v.po_number}.pdf`)}
+                                    className="shrink-0 rounded-md border border-line px-2 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/10"
+                                  >
+                                    ⬇ PDF
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <button
+                              onClick={() => downloadFile(`/purchasing/indents/${openIndentObj.id}/consolidated.pdf`, `consolidated-${openIndentObj.date}.pdf`)}
+                              className="mt-2.5 w-full rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2 text-sm font-semibold text-brand-300 transition hover:bg-brand-500/20"
+                            >
+                              🧾 Download consolidated PDF (all vendors)
+                            </button>
+                            <p className="mt-1.5 text-[11px] text-fg-faint">
+                              Receiving &amp; short-delivery notes are on each order in the <b className="text-fg-soft">Purchase orders</b> panel.
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          {canApprove && openIndentObj.status !== "ORDERED" && (
+                            <button
+                              onClick={() => generate(openIndentObj.id)}
+                              className="flex-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-2 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
+                            >
+                              ✓ Approve &amp; generate purchase orders
+                            </button>
+                          )}
+                          {canApprove && (
+                            <button
+                              onClick={() => deleteIndent(openIndentObj.id)}
+                              title="Delete this indent"
+                              className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-fg-faint transition hover:bg-rose-400/10 hover:text-rose-300"
+                            >
+                              🗑 Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+          </div>
+        )}
+      </DetailSheet>
+
+      {/* Purchase-order detail — opens in place */}
+      <DetailSheet
+        open={!!openPoObj}
+        onClose={() => setOpenPo(null)}
+        width="lg"
+        title={openPoObj ? openPoObj.po_number : ""}
+        subtitle={openPoObj ? `${openPoObj.vendor_name} · ${openPoObj.status.toLowerCase()}` : ""}
+      >
+        {openPoObj && (
+          <div>
+                      <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
+                        {openPoObj.status !== "RECEIVED" && canApprove && (
+                          <label className="flex flex-wrap items-center gap-2 text-xs text-fg-faint">
+                            🚚 Expected delivery
+                            <input
+                              type="date"
+                              value={openPoObj.expected_delivery ?? ""}
+                              onChange={async (e) => {
+                                const v = e.target.value || null;
+                                try {
+                                  await api.patch(`/purchasing/purchase-orders/${openPoObj.id}`, { expected_delivery: v });
+                                  setPos((list) => list.map((x) => (x.id === openPoObj.id ? { ...x, expected_delivery: v } : x)));
+                                } catch { /* leave as-was */ }
+                              }}
+                              className="mise-well rounded-lg px-2 py-1 text-xs text-fg outline-none"
+                            />
+                            {openPoObj.expected_delivery && <span>the dashboard will chase it on the day</span>}
+                          </label>
+                        )}
+                        {openPoBusy && !openPoDetail ? (
+                          <p className="py-1 text-center text-sm text-fg-faint">Loading items…</p>
+                        ) : openPoDetail && openPoDetail.items.length > 0 ? (
+                          <ul className="space-y-1.5">
+                            {openPoDetail.items.map((it) => (
+                              <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
+                                <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
+                                <span className="shrink-0 text-fg-faint">
+                                  {it.ordered_qty} × {format(it.unit_price)}
+                                  {openPoObj.status === "RECEIVED" && it.received_qty !== it.ordered_qty && (
+                                    <span className="ml-2 font-medium text-rose-300">· got {it.received_qty}</span>
+                                  )}
+                                  <span className="ml-2 font-medium text-fg">{format(it.line_total)}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="py-1 text-center text-sm text-fg-faint">No line items.</p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf`, `${openPoObj.po_number}.pdf`)}
+                            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
+                          >
+                            ⬇ {openPoObj.status === "RECEIVED" ? "PO (ordered)" : "PDF"}
+                          </button>
+                          {openPoObj.status === "RECEIVED" && (
+                            <button
+                              onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf?received=1`, `${openPoObj.po_number}-received.pdf`)}
+                              title="What actually arrived (ordered vs received + the note)"
+                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
+                            >
+                              ⬇ Received note
+                            </button>
+                          )}
+                          {canApprove && openPoObj.status !== "RECEIVED" && (
+                            <button
+                              onClick={() => openPoDetail && openReceive(openPoDetail)}
+                              disabled={!openPoDetail}
+                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft disabled:opacity-50"
+                            >
+                              ✓ Receive into stock
+                            </button>
+                          )}
+                          {canApprove && openPoObj.status !== "RECEIVED" && (
+                            <button
+                              onClick={() => revertPo(openPoObj)}
+                              title="Send this PO back to its indent (re-opens it to edit/regenerate)"
+                              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-faint transition hover:bg-amber-400/10 hover:text-amber-300"
+                            >
+                              ↩ Revert to indent
+                            </button>
+                          )}
+                        </div>
+                      </div>
+          </div>
+        )}
+      </DetailSheet>
     </div>
   );
 }

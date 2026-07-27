@@ -15,6 +15,7 @@ from app.assistant.schemas import (
     IngestResult,
     UndoRequest,
 )
+from app.audit import service as audit
 from app.auth.deps import get_current_user, require_feature
 from app.auth.models import User
 from app.core.database import get_db
@@ -129,3 +130,83 @@ async def undo(
     if not result.get("ok"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, result.get("error", "Nothing to undo"))
     return ActResult(ok=True, summary=result["summary"])
+
+
+# ── Claude on Bedrock: read a bill / handwritten recipe ───────────────────────
+@router.get("/vision/status")
+async def vision_status(user: User = Depends(get_current_user)) -> dict:
+    """Is the Bedrock brain switched on? (Drives the upload screen's banner.)"""
+    from app.assistant import bedrock
+
+    return bedrock.health()
+
+
+@router.post("/vision/read")
+async def vision_read(
+    kind: str = Form("auto"),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Photograph of a supplier bill or a handwritten recipe -> structured data.
+
+    Proposes only: nothing is saved until a human confirms it on screen. The
+    matching context is built from THIS hotel's items and vendors, so a hotel's
+    AI can never see another's data.
+    """
+    from sqlalchemy import select
+
+    from app.assistant import bedrock
+    from app.inventory.models import Item
+    from app.vendors.models import Vendor
+
+    if kind not in ("auto", "bill", "recipe"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "kind must be auto, bill or recipe")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Image too large (max 15MB)")
+    media = (file.content_type or "image/jpeg").split(";")[0]
+    if media not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Please upload a photo (JPEG, PNG, WEBP or GIF).",
+        )
+
+    items = (
+        (
+            await db.execute(
+                select(Item).where(Item.hotel_id == user.hotel_id, Item.is_active.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    vendors = (
+        (
+            await db.execute(
+                select(Vendor).where(Vendor.hotel_id == user.hotel_id, Vendor.is_active.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    try:
+        result = bedrock.understand_document(
+            data,
+            media,
+            kind=kind,
+            known_items=[{"id": str(i.id), "name": i.name, "unit": i.unit} for i in items],
+            known_vendors=[v.name for v in vendors],
+        )
+    except bedrock.BedrockUnavailable as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="ai.read_document",
+        summary=f"Read a {result.get('doc_type', kind)} with the AI (nothing saved yet)",
+        entity_type="document", entity_id=None,
+    )
+    return result
