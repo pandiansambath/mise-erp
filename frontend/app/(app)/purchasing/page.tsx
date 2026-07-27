@@ -7,6 +7,7 @@ import {
   downloadFile,
   postForm,
   type Indent,
+  type IndentItemRow,
   type Item,
   type ItemSuppliers,
   type POOut,
@@ -15,7 +16,7 @@ import {
   type SupplierOption,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
-import { DetailSheet } from "@/components/DetailSheet";
+import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
 import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
@@ -71,6 +72,8 @@ export default function PurchasingPage() {
   // item_id -> the vendor PICKED for this order ("" / missing = automatic)
   const [vendorPick, setVendorPick] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<string | null>(null);
+  // Deep link from Inventory: show THIS item's own purchasing history in place.
+  const [historyItem, setHistoryItem] = useState<string | null>(null);
 
   // ⌘K "Start a purchase order" (?new=1) → spotlight the indent composer
   useDeepLink({ new: () => spotlight("indent-form") }, !loading);
@@ -81,6 +84,26 @@ export default function PurchasingPage() {
   const [poBusy, setPoBusy] = useState<string | null>(null);
   // Per-indent consolidated view (its POs across vendors), lazy-loaded on expand.
   const [indentConsol, setIndentConsol] = useState<Record<string, Consolidated>>({});
+
+
+  // Everything that ever happened to ONE item: the indent lines that asked for
+  // it, and the POs those indents turned into. Built from data already loaded,
+  // so opening the history costs no extra request.
+  const itemStory = useMemo(() => {
+    if (!historyItem) return null;
+    const item = items.find((i) => i.id === historyItem);
+    if (!item) return null;
+    const rows = indents
+      .map((ind) => {
+        const line = ind.items.find((l) => l.item_id === historyItem);
+        return line ? { indent: ind, line } : null;
+      })
+      .filter((r): r is { indent: Indent; line: IndentItemRow } => r !== null);
+    const indentIds = new Set(rows.map((r) => r.indent.id));
+    const orders = pos.filter((p) => p.indent_id && indentIds.has(p.indent_id));
+    const ordered = rows.reduce((n, r) => n + Number(r.line.required_qty || 0), 0);
+    return { item, rows, orders, ordered, last: rows[0]?.indent.date ?? null };
+  }, [historyItem, items, indents, pos]);
 
   async function load() {
     const [ind, p] = await Promise.all([
@@ -124,6 +147,15 @@ export default function PurchasingPage() {
   useEffect(() => {
     if (loading) return;
     const params = new URLSearchParams(window.location.search);
+    // ?openItem=<id> — "view in Purchasing" from an inventory item: don't just
+    // land on the page, open that exact item's indent + PO history.
+    const openItemId = params.get("openItem");
+    if (openItemId && items.some((i) => i.id === openItemId)) {
+      setHistoryItem(openItemId);
+      window.history.replaceState(null, "", window.location.pathname);
+      return;
+    }
+
     const itemId = params.get("item");
     if (!itemId || !items.some((i) => i.id === itemId)) return;
     setLines((prev) => (prev.some((l) => l.item_id === itemId) ? prev : [...prev, { item_id: itemId, qty: "" }]));
@@ -914,6 +946,89 @@ export default function PurchasingPage() {
                           )}
                         </div>
                       </div>
+          </div>
+        )}
+      </DetailSheet>
+      {/* One item's whole purchasing story — opened by Inventory's
+          "Order / view in Purchasing" so the link lands on the record itself. */}
+      <DetailSheet
+        open={!!itemStory}
+        onClose={() => setHistoryItem(null)}
+        title={itemStory?.item.name ?? ""}
+        subtitle="Everything this item has been ordered on"
+        width="lg"
+        actions={
+          canWrite && itemStory ? (
+            <button
+              type="button"
+              onClick={() => {
+                const id = itemStory.item.id;
+                setLines((prev) =>
+                  prev.some((l) => l.item_id === id) ? prev : [...prev, { item_id: id, qty: "" }],
+                );
+                setHistoryItem(null);
+                spotlight("indent-form");
+              }}
+              className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              🛒 Order this
+            </button>
+          ) : null
+        }
+      >
+        {itemStory && (
+          <div>
+            <DetailStats
+              stats={[
+                { label: "Times requested", value: itemStory.rows.length },
+                { label: "Total asked for", value: `${itemStory.ordered} ${itemStory.item.unit}` },
+                { label: "Purchase orders", value: itemStory.orders.length },
+              ]}
+            />
+
+            <DetailSection title={`Indents (${itemStory.rows.length})`}>
+              {itemStory.rows.length === 0 ? (
+                <p className="text-sm text-fg-faint">
+                  Never requested yet — “Order this” starts the first one.
+                </p>
+              ) : (
+                <ul className="divide-y divide-line/60">
+                  {itemStory.rows.map(({ indent, line }) => (
+                    <li key={indent.id} className="flex items-center justify-between gap-3 py-2">
+                      <span className="min-w-0">
+                        <span className="block text-sm text-fg">
+                          {line.required_qty} {line.unit}
+                          {line.vendor_name ? ` · ${line.vendor_name}` : ""}
+                        </span>
+                        <span className="text-[11px] text-fg-faint">{indent.date}</span>
+                      </span>
+                      <Badge tone={indentTone[indent.status] ?? "slate"}>{indent.status}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DetailSection>
+
+            <DetailSection title={`Purchase orders (${itemStory.orders.length})`}>
+              {itemStory.orders.length === 0 ? (
+                <p className="text-sm text-fg-faint">No PO has been raised from those indents yet.</p>
+              ) : (
+                <ul className="divide-y divide-line/60">
+                  {itemStory.orders.map((po) => (
+                    <li key={po.id} className="flex items-center justify-between gap-3 py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm text-fg">{po.vendor_name}</span>
+                        <span className="text-[11px] text-fg-faint">{po.po_number}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="text-sm font-semibold text-fg">{format(po.total_amount)}</span>
+                        <Badge tone={poTone[po.status] ?? "slate"}>{po.status}</Badge>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DetailSection>
           </div>
         )}
       </DetailSheet>
