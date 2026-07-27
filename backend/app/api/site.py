@@ -20,12 +20,20 @@ router = APIRouter(prefix="/public", tags=["public-site"])
 # Defaults for the customizable per-hotel landing page (<handle>.dineai.cloud).
 # A hotel stores only its overrides in Hotel.landing; missing keys fall back here.
 LANDING_DEFAULTS: dict = {
-    "tagline": "",       # short hero line under the name
-    "about": "",         # a paragraph about the place
-    "quote": "",         # a chef / owner quote
-    "accent": "#059669", # brand colour (hex)
-    "theme": "dark",     # dark | light | warm
-    "show_order": False, # show an "Order online" button
+    "hero": "warm",              # hero photo style: warm|fine|rustic|spice|cafe|night
+    "tagline": "",               # short hero line under the name
+    "about_title": "Our story",  # heading above the about paragraph
+    "about": "",                 # a paragraph about the place
+    "quote": "",                 # a chef / owner quote
+    "quote_by": "",              # who said it
+    "cta_label": "Order online", # label on the ordering button
+    "address": "",               # visit-us card
+    "phone": "",
+    "hours": "",
+    "accent": "#059669",         # brand colour (hex)
+    "theme": "dark",             # dark | light | warm
+    "show_order": False,         # show the ordering button
+    "show_gallery": True,        # show the dish gallery strip
 }
 
 # Function-specific subdomains that always resolve. The frontend middleware maps

@@ -151,12 +151,20 @@ export interface UserOut {
 }
 
 export interface LandingConfig {
+  hero?: string; // hero photo style: warm|fine|rustic|spice|cafe|night
   tagline?: string;
+  about_title?: string;
   about?: string;
   quote?: string;
+  quote_by?: string;
+  cta_label?: string;
+  address?: string;
+  phone?: string;
+  hours?: string;
   accent?: string; // hex brand colour
   theme?: "dark" | "light" | "warm";
-  show_order?: boolean; // show an "Order online" button
+  show_order?: boolean; // show the ordering button
+  show_gallery?: boolean; // show the dish gallery strip
 }
 
 export interface Hotel {

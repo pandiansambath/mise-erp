@@ -63,6 +63,9 @@ async def test_hotel_landing_public(client, db):
     assert body["landing"]["accent"] == "#ff5500"
     assert body["landing"]["show_order"] is True
     assert body["landing"]["theme"] == "dark"  # default filled in
+    assert body["landing"]["hero"] == "warm"  # new customizable defaults
+    assert body["landing"]["about_title"] == "Our story"
+    assert body["landing"]["show_gallery"] is True
 
     # unknown handle → 404
     assert (await client.get("/api/public/hotel-landing/nope")).status_code == 404

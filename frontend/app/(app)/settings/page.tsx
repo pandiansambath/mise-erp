@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, type LandingConfig } from "@/lib/api";
+import { api, ApiError, type HotelLanding, type LandingConfig } from "@/lib/api";
+import HotelSite, { DEFAULT_LANDING, HERO_STYLES, LANDING_THEMES } from "@/components/site/HotelSite";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
@@ -51,44 +52,6 @@ function senderEmail(): string {
   if (typeof window === "undefined") return "accounts@mise.app";
   const domain = window.location.hostname.split(".").slice(-2).join(".");
   return `accounts@${domain}`;
-}
-
-const PREVIEW_THEMES: Record<string, { bg: string; fg: string; sub: string; line: string }> = {
-  dark: { bg: "#0a0f0d", fg: "#f1f5f4", sub: "#9aa8a3", line: "rgba(255,255,255,0.12)" },
-  light: { bg: "#f7f8f7", fg: "#0f1a17", sub: "#5b6b66", line: "rgba(0,0,0,0.10)" },
-  warm: { bg: "#f6f1e7", fg: "#2a2218", sub: "#7a6c57", line: "rgba(0,0,0,0.10)" },
-};
-
-/** A compact live mirror of the /s/[handle] landing — updates as you type. */
-function LandingPreview({ name, land }: { name: string; land: LandingConfig }) {
-  const t = PREVIEW_THEMES[land.theme ?? "dark"] ?? PREVIEW_THEMES.dark;
-  const accent = land.accent || "#059669";
-  const mono = (name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2) || "M").toUpperCase();
-  return (
-    <div className="overflow-hidden rounded-xl border border-line" style={{ background: t.bg, color: t.fg }}>
-      <div
-        className="flex flex-col items-center gap-2 px-4 py-6 text-center"
-        style={{ background: `radial-gradient(60% 50% at 50% -10%, ${accent}22, transparent 70%)` }}
-      >
-        <div
-          className="grid h-12 w-12 place-items-center rounded-xl text-sm font-bold text-white"
-          style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)` }}
-        >
-          {mono}
-        </div>
-        <p className="text-xl font-bold">{name}</p>
-        {land.tagline && <p className="text-xs" style={{ color: t.sub }}>{land.tagline}</p>}
-        {land.about && <p className="mt-1 max-w-xs text-[11px] leading-relaxed" style={{ color: t.sub }}>{land.about}</p>}
-        {land.quote && <p className="mt-1 max-w-xs text-[11px] italic" style={{ color: t.fg }}>“{land.quote}”</p>}
-        <div className="mt-3 flex gap-2">
-          <span className="rounded-lg px-4 py-1.5 text-[11px] font-semibold text-white" style={{ background: accent }}>Log in →</span>
-          {land.show_order && (
-            <span className="rounded-lg border px-4 py-1.5 text-[11px] font-semibold" style={{ borderColor: t.line, color: t.fg }}>Order online</span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function SettingsPage() {
@@ -147,6 +110,18 @@ export default function SettingsPage() {
     } catch { /* keep the form; a transient failure shouldn't wipe edits */ }
     finally { setLandBusy(false); }
   }
+  // Feed the REAL site component with this hotel, so the preview is the page.
+  const previewData: HotelLanding = {
+    hotel_id: hotel?.id ?? "preview",
+    name: hotel?.name || "Your restaurant",
+    username: hotel?.username ?? null,
+    city: hotel?.city ?? null,
+    has_logo: !!hotel?.has_logo,
+    logo_url: hotel?.id && hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null,
+    order_url: hotel?.id ? `/order/${hotel.id}` : "#",
+    landing: { ...DEFAULT_LANDING, ...(hotel?.landing ?? {}) },
+  };
+
   const siteHost = hotel?.username
     ? `${hotel.username}.${typeof window !== "undefined" ? window.location.hostname.split(".").slice(-2).join(".") : "dineai.cloud"}`
     : null;
@@ -535,73 +510,181 @@ export default function SettingsPage() {
             . Customize it below; it goes live the moment you save.
           </p>
 
-          <div className="mt-4 grid gap-5 md:grid-cols-2">
-            {/* editor */}
-            <div className="space-y-3">
+          <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+            {/* ── editor ─────────────────────────────────────────────── */}
+            <div className="space-y-5">
+              {/* hero photo */}
               <div>
-                <span className="text-xs font-medium text-fg-soft">Theme</span>
-                <div className="mt-1 flex gap-1.5">
-                  {(["dark", "light", "warm"] as const).map((th) => {
-                    const on = (land.theme ?? "dark") === th;
+                <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Hero photo</span>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {HERO_STYLES.map((h) => {
+                    const on = (land.hero ?? "warm") === h.key;
                     return (
                       <button
-                        key={th}
+                        key={h.key}
                         type="button"
-                        onClick={() => setL("theme", th)}
-                        className={`rounded-lg border px-3 py-1.5 text-xs capitalize ${on ? "border-brand-500 bg-brand-500/10 text-fg" : "border-line text-fg-faint hover:bg-paper-2"}`}
+                        onClick={() => setL("hero", h.key)}
+                        title={h.label}
+                        className={`group relative aspect-[16/10] overflow-hidden rounded-xl border-2 transition ${on ? "border-brand-500" : "border-transparent hover:border-line"}`}
                       >
-                        {th}
+                        <span
+                          className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
+                          style={{ backgroundImage: `url(/site/hero-${h.key}.jpg)` }}
+                        />
+                        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-[9px] font-semibold text-white">
+                          {h.label}
+                        </span>
+                        {on && <span className="absolute right-1 top-1 rounded-full bg-brand-500 px-1 text-[9px] font-bold text-white">✓</span>}
                       </button>
                     );
                   })}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-medium text-fg-soft">Accent</span>
-                <input
-                  type="color"
-                  value={land.accent || "#059669"}
-                  onChange={(e) => setL("accent", e.target.value)}
-                  className="h-8 w-12 cursor-pointer rounded border border-line bg-transparent"
-                />
-                <span className="text-xs text-fg-faint">{land.accent || "#059669"}</span>
+
+              {/* theme + accent */}
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Theme</span>
+                  <div className="mt-1.5 flex gap-1.5">
+                    {LANDING_THEMES.map((th) => {
+                      const on = (land.theme ?? "dark") === th.key;
+                      return (
+                        <button
+                          key={th.key}
+                          type="button"
+                          onClick={() => setL("theme", th.key)}
+                          className={`rounded-lg border px-3 py-1.5 text-xs ${on ? "border-brand-500 bg-brand-500/10 text-fg" : "border-line text-fg-faint hover:bg-paper-2"}`}
+                        >
+                          {th.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Accent</span>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={land.accent || "#059669"}
+                      onChange={(e) => setL("accent", e.target.value)}
+                      className="h-8 w-12 cursor-pointer rounded border border-line bg-transparent"
+                    />
+                    <span className="text-xs text-fg-faint">{land.accent || "#059669"}</span>
+                  </div>
+                </div>
               </div>
+
+              {/* wording */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-fg-soft">Tagline <span className="text-fg-faint">(under your name)</span></label>
+                  <input
+                    value={land.tagline || ""}
+                    maxLength={90}
+                    onChange={(e) => setL("tagline", e.target.value)}
+                    placeholder="Authentic South-Indian, since 1998"
+                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[130px_1fr]">
+                  <div>
+                    <label className="text-xs font-medium text-fg-soft">Story heading</label>
+                    <input
+                      value={land.about_title ?? ""}
+                      maxLength={40}
+                      onChange={(e) => setL("about_title", e.target.value)}
+                      placeholder="Our story"
+                      className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-fg-soft">Story</label>
+                    <textarea
+                      value={land.about || ""}
+                      maxLength={400}
+                      rows={3}
+                      onChange={(e) => setL("about", e.target.value)}
+                      placeholder="A short paragraph about your restaurant…"
+                      className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+                  <div>
+                    <label className="text-xs font-medium text-fg-soft">Quote</label>
+                    <input
+                      value={land.quote || ""}
+                      maxLength={140}
+                      onChange={(e) => setL("quote", e.target.value)}
+                      placeholder="A line you love"
+                      className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-fg-soft">Said by</label>
+                    <input
+                      value={land.quote_by || ""}
+                      maxLength={40}
+                      onChange={(e) => setL("quote_by", e.target.value)}
+                      placeholder="Chef Anand"
+                      className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* visit us */}
               <div>
-                <label className="text-xs font-medium text-fg-soft">Tagline</label>
-                <input
-                  value={land.tagline || ""}
-                  maxLength={90}
-                  onChange={(e) => setL("tagline", e.target.value)}
-                  placeholder="e.g. Authentic South-Indian, since 1998"
-                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                />
+                <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Visit us</span>
+                <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                  <input
+                    value={land.address || ""}
+                    maxLength={120}
+                    onChange={(e) => setL("address", e.target.value)}
+                    placeholder="Address"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                  <input
+                    value={land.phone || ""}
+                    maxLength={40}
+                    onChange={(e) => setL("phone", e.target.value)}
+                    placeholder="Phone"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                  <input
+                    value={land.hours || ""}
+                    maxLength={80}
+                    onChange={(e) => setL("hours", e.target.value)}
+                    placeholder="Mon–Sun · 12–11"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-fg-faint">Leave any of these blank to hide that card.</p>
               </div>
-              <div>
-                <label className="text-xs font-medium text-fg-soft">About</label>
-                <textarea
-                  value={land.about || ""}
-                  maxLength={400}
-                  rows={3}
-                  onChange={(e) => setL("about", e.target.value)}
-                  placeholder="A short paragraph about your restaurant…"
-                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                />
+
+              {/* switches */}
+              <div className="space-y-2 border-t border-line pt-4">
+                <label className="flex items-center gap-2 text-sm text-fg-soft">
+                  <input type="checkbox" checked={!!land.show_gallery} onChange={(e) => setL("show_gallery", e.target.checked)} />
+                  Show the dish gallery
+                </label>
+                <label className="flex items-center gap-2 text-sm text-fg-soft">
+                  <input type="checkbox" checked={!!land.show_order} onChange={(e) => setL("show_order", e.target.checked)} />
+                  Show an ordering button
+                </label>
+                {land.show_order && (
+                  <input
+                    value={land.cta_label ?? ""}
+                    maxLength={26}
+                    onChange={(e) => setL("cta_label", e.target.value)}
+                    placeholder="Order online"
+                    className="mise-well ml-6 w-56 rounded-lg px-3 py-1.5 text-sm text-fg outline-none"
+                  />
+                )}
               </div>
-              <div>
-                <label className="text-xs font-medium text-fg-soft">Quote (optional)</label>
-                <input
-                  value={land.quote || ""}
-                  maxLength={140}
-                  onChange={(e) => setL("quote", e.target.value)}
-                  placeholder="A line you love — shown in italics"
-                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm text-fg-soft">
-                <input type="checkbox" checked={!!land.show_order} onChange={(e) => setL("show_order", e.target.checked)} />
-                Show an “Order online” button
-              </label>
-              <div className="flex items-center gap-3 pt-1">
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
                 <button
                   onClick={saveLanding}
                   disabled={landBusy}
@@ -610,13 +693,31 @@ export default function SettingsPage() {
                   {landBusy ? "Saving…" : "Save public page"}
                 </button>
                 {landSaved && <span className="text-sm text-emerald-500">✓ Saved — it’s live</span>}
+                {siteHost && (
+                  <a href={`https://${siteHost}`} target="_blank" rel="noreferrer" className="text-sm text-brand-400 underline">
+                    Open it →
+                  </a>
+                )}
               </div>
             </div>
 
-            {/* live preview */}
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-fg-faint">Live preview</p>
-              <LandingPreview name={hotel?.name || "Your restaurant"} land={land} />
+            {/* ── the REAL page, live ────────────────────────────────── */}
+            <div className="lg:sticky lg:top-4 lg:self-start">
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Live preview</p>
+                <p className="text-[11px] text-fg-faint">scroll it ↓</p>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-line shadow-2xl shadow-black/30">
+                <div className="flex items-center gap-1.5 border-b border-line bg-paper-2 px-3 py-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
+                  <span className="ml-2 truncate text-[11px] text-fg-faint">{siteHost || "yourhandle.dineai.cloud"}</span>
+                </div>
+                <div className="max-h-[560px] overflow-y-auto overscroll-contain">
+                  <HotelSite data={previewData} config={land} preview />
+                </div>
+              </div>
             </div>
           </div>
         </Card>
