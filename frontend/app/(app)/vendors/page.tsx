@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { revealForm } from "@/lib/reveal";
 import {
   api,
   ApiError,
@@ -109,7 +110,7 @@ export default function VendorsPage() {
     setError(null);
     api.get<VendorItem[]>(`/vendors/${id}/items`).then(setVendorItems).catch(() => setVendorItems([]));
     // bring the detail panel into view (it renders below the grid)
-    setTimeout(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    setTimeout(() => revealForm(detailRef.current, { focus: false }), 60);
   }
 
   async function addVendor(e: React.FormEvent) {

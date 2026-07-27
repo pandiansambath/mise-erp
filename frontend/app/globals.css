@@ -1365,3 +1365,21 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   background-image: radial-gradient(color-mix(in srgb, var(--color-fg) 5%, transparent) 1px, transparent 1px);
   background-size: 18px 18px;
 }
+
+/* Detail sheet: slides up on phones, in from the right on desktop. Transform+opacity
+   only, and it stands still for anyone who asked for reduced motion. */
+@keyframes mise-sheet-up {
+  from { opacity: 0; transform: translateY(14%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mise-sheet-right {
+  from { opacity: 0; transform: translateX(4%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.mise-sheet-in { animation: mise-sheet-up 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (min-width: 640px) {
+  .mise-sheet-in { animation: mise-sheet-right 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-sheet-in { animation: none; }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { revealForm } from "@/lib/reveal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -236,12 +237,9 @@ export default function InventoryPage() {
     });
     setAllergensTouched(false);
     setError(null);
-    // Smoothly bring the edit form into view (the real scroll container is
-    // <main>, so window.scrollTo did nothing — scrollIntoView always works) and
-    // pulse it so the click clearly "lands" up top.
-    requestAnimationFrame(() =>
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
+    // Centre the edit form AND drop the caret in it, so you never type into a
+    // field that's scrolled off screen. Pulse it so the click clearly "lands".
+    revealForm(formRef.current, { select: true });
     setFlash(true);
     if (flashTimer.current) window.clearTimeout(flashTimer.current);
     flashTimer.current = window.setTimeout(() => setFlash(false), 1200);

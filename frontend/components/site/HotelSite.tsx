@@ -56,9 +56,9 @@ type Skin = {
 // Every theme is a DUAL-TONE wash, never a flat fill — bg → bg2 down the page,
 // then the hotel's own two accent colours tint it further.
 const THEMES: Record<string, Skin> = {
-  dark:  { bg: "#070910", bg2: "#0d1322", panel: "rgba(255,255,255,.055)", fg: "#f2f5fb", sub: "#a3aec4", line: "rgba(255,255,255,.11)", scrim: 0.66 },
-  light: { bg: "#fbfbfe", bg2: "#eef1fb", panel: "rgba(20,24,60,.045)",    fg: "#0f1424", sub: "#5b6480", line: "rgba(20,24,60,.10)",    scrim: 0.52 },
-  warm:  { bg: "#fdf8f1", bg2: "#f4e9dc", panel: "rgba(80,58,28,.055)",    fg: "#2a2117", sub: "#7b6a53", line: "rgba(80,58,28,.14)",    scrim: 0.55 },
+  dark:  { bg: "#05070f", bg2: "#111a33", panel: "rgba(255,255,255,.06)",  fg: "#f3f6fc", sub: "#a7b2c9", line: "rgba(255,255,255,.12)", scrim: 0.66 },
+  light: { bg: "#eef1fa", bg2: "#dfe5f6", panel: "rgba(20,24,60,.055)",    fg: "#0d1222", sub: "#525c78", line: "rgba(20,24,60,.12)",    scrim: 0.52 },
+  warm:  { bg: "#f8efe1", bg2: "#efdcc6", panel: "rgba(80,58,28,.07)",     fg: "#271d12", sub: "#77654c", line: "rgba(80,58,28,.16)",    scrim: 0.55 },
 };
 
 /** Ready-made dual-tone combos an owner can pick in one click. */
@@ -187,6 +187,26 @@ export default function HotelSite({
       }}
       className="relative w-full overflow-x-hidden"
     >
+      {/* ambient colour field — the page is never a flat sheet */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            `radial-gradient(80% 45% at 12% 8%, ${accent}22, transparent 62%),` +
+            `radial-gradient(70% 42% at 92% 38%, ${accent2}20, transparent 66%),` +
+            `radial-gradient(90% 50% at 50% 104%, ${accent}1c, transparent 70%)`,
+        }}
+      />
+      {/* fine grain — the trick that stops large fills looking cheap */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 opacity-[.05] mix-blend-overlay"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E\")",
+        }}
+      />
       {/* sticky bar — slides in once the hero is behind you */}
       {!preview && (
         <div
@@ -224,7 +244,7 @@ export default function HotelSite({
         </div>
       )}
       {/* ── HERO ───────────────────────────────────────────────────────── */}
-      <section className="relative isolate flex items-center justify-center overflow-hidden"
+      <section className="relative z-10 isolate flex items-center justify-center overflow-hidden"
                style={{ minHeight: heroH }}>
         {/* photo (slow settle drift) */}
         <div ref={imgRef} aria-hidden className="absolute inset-0 -z-20"
@@ -335,9 +355,9 @@ export default function HotelSite({
 
       {/* ── ABOUT + QUOTE ──────────────────────────────────────────────── */}
       {(L.about || L.quote) && (
-        <section className="relative px-6 py-24 sm:py-28">
+        <section className="relative z-10 px-6 py-24 sm:py-28">
           <div aria-hidden className="pointer-events-none absolute inset-0"
-               style={{ background: `radial-gradient(58% 46% at 82% 18%, ${accent2}1f, transparent 68%), radial-gradient(46% 40% at 6% 82%, ${accent}1a, transparent 70%)` }} />
+               style={{ background: `radial-gradient(58% 46% at 82% 18%, ${accent2}30, transparent 68%), radial-gradient(46% 40% at 6% 82%, ${accent}2a, transparent 70%)` }} />
           <div className="relative mx-auto max-w-5xl">
           <div className="grid gap-14 md:grid-cols-[1.15fr_1fr] md:items-center">
             <div>
@@ -360,7 +380,7 @@ export default function HotelSite({
                   <figure className="mt-9 rounded-2xl border p-6 backdrop-blur-sm"
                           style={{
                             borderColor: t.line,
-                            background: `linear-gradient(135deg, ${accent}14, ${accent2}0d)`,
+                            background: `linear-gradient(135deg, ${accent}22, ${accent2}14)`,
                           }}>
                     <div className="text-3xl leading-none" style={{ color: accent }}>&ldquo;</div>
                     <blockquote className="mt-2 text-[17px] italic leading-relaxed" style={{ color: t.fg }}>
@@ -396,7 +416,7 @@ export default function HotelSite({
 
       {/* ── LIVE MENU (straight from their Mise kitchen) ───────────────── */}
       {menu.length > 0 && (
-        <section className="relative px-6 pb-6">
+        <section className="relative z-10 px-6 pb-6">
           {/* their real dish names, drifting past */}
           <div aria-hidden className="relative mb-14 overflow-hidden border-y py-3"
                style={{ borderColor: t.line }}>
@@ -428,7 +448,7 @@ export default function HotelSite({
                 <Reveal key={d.id} delay={i * 70} still={preview}>
                   <article
                     className="group relative h-full overflow-hidden rounded-2xl border transition-transform duration-300 hover:-translate-y-1.5"
-                    style={{ borderColor: t.line, background: `linear-gradient(150deg, ${accent}12, ${accent2}0a)` }}
+                    style={{ borderColor: t.line, background: `linear-gradient(150deg, ${accent}1e, ${accent2}12)` }}
                   >
                     <div className="relative h-32 overflow-hidden">
                       <div
@@ -481,7 +501,7 @@ export default function HotelSite({
 
       {/* ── GALLERY ────────────────────────────────────────────────────── */}
       {L.show_gallery && (
-        <section className="relative px-6 pb-24 sm:pb-28">
+        <section className="relative z-10 px-6 pb-24 sm:pb-28">
           <div className="mx-auto max-w-5xl">
             <Reveal still={preview}>
               <p className="mx-auto w-fit bg-clip-text text-center text-[11px] font-semibold uppercase tracking-[0.3em] text-transparent"
@@ -509,7 +529,7 @@ export default function HotelSite({
 
       {/* ── VISIT US ───────────────────────────────────────────────────── */}
       {(L.address || L.phone || L.hours) && (
-        <section className="relative px-6 pb-24 sm:pb-28">
+        <section className="relative z-10 px-6 pb-24 sm:pb-28">
           <div className="mx-auto grid max-w-4xl gap-4 sm:grid-cols-3">
             {([
               ["Find us", L.address, "📍"],
@@ -522,7 +542,7 @@ export default function HotelSite({
                   <div className="h-full rounded-2xl border p-5 transition-transform duration-300 hover:-translate-y-1"
                        style={{
                          borderColor: t.line,
-                         background: `linear-gradient(150deg, ${accent}12, ${accent2}0a)`,
+                         background: `linear-gradient(150deg, ${accent}1e, ${accent2}12)`,
                        }}>
                     <div className="text-xl">{icon}</div>
                     <p className="mt-3 bg-clip-text text-[10px] font-semibold uppercase tracking-[0.24em] text-transparent"
@@ -540,9 +560,9 @@ export default function HotelSite({
       )}
 
       {/* ── CLOSING CTA ────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden px-6 py-20">
+      <section className="relative z-10 overflow-hidden px-6 py-20">
         <div aria-hidden className="absolute inset-0"
-             style={{ background: `linear-gradient(120deg, ${accent}2b, transparent 48%), linear-gradient(300deg, ${accent2}2b, transparent 52%)` }} />
+             style={{ background: `linear-gradient(120deg, ${accent}3d, transparent 52%), linear-gradient(300deg, ${accent2}3d, transparent 56%)` }} />
         <Reveal still={preview}>
           <div className="relative mx-auto max-w-2xl text-center">
             <h2 className={`text-3xl font-black tracking-tight sm:text-4xl ${fontClass(L.font)}`}
@@ -572,7 +592,7 @@ export default function HotelSite({
       </section>
 
       {/* ── FOOTER ─────────────────────────────────────────────────────── */}
-      <footer className="border-t px-6 py-8 text-center" style={{ borderColor: t.line }}>
+      <footer className="relative z-10 border-t px-6 py-8 text-center" style={{ borderColor: t.line }}>
         <p className="text-xs" style={{ color: t.sub }}>
           {data.username && <span className="mr-2 font-semibold">@{data.username}</span>}
           Powered by{" "}
