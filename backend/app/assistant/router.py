@@ -1,6 +1,10 @@
 """Copilot endpoint. Any authenticated user may ask; tools enforce their own
 permission + hotel scope, so answers never leak across roles or tenants."""
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant import actions, ingest, provider, service
@@ -16,7 +20,7 @@ from app.assistant.schemas import (
     UndoRequest,
 )
 from app.audit import service as audit
-from app.auth.deps import get_current_user, require_feature
+from app.auth.deps import get_current_user, require, require_feature
 from app.auth.models import User
 from app.core.database import get_db
 from app.core.rbac import has_permission
@@ -210,3 +214,80 @@ async def vision_read(
         entity_type="document", entity_id=None,
     )
     return result
+
+
+class VisionCommitLine(BaseModel):
+    """One approved line from a scanned bill (already human-checked)."""
+
+    name: str = Field(max_length=200)
+    qty: float | None = None
+    unit: str | None = None
+    line_total: float | None = None
+
+
+class VisionCommit(BaseModel):
+    vendor_name: str | None = Field(default=None, max_length=120)
+    date: str | None = None
+    total: float = Field(gt=0)
+    category: str = Field(default="Food", max_length=60)
+    lines: list[VisionCommitLine] = Field(default_factory=list)
+
+
+@router.post("/vision/commit")
+async def vision_commit(
+    payload: VisionCommit,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("expenses:write")),
+) -> dict:
+    """Write an APPROVED scanned bill into Expenses.
+
+    Deliberately separate from /vision/read: the AI only ever proposes, and this
+    runs solely on what a human confirmed on screen.
+    """
+    from datetime import date as date_type
+
+    from sqlalchemy import select
+
+    from app.expenses.models import ExpenseCategory
+    from app.expenses.service import create_expense
+
+    when = date_type.today()
+    if payload.date:
+        try:
+            when = date_type.fromisoformat(payload.date[:10])
+        except ValueError:
+            pass  # an unreadable date falls back to today rather than failing
+
+    cat = (
+        await db.execute(
+            select(ExpenseCategory).where(
+                ExpenseCategory.hotel_id == user.hotel_id,
+                func.lower(ExpenseCategory.name) == payload.category.strip().lower(),
+            )
+        )
+    ).scalars().first()
+    if cat is None:
+        cat = ExpenseCategory(
+            hotel_id=user.hotel_id, name=payload.category.strip() or "Food", kind="VARIABLE"
+        )
+        db.add(cat)
+        await db.flush()
+
+    bits = [payload.vendor_name or "Scanned bill"]
+    if payload.lines:
+        bits.append(f"{len(payload.lines)} item{'s' if len(payload.lines) != 1 else ''}")
+    exp = await create_expense(
+        db,
+        user.hotel_id,
+        category_id=cat.id,
+        date=when,
+        amount=Decimal(str(payload.total)),
+        payment_method="CASH",
+        description=" · ".join(bits) + " [ai-scan]",
+    )
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="ai.commit_bill",
+        summary=f"Scanned bill saved: {payload.vendor_name or 'unknown vendor'} {payload.total}",
+        entity_type="expense", entity_id=exp.id,
+    )
+    return {"expense_id": str(exp.id), "amount": str(exp.amount), "date": str(exp.date)}
