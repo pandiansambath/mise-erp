@@ -290,45 +290,9 @@ export default function PriceComparisonPage() {
             <ItemPickerSingle items={items} value={selected} onChange={setSelected} />
           </div>
 
-          <Card className="mise-feel mb-5">
-            <h3 className="font-semibold text-fg">Price history — what you&apos;ve paid</h3>
-            <p className="mb-3 text-xs text-fg-faint">
-              From your received purchase orders — green line falling is good, red line climbing is money leaking.
-            </p>
-            <PriceHistoryChart points={history} />
-            <VendorOverlay changes={changeLog} />
-          </Card>
-
-          {changeLog.length > 0 && (
-            <Card className="mise-feel mb-5">
-              <h3 className="font-semibold text-fg">Price change log</h3>
-              <p className="mb-3 text-xs text-fg-faint">
-                Every recorded price change for this item — kept forever, with where it came from
-                (<b className="text-fg-soft">manual</b> edit, a received <b className="text-fg-soft">PO</b>, or a scanned{" "}
-                <b className="text-fg-soft">invoice</b>). Old prices are never lost.
-              </p>
-              <ul className="space-y-1.5">
-                {changeLog.map((c, i) => (
-                  <li key={i} className="mise-well mise-feel flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-fg">
-                      <b>{c.vendor_name}</b>{" "}
-                      {c.old_price ? (
-                        <span className="text-fg-faint">{format(c.old_price)} → </span>
-                      ) : (
-                        <span className="text-fg-faint">first price </span>
-                      )}
-                      <b className="text-fg">{format(c.new_price)}</b>
-                    </span>
-                    <span className="flex items-center gap-2 text-xs text-fg-faint">
-                      <Badge tone={SRC_TONE[c.source] ?? "slate"}>{c.source}</Badge>
-                      {new Date(c.at).toLocaleDateString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
+          {/* The answer first: who to buy from, and what switching saves.
+              The history and the change log below are the evidence for it —
+              they used to sit above, which buried the actual decision. */}
           {loadingCompare || !data ? (
             <Spinner />
           ) : data.vendor_count === 0 ? (
@@ -419,6 +383,46 @@ export default function PriceComparisonPage() {
               </p>
             </>
           )}
+
+          <Card className="mise-feel mb-5">
+            <h3 className="font-semibold text-fg">Price history — what you&apos;ve paid</h3>
+            <p className="mb-3 text-xs text-fg-faint">
+              From your received purchase orders — green line falling is good, red line climbing is money leaking.
+            </p>
+            <PriceHistoryChart points={history} />
+            <VendorOverlay changes={changeLog} />
+          </Card>
+
+          {changeLog.length > 0 && (
+            <Card className="mise-feel mb-5">
+              <h3 className="font-semibold text-fg">Price change log</h3>
+              <p className="mb-3 text-xs text-fg-faint">
+                Every recorded price change for this item — kept forever, with where it came from
+                (<b className="text-fg-soft">manual</b> edit, a received <b className="text-fg-soft">PO</b>, or a scanned{" "}
+                <b className="text-fg-soft">invoice</b>). Old prices are never lost.
+              </p>
+              <ul className="space-y-1.5">
+                {changeLog.map((c, i) => (
+                  <li key={i} className="mise-well mise-feel flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
+                    <span className="text-fg">
+                      <b>{c.vendor_name}</b>{" "}
+                      {c.old_price ? (
+                        <span className="text-fg-faint">{format(c.old_price)} → </span>
+                      ) : (
+                        <span className="text-fg-faint">first price </span>
+                      )}
+                      <b className="text-fg">{format(c.new_price)}</b>
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-fg-faint">
+                      <Badge tone={SRC_TONE[c.source] ?? "slate"}>{c.source}</Badge>
+                      {new Date(c.at).toLocaleDateString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
         </>
       )}
     </div>
