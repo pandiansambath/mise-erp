@@ -1,5 +1,6 @@
 """Copilot endpoint. Any authenticated user may ask; tools enforce their own
 permission + hotel scope, so answers never leak across roles or tenants."""
+import time
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -7,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assistant import actions, ingest, provider, service
+from app.assistant import actions, guard, ingest, provider, service
 from app.assistant.provider import ProviderError
 from app.assistant.schemas import (
     ActRequest,
@@ -22,6 +23,7 @@ from app.assistant.schemas import (
 from app.audit import service as audit
 from app.auth.deps import get_current_user, require, require_feature
 from app.auth.models import User
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rbac import has_permission
 
@@ -56,7 +58,16 @@ async def chat(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Message too long")
     if req.attachment and len(req.attachment.data) > 20_000_000:  # ~15MB of base64
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Attachment too large")
-    return await service.answer(db, user, req)
+    await guard.enforce(db, user, "chat")
+    started = time.monotonic()
+    answer = await service.answer(db, user, req)
+    # tokens aren't reported back through the provider abstraction yet, so a chat
+    # turn counts toward the request limits but contributes 0 to the token total
+    await guard.record(
+        db, user, kind="chat", model=settings.bedrock_model_id,
+        latency_ms=int((time.monotonic() - started) * 1000),
+    )
+    return answer
 
 
 # ── Document onboarding ────────────────────────────────────────────────────────
@@ -137,6 +148,14 @@ async def undo(
 
 
 # ── Claude on Bedrock: read a bill / handwritten recipe ───────────────────────
+@router.get("/usage")
+async def usage(
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    """This hotel's AI spend this month, and what's left of the allowance."""
+    return await guard.summary(db, user.hotel_id)
+
+
 @router.get("/vision/status")
 async def vision_status(user: User = Depends(get_current_user)) -> dict:
     """Is the Bedrock brain switched on? (Drives the upload screen's banner.)"""
@@ -160,9 +179,12 @@ async def vision_read(
     """
     from sqlalchemy import select
 
-    from app.assistant import bedrock
+    from app.assistant import bedrock, guard
     from app.inventory.models import Item
     from app.vendors.models import Vendor
+
+    # budget first: refuse before spending, never after
+    await guard.enforce(db, user, "vision")
 
     if kind not in ("auto", "bill", "recipe"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "kind must be auto, bill or recipe")
@@ -197,6 +219,8 @@ async def vision_read(
         .all()
     )
 
+    meter: dict = {}
+    started = time.monotonic()
     try:
         result = bedrock.understand_document(
             data,
@@ -204,9 +228,22 @@ async def vision_read(
             kind=kind,
             known_items=[{"id": str(i.id), "name": i.name, "unit": i.unit} for i in items],
             known_vendors=[v.name for v in vendors],
+            meter=meter,
         )
     except bedrock.BedrockUnavailable as exc:
+        await guard.record(
+            db, user, kind="vision", model=meter.get("model", ""),
+            latency_ms=int((time.monotonic() - started) * 1000), ok=False,
+        )
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+
+    await guard.record(
+        db, user, kind="vision",
+        model=meter.get("model", ""),
+        input_tokens=meter.get("input_tokens", 0),
+        output_tokens=meter.get("output_tokens", 0),
+        latency_ms=int((time.monotonic() - started) * 1000),
+    )
 
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="ai.read_document",

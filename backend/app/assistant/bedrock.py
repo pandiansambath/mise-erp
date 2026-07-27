@@ -50,8 +50,12 @@ def _model_id() -> str:
     return (getattr(settings, "bedrock_model_id", "") or DEFAULT_MODEL).strip()
 
 
-def _invoke(body: dict[str, Any]) -> str:
-    """POST a Messages-API body to Bedrock and return the concatenated text."""
+def _invoke(body: dict[str, Any], meter: dict[str, Any] | None = None) -> str:
+    """POST a Messages-API body to Bedrock and return the concatenated text.
+
+    `meter` is an optional dict the caller passes in to receive the token counts
+    Bedrock reports. Tokens are money, so every real call should meter itself —
+    see `app.assistant.guard`."""
     try:
         resp = _client().invoke_model(modelId=_model_id(), body=json.dumps(body))
         payload = json.loads(resp["body"].read())
@@ -64,6 +68,11 @@ def _invoke(body: dict[str, Any]) -> str:
             ) from exc
         log.warning("bedrock invoke failed: %s", msg)
         raise BedrockUnavailable("The AI service is unavailable right now.") from exc
+    if meter is not None:
+        usage = payload.get("usage") or {}
+        meter["model"] = _model_id()
+        meter["input_tokens"] = int(usage.get("input_tokens") or 0)
+        meter["output_tokens"] = int(usage.get("output_tokens") or 0)
     return "".join(b.get("text", "") for b in payload.get("content", []))
 
 
@@ -136,6 +145,7 @@ def understand_document(
     kind: str = "auto",
     known_items: list[dict] | None = None,
     known_vendors: list[str] | None = None,
+    meter: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Read a bill or handwritten recipe into structured, human-confirmable data.
 
@@ -185,7 +195,7 @@ def understand_document(
             }
         ],
     }
-    data = _json_from(_invoke(body))
+    data = _json_from(_invoke(body, meter))
     data.setdefault("doc_type", kind if kind != "auto" else "bill")
     return data
 
@@ -220,7 +230,12 @@ Other rules:
 
 
 def ask(
-    question: str, *, hotel_name: str, context: str = "", history: list[dict] | None = None,
+    question: str,
+    *,
+    hotel_name: str,
+    context: str = "",
+    history: list[dict] | None = None,
+    meter: dict[str, Any] | None = None,
 ) -> str:
     """Answer a question about THIS hotel. `context` is caller-supplied facts
     (already scoped to the hotel) — the model must not go looking elsewhere."""
@@ -238,7 +253,8 @@ def ask(
             "max_tokens": 1500,
             "system": _ASSISTANT_SYSTEM.format(hotel=hotel_name),
             "messages": messages,
-        }
+        },
+        meter,
     ).strip()
 
 

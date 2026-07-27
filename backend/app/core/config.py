@@ -61,6 +61,15 @@ class Settings(BaseSettings):
     # Model access is granted once in the Bedrock console.
     bedrock_model_id: str = "anthropic.claude-sonnet-5"
 
+    # ── AI spend controls ────────────────────────────────────────────────
+    # The AI is the one part of Mise with UNBOUNDED cost: everything else is a
+    # fixed EC2 + RDS bill, but tokens are pay-per-use, so a loop or an abusive
+    # client can run up real money. These are enforced BEFORE Bedrock is called.
+    ai_enabled: bool = True  # global kill switch — off needs no deploy, just an env var
+    ai_hotel_daily_requests: int = 300  # per hotel, per rolling day
+    ai_hotel_monthly_tokens: int = 8_000_000  # per hotel, per calendar month
+    ai_user_per_minute: int = 12  # per user — stops a stuck client hammering us
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
