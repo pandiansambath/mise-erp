@@ -34,7 +34,7 @@ def test_assistant_prompt_is_scoped_to_one_hotel(monkeypatch):
     """The guardrail lives in the system prompt — assert it actually says so."""
     seen = {}
 
-    def fake(body):
+    def fake(body, meter=None):  # meter: token counts for the spend guard
         seen.update(body)
         return "ok"
 
