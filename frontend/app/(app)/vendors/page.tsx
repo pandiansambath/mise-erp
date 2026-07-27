@@ -458,9 +458,31 @@ export default function VendorsPage() {
         {selectedVendor && (
         <div ref={detailRef}>
 
+          {/* Jump tabs — the supply table sits below the fold on a long list,
+              and scrolling to it was the single most-complained-about thing. */}
+          <nav className="mb-4 flex flex-wrap gap-2">
+            {[
+              ["supply", `What they supply (${vendorItems.length})`],
+              ["add-price", "Add / update a price"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById(`vendor-${id}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                className="mise-press rounded-full border border-line px-3 py-1.5 text-xs font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+
           <div className="grid grid-cols-1 gap-6">
             {/* What they supply */}
-            <div className="min-w-0">
+            <div id="vendor-supply" className="min-w-0 scroll-mt-4">
               <p className="text-sm font-medium text-fg-soft">What they supply ({vendorItems.length})</p>
               <div className="mt-2 max-h-[28rem] overflow-auto rounded-xl border border-line">
                 <table className="w-full text-sm">
@@ -524,6 +546,7 @@ export default function VendorsPage() {
             </div>
 
             {/* Add / update a price + bulk import */}
+            <span id="vendor-add-price" className="block scroll-mt-4" />
             {canWrite && (
               <div className="min-w-0">
                 <form onSubmit={addPrice}>
