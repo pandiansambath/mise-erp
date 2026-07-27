@@ -11,8 +11,10 @@ import {
   downloadFile,
   postForm,
   type Item,
+  type ItemSuppliers,
   type PurchaseByVendorRow,
   type ReceiptLine,
+  type SupplierOption,
 } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { AreaChart, RadialBars } from "@/components/charts";
@@ -88,6 +90,11 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // item_id -> every vendor that prices it. Drives the form's supplier picker:
+  // you can only choose a supplier who actually quotes this item.
+  const [itemSuppliers, setItemSuppliers] = useState<Record<string, SupplierOption[]>>({});
+  const [formVendor, setFormVendor] = useState("");
+  const [vendorMsg, setVendorMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState("");
@@ -134,7 +141,39 @@ export default function InventoryPage() {
   const { format, currency } = useCurrency();
 
   function load() {
+    // who prices what, loaded alongside the items so the supplier picker is
+    // never a second round-trip when you open the form
+    api
+      .get<ItemSuppliers[]>("/purchasing/item-suppliers")
+      .then((rows) =>
+        setItemSuppliers(Object.fromEntries(rows.map((r) => [r.item_id, r.vendors]))),
+      )
+      .catch(() => {});
     return api.get<Item[]>("/inventory/items").then(setItems);
+  }
+
+  // The suppliers for whatever the form is currently editing, cheapest first.
+  const formSuppliers = editingId ? itemSuppliers[editingId] ?? [] : [];
+  const pickedSupplier = formSuppliers.find((v) => v.vendor_id === formVendor) ?? null;
+
+  async function chooseSupplier(vendorId: string) {
+    setFormVendor(vendorId);
+    setVendorMsg(null);
+    if (!editingId || !vendorId) return;
+    try {
+      // picking here IS the decision — recipe costing follows the chosen supplier
+      await api.post(`/vendors/items/${editingId}/preferred`, { vendor_id: vendorId });
+      setItemSuppliers((prev) => ({
+        ...prev,
+        [editingId]: (prev[editingId] ?? []).map((v) => ({
+          ...v,
+          is_preferred: v.vendor_id === vendorId,
+        })),
+      }));
+      setVendorMsg("Chosen supplier saved — costing now uses this price.");
+    } catch (err) {
+      setVendorMsg(err instanceof ApiError ? err.message : "Could not save that supplier");
+    }
   }
 
   // ── Strict template import (Excel/CSV only — no AI) ─────────────────────────
@@ -227,6 +266,9 @@ export default function InventoryPage() {
 
   function startEdit(item: Item) {
     setEditingId(item.id);
+    // preselect whoever is already the chosen supplier
+    setFormVendor((itemSuppliers[item.id] ?? []).find((v) => v.is_preferred)?.vendor_id ?? "");
+    setVendorMsg(null);
     setForm({
       name: item.name,
       category: item.category ?? "",
@@ -248,6 +290,8 @@ export default function InventoryPage() {
 
   function cancelEdit() {
     setEditingId(null);
+    setFormVendor("");
+    setVendorMsg(null);
     setForm(EMPTY);
     setAllergensTouched(false);
     setError(null);
@@ -891,6 +935,48 @@ export default function InventoryPage() {
               </div>
               <span className="pb-2 text-sm text-fg-faint">{form.unit || "unit"}</span>
             </div>
+          </div>
+
+          {/* Supplier + price. You can only pick a vendor who actually quotes
+              this item, and the price is theirs — never typed here, because a
+              hand-typed price would quietly diverge from what you really pay. */}
+          <div className="flex flex-col gap-3 rounded-xl border border-line bg-paper-2/40 p-3 sm:flex-row sm:items-end">
+            <div className="flex-1 sm:min-w-[12rem]">
+              <label className="block text-sm font-medium text-fg-soft">Supplier</label>
+              <select
+                value={formVendor}
+                onChange={(e) => chooseSupplier(e.target.value)}
+                disabled={formSuppliers.length === 0}
+                className={`${inputCls} disabled:opacity-50`}
+              >
+                <option value="">
+                  {formSuppliers.length === 0 ? "No supplier prices this yet" : "Choose a supplier…"}
+                </option>
+                {formSuppliers.map((v) => (
+                  <option key={v.vendor_id} value={v.vendor_id}>
+                    {v.vendor_name} — {format(v.price_per_unit)}
+                    {v.is_preferred ? " ★" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-full sm:w-40">
+              <label className="block text-sm font-medium text-fg-soft">Their price</label>
+              <input
+                value={pickedSupplier ? format(pickedSupplier.price_per_unit) : ""}
+                readOnly
+                placeholder="—"
+                title="Comes from the supplier's price list"
+                className={`${inputCls} cursor-not-allowed opacity-70`}
+              />
+            </div>
+            <p className="w-full text-xs text-fg-faint sm:max-w-[16rem]">
+              {!editingId
+                ? "Add the item first, then price it against a supplier."
+                : formSuppliers.length === 0
+                  ? "Nobody prices this item yet — add a price on the Vendors page and it appears here."
+                  : vendorMsg ?? "Picking a supplier makes it the chosen one for costing."}
+            </p>
           </div>
 
           {!editingId && (
