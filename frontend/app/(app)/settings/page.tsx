@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError, type HotelLanding, type LandingConfig } from "@/lib/api";
-import HotelSite, { DEFAULT_LANDING, HERO_STYLES, LANDING_THEMES } from "@/components/site/HotelSite";
+import HotelSite, { DEFAULT_LANDING, HERO_STYLES, LANDING_THEMES, PALETTES } from "@/components/site/HotelSite";
+import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
@@ -561,18 +562,78 @@ export default function SettingsPage() {
                     })}
                   </div>
                 </div>
-                <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Accent</span>
-                  <div className="mt-1.5 flex items-center gap-2">
+              </div>
+
+              {/* colour palette — a dual-tone pair drives every gradient */}
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Colour palette</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {PALETTES.map((pl) => {
+                    const on = (land.accent ?? "").toLowerCase() === pl.a && (land.accent2 ?? "").toLowerCase() === pl.b;
+                    return (
+                      <button
+                        key={pl.key}
+                        type="button"
+                        title={pl.label}
+                        onClick={() => { setL("accent", pl.a); setL("accent2", pl.b); }}
+                        className={`h-9 w-9 rounded-full border-2 transition hover:scale-110 ${on ? "border-fg" : "border-transparent"}`}
+                        style={{ background: `linear-gradient(135deg, ${pl.a}, ${pl.b})` }}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs text-fg-faint">
+                    From
                     <input
                       type="color"
-                      value={land.accent || "#059669"}
+                      value={land.accent || "#4f46e5"}
                       onChange={(e) => setL("accent", e.target.value)}
-                      className="h-8 w-12 cursor-pointer rounded border border-line bg-transparent"
+                      className="h-7 w-10 cursor-pointer rounded border border-line bg-transparent"
                     />
-                    <span className="text-xs text-fg-faint">{land.accent || "#059669"}</span>
-                  </div>
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-fg-faint">
+                    To
+                    <input
+                      type="color"
+                      value={land.accent2 || "#0ea5e9"}
+                      onChange={(e) => setL("accent2", e.target.value)}
+                      className="h-7 w-10 cursor-pointer rounded border border-line bg-transparent"
+                    />
+                  </label>
+                  <span
+                    className="h-7 flex-1 rounded-lg"
+                    style={{ background: `linear-gradient(135deg, ${land.accent || "#4f46e5"}, ${land.accent2 || "#0ea5e9"})` }}
+                  />
                 </div>
+              </div>
+
+              {/* display font */}
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Display font</span>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {SITE_FONTS.map((f) => {
+                    const on = (land.font ?? "serif") === f.key;
+                    return (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setL("font", f.key)}
+                        className={`rounded-lg border px-3 py-1.5 text-sm transition ${f.className} ${on ? "border-brand-500 bg-brand-500/10 text-fg" : "border-line text-fg-faint hover:bg-paper-2"}`}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-sm text-fg-soft">
+                  <input
+                    type="checkbox"
+                    checked={land.title_gradient !== false}
+                    onChange={(e) => setL("title_gradient", e.target.checked)}
+                  />
+                  Paint the name with the gradient
+                </label>
               </div>
 
               {/* wording */}

@@ -30,8 +30,11 @@ LANDING_DEFAULTS: dict = {
     "address": "",               # visit-us card
     "phone": "",
     "hours": "",
-    "accent": "#059669",         # brand colour (hex)
+    "accent": "#4f46e5",         # brand colour (hex) — indigo by default
+    "accent2": "#0ea5e9",        # 2nd colour; the pair makes every gradient
     "theme": "dark",             # dark | light | warm
+    "font": "serif",             # display font: sans|serif|poster|editorial|hand
+    "title_gradient": True,      # paint the hotel name with the accent gradient
     "show_order": False,         # show the ordering button
     "show_gallery": True,        # show the dish gallery strip
 }
@@ -116,6 +119,24 @@ async def hotel_landing(handle: str, db: AsyncSession = Depends(get_db)) -> dict
     if hotel is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such site")
     cfg = {**LANDING_DEFAULTS, **(hotel.landing or {})}
+
+    # What makes this site different from a template: it is WIRED TO THE KITCHEN.
+    # The real menu (live prices, availability) rides along, so the page updates
+    # itself the moment the hotel changes a price or 86s a dish.
+    from app.ordering.models import MenuItem
+
+    dishes = (
+        (
+            await db.execute(
+                select(MenuItem)
+                .where(MenuItem.hotel_id == hotel.id, MenuItem.is_available.is_(True))
+                .order_by(MenuItem.sort_order, MenuItem.name)
+                .limit(8)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {
         "hotel_id": str(hotel.id),
         "name": hotel.name,
@@ -124,5 +145,21 @@ async def hotel_landing(handle: str, db: AsyncSession = Depends(get_db)) -> dict
         "has_logo": bool(hotel.logo_key),
         "logo_url": f"/api/hotels/{hotel.id}/logo" if hotel.logo_key else None,
         "order_url": f"/order/{hotel.id}",
+        "currency": hotel.base_currency,
+        "is_open": not hotel.ordering_paused,
+        "prep_minutes": hotel.prep_minutes,
+        "menu": [
+            {
+                "id": str(m.id),
+                "name": m.name,
+                "description": m.description,
+                "price": str(m.price),
+                "emoji": m.emoji,
+                "photo_url": (
+                    f"/api/public/order/menu-photo/{m.id}" if m.photo_key else None
+                ),
+            }
+            for m in dishes
+        ],
         "landing": cfg,
     }

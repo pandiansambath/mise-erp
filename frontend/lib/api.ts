@@ -162,7 +162,10 @@ export interface LandingConfig {
   phone?: string;
   hours?: string;
   accent?: string; // hex brand colour
+  accent2?: string; // 2nd hex — the pair drives every gradient
   theme?: "dark" | "light" | "warm";
+  font?: string; // display font key
+  title_gradient?: boolean; // gradient-filled hotel name
   show_order?: boolean; // show the ordering button
   show_gallery?: boolean; // show the dish gallery strip
 }
@@ -182,6 +185,16 @@ export interface Hotel {
   landing?: LandingConfig; // customizable public-page config
 }
 
+/** A live dish from the hotel's real Mise menu, shown on their public site. */
+export interface SiteDish {
+  id: string;
+  name: string;
+  description: string | null;
+  price: string;
+  emoji: string | null;
+  photo_url: string | null;
+}
+
 /** Public landing payload for <handle>.dineai.cloud (GET /public/hotel-landing/{h}). */
 export interface HotelLanding {
   hotel_id: string;
@@ -191,6 +204,10 @@ export interface HotelLanding {
   has_logo: boolean;
   logo_url: string | null;
   order_url: string;
+  currency?: string;
+  is_open?: boolean;
+  prep_minutes?: number;
+  menu?: SiteDish[];
   landing: Required<LandingConfig>;
 }
 
