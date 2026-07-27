@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
+import { DetailSheet } from "@/components/DetailSheet";
 import {
   api,
   ApiError,
@@ -109,8 +110,7 @@ export default function VendorsPage() {
     setSelected(id);
     setError(null);
     api.get<VendorItem[]>(`/vendors/${id}/items`).then(setVendorItems).catch(() => setVendorItems([]));
-    // bring the detail panel into view (it renders below the grid)
-    setTimeout(() => revealForm(detailRef.current, { focus: false }), 60);
+    // opens in a sheet right where you clicked — no scrolling to the bottom
   }
 
   async function addVendor(e: React.FormEvent) {
@@ -437,27 +437,28 @@ export default function VendorsPage() {
         </div>
       )}
 
-      {/* Selected vendor detail — full width, plenty of room for the picker */}
-      {selectedVendor && (
-        <Card className="mt-6 p-0" >
-          <div ref={detailRef} className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
-            <div>
-              <h3 className="font-display text-lg font-semibold text-fg">
-                {TYPE_EMOJI[selectedVendor.category ?? ""] ?? "🤝"} {selectedVendor.name}
-              </h3>
-              <p className="text-xs text-fg-faint">{(selectedVendor.category || "—").toLowerCase()} supplier</p>
-            </div>
-            {canWrite && (
-              <button
-                onClick={() => toggleActive(selectedVendor)}
-                className="mise-press rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2"
-              >
-                {selectedVendor.is_active ? "Deactivate" : "Reactivate"}
-              </button>
-            )}
-          </div>
+      {/* Selected vendor — opens in place, so you never scroll to the bottom */}
+      <DetailSheet
+        open={!!selectedVendor}
+        onClose={() => setSelected("")}
+        width="lg"
+        title={selectedVendor ? `${TYPE_EMOJI[selectedVendor.category ?? ""] ?? "🤝"} ${selectedVendor.name}` : ""}
+        subtitle={selectedVendor ? `${(selectedVendor.category || "—").toLowerCase()} supplier · ${vendorItems.length} item${vendorItems.length === 1 ? "" : "s"} priced` : ""}
+        actions={
+          canWrite && selectedVendor ? (
+            <button
+              onClick={() => toggleActive(selectedVendor)}
+              className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            >
+              {selectedVendor.is_active ? "Deactivate" : "Reactivate"}
+            </button>
+          ) : null
+        }
+      >
+        {selectedVendor && (
+        <div ref={detailRef}>
 
-          <div className="grid grid-cols-1 gap-6 px-5 py-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6">
             {/* What they supply */}
             <div className="min-w-0">
               <p className="text-sm font-medium text-fg-soft">What they supply ({vendorItems.length})</p>
@@ -607,8 +608,9 @@ export default function VendorsPage() {
               </div>
             )}
           </div>
-        </Card>
-      )}
+        </div>
+        )}
+      </DetailSheet>
     </div>
   );
 }
