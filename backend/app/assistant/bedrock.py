@@ -24,8 +24,14 @@ from app.core.config import settings
 
 log = logging.getLogger("mise.bedrock")
 
-# Anthropic's Bedrock ids carry an `anthropic.` prefix.
-DEFAULT_MODEL = "anthropic.claude-sonnet-5"
+# Bedrock ids carry an `anthropic.` prefix; the `eu.` prefix is an INFERENCE
+# PROFILE that keeps inference inside EU regions (right for UK client data).
+#
+# Sonnet 4.6 rather than Sonnet 5 for now: both are subscribed, but a freshly
+# accepted Marketplace agreement takes a while to entitle, and Sonnet 5 still
+# answers AccessDenied. 4.6 is live today with a 6M tokens/min quota. Flip to
+# Sonnet 5 by setting BEDROCK_MODEL_ID — no code change needed.
+DEFAULT_MODEL = "eu.anthropic.claude-sonnet-4-6"
 
 
 class BedrockUnavailable(RuntimeError):
