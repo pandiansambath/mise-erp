@@ -1,6 +1,8 @@
 """Request/response shapes for the Copilot chat endpoint."""
 from __future__ import annotations
 
+import uuid
+
 from pydantic import BaseModel, Field
 
 
@@ -16,6 +18,7 @@ class Attachment(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(default_factory=list)
+    thread_id: uuid.UUID | None = None  # which conversation this belongs to
     route: str | None = None  # the page the user is currently on, for context
     attachment: Attachment | None = None  # a bill/receipt/photo to read
     user_name: str | None = None  # what the user asked to be called (set at onboarding)
@@ -35,6 +38,7 @@ class ProposedAction(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    thread_id: uuid.UUID | None = None
     actions: list[Action] = Field(default_factory=list)
     pending_actions: list[ProposedAction] = Field(default_factory=list)
     used_tools: list[str] = Field(default_factory=list)

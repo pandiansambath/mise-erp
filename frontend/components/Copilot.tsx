@@ -32,6 +32,7 @@ type Pending = {
 };
 type Ingest = { kind: string; rows: Row[]; committed?: boolean; result?: string };
 type ChatResponse = {
+  thread_id?: string; // which conversation this reply belongs to
   reply: string; actions: Action[]; pending_actions: Pending[]; used_tools: string[]; configured: boolean;
 };
 type Msg = {
@@ -111,6 +112,7 @@ export function Copilot() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
   const [expanding, setExpanding] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [speakOn, setSpeakOn] = useState(false);
   const speechBase = useRef("");
   const voice = useVoiceInput((t) =>
@@ -126,6 +128,28 @@ export function Copilot() {
   useEffect(() => {
     if (open) router.prefetch("/ai-scan");
   }, [open, router]);
+
+  // Replay this person's conversation. It lives on the server keyed to THEM,
+  // so it survives navigation, a new tab, a different device and logging out.
+  useEffect(() => {
+    if (!open || threadId) return;
+    api
+      .get<{ thread_id: string; messages: { role: string; content: string }[] }>(
+        "/assistant/history",
+      )
+      .then((d) => {
+        setThreadId(d.thread_id);
+        if (d.messages.length) {
+          setMessages(
+            d.messages.map((m) => ({
+              role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
+            })) as Msg[],
+          );
+        }
+      })
+      .catch(() => {});
+  }, [open, threadId]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -188,7 +212,8 @@ export function Copilot() {
     setInput("");
     setLoading(true);
     try {
-      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, user_name: userName() });
+      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, user_name: userName(), thread_id: threadId });
+      if (res.thread_id) setThreadId(res.thread_id);
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
       maybeSpeak(res.reply);
@@ -245,7 +270,7 @@ export function Copilot() {
       const history = [...messages, userMsg];
       setMessages(history);
       setInput("");
-      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64 }, user_name: userName() });
+      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64 }, user_name: userName(), thread_id: threadId });
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
       maybeSpeak(res.reply);
@@ -367,10 +392,29 @@ export function Copilot() {
             </div>
             <button
               type="button"
+              onClick={async () => {
+                try {
+                  const d = await api.post<{ thread_id: string }>("/assistant/history/new", {});
+                  setThreadId(d.thread_id);
+                } catch {
+                  setThreadId(null);
+                }
+                setMessages([GREETING]);
+              }}
+              aria-label="Start a new chat"
+              title="New chat — your old conversations are kept"
+              className="relative ml-auto rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <button
+              type="button"
               onClick={expandToPage}
               aria-label="Open full screen"
               title="Open full screen — more room, and you can send photos"
-              className="relative ml-auto rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+              className="relative rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
                 <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" />

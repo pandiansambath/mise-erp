@@ -1,6 +1,7 @@
 """Copilot endpoint. Any authenticated user may ask; tools enforce their own
 permission + hotel scope, so answers never leak across roles or tenants."""
 import time
+import uuid
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -8,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assistant import actions, guard, ingest, provider, service
+from app.assistant import actions, guard, ingest, memory, provider, service
 from app.assistant.provider import ProviderError
 from app.assistant.schemas import (
     ActRequest,
@@ -59,8 +60,17 @@ async def chat(
     if req.attachment and len(req.attachment.data) > 20_000_000:  # ~15MB of base64
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Attachment too large")
     await guard.enforce(db, user, "chat")
+
+    # Which conversation is this? The client sends one after the first reply;
+    # before that we resume whatever they were last saying.
+    thread_id = req.thread_id or await memory.latest_thread(db, user) or uuid.uuid4()
+    asked = req.messages[-1].content if req.messages else ""
+    await memory.remember(db, user, thread_id, "user", asked)
+
     started = time.monotonic()
     answer = await service.answer(db, user, req)
+    await memory.remember(db, user, thread_id, "assistant", answer.reply)
+    answer.thread_id = thread_id
     # tokens aren't reported back through the provider abstraction yet, so a chat
     # turn counts toward the request limits but contributes 0 to the token total
     await guard.record(
@@ -148,6 +158,35 @@ async def undo(
 
 
 # ── Claude on Bedrock: read a bill / handwritten recipe ───────────────────────
+@router.get("/history")
+async def history(
+    thread: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Replay this person's conversation. Their own messages only — the query is
+    scoped by user_id, so a guessed thread id returns nothing."""
+    tid, msgs = await memory.load(db, user, thread)
+    return {"thread_id": str(tid), "messages": msgs}
+
+
+@router.post("/history/new")
+async def new_thread(user: User = Depends(get_current_user)) -> dict:
+    """Start a fresh conversation. Nothing is deleted — the old thread stays
+    readable, and the assistant still gets a little context from it."""
+    return {"thread_id": str(uuid.uuid4())}
+
+
+@router.delete("/history/{thread_id}")
+async def clear_thread(
+    thread_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    removed = await memory.forget_thread(db, user, thread_id)
+    return {"removed": removed}
+
+
 @router.get("/usage")
 async def usage(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)

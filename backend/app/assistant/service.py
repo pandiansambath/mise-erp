@@ -123,6 +123,15 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
 
     hotel = await db.get(Hotel, user.hotel_id)
     hotel_name = getattr(hotel, "name", None) or "this restaurant"
+
+    # Threads give a clean screen; they are not amnesia. A little of what this
+    # person said in earlier conversations rides along, so "that supplier" still
+    # means something next week.
+    prior = ""
+    if req.thread_id:
+        from app.assistant import memory
+
+        prior = await memory.carryover(db, user, req.thread_id)
     history = [{"role": m.role, "content": m.content} for m in req.messages]
     collected: list[dict] = []
     proposals: list[dict] = []
@@ -140,7 +149,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     if provider.is_configured():
         try:
             reply, used = await provider.generate(
-                system=_build_system(user, req.route, req.user_name, hotel_name),
+                system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
                 history=history,
                 tools=tools_for(user),
                 execute=execute,
