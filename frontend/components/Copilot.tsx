@@ -39,10 +39,30 @@ const userName = (): string | undefined => {
 };
 
 const ATTACH = [
-  { mode: "ingest:items", icon: "📦", label: "Items / stock list" },
-  { mode: "ingest:vendors", icon: "🤝", label: "Suppliers list" },
-  { mode: "chat:receipt", icon: "🧾", label: "Bill / receipt" },
-  { mode: "chat:photo", icon: "🖼️", label: "Photo / other" },
+  {
+    mode: "ingest:items",
+    icon: "📦",
+    label: "My ingredients",
+    hint: "A spreadsheet of what you keep in stock → I'll fill your Inventory",
+  },
+  {
+    mode: "ingest:vendors",
+    icon: "🤝",
+    label: "My suppliers",
+    hint: "Who you buy from, with prices if you have them",
+  },
+  {
+    mode: "chat:receipt",
+    icon: "🧾",
+    label: "A bill or receipt",
+    hint: "Photo or PDF → I'll read the amounts and log the expense",
+  },
+  {
+    mode: "chat:photo",
+    icon: "🖼️",
+    label: "Something handwritten",
+    hint: "A recipe on paper, a stock count, a note — I'll type it up",
+  },
 ];
 
 const GREETING: Msg = {
@@ -494,11 +514,20 @@ export function Copilot() {
             {attachOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setAttachOpen(false)} aria-hidden />
-                <div className="mise-pop absolute bottom-14 left-3 z-20 w-56 rounded-xl border border-glass/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
-                  <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-fg-faint">Upload &amp; let me handle it</p>
+                <div className="mise-pop absolute bottom-14 left-3 z-20 w-72 max-w-[calc(100vw-3rem)] rounded-xl border border-glass/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                  <p className="px-2 pb-1.5 text-[11px] uppercase tracking-wide text-fg-faint">What have you got?</p>
                   {ATTACH.map((a) => (
-                    <button key={a.mode} type="button" onClick={() => chooseAttach(a.mode)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-fg-soft hover:bg-glass/5">
-                      <span aria-hidden>{a.icon}</span> {a.label}
+                    <button
+                      key={a.mode}
+                      type="button"
+                      onClick={() => chooseAttach(a.mode)}
+                      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-glass/5"
+                    >
+                      <span className="mt-0.5 text-base" aria-hidden>{a.icon}</span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-fg">{a.label}</span>
+                        <span className="block text-[11px] leading-snug text-fg-faint">{a.hint}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
