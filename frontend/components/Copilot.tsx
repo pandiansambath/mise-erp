@@ -107,6 +107,13 @@ export function Copilot() {
   const ttsSupported = speechOutputSupported();
   const pathname = usePathname();
   const router = useRouter();
+
+  // Warm the full view as soon as the panel opens. Expanding then costs a
+  // repaint, not a page load — which is the whole difference between the
+  // animation feeling like growth and feeling like a stall.
+  useEffect(() => {
+    if (open) router.prefetch("/ai-scan");
+  }, [open, router]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -306,11 +313,11 @@ export function Copilot() {
       /* private mode / quota — the page just opens fresh, which is fine */
     }
     setExpanding(true);
-    window.setTimeout(() => {
+    router.push("/ai-scan");           // start painting immediately
+    window.setTimeout(() => {          // dissolve plays OVER the new page
       setOpen(false);
       setExpanding(false);
-      router.push("/ai-scan");
-    }, 260);
+    }, 220);
   }
 
   function go(href: string) { voice.stop(); stopSpeaking(); setOpen(false); setClosing(false); router.push(href); }

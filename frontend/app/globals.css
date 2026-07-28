@@ -583,6 +583,14 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 /* Expanding the Copilot into its full page: it grows toward the centre and
    softens away, so the page that follows feels like the same surface rather
    than a new one. Paired with a 260ms delay before routing in Copilot.tsx. */
+/* The receiving half of the expand: the full view rises into place as the
+   bubble dissolves over it, so the handover reads as one movement. */
+@keyframes mise-page-grow {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.mise-page-grow { animation: mise-page-grow 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @keyframes mise-copilot-expand {
   0%   { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
   60%  { opacity: 0.6; transform: scale(1.06) translateY(-6px); filter: blur(2px); }
@@ -608,7 +616,7 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 .mise-launcher-in { animation: mise-launcher-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .mise-copilot-glow, .mise-msg-in, .mise-bob, .mise-copilot-in, .mise-copilot-out, .mise-copilot-expand, .mise-launcher-in { animation: none; }
+  .mise-copilot-glow, .mise-msg-in, .mise-bob, .mise-copilot-in, .mise-copilot-out, .mise-copilot-expand, .mise-page-grow, .mise-launcher-in { animation: none; }
 }
 
 /* ── Onboarding wizard ─────────────────────────────────────────────────────── */

@@ -555,7 +555,7 @@ export default function AiScanPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-3xl flex-col">
+    <div className="mise-page-grow mx-auto -mb-28 flex h-[calc(100dvh-12rem)] max-w-3xl flex-col lg:h-[calc(100dvh-7rem)]">
       <style>{`
         @keyframes aiRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         .ai-rise { animation: aiRise .32s cubic-bezier(.22,1,.36,1) both; }
