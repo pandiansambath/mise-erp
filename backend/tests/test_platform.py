@@ -35,9 +35,12 @@ async def test_plan_prices_editable(client, make_user, auth_header, db):
     # every plan must price every feature — a new module can't ship for free
     for plan in plans:
         assert set(plan["includes"]) == set(by_key["group"]["includes"])
-    # AI is metered per plan, and never in the entry tier
-    assert by_key["kitchen"]["ai_daily_requests"] == 0
-    assert by_key["service"]["ai_daily_requests"] > 0
+    # AI is metered AND model-tiered: the entry plan gets chat on the cheap
+    # model, the paid plans get more calls on the smarter one.
+    assert by_key["kitchen"]["ai_model_label"] == "Haiku"
+    assert by_key["service"]["ai_model_label"] == "Sonnet"
+    assert 0 < by_key["kitchen"]["ai_daily_requests"] < by_key["service"]["ai_daily_requests"]
+    assert by_key["kitchen"]["includes"]["ai_scan"] is False
 
 
 @pytest.mark.asyncio

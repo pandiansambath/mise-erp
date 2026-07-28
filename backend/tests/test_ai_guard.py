@@ -106,14 +106,40 @@ async def test_record_writes_a_costed_row(db, monkeypatch) -> None:
     assert Decimal(s["month_cost_usd"]) > 0
 
 
-async def test_a_plan_without_ai_is_an_upsell_not_an_error(db, monkeypatch) -> None:
-    """Kitchen has no AI. Asking must explain the upgrade, not look broken."""
+async def test_a_feature_outside_the_plan_is_an_upsell_not_an_error(db, hotel, monkeypatch) -> None:
+    """Kitchen has chat but NOT scanning. Asking to scan must sell the upgrade
+    in the assistant's own voice, not return a dead end."""
     monkeypatch.setattr(settings, "ai_enabled", True)
-    monkeypatch.setattr(guard.feat, "DEFAULT_PLAN", "kitchen")
+    hotel.plan = "kitchen"
+    hotel.features = {"ai_copilot": True, "ai_scan": False}
+    await db.commit()
+
+    user = _FakeUser()
+    user.hotel_id = hotel.id
+
+    # scanning is not in Kitchen -> a sales line, not an error
     with pytest.raises(HTTPException) as exc:
-        await guard.enforce(db, _FakeUser(), "vision")
+        await guard.enforce(db, user, "vision", feature="ai_scan")
     assert exc.value.status_code == 429
-    assert "Upgrade" in exc.value.detail
+    assert "Service" in exc.value.detail
+
+    # but chat IS in Kitchen, so it must go through
+    await guard.enforce(db, user, "chat", feature="ai_copilot")
+
+
+async def test_kitchen_runs_on_the_cheap_model(db, hotel) -> None:
+    """Model tiering is what makes AI affordable on the entry plan."""
+    from app.platform_admin import features as f
+
+    hotel.plan = "kitchen"
+    await db.commit()
+    user = _FakeUser()
+    user.hotel_id = hotel.id
+    assert await guard.model_for(db, user) == f.HAIKU
+
+    hotel.plan = "service"
+    await db.commit()
+    assert await guard.model_for(db, user) == f.SONNET
 
 
 def test_every_feature_is_priced_on_every_plan() -> None:
@@ -122,12 +148,18 @@ def test_every_feature_is_priced_on_every_plan() -> None:
 
     for plan in f.PLANS:
         assert set(plan.includes) == set(f.ALL_KEYS), plan.key
-    # AI is never in the entry tier — it is the only variable-cost feature
+    # The entry tier tastes the AI (chat) but not the expensive parts, and it
+    # runs on the cheaper model — that combination is what keeps it affordable.
     kitchen = f.get_plan("kitchen")
     assert kitchen is not None
-    for key in f.AI_KEYS:
-        assert kitchen.includes[key] is False
-    assert f.plan_ai_limits("kitchen") == (0, 0)
+    assert kitchen.includes["ai_copilot"] is True
+    assert kitchen.includes["ai_scan"] is False
+    assert kitchen.includes["ai_insights"] is False
+    assert kitchen.ai_model == f.HAIKU
+    daily, monthly = f.plan_ai_limits("kitchen")
+    assert 0 < daily <= 50 and 0 < monthly <= 1_000_000
+    # paid tiers get the smarter model
+    assert f.get_plan("service").ai_model == f.SONNET
     # and the core money spine is in every plan
     for plan in f.PLANS:
         for key in f.CORE_KEYS:

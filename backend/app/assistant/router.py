@@ -184,7 +184,7 @@ async def vision_read(
     from app.vendors.models import Vendor
 
     # budget first: refuse before spending, never after
-    await guard.enforce(db, user, "vision")
+    await guard.enforce(db, user, "vision", feature="ai_scan")
 
     if kind not in ("auto", "bill", "recipe"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "kind must be auto, bill or recipe")
@@ -229,6 +229,7 @@ async def vision_read(
             known_items=[{"id": str(i.id), "name": i.name, "unit": i.unit} for i in items],
             known_vendors=[v.name for v in vendors],
             meter=meter,
+            model=await guard.model_for(db, user),
         )
     except bedrock.BedrockUnavailable as exc:
         await guard.record(

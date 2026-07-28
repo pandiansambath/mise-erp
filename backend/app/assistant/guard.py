@@ -60,6 +60,12 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> Decimal:
     return cost.quantize(Decimal("0.000001"))
 
 
+async def model_for(db: AsyncSession, user: User) -> str:
+    """The Bedrock model this hotel's plan entitles it to."""
+    hotel = await db.get(Hotel, user.hotel_id)
+    return feat.plan_model(getattr(hotel, "plan", "") or feat.DEFAULT_PLAN)
+
+
 async def _limits(db: AsyncSession, user: User) -> tuple[int, int, str]:
     """(daily requests, monthly tokens, plan label) for this hotel.
 
@@ -82,17 +88,48 @@ async def _limits(db: AsyncSession, user: User) -> tuple[int, int, str]:
     )
 
 
-async def enforce(db: AsyncSession, user: User, kind: str) -> None:
-    """Gate a call. Raises before a single token is spent, never after."""
+# What each AI feature is worth saying when a plan doesn't include it. The
+# assistant answers with these in-character, because a refusal that explains the
+# upgrade is marketing; a bare 403 is just a dead end.
+_UPSELL = {
+    "ai_scan": (
+        "I can't read photos on {plan} — bill and handwritten-recipe scanning "
+        "comes with Service. Want to see what else it adds?"
+    ),
+    "ai_insights": (
+        "Daily insights aren't part of {plan}. Service spots what changed "
+        "overnight and tells you before it costs you."
+    ),
+    "ai_copilot": (
+        "Chat isn't part of your {plan} plan yet — every paid plan includes it."
+    ),
+}
+
+
+async def enforce(
+    db: AsyncSession, user: User, kind: str, *, feature: str = "ai_copilot"
+) -> None:
+    """Gate a call. Raises before a single token is spent, never after.
+
+    `feature` is the specific AI capability being used, because the plans slice
+    AI finely: Kitchen has chat but not scanning, so "does this hotel have AI"
+    is the wrong question to ask.
+    """
     if not settings.ai_enabled:
         raise AiDisabled("The AI is switched off right now. Please try again later.")
 
     daily_cap, monthly_cap, plan_label = await _limits(db, user)
+
+    hotel = await db.get(Hotel, user.hotel_id)
+    if hotel is not None and not hotel.feature_on(feature):
+        raise AiQuotaExceeded(_UPSELL.get(feature, "That's not part of your plan.").format(
+            plan=plan_label
+        ))
+
     if daily_cap <= 0 and monthly_cap <= 0:
-        # The plan simply doesn't include AI — an upsell, not an error.
         raise AiQuotaExceeded(
-            f"AI isn't part of your {plan_label} plan. Upgrade to Service to "
-            "photograph bills and ask the Copilot anything about your kitchen."
+            f"AI isn't part of your {plan_label} plan. Upgrade to add the "
+            "assistant and bill scanning."
         )
 
     now = datetime.now(UTC)
@@ -204,6 +241,7 @@ async def summary(db: AsyncSession, user: User) -> dict:
         "month_cost_usd": str(row[2]),
         "today_calls": int(today or 0),
         "plan": plan_label,
+        "model": await model_for(db, user),
         "daily_limit": daily_cap,
         "monthly_token_limit": monthly_cap,
         "included": daily_cap > 0 or monthly_cap > 0,

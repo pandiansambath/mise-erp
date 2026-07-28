@@ -109,6 +109,11 @@ FEATURES: tuple[Feature, ...] = (
     Feature("api_access", "API access", "Programmatic access for integrations.", enforced=True),
 )
 
+# Bedrock inference-profile ids. `eu.` keeps inference inside EU regions, which
+# matters because these prompts carry UK client data. Both verified invocable.
+HAIKU = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+SONNET = "eu.anthropic.claude-sonnet-4-6"
+
 _BY_KEY = {f.key: f for f in FEATURES}
 ALL_KEYS: tuple[str, ...] = tuple(f.key for f in FEATURES)
 CORE_KEYS: tuple[str, ...] = tuple(f.key for f in FEATURES if f.core)
@@ -152,7 +157,10 @@ class Plan:
     price_annual_hint: str          # annual equivalent (pay 10, get 12)
     max_users: int                  # user cap (grandfathers hotels already over it)
     includes: dict[str, bool]       # EVERY feature key -> in this plan or not
-    # AI is metered, not just on/off. 0 = no AI on this plan.
+    # AI is metered AND model-tiered, not just on/off. 0 = no AI on this plan.
+    # The model is the real cost lever: Haiku is ~4x cheaper than Sonnet, which
+    # is what lets the entry tier include a chat assistant at all.
+    ai_model: str
     ai_daily_requests: int
     ai_monthly_tokens: int
     trial_days: int
@@ -166,11 +174,12 @@ def _plan_map(on: tuple[str, ...]) -> dict[str, bool]:
     return {k: (k in included) for k in ALL_KEYS}
 
 
-# Kitchen — the money spine only. Deliberately NO AI: it is the one feature with a
-# variable per-use cost, so the cheapest tier must never be able to generate the
-# biggest bill.
+# Kitchen — the money spine, plus a taste of the AI. It gets the CHAT assistant
+# (ask about your own numbers) but not scanning or insights, and it runs on
+# Haiku with a small cap. Removing AI entirely would protect cost but destroy
+# the reason to upgrade — the cheaper model is the better lever.
 _KITCHEN_ON: tuple[str, ...] = (
-    "waste", "stock_take", "ordering", "branded_site",
+    "waste", "stock_take", "ordering", "branded_site", "ai_copilot",
 )
 
 # Service — the full operating system for a single venue.
@@ -190,7 +199,8 @@ PLANS: tuple[Plan, ...] = (
     Plan(
         "kitchen", "Kitchen", "£39/mo", "£390/yr", 3,
         _plan_map(_KITCHEN_ON),
-        ai_daily_requests=0, ai_monthly_tokens=0, trial_days=0,
+        ai_model=HAIKU,
+        ai_daily_requests=20, ai_monthly_tokens=500_000, trial_days=0,
         blurb="Know what everything costs and what you actually made.",
         highlights=(
             "Inventory, recipes & live plate costing",
@@ -198,17 +208,19 @@ PLANS: tuple[Plan, ...] = (
             "Sales, expenses & a real-time P&L",
             "Waste log and stock-take",
             "Your own branded site with pickup ordering",
+            "AI chat — ask anything about your own numbers (20/day)",
             "Up to 3 users",
         ),
     ),
     Plan(
         "service", "Service", "£99/mo", "£990/yr", 15,
         _plan_map(_SERVICE_ON),
-        ai_daily_requests=300, ai_monthly_tokens=8_000_000, trial_days=14,
+        ai_model=SONNET,
+        ai_daily_requests=300, ai_monthly_tokens=5_000_000, trial_days=14,
         blurb="The whole operation — people, compliance, delivery and AI.",
         highlights=(
             "Everything in Kitchen",
-            "AI Copilot + photograph a bill or handwritten recipe",
+            "Smarter AI (Sonnet) + photograph a bill or handwritten recipe",
             "Payroll, rota, attendance & staff self-service",
             "Food safety, allergens, documents & audit trail",
             "Price comparison and party orders",
@@ -220,7 +232,8 @@ PLANS: tuple[Plan, ...] = (
     Plan(
         "group", "Group", "£249/mo", "£2,490/yr", 100000,
         _plan_map(_GROUP_ON),
-        ai_daily_requests=1000, ai_monthly_tokens=30_000_000, trial_days=14,
+        ai_model=SONNET,
+        ai_daily_requests=1000, ai_monthly_tokens=20_000_000, trial_days=14,
         blurb="Several venues, one set of numbers.",
         highlights=(
             "Everything in Service",
@@ -269,6 +282,12 @@ def plan_ai_limits(plan_key: str) -> tuple[int, int]:
     return (p.ai_daily_requests, p.ai_monthly_tokens) if p else (0, 0)
 
 
+def plan_model(plan_key: str) -> str:
+    """Which Bedrock model this plan is entitled to. Empty = fall back to config."""
+    p = get_plan(plan_key)
+    return p.ai_model if p else ""
+
+
 def plans_public(price_overrides: dict | None = None) -> list[dict]:
     """Serialisable plans for the Control Room, the pricing page and the landing page.
     The operator can override each plan's display price (plan_key -> string)."""
@@ -281,6 +300,8 @@ def plans_public(price_overrides: dict | None = None) -> list[dict]:
             "max_users": p.max_users, "blurb": p.blurb,
             "highlights": list(p.highlights),
             "includes": dict(p.includes),
+            "ai_model": p.ai_model,
+            "ai_model_label": "Haiku" if p.ai_model == HAIKU else "Sonnet",
             "ai_daily_requests": p.ai_daily_requests,
             "ai_monthly_tokens": p.ai_monthly_tokens,
             "trial_days": p.trial_days,

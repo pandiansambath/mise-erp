@@ -50,14 +50,22 @@ def _model_id() -> str:
     return (getattr(settings, "bedrock_model_id", "") or DEFAULT_MODEL).strip()
 
 
-def _invoke(body: dict[str, Any], meter: dict[str, Any] | None = None) -> str:
+def _invoke(
+    body: dict[str, Any],
+    meter: dict[str, Any] | None = None,
+    model: str = "",
+) -> str:
     """POST a Messages-API body to Bedrock and return the concatenated text.
 
     `meter` is an optional dict the caller passes in to receive the token counts
     Bedrock reports. Tokens are money, so every real call should meter itself —
-    see `app.assistant.guard`."""
+    see `app.assistant.guard`.
+
+    `model` overrides the configured model. The caller passes the one the
+    hotel's PLAN entitles it to, which is how the cheap tier runs on Haiku."""
     try:
-        resp = _client().invoke_model(modelId=_model_id(), body=json.dumps(body))
+        model_id = model or _model_id()
+        resp = _client().invoke_model(modelId=model_id, body=json.dumps(body))
         payload = json.loads(resp["body"].read())
     except Exception as exc:  # noqa: BLE001 — surfaced to the caller as 503
         msg = str(exc)
@@ -70,7 +78,7 @@ def _invoke(body: dict[str, Any], meter: dict[str, Any] | None = None) -> str:
         raise BedrockUnavailable("The AI service is unavailable right now.") from exc
     if meter is not None:
         usage = payload.get("usage") or {}
-        meter["model"] = _model_id()
+        meter["model"] = model or _model_id()
         meter["input_tokens"] = int(usage.get("input_tokens") or 0)
         meter["output_tokens"] = int(usage.get("output_tokens") or 0)
     return "".join(b.get("text", "") for b in payload.get("content", []))
@@ -146,6 +154,7 @@ def understand_document(
     known_items: list[dict] | None = None,
     known_vendors: list[str] | None = None,
     meter: dict[str, Any] | None = None,
+    model: str = "",
 ) -> dict[str, Any]:
     """Read a bill or handwritten recipe into structured, human-confirmable data.
 
@@ -195,7 +204,7 @@ def understand_document(
             }
         ],
     }
-    data = _json_from(_invoke(body, meter))
+    data = _json_from(_invoke(body, meter, model))
     data.setdefault("doc_type", kind if kind != "auto" else "bill")
     return data
 
@@ -236,6 +245,7 @@ def ask(
     context: str = "",
     history: list[dict] | None = None,
     meter: dict[str, Any] | None = None,
+    model: str = "",
 ) -> str:
     """Answer a question about THIS hotel. `context` is caller-supplied facts
     (already scoped to the hotel) — the model must not go looking elsewhere."""
@@ -255,6 +265,7 @@ def ask(
             "messages": messages,
         },
         meter,
+        model,
     ).strip()
 
 
