@@ -42,7 +42,10 @@ def test_assistant_prompt_is_scoped_to_one_hotel(monkeypatch):
 
     monkeypatch.setattr(bedrock, "_invoke", fake)
     bedrock.ask("how were sales?", hotel_name="Milagu")
-    system = seen["system"]
+    # `system` is a list of blocks now that it carries a cache_control marker;
+    # flatten it so this test asserts the GUARDRAILS, not the payload shape.
+    raw = seen["system"]
+    system = raw if isinstance(raw, str) else "".join(b.get("text", "") for b in raw)
     assert "Milagu" in system
     # refuses off-topic, and never crosses tenants
     assert "outside my kitchen" in system
