@@ -25,11 +25,19 @@ async def test_plan_prices_editable(client, make_user, auth_header, db):
     owner = await _make_owner(make_user, db)
     h = auth_header(owner)
     # GET /plans is public and reflects an operator price override.
-    r = await client.patch("/api/platform/plans/prices", headers=h, json={"prices": {"pro": "£89/mo"}})
+    r = await client.patch(
+        "/api/platform/plans/prices", headers=h, json={"prices": {"service": "£89/mo"}}
+    )
     assert r.status_code == 200
     plans = (await client.get("/api/platform/plans")).json()["plans"]
-    pro = next(p for p in plans if p["key"] == "pro")
-    assert pro["price_hint"] == "£89/mo"
+    by_key = {p["key"]: p for p in plans}
+    assert by_key["service"]["price_hint"] == "£89/mo"
+    # every plan must price every feature — a new module can't ship for free
+    for plan in plans:
+        assert set(plan["includes"]) == set(by_key["group"]["includes"])
+    # AI is metered per plan, and never in the entry tier
+    assert by_key["kitchen"]["ai_daily_requests"] == 0
+    assert by_key["service"]["ai_daily_requests"] > 0
 
 
 @pytest.mark.asyncio
