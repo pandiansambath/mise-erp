@@ -141,6 +141,14 @@ class PlanPrices(BaseModel):
     prices: dict[str, str] = Field(default_factory=dict)  # plan_key -> "£89/mo"
 
 
+@router.get("/plans/matrix")
+async def plans_matrix() -> dict:
+    """Every feature × every plan. PUBLIC, and deliberately the same registry the
+    app enforces from — a pricing table built from separate copy drifts, and then
+    you're selling something you don't ship."""
+    return {"features": feat.plan_matrix(), "plans": feat.plans_public()}
+
+
 @router.patch("/plans/prices")
 async def set_plan_prices(
     body: PlanPrices,
