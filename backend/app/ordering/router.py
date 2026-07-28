@@ -671,7 +671,7 @@ async def place_order(
         hotel_id,
         f"🛎️ New order {order.code}: {order.customer_name} · £{order.total}",
         f"{order.customer_name} placed {payload.fulfilment.lower()} order {order.code} "
-        f"for £{order.total}. Open Mise → Online Orders to confirm it.",
+        f"for £{order.total}. Open DineAI → Online Orders to confirm it.",
         html=notify.render_email(
             badge="🛎️ New order",
             heading="Order in — the board is lit!",

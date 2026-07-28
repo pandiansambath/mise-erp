@@ -1,4 +1,4 @@
-// Typed client for the Mise backend API. Stores the JWT in localStorage and
+// Typed client for the DineAI backend API. Stores the JWT in localStorage and
 // attaches it to every request. Keep this the single place that talks to the API.
 
 // Unset (local dev) -> localhost; set to "" (prod behind a reverse proxy) ->
@@ -146,7 +146,7 @@ export interface UserOut {
   is_active: boolean;
   email_verified?: boolean; // live inbox-confirmation status
   preferred_name?: string | null;
-  is_platform_owner?: boolean; // the Mise operator — unlocks the Control Room
+  is_platform_owner?: boolean; // the DineAI operator — unlocks the Control Room
   last_login?: string | null;
 }
 
@@ -180,12 +180,12 @@ export interface Hotel {
   break_allowance_minutes: number;
   break_penalty_per_min: string;
   min_hourly_rate?: string; // configurable minimum wage floor (payroll rejects below)
-  has_logo?: boolean; // an uploaded brand logo replaces the default Mise mark
+  has_logo?: boolean; // an uploaded brand logo replaces the default DineAI mark
   features?: Record<string, boolean>; // per-hotel entitlements (missing = enabled)
   landing?: LandingConfig; // customizable public-page config
 }
 
-/** A live dish from the hotel's real Mise menu, shown on their public site. */
+/** A live dish from the hotel's real DineAI menu, shown on their public site. */
 export interface SiteDish {
   id: string;
   name: string;

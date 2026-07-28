@@ -18,16 +18,16 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: "Mise — Every plate, every penny, in its place.",
-    template: "%s · Mise",
+    default: "DineAI — Every plate, every penny, in its place.",
+    template: "%s · DineAI",
   },
   description:
     "The restaurant operating system: recipes costed to the gram, live inventory and purchasing, staff and payroll, and a real-time P&L — one platform for the whole brigade.",
   openGraph: {
-    title: "Mise — Every plate, every penny, in its place.",
+    title: "DineAI — Every plate, every penny, in its place.",
     description:
       "Recipes costed to the gram, live inventory, purchasing, payroll and a real-time P&L — the operating system for your restaurant.",
-    siteName: "Mise",
+    siteName: "DineAI",
     type: "website",
   },
 };

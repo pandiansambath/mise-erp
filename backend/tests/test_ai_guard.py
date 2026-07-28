@@ -1,4 +1,4 @@
-"""The AI is the only unbounded-cost surface in Mise, so its limits are tested
+"""The AI is the only unbounded-cost surface in DineAI, so its limits are tested
 like money code: a cap that silently doesn't bind is worse than no cap at all."""
 import uuid
 from decimal import Decimal

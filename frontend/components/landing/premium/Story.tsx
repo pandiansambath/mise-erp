@@ -31,7 +31,7 @@ const BEATS: Beat[] = [
     videos: ["sky-to-mountains", "mountains-to-forest"],
     kicker: "01 · THE WORLD",
     title: ["Every great plate", "starts far from the plate."],
-    body: "Above the clouds, down the mountains, into the forest — everything you serve begins somewhere. Mise follows it all the way to your books.",
+    body: "Above the clouds, down the mountains, into the forest — everything you serve begins somewhere. DineAI follows it all the way to your books.",
     align: "center",
   },
   {
@@ -272,7 +272,7 @@ export default function Story() {
   }, []);
 
   return (
-    <section ref={sectionRef} id="story" aria-label="How Mise works" className="relative">
+    <section ref={sectionRef} id="story" aria-label="How DineAI works" className="relative">
       {/* ── the pinned cinema stage ── */}
       <div className="sticky top-0 h-screen overflow-hidden">
         {/* settled stills (crossfade base). Phones keep only the stills near

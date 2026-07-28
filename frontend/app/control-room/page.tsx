@@ -1,6 +1,6 @@
 "use client";
 
-// 🛰️ CONTROL ROOM — the Mise operator's cross-tenant console. Lists every hotel,
+// 🛰️ CONTROL ROOM — the DineAI operator's cross-tenant console. Lists every hotel,
 // lets us toggle per-hotel features (entitlements → future plan tiers) and reset
 // any user's password. Gated to is_platform_owner (server-enforced too).
 
@@ -368,7 +368,7 @@ function AnnouncementsCard() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={500}
-            placeholder="e.g. Mise gets new charts tonight 22:00–22:15 — nothing you need to do."
+            placeholder="e.g. DineAI gets new charts tonight 22:00–22:15 — nothing you need to do."
             className="mise-well w-full rounded-xl px-3 py-2.5 text-sm outline-none"
           />
         </div>
@@ -792,21 +792,21 @@ export default function ControlRoomPage() {
       <div className="mise-well mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">
         <span className="flex items-center gap-2 text-fg">
           <span className="h-2 w-2 animate-pulse rounded-full bg-brand-400" />
-          MISE CONTROL
+          DINEAI CONTROL
         </span>
         <span>fleet {hotels.length}</span>
         <span className="text-brand-300">{active} up</span>
         {hotels.length - active > 0 && <span className="text-rose-300">{hotels.length - active} suspended</span>}
         <span className="ml-auto tabular-nums">{utc} UTC</span>
       </div>
-      <PageHeader title="All hotels" subtitle="Every restaurant on Mise — flip features, reset access, all in one place." />
+      <PageHeader title="All hotels" subtitle="Every restaurant on DineAI — flip features, reset access, all in one place." />
 
       {err && <Card className="mb-4"><p className="text-sm text-rose-400">{err}</p></Card>}
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Hotels" value={String(hotels.length)} accent="brand" hint={`${active} active`} />
         <StatCard label="Total users" value={String(totalUsers)} accent="slate" />
-        <StatCard label="AI enabled" value={`${aiOn}/${hotels.length}`} accent="copper" hint="Ask Mise" />
+        <StatCard label="AI enabled" value={`${aiOn}/${hotels.length}`} accent="copper" hint="Ask DineAI" />
         <StatCard label="Features" value={String(features.length)} accent="amber" hint="per hotel" />
       </div>
 
@@ -815,7 +815,7 @@ export default function ControlRoomPage() {
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card className="mise-feel">
             <h3 className="font-semibold text-fg">Signups — last 12 months</h3>
-            <p className="text-xs text-fg-faint">new hotels joining Mise per month</p>
+            <p className="text-xs text-fg-faint">new hotels joining DineAI per month</p>
             {(() => {
               const now = new Date();
               const months: string[] = [];

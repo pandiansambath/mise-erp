@@ -408,7 +408,7 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
               <p className="mt-2 text-sm font-medium text-fg">No login yet</p>
               <p className="mt-1 text-xs text-fg-faint">
                 Create one from the <b className="text-fg-soft">Staff</b> page. The moment you do,
-                Mise emails them a verification link — they can&apos;t sign in until they confirm it.
+                DineAI emails them a verification link — they can&apos;t sign in until they confirm it.
               </p>
             </div>
           ) : (
@@ -431,7 +431,7 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
               {!status.email_verified ? (
                 <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
                   🔴 <b>Live status:</b> not confirmed yet — they can&apos;t sign in until they click
-                  the verification link Mise emailed. Resend it if it went astray.
+                  the verification link DineAI emailed. Resend it if it went astray.
                 </p>
               ) : (
                 <p className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-500">

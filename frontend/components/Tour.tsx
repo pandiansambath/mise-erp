@@ -12,7 +12,7 @@ const KEY = "mise.tour.done";
 type Step = { href: string; title: string; body: string; emoji: string };
 
 const STEPS: Step[] = [
-  { href: "/dashboard", title: "Welcome to Mise 👋", body: "A quick walk through where everything lives — I'll drive, you just tap Next. This is your Dashboard: today's takings, this month's profit and low stock, at a glance.", emoji: "▦" },
+  { href: "/dashboard", title: "Welcome to DineAI 👋", body: "A quick walk through where everything lives — I'll drive, you just tap Next. This is your Dashboard: today's takings, this month's profit and low stock, at a glance.", emoji: "▦" },
   { href: "/money", title: "Money", body: "The plain-English money story: sales − food − running costs = what you keep. Waste and every other cost land here too.", emoji: "💰" },
   { href: "/inventory", title: "Inventory", body: "Every item with live stock, a health bar and pack sizes (1 box = 5 kg) — so recipes cost in the base unit but you order in packs.", emoji: "📦" },
   { href: "/recipes", title: "Recipes", body: "Cost each dish from its ingredients, so you always know its real margin before you set a price.", emoji: "🍲" },

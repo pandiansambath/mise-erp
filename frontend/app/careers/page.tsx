@@ -1,6 +1,6 @@
 "use client";
 
-// The public job board — every open vacancy across every hotel on Mise, in
+// The public job board — every open vacancy across every hotel on DineAI, in
 // the landing's cinema language. No login: guests browse, filter and apply
 // with a resume. Hotels manage everything from their Hiring page.
 
@@ -395,7 +395,7 @@ export default function CareersPage() {
       {/* nav */}
       <header className="fixed inset-x-0 top-0 z-40 border-b border-glass/10 bg-shell/85 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-4 sm:px-6">
-          <Link href="/" aria-label="Mise home">
+          <Link href="/" aria-label="DineAI home">
             <Brand size={28} wordClassName="text-lg text-fg" />
           </Link>
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.3em] text-fg-faint sm:block">
@@ -408,7 +408,7 @@ export default function CareersPage() {
               href="/signup"
               className="block rounded-[6.5px] bg-shell px-3.5 py-2 text-[13px] font-semibold text-fg transition hover:bg-paper"
             >
-              Hiring? Run your hotel on Mise
+              Hiring? Run your hotel on DineAI
             </Link>
           </span>
         </nav>
@@ -434,7 +434,7 @@ export default function CareersPage() {
         />
         <div className="relative mx-auto max-w-6xl px-5 sm:px-6">
           <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-brand-400">
-            Careers · powered by Mise
+            Careers · powered by DineAI
           </p>
           <h1 className="mt-3 font-display text-4xl leading-[1.05] text-fg sm:text-6xl">
             Work where the{" "}
@@ -447,7 +447,7 @@ export default function CareersPage() {
             is.
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-fg-soft sm:text-base">
-            Open roles across independent hotels &amp; restaurants running on Mise — kitchens,
+            Open roles across independent hotels &amp; restaurants running on DineAI — kitchens,
             floors and front desks that take their craft (and their people) seriously.
           </p>
 
@@ -522,7 +522,7 @@ export default function CareersPage() {
             <h2 className="mt-4 font-display text-2xl text-fg">No open roles right now</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm text-fg-soft">
               Kitchens hire fast — check back soon, or tell your favourite local their hotel
-              should be running on Mise.
+              should be running on DineAI.
             </p>
           </div>
         ) : (
@@ -617,7 +617,7 @@ export default function CareersPage() {
             </p>
             <h2 className="mt-2 font-display text-3xl text-fg">Available staff to borrow</h2>
             <p className="mt-1 max-w-xl text-sm text-fg-faint">
-              Quiet week? Short-staffed? Hotels on Mise lend their people to each other.
+              Quiet week? Short-staffed? Hotels on DineAI lend their people to each other.
               Sign in to your hotel and chat directly.
             </p>
           </div>
@@ -669,7 +669,7 @@ export default function CareersPage() {
       {/* footer */}
       <footer className="border-t border-glass/10 py-8">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 text-xs text-fg-faint sm:px-6">
-          <p>© {new Date().getFullYear()} Mise · every plate, every penny</p>
+          <p>© {new Date().getFullYear()} DineAI · every plate, every penny</p>
           <Link href="/" className="transition hover:text-fg">mise for hotels →</Link>
         </div>
       </footer>

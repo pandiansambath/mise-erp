@@ -315,7 +315,7 @@ async def public_apply(
         posting.hotel_id,
         f"New applicant for {posting.title}: {application.applicant_name}",
         f"{application.applicant_name} just applied for '{posting.title}'. "
-        f"Review the application in Mise → Hiring.",
+        f"Review the application in DineAI → Hiring.",
         html=notify.render_email(
             badge="🧑‍🍳 New applicant",
             heading="Someone wants to join your team!",

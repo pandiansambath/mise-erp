@@ -1,6 +1,6 @@
 import { Logo } from "@/components/Logo";
 
-/** The one Mise lockup — emerald mark + wordmark — used on every page (landing,
+/** The one DineAI lockup — emerald mark + wordmark — used on every page (landing,
  * auth, onboarding, app) so the brand never diverges. */
 export function Brand({
   size = 28,
@@ -17,7 +17,7 @@ export function Brand({
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
       <Logo size={size} />
       {wordmark && (
-        <span className={`font-display font-semibold tracking-tight ${wordClassName}`}>Mise</span>
+        <span className={`font-display font-semibold tracking-tight ${wordClassName}`}>DineAI</span>
       )}
     </span>
   );

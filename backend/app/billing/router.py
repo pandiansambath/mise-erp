@@ -1,4 +1,4 @@
-"""Stripe billing — TEST MODE subscription for the Mise Pro plan.
+"""Stripe billing — TEST MODE subscription for the DineAI Pro plan.
 
 How the money flow works (none of it touches our servers):
   1. `/billing/checkout` asks Stripe for a hosted Checkout page and we redirect

@@ -429,7 +429,7 @@ export default function HotelSite({
         </section>
       )}
 
-      {/* ── LIVE MENU (straight from their Mise kitchen) ───────────────── */}
+      {/* ── LIVE MENU (straight from their DineAI kitchen) ───────────────── */}
       {menu.length > 0 && (
         <section className="relative z-10 px-6 pb-6">
           {/* their real dish names, drifting past */}
@@ -611,7 +611,7 @@ export default function HotelSite({
         <p className="text-xs" style={{ color: t.sub }}>
           {data.username && <span className="mr-2 font-semibold">@{data.username}</span>}
           Powered by{" "}
-          <a href="https://dineai.cloud" className="font-bold" style={{ color: t.fg }}>Mise</a>
+          <a href="https://dineai.cloud" className="font-bold" style={{ color: t.fg }}>DineAI</a>
           {" "}· every plate, every penny
         </p>
       </footer>

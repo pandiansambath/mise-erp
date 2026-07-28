@@ -1,4 +1,4 @@
-// Mise logo — a fork whose tines rise like a bar chart.
+// DineAI logo — a fork whose tines rise like a bar chart.
 // Food (the fork) + growth/analytics (ascending bars) = "the intelligence behind
 // the plate." Emerald gradient. Reads cleanly from favicon to billboard.
 
@@ -10,7 +10,7 @@ export function Logo({ size = 32, className = "" }: { size?: number; className?:
       viewBox="0 0 64 64"
       fill="none"
       role="img"
-      aria-label="Mise"
+      aria-label="DineAI"
       className={className}
       xmlns="http://www.w3.org/2000/svg"
     >

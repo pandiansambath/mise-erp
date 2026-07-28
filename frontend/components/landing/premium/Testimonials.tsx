@@ -1,7 +1,7 @@
 "use client";
 
 // Operator voices over the spice-mandala cinematic. The middle card carries
-// the AURUM exterior — the "restaurant that runs on Mise".
+// the AURUM exterior — the "restaurant that runs on DineAI".
 
 import { Reveal } from "@/components/Reveal";
 import { Aurora, SectionHead } from "./bits";
@@ -9,7 +9,7 @@ import { Aurora, SectionHead } from "./bits";
 const VOICES = [
   {
     quote:
-      "We found £700 a month hiding in six recipes. Mise paid for itself inside the first week.",
+      "We found £700 a month hiding in six recipes. DineAI paid for itself inside the first week.",
     name: "Priya N.",
     role: "Owner · The Saffron House",
     img: null,

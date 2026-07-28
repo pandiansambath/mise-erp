@@ -30,7 +30,7 @@ export default function ForgotPasswordPage() {
             <span className="mise-pop-lg mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-500/15 text-2xl">✉️</span>
             <h1 className="font-display text-2xl text-white">Check your inbox</h1>
             <p className="text-sm leading-relaxed text-slate-300">
-              If <b className="text-white">{email}</b> has a Mise account, a reset link is on its
+              If <b className="text-white">{email}</b> has a DineAI account, a reset link is on its
               way. It works for <b className="text-white">1 hour</b>.
             </p>
             <p className="text-xs text-slate-500">

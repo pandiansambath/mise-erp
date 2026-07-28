@@ -291,7 +291,7 @@ async def profit_for_range(db: AsyncSession, user: User, args: dict) -> dict:
 
 async def navigate(db: AsyncSession, user: User, args: dict) -> dict:
     """Resolve a free-text intent ('reorder', 'where do I add a supplier') to the
-    best Mise page the user can reach, with a direct link."""
+    best DineAI page the user can reach, with a direct link."""
     q = (args.get("query") or "").strip().lower()
     can = _can(user)
     visible = [p for p in PAGES if not p["perm"] or can(p["perm"])]
@@ -311,7 +311,7 @@ async def navigate(db: AsyncSession, user: User, args: dict) -> dict:
 
 
 async def explain_term(db: AsyncSession, user: User, args: dict) -> dict:
-    """Define a Mise / restaurant-finance term in plain English."""
+    """Define a DineAI / restaurant-finance term in plain English."""
     term = (args.get("term") or "").strip()
     definition = glossary_lookup(term)
     return {
@@ -470,7 +470,7 @@ TOOLS: list[dict] = [
     {
         "name": "navigate",
         "description": (
-            "Find the right Mise page for what the user wants to do, and return a "
+            "Find the right DineAI page for what the user wants to do, and return a "
             "direct link. Use for 'where do I…', 'how do I…', 'take me to…'."
         ),
         "parameters": {
@@ -487,7 +487,7 @@ TOOLS: list[dict] = [
     {
         "name": "explain_term",
         "description": (
-            "Define a restaurant-finance or Mise term (e.g. 'slow stock', 'food cost "
+            "Define a restaurant-finance or DineAI term (e.g. 'slow stock', 'food cost "
             "variance', 'margin', 'break even')."
         ),
         "parameters": {

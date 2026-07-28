@@ -1616,7 +1616,7 @@ export default function InventoryPage() {
                                       <span>Last received <b className="font-semibold text-fg-soft">{new Date(openRows[0].received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</b></span>
                                     </div>
                                     <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
-                                      Stock from different suppliers mixes into one pool — so Mise values your {fmtQty(openItem.current_stock, openItem.unit)} on hand at the weighted-average {format(openItem.average_cost)}/{openItem.unit} rather than guessing whose stock is left.
+                                      Stock from different suppliers mixes into one pool — so DineAI values your {fmtQty(openItem.current_stock, openItem.unit)} on hand at the weighted-average {format(openItem.average_cost)}/{openItem.unit} rather than guessing whose stock is left.
                                     </p>
                                     <div className="mt-3">
                                       <Link

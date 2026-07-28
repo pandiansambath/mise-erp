@@ -132,7 +132,7 @@ export default function Pricing() {
                 Start small. <em className="mise-hero-text not-italic">Grow into it.</em>
               </>
             }
-            sub="One price per property, every user included up to your plan's limit. If Mise catches one mispriced dish a day, it has already paid for itself."
+            sub="One price per property, every user included up to your plan's limit. If DineAI catches one mispriced dish a day, it has already paid for itself."
           />
         </Reveal>
 

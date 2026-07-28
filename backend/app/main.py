@@ -1,4 +1,4 @@
-"""Mise API — FastAPI application entrypoint."""
+"""DineAI API — FastAPI application entrypoint."""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

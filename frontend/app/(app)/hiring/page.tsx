@@ -1,6 +1,6 @@
 "use client";
 
-// Hiring — post vacancies to the public Mise job board (/careers) and work
+// Hiring — post vacancies to the public DineAI job board (/careers) and work
 // the applicant pipeline: NEW → SHORTLISTED → INTERVIEWED → HIRED/REJECTED,
 // with one-tap resume downloads.
 
@@ -179,7 +179,7 @@ export default function HiringPage() {
     <div>
       <PageHeader
         title="Hiring"
-        subtitle="Post vacancies to the public Mise job board and run your applicant pipeline."
+        subtitle="Post vacancies to the public DineAI job board and run your applicant pipeline."
       />
 
       {/* vitals + the public-board link */}
@@ -425,7 +425,7 @@ function LendStaffSection({ canWrite }: { canWrite: boolean }) {
         <div>
           <h3 className="font-semibold text-fg">🤝 Lend staff to other hotels</h3>
           <p className="mt-0.5 text-sm text-fg-faint">
-            Quiet week? Post a free team member — other Mise hotels see them on the public
+            Quiet week? Post a free team member — other DineAI hotels see them on the public
             Careers board and message you directly. Their chat with you is saved forever.
           </p>
         </div>

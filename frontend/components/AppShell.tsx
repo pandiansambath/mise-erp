@@ -163,7 +163,7 @@ function UserMenu() {
       {open && (
         <div className="mise-pop absolute right-0 z-40 mt-2 w-60 overflow-hidden rounded-xl border border-glass/10 bg-paper-2/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl">
           <div className="border-b border-glass/10 px-3 py-2.5">
-            <p className="truncate text-sm font-semibold text-fg">{hotel?.name ?? "Mise"}</p>
+            <p className="truncate text-sm font-semibold text-fg">{hotel?.name ?? "DineAI"}</p>
             <p className="mt-0.5 truncate text-xs text-fg-soft">{user?.email}</p>
             {role && (
               <span className="mt-1.5 inline-block rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-300">
@@ -213,7 +213,7 @@ function Brand() {
         <Logo size={32} />
       )}
       <span className="max-w-[9rem] truncate font-display text-lg font-semibold tracking-tight text-fg">
-        {hotel?.has_logo ? hotel.name : "Mise"}
+        {hotel?.has_logo ? hotel.name : "DineAI"}
       </span>
     </div>
   );
@@ -617,7 +617,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="mt-1 block h-0.5 w-5 bg-current" />
             <span className="mt-1 block h-0.5 w-5 bg-current" />
           </button>
-          <h1 className="font-display text-sm font-semibold text-fg lg:hidden">Mise</h1>
+          <h1 className="font-display text-sm font-semibold text-fg lg:hidden">DineAI</h1>
           {/* ⌘K search — a well that invites the finger */}
           <button
             type="button"
@@ -647,7 +647,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* pb is generous so the floating "Ask Mise" launcher (bottom-right) never
+        {/* pb is generous so the floating "Ask DineAI" launcher (bottom-right) never
             covers a page's last action button. */}
         <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8">
           <ImpersonationBanner />

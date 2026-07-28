@@ -89,7 +89,7 @@ async def export_logs_pdf(
     hotel = await db.get(Hotel, user.hotel_id)
     logs = await service.list_logs(db, user.hotel_id, date_from, date_to)
     data = safety_pdf.safety_log_pdf(
-        hotel.name if hotel else "Mise", date_from or "", date_to or "", logs
+        hotel.name if hotel else "DineAI", date_from or "", date_to or "", logs
     )
     return Response(
         content=data, media_type="application/pdf",

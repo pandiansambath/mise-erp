@@ -173,7 +173,7 @@ function MessagesInner() {
     <div>
       <PageHeader
         title="Messages"
-        subtitle="Chat with other Mise hotels about lending & hiring staff. Every message is saved."
+        subtitle="Chat with other DineAI hotels about lending & hiring staff. Every message is saved."
       />
       <div className="mise-feel grid h-[70vh] grid-cols-1 overflow-hidden rounded-2xl border border-line bg-paper sm:grid-cols-[300px_1fr]">
         {/* chat list */}

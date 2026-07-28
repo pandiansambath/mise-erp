@@ -35,7 +35,7 @@ class User(Base):
     preferred_name: Mapped[str | None] = mapped_column(String(60))
     role: Mapped[str] = mapped_column(String(50), nullable=False, default=Role.STAFF.value)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # The Mise operator (us) — a cross-tenant super-flag that unlocks the platform
+    # The DineAI operator (us) — a cross-tenant super-flag that unlocks the platform
     # Control Room (manage ALL hotels). False for every normal hotel user.
     is_platform_owner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Stamped on every successful login — staff visibility + hotel health.

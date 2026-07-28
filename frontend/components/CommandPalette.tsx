@@ -237,7 +237,7 @@ export default function CommandPalette({
           <div className="flex items-center gap-3 border-t border-line px-4 py-2 text-[10px] text-fg-faint">
             <span><kbd className="font-mono">↑↓</kbd> navigate</span>
             <span><kbd className="font-mono">↵</kbd> run</span>
-            <span className="ml-auto font-mono tracking-wide">MISE</span>
+            <span className="ml-auto font-mono tracking-wide">DINEAI</span>
           </div>
         </div>
       </div>

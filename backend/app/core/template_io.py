@@ -95,7 +95,7 @@ def template_xlsx(spec: TemplateSpec) -> bytes:
     headers = [f"{h} *" if h in req else h for h in spec.headers()]
     right = {i for i, c in enumerate(spec.columns, start=1) if c.kind == "number"}
     style_table(
-        ws, title=f"Mise — {spec.name} template",
+        ws, title=f"DineAI — {spec.name} template",
         subtitle=spec.subtitle or "Fill the rows, keep the headers, then upload. * = required.",
         headers=headers, n_rows=max(len(spec.sample_rows), 1),
         widths=[max(12, len(h) + 4) for h in headers], right_cols=right,

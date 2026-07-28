@@ -813,7 +813,7 @@ export default function RecipesPage() {
                   </label>
                 </div>
                 <p className="-mt-1 text-[11px] text-fg-faint">
-                  Snap your chef&apos;s handwritten list — Mise reads it, matches each line to an
+                  Snap your chef&apos;s handwritten list — DineAI reads it, matches each line to an
                   inventory item, and lets you review before adding. Nothing is added until you confirm.
                 </p>
                 {noteMsg && <p className="text-xs text-fg-soft">{noteMsg}</p>}

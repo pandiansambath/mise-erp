@@ -1,6 +1,6 @@
 "use client";
 
-// The Mise chef — a cinematic 3D-render maître in a breathing medallion.
+// The DineAI chef — a cinematic 3D-render maître in a breathing medallion.
 // 10 poses live in /public/chef/*.webp (docs/CHEF_PROMPTS.md). Pose changes
 // don't jump: the outgoing render blurs and swells, the incoming one arrives
 // through a kitchen-steam puff — like he moved while the steam rolled past.

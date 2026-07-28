@@ -51,7 +51,7 @@ async def quote_pdf(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quote not found")
     hotel = await db.get(Hotel, user.hotel_id)
     data = recipe_pdf.party_quote_pdf(
-        hotel.name if hotel else "Mise",
+        hotel.name if hotel else "DineAI",
         q.customer or "",
         str(q.event_date) if q.event_date else "",
         q.currency,

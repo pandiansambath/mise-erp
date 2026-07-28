@@ -52,7 +52,7 @@ _ITEM_COLS = [
 def items_to_csv(items, suppliers: dict | None = None) -> bytes:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Mise — Inventory stock valuation"])
+    w.writerow(["DineAI — Inventory stock valuation"])
     w.writerow([])
     w.writerow(_ITEM_COLS)
     total = Decimal("0")
@@ -111,7 +111,7 @@ def items_to_xlsx(items, suppliers: dict | None = None) -> bytes:
         ws.cell(row=r, column=11, value="active" if it.is_active else "archived")
         r += 1
     style_table(
-        ws, title="Mise — Inventory stock valuation", headers=_ITEM_COLS, n_rows=len(items),
+        ws, title="DineAI — Inventory stock valuation", headers=_ITEM_COLS, n_rows=len(items),
         widths=[26, 16, 10, 8, 10, 12, 15, 16, 22, 18, 10], right_cols={3, 5, 6, 7, 8, 9},
     )
     total_row(
@@ -132,8 +132,8 @@ _WASTE_COLS = ["Date", "Item", "Qty", "Unit", "Unit cost", "Value", "Reason"]
 
 def _title(date_from: date_type | None, date_to: date_type | None) -> str:
     if date_from and date_to:
-        return f"Mise — Waste log ({date_from} to {date_to})"
-    return "Mise — Waste log"
+        return f"DineAI — Waste log ({date_from} to {date_to})"
+    return "DineAI — Waste log"
 
 
 def _wdate(created) -> str:

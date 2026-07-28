@@ -1,4 +1,4 @@
-"""What the Copilot KNOWS about Mise — the grounding that makes a generic model
+"""What the Copilot KNOWS about DineAI — the grounding that makes a generic model
 feel custom-trained on our product.
 
 Three things:
@@ -69,7 +69,7 @@ GLOSSARY: dict[str, str] = {
     "out of stock": "An item with zero (or effectively zero) quantity on hand. Reorder it on the Purchasing page.",
     "slow stock": "Slow-moving stock — items sitting in inventory that you're barely using or selling. Money is tied up in them and they risk spoiling (waste). Spot them by looking for high stock value with little movement on Inventory/Stock-take, and watch the Waste page for what's being thrown away.",
     "slow moving stock": "Same as slow stock — inventory that turns over slowly, tying up cash and risking spoilage.",
-    "weighted average cost": "When you buy the same item at different prices over time, Mise blends them into one average cost weighted by quantity. Every recipe using that item re-prices automatically as new deliveries arrive — so dish costs always reflect what you actually paid.",
+    "weighted average cost": "When you buy the same item at different prices over time, DineAI blends them into one average cost weighted by quantity. Every recipe using that item re-prices automatically as new deliveries arrive — so dish costs always reflect what you actually paid.",
     "average cost": "The blended (weighted-average) unit cost of an item across your purchases. Used to value stock and cost recipes.",
     "margin": "Profit as a percentage of the selling price. For a dish: (selling price − cost to make) ÷ selling price. Higher is better; thin margins mean a dish barely earns.",
     "profit margin": "See margin — for a dish it's (selling price − cost) ÷ selling price, shown per recipe on the Recipes page.",
@@ -78,7 +78,7 @@ GLOSSARY: dict[str, str] = {
     "gross profit": "Net sales minus the cost of sales (variable/food costs). What's left to cover fixed costs and profit.",
     "net profit": "What's actually left after ALL costs — gross profit minus operating (fixed) expenses like rent, utilities and salaries.",
     "net sales": "Sales after deducting delivery-app commission — the revenue you actually keep before costs.",
-    "commission": "The cut a delivery platform (e.g. a food-delivery app) takes from each order. Mise nets it off gross sales to give net sales.",
+    "commission": "The cut a delivery platform (e.g. a food-delivery app) takes from each order. DineAI nets it off gross sales to give net sales.",
     "break even": "The level of sales at which profit is exactly zero — you've covered all costs but earned nothing yet. Above it you're in profit. Shown on the Money page with how far off you are.",
     "indent": "A purchase request — the list of what the kitchen needs to buy. You raise an indent first, then turn it into purchase orders to suppliers. Lives on the Purchasing page.",
     "purchase order": "A PO — a formal order sent to one supplier for specific items and quantities, at their prices. Created from an indent on Purchasing; receiving it adds the stock in.",
@@ -92,8 +92,8 @@ GLOSSARY: dict[str, str] = {
     "plowhorse": "A menu-engineering class: a popular dish with a thin margin — consider a small price rise or a cheaper recipe tweak.",
     "puzzle": "A menu-engineering class: a high-margin dish that few people order — promote it or reposition it on the menu.",
     "dog": "A menu-engineering class: a dish that sells little AND earns little — a candidate to drop or rework.",
-    "allergens": "The 14 legally-declarable allergens. In Mise you tag them on an ingredient/stock item and every dish using it inherits them, giving a per-dish allergen list (Natasha's Law). See the Allergens page.",
-    "natasha's law": "UK law requiring full ingredient + allergen labelling on pre-packed-for-direct-sale food. Mise's Allergens page gives the per-dish allergen breakdown.",
+    "allergens": "The 14 legally-declarable allergens. In DineAI you tag them on an ingredient/stock item and every dish using it inherits them, giving a per-dish allergen list (Natasha's Law). See the Allergens page.",
+    "natasha's law": "UK law requiring full ingredient + allergen labelling on pre-packed-for-direct-sale food. DineAI's Allergens page gives the per-dish allergen breakdown.",
     "labour percentage": "Staff cost as a % of net sales — a key efficiency number. Projected on the Rota page from planned shifts.",
     "stock value": "The total money tied up in your current stock, valued at weighted-average cost. Shown on the Money page, broken down by category.",
     "p&l": "Profit & loss — the statement of sales minus costs down to net profit, for a date range. See the Reports page.",
@@ -111,7 +111,7 @@ GLOSSARY: dict[str, str] = {
     "average spend": "Average sales value per customer/cover — total sales ÷ covers. A lever for revenue alongside footfall.",
     "contribution margin": "The % of each sale left after variable (food) costs — it pays your fixed costs and then profit. Higher = you reach break-even sooner. Shown on the Money page.",
     "theoretical food cost": "What your dishes SHOULD cost based on recipes (costed to the gram). Compared to ACTUAL food cost (what you really spent) to reveal variance — waste, over-portioning or theft.",
-    "vat": "Value Added Tax (UK, usually 20% on eligible sales). Expense amounts in Mise are gross (incl VAT); you can note a VAT amount on an expense.",
+    "vat": "Value Added Tax (UK, usually 20% on eligible sales). Expense amounts in DineAI are gross (incl VAT); you can note a VAT amount on an expense.",
     "petty cash": "Small ad-hoc cash spends — cash given to staff, or something bought outside. Log it as a cash Expense (there's a one-tap 'Petty cash' button) so it reduces your profit correctly.",
     "gross profit margin": "Gross profit ÷ net sales, as a %. What's left after food/variable costs, before fixed costs. Watched alongside food-cost %.",
     "party order": "A bulk/catering order priced from your recipes — see the Party Order page: enter dishes + quantities and it shows the total price, cost, profit and margin.",
@@ -124,7 +124,7 @@ HOWTOS: dict[str, str] = {
     "record an expense": "Expenses → Add expense (amount, category, date). Or say e.g. 'gas bill £120 today' and I'll prepare it.",
     "record sales / takings": "Sales & Cash → pick the day and enter takings by channel. Or tell me the amount and channel and I'll draft it.",
     "reorder / buy stock": "Purchasing — raise an indent (what you need), then a purchase order to your chosen supplier; receiving it adds the stock back in.",
-    "do a stock-take": "Stock-take — enter your physical count next to each item; Mise shows the variance vs the system (shrinkage).",
+    "do a stock-take": "Stock-take — enter your physical count next to each item; DineAI shows the variance vs the system (shrinkage).",
     "cost a dish / check margins": "Recipes — each dish is costed to the gram from live ingredient prices, with its selling price and margin.",
     "see profit / P&L": "Reports for a full P&L over any date range (PDF export); Money for live profit, food-cost % and break-even.",
     "log waste": "Waste — record spoilage/spillage/over-prep; it values the loss at average cost.",
@@ -140,7 +140,7 @@ HOWTOS: dict[str, str] = {
 }
 
 PERSONA = (
-    "You are Mise Copilot, the built-in assistant for Mise — a restaurant ERP whose "
+    "You are DineAI Copilot, the built-in assistant for DineAI — a restaurant ERP whose "
     "tagline is 'every plate, every penny'. You help the owner and staff of ONE "
     "restaurant understand the app and their numbers, and you can DO things for them.\n\n"
     "Scope & safety:\n"
@@ -169,7 +169,7 @@ PERSONA = (
     "• For 'where/how do I…', name the page and use the navigate action to give a direct "
     "link; point them to the exact place to act (e.g. Purchasing to reorder).\n"
     "• Don't push pages the user lacks permission for. If a feature doesn't exist, say so "
-    "honestly. Keep focused on Mise and running the restaurant.\n\n"
+    "honestly. Keep focused on DineAI and running the restaurant.\n\n"
     "Be FLEXIBLE — this matters a lot:\n"
     "• ACT on what the user wants. Take their own words and run with them — do NOT make "
     "them pick from a list or re-state something they already told you.\n"

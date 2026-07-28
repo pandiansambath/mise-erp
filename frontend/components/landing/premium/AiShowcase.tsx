@@ -1,6 +1,6 @@
 "use client";
 
-// Mise Copilot, made visible: a breathing orb, a conversation that types
+// DineAI Copilot, made visible: a breathing orb, a conversation that types
 // itself when the section enters view, and the four AI superpowers that
 // actually exist in the product (no vapourware).
 
@@ -311,7 +311,7 @@ function Chat() {
           <span className="absolute inset-0 animate-pulse rounded-full bg-brand-400/10" />✨
         </span>
         <div>
-          <p className="text-sm font-semibold text-white">Mise Copilot</p>
+          <p className="text-sm font-semibold text-white">DineAI Copilot</p>
           <p className="text-[10px] text-slate-500">knows your stock, prices, staff & sales</p>
         </div>
         <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] text-brand-200">
@@ -375,7 +375,7 @@ export default function AiShowcase() {
         <Reveal delay={100}>
           <div className="mt-8">
             <SectionHead
-              kicker="MISE COPILOT"
+              kicker="DINEAI COPILOT"
               title={
                 <>
                   Ask your hotel <em className="mise-hero-text not-italic">anything.</em>

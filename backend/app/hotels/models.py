@@ -35,7 +35,7 @@ class Hotel(Base):
     min_hourly_rate: Mapped[Decimal] = mapped_column(
         Numeric(8, 2), nullable=False, default=Decimal("11.44")
     )
-    # Uploaded brand logo (storage key). When set, replaces the default Mise mark.
+    # Uploaded brand logo (storage key). When set, replaces the default DineAI mark.
     logo_key: Mapped[str | None] = mapped_column(String(255))
     # Per-hotel feature entitlements (key -> bool). Missing key = default (enabled).
     # Managed by the platform operator from the Control Room.

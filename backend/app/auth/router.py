@@ -59,7 +59,7 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
     if not hotel.is_active and not getattr(user, "is_platform_owner", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This account is suspended. Contact Mise support.",
+            detail="This account is suspended. Contact DineAI support.",
         )
     if not user.email_verified and not getattr(user, "is_platform_owner", False):
         raise HTTPException(
@@ -75,8 +75,8 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         await db.commit()
         await notify.send_email(
             user.email,
-            f"{user.otp_code} is your Mise sign-in code",
-            f"Your Mise sign-in code is {user.otp_code}. It expires in 10 minutes. "
+            f"{user.otp_code} is your DineAI sign-in code",
+            f"Your DineAI sign-in code is {user.otp_code}. It expires in 10 minutes. "
             "If this wasn't you, change your password.",
             html=notify.render_email(
                 badge="🔐 Two-step sign-in",
@@ -108,8 +108,8 @@ async def _security_login_alert(user: User) -> None:
     notify.fire(
         notify.send_email(
             user.email,
-            "New sign-in to your Mise account",
-            f"Your Mise account was signed in at {when}. If this wasn't you, "
+            "New sign-in to your DineAI account",
+            f"Your DineAI account was signed in at {when}. If this wasn't you, "
             "reset your password immediately.",
             html=notify.render_email(
                 badge="🛡️ Security",
@@ -207,10 +207,10 @@ async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_
     verify_url = f"{settings.app_base_url}/verify-email?token={user.verify_token}"
     await notify.send_email(
         payload.email,
-        f"Welcome to Mise, {hotel.name} — confirm your email to open ✉️",
-        f"Welcome to Mise, {hotel.name}! Confirm your email to open your kitchen: {verify_url}",
+        f"Welcome to DineAI, {hotel.name} — confirm your email to open ✉️",
+        f"Welcome to DineAI, {hotel.name}! Confirm your email to open your kitchen: {verify_url}",
         html=notify.render_email(
-            badge="🎉 Welcome to Mise",
+            badge="🎉 Welcome to DineAI",
             heading=f"One click and you're in, {hotel.name}",
             intro=(
                 "Great restaurants run on great numbers — and yours are about to get "
@@ -218,13 +218,13 @@ async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_
                 "all in one place. Confirm this is your email and your kitchen opens "
                 "immediately."
             ),
-            footnote="Didn't sign up to Mise? You can safely ignore this email.",
+            footnote="Didn't sign up to DineAI? You can safely ignore this email.",
             rows=[
                 ("Restaurant", hotel.name),
                 ("Owner login", payload.email),
                 ("Currency", hotel.base_currency),
             ],
-            cta_label="Confirm email & open Mise",
+            cta_label="Confirm email & open DineAI",
             cta_url=verify_url,
         ),
     )
@@ -405,15 +405,15 @@ async def resend_verification(payload: EmailOnly, db: AsyncSession = Depends(get
         verify_url = f"{settings.app_base_url}/verify-email?token={user.verify_token}"
         await notify.send_email(
             user.email,
-            "Your Mise verification link ✉️",
-            f"Confirm your email to open Mise: {verify_url}",
+            "Your DineAI verification link ✉️",
+            f"Confirm your email to open DineAI: {verify_url}",
             html=notify.render_email(
                 badge="✉️ Verification link",
                 heading="Here's that link again",
-                intro="One click confirms your email and opens your Mise kitchen — "
+                intro="One click confirms your email and opens your DineAI kitchen — "
                 "your inventory, recipes and live P&L are waiting.",
                 footnote="Didn't request this? You can safely ignore it.",
-                cta_label="Confirm email & open Mise",
+                cta_label="Confirm email & open DineAI",
                 cta_url=verify_url,
             ),
         )
@@ -431,7 +431,7 @@ async def forgot_password(payload: EmailOnly, db: AsyncSession = Depends(get_db)
         reset_url = f"{settings.app_base_url}/reset-password?token={user.reset_token}"
         await notify.send_email(
             user.email,
-            "Reset your Mise password 🔑",
+            "Reset your DineAI password 🔑",
             f"Choose a new password (link valid for 1 hour): {reset_url}",
             html=notify.render_email(
                 badge="🔑 Password reset",

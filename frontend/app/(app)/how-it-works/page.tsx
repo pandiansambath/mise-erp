@@ -2,7 +2,7 @@
 
 // "How it works" — the in-app guide. Each topic: a plain explanation, the REAL
 // formula, a worked example, an interactive "see it live" mini-simulation you can
-// play with, and a per-topic "Ask Mise" that opens the Copilot pre-asked.
+// play with, and a per-topic "Ask DineAI" that opens the Copilot pre-asked.
 import { useState } from "react";
 import { Card, PageHeader } from "@/components/ui";
 import { askMise } from "@/lib/copilot";
@@ -263,7 +263,7 @@ function Topic({ icon, title, tag, ask, sim, q = "", keywords = "", children }: 
           onClick={() => askMise(ask)}
           className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft"
         >
-          ✨ Still unsure? Ask Mise
+          ✨ Still unsure? Ask DineAI
         </button>
       </div>
       {sim && open && (
@@ -279,7 +279,7 @@ export default function HowItWorksPage() {
     <div>
       <PageHeader
         title="How it works"
-        subtitle="Every number in Mise, in plain English — the real formula, a worked example, and a live demo you can play with. Stuck on anything? tap “Ask Mise”."
+        subtitle="Every number in DineAI, in plain English — the real formula, a worked example, and a live demo you can play with. Stuck on anything? tap “Ask DineAI”."
       />
 
       <div className="mt-5 flex items-center gap-4">
@@ -301,7 +301,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="roles permissions who can see access manager staff kitchen accountant cashier rider login accounts"
           icon="👥" title="Roles — who can see what" tag="Team"
-          ask="Explain the difference between the roles in Mise and what each one can access, with examples."
+          ask="Explain the difference between the roles in DineAI and what each one can access, with examples."
         >
           <p>
             Every login you create (in <b>Staff</b>) carries a role, and the role decides which
@@ -350,12 +350,12 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="stock average price blend cost"
           icon="📦" title="Inventory — weighted-average cost" tag="Inventory"
-          ask="In simple words, how is weighted-average cost calculated in Mise? Give a quick example."
+          ask="In simple words, how is weighted-average cost calculated in DineAI? Give a quick example."
           sim={<WeightedAvgSim />}
         >
           <p>
             When you buy the same item at different prices over time, your stock is a <b>mix</b> — you can&apos;t
-            tell which physical unit is from which delivery. So Mise blends them into <b>one average cost,
+            tell which physical unit is from which delivery. So DineAI blends them into <b>one average cost,
             weighted by quantity</b>. Every recipe using that item re-prices automatically as new stock arrives.
           </p>
           <Formula>new avg = (old qty × old avg + bought qty × buy price) ÷ (old qty + bought qty)</Formula>
@@ -367,7 +367,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="supplier vendor price today shelf"
           icon="🏷️" title="Avg cost vs Current buy price" tag="Inventory"
-          ask="What's the difference between average cost and current buy price in Mise?"
+          ask="What's the difference between average cost and current buy price in DineAI?"
         >
           <p>
             <b>Avg cost</b> = what your stock <i>on hand</i> cost you (the blend above) — it values what&apos;s on the
@@ -383,12 +383,12 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="dish gp gross profit plate selling"
           icon="🍲" title="Recipes — cost, margin & food cost %" tag="Recipes"
-          ask="How does Mise work out a dish's cost, margin and food-cost %? Give an example."
+          ask="How does DineAI work out a dish's cost, margin and food-cost %? Give an example."
           sim={<MarginSim />}
         >
           <p>
             A dish&apos;s cost is the sum of each ingredient&apos;s <b>quantity × price</b> (using your chosen
-            supplier&apos;s price, else the average cost). Set a selling price and Mise shows your profit and margins.
+            supplier&apos;s price, else the average cost). Set a selling price and DineAI shows your profit and margins.
           </p>
           <Formula>
             dish cost = Σ(ingredient qty × price) · profit = price − cost<br />
@@ -414,7 +414,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="pnl net gross revenue bottom line"
           icon="📈" title="Reports — Profit &amp; Loss" tag="Reports (P&L)"
-          ask="Explain the P&L in Mise — net sales, cost of sales, gross and net profit — with an example."
+          ask="Explain the P&L in DineAI — net sales, cost of sales, gross and net profit — with an example."
           sim={<PnlSim />}
         >
           <p>
@@ -432,7 +432,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="difference sections takings spend"
           icon="🧭" title="Sales &amp; Cash vs Expenses vs Money" tag="Where things live"
-          ask="What's the difference between the Sales & Cash, Expenses, and Money sections in Mise?"
+          ask="What's the difference between the Sales & Cash, Expenses, and Money sections in DineAI?"
         >
           <p><b>Sales &amp; Cash</b> — money coming <b>in</b>: daily takings by channel (dine-in, delivery apps…), card vs cash, and the end-of-day cash count.</p>
           <p><b>Expenses</b> — money going <b>out</b>: bills and purchases by category (rent, gas, packaging…), fixed vs variable, plus petty cash.</p>
@@ -442,7 +442,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="order po receive supplier delivery"
           icon="🛒" title="Purchasing — indents &amp; deliveries" tag="Purchasing"
-          ask="How does purchasing work in Mise — indents, ordering and receiving stock?"
+          ask="How does purchasing work in DineAI — indents, ordering and receiving stock?"
         >
           <p>
             Raise an <b>indent</b> (a shopping list) for a supplier, send/record the order, and when it arrives
@@ -454,7 +454,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="wages salary pay run weekly monthly advance payslip"
           icon="💷" title="Payroll — monthly &amp; weekly runs" tag="Payroll"
-          ask="How does payroll work in Mise — monthly vs weekly runs, hourly vs salaried, and advances?"
+          ask="How does payroll work in DineAI — monthly vs weekly runs, hourly vs salaried, and advances?"
           sim={<PaySim />}
         >
           <p>
@@ -472,7 +472,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="clock in out break overnight hours punch 12h 30m"
           icon="⏱️" title="Attendance — how hours are counted" tag="Attendance"
-          ask="How does Mise calculate attendance hours, including breaks and overnight shifts?"
+          ask="How does DineAI calculate attendance hours, including breaks and overnight shifts?"
           sim={<HoursSim />}
         >
           <p>
@@ -487,7 +487,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="cover costs fixed contribution minimum sales"
           icon="⚖️" title="Break-even — the sales you must hit" tag="Money"
-          ask="What is break-even and how does Mise calculate my break-even sales?"
+          ask="What is break-even and how does DineAI calculate my break-even sales?"
           sim={<BreakEvenSim />}
         >
           <p>
@@ -502,7 +502,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="bin spoiled leak spillage over-prep double count"
           icon="🗑️" title="Waste — a leak, not a second cost" tag="Money"
-          ask="How does waste logging work in Mise and why isn't it subtracted from profit twice?"
+          ask="How does waste logging work in DineAI and why isn't it subtracted from profit twice?"
         >
           <p>
             Logging waste removes the stock and shows the <b>£ value you binned</b>. It is <i>not</i> subtracted from
@@ -515,10 +515,10 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="stars dogs plowhorse puzzle popularity menu promote cut"
           icon="⭐" title="Menu engineering — stars &amp; dogs" tag="Money"
-          ask="Explain menu engineering in Mise — stars, plowhorses, puzzles and dogs."
+          ask="Explain menu engineering in DineAI — stars, plowhorses, puzzles and dogs."
         >
           <p>
-            Record <b>dishes sold</b> and Mise crosses each dish&apos;s <b>popularity</b> with its <b>margin</b>:
+            Record <b>dishes sold</b> and DineAI crosses each dish&apos;s <b>popularity</b> with its <b>margin</b>:
             ⭐ <b>Stars</b> (popular + high margin — promote them), 🐎 <b>Plowhorses</b> (popular, thin margin — re-price
             or re-cost), 🧩 <b>Puzzles</b> (great margin, few sales — reposition on the menu), 🐕 <b>Dogs</b> (neither — cut).
           </p>
@@ -527,7 +527,7 @@ export default function HowItWorksPage() {
         <Topic
           q={q} keywords="count variance missing shrinkage correct system"
           icon="📋" title="Stock-take — counted vs system" tag="Inventory"
-          ask="How does a stock-take work in Mise and what does the variance mean?"
+          ask="How does a stock-take work in DineAI and what does the variance mean?"
           sim={<StockTakeSim />}
         >
           <p>
@@ -541,7 +541,7 @@ export default function HowItWorksPage() {
 
       <Card className="mt-5 border-brand-500/20 bg-brand-500/5">
         <p className="text-sm text-fg-soft">
-          Still can&apos;t find what you need? Open <b className="text-brand-300">Ask Mise</b> (bottom-right on any
+          Still can&apos;t find what you need? Open <b className="text-brand-300">Ask DineAI</b> (bottom-right on any
           page) and ask in your own words — it knows your live numbers and this whole guide.
         </p>
       </Card>

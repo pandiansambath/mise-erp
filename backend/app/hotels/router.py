@@ -47,7 +47,7 @@ async def upload_logo(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("hotel:config")),
 ) -> HotelOut:
-    """Upload the hotel's brand logo (PNG/JPG). Replaces the default Mise mark in the
+    """Upload the hotel's brand logo (PNG/JPG). Replaces the default DineAI mark in the
     app UI and on PDFs. Stored in S3/local; served publicly from /hotels/{id}/logo."""
     ext = _LOGO_TYPES.get((file.content_type or "").lower())
     if ext is None:
@@ -75,7 +75,7 @@ async def delete_logo(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("hotel:config")),
 ) -> HotelOut:
-    """Remove the hotel logo — reverts to the default Mise mark everywhere."""
+    """Remove the hotel logo — reverts to the default DineAI mark everywhere."""
     hotel = await db.get(Hotel, user.hotel_id)
     if hotel.logo_key:
         try:

@@ -1,6 +1,6 @@
 "use client";
 
-// The Mise landing experience — composition root.
+// The DineAI landing experience — composition root.
 //
 //   cinema hero (dish → live dashboard) → trust strip → three-beat story →
 //   product tour → Copilot → reports → pricing → operators → dawn CTA
@@ -147,7 +147,7 @@ function Nav() {
       }`}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-6">
-        <Link href="/" aria-label="Mise home">
+        <Link href="/" aria-label="DineAI home">
           <Brand size={28} wordClassName="text-lg text-white" />
         </Link>
         <div className="hidden items-center gap-7 text-sm text-slate-400 md:flex">
@@ -224,7 +224,7 @@ function TrustStrip() {
             </p>
             <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] text-slate-500 sm:text-sm">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
-              tracked through Mise today
+              tracked through DineAI today
             </p>
           </div>
         </Reveal>
@@ -298,7 +298,7 @@ function Footer() {
           </div>
         </div>
         <div className="mt-10 flex flex-col items-start justify-between gap-3 border-t border-white/5 pt-6 sm:flex-row sm:items-center">
-          <p className="text-xs text-slate-600">© {new Date().getFullYear()} Mise · made for independent operators</p>
+          <p className="text-xs text-slate-600">© {new Date().getFullYear()} DineAI · made for independent operators</p>
           <p className="font-mono text-[11px] tracking-[0.25em] text-slate-600">EVERY PLATE · EVERY PENNY</p>
         </div>
       </div>
@@ -417,7 +417,7 @@ export default function PremiumLanding() {
       >
         <div className="flex w-56 flex-col items-center">
           <Logo size={48} className="mise-pop-lg" />
-          <p className="mt-4 font-display text-3xl text-white">Mise</p>
+          <p className="mt-4 font-display text-3xl text-white">DineAI</p>
           <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.3em] text-copper-300/80">
             Every plate · Every penny
           </p>

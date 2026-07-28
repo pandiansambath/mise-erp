@@ -101,12 +101,12 @@ async def _mark_unverified_and_email(db, user, hotel_name: str | None) -> None:
     verify_url = f"{settings.app_base_url}/verify-email?token={user.verify_token}"
     await notify.send_email(
         user.email,
-        "Confirm your email to access Mise \u2709\ufe0f",
-        f"Your manager set up a Mise login for you. Confirm your email to sign in: {verify_url}",
+        "Confirm your email to access DineAI \u2709\ufe0f",
+        f"Your manager set up a DineAI login for you. Confirm your email to sign in: {verify_url}",
         html=notify.render_email(
             badge="\u2709\ufe0f Verify your email",
-            heading="One click to activate your Mise login",
-            intro="Your manager created a Mise account for you. Confirm this is your "
+            heading="One click to activate your DineAI login",
+            intro="Your manager created a DineAI account for you. Confirm this is your "
             "email and you can sign in — this keeps payslips and alerts reaching the "
             "right inbox.",
             cta_label="Confirm email & activate",
@@ -165,8 +165,8 @@ async def reset_staff_password(db, emp: Employee, new_password: str) -> None:
     await db.commit()
     await notify.send_email(
         u.email,
-        "Your Mise password was changed \ud83d\udd11",
-        "Your manager set a new password on your Mise account. Ask them for it, or "
+        "Your DineAI password was changed \ud83d\udd11",
+        "Your manager set a new password on your DineAI account. Ask them for it, or "
         f"reset it yourself: {settings.app_base_url}/forgot-password",
         html=notify.render_email(
             badge="\ud83d\udd11 Password changed",

@@ -15,7 +15,7 @@ const NAME_KEY = "mise.user.name";
 
 // Steps: a warm intro that learns your name, then the master-data imports.
 const STEPS = [
-  { key: "welcome", title: "Welcome to Mise" },
+  { key: "welcome", title: "Welcome to DineAI" },
   { key: "items", title: "Your stock items" },
   { key: "vendors", title: "Your suppliers" },
   { key: "recipes", title: "Your menu" },
@@ -204,7 +204,7 @@ function Welcome({
         Welcome{hotelName ? ` to ${hotelName}` : ""}.
       </h1>
       <p className="mt-3 text-white/70">
-        I&apos;m <span className="font-medium text-white">Mise Copilot</span> — I&apos;ll help you set
+        I&apos;m <span className="font-medium text-white">DineAI Copilot</span> — I&apos;ll help you set
         everything up in a couple of minutes. First, what should I call you?
       </p>
       <input
@@ -484,7 +484,7 @@ function ReviewStep({ onNext, onRestart }: { onNext: () => void; onRestart: () =
         <h2 className="mt-4 font-display text-2xl font-semibold sm:text-3xl">Nothing imported yet — and that&apos;s OK</h2>
         <p className="mt-3 text-white/70">
           You skipped the imports. You can add your items, suppliers, menu and team anytime — upload a
-          file on each page, or just tell <b>Ask Mise</b> (bottom-right). Want to import now?
+          file on each page, or just tell <b>Ask DineAI</b> (bottom-right). Want to import now?
         </p>
         <div className="mt-7 flex items-center justify-between">
           <button onClick={onNext} className="text-sm text-white/50 transition hover:text-white/80">
@@ -528,7 +528,7 @@ function ReviewStep({ onNext, onRestart }: { onNext: () => void; onRestart: () =
       </div>
 
       <p className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100/90">
-        ✨ Something not right? Tap <span className="font-semibold">Ask Mise</span> (bottom-right) <b>right now</b>
+        ✨ Something not right? Tap <span className="font-semibold">Ask DineAI</span> (bottom-right) <b>right now</b>
         and just tell it — e.g. <span className="italic">&quot;change the price of Tomato to £2&quot;</span> — and it&apos;ll
         fix it on the spot, here in setup.
       </p>

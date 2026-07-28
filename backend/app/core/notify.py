@@ -23,7 +23,7 @@ ALERT_DEFAULTS: dict[str, bool] = {
     "job_application": True,   # someone applied to one of your vacancies
     "price_rise": True,        # a supplier moved a price UP
     "low_stock": True,         # an item crossed below its minimum level
-    "broadcast": True,         # a platform (Mise HQ) announcement
+    "broadcast": True,         # a platform (DineAI HQ) announcement
     "security_login": False,   # every sign-in to your account (quiet by default)
     "new_order": True,         # a customer placed an online order
 }
@@ -139,7 +139,7 @@ def render_email(
         <tr><td style="background:linear-gradient(120deg,#065f46,#047857 40%,#0ea5e9);
             padding:30px 32px 26px;">
           <div style="color:#ffffff;font-size:24px;font-weight:800;letter-spacing:-.5px;">
-            🍽️ Mise</div>
+            🍽️ DineAI</div>
           <div style="color:#a7f3d0;font-size:12px;margin-top:3px;letter-spacing:.5px;">
             EVERY PLATE, EVERY PENNY</div>
         </td></tr>
@@ -153,12 +153,12 @@ def render_email(
         </td></tr>
         <tr><td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
           <p style="margin:0;color:#64748b;font-size:12px;line-height:1.6;">
-            You're running your kitchen the smart way — this is Mise keeping you a step ahead.
+            You're running your kitchen the smart way — this is DineAI keeping you a step ahead.
           </p>
           <p style="margin:6px 0 0;color:#94a3b8;font-size:11px;line-height:1.5;">
-            Sent by Mise, the restaurant ERP · <a href="{base_url}"
+            Sent by DineAI, the restaurant ERP · <a href="{base_url}"
             style="color:#059669;text-decoration:none;font-weight:600;">{base_host}</a>
-            · You receive these because you manage a venue on Mise — tune them any time in
+            · You receive these because you manage a venue on DineAI — tune them any time in
             Settings → Email alerts.
           </p>
         </td></tr>

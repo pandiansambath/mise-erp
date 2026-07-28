@@ -193,7 +193,7 @@ async def _fallback(
 
 def _help_text(configured: bool) -> str:
     base = (
-        "I can help you find your way around Mise and read your live numbers. "
+        "I can help you find your way around DineAI and read your live numbers. "
         "Try: “what's low on stock?”, “how much profit this month?”, "
         "“what is slow stock?”, or “where do I reorder?”."
     )

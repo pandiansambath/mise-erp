@@ -43,7 +43,7 @@ export default function HotelLandingPage() {
         <p className="text-sm text-white/50">No hotel is using the handle “{handle}”.</p>
         <a href="https://dineai.cloud"
            className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/15">
-          Go to Mise →
+          Go to DineAI →
         </a>
       </div>
     );

@@ -144,7 +144,7 @@ async def export_allergen_pdf(
     """The allergen matrix as a clean, branded PDF (server-side, not a screen-print)."""
     hotel = await db.get(Hotel, user.hotel_id)
     rows = await service.allergen_matrix(db, user.hotel_id)
-    data = recipe_pdf.allergen_pdf(hotel.name if hotel else "Mise", rows)
+    data = recipe_pdf.allergen_pdf(hotel.name if hotel else "DineAI", rows)
     return Response(
         content=data, media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="allergen-matrix.pdf"'},
@@ -174,7 +174,7 @@ async def export_party_quote_pdf(
     """Render the party-order quote as a clean, branded PDF (not a browser screen-print)."""
     hotel = await db.get(Hotel, user.hotel_id)
     data = recipe_pdf.party_quote_pdf(
-        hotel.name if hotel else "Mise", payload.customer, payload.when,
+        hotel.name if hotel else "DineAI", payload.customer, payload.when,
         payload.currency, [ln.model_dump() for ln in payload.lines],
     )
     return Response(

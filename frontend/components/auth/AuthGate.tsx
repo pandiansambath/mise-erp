@@ -182,7 +182,7 @@ function LoginForm({ active }: { active: boolean }) {
       </div>
       <div>
         <h2 className="font-display text-2xl text-white">Welcome back</h2>
-        <p className="mt-1 text-sm text-slate-300">Sign in to your Mise workspace.</p>
+        <p className="mt-1 text-sm text-slate-300">Sign in to your workspace.</p>
       </div>
       <div>
         <label htmlFor="li-email" className={authLabel}>Email</label>
@@ -229,7 +229,7 @@ function LoginForm({ active }: { active: boolean }) {
           <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-200">
             <p className="font-semibold">🔒 This restaurant&apos;s account is suspended</p>
             <p className="mt-1 text-xs text-amber-200/80">
-              Your data is safe — access is paused by the Mise team (usually billing). Email{" "}
+              Your data is safe — access is paused by our team (usually billing). Email{" "}
               <a href="mailto:support@mise.app" className="underline">support@mise.app</a> and we&apos;ll sort it out.
             </p>
           </div>
@@ -511,7 +511,7 @@ function CinePanel({ mode, onSwitch }: { mode: AuthMode; onSwitch: (m: AuthMode)
 
       <Link href="/" className="relative inline-flex items-center gap-2.5">
         <Logo size={32} />
-        <span className="font-display text-lg font-semibold tracking-tight text-white">Mise</span>
+        <span className="font-display text-lg font-semibold tracking-tight text-white">DineAI</span>
       </Link>
 
       <div className="relative">
@@ -595,7 +595,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   const switchTo = useCallback((m: AuthMode) => {
     setMode(m);
     window.history.replaceState(null, "", m === "login" ? "/login" : "/signup");
-    document.title = m === "login" ? "Sign in · Mise" : "Register your hotel · Mise";
+    document.title = m === "login" ? "Sign in · DineAI" : "Register your hotel · DineAI";
   }, []);
 
   const isLogin = mode === "login";
@@ -675,7 +675,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
         <div className="relative flex min-h-full flex-col px-4 pb-8 pt-6">
           <Link href="/" className="mb-6 flex items-center gap-2.5">
             <Logo size={38} />
-            <span className="font-display text-xl font-semibold text-white drop-shadow">Mise</span>
+            <span className="font-display text-xl font-semibold text-white drop-shadow">DineAI</span>
             <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.3em] text-slate-300 drop-shadow">
               Every plate · Every penny
             </span>

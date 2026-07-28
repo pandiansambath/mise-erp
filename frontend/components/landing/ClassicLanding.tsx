@@ -377,7 +377,7 @@ function Preloader({ leaving, onCounted }: { leaving: boolean; onCounted: () => 
       <div className="mise-loader-front absolute inset-0 flex flex-col bg-ink-950">
         <div className="mise-loader-content flex flex-1 flex-col items-center justify-center px-6">
           <Logo size={56} />
-          <p className="mt-6 font-display text-5xl text-white sm:text-6xl">Mise</p>
+          <p className="mt-6 font-display text-5xl text-white sm:text-6xl">DineAI</p>
           <p className="mise-loader-tag mt-4 font-mono text-[10px] uppercase text-brand-200/80 sm:text-xs">
             Every plate · Every penny
           </p>
@@ -709,7 +709,7 @@ export default function ClassicLanding() {
         <div className="fixed inset-0 z-[60] grid place-items-center bg-ink-950" aria-hidden>
           <div className="flex flex-col items-center">
             <Logo size={56} />
-            <p className="mt-6 font-display text-5xl text-white sm:text-6xl">Mise</p>
+            <p className="mt-6 font-display text-5xl text-white sm:text-6xl">DineAI</p>
           </div>
         </div>
       )}
@@ -725,13 +725,13 @@ export default function ClassicLanding() {
         <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-2.5">
             <Logo size={32} />
-            <span className="text-lg font-semibold tracking-tight">Mise</span>
+            <span className="text-lg font-semibold tracking-tight">DineAI</span>
           </div>
           <div className="hidden items-center gap-7 text-sm text-slate-400 md:flex">
             <a href="#how-it-works" className="transition hover:text-white">How it works</a>
             <a href="#modules" className="transition hover:text-white">Modules</a>
             <a href="#pricing" className="transition hover:text-white">Pricing</a>
-            <a href="#why" className="transition hover:text-white">Why Mise</a>
+            <a href="#why" className="transition hover:text-white">Why DineAI</a>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-3">
             <Link href="/login" className="whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium text-slate-300 transition hover:text-white sm:px-3">
@@ -778,7 +778,7 @@ export default function ClassicLanding() {
               </div>
               <div {...enter(2)}>
                 <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
-                  Mise is the operating system for your restaurant — recipes costed to the gram,
+                  DineAI is the operating system for your restaurant — recipes costed to the gram,
                   stock and purchasing in lockstep, payroll done properly, and a live P&amp;L that
                   tells you what you <span className="font-semibold text-copper-200">actually kept</span>.
                 </p>
@@ -1101,7 +1101,7 @@ export default function ClassicLanding() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-10 text-sm text-slate-500 sm:flex-row">
           <div className="flex items-center gap-2">
             <Logo size={24} />
-            <span className="font-medium text-slate-300">Mise</span>
+            <span className="font-medium text-slate-300">DineAI</span>
             <span className="hidden sm:inline">— restaurant intelligence</span>
           </div>
           <div className="flex items-center gap-6">
@@ -1109,7 +1109,7 @@ export default function ClassicLanding() {
             <a href="#modules" className="transition hover:text-slate-300">Modules</a>
             <Link href="/login" className="transition hover:text-slate-300">Sign in</Link>
           </div>
-          <p className="font-display italic">Every plate, every penny. © {new Date().getFullYear()} Mise</p>
+          <p className="font-display italic">Every plate, every penny. © {new Date().getFullYear()} DineAI</p>
         </div>
       </footer>
     </div>

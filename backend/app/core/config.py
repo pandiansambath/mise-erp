@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     )
 
     # App
-    app_name: str = "Mise API"
+    app_name: str = "DineAI API"
     environment: str = "local"  # local | ci | staging | production
     debug: bool = True
 
@@ -35,17 +35,17 @@ class Settings(BaseSettings):
     # Email alerts (optional). Set RESEND_API_KEY to activate; otherwise alerts are
     # logged and no-op'd, so the app runs fine without a provider configured.
     resend_api_key: str = ""
-    email_from: str = "Mise <alerts@mise.local>"
+    email_from: str = "DineAI <alerts@dineai.cloud>"
     # Public URL of the app — verification/reset links in emails point here.
-    app_base_url: str = "https://milagurestaurant.com"
+    app_base_url: str = "https://dineai.cloud"
 
     # Stripe billing (TEST MODE for now — sk_test_/whsec_ keys, no real money).
     # Empty keys = billing endpoints answer 503 and the app runs fine without it.
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_price_id: str = ""  # the Mise Pro monthly price (created in Stripe)
+    stripe_price_id: str = ""  # the DineAI Pro monthly price (created in Stripe)
 
-    # Mise Copilot — the in-app AI assistant. A free Google AI Studio key activates
+    # DineAI Copilot — the in-app AI assistant. A free Google AI Studio key activates
     # the LLM (Gemini Flash: free tier, 1M context, native tools). With no key the
     # assistant degrades gracefully to deterministic glossary + navigation answers,
     # so the app (and CI) run fine without it. Provider-agnostic by design.
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     bedrock_model_id: str = "anthropic.claude-sonnet-5"
 
     # ── AI spend controls ────────────────────────────────────────────────
-    # The AI is the one part of Mise with UNBOUNDED cost: everything else is a
+    # The AI is the one part of DineAI with UNBOUNDED cost: everything else is a
     # fixed EC2 + RDS bill, but tokens are pay-per-use, so a loop or an abusive
     # client can run up real money. These are enforced BEFORE Bedrock is called.
     ai_enabled: bool = True  # global kill switch — off needs no deploy, just an env var

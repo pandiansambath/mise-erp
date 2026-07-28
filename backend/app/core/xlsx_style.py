@@ -1,4 +1,4 @@
-"""One shared Excel look so every Mise download feels like the same professional,
+"""One shared Excel look so every DineAI download feels like the same professional,
 on-brand document: a title band, a calm emerald header row, zebra-striped rows and
 soft borders. Import and call style_table() after writing your data."""
 from __future__ import annotations
@@ -7,7 +7,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-# Mise emerald palette — calm, professional, peaceful (matches the app brand).
+# DineAI emerald palette — calm, professional, peaceful (matches the app brand).
 _TITLE = "065F46"      # emerald-900 (title text)
 _SUBTLE = "6B7280"     # slate-500 (subtitle)
 _HEADER_BG = "047857"  # emerald-700 (header fill)
@@ -31,7 +31,7 @@ def style_table(
     widths: list[int] | None = None,
     right_cols: set[int] | None = None,
 ) -> None:
-    """Apply the Mise look to a simple table on `ws`: a title (+optional subtitle) at
+    """Apply the DineAI look to a simple table on `ws`: a title (+optional subtitle) at
     the top, a coloured header row at `header_row`, then `n_rows` zebra-striped,
     bordered data rows beneath it. Column numbers in `right_cols` are right-aligned."""
     ncols = len(headers)

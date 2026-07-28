@@ -135,7 +135,7 @@ _GRID_HEADER = (
 def _grid_csv(tue_cell: str) -> bytes:
     """A weekly grid CSV for 2026-06-22→28 with one shift cell on Tue 23/06."""
     return (
-        "Mise — Weekly Rota\n"
+        "DineAI — Weekly Rota\n"
         "2026-06-22 → 2026-06-28  ·  fill cells like 09:00-17:00\n"
         f"{_GRID_HEADER}\n"
         f"Sam,,,,{tue_cell},,,,,,\n"
@@ -209,7 +209,7 @@ async def test_rota_grid_import_xlsx_and_bad_cell(client, make_user, auth_header
     )
     wb = Workbook()
     ws = wb.active
-    ws.append(["Mise — Weekly Rota"])
+    ws.append(["DineAI — Weekly Rota"])
     ws.append(["2026-06-22 → 2026-06-28  fill cells"])
     ws.append(_GRID_HEADER.split(","))
     ws.append(["Sam", "", "", "", "9 to 5", "", "", "", "", "", ""])  # unreadable cell

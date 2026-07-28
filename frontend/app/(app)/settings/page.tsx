@@ -19,8 +19,8 @@ const ALERTS: { key: string; emoji: string; title: string; desc: string }[] = [
     desc: "a vendor moves a price UP — every dish using that item just got costlier" },
   { key: "low_stock", emoji: "📉", title: "Low stock",
     desc: "an item crosses below its minimum level — time to reorder" },
-  { key: "broadcast", emoji: "📣", title: "Mise announcements",
-    desc: "important platform notes from the Mise team" },
+  { key: "broadcast", emoji: "📣", title: "DineAI announcements",
+    desc: "important platform notes from the DineAI team" },
   { key: "security_login", emoji: "🛡️", title: "Every sign-in",
     desc: "a heads-up email each time your account is opened (quiet by default)" },
 ];
@@ -353,7 +353,7 @@ export default function SettingsPage() {
           </div>
           {billingBanner === "success" && (
             <p className="mise-tick-in mt-3 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-500">
-              🎉 Subscription started — welcome to Mise Pro! Stripe will email your invoices.
+              🎉 Subscription started — welcome to DineAI Pro! Stripe will email your invoices.
             </p>
           )}
           {billingBanner === "cancelled" && (
@@ -362,7 +362,7 @@ export default function SettingsPage() {
             </p>
           )}
           <p className="mt-1 text-sm text-fg-faint">
-            Mise Pro: £49/month per venue, 14-day free trial. Payments run on Stripe&apos;s
+            DineAI Pro: £49/month per venue, 14-day free trial. Payments run on Stripe&apos;s
             hosted checkout — your card details never touch our servers.
           </p>
           {billing?.test_mode && (
@@ -465,7 +465,7 @@ export default function SettingsPage() {
         <Card className="mise-feel mb-6" id="s-handle">
           <h3 className="font-semibold text-fg">🆔 Your hotel handle (@username)</h3>
           <p className="mt-1 text-sm text-fg-faint">
-            Pick a unique handle so other Mise hotels can find you in{" "}
+            Pick a unique handle so other DineAI hotels can find you in{" "}
             <b className="text-fg-soft">Messages → New</b> and start a chat about lending or
             hiring staff. 3–40 lowercase letters, numbers or underscores.
           </p>
@@ -822,7 +822,7 @@ export default function SettingsPage() {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
           <div>
-            <p className="text-sm text-fg">Close your Mise account</p>
+            <p className="text-sm text-fg">Close your DineAI account</p>
             <p className="text-xs text-fg-faint">handled personally so nothing is lost by accident — email us and we action it same-day</p>
           </div>
           <a href="mailto:support@mise.app?subject=Close%20my%20Mise%20account" className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft">

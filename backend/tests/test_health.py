@@ -9,7 +9,7 @@ async def test_root(client: AsyncClient):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["name"] == "Mise API"
+    assert body["name"] == "DineAI API"
 
 
 @pytest.mark.asyncio

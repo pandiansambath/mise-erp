@@ -614,7 +614,7 @@ export default function ExpensesPage() {
                 <label className="col-span-2 flex items-start gap-2 text-sm text-fg-soft">
                   <input type="checkbox" checked={repeats} onChange={(e) => setRepeats(e.target.checked)} className="mt-0.5" />
                   <span>
-                    🔁 <b className="text-fg">Repeats every month</b> — Mise will log this again
+                    🔁 <b className="text-fg">Repeats every month</b> — DineAI will log this again
                     automatically next month (rent, gas, internet…). Untick the badge on any
                     auto-added copy to stop the chain.
                   </span>

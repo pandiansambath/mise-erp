@@ -1,6 +1,6 @@
 "use client";
 
-// The Mise chart kit — hand-rolled animated SVG, no library. Every chart
+// The DineAI chart kit — hand-rolled animated SVG, no library. Every chart
 // draws itself when scrolled into view, respects reduced motion, and reads
 // correctly in BOTH themes (colors via design tokens / passed tones).
 //

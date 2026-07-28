@@ -371,7 +371,7 @@ export default function FeatureTour() {
                 From the pass <em className="mise-hero-text not-italic">to the P&amp;L.</em>
               </>
             }
-            sub="Every department usually means another tool that disagrees. In Mise they all share one brain — change a price anywhere and every number downstream already knows."
+            sub="Every department usually means another tool that disagrees. In DineAI they all share one brain — change a price anywhere and every number downstream already knows."
           />
         </Reveal>
 

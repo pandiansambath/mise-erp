@@ -26,7 +26,7 @@ function DarkSplash() {
     <div className="grid min-h-screen place-items-center bg-[#04080e]">
       <div className="flex flex-col items-center">
         <Logo size={48} />
-        <p className="mt-4 font-display text-3xl text-white">Mise</p>
+        <p className="mt-4 font-display text-3xl text-white">DineAI</p>
       </div>
     </div>
   );

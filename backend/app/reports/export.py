@@ -28,7 +28,7 @@ _PNL_PCTS = [
 def to_csv(pnl: dict) -> bytes:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Mise — Profit & Loss"])
+    w.writerow(["DineAI — Profit & Loss"])
     w.writerow(["Period", f"{pnl['date_from']} to {pnl['date_to']}"])
     w.writerow([])
     for label, key in _PNL_LINES:
@@ -49,7 +49,7 @@ def to_xlsx(pnl: dict) -> bytes:
     ws = wb.active
     ws.title = "Profit & Loss"
 
-    title = ws.cell(row=1, column=1, value="Mise — Profit & Loss")
+    title = ws.cell(row=1, column=1, value="DineAI — Profit & Loss")
     title.font = Font(bold=True, size=15, color=_TITLE)
     ws.cell(row=2, column=1, value=f"Period: {pnl['date_from']} to {pnl['date_to']}").font = Font(
         size=10, italic=True, color="6B7280"

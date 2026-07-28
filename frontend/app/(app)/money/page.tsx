@@ -493,7 +493,7 @@ export default function MoneyPage() {
                 }
                 className="mise-press shrink-0 rounded-full border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-[11px] font-medium text-brand-300"
               >
-                ✨ Ask Mise to dig deeper
+                ✨ Ask DineAI to dig deeper
               </button>
             </div>
             <div className="mt-2 space-y-1.5 text-sm leading-relaxed text-fg-soft">

@@ -430,7 +430,7 @@ export default function PayrollPage() {
           <b className="text-fg">Monthly</b> runs pay <b className="text-fg">monthly-salaried</b> staff only ·{" "}
           <b className="text-fg">Weekly</b> runs pay <b className="text-fg">hourly (weekly-paid)</b> staff only.
           A person&apos;s type is set on their <Link href="/employees" className="text-brand-400 underline">Employees</Link> card.
-          If dates ever overlap someone&apos;s existing pay, Mise blocks the run and tells you.
+          If dates ever overlap someone&apos;s existing pay, DineAI blocks the run and tells you.
         </p>
         <div key={cadence} className="mise-cadence-in flex flex-wrap items-end gap-x-3 gap-y-2">
           <div>
@@ -517,7 +517,7 @@ export default function PayrollPage() {
           <p className="mt-1 text-sm text-fg-faint">
             For individual schedules — paid on the 18th, paid every Sunday, catching up a missed
             week. Pick the person, pick the dates, <b className="text-fg-soft">preview first</b>, then run.
-            If they were already paid for those dates, Mise stops you.
+            If they were already paid for those dates, DineAI stops you.
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <div className="w-52">

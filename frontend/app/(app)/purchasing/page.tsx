@@ -685,7 +685,7 @@ export default function PurchasingPage() {
                 </label>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-fg-faint">
-                Mise reads the bill and matches its lines to <b className="text-fg-soft">this order</b> — filling in the
+                DineAI reads the bill and matches its lines to <b className="text-fg-soft">this order</b> — filling in the
                 received qty + the <b className="text-fg-soft">actual price</b> per item. Nothing changes until you press
                 Receive; old prices are kept in each item&apos;s <b className="text-fg-soft">price history</b>.
               </p>

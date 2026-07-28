@@ -1,4 +1,4 @@
-"""Mise Copilot — knowledge grounding + the no-key deterministic fallback.
+"""DineAI Copilot — knowledge grounding + the no-key deterministic fallback.
 
 These exercise the assistant WITHOUT a live LLM key (CI has none): the
 deterministic fallback must still answer glossary, live-data and navigation

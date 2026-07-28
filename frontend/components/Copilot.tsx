@@ -1,6 +1,6 @@
 "use client";
 
-// Mise Copilot — the project-aware AI, on every page (mounted in AppShell so it
+// DineAI Copilot — the project-aware AI, on every page (mounted in AppShell so it
 // inherits the theme). It explains things, reads your live numbers, links you
 // straight to the right screen, ONBOARDS you from documents, reads bills/photos,
 // and can DO things (add an expense/sale/item/supplier) — always behind a
@@ -48,7 +48,7 @@ const ATTACH = [
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "Hi — I'm your Mise Copilot. Ask about your stock, sales or profit, tell me to add something (“log a £40 gas bill”), or tap 📎 to upload an items list, a supplier list, or a bill/receipt and I'll handle it.",
+    "Hi — I'm your DineAI Copilot. Ask about your stock, sales or profit, tell me to add something (“log a £40 gas bill”), or tap 📎 to upload an items list, a supplier list, or a bill/receipt and I'll handle it.",
 };
 
 const kindLabel = (k: string) => (k === "vendors" ? "suppliers" : "items");
@@ -279,14 +279,14 @@ export function Copilot() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Ask Mise Copilot"
+          aria-label="Ask DineAI Copilot"
           className="mise-launcher-in group fixed bottom-20 right-4 z-50 lg:bottom-6 lg:right-6 flex items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-brand-500 hover:shadow-xl active:scale-95 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
             <path d="M12 2.5l1.7 5.3a3 3 0 0 0 1.9 1.9L21 11.4l-5.3 1.7a3 3 0 0 0-1.9 1.9L12 20.3l-1.7-5.3a3 3 0 0 0-1.9-1.9L3 11.4l5.3-1.7a3 3 0 0 0 1.9-1.9z" />
             <circle cx="18.5" cy="5" r="1.4" />
           </svg>
-          <span className="hidden text-sm font-semibold sm:inline">Ask Mise</span>
+          <span className="hidden text-sm font-semibold sm:inline">Ask DineAI</span>
         </button>
       )}
 
@@ -294,14 +294,14 @@ export function Copilot() {
         <div
           className={`${closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-20 z-50 flex max-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
           role="dialog"
-          aria-label="Mise Copilot"
+          aria-label="DineAI Copilot"
         >
           {/* Header */}
           <div className="relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3">
             <div className="absolute inset-0 bg-gradient-to-r from-brand-600/25 via-brand-500/10 to-transparent" aria-hidden />
             <ChefMascot mood={loading ? "think" : "happy"} className="relative w-10 shrink-0" />
             <div className="relative leading-tight">
-              <p className="text-sm font-semibold text-fg">Mise Copilot</p>
+              <p className="text-sm font-semibold text-fg">DineAI Copilot</p>
               <p className="text-[11px] text-fg-faint">{configured === false ? "Quick help & navigation" : "One place for every plate & penny"}</p>
             </div>
             <button type="button" onClick={closePanel} aria-label="Close" className="relative ml-auto rounded-lg p-1.5 text-fg-faint hover:bg-glass/5 hover:text-fg">✕</button>

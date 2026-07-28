@@ -300,7 +300,7 @@ export default function Hero({ start }: { start: boolean }) {
 
         {/* caption that appears with the dashboard */}
         <div ref={capRef} className="pointer-events-none absolute inset-x-0 top-[7vh] z-10 text-center will-change-[opacity] max-md:transition-opacity max-md:duration-500" style={{ opacity: 0 }}>
-          <p className="font-mono text-[11px] tracking-[0.35em] text-brand-300/90">THIS IS MISE</p>
+          <p className="font-mono text-[11px] tracking-[0.35em] text-brand-300/90">THIS IS DINEAI</p>
           <p className="mt-2 font-display text-2xl text-white sm:text-3xl">
             Your whole operation, <em className="text-copper-200">live</em>.
           </p>

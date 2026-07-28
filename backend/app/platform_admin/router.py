@@ -1,6 +1,6 @@
 """Platform operator (Control Room) API — cross-tenant management of ALL hotels.
 
-Strictly gated to users with ``is_platform_owner`` (the Mise operator, i.e. us).
+Strictly gated to users with ``is_platform_owner`` (the DineAI operator, i.e. us).
 A normal hotel Super Admin CANNOT reach any of this. Capabilities:
   • list every hotel with quick stats,
   • toggle per-hotel FEATURES (entitlements) — foundation for plan tiers,
@@ -321,11 +321,11 @@ async def create_announcement(
         await notify.email_hotel_admins(
             db,
             hid,
-            f"Mise announcement: {body.message.strip()[:80]}",
+            f"DineAI announcement: {body.message.strip()[:80]}",
             body.message.strip(),
             html=notify.render_email(
                 badge="📣 Announcement",
-                heading="A note from Mise HQ",
+                heading="A note from DineAI HQ",
                 intro=body.message.strip(),
                 accent="#0ea5e9" if body.level == "info" else "#d97742",
             ),

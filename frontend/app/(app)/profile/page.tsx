@@ -109,7 +109,7 @@ export default function ProfilePage() {
     try {
       await api.delete("/hotels/logo");
       await refreshHotel();
-      setLogoMsg("Logo removed — back to the default Mise mark.");
+      setLogoMsg("Logo removed — back to the default DineAI mark.");
     } catch (err) {
       setLogoMsg(err instanceof ApiError ? err.message : "Could not remove the logo.");
     } finally {
@@ -195,7 +195,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl">
-      <PageHeader title="Profile" subtitle="Your account in Mise." />
+      <PageHeader title="Profile" subtitle="Your account in DineAI." />
 
       {canBrand && (
         <Card
@@ -226,7 +226,7 @@ export default function ProfilePage() {
                 {logoDrag
                   ? "Drop it here —"
                   : "Drag a PNG/JPG anywhere on this card, or use the button."}{" "}
-                Up to 2 MB. Replaces the Mise mark across the app and on your payslip / purchase-order PDFs.
+                Up to 2 MB. Replaces the DineAI mark across the app and on your payslip / purchase-order PDFs.
               </p>
             </div>
             <div className="flex gap-2">

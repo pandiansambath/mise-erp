@@ -1,6 +1,6 @@
 "use client";
 
-// A realistic, animated simulation of the Mise dashboard — the "try it without
+// A realistic, animated simulation of the DineAI dashboard — the "try it without
 // logging in" moment. Everything is hand-drawn DOM/SVG (no screenshots), so it
 // stays crisp on every screen and weighs almost nothing.
 
