@@ -37,12 +37,15 @@ class AiUsage(Base):
     )
 
 
-class ChatMessage(Base):
+class AssistantMessage(Base):
     """One turn of a person's conversation with the assistant.
 
     Kept per USER, not per browser: the Copilot was losing everything the moment
     you navigated, which makes it feel disposable and forces people to repeat
     themselves. History survives logout, device changes and new sessions.
+
+    Named `assistant_messages`, not `chat_messages`: the latter is already the
+    hotel-to-hotel messaging table and the two are unrelated.
 
     `thread_id` groups a conversation so "New chat" can start a clean screen —
     but threads are NOT walled off from each other. The assistant is given
@@ -50,7 +53,7 @@ class ChatMessage(Base):
     same supplier next week should not have to re-explain who they mean.
     """
 
-    __tablename__ = "chat_messages"
+    __tablename__ = "assistant_messages"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     hotel_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)

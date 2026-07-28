@@ -17,7 +17,7 @@ import uuid
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assistant.models import ChatMessage
+from app.assistant.models import AssistantMessage
 from app.auth.models import User
 
 log = logging.getLogger("mise.assistant.memory")
@@ -32,9 +32,9 @@ CARRYOVER_LIMIT = 6
 async def latest_thread(db: AsyncSession, user: User) -> uuid.UUID | None:
     """The conversation this person was last having, so reopening resumes it."""
     return await db.scalar(
-        select(ChatMessage.thread_id)
-        .where(ChatMessage.user_id == user.id)
-        .order_by(desc(ChatMessage.created_at))
+        select(AssistantMessage.thread_id)
+        .where(AssistantMessage.user_id == user.id)
+        .order_by(desc(AssistantMessage.created_at))
         .limit(1)
     )
 
@@ -47,9 +47,9 @@ async def load(
     rows = (
         (
             await db.execute(
-                select(ChatMessage)
-                .where(ChatMessage.user_id == user.id, ChatMessage.thread_id == tid)
-                .order_by(ChatMessage.created_at)
+                select(AssistantMessage)
+                .where(AssistantMessage.user_id == user.id, AssistantMessage.thread_id == tid)
+                .order_by(AssistantMessage.created_at)
                 .limit(THREAD_LIMIT)
             )
         )
@@ -68,9 +68,9 @@ async def carryover(db: AsyncSession, user: User, thread_id: uuid.UUID) -> str:
     rows = (
         (
             await db.execute(
-                select(ChatMessage)
-                .where(ChatMessage.user_id == user.id, ChatMessage.thread_id != thread_id)
-                .order_by(desc(ChatMessage.created_at))
+                select(AssistantMessage)
+                .where(AssistantMessage.user_id == user.id, AssistantMessage.thread_id != thread_id)
+                .order_by(desc(AssistantMessage.created_at))
                 .limit(CARRYOVER_LIMIT)
             )
         )
@@ -95,7 +95,7 @@ async def remember(
         return
     try:
         db.add(
-            ChatMessage(
+            AssistantMessage(
                 hotel_id=user.hotel_id,
                 user_id=user.id,
                 thread_id=thread_id,
@@ -115,8 +115,8 @@ async def forget_thread(db: AsyncSession, user: User, thread_id: uuid.UUID) -> i
     rows = (
         (
             await db.execute(
-                select(ChatMessage).where(
-                    ChatMessage.user_id == user.id, ChatMessage.thread_id == thread_id
+                select(AssistantMessage).where(
+                    AssistantMessage.user_id == user.id, AssistantMessage.thread_id == thread_id
                 )
             )
         )

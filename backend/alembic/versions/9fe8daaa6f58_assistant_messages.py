@@ -1,4 +1,4 @@
-"""chat_messages — the assistant's memory, kept per user rather than per browser
+"""assistant_messages — the assistant's memory, kept per user rather than per browser
 
 Revision ID: 9fe8daaa6f58
 Revises: ef4453d8b052
@@ -15,7 +15,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.create_table(
-        "chat_messages",
+        "assistant_messages",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("hotel_id", sa.Uuid(), nullable=False),
         sa.Column("user_id", sa.Uuid(), nullable=False),
@@ -29,14 +29,14 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index("ix_chat_messages_hotel_id", "chat_messages", ["hotel_id"])
-    op.create_index("ix_chat_messages_thread_id", "chat_messages", ["thread_id"])
+    op.create_index("ix_assistant_messages_hotel_id", "assistant_messages", ["hotel_id"])
+    op.create_index("ix_assistant_messages_thread_id", "assistant_messages", ["thread_id"])
     # Every read is "this user's messages, newest first" — one index for both.
-    op.create_index("ix_chat_messages_user_time", "chat_messages", ["user_id", "created_at"])
+    op.create_index("ix_assistant_messages_user_time", "assistant_messages", ["user_id", "created_at"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_chat_messages_user_time", table_name="chat_messages")
-    op.drop_index("ix_chat_messages_thread_id", table_name="chat_messages")
-    op.drop_index("ix_chat_messages_hotel_id", table_name="chat_messages")
-    op.drop_table("chat_messages")
+    op.drop_index("ix_assistant_messages_user_time", table_name="assistant_messages")
+    op.drop_index("ix_assistant_messages_thread_id", table_name="assistant_messages")
+    op.drop_index("ix_assistant_messages_hotel_id", table_name="assistant_messages")
+    op.drop_table("assistant_messages")
