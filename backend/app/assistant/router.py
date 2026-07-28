@@ -153,7 +153,7 @@ async def usage(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ) -> dict:
     """This hotel's AI spend this month, and what's left of the allowance."""
-    return await guard.summary(db, user.hotel_id)
+    return await guard.summary(db, user)
 
 
 @router.get("/vision/status")

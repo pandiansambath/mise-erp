@@ -100,7 +100,35 @@ async def test_record_writes_a_costed_row(db, monkeypatch) -> None:
         db, user, kind="vision", model="eu.anthropic.claude-sonnet-4-6",
         input_tokens=2000, output_tokens=500, latency_ms=1234,
     )
-    s = await guard.summary(db, user.hotel_id)
+    s = await guard.summary(db, user)
     assert s["month_calls"] == 1
     assert s["month_tokens"] == 2500
     assert Decimal(s["month_cost_usd"]) > 0
+
+
+async def test_a_plan_without_ai_is_an_upsell_not_an_error(db, monkeypatch) -> None:
+    """Kitchen has no AI. Asking must explain the upgrade, not look broken."""
+    monkeypatch.setattr(settings, "ai_enabled", True)
+    monkeypatch.setattr(guard.feat, "DEFAULT_PLAN", "kitchen")
+    with pytest.raises(HTTPException) as exc:
+        await guard.enforce(db, _FakeUser(), "vision")
+    assert exc.value.status_code == 429
+    assert "Upgrade" in exc.value.detail
+
+
+def test_every_feature_is_priced_on_every_plan() -> None:
+    """A feature nobody priced is revenue quietly lost."""
+    from app.platform_admin import features as f
+
+    for plan in f.PLANS:
+        assert set(plan.includes) == set(f.ALL_KEYS), plan.key
+    # AI is never in the entry tier — it is the only variable-cost feature
+    kitchen = f.get_plan("kitchen")
+    assert kitchen is not None
+    for key in f.AI_KEYS:
+        assert kitchen.includes[key] is False
+    assert f.plan_ai_limits("kitchen") == (0, 0)
+    # and the core money spine is in every plan
+    for plan in f.PLANS:
+        for key in f.CORE_KEYS:
+            assert plan.includes[key] is True, (plan.key, key)

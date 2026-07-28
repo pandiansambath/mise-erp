@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assistant.models import AiUsage
 from app.auth.models import User
 from app.core.config import settings
+from app.hotels.models import Hotel
+from app.platform_admin import features as feat
 
 log = logging.getLogger("mise.ai.guard")
 
@@ -58,10 +60,40 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> Decimal:
     return cost.quantize(Decimal("0.000001"))
 
 
+async def _limits(db: AsyncSession, user: User) -> tuple[int, int, str]:
+    """(daily requests, monthly tokens, plan label) for this hotel.
+
+    The plan is the paywall: AI is the only metered feature, so its allowance is
+    a property of what the hotel bought, not a global env var. The env settings
+    remain as a ceiling — a plan can never grant more than the platform allows,
+    which is what stops a Control Room mistake becoming a bill.
+    """
+    hotel = await db.get(Hotel, user.hotel_id)
+    plan_key = getattr(hotel, "plan", "") or feat.DEFAULT_PLAN
+    daily, monthly = feat.plan_ai_limits(plan_key)
+    plan = feat.get_plan(plan_key)
+    label = plan.label if plan else plan_key.title()
+    return (
+        min(daily, settings.ai_hotel_daily_requests) if settings.ai_hotel_daily_requests else daily,
+        min(monthly, settings.ai_hotel_monthly_tokens)
+        if settings.ai_hotel_monthly_tokens
+        else monthly,
+        label,
+    )
+
+
 async def enforce(db: AsyncSession, user: User, kind: str) -> None:
     """Gate a call. Raises before a single token is spent, never after."""
     if not settings.ai_enabled:
         raise AiDisabled("The AI is switched off right now. Please try again later.")
+
+    daily_cap, monthly_cap, plan_label = await _limits(db, user)
+    if daily_cap <= 0 and monthly_cap <= 0:
+        # The plan simply doesn't include AI — an upsell, not an error.
+        raise AiQuotaExceeded(
+            f"AI isn't part of your {plan_label} plan. Upgrade to Service to "
+            "photograph bills and ask the Copilot anything about your kitchen."
+        )
 
     now = datetime.now(UTC)
 
@@ -80,7 +112,7 @@ async def enforce(db: AsyncSession, user: User, kind: str) -> None:
             raise AiQuotaExceeded("You're going a bit fast for me — give me a few seconds.")
 
     # per-hotel daily requests
-    if settings.ai_hotel_daily_requests > 0:
+    if daily_cap > 0:
         today = await db.scalar(
             select(func.count())
             .select_from(AiUsage)
@@ -89,14 +121,14 @@ async def enforce(db: AsyncSession, user: User, kind: str) -> None:
                 AiUsage.created_at >= now - timedelta(days=1),
             )
         )
-        if (today or 0) >= settings.ai_hotel_daily_requests:
+        if (today or 0) >= daily_cap:
             raise AiQuotaExceeded(
-                "You've used today's AI allowance. It resets in a few hours — "
-                "or ask your manager to raise the limit."
+                f"You've used today's AI allowance ({daily_cap} on {plan_label}). "
+                "It resets in a few hours — or upgrade for a bigger allowance."
             )
 
     # per-hotel monthly tokens — the one that actually tracks money
-    if settings.ai_hotel_monthly_tokens > 0:
+    if monthly_cap > 0:
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         used = await db.scalar(
             select(func.coalesce(func.sum(AiUsage.input_tokens + AiUsage.output_tokens), 0)).where(
@@ -104,9 +136,10 @@ async def enforce(db: AsyncSession, user: User, kind: str) -> None:
                 AiUsage.created_at >= month_start,
             )
         )
-        if int(used or 0) >= settings.ai_hotel_monthly_tokens:
+        if int(used or 0) >= monthly_cap:
             raise AiQuotaExceeded(
-                "This month's AI allowance is used up. It resets on the 1st."
+                f"This month's AI allowance is used up on {plan_label}. "
+                "It resets on the 1st — or upgrade for a bigger allowance."
             )
 
 
@@ -144,10 +177,11 @@ async def record(
         await db.rollback()
 
 
-async def summary(db: AsyncSession, hotel_id) -> dict:
+async def summary(db: AsyncSession, user: User) -> dict:
     """What this hotel has spent — drives the Control Room view and the UI's
     'allowance left' hint."""
     now = datetime.now(UTC)
+    daily_cap, monthly_cap, plan_label = await _limits(db, user)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     row = (
         await db.execute(
@@ -155,13 +189,13 @@ async def summary(db: AsyncSession, hotel_id) -> dict:
                 func.count(),
                 func.coalesce(func.sum(AiUsage.input_tokens + AiUsage.output_tokens), 0),
                 func.coalesce(func.sum(AiUsage.cost_usd), 0),
-            ).where(AiUsage.hotel_id == hotel_id, AiUsage.created_at >= month_start)
+            ).where(AiUsage.hotel_id == user.hotel_id, AiUsage.created_at >= month_start)
         )
     ).one()
     today = await db.scalar(
         select(func.count())
         .select_from(AiUsage)
-        .where(AiUsage.hotel_id == hotel_id, AiUsage.created_at >= now - timedelta(days=1))
+        .where(AiUsage.hotel_id == user.hotel_id, AiUsage.created_at >= now - timedelta(days=1))
     )
     return {
         "enabled": settings.ai_enabled,
@@ -169,6 +203,8 @@ async def summary(db: AsyncSession, hotel_id) -> dict:
         "month_tokens": int(row[1]),
         "month_cost_usd": str(row[2]),
         "today_calls": int(today or 0),
-        "daily_limit": settings.ai_hotel_daily_requests,
-        "monthly_token_limit": settings.ai_hotel_monthly_tokens,
+        "plan": plan_label,
+        "daily_limit": daily_cap,
+        "monthly_token_limit": monthly_cap,
+        "included": daily_cap > 0 or monthly_cap > 0,
     }
