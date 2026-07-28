@@ -66,3 +66,23 @@ def test_kitchen_never_touches_money_or_people() -> None:
     ceiling = envelope_for("KITCHEN_MANAGER")
     for forbidden in ("payroll:write", "payroll:read", "cash:write", "hiring:write"):
         assert forbidden not in ceiling, forbidden
+
+
+def test_the_api_clips_a_grant_it_should_never_have_received() -> None:
+    """The UI hides out-of-envelope permissions, so anything arriving here came
+    from a stale client or someone poking the API. It is dropped silently —
+    a 400 would let a caller map the ceiling by watching what gets rejected."""
+    from app.auth.roles_router import _clip
+
+    kept = _clip("STAFF", {"hiring:write": True, "attendance:self": True})
+    assert "hiring:write" not in kept
+    assert kept["attendance:self"] is True
+
+
+def test_owner_archetype_is_not_offered_as_a_base() -> None:
+    """A custom role based on the owner would just be a second owner, since the
+    owner has no ceiling. If you want another owner, make them one explicitly."""
+    from app.auth.roles_router import ASSIGNABLE
+
+    assert "SUPER_ADMIN" not in ASSIGNABLE
+    assert "STAFF" in ASSIGNABLE and "MANAGER" in ASSIGNABLE

@@ -37,10 +37,32 @@ async def get_current_user(
     return user
 
 
+async def effective_permissions(db: AsyncSession, user: User) -> list[str] | None:
+    """This user's permissions once their custom role is taken into account.
+
+    Returns None when they have no custom role, meaning "just use the base
+    archetype" — so the common path costs no extra query.
+    """
+    crid = getattr(user, "custom_role_id", None)
+    if not crid:
+        return None
+    from app.auth.models import CustomRole
+    from app.core.rbac import resolve_permissions
+
+    cr = await db.get(CustomRole, crid)
+    # A deleted or deactivated custom role must fall back to the BASE archetype,
+    # never to "allow" — losing the row must never widen someone's access.
+    if cr is None or not cr.is_active or cr.hotel_id != user.hotel_id:
+        return None
+    return resolve_permissions(cr.base_role or user.role, cr.overrides or {})
+
+
 def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
     """Dependency factory enforcing a single permission string."""
 
-    async def checker(user: User = Depends(get_current_user)) -> User:
+    async def checker(
+        user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    ) -> User:
         if getattr(user, "is_impersonated_session", False) and not (
             permission.endswith(":read") or permission.endswith(":self")
         ):
@@ -48,7 +70,20 @@ def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Read-only support view - changes are disabled while impersonating.",
             )
-        if not has_permission(user.role, permission):
+        granted = await effective_permissions(db, user)
+        if granted is None:
+            allowed = has_permission(user.role, permission)
+        else:
+            # a ":write" grant still implies ":read" on the same module, exactly
+            # as it does for base roles — otherwise custom roles would behave
+            # subtly differently from the archetypes they are built on
+            module = permission.rsplit(":", 1)[0]
+            allowed = (
+                "*" in granted
+                or permission in granted
+                or (permission.endswith(":read") and f"{module}:write" in granted)
+            )
+        if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role {user.role} lacks permission '{permission}'",
