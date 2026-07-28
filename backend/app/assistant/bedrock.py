@@ -31,6 +31,7 @@ log = logging.getLogger("mise.bedrock")
 # accepted Marketplace agreement takes a while to entitle, and Sonnet 5 still
 # answers AccessDenied. 4.6 is live today with a 6M tokens/min quota. Flip to
 # Sonnet 5 by setting BEDROCK_MODEL_ID — no code change needed.
+# Kept in step with the plan registry so there is ONE answer to "which model".
 DEFAULT_MODEL = "eu.anthropic.claude-sonnet-4-6"
 
 

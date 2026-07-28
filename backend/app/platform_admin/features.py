@@ -174,16 +174,16 @@ def _plan_map(on: tuple[str, ...]) -> dict[str, bool]:
     return {k: (k in included) for k in ALL_KEYS}
 
 
-# Kitchen — the money spine, plus a taste of the AI. It gets the CHAT assistant
+# Starter — the money spine, plus a taste of the AI. It gets the CHAT assistant
 # (ask about your own numbers) but not scanning or insights, and it runs on
 # Haiku with a small cap. Removing AI entirely would protect cost but destroy
 # the reason to upgrade — the cheaper model is the better lever.
-_KITCHEN_ON: tuple[str, ...] = (
+_STARTER_ON: tuple[str, ...] = (
     "waste", "stock_take", "ordering", "branded_site", "ai_copilot",
 )
 
-# Service — the full operating system for a single venue.
-_SERVICE_ON: tuple[str, ...] = _KITCHEN_ON + (
+# Pro — the full operating system for a single venue.
+_PRO_ON: tuple[str, ...] = _STARTER_ON + (
     "price_comparison", "party_orders", "money",
     "food_safety", "allergens", "documents", "audit",
     "employees", "attendance", "rota", "payroll", "self_service", "hiring", "talent",
@@ -191,14 +191,14 @@ _SERVICE_ON: tuple[str, ...] = _KITCHEN_ON + (
     "ai_copilot", "ai_scan", "ai_insights",
 )
 
-# Group — everything, several venues.
-_GROUP_ON: tuple[str, ...] = _SERVICE_ON + ("multi_site", "api_access")
+# Enterprise — everything, several venues.
+_ENTERPRISE_ON: tuple[str, ...] = _PRO_ON + ("multi_site", "api_access")
 
 
 PLANS: tuple[Plan, ...] = (
     Plan(
-        "kitchen", "Kitchen", "£39/mo", "£390/yr", 3,
-        _plan_map(_KITCHEN_ON),
+        "starter", "Starter", "£39/mo", "£390/yr", 3,
+        _plan_map(_STARTER_ON),
         ai_model=HAIKU,
         ai_daily_requests=20, ai_monthly_tokens=500_000, trial_days=0,
         blurb="Know what everything costs and what you actually made.",
@@ -213,13 +213,13 @@ PLANS: tuple[Plan, ...] = (
         ),
     ),
     Plan(
-        "service", "Service", "£99/mo", "£990/yr", 15,
-        _plan_map(_SERVICE_ON),
+        "pro", "Pro", "£99/mo", "£990/yr", 15,
+        _plan_map(_PRO_ON),
         ai_model=SONNET,
         ai_daily_requests=300, ai_monthly_tokens=5_000_000, trial_days=14,
         blurb="The whole operation — people, compliance, delivery and AI.",
         highlights=(
-            "Everything in Kitchen",
+            "Everything in Starter",
             "Smarter AI (Sonnet) + photograph a bill or handwritten recipe",
             "Payroll, rota, attendance & staff self-service",
             "Food safety, allergens, documents & audit trail",
@@ -230,13 +230,13 @@ PLANS: tuple[Plan, ...] = (
         ),
     ),
     Plan(
-        "group", "Group", "£249/mo", "£2,490/yr", 100000,
-        _plan_map(_GROUP_ON),
+        "enterprise", "Enterprise", "£249/mo", "£2,490/yr", 100000,
+        _plan_map(_ENTERPRISE_ON),
         ai_model=SONNET,
         ai_daily_requests=1000, ai_monthly_tokens=20_000_000, trial_days=14,
         blurb="Several venues, one set of numbers.",
         highlights=(
-            "Everything in Service",
+            "Everything in Pro",
             "Multi-site rollup across every venue",
             "Unlimited users",
             "API access for your own integrations",
@@ -247,10 +247,11 @@ PLANS: tuple[Plan, ...] = (
 )
 
 _PLAN_BY_KEY = {p.key: p for p in PLANS}
-DEFAULT_PLAN = "service"
+DEFAULT_PLAN = "pro"
 
-# Old plan keys kept working so existing hotels and links don't break.
-_LEGACY_PLANS = {"starter": "kitchen", "pro": "service", "enterprise": "group"}
+# The kitchen/service/group keys were live briefly; map them back so any hotel
+# or link created in that window keeps working.
+_LEGACY_PLANS = {"kitchen": "starter", "service": "pro", "group": "enterprise"}
 
 
 def canonical_plan(key: str) -> str:

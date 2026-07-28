@@ -59,7 +59,12 @@ class Settings(BaseSettings):
     # (bills, handwritten recipes) and the in-app assistant. Runs on the instance
     # role, so there's no key: client images never leave our own AWS account.
     # Model access is granted once in the Bedrock console.
-    bedrock_model_id: str = "anthropic.claude-sonnet-5"
+    # Empty on purpose: the plan decides the model (see platform_admin.features),
+    # and bedrock.DEFAULT_MODEL is the fallback. This used to default to
+    # claude-sonnet-5 — a model AWS never granted this account — so every health
+    # check came back AccessDenied and the UI reported "AI is switched off" while
+    # the AI was in fact working. Set BEDROCK_MODEL_ID only to pin a model.
+    bedrock_model_id: str = ""
 
     # ── AI spend controls ────────────────────────────────────────────────
     # The AI is the one part of DineAI with UNBOUNDED cost: everything else is a

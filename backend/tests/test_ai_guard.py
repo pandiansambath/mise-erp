@@ -110,7 +110,7 @@ async def test_a_feature_outside_the_plan_is_an_upsell_not_an_error(db, hotel, m
     """Kitchen has chat but NOT scanning. Asking to scan must sell the upgrade
     in the assistant's own voice, not return a dead end."""
     monkeypatch.setattr(settings, "ai_enabled", True)
-    hotel.plan = "kitchen"
+    hotel.plan = "starter"
     hotel.features = {"ai_copilot": True, "ai_scan": False}
     await db.commit()
 
@@ -121,23 +121,23 @@ async def test_a_feature_outside_the_plan_is_an_upsell_not_an_error(db, hotel, m
     with pytest.raises(HTTPException) as exc:
         await guard.enforce(db, user, "vision", feature="ai_scan")
     assert exc.value.status_code == 429
-    assert "Service" in exc.value.detail
+    assert "Pro" in exc.value.detail
 
     # but chat IS in Kitchen, so it must go through
     await guard.enforce(db, user, "chat", feature="ai_copilot")
 
 
-async def test_kitchen_runs_on_the_cheap_model(db, hotel) -> None:
+async def test_entry_plan_runs_on_the_cheap_model(db, hotel) -> None:
     """Model tiering is what makes AI affordable on the entry plan."""
     from app.platform_admin import features as f
 
-    hotel.plan = "kitchen"
+    hotel.plan = "starter"
     await db.commit()
     user = _FakeUser()
     user.hotel_id = hotel.id
     assert await guard.model_for(db, user) == f.HAIKU
 
-    hotel.plan = "service"
+    hotel.plan = "pro"
     await db.commit()
     assert await guard.model_for(db, user) == f.SONNET
 
@@ -150,16 +150,20 @@ def test_every_feature_is_priced_on_every_plan() -> None:
         assert set(plan.includes) == set(f.ALL_KEYS), plan.key
     # The entry tier tastes the AI (chat) but not the expensive parts, and it
     # runs on the cheaper model — that combination is what keeps it affordable.
-    kitchen = f.get_plan("kitchen")
+    kitchen = f.get_plan("starter")
     assert kitchen is not None
     assert kitchen.includes["ai_copilot"] is True
     assert kitchen.includes["ai_scan"] is False
     assert kitchen.includes["ai_insights"] is False
     assert kitchen.ai_model == f.HAIKU
-    daily, monthly = f.plan_ai_limits("kitchen")
+    # the kitchen/service/group keys were live briefly — hotels created then
+    # must still resolve, so this alias is load-bearing, not cosmetic
+    assert f.get_plan("kitchen") is kitchen
+    assert f.canonical_plan("service") == "pro"
+    daily, monthly = f.plan_ai_limits("starter")
     assert 0 < daily <= 50 and 0 < monthly <= 1_000_000
     # paid tiers get the smarter model
-    assert f.get_plan("service").ai_model == f.SONNET
+    assert f.get_plan("pro").ai_model == f.SONNET
     # and the core money spine is in every plan
     for plan in f.PLANS:
         for key in f.CORE_KEYS:

@@ -78,6 +78,7 @@ export function Copilot() {
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [expanding, setExpanding] = useState(false);
   const [speakOn, setSpeakOn] = useState(false);
   const speechBase = useRef("");
   const voice = useVoiceInput((t) =>
@@ -271,6 +272,27 @@ export function Copilot() {
     setClosing(true);
     window.setTimeout(() => { setOpen(false); setClosing(false); }, 200);
   }
+  /** Grow the bubble into the full page, carrying the conversation with it. */
+  function expandToPage() {
+    voice.stop();
+    stopSpeaking();
+    try {
+      // hand the thread over so the full view doesn't start from nothing
+      sessionStorage.setItem(
+        "copilot:thread",
+        JSON.stringify(messages.filter((m) => !m.image).slice(-12)),
+      );
+    } catch {
+      /* private mode / quota — the page just opens fresh, which is fine */
+    }
+    setExpanding(true);
+    window.setTimeout(() => {
+      setOpen(false);
+      setExpanding(false);
+      router.push("/ai-scan");
+    }, 260);
+  }
+
   function go(href: string) { voice.stop(); stopSpeaking(); setOpen(false); setClosing(false); router.push(href); }
 
   return (
@@ -292,7 +314,7 @@ export function Copilot() {
 
       {open && (
         <div
-          className={`${closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-20 z-50 flex max-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
+          className={`${expanding ? "mise-copilot-expand" : closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-20 z-50 flex max-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
           role="dialog"
           aria-label="DineAI Copilot"
         >
@@ -304,7 +326,18 @@ export function Copilot() {
               <p className="text-sm font-semibold text-fg">DineAI Copilot</p>
               <p className="text-[11px] text-fg-faint">{configured === false ? "Quick help & navigation" : "One place for every plate & penny"}</p>
             </div>
-            <button type="button" onClick={closePanel} aria-label="Close" className="relative ml-auto rounded-lg p-1.5 text-fg-faint hover:bg-glass/5 hover:text-fg">✕</button>
+            <button
+              type="button"
+              onClick={expandToPage}
+              aria-label="Open full screen"
+              title="Open full screen — more room, and you can send photos"
+              className="relative ml-auto rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" />
+              </svg>
+            </button>
+            <button type="button" onClick={closePanel} aria-label="Close" className="relative rounded-lg p-1.5 text-fg-faint hover:bg-glass/5 hover:text-fg">✕</button>
           </div>
 
           {/* Messages */}

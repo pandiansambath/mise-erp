@@ -26,21 +26,21 @@ async def test_plan_prices_editable(client, make_user, auth_header, db):
     h = auth_header(owner)
     # GET /plans is public and reflects an operator price override.
     r = await client.patch(
-        "/api/platform/plans/prices", headers=h, json={"prices": {"service": "£89/mo"}}
+        "/api/platform/plans/prices", headers=h, json={"prices": {"pro": "£89/mo"}}
     )
     assert r.status_code == 200
     plans = (await client.get("/api/platform/plans")).json()["plans"]
     by_key = {p["key"]: p for p in plans}
-    assert by_key["service"]["price_hint"] == "£89/mo"
+    assert by_key["pro"]["price_hint"] == "£89/mo"
     # every plan must price every feature — a new module can't ship for free
     for plan in plans:
-        assert set(plan["includes"]) == set(by_key["group"]["includes"])
+        assert set(plan["includes"]) == set(by_key["enterprise"]["includes"])
     # AI is metered AND model-tiered: the entry plan gets chat on the cheap
     # model, the paid plans get more calls on the smarter one.
-    assert by_key["kitchen"]["ai_model_label"] == "Haiku"
-    assert by_key["service"]["ai_model_label"] == "Sonnet"
-    assert 0 < by_key["kitchen"]["ai_daily_requests"] < by_key["service"]["ai_daily_requests"]
-    assert by_key["kitchen"]["includes"]["ai_scan"] is False
+    assert by_key["starter"]["ai_model_label"] == "Haiku"
+    assert by_key["pro"]["ai_model_label"] == "Sonnet"
+    assert 0 < by_key["starter"]["ai_daily_requests"] < by_key["pro"]["ai_daily_requests"]
+    assert by_key["starter"]["includes"]["ai_scan"] is False
 
 
 @pytest.mark.asyncio

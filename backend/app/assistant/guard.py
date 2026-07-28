@@ -94,10 +94,10 @@ async def _limits(db: AsyncSession, user: User) -> tuple[int, int, str]:
 _UPSELL = {
     "ai_scan": (
         "I can't read photos on {plan} — bill and handwritten-recipe scanning "
-        "comes with Service. Want to see what else it adds?"
+        "comes with Pro. Want to see what else it adds?"
     ),
     "ai_insights": (
-        "Daily insights aren't part of {plan}. Service spots what changed "
+        "Daily insights aren't part of {plan}. Pro spots what changed "
         "overnight and tells you before it costs you."
     ),
     "ai_copilot": (

@@ -190,6 +190,34 @@ export default function AiScanPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
+  // If you arrived by expanding the Copilot bubble, carry that conversation in
+  // so the bigger view continues it rather than starting over.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("copilot:thread");
+      sessionStorage.removeItem("copilot:thread");
+      if (!raw) return;
+      const prior = JSON.parse(raw) as { role: string; content: string }[];
+      if (!Array.isArray(prior) || prior.length === 0) return;
+      setMsgs([
+        ...prior.map((m) => ({
+          id: nid(),
+          who: (m.role === "assistant" ? "ai" : "me") as "ai" | "me",
+          kind: "text" as const,
+          text: m.content,
+        })),
+        {
+          id: nid(),
+          who: "ai" as const,
+          kind: "text" as const,
+          text: "More room here — send me a photo of a bill or a handwritten recipe whenever you're ready.",
+        },
+      ]);
+    } catch {
+      /* nothing handed over, or storage unavailable — the greeting stands */
+    }
+  }, []);
+
   useEffect(() => {
     api
       .get<{ configured: boolean; reason?: string }>("/assistant/vision/status")
