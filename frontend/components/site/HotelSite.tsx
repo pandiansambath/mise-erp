@@ -244,6 +244,12 @@ export default function HotelSite({
         </div>
       )}
       {/* ── HERO ───────────────────────────────────────────────────────── */}
+      {/* The hero is a CSS background, which the browser only discovers after it
+          has parsed the stylesheet — on a phone that is most of the "slow to
+          load" feeling. Preloading it starts the download with the HTML, so the
+          largest element on the page stops being the last one to arrive.
+          React hoists this link into <head>. */}
+      <link rel="preload" as="image" href={hero} fetchPriority="high" />
       <section className="relative z-10 isolate flex items-center justify-center overflow-hidden"
                style={{ minHeight: heroH }}>
         {/* photo (slow settle drift) */}
@@ -254,6 +260,15 @@ export default function HotelSite({
                backgroundPosition: "center",
                transform: "scale(1.06)",
                animation: preview ? undefined : "mise-site-drift 26s ease-out forwards",
+             }} />
+        {/* colour grade — a whisper of the hotel's own palette over the photo, so
+            the page and the photograph look shot together rather than pasted.
+            soft-light keeps the food's real colours; it tints, never repaints. */}
+        <div aria-hidden className="absolute inset-0 -z-[15]"
+             style={{
+               background: `linear-gradient(135deg, ${accent} 0%, transparent 55%, ${accent2} 100%)`,
+               mixBlendMode: "soft-light",
+               opacity: 0.55,
              }} />
         {/* readability scrim — the glass-readability rule: text never fights the photo */}
         <div aria-hidden className="absolute inset-0 -z-10"
