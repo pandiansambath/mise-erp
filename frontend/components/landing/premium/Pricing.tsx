@@ -1,15 +1,29 @@
 "use client";
 
-// Pricing. The monthly figures come live from the Control Room's public
-// /api/platform/plans endpoint (operator-editable), falling back to the
-// defaults below. Yearly = 10× monthly — two months free, computed only when
-// the operator's price hint parses as "£N/mo".
+// Pricing. EVERYTHING here — names, prices, blurbs, feature lists, the AI model
+// each tier runs on — comes live from /api/platform/plans, which is the same
+// registry the app enforces entitlements from. That is deliberate: hard-coded
+// marketing copy drifts from what the product actually gates, and then you are
+// selling something you don't ship. The constants below are only a first-paint
+// fallback for when the API is unreachable.
+// Yearly = 10× monthly — two months free.
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Reveal } from "@/components/Reveal";
 import { API_BASE } from "@/lib/api";
 import { Aurora, Magnetic, SectionHead } from "./bits";
+
+type LivePlan = {
+  key: string;
+  label: string;
+  blurb: string;
+  price_hint: string;
+  highlights: string[];
+  ai_model_label: string;
+  ai_daily_requests: number;
+  trial_days: number;
+};
 
 const PLANS = [
   {
@@ -70,18 +84,32 @@ function parseMonthly(hint: string): number | null {
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
-  const [hints, setHints] = useState<Record<string, string>>({});
+  const [live, setLive] = useState<LivePlan[] | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/platform/plans`)
       .then((r) => r.json())
       .then((d) => {
-        const m: Record<string, string> = {};
-        for (const p of d.plans ?? []) m[p.key] = p.price_hint;
-        setHints(m);
+        const rows = (d.plans ?? []) as LivePlan[];
+        if (rows.length) setLive(rows);
       })
       .catch(() => {});
   }, []);
+
+  // The live registry wins; the constants are only a fallback.
+  const tiers = live
+    ? live.map((p, i) => ({
+        key: p.key,
+        name: p.label,
+        blurb: p.blurb,
+        fallback: p.price_hint,
+        featured: i === 1,
+        cta: p.trial_days > 0 ? `Try free for ${p.trial_days} days` : "Get started",
+        features: p.highlights,
+        model: p.ai_model_label,
+        aiPerDay: p.ai_daily_requests,
+      }))
+    : PLANS.map((t) => ({ ...t, model: "", aiPerDay: 0 }));
 
   return (
     <section id="pricing" className="mise-cv relative overflow-hidden">
@@ -134,8 +162,8 @@ export default function Pricing() {
         </Reveal>
 
         <div className="mt-12 grid items-stretch gap-5 lg:grid-cols-3">
-          {PLANS.map((t, i) => {
-            const hint = hints[t.key] ?? t.fallback;
+          {tiers.map((t, i) => {
+            const hint = t.fallback;  // already the live price when the API answered
             const monthly = parseMonthly(hint);
             const price =
               monthly === null ? hint : yearly ? `£${Math.round(monthly * 10).toLocaleString("en-GB")}` : `£${monthly}`;
@@ -164,6 +192,13 @@ export default function Pricing() {
                     <p className="mt-1 text-[11px] text-copper-200/90">≈ £{Math.round((monthly * 10) / 12)}/mo, billed annually</p>
                   ) : (
                     <p className="mt-1 text-[11px] text-transparent select-none">·</p>
+                  )}
+                  {t.model && (
+                    <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300">
+                      <span aria-hidden>✦</span>
+                      AI on <b className="font-semibold text-white">{t.model}</b>
+                      {t.aiPerDay > 0 && <span className="text-slate-400">· {t.aiPerDay}/day</span>}
+                    </p>
                   )}
                   <ul className="mt-5 space-y-2.5 text-sm text-slate-300">
                     {t.features.map((f) => (
