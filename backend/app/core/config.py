@@ -43,7 +43,19 @@ class Settings(BaseSettings):
     # Empty keys = billing endpoints answer 503 and the app runs fine without it.
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_price_id: str = ""  # the DineAI Pro monthly price (created in Stripe)
+    stripe_price_id: str = ""  # legacy single price; kept so old callers work
+
+    # Per-plan price ids as JSON: {"<plan>_<month|year>": "price_..."}. Price
+    # ids are not secrets (they appear in the checkout URL), so the TEST-mode
+    # ids ship as the default and STRIPE_PRICES overrides them for live.
+    stripe_prices: str = (
+        '{"starter_month":"price_1TyCp1PlbHXr6C3CgWE7bGVD",'
+        '"starter_year":"price_1TyCp2PlbHXr6C3CyWkzdiGX",'
+        '"pro_month":"price_1TyCp4PlbHXr6C3Cb42bUvnQ",'
+        '"pro_year":"price_1TyCp5PlbHXr6C3Ctgnxtl7G",'
+        '"enterprise_month":"price_1TyCp7PlbHXr6C3C6s7Czbrh",'
+        '"enterprise_year":"price_1TyCp8PlbHXr6C3C7Uz21KGA"}'
+    )
 
     # DineAI Copilot — the in-app AI assistant. A free Google AI Studio key activates
     # the LLM (Gemini Flash: free tier, 1M context, native tools). With no key the

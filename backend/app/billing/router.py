@@ -95,9 +95,28 @@ async def billing_status(
     }
 
 
+def price_for(plan: str, interval: str = "month") -> str:
+    """The Stripe price id for a plan. Falls back to the legacy single price so
+    an existing deployment that only ever had one price keeps working."""
+    import json
+
+    from app.platform_admin import features as feat
+
+    try:
+        table = json.loads(settings.stripe_prices or "{}")
+    except ValueError:
+        log.error("STRIPE_PRICES is not valid JSON — falling back to the single price")
+        table = {}
+    key = f"{feat.canonical_plan(plan)}_{'year' if interval == 'year' else 'month'}"
+    return table.get(key) or settings.stripe_price_id
+
+
 @router.post("/checkout")
 async def create_checkout(
-    current: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    plan: str = "pro",
+    interval: str = "month",
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Start a subscription: returns the URL of Stripe's hosted Checkout page."""
     _require_configured()
@@ -105,6 +124,19 @@ async def create_checkout(
     hotel = await db.get(Hotel, current.hotel_id)
     if hotel is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    from app.platform_admin import features as feat
+
+    if not feat.is_valid_plan(plan):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown plan {plan!r}")
+    price = price_for(plan, interval)
+    if not price:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "That plan has no price configured yet.",
+        )
+    # the plan is carried on the subscription so the webhook can grant exactly
+    # what was paid for, rather than guessing from the amount
+    trial = feat.get_plan(plan)
     customer_id = await _ensure_customer(db, hotel, current.email)
     session = await _stripe(
         "POST", "/checkout/sessions",
@@ -113,11 +145,13 @@ async def create_checkout(
         success_url=f"{settings.app_base_url}/settings?billing=success",
         cancel_url=f"{settings.app_base_url}/settings?billing=cancelled",
         **{
-            "line_items[0][price]": settings.stripe_price_id,
+            "line_items[0][price]": price,
             "line_items[0][quantity]": "1",
-            "subscription_data[trial_period_days]": "14",
+            "subscription_data[trial_period_days]": str((trial.trial_days if trial else 0) or 14),
             "subscription_data[metadata][hotel_id]": str(hotel.id),
+            "subscription_data[metadata][plan]": feat.canonical_plan(plan),
             "metadata[hotel_id]": str(hotel.id),
+            "metadata[plan]": feat.canonical_plan(plan),
         },
     )
     return {"url": session["url"]}
@@ -178,6 +212,25 @@ async def _hotel_by_customer(db: AsyncSession, customer_id: str) -> Hotel | None
     ).scalar_one_or_none()
 
 
+def _apply_plan(hotel, plan_key: str) -> None:
+    """Grant what was actually paid for.
+
+    Without this a customer could complete checkout for Enterprise and receive
+    nothing — status would flip to active while their features stayed on the
+    old plan. The plan travels on the subscription's metadata, so we grant the
+    plan that was BOUGHT rather than inferring it from the amount (which breaks
+    the moment you run a discount).
+    """
+    from app.platform_admin import features as feat
+
+    if not feat.is_valid_plan(plan_key):
+        log.error("stripe webhook carried unknown plan %r — leaving plan unchanged", plan_key)
+        return
+    canonical = feat.canonical_plan(plan_key)
+    hotel.plan = canonical
+    hotel.features = feat.plan_features(canonical)  # reassign so the JSON is dirty
+
+
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     if not settings.stripe_webhook_secret:
@@ -206,6 +259,9 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
         if hotel:
             hotel.stripe_subscription_id = obj.get("subscription")
             hotel.subscription_status = "active"  # refined by subscription.updated
+            paid_for = (obj.get("metadata") or {}).get("plan")
+            if paid_for:
+                _apply_plan(hotel, paid_for)
             await db.commit()
 
     elif etype == "customer.subscription.updated":
@@ -213,6 +269,10 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
         if hotel:
             hotel.stripe_subscription_id = obj.get("id")
             hotel.subscription_status = _STATUS_MAP.get(obj.get("status", ""), "active")
+            # an upgrade or downgrade arrives as an update, so re-apply the plan
+            paid_for = (obj.get("metadata") or {}).get("plan")
+            if paid_for:
+                _apply_plan(hotel, paid_for)
             await db.commit()
 
     elif etype == "customer.subscription.deleted":
