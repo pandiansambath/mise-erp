@@ -61,7 +61,8 @@ type Msg =
   | { id: string; who: "ai" | "me"; kind: "text"; text: string; actions?: Action[] }
   | { id: string; who: "me"; kind: "photo"; url: string; name: string }
   | { id: string; who: "ai"; kind: "thinking"; note: string }
-  | { id: string; who: "ai"; kind: "card" };
+  | { id: string; who: "ai"; kind: "card" }
+  | { id: string; who: "ai"; kind: "offer"; text: string };
 
 let seq = 0;
 const nid = () => `m${++seq}`;
@@ -177,6 +178,8 @@ export default function AiScanPage() {
   const canWrite = can(user?.role, "expenses:write");
 
   const [status, setStatus] = useState<{ configured: boolean; reason?: string } | null>(null);
+  // what plan + model this hotel is on — people should know what they're using
+  const [usage, setUsage] = useState<{ plan?: string; model?: string; today_calls?: number; daily_limit?: number } | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([
     { id: nid(), who: "ai", kind: "text", text: GREETING },
   ]);
@@ -192,6 +195,12 @@ export default function AiScanPage() {
       .get<{ configured: boolean; reason?: string }>("/assistant/vision/status")
       .then(setStatus)
       .catch(() => setStatus({ configured: false }));
+    api
+      .get<{ plan?: string; model?: string; today_calls?: number; daily_limit?: number }>(
+        "/assistant/usage",
+      )
+      .then(setUsage)
+      .catch(() => {});
   }, []);
 
   // keep the newest message in view — a chat that doesn't follow you is broken
@@ -261,11 +270,16 @@ export default function AiScanPage() {
       push({ id: cardId, who: "ai", kind: "card" });
     } catch (e) {
       drop(thinking);
-      say(
-        e instanceof ApiError
-          ? `Sorry — ${e.message}`
-          : "Sorry, I couldn't read that photo. A flatter page in better light usually does it.",
-      );
+      if (e instanceof ApiError && e.status === 429) {
+        // the plan doesn't cover this — answer in-character and offer the upgrade
+        push({ id: nid(), who: "ai", kind: "offer", text: e.message });
+      } else {
+        say(
+          e instanceof ApiError
+            ? `Sorry — ${e.message}`
+            : "Sorry, I couldn't read that photo. A flatter page in better light usually does it.",
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -530,6 +544,17 @@ export default function AiScanPage() {
           <p className="truncate text-xs text-fg-faint">
             {offline ? "AI is switched off" : "Photograph a bill — I'll read it, you check it"}
           </p>
+          {usage?.model && (
+            <p className="mt-0.5 truncate text-[11px] text-fg-faint">
+              <span className="text-brand-400">
+                {usage.model.includes("haiku") ? "Haiku" : "Sonnet"}
+              </span>
+              {usage.plan ? ` · ${usage.plan} plan` : ""}
+              {usage.daily_limit
+                ? ` · ${Math.max(0, usage.daily_limit - (usage.today_calls ?? 0))} left today`
+                : ""}
+            </p>
+          )}
         </div>
       </header>
 
@@ -572,6 +597,28 @@ export default function AiScanPage() {
                   </span>
                   {m.note}
                 </span>
+              </Bubble>
+            );
+          }
+          if (m.kind === "offer") {
+            return (
+              <Bubble key={m.id} who="ai">
+                <p className="whitespace-pre-wrap">{m.text}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    href="/settings?tab=plan"
+                    className="mise-press rounded-lg bg-gradient-to-r from-brand-500 to-sky-400 px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    See what Service adds →
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => say("No problem — carry on. What else can I help with?")}
+                    className="rounded-lg bg-paper-2 px-3 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-3"
+                  >
+                    Not now
+                  </button>
+                </div>
               </Bubble>
             );
           }
