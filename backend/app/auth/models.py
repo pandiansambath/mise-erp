@@ -20,6 +20,34 @@ class Role(str, enum.Enum):
     STAFF = "STAFF"  # General staff — own attendance & payslip only
 
 
+class CustomRole(Base):
+    """A job title the hotel invented, pinned to one of our base archetypes.
+
+    Owners think in "Kitchen Manager" or "Accounts Assistant", not in our six
+    enum names — so they name the role freely. What they cannot do is invent
+    the PERMISSIONS: `base_role` fixes the ceiling (see core.rbac.ENVELOPES),
+    and `overrides` may only move things inside it. Free-text names are
+    friendly; free-text permissions would be a security hole.
+    """
+
+    __tablename__ = "custom_roles"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    # one of Role.* — the archetype whose envelope bounds this role
+    base_role: Mapped[str] = mapped_column(String(50), nullable=False)
+    # permission -> on/off, applied on top of the archetype's defaults and
+    # silently clipped to its envelope
+    overrides: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -34,6 +62,12 @@ class User(Base):
     # the linked employee's first name for staff logins.
     preferred_name: Mapped[str | None] = mapped_column(String(60))
     role: Mapped[str] = mapped_column(String(50), nullable=False, default=Role.STAFF.value)
+    # Optional hotel-defined job title. When set, `role` still holds the base
+    # archetype, so every existing permission check keeps working untouched —
+    # the custom role only ever narrows or widens WITHIN that archetype.
+    custom_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("custom_roles.id", ondelete="SET NULL"), index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # The DineAI operator (us) — a cross-tenant super-flag that unlocks the platform
     # Control Room (manage ALL hotels). False for every normal hotel user.
