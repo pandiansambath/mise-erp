@@ -102,6 +102,37 @@ Two answers:
 
 ---
 
+## 4b. ✅ ALREADY DONE FOR YOU (test mode)
+
+I created these through the API, so you don't need section 5 unless you want to
+change something:
+
+| Product | Monthly | Yearly |
+|---|---|---|
+| DineAI Starter | £39 | £390 |
+| DineAI Pro | £99 | £990 |
+| DineAI Enterprise | £249 | £2,490 |
+
+Also cleaned up: the old **"Mise Pro £49"** product is archived, and the test
+subscription that was on it has been moved onto DineAI Pro (with
+`metadata[plan]=pro`, so our webhook grants the right plan).
+
+### ⚠️ One thing only YOU can do — 30 seconds
+
+The customer billing portal still says **"mise erp sandbox"** at the top. That
+is the Stripe ACCOUNT name, and Stripe blocks changing your own account name via
+the API on purpose (*"You cannot use this method on your own account"*). So:
+
+1. Stripe Dashboard → **Settings** (gear, top right)
+2. **Business → Public details** (sometimes "Account details")
+3. Change the name to **DineAI**, and set the support email / website while you
+   are there — both appear on receipts and the billing portal
+4. Save
+
+Do it once in test mode and again later in live mode; they are separate accounts.
+
+---
+
 ## 5. Creating the plans by hand (if you prefer)
 
 In the Stripe dashboard, with **Test mode ON**:
