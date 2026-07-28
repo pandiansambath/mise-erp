@@ -15,7 +15,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.models import User
+from app.auth.models import Role, User
 from app.core.rbac import has_permission
 from app.expenses import service as expense_service
 from app.inventory import service as inventory_service
@@ -294,7 +294,21 @@ async def navigate(db: AsyncSession, user: User, args: dict) -> dict:
     best DineAI page the user can reach, with a direct link."""
     q = (args.get("query") or "").strip().lower()
     can = _can(user)
-    visible = [p for p in PAGES if not p["perm"] or can(p["perm"])]
+    # ":self" pages are the staff self-service area. An owner technically passes
+    # the check (they hold "*"), but offering "My Space" to the account owner is
+    # nonsense — it is the page their STAFF use to see their own rota and
+    # payslip. Suggest it only to people who have nothing broader.
+    def _relevant(page: dict) -> bool:
+        perm = page["perm"]
+        if not perm:
+            return True
+        if not can(perm):
+            return False
+        if perm.endswith(":self") and user.role != Role.STAFF.value:
+            return False
+        return True
+
+    visible = [p for p in PAGES if _relevant(p)]
     # crude relevance: score by keyword overlap with label + about
     def score(p: dict) -> int:
         hay = f"{p['label']} {p['about']} {p['route']}".lower()
@@ -388,7 +402,100 @@ async def propose_purchase(db: AsyncSession, user: User, args: dict) -> dict:
 
 # ── Registry: schema (for the model) + executor (server-side) ─────────────────
 _QUERY = {"type": "string"}
+async def team_and_access(db: AsyncSession, user: User, args: dict) -> dict:
+    """Who is on this team, what role each holds, and what that role can reach.
+
+    This exists because the assistant was answering "what roles do we have and
+    what can they see?" with a link to the Staff page — a deflection, not an
+    answer. It had no way to know. Now it does.
+    """
+    from sqlalchemy import func as sa_func
+    from sqlalchemy import select
+
+    from app.auth.models import CustomRole
+    from app.core.rbac import PERMISSIONS, envelope_for, resolve_permissions
+
+    counts = dict(
+        (
+            await db.execute(
+                select(User.role, sa_func.count())
+                .where(User.hotel_id == user.hotel_id, User.is_active.is_(True))
+                .group_by(User.role)
+            )
+        ).all()
+    )
+
+    # readable names for what a permission actually lets someone do
+    def _areas(perms: list[str]) -> list[str]:
+        if "*" in perms:
+            return ["everything"]
+        seen: list[str] = []
+        for perm in sorted(perms):
+            area = perm.rsplit(":", 1)[0].replace("_", " ")
+            if area not in seen:
+                seen.append(area)
+        return seen
+
+    roles = []
+    for role_key, default_perms in PERMISSIONS.items():
+        roles.append(
+            {
+                "role": role_key.replace("_", " ").title(),
+                "members": int(counts.get(role_key, 0)),
+                "can_access": _areas(default_perms),
+                "could_also_be_given": sorted(
+                    set(envelope_for(role_key)) - set(default_perms)
+                )
+                if "*" not in default_perms
+                else [],
+            }
+        )
+
+    customs = (
+        (
+            await db.execute(
+                select(CustomRole).where(
+                    CustomRole.hotel_id == user.hotel_id, CustomRole.is_active.is_(True)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    custom_rows = [
+        {
+            "name": c.name,
+            "based_on": c.base_role.replace("_", " ").title(),
+            "can_access": _areas(resolve_permissions(c.base_role, c.overrides or {})),
+        }
+        for c in customs
+    ]
+
+    return {
+        "total_active_users": sum(counts.values()),
+        "roles": roles,
+        "custom_roles": custom_rows,
+        "how_it_works": (
+            "Two independent layers decide what someone sees: the hotel's PLAN "
+            "decides whether a feature exists at all, and the person's ROLE decides "
+            "whether they may use it. An owner can create a custom role with any "
+            "name, but only ever with permissions inside its base role's envelope — "
+            "so a waiter can never be given Hiring, however the toggles are set."
+        ),
+    }
+
+
 TOOLS: list[dict] = [
+    {
+        "name": "team_and_access",
+        "description": (
+            "The hotel's roles: how many people hold each, what each role can "
+            "access, and any custom roles the owner created. Use for 'what roles "
+            "do we have', 'how many staff', 'who can see payroll', 'what can a "
+            "chef access', 'what will my manager see on their dashboard'."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
     {
         "name": "search_items",
         "description": (
@@ -807,6 +914,7 @@ EXECUTORS: dict[str, Executor] = {
     "recipe_detail": recipe_detail,
     "profit_for_range": profit_for_range,
     "navigate": navigate,
+    "team_and_access": team_and_access,
     "explain_term": explain_term,
     "propose_expense": propose_expense,
     "propose_sale": propose_sale,

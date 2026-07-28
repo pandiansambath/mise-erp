@@ -26,7 +26,69 @@ def _route_context(route: str | None) -> str:
     return f"\nThe user is currently on {route}."
 
 
-def _build_system(user: User, route: str | None, user_name: str | None = None) -> str:
+# Plain-English meaning of each role, so the assistant can reason about what the
+# person in front of it is actually allowed to do — "SUPER_ADMIN" on its own
+# told it nothing, which is how it ended up offering the owner the staff
+# self-service page.
+_ROLE_SENSE = {
+    "SUPER_ADMIN": (
+        "the OWNER of this restaurant's account. They can see and change "
+        "everything here, including money, people and settings. Never suggest "
+        "the staff self-service area ('My Space') to them - that is for their "
+        "employees, not for them"
+    ),
+    "MANAGER": (
+        "the restaurant MANAGER. They run the venue day to day: stock, suppliers, "
+        "purchasing, sales, staff and rotas. They do not own the account"
+    ),
+    "KITCHEN_MANAGER": (
+        "the CHEF / kitchen lead. Their world is food: stock, recipes, ordering, "
+        "food safety and waste. They cannot see payroll, cash or hiring"
+    ),
+    "ACCOUNTANT": (
+        "the ACCOUNTS person. Payroll, supplier payments, expenses and the books. "
+        "They do not run kitchen operations"
+    ),
+    "CASHIER": (
+        "on the TILL. Sales, cash and orders. They cannot see people's pay or "
+        "change stock"
+    ),
+    "STAFF": (
+        "a STAFF member. They see only their own rota, hours and payslips - "
+        "nothing about the business's money or other people"
+    ),
+}
+
+
+def _where_am_i(user: User, hotel_name: str) -> str:
+    """Tell the assistant where it is sitting and who it is talking to.
+
+    Without this it answers every question identically regardless of whether the
+    owner, a chef or a waiter asked - which produces both wrong suggestions and
+    answers that leak the shape of things a person cannot access.
+    """
+    if getattr(user, "is_platform_owner", False):
+        return (
+            "\n\nWHERE YOU ARE: the DineAI CONTROL ROOM - the platform "
+            "operator's area, not a restaurant's own account. The person you are "
+            "talking to runs the DineAI platform itself and works across many "
+            "restaurants. Answer about the platform, plans and hotels in general; "
+            "do not pretend to be inside one restaurant's kitchen."
+        )
+    sense = _ROLE_SENSE.get(user.role, f"a user with the role {user.role}")
+    return (
+        f"\n\nWHERE YOU ARE: inside {hotel_name}'s own DineAI account. "
+        f"You are talking to {sense}.\n"
+        "Answer for THIS restaurant and for THIS person's level of access. If they "
+        "ask about something their role cannot reach, say so plainly and warmly "
+        "rather than describing it or linking them to a page that will refuse "
+        "them. Never suggest a page their role cannot open."
+    )
+
+
+def _build_system(
+    user: User, route: str | None, user_name: str | None = None, hotel_name: str = "this restaurant"
+) -> str:
     # Prefer the name the client passed (fresh edit); fall back to the one stored on
     # the account (server-side → works on any device, incl. staff logins).
     name = (user_name or "").strip() or (getattr(user, "preferred_name", None) or "").strip()
@@ -57,6 +119,10 @@ def _dedupe(actions: list[dict]) -> list[Action]:
 
 
 async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse:
+    from app.hotels.models import Hotel
+
+    hotel = await db.get(Hotel, user.hotel_id)
+    hotel_name = getattr(hotel, "name", None) or "this restaurant"
     history = [{"role": m.role, "content": m.content} for m in req.messages]
     collected: list[dict] = []
     proposals: list[dict] = []
@@ -74,7 +140,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     if provider.is_configured():
         try:
             reply, used = await provider.generate(
-                system=_build_system(user, req.route, req.user_name),
+                system=_build_system(user, req.route, req.user_name, hotel_name),
                 history=history,
                 tools=tools_for(user),
                 execute=execute,

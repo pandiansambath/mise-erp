@@ -1,5 +1,17 @@
 "use client";
 
+/** The model sometimes writes markdown links. The bubble renders plain text and
+ *  the same links already appear as action buttons below, so show just the
+ *  label rather than leaking "[Open Staff](/staff)" at the reader. */
+function plainText(s: string): string {
+  return s
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")   // [label](href) -> label
+    .replace(/\*\*([^*]+)\*\*/g, "$1")             // **bold** -> bold
+    .replace(/(^|\s)\*([^*]+)\*/g, "$1$2")         // *italic* -> italic
+    .replace(/`([^`]+)`/g, "$1")                    // `code` -> code
+    .trim();
+}
+
 // The AI surface is a CONVERSATION, not a form.
 //
 // You send a photo of a supplier bill (or a handwritten recipe) the way you'd
@@ -631,7 +643,7 @@ export default function AiScanPage() {
           if (m.kind === "offer") {
             return (
               <Bubble key={m.id} who="ai">
-                <p className="whitespace-pre-wrap">{m.text}</p>
+                <p className="whitespace-pre-wrap">{plainText(m.text)}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     href="/settings?tab=plan"
