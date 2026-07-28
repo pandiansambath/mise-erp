@@ -81,6 +81,10 @@ def _invoke(
         meter["model"] = model or _model_id()
         meter["input_tokens"] = int(usage.get("input_tokens") or 0)
         meter["output_tokens"] = int(usage.get("output_tokens") or 0)
+        # cached input is billed at a fraction of normal input; track it so the
+        # saving is something we can see rather than something we assume
+        meter["cache_read_tokens"] = int(usage.get("cache_read_input_tokens") or 0)
+        meter["cache_write_tokens"] = int(usage.get("cache_creation_input_tokens") or 0)
     return "".join(b.get("text", "") for b in payload.get("content", []))
 
 
@@ -99,6 +103,24 @@ def _json_from(text: str) -> dict[str, Any]:
             except json.JSONDecodeError:
                 pass
     raise BedrockUnavailable("The AI returned something we couldn't read. Try again.")
+
+
+def _cached_system(text: str) -> list[dict[str, Any]]:
+    """Mark a system prompt as cacheable.
+
+    The rules and this hotel's item catalogue are byte-identical on every call,
+    so Bedrock can keep them warm: a cache READ costs ~0.1x normal input, which
+    is where the margin on the AI tiers comes from.
+
+    The trade-off, honestly: a cache WRITE costs ~1.25x, and entries live about
+    five minutes. So this pays when someone scans a few bills or holds a
+    conversation, and costs a fraction more for a single isolated call. That's
+    the right bet — bursts are the normal shape of both scanning and chat.
+
+    Below roughly 1-2k tokens Bedrock ignores the marker and simply bills
+    normally, so short prompts lose nothing by asking.
+    """
+    return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
 
 # ── 1. Document understanding (bills + handwritten recipes) ──────────────────
@@ -180,7 +202,7 @@ def understand_document(
     body = {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 4096,
-        "system": _EXTRACT_SYSTEM + context,
+        "system": _cached_system(_EXTRACT_SYSTEM + context),
         "messages": [
             {
                 "role": "user",
@@ -261,7 +283,7 @@ def ask(
         {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1500,
-            "system": _ASSISTANT_SYSTEM.format(hotel=hotel_name),
+            "system": _cached_system(_ASSISTANT_SYSTEM.format(hotel=hotel_name)),
             "messages": messages,
         },
         meter,
