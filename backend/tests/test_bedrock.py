@@ -21,7 +21,7 @@ def test_json_from_rejects_garbage():
 
 
 def test_health_reports_not_configured_without_access(monkeypatch):
-    def boom(_body):
+    def boom(_body, *_args, **_kwargs):
         raise bedrock.BedrockUnavailable("model access not granted")
 
     monkeypatch.setattr(bedrock, "_invoke", boom)
@@ -34,7 +34,9 @@ def test_assistant_prompt_is_scoped_to_one_hotel(monkeypatch):
     """The guardrail lives in the system prompt — assert it actually says so."""
     seen = {}
 
-    def fake(body, meter=None):  # meter: token counts for the spend guard
+    # *args/**kwargs on purpose: this double cares only about the request body,
+    # so adding parameters to _invoke (meter, model, ...) must not break it.
+    def fake(body, *_args, **_kwargs):
         seen.update(body)
         return "ok"
 
