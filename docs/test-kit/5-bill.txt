@@ -1,0 +1,12 @@
+EXOTIC FOODS LTD
+Invoice INV-20713
+Date: 13/07/2026
+
+Basmati Rice      25 kg    @ 1.85     46.25
+Paneer             8 kg    @ 6.40     51.20
+Ginger             5 kg    @ 2.40     12.00
+Sunflower Oil      2 box   @ 18.50    37.00
+
+Subtotal                              146.45
+VAT 20%                                29.29
+TOTAL                                 175.74
