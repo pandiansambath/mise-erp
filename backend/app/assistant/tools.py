@@ -554,7 +554,44 @@ async def staff_today(db: AsyncSession, user: User, args: dict) -> dict:
     }
 
 
+async def query_data(db: AsyncSession, user: User, args: dict) -> dict:
+    """Read this hotel's data with SQL, for anything the other tools don't cover.
+
+    The escape hatch that makes the assistant a master of THIS restaurant rather
+    than a master of twenty-nine pre-built questions. Safety lives in the ai_*
+    views and in query.validate — see app/assistant/query.py.
+    """
+    from app.assistant import query as q
+
+    return await q.run(db, user, args.get("sql") or "")
+
+
 TOOLS: list[dict] = [
+    {
+        "name": "query_data",
+        "description": (
+            "Read this restaurant's data with a SQL SELECT, for anything the "
+            "other tools do not cover. Use it rather than telling someone to go "
+            "and look at a page. Query ONLY these views, which are already "
+            "limited to this hotel: ai_items, ai_vendors, ai_vendor_items, "
+            "ai_recipes, ai_recipe_ingredients, ai_indents, ai_indent_items, "
+            "ai_purchase_orders, ai_po_items, ai_price_history, ai_expenses, "
+            "ai_expense_categories, ai_daily_sales, ai_dish_sales, "
+            "ai_sales_channels, ai_menu_items, ai_orders, ai_order_items, "
+            "ai_employees, ai_attendance, ai_payroll, ai_salary_advances, "
+            "ai_shifts, ai_documents, ai_safety_logs, ai_party_quotes, "
+            "ai_party_quote_lines, ai_budget_targets, ai_job_postings, "
+            "ai_job_applications. One SELECT, no semicolons, no comments. "
+            "If a column name is wrong the error will say so — fix it and retry."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sql": {"type": "string", "description": "A single SELECT over ai_* views"}
+            },
+            "required": ["sql"],
+        },
+    },
     {
         "name": "staff_today",
         "description": (
@@ -1001,6 +1038,7 @@ EXECUTORS: dict[str, Executor] = {
     "navigate": navigate,
     "team_and_access": team_and_access,
     "staff_today": staff_today,
+    "query_data": query_data,
     "explain_term": explain_term,
     "propose_expense": propose_expense,
     "propose_sale": propose_sale,
