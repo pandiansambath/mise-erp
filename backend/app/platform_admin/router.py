@@ -141,6 +141,27 @@ class PlanPrices(BaseModel):
     prices: dict[str, str] = Field(default_factory=dict)  # plan_key -> "£89/mo"
 
 
+class OperatorAsk(BaseModel):
+    question: str = Field(min_length=2, max_length=2000)
+
+
+@router.post("/ai/ask")
+async def operator_ai(
+    body: OperatorAsk,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_platform_owner),
+) -> dict:
+    """The one assistant that sees across hotels — plans, billing state and AI
+    spend, never a tenant's own recipes, prices or staff."""
+    from app.assistant.bedrock import BedrockUnavailable
+    from app.platform_admin import ai as operator_brain
+
+    try:
+        return {"reply": await operator_brain.ask(db, user, body.question)}
+    except BedrockUnavailable as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from None
+
+
 class HotelFlagsIn(BaseModel):
     is_comp: bool | None = None
     ai_daily_override: int | None = None
