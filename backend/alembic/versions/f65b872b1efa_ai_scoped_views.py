@@ -19,7 +19,6 @@ Child tables (no hotel_id of their own) scope through their parent, so they
 cannot be reached for another hotel by joining sideways.
 """
 from alembic import op
-
 from app.core.ai_views import create_statements, drop_statements
 
 revision: str = "f65b872b1efa"
