@@ -11,6 +11,7 @@ from app.auth.service import get_user_by_id
 from app.core.database import get_db
 from app.core.rbac import has_permission
 from app.core.security import decode_token
+from app.hotels import access
 from app.hotels.models import Hotel
 
 bearer_scheme = HTTPBearer(auto_error=True)
@@ -88,6 +89,14 @@ def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role {user.role} lacks permission '{permission}'",
             )
+
+        # Billing state. Reading always works — we never hide a restaurant's own
+        # data from it — but unpaid accounts stop spending our money and stop
+        # making new commitments. 402 so the client can offer the fix.
+        hotel = await db.get(Hotel, user.hotel_id)
+        reason = access.blocks(hotel, permission) if hotel is not None else None
+        if reason:
+            raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, reason)
         return user
 
     return checker

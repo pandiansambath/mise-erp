@@ -230,6 +230,16 @@ def _apply_plan(hotel, plan_key: str) -> None:
     hotel.plan = canonical
     hotel.features = feat.plan_features(canonical)  # reassign so the JSON is dirty
 
+    # Start the clock. Without this `trial_days` was a number in a config file
+    # that nothing ever acted on.
+    plan = feat.get_plan(canonical)
+    if plan and plan.trial_days and not hotel.trial_ends_on:
+        from datetime import UTC, datetime, timedelta
+
+        hotel.trial_ends_on = (
+            datetime.now(UTC) + timedelta(days=plan.trial_days)
+        ).date()
+
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:

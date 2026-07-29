@@ -4,10 +4,10 @@ Every domain row (users, items, vendors, recipes) carries a hotel_id and is
 scoped to the logged-in user's hotel, so hotels never see each other's data.
 """
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Uuid, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -50,6 +50,10 @@ class Hotel(Base):
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), index=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(64))
     subscription_status: Mapped[str] = mapped_column(String(20), nullable=False, default="free")
+    # When a trial ends. Null = not on trial. Kept as a date on the hotel rather
+    # than inferred from Stripe so a trial works before anyone has paid, and so
+    # expiry is answerable without a network call.
+    trial_ends_on: Mapped[date | None] = mapped_column(Date)
     # Online ordering (Ph2a): the prep estimate customers see, and the kitchen's
     # busy-mode switch (paused = the public page shows closed, orders refused).
     prep_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
