@@ -4,7 +4,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -27,7 +27,7 @@ from app.auth.schemas import (
     UserOut,
     UserUpdate,
 )
-from app.core import notify
+from app.core import notify, ratelimit
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
@@ -48,9 +48,15 @@ async def _hotel_or_404(db: AsyncSession, hotel_id: uuid.UUID) -> Hotel:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def login(
+    payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
+    # Before the password check, so a rejected attempt costs an attacker a slot
+    # rather than a bcrypt round.
+    ratelimit.guard(request, "login", payload.email)
     user = await service.authenticate(db, payload.email, payload.password)
     if user is None:
+        ratelimit.note_failure("login", payload.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password"
         )
@@ -167,10 +173,14 @@ async def login_otp(payload: OtpRequest, db: AsyncSession = Depends(get_db)) -> 
 
 
 @router.post("/register-hotel", status_code=status.HTTP_201_CREATED)
-async def register_hotel(payload: RegisterHotel, db: AsyncSession = Depends(get_db)) -> dict:
+async def register_hotel(
+    payload: RegisterHotel, request: Request, db: AsyncSession = Depends(get_db)
+) -> dict:
     """Public self-signup: create the hotel + its first Super Admin. NO token is
     returned — the session starts from the verification email's link (returning
     one here would let the unverified skip the gate entirely)."""
+    # Signup is where spam and card-testing arrive.
+    ratelimit.guard(request, "register", payload.email)
     if await service.get_user_by_email(db, payload.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "That email already has an account")
     # Mandatory @handle → their own subdomain, reserved at signup.
@@ -396,8 +406,11 @@ class EmailOnly(BaseModel):
 
 
 @router.post("/resend-verification")
-async def resend_verification(payload: EmailOnly, db: AsyncSession = Depends(get_db)) -> dict:
+async def resend_verification(
+    payload: EmailOnly, request: Request, db: AsyncSession = Depends(get_db)
+) -> dict:
     """Always answers OK (no account enumeration); sends only when it applies."""
+    ratelimit.guard(request, "resend_verification", payload.email)
     user = await service.get_user_by_email(db, payload.email.strip().lower())
     if user and not user.email_verified:
         user.verify_token = user.verify_token or secrets.token_urlsafe(32)
@@ -421,8 +434,13 @@ async def resend_verification(payload: EmailOnly, db: AsyncSession = Depends(get
 
 
 @router.post("/forgot-password")
-async def forgot_password(payload: EmailOnly, db: AsyncSession = Depends(get_db)) -> dict:
+async def forgot_password(
+    payload: EmailOnly, request: Request, db: AsyncSession = Depends(get_db)
+) -> dict:
     """Always answers OK. A real account gets a 60-minute reset link."""
+    # This sends an email. Unmetered, it is a way to use us to flood someone
+    # else's inbox.
+    ratelimit.guard(request, "forgot_password", payload.email)
     user = await service.get_user_by_email(db, payload.email.strip().lower())
     if user and user.is_active:
         user.reset_token = secrets.token_urlsafe(32)
