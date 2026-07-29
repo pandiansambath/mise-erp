@@ -1,0 +1,596 @@
+Role
+
+You are Fable 5, an elite AI product designer, creative director, senior frontend engineer, UX researcher, motion designer, branding expert, and conversion optimization specialist.
+
+Do not simply generate a landing page.
+
+Your goal is to create a world-class SaaS landing page that looks like a premium product (Stripe, Linear, Vercel, Framer, Apple, Notion, Raycast, Arc Browser, Clerk, Supabase, OpenAI level quality).
+
+---
+
+NOTE: CURRENT LANDING PAGE IS also HABING SCROLL VIDEO ANIMATON JOUNRY...BUT ITS NOT NICE BRO I NEED SOMETHUG IMPRESSIVE...SO CELAR ALL AND DO AS PER UR WISH
+
+Step 1 (Mandatory)
+
+Before doing anything else, analyze the entire project directory.
+
+Understand:
+
+- Project architecture
+- Design system
+- Components
+- Routing
+- Tech stack
+- Existing UI patterns
+- Color palette
+- Fonts
+- Animations
+- Assets
+- Dashboard
+- APIs
+- Brand identity
+
+Do NOT start coding until you completely understand the project.
+
+After understanding the project, analyze this prompt again and then decide the best implementation.
+
+Do not ask me what to build.
+
+You decide everything like a world-class product team.
+
+---
+
+About the Product
+
+This is an AI-powered Hotel ERP Platform.
+
+It is an all-in-one operating system for hotels.
+
+Features include:
+
+- Dashboard
+- Inventory Management
+- Recipe Management
+- Vendor Management
+- Purchase Orders
+- Sales
+- Expenses
+- Payroll
+- Employees
+- Attendance
+- Shift Rota
+- Kitchen Operations
+- POS
+- AI Assistant
+- Reports
+- Analytics
+- Money In
+- Money Out
+- Profit & Loss
+- Taxes
+- Business Insights
+- Financial Reports
+- Notifications
+- Multi-user Roles
+- Settings
+- and many more.
+
+The platform allows hotel owners to manage their complete business from one place.
+
+---
+
+Current Problem
+
+The application itself is good.
+
+The landing page is not impressive.
+
+When a hotel owner visits the website, they should immediately think:
+
+«"This company builds premium software."»
+
+The landing page should build:
+
+- trust
+- confidence
+- professionalism
+- premium feel
+- innovation
+- enterprise quality
+
+It should make visitors feel that this product is worth purchasing before they even scroll halfway.
+
+---
+
+Design Philosophy
+
+Do NOT create a normal SaaS landing page.
+
+Create an unforgettable experience.
+
+Think of a mix of:
+
+- Apple
+- Stripe
+- Linear
+- Vercel
+- Framer
+- OpenAI
+- Raycast
+- Arc Browser
+- Clerk
+- Notion
+
+Use modern 2026 SaaS design trends.
+
+No template feel.
+
+No generic sections.
+
+Everything should feel handcrafted.
+
+---
+
+Motion & Animation
+
+This is extremely important.
+
+Use premium animations everywhere.
+
+Examples:
+
+- smooth page reveal
+- stagger animations
+- scroll storytelling
+- parallax
+- depth effects
+- portal animations
+- floating 3D cards
+- morphing backgrounds
+- glass reflections
+- animated gradients
+- mouse interactions
+- spotlight hover
+- magnetic buttons
+- card expansion
+- dashboard transitions
+- section transitions
+- smooth counters
+- AI glow effects
+- animated charts
+- premium loading states
+- premium micro interactions
+
+Animations should feel expensive.
+
+Never distracting.
+
+Always smooth.
+
+Performance first.
+
+---
+
+3D
+
+Include tasteful 3D elements.
+
+Ideas:
+
+- floating ERP dashboard
+- floating analytics cards
+- floating inventory boxes
+- rotating hotel model
+- AI assistant orb
+- data streams
+- holographic panels
+- floating business reports
+- rotating graphs
+- warehouse simulation
+- kitchen management visualization
+
+Use subtle depth.
+
+No childish effects.
+
+---
+
+Hero Section
+
+The hero section alone should impress clients.
+
+Include:
+
+- strong headline
+- premium subheading
+- animated CTA
+- dashboard simulation
+- floating cards
+- analytics
+- sales graph
+- inventory status
+- AI insights
+- profit widgets
+- live notifications
+- revenue chart
+
+Visitors should immediately understand what the software does.
+
+---
+
+Storytelling Journey
+
+Instead of normal scrolling...
+
+Create a journey.
+
+For example:
+
+Problem
+
+↓
+
+Chaos in hotel management
+
+↓
+
+Disconnected systems
+
+↓
+
+Manual calculations
+
+↓
+
+Inventory losses
+
+↓
+
+Payroll confusion
+
+↓
+
+Vendor issues
+
+↓
+
+AI arrives
+
+↓
+
+Everything becomes automated
+
+↓
+
+Business insights
+
+↓
+
+Profit grows
+
+↓
+
+Hotel runs itself
+
+↓
+
+Customer succeeds
+
+Tell a visual story while scrolling.
+
+---
+
+Dashboard Simulation
+
+Without logging in, users should experience the product.
+
+Create realistic simulations.
+
+Examples:
+
+Inventory
+
+- Rice
+- Oil
+- Chicken
+- Vegetables
+- Low Stock Alerts
+
+Sales
+
+- Today's Sales
+- Weekly Revenue
+- Monthly Revenue
+
+Employees
+
+- Present
+- Absent
+- Late
+
+Kitchen
+
+- Active Orders
+- Recipes
+- Food Cost
+
+Finance
+
+- Money In
+- Money Out
+- Expenses
+- Net Profit
+
+Analytics
+
+- Graphs
+- Pie charts
+- KPIs
+- Revenue trend
+
+AI
+
+- Smart recommendations
+- Predictive analytics
+- Cost optimization
+- Sales forecast
+
+These are simulations only, but should feel real.
+
+---
+
+Video Integration
+
+I already created more than 10 professional videos and images using ElevenLabs.
+
+Assets location:
+
+C:\pandi\project-nirai\try1\generated_assets
+please dont mind that we dont haeve 9:16 for mobile...we only have 16:9 ...i got rekt with credits in ElevenLabs so i cant create more video images...so please usethis 16:9 itself for  mobile too ..optimizate for mobiel bro
+
+Analyze every media asset.
+
+Decide automatically:
+
+- where each video belongs
+- where each image belongs
+- whether it should autoplay
+- scroll reveal
+- background section
+- feature explanation
+- dashboard preview
+- testimonials
+- AI showcase
+
+Use them wherever they create maximum impact.
+
+Do not ask me which media goes where.
+
+You decide.
+
+---
+
+Pricing
+
+Create a beautiful pricing section.
+
+Plans:
+
+Starter
+
+Pro
+
+Enterprise
+
+Include:
+
+- feature comparison
+- recommended badge
+- animations
+- hover effects
+- enterprise styling
+- CTA
+- monthly/yearly toggle
+- ROI messaging
+
+---
+
+Trust Section
+
+Include:
+
+- statistics
+- achievements
+- performance numbers
+- uptime
+- response time
+- customer satisfaction
+- AI processing
+- security
+- cloud infrastructure
+
+---
+
+Features
+
+Present features beautifully.
+
+Avoid icon grids.
+
+Instead use:
+
+- interactive cards
+- sticky scrolling
+- horizontal storytelling
+- animated dashboard
+- immersive transitions
+
+---
+
+AI Section
+
+Make AI look magical.
+
+Show:
+
+- AI assistant
+- predictions
+- inventory forecasting
+- recipe optimization
+- staff scheduling
+- expense analysis
+- profit suggestions
+- chatbot
+- natural language search
+
+---
+
+Reports
+
+Show interactive reports.
+
+Examples:
+
+Profit & Loss
+
+Expenses
+
+Revenue
+
+Cash Flow
+
+Inventory Trends
+
+Payroll
+
+Food Cost
+
+Business Health
+
+Animated charts are preferred.
+
+---
+
+Testimonials
+
+Premium cards.
+
+Video testimonials if possible.
+
+Animated transitions.
+
+---
+
+Final CTA
+
+The last section should feel powerful.
+
+Visitors should feel:
+
+"I need this software."
+
+---
+
+Technical Expectations
+
+Use the existing project stack.
+
+Reuse existing components wherever possible.
+
+Maintain clean architecture.
+
+Write production-quality code.
+
+Responsive across all devices.
+
+Accessibility compliant.
+
+SEO optimized.
+
+Fast loading.
+
+Lazy loading.
+
+Code splitting.
+
+Smooth 60 FPS animations.
+
+---
+
+Quality Standards
+
+Every pixel should have a purpose.
+
+Every animation should communicate value.
+
+Every section should increase trust.
+
+Every interaction should feel premium.
+
+Avoid generic SaaS templates.
+
+Avoid clutter.
+
+Avoid unnecessary text.
+
+Less text.
+
+More experience.
+
+---
+
+Your Freedom
+
+You are allowed to:
+
+- redesign layouts
+- improve typography
+- improve spacing
+- replace sections
+- add premium interactions
+- improve branding
+- enhance storytelling
+- improve visual hierarchy
+- reorganize content
+- create better information architecture
+
+If you believe a better design exists than what I've described, choose the better design.
+
+Your objective is not to follow my instructions literally.
+
+Your objective is to build the best Hotel ERP landing page possible.
+
+Imagine this landing page will compete with billion-dollar SaaS companies.
+
+Surprise me with ideas I haven't thought of.
+
+Make visitors say:
+
+"Wow... this software feels premium. We should book a demo immediately." 
+
+
+note:learn how to push and run workflow and deploy --> this is alredy in ur memroy file as previous opus 4.8 is the one wokred on this...so it memeory i threr i guess please check once....
+
+
+
+
+
+
+
+
+
+
+
+
+i dont like either bro...please use treding transition desgin when moving from login to register a smooth trantioion insted of lpoaidn site.....also ui i dnt like and mainly background is plai bro...do something..i need repmium desing in these 2 pages...whcih should imprresss
+
+
+
+
+please continue from where u left... see as i already said we need tht ui styles like neomoophism glassomophos and other morphism which ever suits our app ---> these styles we need to implment in all the seciton in our app...so dont forget we need in all section...
+
+now please continuw and do all the wokr wihtiut asking me permission..do all yourlsef
+
+
+
+also bro in landing page we have revolving kinda things nah in coppilet area...that UI we need more detailing bro... like we can make that still better like currently very simple solar system.. we can make them so realistic solar syatem kinda UI nah like foggy cloud kinda thing revolving...also each planet above each  planet soeting is revelivinh in 4 way rotation...each shoud show detailings

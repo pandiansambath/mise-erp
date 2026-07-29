@@ -1,0 +1,51 @@
+MEDIA STRATEGY FOR THE 3D JOURNEY LANDING PAGE
+================================================
+
+Use a HYBRID approach in this priority order:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER 1 — PIXABAY (PRIMARY, FREE, PREFER THIS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API Key: C:\pandi\project-nirai\try1\docs\pixabay_api_and_doc.txt
+Docs: https://pixabay.com/api/docs/
+Endpoint: https://pixabay.com/api/videos/ (for video clips)
+         https://pixabay.com/api/ (for images)
+
+Search terms to try for the journey sections:
+- "restaurant kitchen chef"
+- "indian food cooking"
+- "fine dining ambiance"
+- "city lights night"
+- "food delivery"
+- "tablet restaurant"
+
+Params to use: &video_type=film&per_page=10&safesearch=true&order=popular
+Pick highest resolution (fullHD preferred). Always use the `large_video_url` 
+or `large` image size.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER 2 — PEXELS (FALLBACK IF PIXABAY HAS NOTHING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API Key: C:\pandi\project-nirai\try1\docs\pexels_api_key_and_documentation_link.txt
+Docs: https://www.pexels.com/api/documentation/
+Only use if Pixabay returns 0 useful results for a scene.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER 3 — AI IMAGE GENERATION (ONLY IF STOCK HAS NOTHING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use fal.ai api key(C:\pandi\project-nirai\try1\docs\falai_for_image.txt) ONLY for scenes that are too specific
+to exist in stock — e.g. "Mise SaaS dashboard on a chef's tablet 
+in a dark restaurant kitchen with warm bokeh lighting".
+
+i have a trick too...i have 5 chatgpt account.... we can use playwright to login to chatgpt(ill give otp) and give promt and get images...this is free bro...we can use as much as possible...asls these 5 chatgpt accunts are extra ccount so even if thay ban also no prombrl for me
+if u r ok wiht thi stick... use this email and ask me otp --> pandiawsuser@gmail.com, claudepandi2001@gmail.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GENERAL RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Always prefer VIDEO clips over static images for the 3D journey 
+  scroll sections — movement = more realistic feel
+- For each journey "scene/stop", fetch 3 candidates from Pixabay, 
+  pick the one with highest views + resolution
+- All media must be royalty-free and attributed correctly
+- For video: use as background with overlay animations, not raw playback
+- Target: realistic, cinematic, premium restaurant management vibe

@@ -1,0 +1,20 @@
+Done — the Control Room is now exactly what you described: a separate operator area with its own login, live and verified on production.
+
+🛰️ How to use it (try it now)
+Go to https://milagurestaurant.com/login
+Log in as:
+
+Email:    control@mise.app
+Password: Control@2026
+You land straight on the Control Room — its own page, "Mise Control Room" header, no hotel sidebar. You'll see all 16 hotels in the whole Mise project.
+Each hotel card = its master switches: toggle AI Copilot, Party Orders, Food Safety, Documents, Price Comparison (flip off → it's blocked server-side and disappears from that hotel's app), plus Reset a password for any user in that hotel.
+What made it "separate" (the fix)
+Moved the whole thing out of the hotel app into its own top-level route with a standalone shell.
+The operator login is dedicated — it can't wander into a hotel's app (it gets bounced back to the Control Room), and normal hotel staff never see any of it.
+Verified live just now
+control@mise.app → is_platform_owner: True, /platform/hotels → 200 (all hotels), /control-room page → served. Deploy succeeded, health 200.
+
+Two loose ends for you
+Control@2026 is your operator password — fine to keep, or tell me to set something specific.
+Your personal ravishankar.vijayan@gmail.com — I revoked its (mistaken) operator flag, but its password is currently mise because I'd changed it earlier and hashes can't be reversed. If you use that account, give me a password and I'll reset it; if you only ever log in as superadmin@gmail.com, just ignore it.
+Want me to harden the operator password, build a proper self-serve Forgot Password flow, or start on the bigger subscription/enterprise tiers this Control Room is the foundation for?
