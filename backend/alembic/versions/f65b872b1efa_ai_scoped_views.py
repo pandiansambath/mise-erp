@@ -20,51 +20,19 @@ cannot be reached for another hotel by joining sideways.
 """
 from alembic import op
 
+from app.core.ai_views import create_statements, drop_statements
+
 revision: str = "f65b872b1efa"
 down_revision: str | None = "48158cdb14ea"
 branch_labels = None
 depends_on = None
 
-# hotel_id lives on the row itself.
-DIRECT = [
-    "items", "vendors", "recipes", "indents", "purchase_orders",
-    "expenses", "expense_categories", "daily_sales", "dish_sales",
-    "menu_items", "orders", "employees", "attendance", "payroll",
-    "salary_advances", "shifts", "documents", "safety_logs",
-    "party_quotes", "budget_targets", "price_history",
-    "job_postings", "job_applications", "sales_channels",
-]
-
-# (view, table, join to a parent that DOES carry hotel_id)
-CHILD = [
-    ("vendor_items", "vendor_items", "vendors", "vendor_id"),
-    ("recipe_ingredients", "recipe_ingredients", "recipes", "recipe_id"),
-    ("indent_items", "indent_items", "indents", "indent_id"),
-    ("po_items", "po_items", "purchase_orders", "po_id"),
-    ("order_items", "order_items", "orders", "order_id"),
-    ("party_quote_lines", "party_quote_lines", "party_quotes", "quote_id"),
-]
-
-_SCOPE = "current_setting('app.hotel_id', true)::uuid"
-
 
 def upgrade() -> None:
-    for t in DIRECT:
-        op.execute(
-            f"CREATE OR REPLACE VIEW ai_{t} AS "
-            f"SELECT * FROM {t} WHERE hotel_id = {_SCOPE}"
-        )
-    for view, table, parent, fk in CHILD:
-        op.execute(
-            f"CREATE OR REPLACE VIEW ai_{view} AS "
-            f"SELECT c.* FROM {table} c "
-            f"JOIN {parent} p ON p.id = c.{fk} "
-            f"WHERE p.hotel_id = {_SCOPE}"
-        )
+    for stmt in create_statements():
+        op.execute(stmt)
 
 
 def downgrade() -> None:
-    for view, *_ in CHILD:
-        op.execute(f"DROP VIEW IF EXISTS ai_{view}")
-    for t in DIRECT:
-        op.execute(f"DROP VIEW IF EXISTS ai_{t}")
+    for stmt in drop_statements():
+        op.execute(stmt)

@@ -58,10 +58,35 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture(autouse=True)
 async def _reset_db():
-    """Drop & recreate all tables before each test for full isolation."""
+    """Drop & recreate all tables before each test for full isolation.
+
+    The ai_* views (migration f65b872b1efa) depend on these tables, so a plain
+    drop_all now fails with DependentObjectsStillExist. Views are dropped first
+    and rebuilt after — the assistant's SQL tool is unusable without them, and a
+    test suite that silently ran without them would not be testing what ships.
+    """
+    from sqlalchemy import text
+
     async with engine.begin() as conn:
+        views = (
+            await conn.execute(
+                text(
+                    "select table_name from information_schema.views "
+                    "where table_schema='public' and table_name like 'ai\\_%' escape '\'"
+                )
+            )
+        ).scalars().all()
+        for v in views:
+            await conn.execute(text(f"DROP VIEW IF EXISTS {v} CASCADE"))
+
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+
+        # Rebuild them from the same definitions the migration uses, so tests
+        # exercise the real scoping rather than a stand-in.
+        from app.core.ai_views import create_ai_views
+
+        await create_ai_views(conn)
     yield
 
 
