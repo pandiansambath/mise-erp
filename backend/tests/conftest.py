@@ -67,25 +67,21 @@ async def _reset_db():
     """
     from sqlalchemy import text
 
+    from app.core.ai_views import create_ai_views, drop_statements
+
     async with engine.begin() as conn:
-        views = (
-            await conn.execute(
-                text(
-                    "select table_name from information_schema.views "
-                    "where table_schema='public' and table_name like 'ai\\_%' escape '\'"
-                )
-            )
-        ).scalars().all()
-        for v in views:
-            await conn.execute(text(f"DROP VIEW IF EXISTS {v} CASCADE"))
+        # Drop by KNOWN NAME rather than pattern-matching information_schema.
+        # The LIKE-with-escape version silently matched nothing, so no views
+        # were dropped and drop_all failed on the dependency — a query that
+        # returns empty looks identical to one with nothing to do.
+        for stmt in drop_statements():
+            await conn.execute(text(stmt))
 
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
-        # Rebuild them from the same definitions the migration uses, so tests
+        # Rebuild from the same definitions the migration uses, so tests
         # exercise the real scoping rather than a stand-in.
-        from app.core.ai_views import create_ai_views
-
         await create_ai_views(conn)
     yield
 
