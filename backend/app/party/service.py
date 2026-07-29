@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.timezones import hotel_today
 from app.party.models import PartyQuote, PartyQuoteLine
 from app.party.schemas import PartyQuoteCreate
 
@@ -19,8 +20,11 @@ class QuoteExpiredError(Exception):
     """Raised when trying to edit/delete a quote that's already expired (locked)."""
 
 
-def is_expired(valid_until: date | None) -> bool:
-    return valid_until is not None and valid_until < date.today()
+def is_expired(valid_until: date | None, hotel=None) -> bool:
+    """A quote expires at the END of its last day, where the restaurant is.
+    Server time would expire it early for anywhere east of UTC."""
+    today = hotel_today(hotel) if hotel is not None else date.today()
+    return valid_until is not None and valid_until < today
 
 
 def _totals(lines) -> tuple[Decimal, Decimal]:
@@ -34,8 +38,9 @@ def _totals(lines) -> tuple[Decimal, Decimal]:
     return total_price.quantize(_Q2), total_cost.quantize(_Q2)
 
 
-def _valid_until(event_date: date | None) -> date:
-    return event_date or (date.today() + timedelta(days=_DEFAULT_VALID_DAYS))
+def _valid_until(event_date: date | None, hotel=None) -> date:
+    base = hotel_today(hotel) if hotel is not None else date.today()
+    return event_date or (base + timedelta(days=_DEFAULT_VALID_DAYS))
 
 
 def quote_dict(q: PartyQuote) -> dict:

@@ -171,6 +171,7 @@ export interface LandingConfig {
 }
 
 export interface Hotel {
+  timezone?: string; // IANA zone — decides which day a sale belongs to
   id: string;
   name: string;
   username?: string | null; // @handle → <username>.dineai.cloud

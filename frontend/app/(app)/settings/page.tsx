@@ -61,6 +61,36 @@ export default function SettingsPage() {
   const isAdmin = user?.role === "SUPER_ADMIN";
 
   const [allowance, setAllowance] = useState("0");
+  const [tz, setTz] = useState("Europe/London");
+  const [tzList, setTzList] = useState<{ value: string; label: string }[]>([]);
+  const [savingTz, setSavingTz] = useState(false);
+  const [savedTz, setSavedTz] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ timezones: { value: string; label: string }[] }>("/hotels/timezones")
+      .then((d) => setTzList(d.timezones))
+      .catch(() => {});
+  }, []);
+
+  async function saveTimezone(next: string) {
+    setTz(next);
+    setSavingTz(true);
+    setSavedTz(false);
+    try {
+      await api.patch("/hotels/me", { timezone: next });
+      setSavedTz(true);
+      // Reload deliberately: every date on screen was computed for the OLD
+      // zone, and leaving stale figures beside a new setting is how people
+      // stop trusting the numbers.
+      window.setTimeout(() => window.location.reload(), 700);
+    } catch {
+      setSavedTz(false);
+    } finally {
+      setSavingTz(false);
+    }
+  }
+
   const [penalty, setPenalty] = useState("0");
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [savedPolicy, setSavedPolicy] = useState(false);
@@ -197,6 +227,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (hotel) {
       setAllowance(String(hotel.break_allowance_minutes ?? 0));
+      setTz(hotel.timezone ?? "Europe/London");
       setPenalty(hotel.break_penalty_per_min ?? "0");
       setMinWage(hotel.min_hourly_rate ?? "11.44");
     }
@@ -411,6 +442,44 @@ export default function SettingsPage() {
             Paid break minutes allowed per shift. Minutes beyond this are flagged on the
             timesheet and charged at the penalty rate below.
           </p>
+
+          {/* Timezone. Not cosmetic: it decides which DAY a sale, a shift or a
+              P&L belongs to, so it sits with the policy settings rather than
+              buried under display preferences. */}
+          <div className="mt-6 border-t border-line pt-5">
+            <label className="block text-sm font-medium text-fg-soft">Time zone</label>
+            <p className="mt-1 text-sm text-fg-faint">
+              Decides when your day starts and ends. Sales, shifts, reports and PDFs all
+              follow it — change it and today&apos;s figures re-group to the new local day.
+            </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <select
+                value={tz}
+                onChange={(e) => saveTimezone(e.target.value)}
+                disabled={savingTz}
+                className={`${inputCls} sm:w-80`}
+              >
+                {tzList.map((z) => (
+                  <option key={z.value} value={z.value}>
+                    {z.label}
+                  </option>
+                ))}
+              </select>
+              {savingTz && <span className="text-sm text-fg-faint">Saving…</span>}
+              {savedTz && <span className="text-sm text-brand-400">Saved ✓</span>}
+            </div>
+            <p className="mt-2 text-xs text-fg-faint">
+              Right now it&apos;s{" "}
+              <b className="text-fg-soft">
+                {new Date().toLocaleTimeString("en-GB", {
+                  timeZone: tz || "Europe/London",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </b>{" "}
+              there — check that matches the clock on your wall.
+            </p>
+          </div>
           <form onSubmit={saveBreakPolicy} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="sm:w-48">
               <label className="block text-sm font-medium text-fg-soft">Break allowance (minutes)</label>

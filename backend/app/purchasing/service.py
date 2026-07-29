@@ -6,7 +6,6 @@ otherwise the CHEAPEST active vendor. Only items no active vendor prices at
 all are skipped.
 """
 import uuid
-from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -210,7 +209,12 @@ async def item_suppliers(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUI
 
 
 async def _next_po_number(db: AsyncSession, hotel_id: uuid.UUID) -> tuple[int, int]:
-    year = date.today().year
+    # PO numbers embed the year. On 1 January a hotel east of UTC would
+    # otherwise still be issuing last year's numbers.
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel as _Hotel
+
+    year = hotel_today(await db.get(_Hotel, hotel_id)).year
     count = await db.scalar(
         select(func.count())
         .select_from(PurchaseOrder)

@@ -453,11 +453,18 @@ async def post_salary_expense(db: AsyncSession, rec: Payroll, employee_name: str
             cat = ExpenseCategory(hotel_id=rec.hotel_id, name="Staff Salaries", kind="FIXED")
             db.add(cat)
             await db.flush()
+
+        from app.core.timezones import hotel_today as _hotel_today
+        from app.hotels.models import Hotel as _Hotel
+
+        _pay_day = _hotel_today(await db.get(_Hotel, rec.hotel_id))
         db.add(
             Expense(
                 hotel_id=rec.hotel_id,
                 category_id=cat.id,
-                date=date.today(),
+                # The restaurant's day, so a late-evening pay run does not
+                # land in tomorrow's expenses.
+                date=_pay_day,
                 amount=rec.net_pay,
                 payment_method="BANK",
                 description=f"Payroll {rec.pay_period} · {employee_name} {marker}",

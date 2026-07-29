@@ -219,7 +219,9 @@ export function Copilot() {
 
   useEffect(() => {
     if (open) {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+      // Jump, don't glide: on REOPEN a smooth scroll walks the whole history
+      // past you, which is both slow and shows text mid-render.
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "auto" });
       inputRef.current?.focus();
     }
   }, [messages, open]);

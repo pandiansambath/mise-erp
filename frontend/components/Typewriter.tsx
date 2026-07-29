@@ -23,6 +23,16 @@ import { ChatMarkdown } from "@/components/ChatMarkdown";
 const CHARS_PER_TICK = 3;
 const TICK_MS = 16;
 
+/** Markdown characters, removed while typing so they are never seen. */
+function stripSyntax(s: string): string {
+  return s
+    .replace(/\|/g, "  ")                       // table pipes
+    .replace(/^\s*[-:]{3,}\s*$/gm, "")           // table dividers
+    .replace(/\*\*/g, "")                        // bold markers
+    .replace(/`/g, "")                          // code ticks
+    .replace(/\[([^\]]*)\]\([^)]*\)?/g, "$1");    // links -> their label
+}
+
 export function Typewriter({ text, animate }: { text: string; animate: boolean }) {
   const [shown, setShown] = useState(animate ? 0 : text.length);
   const done = shown >= text.length;
@@ -50,10 +60,10 @@ export function Typewriter({ text, animate }: { text: string; animate: boolean }
     };
   }, [text, animate]);
 
-  // Mid-animation the text is rendered as PLAIN text, not markdown: a
-  // half-written table is a mess of stray pipes, and re-parsing markdown on
-  // every tick would be wasteful as well as ugly. The real render happens once
-  // the text is whole.
+  // Mid-animation we type a SYNTAX-FREE version. Showing raw markdown while it
+  // types — stray asterisks, half-built table pipes — then swapping to a
+  // rendered block reads as if the app briefly broke and repaired itself. The
+  // reader should never see our formatting characters at all.
   if (!done) {
     return (
       <div
@@ -61,7 +71,7 @@ export function Typewriter({ text, animate }: { text: string; animate: boolean }
         title="Click to show it all"
         className="cursor-pointer whitespace-pre-wrap leading-[1.65]"
       >
-        {text.slice(0, shown)}
+        {stripSyntax(text.slice(0, shown))}
         <span className="ml-0.5 inline-block h-[1em] w-[2px] translate-y-[0.15em] animate-pulse bg-brand-400" />
       </div>
     );
