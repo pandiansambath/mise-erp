@@ -131,7 +131,10 @@ export default function HotelSite({
   /** The hotel's signature gradient — used on every button, chip and wash. */
   const grad = `linear-gradient(135deg, ${accent}, ${accent2})`;
   const heroKey = HERO_STYLES.some((h) => h.key === L.hero) ? L.hero : "warm";
-  const hero = `/site/hero-${heroKey}.jpg`;
+  // WebP: ~36% smaller than the JPEGs across the set, and supported by every
+  // browser we target. The .jpg originals stay in the repo as the source of
+  // truth for re-encoding, not as a runtime fallback nobody would hit.
+  const hero = `/site/hero-${heroKey}.webp`;
   const tagline = L.tagline || (data.city ? `A kitchen in ${data.city}` : "Every plate, every penny.");
 
   // ── hero parallax + scrim deepen: one rAF, direct style writes ──

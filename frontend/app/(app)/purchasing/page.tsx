@@ -810,7 +810,14 @@ export default function PurchasingPage() {
                         <ul className="space-y-1.5">
                           {openIndentObj.items.map((it) => (
                             <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
-                              <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setHistoryItem(it.item_id)}
+                                title="See everything this item has been ordered on"
+                                className="min-w-0 truncate text-left text-fg-soft underline decoration-dotted underline-offset-4 transition hover:text-brand-300"
+                              >
+                                {it.item_name}
+                              </button>
                               <span className="shrink-0 text-right">
                                 <span className="text-fg">{it.required_qty} {it.unit}</span>
                                 {it.vendor_name && <span className="ml-2 text-xs text-brand-300">→ {it.vendor_name}</span>}
