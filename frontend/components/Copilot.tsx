@@ -78,6 +78,17 @@ export function Copilot() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [expanding, setExpanding] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [usage, setUsage] = useState<{ plan?: string; model?: string; today_calls?: number; daily_limit?: number } | null>(null);
+
+  useEffect(() => {
+    if (!open || usage) return;
+    api
+      .get<{ plan?: string; model?: string; today_calls?: number; daily_limit?: number }>(
+        "/assistant/usage",
+      )
+      .then(setUsage)
+      .catch(() => {});
+  }, [open, usage]);
   const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
   const [showThreads, setShowThreads] = useState(false);
   // True only for a reply that just arrived, so replayed history appears at
@@ -414,10 +425,37 @@ export function Copilot() {
           <div className="relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3">
             <div className="absolute inset-0 bg-gradient-to-r from-brand-600/25 via-brand-500/10 to-transparent" aria-hidden />
             <ChefMascot mood={loading ? "think" : "happy"} className="relative w-10 shrink-0" />
-            <div className="relative leading-tight">
+            <div className="relative min-w-0 leading-tight">
               <p className="text-sm font-semibold text-fg">DineAI Copilot</p>
-              <p className="text-[11px] text-fg-faint">{configured === false ? "Quick help & navigation" : "One place for every plate & penny"}</p>
+              <p className="truncate text-[11px] text-fg-faint">
+                {configured === false
+                  ? "Quick help & navigation"
+                  : usage?.model
+                    ? `${usage.model.includes("haiku") ? "Haiku" : "Sonnet"}${usage.plan ? ` · ${usage.plan}` : ""}`
+                    : "One place for every plate & penny"}
+              </p>
             </div>
+            {/* The same allowance ring as the full page. Parity means the same
+                information, not a smaller version of a different thing. */}
+            {usage?.daily_limit ? (
+              <div className="relative h-9 w-9 shrink-0" title="AI questions left today">
+                <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
+                  <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3.5" className="stroke-glass/15" />
+                  <circle
+                    cx="18" cy="18" r="15.5" fill="none" strokeWidth="3.5" strokeLinecap="round"
+                    className={
+                      (usage.daily_limit - (usage.today_calls ?? 0)) / usage.daily_limit > 0.25
+                        ? "stroke-brand-400"
+                        : "stroke-amber-400"
+                    }
+                    strokeDasharray={`${Math.max(0, ((usage.daily_limit - (usage.today_calls ?? 0)) / usage.daily_limit) * 97.4)} 97.4`}
+                  />
+                </svg>
+                <span className="absolute inset-0 grid place-items-center text-[10px] font-semibold text-fg">
+                  {Math.max(0, usage.daily_limit - (usage.today_calls ?? 0))}
+                </span>
+              </div>
+            ) : null}
             <div className="relative ml-auto">
               <button
                 type="button"
@@ -497,7 +535,7 @@ export function Copilot() {
                 <div className="max-w-[80%]">
                   {/* eslint-disable-next-line @next/next/no-img-element -- data-URL thumbnail, nothing for next/image to optimise */}
                   {m.image && <img src={m.image} alt="attachment" className="mb-1.5 max-h-40 rounded-xl border border-glass/15 object-cover" />}
-                  <div className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "rounded-br-md bg-brand-600 text-white shadow-sm" : "rounded-bl-md border border-glass/10 bg-paper-3 text-fg"}`}>
+                  <div className={`rounded-2xl px-4 py-3 text-[15px] leading-[1.65] ${m.role === "user" ? "rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20" : "mise-neo-raised rounded-bl-md text-fg"}`}>
                     <Typewriter text={m.content} animate={m.role === "assistant" && i === messages.length - 1 && justAnswered} />
                   </div>
 
