@@ -527,11 +527,29 @@ async def staff_today(db: AsyncSession, user: User, args: dict) -> dict:
     }
 
     def _t(dt) -> str | None:
-        return dt.strftime("%H:%M") if dt else None
+        # Seconds matter here: a clock-in and clock-out in the same MINUTE looks
+        # like a data error at HH:MM, and like a 40-second shift at HH:MM:SS.
+        return dt.strftime("%H:%M:%S") if dt else None
 
+    now = datetime.now(UTC)
     rows = []
     for p in people:
         a = marks.get(p.id)
+        cin = getattr(a, "clock_in", None) if a else None
+        cout = getattr(a, "clock_out", None) if a else None
+
+        # Derive what the raw columns don't say, so the assistant can reason
+        # about it instead of reading two timestamps aloud.
+        state, worked_minutes = "not marked", None
+        if cin and cout:
+            worked_minutes = round((cout - cin).total_seconds() / 60, 1)
+            state = "left"
+        elif cin:
+            worked_minutes = round((now - cin).total_seconds() / 60, 1)
+            state = "still working"
+        elif a and getattr(a, "status", None):
+            state = str(a.status).lower()
+
         rows.append(
             {
                 "name": p.full_name,
@@ -539,17 +557,26 @@ async def staff_today(db: AsyncSession, user: User, args: dict) -> dict:
                 # No attendance row means nobody marked them either way today —
                 # say that, rather than implying they were absent.
                 "today": (a.status if a else "not marked"),
-                "clock_in": _t(getattr(a, "clock_in", None)) if a else None,
-                "clock_out": _t(getattr(a, "clock_out", None)) if a else None,
+                "state": state,
+                "clock_in": _t(cin),
+                "clock_out": _t(cout),
+                "worked_minutes": worked_minutes,
+                # A shift under two minutes is almost always a mis-tap, and the
+                # owner wants that flagged rather than reported as a shift.
+                "looks_like_a_mistake": bool(
+                    worked_minutes is not None and state == "left" and worked_minutes < 2
+                ),
             }
         )
 
-    present = sum(1 for r in rows if r["today"] == "PRESENT")
     return {
         "date": str(day),
+        "now": now.strftime("%H:%M:%S"),
         "total_staff": len(rows),
-        "present_today": present,
-        "not_marked": sum(1 for r in rows if r["today"] == "not marked"),
+        "still_working": sum(1 for r in rows if r["state"] == "still working"),
+        "left_already": sum(1 for r in rows if r["state"] == "left"),
+        "not_marked": sum(1 for r in rows if r["state"] == "not marked"),
+        "suspicious_shifts": [r["name"] for r in rows if r["looks_like_a_mistake"]],
         "staff": rows[:120],
     }
 

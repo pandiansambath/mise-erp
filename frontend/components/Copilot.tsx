@@ -1,16 +1,7 @@
 "use client";
 
-/** The model sometimes writes markdown links. The bubble renders plain text and
- *  the same links already appear as action buttons below, so show just the
- *  label rather than leaking "[Open Staff](/staff)" at the reader. */
-function plainText(s: string): string {
-  return s
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")   // [label](href) -> label
-    .replace(/\*\*([^*]+)\*\*/g, "$1")             // **bold** -> bold
-    .replace(/(^|\s)\*([^*]+)\*/g, "$1$2")         // *italic* -> italic
-    .replace(/`([^`]+)`/g, "$1")                    // `code` -> code
-    .trim();
-}
+import { ChatMarkdown } from "@/components/ChatMarkdown";
+
 
 // DineAI Copilot — the project-aware AI, on every page (mounted in AppShell so it
 // inherits the theme). It explains things, reads your live numbers, links you
@@ -521,7 +512,7 @@ export function Copilot() {
                   {/* eslint-disable-next-line @next/next/no-img-element -- data-URL thumbnail, nothing for next/image to optimise */}
                   {m.image && <img src={m.image} alt="attachment" className="mb-1.5 max-h-40 rounded-xl border border-glass/15 object-cover" />}
                   <div className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "rounded-br-md bg-brand-600 text-white shadow-sm" : "rounded-bl-md border border-glass/10 bg-paper-3 text-fg"}`}>
-                    {plainText(m.content)}
+                    <ChatMarkdown text={m.content} />
                   </div>
 
                   {/* Confirm cards (proposed write actions) */}
