@@ -183,10 +183,12 @@ function Bubble({
           </div>
         ))}
       <div
-        className={`max-w-[min(46rem,88%)] rounded-2xl ${tight ? "p-1.5" : "px-4 py-3"} text-sm leading-relaxed ${
+        className={`max-w-[min(46rem,86%)] rounded-2xl ${
+          tight ? "p-2" : "px-4.5 py-3.5"
+        } text-[15px] leading-[1.65] ${
           mine
-            ? "mise-press rounded-br-md bg-brand-600 text-white"
-            : "mise-feel rounded-bl-md bg-paper-2 text-fg"
+            ? "mise-press rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20"
+            : "mise-neo-raised rounded-bl-md text-fg"
         }`}
       >
         {children}
@@ -219,6 +221,35 @@ export default function AiScanPage() {
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
+  // Past conversations. "New chat" never deleted anything — but with no way
+  // back to the old thread it may as well have.
+  const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
+  const [showThreads, setShowThreads] = useState(false);
+
+  const loadThreads = useCallback(() => {
+    api
+      .get<{ threads: { id: string; title: string }[] }>("/assistant/threads")
+      .then((d) => setThreads(d.threads))
+      .catch(() => {});
+  }, []);
+
+  async function openThread(id: string) {
+    setShowThreads(false);
+    const d = await api.get<{ thread_id: string; messages: { role: string; content: string }[] }>(
+      `/assistant/history?thread=${id}`,
+    );
+    setThreadId(d.thread_id);
+    setMsgs(
+      d.messages.length
+        ? d.messages.map((m) => ({
+            id: nid(),
+            who: (m.role === "assistant" ? "ai" : "me") as "ai" | "me",
+            kind: "text" as const,
+            text: m.content,
+          }))
+        : [{ id: nid(), who: "ai", kind: "text", text: GREETING }],
+    );
+  }
 
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -234,6 +265,7 @@ export default function AiScanPage() {
       )
       .then((d) => {
         setThreadId(d.thread_id);
+        loadThreads();
         if (!d.messages.length) return;
         setMsgs(
           d.messages.map((m) => ({
@@ -618,6 +650,45 @@ export default function AiScanPage() {
             </p>
           )}
         </div>
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            onClick={() => {
+              loadThreads();
+              setShowThreads((v) => !v);
+            }}
+            title="Past conversations"
+            className="mise-press flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <path d="M12 8v4l3 2M3 12a9 9 0 1 0 9-9 9 9 0 0 0-7.5 4" />
+            </svg>
+            <span className="hidden sm:inline">History</span>
+          </button>
+          {showThreads && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowThreads(false)} aria-hidden />
+              <div className="mise-pop absolute right-0 top-11 z-20 max-h-80 w-72 overflow-y-auto rounded-xl border border-line bg-paper-2/95 p-1.5 shadow-2xl backdrop-blur">
+                {threads.length === 0 ? (
+                  <p className="px-3 py-3 text-xs text-fg-faint">No earlier conversations yet.</p>
+                ) : (
+                  threads.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => openThread(t.id)}
+                      className={`block w-full truncate rounded-lg px-3 py-2 text-left text-sm transition hover:bg-glass/5 ${
+                        t.id === threadId ? "text-brand-300" : "text-fg-soft"
+                      }`}
+                    >
+                      {t.title}
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
         <button
           type="button"
           onClick={async () => {
@@ -628,9 +699,10 @@ export default function AiScanPage() {
               setThreadId(null);
             }
             setMsgs([{ id: nid(), who: "ai", kind: "text", text: GREETING }]);
+            loadThreads();
           }}
           title="New chat — your old conversations are kept"
-          className="mise-press ml-auto flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+          className="mise-press flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
             <path d="M12 5v14M5 12h14" />
@@ -649,7 +721,7 @@ export default function AiScanPage() {
       )}
 
       {/* the thread */}
-      <div className="mise-glass flex-1 space-y-4 overflow-y-auto rounded-2xl p-4">
+      <div className="mise-glass flex-1 space-y-5 overflow-y-auto rounded-2xl p-5 sm:p-6">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];
@@ -670,7 +742,7 @@ export default function AiScanPage() {
             return (
               <Bubble key={m.id} who="ai">
                 <span className="flex items-center gap-2 text-fg-faint">
-                  <span className="flex gap-1">
+                  <span className="mise-breathe flex gap-1">
                     {[0, 1, 2].map((i) => (
                       <span
                         key={i}
@@ -785,7 +857,7 @@ export default function AiScanPage() {
             e.target.value = "";
           }}
         />
-        <div className="mise-well flex items-end gap-2 rounded-2xl p-2">
+        <div className="mise-neo flex items-end gap-2 p-2.5">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
