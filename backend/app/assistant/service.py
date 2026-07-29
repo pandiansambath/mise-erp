@@ -121,7 +121,7 @@ def _dedupe(actions: list[dict]) -> list[Action]:
 async def _gather_for_sonnet(db: AsyncSession, user: User, history: list[dict]) -> str:
     """Facts for the single-shot Sonnet path.
 
-    The Gemini provider calls tools in a loop; this path has no loop, so we run
+    The brain calls tools in a loop; this helper has no loop, so we run
     the cheap read-only tools up front and hand the results over. It costs one
     call instead of several, and means the assistant answers from real numbers
     rather than guessing.

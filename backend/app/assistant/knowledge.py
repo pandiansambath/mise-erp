@@ -9,7 +9,7 @@ Three things:
               might ask about ("what is slow stock?", "what's a margin?").
   • PERSONA — who the assistant is and how it should behave.
 
-This is small enough to live entirely in the prompt (Gemini Flash has a 1M-token
+This is small enough to live entirely in the prompt (Claude has a 200k-token
 context), so there's no vector DB to maintain. Keep it current as features land.
 """
 from __future__ import annotations

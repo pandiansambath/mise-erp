@@ -57,15 +57,12 @@ class Settings(BaseSettings):
         '"enterprise_year":"price_1TyCp8PlbHXr6C3C7Uz21KGA"}'
     )
 
-    # DineAI Copilot — the in-app AI assistant. A free Google AI Studio key activates
-    # the LLM (Gemini Flash: free tier, 1M context, native tools). With no key the
-    # assistant degrades gracefully to deterministic glossary + navigation answers,
-    # so the app (and CI) run fine without it. Provider-agnostic by design.
+    # Gemini is GONE. The assistant, document ingest and scanning all run on
+    # Bedrock now (see app/assistant/brain.py). These keys are kept only so an
+    # existing .env with them set still boots; nothing reads them.
     gemini_api_key: str = ""
-    # Optional 2nd key — the assistant rotates to it when the 1st hits the free-tier
-    # rate limit (429), so a busy minute doesn't take the Copilot offline.
     gemini_api_key_2: str = ""
-    assistant_model: str = "gemini-2.5-flash"
+    assistant_model: str = ""
 
     # Claude on Amazon Bedrock — the Copilot's brain for document understanding
     # (bills, handwritten recipes) and the in-app assistant. Runs on the instance

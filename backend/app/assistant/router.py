@@ -108,7 +108,7 @@ async def ingest_extract(
         if not provider.is_configured():
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
-                "The AI isn't switched on yet (no Gemini key), so I can't read documents.",
+                "The AI can't be reached right now, so I can't read documents.",
             ) from None
         # The AI IS on — this was a transient failure (usually a rate limit).
         raise HTTPException(

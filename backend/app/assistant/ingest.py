@@ -1,5 +1,5 @@
 """Document onboarding — upload a PDF/image/CSV of your existing items or
-suppliers and the Copilot reads it (Gemini multimodal), extracts structured
+suppliers and the Copilot reads it (Claude on Bedrock), extracts structured
 rows, and (after you confirm) bulk-creates them via the normal services.
 
 Two steps so a human always confirms before anything is written:
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -20,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.auth.models import User
-from app.core.config import settings
 from app.core.rbac import has_permission
 from app.employees import service as employee_service
 from app.inventory import service as inventory_service
@@ -28,7 +28,8 @@ from app.recipes import service as recipe_service
 from app.sales import service as sales_service
 from app.vendors import service as vendor_service
 
-from .provider import ProviderError, is_configured, post_gemini
+from . import bedrock
+from .provider import ProviderError
 
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -172,7 +173,7 @@ KINDS: dict[str, dict] = {
     },
 }
 
-MAX_BYTES = 15 * 1024 * 1024  # Gemini inline-data ceiling is ~20MB; stay under it
+MAX_BYTES = 15 * 1024 * 1024  # Bedrock's per-request payload ceiling; stay under it
 
 
 def kind_perm(kind: str) -> str | None:
@@ -213,55 +214,78 @@ def _xlsx_to_csv(file_bytes: bytes, max_rows: int = 500) -> str:
 
 
 async def extract(file_bytes: bytes, mime: str, kind: str) -> list[dict]:
-    """Read the uploaded document and return proposed rows (writes nothing)."""
+    """Read the uploaded document and return proposed rows (writes nothing).
+
+    On Bedrock, like everything else in the assistant. Spreadsheets are still
+    converted to CSV text first: no model can read an .xlsx binary, and handing
+    it one produces confident nonsense rather than an error.
+    """
     if kind not in KINDS:
         raise ValueError(f"Unknown document kind '{kind}'")
-    if not is_configured():
-        raise ProviderError("no api key")
     cfg = KINDS[kind]
 
-    try:
-        import httpx
-    except ImportError as exc:
-        raise ProviderError("httpx not installed") from exc
+    schema_hint = (
+        "\n\nReply with a JSON ARRAY only - no prose, no code fences. Each "
+        "element must match this shape:\n"
+        + json.dumps(cfg["schema"], default=str)[:2000]
+    )
 
-    url = _ENDPOINT.format(model=settings.assistant_model)
-    # Gemini can't read an .xlsx binary, so convert spreadsheets to CSV text first.
     if _is_excel(mime):
-        sheet = _xlsx_to_csv(file_bytes)
-        parts = [{"text": cfg["prompt"] + "\n\nSPREADSHEET CONTENTS (CSV):\n" + sheet}]
-    else:
-        parts = [
-            {"text": cfg["prompt"]},
-            {"inline_data": {"mime_type": mime, "data": base64.b64encode(file_bytes).decode()}},
+        content: list[dict] = [
+            {
+                "type": "text",
+                "text": (
+                    cfg["prompt"]
+                    + "\n\nSPREADSHEET CONTENTS (CSV):\n"
+                    + _xlsx_to_csv(file_bytes)
+                    + schema_hint
+                ),
+            }
         ]
-    body = {
-        "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": cfg["schema"],
-            "temperature": 0.1,
-            "maxOutputTokens": 8192,
-        },
-    }
+    else:
+        media = mime.split(";")[0]
+        is_image = media.startswith("image/")
+        content = [
+            {
+                "type": "image" if is_image else "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": media if is_image else "application/pdf",
+                    "data": base64.b64encode(file_bytes).decode(),
+                },
+            },
+            {"type": "text", "text": cfg["prompt"] + schema_hint},
+        ]
+
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await post_gemini(client, url, body)  # rotates keys on 429
-            if resp.status_code >= 300:
-                raise ProviderError(f"gemini {resp.status_code}: {resp.text[:300]}")
-            data = resp.json()
-        text = "".join(
-            p.get("text", "") for p in data["candidates"][0]["content"]["parts"]
+        raw = bedrock._invoke(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 8192,
+                "messages": [{"role": "user", "content": content}],
+            }
         )
-        rows = json.loads(text)
-        if not isinstance(rows, list):
-            return []
-        key = "amount" if kind == "sales" else "name"
-        return [r for r in rows if isinstance(r, dict) and r.get(key) is not None]
-    except ProviderError:
-        raise
-    except Exception as exc:  # noqa: BLE001 — network/JSON → caller decides
+    except bedrock.BedrockUnavailable as exc:
         raise ProviderError(str(exc)) from exc
+
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-z]*\s*|\s*```$", "", text, flags=re.S)
+    try:
+        rows = json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\[.*\]", text, flags=re.S)
+        if not m:
+            raise ProviderError("The AI returned something we couldn't read.") from None
+        try:
+            rows = json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            raise ProviderError("The AI returned something we couldn't read.") from exc
+
+    if not isinstance(rows, list):
+        return []
+    key = "amount" if kind == "sales" else "name"
+    return [r for r in rows if isinstance(r, dict) and r.get(key) is not None]
 
 
 def _dec(v: Any) -> str | None:
