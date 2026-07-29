@@ -74,6 +74,10 @@ export default function PurchasingPage() {
   const [msg, setMsg] = useState<string | null>(null);
   // Deep link from Inventory: show THIS item's own purchasing history in place.
   const [historyItem, setHistoryItem] = useState<string | null>(null);
+  // The page is three jobs, not one long scroll: raise an order, track indents,
+  // track POs. Stacking all three meant whatever you came for was usually below
+  // the fold.
+  const [tab, setTab] = useState<"new" | "indents" | "orders">("new");
 
   // ⌘K "Start a purchase order" (?new=1) → spotlight the indent composer
   useDeepLink({ new: () => spotlight("indent-form") }, !loading);
@@ -166,6 +170,7 @@ export default function PurchasingPage() {
     if (vendorId) setVendorPick((prev) => ({ ...prev, [itemId]: vendorId }));
     window.history.replaceState(null, "", window.location.pathname); // one-shot
     // land the user IN the composer: scroll to it, ring it, focus the first field
+    setTab("new");
     spotlight("indent-form");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -457,7 +462,32 @@ export default function PurchasingPage() {
       <PageHeader title="Purchasing" subtitle="Kitchen indents → vendor-wise purchase orders." />
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
 
-      {canWrite && (
+      {/* One job on screen at a time. Everything is one tap away; nothing is
+          reachable only by scrolling. */}
+      <nav className="mb-5 flex flex-wrap gap-2">
+        {([
+          ["new", "New order", canWrite],
+          ["indents", `Indents (${indents.length})`, true],
+          ["orders", `Purchase orders (${pos.length})`, true],
+        ] as const)
+          .filter(([, , show]) => show)
+          .map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={`mise-press rounded-full px-4 py-2 text-sm font-medium transition ${
+                tab === key
+                  ? "bg-brand-600 text-white shadow-sm"
+                  : "border border-line text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+      </nav>
+
+      {canWrite && tab === "new" && (
         <Card className="mb-6" id="indent-form">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium text-fg-soft">New kitchen indent</p>
@@ -494,7 +524,7 @@ export default function PurchasingPage() {
       )}
 
       {/* ── The purchasing pipeline — where every order sits, at a glance ── */}
-      {(indents.length > 0 || pos.length > 0) && (
+      {tab === "new" && (indents.length > 0 || pos.length > 0) && (
         <Card className="mise-feel mb-6">
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             {(() => {
@@ -547,9 +577,9 @@ export default function PurchasingPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         {/* Indents — tap a row to see its items, suppliers and the approve action. */}
-        <Card className="overflow-hidden p-0">
+        <Card className={`overflow-hidden p-0 ${tab === "indents" ? "" : "hidden"}`}>
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h3 className="font-semibold text-fg">Indents</h3>
             <span className="text-xs text-fg-faint">{indents.length} total</span>
@@ -583,7 +613,7 @@ export default function PurchasingPage() {
         </Card>
 
         {/* Purchase orders — same tap-to-expand; line items load on open, no side-scroll. */}
-        <Card className="overflow-hidden p-0">
+        <Card className={`overflow-hidden p-0 ${tab === "orders" ? "" : "hidden"}`}>
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h3 className="font-semibold text-fg">Purchase orders</h3>
             <span className="text-xs text-fg-faint">{pos.length} total</span>
