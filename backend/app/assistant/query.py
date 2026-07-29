@@ -63,7 +63,7 @@ class UnsafeQuery(ValueError):
     """Rejected before it reached the database."""
 
 
-def validate(sql: str) -> str:
+def validate(sql: str, allowed: set[str] | None = None) -> str:
     """Reject anything that is not a single plain read over allow-listed views."""
     q = (sql or "").strip().rstrip(";").strip()
     if not q:
@@ -81,15 +81,14 @@ def validate(sql: str) -> str:
     if _FORBIDDEN.search(q):
         raise UnsafeQuery("Only plain read-only queries are allowed")
 
+    allow = allowed if allowed is not None else READABLE
     referenced = {t.lower() for t in _TABLES.findall(q)}
     # `with x as (...) select ... from x` — CTE names are fine.
     ctes = {c.lower() for c in re.findall(r"\b(\w+)\s+as\s*\(", q, re.I)}
-    unknown = referenced - READABLE - ctes
+    unknown = referenced - allow - ctes
     if unknown:
-        raise UnsafeQuery(
-            "Can only read: " + ", ".join(sorted(READABLE))[:400]
-        )
-    if not (referenced & READABLE):
+        raise UnsafeQuery("Can only read: " + ", ".join(sorted(allow))[:400])
+    if not (referenced & allow):
         raise UnsafeQuery("No readable view referenced")
     return q
 
@@ -121,6 +120,51 @@ async def run(db: AsyncSession, user: User, sql: str) -> dict:
         return {"error": "That query didn't run — try asking a different way."}
     finally:
         # Never leave a read-only transaction open for the next caller.
+        await db.rollback()
+
+    return {"row_count": len(rows), "rows": rows, "truncated": len(rows) >= MAX_ROWS}
+
+
+# ── Operator scope: the same machinery WITHOUT the hotel filter ─────────────
+#
+# The Control Room legitimately sees every hotel — that is its whole job. So it
+# queries the base tables directly rather than the ai_* views.
+#
+# Two things are still excluded, and they are not negotiable:
+#   users            — carries password_hash. Staff facts come from employees.
+#   chats/chat_messages — hotel-to-hotel private messaging. The operator runs
+#                         the platform; they are not a party to those.
+OPERATOR_READABLE = {
+    "hotels", "items", "vendors", "vendor_items", "recipes", "recipe_ingredients",
+    "indents", "indent_items", "purchase_orders", "po_items", "price_history",
+    "expenses", "expense_categories", "daily_sales", "dish_sales", "sales_channels",
+    "menu_items", "orders", "order_items", "employees", "attendance", "payroll",
+    "shifts", "documents", "safety_logs", "party_quotes", "budget_targets",
+    "job_postings", "job_applications", "ai_usage", "audit_events",
+    "assistant_threads", "custom_roles",
+}
+
+
+async def run_operator(db: AsyncSession, sql: str) -> dict:
+    """Cross-hotel read for the Control Room. Caller MUST have checked the
+    platform-owner flag — this function deliberately applies no tenant scope."""
+    try:
+        q = validate(sql, allowed=OPERATOR_READABLE)
+    except UnsafeQuery as exc:
+        return {"error": str(exc)}
+
+    if not re.search(r"limit\s+\d+", q, re.I):
+        q = f"{q} LIMIT {MAX_ROWS}"
+
+    try:
+        await db.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+        await db.execute(text("SET LOCAL transaction_read_only = on"))
+        rows = [dict(r._mapping) for r in (await db.execute(text(q))).fetchall()[:MAX_ROWS]]
+    except Exception as exc:  # noqa: BLE001
+        log.warning("operator query failed: %s", str(exc)[:300], extra={"code": "DINE-A3005"})
+        await db.rollback()
+        return {"error": "That query didn't run — try asking a different way."}
+    finally:
         await db.rollback()
 
     return {"row_count": len(rows), "rows": rows, "truncated": len(rows) >= MAX_ROWS}

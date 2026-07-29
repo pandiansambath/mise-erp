@@ -38,7 +38,27 @@ async def test_the_facts_carry_no_tenant_operational_data(db) -> None:
         assert forbidden not in blob, forbidden
 
 
-async def test_system_prompt_forbids_speculating_about_tenant_data() -> None:
+async def test_system_prompt_still_forbids_inventing_and_leaking() -> None:
     prompt = operator_brain._SYSTEM.lower()
-    assert "never reveal" in prompt
     assert "never invent a number" in prompt
+    # It CAN now read tenant data — so the rule that matters shifts from "you
+    # cannot see it" to "you do not repeat it".
+    assert "never volunteer" in prompt
+
+
+def test_the_operator_cannot_read_credentials_or_private_messages() -> None:
+    """The operator runs the platform. That does not make them a party to
+    hotel-to-hotel messages, and nothing justifies reading password hashes."""
+    from app.assistant import query
+
+    for forbidden in ("users", "chats", "chat_messages"):
+        assert forbidden not in query.OPERATOR_READABLE, forbidden
+
+
+def test_operator_scope_is_wider_than_a_hotel_scope() -> None:
+    """The whole point: same machinery, no tenant filter."""
+    from app.assistant import query
+
+    assert "hotels" in query.OPERATOR_READABLE
+    # a hotel's own assistant only ever sees the scoped views
+    assert all(v.startswith("ai_") for v in query.READABLE)
