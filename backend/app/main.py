@@ -12,6 +12,7 @@ from app.audit.router import router as audit_router
 from app.auth.roles_router import router as roles_router
 from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
+from app.core import logging_setup
 from app.core.config import settings
 from app.documents.router import router as documents_router
 from app.employees.router import attendance_router
@@ -48,6 +49,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # One log format everywhere, before anything can log.
+    logging_setup.configure(getattr(settings, "log_level", "INFO"))
+
     app = FastAPI(
         title=settings.app_name,
         version=__version__,
@@ -57,6 +61,25 @@ def create_app() -> FastAPI:
     # We authenticate with Bearer tokens (no cookies), so a "*" origin is safe;
     # browsers forbid credentials + "*", so only enable credentials for explicit origins.
     _wildcard = "*" in settings.cors_origins
+    @app.middleware("http")
+    async def _log_context(request, call_next):
+        """Bind hotel + user to every log line this request produces.
+
+        Done here so nothing has to thread the hotel down through five layers of
+        call just to be searchable. The handle (not the UUID) is what support
+        can read off a customer's URL.
+        """
+        import uuid as _uuid
+
+        rid = _uuid.uuid4().hex[:8]
+        logging_setup.bind(request_id=rid)
+        try:
+            response = await call_next(request)
+        finally:
+            logging_setup.clear()
+        response.headers["X-Request-Id"] = rid
+        return response
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
