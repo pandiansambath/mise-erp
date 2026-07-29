@@ -38,6 +38,9 @@ class ProposedAction(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    # Tappable follow-ups the assistant offered. Sending one back is the same as
+    # typing it, so the conversation stays a conversation.
+    choices: list[str] = Field(default_factory=list)
     thread_id: uuid.UUID | None = None
     actions: list[Action] = Field(default_factory=list)
     pending_actions: list[ProposedAction] = Field(default_factory=list)

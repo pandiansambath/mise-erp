@@ -2,6 +2,8 @@
 and harvest navigation actions. Degrades to a deterministic answer with no key."""
 from __future__ import annotations
 
+import re
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
@@ -140,6 +142,23 @@ async def _gather_for_sonnet(db: AsyncSession, user: User, history: list[dict]) 
     return json.dumps(out, default=str)[:12000]
 
 
+_CHOICES_RE = re.compile(r"\[\[CHOICES:\s*(.+?)\s*\]\]", re.S)
+
+
+def _split_choices(reply: str) -> tuple[str, list[str]]:
+    """Pull [[CHOICES: a | b]] out of the reply.
+
+    The marker must never reach the screen — a user seeing our prompt syntax
+    loses trust in everything else on the page. Options are capped at three
+    because a wall of buttons is just a menu with extra steps.
+    """
+    m = _CHOICES_RE.search(reply or "")
+    if not m:
+        return (reply or "").strip(), []
+    options = [o.strip() for o in m.group(1).split("|") if o.strip()][:3]
+    return _CHOICES_RE.sub("", reply).strip(), options
+
+
 async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse:
     from app.hotels.models import Hotel
 
@@ -184,8 +203,10 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
             meter=meter,
         )
         if reply:
+            reply, choices = _split_choices(reply)
             return ChatResponse(
                 reply=reply,
+                choices=choices,
                 actions=_dedupe(collected),
                 pending_actions=[ProposedAction(**p) for p in proposals],
                 used_tools=used,

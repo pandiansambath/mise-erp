@@ -70,7 +70,7 @@ type Draft = {
 type Action = { label: string; href: string };
 
 type Msg =
-  | { id: string; who: "ai" | "me"; kind: "text"; text: string; actions?: Action[]; at?: number }
+  | { id: string; who: "ai" | "me"; kind: "text"; text: string; actions?: Action[]; choices?: string[]; at?: number }
   | { id: string; who: "me"; kind: "photo"; url: string; name: string }
   | { id: string; who: "ai"; kind: "thinking"; note: string }
   | { id: string; who: "ai"; kind: "card" }
@@ -271,8 +271,8 @@ export default function AiScanPage() {
     [],
   );
   const say = useCallback(
-    (text: string, actions?: Action[]) =>
-      push({ id: nid(), who: "ai", kind: "text", text, actions, at: now() }),
+    (text: string, actions?: Action[], choices?: string[]) =>
+      push({ id: nid(), who: "ai", kind: "text", text, actions, choices, at: now() }),
     [push],
   );
 
@@ -358,7 +358,7 @@ export default function AiScanPage() {
       .map((m) => ({ role: m.who === "ai" ? "assistant" : "user", content: m.text }));
 
     try {
-      const r = await api.post<{ reply: string; actions?: Action[]; thread_id?: string }>(
+      const r = await api.post<{ reply: string; actions?: Action[]; choices?: string[]; thread_id?: string }>(
         "/assistant/chat",
         {
           messages: [...history, { role: "user", content: q }],
@@ -368,7 +368,7 @@ export default function AiScanPage() {
       );
       if (r.thread_id) setThreadId(r.thread_id);
       drop(thinking);
-      say(r.reply, r.actions);
+      say(r.reply, r.actions, r.choices);
     } catch (e) {
       drop(thinking);
       say(e instanceof ApiError ? `Sorry — ${e.message}` : "Sorry, I couldn't answer that.");
@@ -716,6 +716,21 @@ export default function AiScanPage() {
           return (
             <Bubble key={m.id} who={m.who} grouped={grouped} at={m.at}>
               <p className="whitespace-pre-wrap">{m.text}</p>
+              {m.choices && m.choices.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {m.choices.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => send(c)}
+                      disabled={busy}
+                      className="mise-press rounded-full border border-brand-400/40 bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-brand-500/20 disabled:opacity-50"
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
               {m.actions && m.actions.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {m.actions.map((a) => (
