@@ -78,6 +78,9 @@ class HotelUpdate(BaseModel):
     break_penalty_per_min: Decimal | None = Field(default=None, ge=0)
     min_hourly_rate: Decimal | None = Field(default=None, ge=0)
     landing: dict | None = None  # customizable public-page config (tagline/about/accent/…)
+    # IANA zone. Validated against the offered list rather than accepted freely:
+    # a typo here silently shifts which DAY every sale and shift belongs to.
+    timezone: str | None = None
 
 
 class TokenResponse(BaseModel):

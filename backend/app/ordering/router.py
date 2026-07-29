@@ -385,12 +385,16 @@ async def _record_sale(db: AsyncSession, order: Order) -> None:
     engine — the 'Online Orders' sales channel gets a line (feeds Sales & Cash,
     Money and the P&L), and recipe-linked items bump DishSale so menu
     engineering learns what actually sells. Best-effort: never blocks the flow."""
-    from datetime import UTC, datetime
 
     from app.sales.models import DailySales, DishSale, SalesChannel, SalesLine
 
     try:
-        today = datetime.now(UTC).date()
+        # An order taken at 23:50 local belongs to THAT day's takings, even
+        # though UTC may already have rolled over.
+        from app.core.timezones import hotel_today
+        from app.hotels.models import Hotel as _Hotel
+
+        today = hotel_today(await db.get(_Hotel, order.hotel_id))
         channel = (
             await db.execute(
                 select(SalesChannel).where(

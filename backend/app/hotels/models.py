@@ -54,6 +54,10 @@ class Hotel(Base):
     # than inferred from Stripe so a trial works before anyone has paid, and so
     # expiry is answerable without a network call.
     trial_ends_on: Mapped[date | None] = mapped_column(Date)
+    # IANA zone (e.g. "Europe/London", "Asia/Kolkata"). Decides which DAY a sale,
+    # a shift or a P&L belongs to — not just how a time is printed. Timestamps
+    # stay stored in UTC; this changes how they are read. See core.timezones.
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Europe/London")
     # Internal/comped account (our own test hotels, a demo, a goodwill month).
     # Full access, never billed, and EXCLUDED from revenue reporting — otherwise
     # your own test accounts quietly inflate MRR and you trust a wrong number.

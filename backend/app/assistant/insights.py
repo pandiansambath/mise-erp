@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +71,12 @@ async def daily(db: AsyncSession, user: User, *, force: bool = False) -> dict:
     """Today's briefing. Cached per hotel per day, so opening the dashboard
     repeatedly costs nothing."""
     key = str(user.hotel_id)
-    today = datetime.now(UTC).date()
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel as _Hotel
+
+    # Cached per hotel per LOCAL day, so the briefing refreshes at the
+    # restaurant's midnight rather than the server's.
+    today = hotel_today(await db.get(_Hotel, user.hotel_id))
     if not force:
         hit = _CACHE.get(key)
         if hit and hit[0] == today:

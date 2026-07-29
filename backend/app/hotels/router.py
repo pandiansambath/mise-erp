@@ -4,9 +4,10 @@ import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import require
+from app.auth.deps import get_current_user, require
 from app.auth.models import User
 from app.auth.schemas import HotelOut, HotelUpdate
+from app.core import timezones
 from app.core.database import get_db
 from app.core.storage import get_storage
 from app.hotels.models import Hotel
@@ -14,6 +15,13 @@ from app.hotels.models import Hotel
 router = APIRouter(prefix="/hotels", tags=["hotels"])
 
 _LOGO_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg"}
+
+
+@router.get("/timezones")
+async def list_timezones(user: User = Depends(get_current_user)) -> dict:
+    """The zones Settings may offer. Served from the same list the server
+    validates against, so the dropdown can never show an unaccepted option."""
+    return {"timezones": timezones.CHOICES, "default": timezones.DEFAULT}
 
 
 @router.get("/me", response_model=HotelOut)
@@ -34,7 +42,19 @@ async def update_my_hotel(
     hotel = await db.get(Hotel, user.hotel_id)
     if hotel is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+
+    # A bad zone would not error — it would quietly move every business day.
+    # Reject it here rather than fall back at read time and leave the setting
+    # showing something the app is not actually using.
+    tz = data.get("timezone")
+    if tz is not None and not timezones.is_valid(tz):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"{tz!r} is not a timezone we support.",
+        )
+
+    for key, value in data.items():
         setattr(hotel, key, value)
     await db.commit()
     await db.refresh(hotel)

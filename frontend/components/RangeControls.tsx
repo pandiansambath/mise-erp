@@ -5,6 +5,7 @@
 // RELATIVE time ("the last N days/weeks/months") and ABSOLUTE from/to — instead of two
 // bare date boxes buried in a toolbar.
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { localISODate } from "@/lib/date";
 
 export type Range = { from: string; to: string };
@@ -104,6 +105,24 @@ export function TimeRangePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"quick" | "relative" | "absolute">("quick");
+  // Portals need the DOM, so nothing renders on the server pass.
+  const [mounted, setMounted] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 420 });
+
+  useEffect(() => setMounted(true), []);
+
+  // Measure when opening: place it under the trigger, and pull it back on-screen
+  // if it would run off the right edge (which it did on the attendance page).
+  useEffect(() => {
+    if (!open || !wrap.current) return;
+    const r = wrap.current.getBoundingClientRect();
+    const width = Math.min(420, window.innerWidth - 24);
+    const left =
+      align === "right"
+        ? Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12))
+        : Math.max(12, Math.min(r.left, window.innerWidth - width - 12));
+    setPos({ top: r.bottom + 8, left, width });
+  }, [open, align]);
   const [n, setN] = useState(7);
   const [unit, setUnit] = useState<Unit>("days");
   const [from, setFrom] = useState(range.from);
@@ -150,16 +169,16 @@ export function TimeRangePicker({
         <span aria-hidden className={`text-fg-faint transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
 
-      {open && (
+      {open && mounted && createPortal(
         <div
           role="dialog"
-          // z-[60] and a SOLID background: at z-40 the toast and the Copilot
-          // launcher (both z-50) rendered over it, and a translucent panel let
-          // them bleed through — a date picker you can read another element
-          // through is unusable.
-          className={`mise-pop absolute z-[60] mt-2 w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/50 backdrop-blur-xl ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
+          // Portalled to <body> and FIXED. An absolute panel is trapped inside
+          // any ancestor with a stacking context (a transform, filter or
+          // opacity anywhere up the tree), which is why bumping z-index alone
+          // never lifted it above the toast — the toast was in a different
+          // context entirely. Position is measured from the trigger below.
+          style={{ top: pos.top, left: pos.left, width: pos.width }}
+          className="mise-pop fixed z-[100] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/50"
         >
           <div className="flex border-b border-line">
             {([["quick", "Quick"], ["relative", "Relative"], ["absolute", "Absolute"]] as const).map(
@@ -274,7 +293,8 @@ export function TimeRangePicker({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -501,7 +501,13 @@ async def staff_today(db: AsyncSession, user: User, args: dict) -> dict:
     if not has_permission(user.role, "employees:read"):
         return {"error": "You don't have access to staff records."}
 
-    day = _d(args.get("date"), datetime.now(UTC).date())
+    # The restaurant's today, not the server's. A night shift in Chennai would
+    # otherwise disappear from "today" for five and a half hours.
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel as _Hotel
+
+    _hotel = await db.get(_Hotel, user.hotel_id)
+    day = _d(args.get("date"), hotel_today(_hotel))
     people = (
         (
             await db.execute(
