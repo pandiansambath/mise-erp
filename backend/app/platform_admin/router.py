@@ -141,6 +141,43 @@ class PlanPrices(BaseModel):
     prices: dict[str, str] = Field(default_factory=dict)  # plan_key -> "£89/mo"
 
 
+class HotelFlagsIn(BaseModel):
+    is_comp: bool | None = None
+    ai_daily_override: int | None = None
+    ai_monthly_override: int | None = None
+
+
+@router.patch("/hotels/{hotel_id}/flags")
+async def set_hotel_flags(
+    hotel_id: uuid.UUID,
+    body: HotelFlagsIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_platform_owner),
+) -> dict:
+    """Operator switches: comp an account, or lift one hotel's AI allowance.
+
+    `is_comp` is how internal and demo hotels get full access without being
+    billed — and, critically, without counting toward revenue. The AI overrides
+    let one hotel be raised above its plan (a pilot, a goodwill gesture) without
+    inventing a plan for them.
+    """
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    if body.is_comp is not None:
+        hotel.is_comp = body.is_comp
+    if body.ai_daily_override is not None:
+        hotel.ai_daily_override = body.ai_daily_override or None
+    if body.ai_monthly_override is not None:
+        hotel.ai_monthly_override = body.ai_monthly_override or None
+    await db.commit()
+    return {
+        "is_comp": hotel.is_comp,
+        "ai_daily_override": hotel.ai_daily_override,
+        "ai_monthly_override": hotel.ai_monthly_override,
+    }
+
+
 @router.get("/plans/matrix")
 async def plans_matrix() -> dict:
     """Every feature × every plan. PUBLIC, and deliberately the same registry the

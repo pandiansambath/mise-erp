@@ -54,6 +54,13 @@ class Hotel(Base):
     # than inferred from Stripe so a trial works before anyone has paid, and so
     # expiry is answerable without a network call.
     trial_ends_on: Mapped[date | None] = mapped_column(Date)
+    # Internal/comped account (our own test hotels, a demo, a goodwill month).
+    # Full access, never billed, and EXCLUDED from revenue reporting — otherwise
+    # your own test accounts quietly inflate MRR and you trust a wrong number.
+    is_comp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Optional per-hotel AI allowance overrides. Null = use the plan's numbers.
+    ai_daily_override: Mapped[int | None] = mapped_column(Integer)
+    ai_monthly_override: Mapped[int | None] = mapped_column(Integer)
     # Online ordering (Ph2a): the prep estimate customers see, and the kitchen's
     # busy-mode switch (paused = the public page shows closed, orders refused).
     prep_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=20)

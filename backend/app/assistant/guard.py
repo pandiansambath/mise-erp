@@ -93,6 +93,10 @@ async def _limits(db: AsyncSession, user: User) -> tuple[int, int, str]:
     hotel = await db.get(Hotel, user.hotel_id)
     plan_key = getattr(hotel, "plan", "") or feat.DEFAULT_PLAN
     daily, monthly = feat.plan_ai_limits(plan_key)
+    # An operator can lift one hotel above its plan (a pilot, a complaint, our
+    # own test accounts) without inventing a new plan for them.
+    daily = getattr(hotel, "ai_daily_override", None) or daily
+    monthly = getattr(hotel, "ai_monthly_override", None) or monthly
     plan = feat.get_plan(plan_key)
     label = plan.label if plan else plan_key.title()
     return (

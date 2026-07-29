@@ -46,6 +46,8 @@ def trial_days_left(hotel) -> int | None:
 
 def is_lapsed(hotel) -> bool:
     """Billing is unhealthy, or the trial ran out without converting."""
+    if getattr(hotel, "is_comp", False):
+        return False  # internal/comped: never billed, never blocked
     status = (getattr(hotel, "subscription_status", "") or "free").lower()
     if status in GRACE or status in ENDED:
         return True
