@@ -44,33 +44,6 @@ const userName = (): string | undefined => {
   }
 };
 
-const ATTACH = [
-  {
-    mode: "ingest:items",
-    icon: "📦",
-    label: "My ingredients",
-    hint: "A spreadsheet of what you keep in stock → I'll fill your Inventory",
-  },
-  {
-    mode: "ingest:vendors",
-    icon: "🤝",
-    label: "My suppliers",
-    hint: "Who you buy from, with prices if you have them",
-  },
-  {
-    mode: "chat:receipt",
-    icon: "🧾",
-    label: "A bill or receipt",
-    hint: "Photo or PDF → I'll read the amounts and log the expense",
-  },
-  {
-    mode: "chat:photo",
-    icon: "🖼️",
-    label: "Something handwritten",
-    hint: "A recipe on paper, a stock count, a note — I'll type it up",
-  },
-];
-
 const GREETING: Msg = {
   role: "assistant",
   content:
@@ -103,7 +76,6 @@ export function Copilot() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [attachOpen, setAttachOpen] = useState(false);
   const [expanding, setExpanding] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
@@ -277,7 +249,6 @@ export function Copilot() {
 
   function chooseAttach(mode: string) {
     modeRef.current = mode;
-    setAttachOpen(false);
     fileRef.current?.click();
   }
 
@@ -287,6 +258,14 @@ export function Copilot() {
     if (!file || loading) return;
     const [channel, kind] = modeRef.current.split(":");
     if (channel === "ingest") return ingestFile(file, kind);
+
+    // "auto": let the file decide. A spreadsheet is a list to import; anything
+    // else goes to the model, which can read PDFs, photos and text alike.
+    if (kind === "auto") {
+      const name = file.name.toLowerCase();
+      const sheet = /\.(csv|xlsx|xls)$/.test(name);
+      return sheet ? ingestFile(file, "items") : chatWithImage(file, "auto");
+    }
     return chatWithImage(file, kind);
   }
 
@@ -318,7 +297,7 @@ export function Copilot() {
       const history = [...messages, userMsg];
       setMessages(history);
       setInput("");
-      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64 }, user_name: userName(), thread_id: threadId });
+      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64, name: file.name }, user_name: userName(), thread_id: threadId });
       setConfigured(res.configured);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
       maybeSpeak(res.reply);
@@ -673,30 +652,8 @@ export function Copilot() {
 
           {/* Composer */}
           <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="relative flex items-center gap-2 border-t border-glass/10 bg-paper-3/40 p-3">
-            <input ref={fileRef} type="file" accept="application/pdf,image/*,.csv" onChange={onFile} className="hidden" />
-            {attachOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setAttachOpen(false)} aria-hidden />
-                <div className="mise-pop absolute bottom-14 left-3 z-20 w-72 max-w-[calc(100vw-3rem)] rounded-xl border border-glass/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
-                  <p className="px-2 pb-1.5 text-[11px] uppercase tracking-wide text-fg-faint">What have you got?</p>
-                  {ATTACH.map((a) => (
-                    <button
-                      key={a.mode}
-                      type="button"
-                      onClick={() => chooseAttach(a.mode)}
-                      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-glass/5"
-                    >
-                      <span className="mt-0.5 text-base" aria-hidden>{a.icon}</span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium text-fg">{a.label}</span>
-                        <span className="block text-[11px] leading-snug text-fg-faint">{a.hint}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            <button type="button" onClick={() => setAttachOpen((o) => !o)} aria-label="Attach a document" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-glass/15 text-lg text-fg-soft transition hover:bg-glass/5">📎</button>
+            <input ref={fileRef} type="file" accept="*/*" onChange={onFile} className="hidden" />
+            <button type="button" onClick={() => chooseAttach("chat:auto")} aria-label="Attach a file" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-glass/15 text-lg text-fg-soft transition hover:bg-glass/5">📎</button>
             {voice.supported && (
               <button
                 type="button"

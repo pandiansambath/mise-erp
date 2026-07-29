@@ -14,6 +14,8 @@ class ChatMessage(BaseModel):
 class Attachment(BaseModel):
     mime: str
     data: str  # base64-encoded file bytes (image/PDF of a bill, receipt, etc.)
+    name: str | None = None  # so the model can say WHICH file it couldn't read
+
 
 
 class ChatRequest(BaseModel):

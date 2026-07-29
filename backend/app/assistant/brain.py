@@ -60,18 +60,61 @@ async def generate(
             {"role": role, "content": [{"type": "text", "text": str(turn.get("content", ""))}]}
         )
 
-    # A photo rides on the newest user message so the model reads it in context.
+    # The attachment rides on the newest user message so the model reads it in
+    # context. Claude handles images AND pdfs natively; anything else is decoded
+    # as text. Previously a non-image was dropped silently — the file appeared
+    # to upload and the model was then asked about nothing.
     if attachment and messages:
         data = attachment.get("data") or ""
-        mime = (attachment.get("mime") or "image/jpeg").split(";")[0]
-        if data and mime.startswith("image/"):
-            messages[-1]["content"].insert(
-                0,
-                {
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": mime, "data": data},
-                },
-            )
+        mime = (attachment.get("mime") or "").split(";")[0]
+        name = attachment.get("name") or "the file"
+        if data:
+            if mime.startswith("image/"):
+                messages[-1]["content"].insert(
+                    0,
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": mime, "data": data},
+                    },
+                )
+            elif mime == "application/pdf" or name.lower().endswith(".pdf"):
+                messages[-1]["content"].insert(
+                    0,
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": data,
+                        },
+                    },
+                )
+            else:
+                # Plain text, CSV, JSON, logs — decode and hand it over rather
+                # than refusing a file the model could easily read.
+                import base64 as _b64
+
+                try:
+                    text_body = _b64.b64decode(data).decode("utf-8", "replace")[:60000]
+                except Exception:  # noqa: BLE001
+                    text_body = ""
+                if text_body.strip():
+                    messages[-1]["content"].insert(
+                        0,
+                        {"type": "text", "text": f"CONTENTS OF {name}:\n{text_body}"},
+                    )
+                else:
+                    messages[-1]["content"].insert(
+                        0,
+                        {
+                            "type": "text",
+                            "text": (
+                                f"The user attached {name} ({mime or 'unknown type'}), "
+                                "which could not be read as text. Say so plainly and "
+                                "ask them to send it as a PDF, photo or spreadsheet."
+                            ),
+                        },
+                    )
 
     spec = _to_anthropic_tools(tools)
     used: list[str] = []

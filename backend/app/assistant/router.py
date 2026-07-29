@@ -282,7 +282,9 @@ async def vision_read(
     if len(data) > 15 * 1024 * 1024:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Image too large (max 15MB)")
     media = (file.content_type or "image/jpeg").split(";")[0]
-    if media not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+    if media not in (
+        "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf",
+    ):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Please upload a photo (JPEG, PNG, WEBP or GIF).",
