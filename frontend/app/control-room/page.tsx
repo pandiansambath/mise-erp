@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, ApiError } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner, StatCard, Toggle } from "@/components/ui";
+import { OperatorAI } from "@/components/OperatorAI";
 import { Donut, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
@@ -800,6 +801,9 @@ export default function ControlRoomPage() {
         <span className="ml-auto tabular-nums">{utc} UTC</span>
       </div>
       <PageHeader title="All hotels" subtitle="Every restaurant on DineAI — flip features, reset access, all in one place." />
+
+      {/* The one assistant with a cross-hotel view. */}
+      <OperatorAI />
 
       {err && <Card className="mb-4"><p className="text-sm text-rose-400">{err}</p></Card>}
 

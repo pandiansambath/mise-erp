@@ -673,16 +673,36 @@ export default function AiScanPage() {
                   <p className="px-3 py-3 text-xs text-fg-faint">No earlier conversations yet.</p>
                 ) : (
                   threads.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => openThread(t.id)}
-                      className={`block w-full truncate rounded-lg px-3 py-2 text-left text-sm transition hover:bg-glass/5 ${
-                        t.id === threadId ? "text-brand-300" : "text-fg-soft"
-                      }`}
-                    >
-                      {t.title}
-                    </button>
+                    <div key={t.id} className="group/row flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openThread(t.id)}
+                        className={`min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-left text-sm transition hover:bg-glass/5 ${
+                          t.id === threadId ? "text-brand-300" : "text-fg-soft"
+                        }`}
+                      >
+                        {t.title}
+                      </button>
+                      <button
+                        type="button"
+                        title="Rename"
+                        onClick={async () => {
+                          const next = window.prompt("Name this conversation", t.title);
+                          if (next === null) return;
+                          try {
+                            await api.patch(`/assistant/threads/${t.id}`, { title: next });
+                            setThreads((prev) =>
+                              prev.map((x) => (x.id === t.id ? { ...x, title: next.trim() || x.title } : x)),
+                            );
+                          } catch {
+                            /* leave the old name rather than show a half-renamed list */
+                          }
+                        }}
+                        className="rounded-md px-1.5 py-1 text-[11px] text-fg-faint opacity-0 transition hover:text-brand-300 group-hover/row:opacity-100"
+                      >
+                        ✎
+                      </button>
+                    </div>
                   ))
                 )}
               </div>
