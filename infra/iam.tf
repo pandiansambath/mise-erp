@@ -79,3 +79,27 @@ resource "aws_iam_role_policy" "s3_uploads" {
     ]
   })
 }
+
+# CloudWatch Logs — the containers ship their logs here via the awslogs driver
+# (see user_data.sh.tftpl). Applied by hand on the running box first; without it
+# in terraform a replaced instance would lose the permission and fall back to
+# local logs that die with the box.
+resource "aws_iam_role_policy" "cloudwatch_logs" {
+  name = "${var.project}-cloudwatch-logs"
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+      ]
+      # Scoped to our own groups — an instance role that can write anywhere in
+      # CloudWatch can also bury evidence in someone else's log group.
+      Resource = "arn:aws:logs:${var.region}:*:log-group:/dineai/*"
+    }]
+  })
+}

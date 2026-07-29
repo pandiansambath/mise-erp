@@ -32,6 +32,13 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${region}
+        awslogs-group: /dineai/app
+        awslogs-create-group: "true"
+        awslogs-stream: caddy
     ports:
       - "80:80"
       - "443:443"
@@ -45,6 +52,13 @@ services:
   backend:
     image: ${backend_image}
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${region}
+        awslogs-group: /dineai/app
+        awslogs-create-group: "true"
+        awslogs-stream: backend
     environment:
       DATABASE_URL: "postgresql+asyncpg://mise:${db_password}@${db_host}:5432/mise"
       SECRET_KEY: "${app_secret_key}"
@@ -64,6 +78,13 @@ services:
   frontend:
     image: ${frontend_image}
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${region}
+        awslogs-group: /dineai/app
+        awslogs-create-group: "true"
+        awslogs-stream: frontend
 
 volumes:
   caddy_config:
