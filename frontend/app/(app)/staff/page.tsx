@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { RoleBuilder } from "@/components/RoleBuilder";
 import { Donut } from "@/components/charts";
 import { ROLE_LABELS as RL } from "@/lib/permissions";
 import { Select } from "@/components/Select";
@@ -116,6 +117,11 @@ export default function StaffPage() {
     return (
       <div>
         <PageHeader title="Roles & Access" />
+
+        {/* Custom roles: name them how this hotel actually talks, bounded by
+            what each archetype may ever be trusted with. */}
+        <RoleBuilder />
+
         <Card>
           <p className="py-6 text-center text-sm text-fg-faint">
             You don&apos;t have permission to manage staff. Ask your Super Admin.
