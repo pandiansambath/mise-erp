@@ -4,8 +4,17 @@
 // panel three screens down. A side sheet on desktop (wide, room for real detail) and
 // a bottom sheet on phones, which is where thumbs already are.
 //
-// Deliberately dumb: it owns presentation (backdrop, focus trap, escape, scroll lock)
-// and nothing else, so every section can pour its own content in.
+// The header is the point. The recipe costing stage works because the number you
+// opened the row FOR - the margin - sits in the header and never moves; the body
+// scrolls underneath it. This sheet used to put its stats inside the scroll area,
+// so you opened a vendor and still had to scroll before learning anything. That is
+// the same complaint as having no sheet at all.
+//
+// So the icon tile, the headline gauge and the stat band all sit OUTSIDE the
+// scrolling region. Whatever you came to find is on screen the moment it opens.
+//
+// Still deliberately dumb about content: it owns presentation (backdrop, focus trap,
+// escape, scroll lock) and nothing else, so every section pours its own content in.
 
 import { useEffect, useRef, type ReactNode } from "react";
 
@@ -15,6 +24,9 @@ export function DetailSheet({
   title,
   subtitle,
   badge,
+  icon,
+  ring,
+  stats,
   actions,
   children,
   width = "md",
@@ -25,6 +37,12 @@ export function DetailSheet({
   subtitle?: ReactNode;
   /** Small status chip beside the title. */
   badge?: ReactNode;
+  /** Emoji or glyph in a raised tile - makes the row identifiable at a glance. */
+  icon?: ReactNode;
+  /** The headline metric, pinned in the header. Usually <SheetRing/>. */
+  ring?: ReactNode;
+  /** Key figures, pinned under the header and never scrolled away. */
+  stats?: { label: string; value: ReactNode; hint?: ReactNode; tone?: "good" | "warn" | "bad" | "plain" }[];
   /** Sticky footer actions (buttons). */
   actions?: ReactNode;
   children: ReactNode;
@@ -56,20 +74,26 @@ export function DetailSheet({
         ref={panel}
         tabIndex={-1}
         className={`mise-sheet-in absolute inset-x-0 bottom-0 flex max-h-[92svh] flex-col rounded-t-3xl border border-line bg-paper shadow-2xl outline-none sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:rounded-l-3xl sm:rounded-tr-none sm:border-y-0 sm:border-r-0 ${
-          width === "lg" ? "sm:w-[min(620px,94vw)]" : "sm:w-[min(500px,94vw)]"
+          width === "lg" ? "sm:w-[min(720px,96vw)]" : "sm:w-[min(540px,94vw)]"
         }`}
       >
         {/* grab handle (phones) */}
         <div aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-fg/15 sm:hidden" />
 
-        <header className="flex items-start gap-3 border-b border-line px-5 py-4">
+        <header className="flex shrink-0 items-center gap-3 border-b border-line bg-gradient-to-r from-brand-500/10 via-transparent to-transparent px-5 py-4">
+          {icon !== undefined && (
+            <span aria-hidden className="mise-neo-raised grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-2xl">
+              {icon}
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-bold text-fg">{title}</h2>
+              <h2 className="truncate font-display text-xl font-semibold text-fg">{title}</h2>
               {badge}
             </div>
-            {subtitle && <p className="mt-0.5 truncate text-sm text-fg-faint">{subtitle}</p>}
+            {subtitle && <p className="mt-0.5 truncate text-xs text-fg-faint">{subtitle}</p>}
           </div>
+          {ring}
           <button
             type="button"
             onClick={onClose}
@@ -80,15 +104,71 @@ export function DetailSheet({
           </button>
         </header>
 
+        {/* Pinned outside the scroll area on purpose - see the note at the top. */}
+        {stats && stats.length > 0 && (
+          <div
+            className="mise-stagger grid shrink-0 gap-2 border-b border-line bg-paper-2/40 px-5 py-3"
+            style={{ gridTemplateColumns: `repeat(${Math.min(stats.length, 4)}, minmax(0, 1fr))` }}
+          >
+            {stats.map((s) => (
+              <div key={s.label} className="mise-neo-raised rounded-xl px-3 py-2">
+                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-fg-faint">{s.label}</p>
+                <p
+                  className={`mt-0.5 truncate font-display text-lg font-semibold tabular-nums ${
+                    s.tone === "good"
+                      ? "text-emerald-400"
+                      : s.tone === "bad"
+                        ? "text-rose-400"
+                        : s.tone === "warn"
+                          ? "text-amber-400"
+                          : "text-fg"
+                  }`}
+                >
+                  {s.value}
+                </p>
+                {s.hint && <p className="truncate text-[10px] text-fg-faint">{s.hint}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
 
         {actions && (
-          <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-paper-2/50 px-5 py-3">
+          <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line bg-paper-2/50 px-5 py-3">
             {actions}
           </footer>
         )}
       </div>
     </div>
+  );
+}
+
+/** A percentage wearing its ring - the headline metric, small enough for a header.
+ *  Lifted from the recipe costing stage, which is the interaction this sheet is
+ *  modelled on. `invert` flips the colour scale: for a margin, high is good; for
+ *  "share of your spend with one supplier", high is a concentration risk. */
+export function SheetRing({
+  pct, label, invert = false,
+}: { pct: number; label?: string; invert?: boolean }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const good = invert ? clamped <= 30 : clamped >= 70;
+  const mid = invert ? clamped <= 60 : clamped >= 40;
+  const tone = good ? "#34d399" : mid ? "#f59e0b" : "#f43f5e";
+  return (
+    <span className="relative grid h-11 w-11 shrink-0 place-items-center" title={label ?? `${Math.round(pct)}%`}>
+      <svg viewBox="0 0 36 36" className="absolute inset-0 -rotate-90" aria-hidden>
+        <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="3.5" />
+        <circle
+          cx="18" cy="18" r="15.5" fill="none"
+          stroke={tone} strokeWidth="3.5" strokeLinecap="round"
+          strokeDasharray={`${(clamped / 100) * 97.4} 97.4`}
+        />
+      </svg>
+      <span className="text-[9px] font-bold tabular-nums" style={{ color: tone }}>
+        {Math.round(pct)}%
+      </span>
+    </span>
   );
 }
 

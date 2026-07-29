@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
-import { DetailSheet } from "@/components/DetailSheet";
+import { DetailSheet, SheetRing } from "@/components/DetailSheet";
 import {
   api,
   ApiError,
@@ -244,6 +244,28 @@ export default function VendorsPage() {
     return it ? `${it.name} (${it.unit})` : "—";
   };
   const selectedVendor = vendors.find((v) => v.id === selected);
+
+  // The three questions a supplier row exists to answer: what do they cost us,
+  // are they actually competitive, and are they creeping their prices up. These
+  // sit in the sheet header so opening a vendor answers them without scrolling.
+  const vendorStats = (() => {
+    const mine = spend.find((r) => r.vendor_name === selectedVendor?.name);
+    const total = spend.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0);
+    const spent = parseFloat(mine?.total ?? "0") || 0;
+    const bestCount = vendorItems.filter((vi) => {
+      const best = cheapest[vi.item_id];
+      return best != null && (parseFloat(vi.price_per_unit) || 0) <= best;
+    }).length;
+    return {
+      spend: spent,
+      orders: mine?.orders ?? 0,
+      rises: mine?.price_rises ?? 0,
+      bestCount,
+      // Share of ALL supplier spend. Null when there is no spend at all, because
+      // a ring reading 0% of nothing implies a fact we do not have.
+      sharePct: total > 0 ? (spent / total) * 100 : null,
+    };
+  })();
   const pricedCount = (vid: string) => (vid === selected ? vendorItems.length : null);
 
   // Built-in types + any custom ones already used by vendors + ones added this
@@ -444,8 +466,37 @@ export default function VendorsPage() {
         open={!!selectedVendor}
         onClose={() => setSelected("")}
         width="lg"
-        title={selectedVendor ? `${TYPE_EMOJI[selectedVendor.category ?? ""] ?? "🤝"} ${selectedVendor.name}` : ""}
+        icon={TYPE_EMOJI[selectedVendor?.category ?? ""] ?? "🤝"}
+        title={selectedVendor?.name ?? ""}
         subtitle={selectedVendor ? `${(selectedVendor.category || "—").toLowerCase()} supplier · ${vendorItems.length} item${vendorItems.length === 1 ? "" : "s"} priced` : ""}
+        ring={
+          vendorStats.sharePct !== null ? (
+            <SheetRing
+              pct={vendorStats.sharePct}
+              invert
+              label={`${Math.round(vendorStats.sharePct)}% of your 90-day spend goes to this supplier`}
+            />
+          ) : undefined
+        }
+        stats={
+          selectedVendor
+            ? [
+                { label: "Spend · 90d", value: format(vendorStats.spend), hint: vendorStats.orders ? `${vendorStats.orders} order${vendorStats.orders === 1 ? "" : "s"}` : "no orders yet" },
+                {
+                  label: "Best price on",
+                  value: `${vendorStats.bestCount}/${vendorItems.length || 0}`,
+                  hint: "items vs other suppliers",
+                  tone: vendorItems.length === 0 ? "plain" : vendorStats.bestCount === 0 ? "bad" : vendorStats.bestCount === vendorItems.length ? "good" : "warn",
+                },
+                {
+                  label: "Price rises",
+                  value: vendorStats.rises,
+                  hint: "last 90 days",
+                  tone: vendorStats.rises > 2 ? "bad" : vendorStats.rises > 0 ? "warn" : "good",
+                },
+              ]
+            : undefined
+        }
         actions={
           canWrite && selectedVendor ? (
             <button

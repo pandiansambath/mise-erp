@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
-import { DetailSheet, DetailStats } from "@/components/DetailSheet";
+import { DetailSheet, DetailStats, SheetRing } from "@/components/DetailSheet";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -1476,25 +1476,41 @@ export default function InventoryPage() {
         open={!!openItem}
         onClose={() => { setExpanded(null); setOpenReceipt(null); }}
         width="lg"
+        icon={categoryEmoji(openItem?.category ?? "")}
         title={openItem ? openItem.name : ""}
-        subtitle={
-          openItem
-            ? `${fmtQty(openItem.current_stock, openItem.unit)} on hand · avg ${format(openItem.average_cost)}/${openItem.unit}`
-            : ""
+        subtitle={openItem ? `${openItem.category || "uncategorised"} · ${openItem.vendor_count ?? 0} supplier${(openItem.vendor_count ?? 0) === 1 ? "" : "s"}` : ""}
+        ring={
+          openItem && (parseFloat(openItem.min_stock_level ?? "0") || 0) > 0 ? (
+            <SheetRing
+              pct={Math.min(
+                100,
+                ((parseFloat(openItem.current_stock) || 0) / (parseFloat(openItem.min_stock_level!) || 1)) * 100,
+              )}
+              label={`stock is at ${Math.round(
+                ((parseFloat(openItem.current_stock) || 0) / (parseFloat(openItem.min_stock_level!) || 1)) * 100,
+              )}% of your minimum level (capped at 100)`}
+            />
+          ) : undefined
         }
-      >
-        {openItem && (
-          <>
-            <DetailStats
-              stats={[
+        stats={
+          openItem
+            ? [
                 { label: "On hand", value: fmtQty(openItem.current_stock, openItem.unit) },
-                { label: "Avg cost", value: `${format(openItem.average_cost)}` },
                 {
                   label: "Stock value",
                   value: format(
                     String((parseFloat(openItem.current_stock) || 0) * (parseFloat(openItem.average_cost) || 0)),
                   ),
                 },
+                { label: "Avg cost", value: format(openItem.average_cost), hint: `per ${openItem.unit}` },
+              ]
+            : undefined
+        }
+      >
+        {openItem && (
+          <>
+            <DetailStats
+              stats={[
                 { label: "Min level", value: openItem.min_stock_level ?? "—" },
                 { label: "Category", value: openItem.category || "—" },
                 { label: "Suppliers", value: String(openItem.vendor_count ?? 0) },

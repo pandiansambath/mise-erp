@@ -801,8 +801,33 @@ export default function PurchasingPage() {
         open={!!openIndentObj}
         onClose={() => setOpenIndent(null)}
         width="lg"
+        icon="📋"
         title={openIndentObj ? `Indent · ${openIndentObj.date}` : ""}
-        subtitle={openIndentObj ? `${openIndentObj.items.length} item${openIndentObj.items.length === 1 ? "" : "s"} · ${openIndentObj.status.toLowerCase()}` : ""}
+        subtitle={openIndentObj ? `raised ${openIndentObj.date} · ${openIndentObj.status.toLowerCase()}` : ""}
+        badge={openIndentObj ? <Badge tone={indentTone[openIndentObj.status] ?? "slate"}>{openIndentObj.status}</Badge> : undefined}
+        stats={
+          openIndentObj
+            ? [
+                {
+                  label: "Value",
+                  // Only real once POs exist. Showing 0 for a pending indent would
+                  // read as "this costs nothing", which is not what we know.
+                  value: indentConsol[openIndentObj.id]?.po_count
+                    ? format(indentConsol[openIndentObj.id].grand_total)
+                    : "—",
+                  hint: indentConsol[openIndentObj.id]?.po_count ? "ordered" : "not ordered yet",
+                },
+                { label: "Items", value: openIndentObj.items.length },
+                {
+                  label: "Vendors",
+                  value:
+                    indentConsol[openIndentObj.id]?.vendor_count ??
+                    new Set(openIndentObj.items.map((i) => i.vendor_name).filter(Boolean)).size,
+                  hint: "supplying this",
+                },
+              ]
+            : undefined
+        }
       >
         {openIndentObj && (
           <div>
