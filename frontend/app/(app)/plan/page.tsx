@@ -46,6 +46,9 @@ type Usage = {
   today_calls?: number;
   daily_limit?: number;
   monthly_token_limit?: number;
+  calls_left?: number | null;
+  tokens_left?: number | null;
+  est_messages_left?: number | null;
   included?: boolean;
 };
 
@@ -59,6 +62,11 @@ function Meter({ used, cap, label }: { used: number; cap: number; label: string 
         <span className="text-fg-soft">{label}</span>
         <span className="text-fg-faint">
           {used.toLocaleString()} / {cap > 0 ? cap.toLocaleString() : "—"}
+          {cap > 0 && (
+            <span className="ml-1.5 font-medium text-fg-soft">
+              · {Math.max(0, cap - used).toLocaleString()} left
+            </span>
+          )}
         </span>
       </div>
       <div className="mise-well mt-1.5 h-2 overflow-hidden rounded-full">
@@ -143,6 +151,22 @@ export default function PlanPage() {
                 cap={usage.monthly_token_limit ?? current.ai_monthly_tokens}
               />
             </div>
+          )}
+
+          {usage?.est_messages_left != null && (
+            <p className="mt-4 rounded-xl bg-paper-2 px-3.5 py-2.5 text-sm text-fg-soft">
+              <span aria-hidden className="mr-1.5">✦</span>
+              That leaves you roughly{" "}
+              <b className="text-fg">
+                {usage.est_messages_left.toLocaleString()} more question
+                {usage.est_messages_left === 1 ? "" : "s"}
+              </b>{" "}
+              today, or {usage.calls_left?.toLocaleString() ?? "—"} more scans.
+              <span className="block text-[11px] text-fg-faint">
+                An estimate from a typical question and answer — long conversations
+                and photo scans use more.
+              </span>
+            </p>
           )}
         </Card>
       )}
