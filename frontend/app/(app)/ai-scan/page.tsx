@@ -453,6 +453,7 @@ export default function AiScanPage() {
   }
 
   const offline = status !== null && !status.configured;
+  const left = Math.max(0, (usage?.daily_limit ?? 0) - (usage?.today_calls ?? 0));
 
   /* ── the interactive reply card ──────────────────────────────────────── */
   function Card({ id }: { id: string }) {
@@ -625,28 +626,38 @@ export default function AiScanPage() {
         .ai-dot { animation: aiDot 1.2s infinite; }
       `}</style>
 
-      <header className="flex items-center gap-3 pb-3">
-        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-sky-400 text-lg text-white shadow-lg shadow-brand-500/20">
-          ✦
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-fg">DineAI Copilot</h1>
-          <p className="truncate text-xs text-fg-faint">
-            {offline ? "AI is switched off" : "Ask anything, or photograph a bill"}
-          </p>
-          {usage?.model && (
-            <p className="mt-0.5 truncate text-[11px] text-fg-faint">
-              <span className="text-brand-400">
-                {usage.model.includes("haiku") ? "Haiku" : "Sonnet"}
-              </span>
-              {usage.plan ? ` · ${usage.plan} plan` : ""}
-              {usage.daily_limit
-                ? ` · ${Math.max(0, usage.daily_limit - (usage.today_calls ?? 0))} left today`
-                : ""}
+      {/* Header modelled on the recipe sheet: an identity block, a progress
+          RING, and stat tiles with big legible numbers. The old version buried
+          the same facts in 11px grey text nobody reads. */}
+      <header className="mise-neo-raised mb-3 rounded-2xl px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-sky-400 text-lg text-white shadow-lg shadow-brand-500/25">
+            ✦
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-semibold leading-tight text-fg">DineAI Copilot</h1>
+            <p className="truncate text-xs text-fg-faint">
+              {offline ? "AI is switched off" : "Ask anything, or send any file"}
             </p>
-          )}
-        </div>
-        <div className="relative ml-auto">
+          </div>
+          {/* Allowance as a ring, the way the recipe sheet shows margin:
+              a shape you read in a glance beats a number you have to parse. */}
+          {usage?.daily_limit ? (
+            <div className="relative hidden h-12 w-12 shrink-0 sm:block" title="AI questions left today">
+              <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90">
+                <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" className="stroke-line" />
+                <circle
+                  cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" strokeLinecap="round"
+                  className={left / (usage.daily_limit || 1) > 0.25 ? "stroke-brand-500" : "stroke-amber-400"}
+                  strokeDasharray={`${(left / (usage.daily_limit || 1)) * 97.4} 97.4`}
+                />
+              </svg>
+              <span className="absolute inset-0 grid place-items-center text-[11px] font-semibold text-fg">
+                {left}
+              </span>
+            </div>
+          ) : null}
+        <div className="relative">
           <button
             type="button"
             onClick={() => {
@@ -725,6 +736,28 @@ export default function AiScanPage() {
           </svg>
           <span className="hidden sm:inline">New chat</span>
         </button>
+        </div>
+
+        {/* Stat tiles. The recipe sheet works because the numbers that matter
+            are big and labelled; these were 11px grey text nobody read. */}
+        {usage?.model && (
+          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-line/60 pt-3">
+            {(
+              [
+                ["Model", usage.model.includes("haiku") ? "Haiku" : "Sonnet"],
+                ["Plan", usage.plan ?? "—"],
+                ["Questions left", usage.daily_limit ? String(left) : "—"],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="mise-well rounded-xl px-3 py-2">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-fg-faint">
+                  {label}
+                </p>
+                <p className="mt-0.5 truncate font-display text-base text-fg">{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </header>
 
       {offline && (
