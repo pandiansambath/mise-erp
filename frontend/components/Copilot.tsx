@@ -33,11 +33,13 @@ type Pending = {
 type Ingest = { kind: string; rows: Row[]; committed?: boolean; result?: string };
 type ChatResponse = {
   thread_id?: string; // which conversation this reply belongs to
+  choices?: string[]; // tappable follow-ups the assistant offered
   reply: string; actions: Action[]; pending_actions: Pending[]; used_tools: string[]; configured: boolean;
 };
 type Msg = {
   role: "user" | "assistant"; content: string;
   actions?: Action[]; pending?: Pending[]; ingest?: Ingest; image?: string;
+  choices?: string[]; // tappable follow-ups; tapping one is the same as typing it
 };
 
 const STARTERS = ["What's low on stock?", "How's this month's profit?", "Add a £40 gas expense", "What is slow stock?"];
@@ -113,6 +115,31 @@ export function Copilot() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [expanding, setExpanding] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
+  const [showThreads, setShowThreads] = useState(false);
+
+  const loadThreads = () => {
+    api
+      .get<{ threads: { id: string; title: string }[] }>("/assistant/threads")
+      .then((d) => setThreads(d.threads))
+      .catch(() => {});
+  };
+
+  async function openThread(id: string) {
+    setShowThreads(false);
+    const d = await api.get<{ thread_id: string; messages: { role: string; content: string }[] }>(
+      `/assistant/history?thread=${id}`,
+    );
+    setThreadId(d.thread_id);
+    setMessages(
+      d.messages.length
+        ? (d.messages.map((m) => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
+          })) as Msg[])
+        : [GREETING],
+    );
+  }
   const panelRef = useRef<HTMLDivElement>(null);
   const [speakOn, setSpeakOn] = useState(false);
   const speechBase = useRef("");
@@ -236,8 +263,9 @@ export function Copilot() {
     try {
       const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, user_name: userName(), thread_id: threadId });
       if (res.thread_id) setThreadId(res.thread_id);
+      // choices ride on the assistant message so they disappear once answered
       setConfigured(res.configured);
-      push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
+      push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions, choices: res.choices });
       maybeSpeak(res.reply);
     } catch (e) {
       push({ role: "assistant", content: e instanceof ApiError && e.status === 401 ? "Please sign in again." : "Sorry — I couldn't reach the assistant. Please try again." });
@@ -413,6 +441,42 @@ export function Copilot() {
               <p className="text-sm font-semibold text-fg">DineAI Copilot</p>
               <p className="text-[11px] text-fg-faint">{configured === false ? "Quick help & navigation" : "One place for every plate & penny"}</p>
             </div>
+            <div className="relative ml-auto">
+              <button
+                type="button"
+                onClick={() => { loadThreads(); setShowThreads((v) => !v); }}
+                aria-label="Past conversations"
+                title="Past conversations"
+                className="relative rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                  <path d="M12 8v4l3 2M3 12a9 9 0 1 0 9-9 9 9 0 0 0-7.5 4" />
+                </svg>
+              </button>
+              {showThreads && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowThreads(false)} aria-hidden />
+                  <div className="mise-pop absolute right-0 top-9 z-20 max-h-64 w-64 overflow-y-auto rounded-xl border border-glass/10 bg-paper-2/95 p-1.5 shadow-2xl backdrop-blur">
+                    {threads.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-fg-faint">No earlier conversations yet.</p>
+                    ) : (
+                      threads.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => openThread(t.id)}
+                          className={`block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-xs transition hover:bg-glass/5 ${
+                            t.id === threadId ? "text-brand-300" : "text-fg-soft"
+                          }`}
+                        >
+                          {t.title}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
             <button
               type="button"
               onClick={async () => {
@@ -426,7 +490,7 @@ export function Copilot() {
               }}
               aria-label="Start a new chat"
               title="New chat — your old conversations are kept"
-              className="relative ml-auto rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+              className="relative rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
                 <path d="M12 5v14M5 12h14" />
@@ -560,6 +624,21 @@ export function Copilot() {
                     </div>
                   )}
 
+                  {m.choices && m.choices.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {m.choices.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => send(c)}
+                          disabled={loading}
+                          className="mise-press rounded-full border border-brand-400/40 bg-brand-500/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {m.actions && m.actions.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {m.actions.map((a, j) => (
