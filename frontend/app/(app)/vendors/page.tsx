@@ -71,6 +71,7 @@ export default function VendorsPage() {
 
   // add-price form
   const [piItem, setPiItem] = useState("");
+  const priceRef = useRef<HTMLInputElement>(null);
   const [piPrice, setPiPrice] = useState("");
   const [piMode, setPiMode] = useState<"unit" | "pack">("unit"); // enter £/unit or £/pack
 
@@ -552,10 +553,38 @@ export default function VendorsPage() {
                 <form onSubmit={addPrice}>
                   <p className="text-sm font-medium text-fg-soft">Add / update a price</p>
                   <div className="mt-2">
-                    <ItemPickerSingle items={items} value={piItem} onChange={setPiItem} />
+                    <ItemPickerSingle
+                      items={items}
+                      value={piItem}
+                      onChange={(v) => {
+                        setPiItem(v);
+                        // straight to the only remaining step
+                        if (v) window.setTimeout(() => priceRef.current?.focus(), 60);
+                      }}
+                    />
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {/* Sticky, and it NAMES what you picked. Before this the price
+                      box sat under a long grid: choosing an item pushed the input
+                      off-screen, so you scrolled down to type a number with no
+                      reminder of which item you were pricing. */}
+                  <div
+                    className={`sticky bottom-0 z-10 mt-3 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5 transition ${
+                      piItem
+                        ? "border border-brand-400/40 bg-paper-2/95 shadow-lg shadow-black/20 backdrop-blur"
+                        : "border border-transparent"
+                    }`}
+                  >
+                    {piItem && (
+                      <span className="w-full text-xs text-fg-faint">
+                        Pricing{" "}
+                        <b className="text-fg">
+                          {items.find((i) => i.id === piItem)?.name ?? "—"}
+                        </b>{" "}
+                        for {selectedVendor?.name}
+                      </span>
+                    )}
                     <input
+                      ref={priceRef}
                       inputMode="decimal"
                       value={piPrice}
                       onChange={(e) => setPiPrice(numeric(e.target.value))}

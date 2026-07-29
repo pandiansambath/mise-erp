@@ -158,6 +158,9 @@ export default function PurchasingPage() {
 
     const itemId = params.get("item");
     if (!itemId || !items.some((i) => i.id === itemId)) return;
+    // Say what just happened. Landing on a busy page with a silently pre-filled
+    // row reads as "it ignored me" — which is exactly what it looked like.
+    setMsg(`${items.find((i) => i.id === itemId)?.name ?? "That item"} is on your order below — enter how much you need.`);
     setLines((prev) => (prev.some((l) => l.item_id === itemId) ? prev : [...prev, { item_id: itemId, qty: "" }]));
     const vendorId = params.get("vendor");
     if (vendorId) setVendorPick((prev) => ({ ...prev, [itemId]: vendorId }));
