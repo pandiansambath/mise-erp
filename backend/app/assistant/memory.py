@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assistant.models import AssistantMessage
+from app.assistant.models import AssistantMessage, AssistantThread
 from app.auth.models import User
 
 log = logging.getLogger("mise.assistant.memory")
@@ -127,3 +128,66 @@ async def forget_thread(db: AsyncSession, user: User, thread_id: uuid.UUID) -> i
         await db.delete(r)
     await db.commit()
     return len(rows)
+
+
+def _auto_title(first_question: str) -> str:
+    """Name a thread from its opening line.
+
+    Trimmed to something scannable rather than the whole sentence: a sidebar of
+    120-character titles is as unreadable as a sidebar of UUIDs.
+    """
+    text = " ".join((first_question or "").split())
+    if not text:
+        return "New chat"
+    return (text[:47].rstrip() + "…") if len(text) > 48 else text
+
+
+async def touch_thread(
+    db: AsyncSession, user: User, thread_id: uuid.UUID, first_question: str = ""
+) -> AssistantThread:
+    """Create the thread on first use, or bump its timestamp. Titles are only
+    written once — a later question shouldn't rename a conversation under you."""
+    row = await db.get(AssistantThread, thread_id)
+    if row is None:
+        row = AssistantThread(
+            id=thread_id,
+            hotel_id=user.hotel_id,
+            user_id=user.id,
+            title=_auto_title(first_question),
+        )
+        db.add(row)
+    else:
+        row.updated_at = datetime.now(UTC)
+    await db.commit()
+    return row
+
+
+async def list_threads(db: AsyncSession, user: User, limit: int = 30) -> list[dict]:
+    """This person's conversations, newest first."""
+    rows = (
+        (
+            await db.execute(
+                select(AssistantThread)
+                .where(AssistantThread.user_id == user.id)
+                .order_by(desc(AssistantThread.updated_at))
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {"id": str(r.id), "title": r.title, "updated_at": r.updated_at.isoformat()} for r in rows
+    ]
+
+
+async def rename_thread(
+    db: AsyncSession, user: User, thread_id: uuid.UUID, title: str
+) -> bool:
+    """Scoped to the owner, so a guessed id renames nothing."""
+    row = await db.get(AssistantThread, thread_id)
+    if row is None or row.user_id != user.id:
+        return False
+    row.title = (title or "").strip()[:120] or "New chat"
+    await db.commit()
+    return True

@@ -37,6 +37,29 @@ class AiUsage(Base):
     )
 
 
+class AssistantThread(Base):
+    """A named conversation.
+
+    Threads were anonymous UUIDs, so "New chat" produced a growing pile of
+    indistinguishable ones. The title is auto-written from the first question
+    and editable, because the machine's guess is usually close and occasionally
+    wrong — and the person should be able to fix it rather than live with it.
+    """
+
+    __tablename__ = "assistant_threads"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(120), nullable=False, default="New chat")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+
 class AssistantMessage(Base):
     """One turn of a person's conversation with the assistant.
 

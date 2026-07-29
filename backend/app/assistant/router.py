@@ -65,6 +65,7 @@ async def chat(
     # before that we resume whatever they were last saying.
     thread_id = req.thread_id or await memory.latest_thread(db, user) or uuid.uuid4()
     asked = req.messages[-1].content if req.messages else ""
+    await memory.touch_thread(db, user, thread_id, asked)
     await memory.remember(db, user, thread_id, "user", asked)
 
     started = time.monotonic()
@@ -171,6 +172,32 @@ async def history(
     scoped by user_id, so a guessed thread id returns nothing."""
     tid, msgs = await memory.load(db, user, thread)
     return {"thread_id": str(tid), "messages": msgs}
+
+
+@router.get("/threads")
+async def threads(
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    """This person's conversations, newest first — the sidebar list."""
+    return {"threads": await memory.list_threads(db, user)}
+
+
+class RenameThread(BaseModel):
+    title: str = Field(max_length=120)
+
+
+@router.patch("/threads/{thread_id}")
+async def rename_thread(
+    thread_id: uuid.UUID,
+    body: RenameThread,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Auto-titles are a good guess, not always the right one."""
+    ok = await memory.rename_thread(db, user, thread_id, body.title)
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+    return {"ok": True}
 
 
 @router.post("/history/new")
