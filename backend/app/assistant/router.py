@@ -190,6 +190,25 @@ async def clear_thread(
     return {"removed": removed}
 
 
+@router.get("/insights")
+async def insights(
+    refresh: bool = False,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Today's briefing. Generated at most once a day per hotel, so opening the
+    dashboard repeatedly is free — this would otherwise be the most expensive
+    screen in the product."""
+    from app.assistant import insights as ins
+
+    try:
+        return await ins.daily(db, user, force=refresh)
+    except guard.AiQuotaExceeded as exc:
+        # not on this plan, or out of allowance — say so quietly rather than
+        # breaking the dashboard for everyone on Starter
+        return {"insights": [], "unavailable": True, "reason": exc.detail}
+
+
 @router.get("/usage")
 async def usage(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)

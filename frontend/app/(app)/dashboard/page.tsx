@@ -11,6 +11,7 @@ import { api, type DashboardKpis, type PnL, type POSummary } from "@/lib/api";
 import { AreaChart, Bars, CalendarHeat, Donut, Meter, type DonutSegment } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
+import { DailyBriefing } from "@/components/DailyBriefing";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -236,6 +237,9 @@ export default function DashboardPage() {
           </Button>
         }
       />
+
+      {/* What changed since yesterday, and what to do about it. */}
+      <DailyBriefing />
 
       <div className="-mt-2 mb-5 space-y-2 text-xs text-fg-faint">
         <div className="flex flex-wrap items-center gap-2">
