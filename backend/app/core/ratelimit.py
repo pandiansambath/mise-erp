@@ -29,15 +29,18 @@ log = logging.getLogger("mise.ratelimit")
 
 # endpoint -> (max attempts, window seconds)
 LIMITS: dict[str, tuple[int, int]] = {
-    # Generous enough for a person mistyping a password, far short of a list.
-    "login": (10, 300),
+    # 20/5min per IP: a restaurant is often behind ONE office NAT address, so a
+    # tight cap would lock out a whole shift at open. Still nowhere near enough
+    # to walk a password list, and the per-account window below is the one that
+    # actually protects a specific login.
+    "login": (20, 300),
     # Signup is where spam and card-testing arrive.
     "register": (5, 3600),
     # Each of these sends an EMAIL. Unmetered, they are a way to use us to
     # harass someone else's inbox.
     "forgot_password": (5, 3600),
     "resend_verification": (5, 3600),
-    "login_otp": (10, 300),
+    "login_otp": (20, 300),
 }
 
 _hits: dict[str, deque[float]] = defaultdict(deque)

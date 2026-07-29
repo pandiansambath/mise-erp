@@ -67,7 +67,14 @@ async def _reset_db():
     """
     from sqlalchemy import text
 
+    from app.core import ratelimit
     from app.core.ai_views import create_ai_views, drop_statements
+
+    # The limiter is in-process, so without this every test shares one bucket
+    # and the suite rate-limits ITSELF — dozens of logins from one client look
+    # exactly like an attack. Cleared per test rather than disabled, so
+    # test_ratelimit still exercises the real thing.
+    ratelimit._hits.clear()
 
     async with engine.begin() as conn:
         # Drop by KNOWN NAME rather than pattern-matching information_schema.
