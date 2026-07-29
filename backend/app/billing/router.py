@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
 from app.auth.models import Role, User
+from app.billing import emails
 from app.core.config import settings
 from app.core.database import get_db
 from app.hotels.models import Hotel
@@ -292,12 +293,25 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)) -
             # The paid door closes — same suspension lever the Control Room uses.
             hotel.is_active = False
             await db.commit()
+            # Sent AFTER the commit: an email promising the door is shut must
+            # never go out if the state change itself failed to persist.
+            await emails.subscription_ended(db, hotel)
 
     elif etype == "invoice.payment_failed":
         hotel = await _hotel_by_customer(db, obj.get("customer", ""))
         if hotel and hotel.stripe_subscription_id:
             hotel.subscription_status = "past_due"  # grace: app stays open
             await db.commit()
+            # Tell them. This used to change state in silence, so the first sign
+            # of a dead card was the app refusing to work mid-service.
+            await emails.payment_failed(db, hotel, obj.get("attempt_count") or 1)
+
+    elif etype == "customer.subscription.trial_will_end":
+        # Stripe fires this ~3 days out for trials IT knows about. Our own
+        # pre-Stripe trials are covered by the daily reminder job instead.
+        hotel = await _hotel_by_customer(db, obj.get("customer", ""))
+        if hotel:
+            await emails.trial_ending(db, hotel, 3)
 
     elif etype == "invoice.paid":
         hotel = await _hotel_by_customer(db, obj.get("customer", ""))
