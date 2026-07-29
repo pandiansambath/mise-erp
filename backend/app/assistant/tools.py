@@ -485,7 +485,92 @@ async def team_and_access(db: AsyncSession, user: User, args: dict) -> dict:
     }
 
 
+async def staff_today(db: AsyncSession, user: User, args: dict) -> dict:
+    """The actual people, by name, with today's attendance.
+
+    `team_and_access` answers "what ROLES exist"; it was being used for "who
+    works here", which is why the assistant kept saying names aren't available
+    and pointing at a page. They are available — it just had no tool for them.
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select as _select
+
+    from app.employees.models import Attendance, Employee
+
+    if not has_permission(user.role, "employees:read"):
+        return {"error": "You don't have access to staff records."}
+
+    day = _d(args.get("date"), datetime.now(UTC).date())
+    people = (
+        (
+            await db.execute(
+                _select(Employee)
+                .where(Employee.hotel_id == user.hotel_id, Employee.is_active.is_(True))
+                .order_by(Employee.full_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    marks = {
+        a.employee_id: a
+        for a in (
+            await db.execute(
+                _select(Attendance).where(
+                    Attendance.hotel_id == user.hotel_id, Attendance.date == day
+                )
+            )
+        )
+        .scalars()
+        .all()
+    }
+
+    def _t(dt) -> str | None:
+        return dt.strftime("%H:%M") if dt else None
+
+    rows = []
+    for p in people:
+        a = marks.get(p.id)
+        rows.append(
+            {
+                "name": p.full_name,
+                "role": (getattr(p, "job_title", None) or "").strip() or None,
+                # No attendance row means nobody marked them either way today —
+                # say that, rather than implying they were absent.
+                "today": (a.status if a else "not marked"),
+                "clock_in": _t(getattr(a, "clock_in", None)) if a else None,
+                "clock_out": _t(getattr(a, "clock_out", None)) if a else None,
+            }
+        )
+
+    present = sum(1 for r in rows if r["today"] == "PRESENT")
+    return {
+        "date": str(day),
+        "total_staff": len(rows),
+        "present_today": present,
+        "not_marked": sum(1 for r in rows if r["today"] == "not marked"),
+        "staff": rows[:120],
+    }
+
+
 TOOLS: list[dict] = [
+    {
+        "name": "staff_today",
+        "description": (
+            "The actual people who work here, BY NAME, with today's attendance "
+            "(present/absent/leave, clock in and out). Use for 'how many staff do "
+            "we have', 'list my staff', 'who is in today', 'who clocked in', "
+            "'attendance today'. Prefer this over team_and_access whenever the "
+            "question is about PEOPLE rather than roles or permissions."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "YYYY-MM-DD; today if omitted"}
+            },
+        },
+    },
     {
         "name": "team_and_access",
         "description": (
@@ -915,6 +1000,7 @@ EXECUTORS: dict[str, Executor] = {
     "profit_for_range": profit_for_range,
     "navigate": navigate,
     "team_and_access": team_and_access,
+    "staff_today": staff_today,
     "explain_term": explain_term,
     "propose_expense": propose_expense,
     "propose_sale": propose_sale,
@@ -933,6 +1019,7 @@ EXECUTORS: dict[str, Executor] = {
 # Tools gated by a write permission — filtered out for roles that lack it so the
 # model is never even offered an action the user can't take.
 TOOL_PERMS: dict[str, str] = {
+    "staff_today": "employees:read",
     "propose_expense": "expenses:write",
     "propose_sale": "sales:write",
     "propose_item": "inventory:write",

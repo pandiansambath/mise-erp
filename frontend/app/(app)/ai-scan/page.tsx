@@ -667,8 +667,8 @@ export default function AiScanPage() {
           </button>
           {showThreads && (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowThreads(false)} aria-hidden />
-              <div className="mise-pop absolute right-0 top-11 z-20 max-h-80 w-72 overflow-y-auto rounded-xl border border-line bg-paper-2/95 p-1.5 shadow-2xl backdrop-blur">
+              <div className="fixed inset-0 z-[55]" onClick={() => setShowThreads(false)} aria-hidden />
+              <div className="mise-pop absolute right-0 top-11 z-[60] max-h-80 w-72 overflow-y-auto rounded-xl border border-line bg-paper-2/95 p-1.5 shadow-2xl backdrop-blur">
                 {threads.length === 0 ? (
                   <p className="px-3 py-3 text-xs text-fg-faint">No earlier conversations yet.</p>
                 ) : (
