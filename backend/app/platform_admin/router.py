@@ -120,6 +120,11 @@ async def list_hotels(
             "admin_email": admin.email if admin else None,
             "plan": h.plan,
             "max_users": feat.plan_max_users(h.plan),
+            # Operator overrides, so the Control Room can show their real state
+            # rather than defaulting the checkbox to off on every reload.
+            "is_comp": bool(getattr(h, "is_comp", False)),
+            "ai_daily_override": getattr(h, "ai_daily_override", None),
+            "ai_monthly_override": getattr(h, "ai_monthly_override", None),
             "features": _merged_features(h),
             "has_traded": h.id in has_traded,
             "last_active": max(

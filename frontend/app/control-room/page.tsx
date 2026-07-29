@@ -23,6 +23,9 @@ type HotelRow = {
   created_at: string; has_logo: boolean; is_active: boolean;
   user_count: number; admin_email: string | null; plan: string; max_users: number;
   features: Record<string, boolean>;
+  is_comp?: boolean;
+  ai_daily_override?: number | null;
+  ai_monthly_override?: number | null;
   last_active?: string | null; sales_entries_7d?: number; has_traded?: boolean;
 };
 
@@ -434,6 +437,32 @@ function HotelCard({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [planSel, setPlanSel] = useState(hotel.plan);
   const [planBusy, setPlanBusy] = useState(false);
+  const [comp, setComp] = useState(Boolean(hotel.is_comp));
+  const [aiDay, setAiDay] = useState(hotel.ai_daily_override ? String(hotel.ai_daily_override) : "");
+  const [aiMonth, setAiMonth] = useState(
+    hotel.ai_monthly_override ? String(hotel.ai_monthly_override) : "",
+  );
+  const [flagBusy, setFlagBusy] = useState(false);
+  const [flagMsg, setFlagMsg] = useState<string | null>(null);
+
+  async function saveFlags() {
+    setFlagBusy(true);
+    setFlagMsg(null);
+    try {
+      await api.patch(`/platform/hotels/${hotel.id}/flags`, {
+        is_comp: comp,
+        // Blank means "use the plan", not zero — sending 0 would mean no AI.
+        ai_daily_override: aiDay ? Number(aiDay) : 0,
+        ai_monthly_override: aiMonth ? Number(aiMonth) : 0,
+      });
+      setFlagMsg("Saved");
+      window.setTimeout(() => setFlagMsg(null), 2500);
+    } catch {
+      setFlagMsg("Could not save");
+    } finally {
+      setFlagBusy(false);
+    }
+  }
   const [suspendBusy, setSuspendBusy] = useState(false);
 
   async function toggleSuspend() {
@@ -566,6 +595,54 @@ function HotelCard({
         <p className="mt-1.5 text-[11px] text-fg-faint">
           Applying a plan sets its feature preset + user limit. You can still fine-tune individual toggles below.
         </p>
+
+        {/* Operator overrides. Separate from the plan on purpose: a comped or
+            boosted hotel should not need a fake plan invented for it. */}
+        <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-white/10 pt-3">
+          <label className="flex items-center gap-2 text-xs text-white/70">
+            <input
+              type="checkbox"
+              checked={comp}
+              onChange={(e) => setComp(e.target.checked)}
+              className="h-4 w-4 accent-amber-500"
+            />
+            <span>
+              Comped account
+              <span className="block text-[10px] text-white/35">
+                full access, never billed, excluded from revenue
+              </span>
+            </span>
+          </label>
+
+          <label className="text-xs text-white/60">
+            <span className="block">AI calls/day</span>
+            <input
+              value={aiDay}
+              onChange={(e) => setAiDay(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="plan default"
+              className="mt-1 w-28 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-white outline-none"
+            />
+          </label>
+          <label className="text-xs text-white/60">
+            <span className="block">AI tokens/month</span>
+            <input
+              value={aiMonth}
+              onChange={(e) => setAiMonth(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="plan default"
+              className="mt-1 w-32 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-white outline-none"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={saveFlags}
+            disabled={flagBusy}
+            className="mise-press rounded-lg border border-amber-400/40 px-3 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/10 disabled:opacity-50"
+          >
+            {flagBusy ? "Saving…" : "Save overrides"}
+          </button>
+          {flagMsg && <span className="text-[11px] text-emerald-300">{flagMsg}</span>}
+        </div>
       </div>
 
       {/* feature toggles */}
