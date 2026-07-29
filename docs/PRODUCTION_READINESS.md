@@ -7,10 +7,13 @@ building the commercial layer, so it reflects the real state, not the plan.
 
 ## 🔴 Would hurt on day one with a paying customer
 
-**1. No backups you have restored from.**
-There are backup scripts. Nobody has done a restore drill. An untested backup is
-a hope, not a backup — you find out it was incomplete on the day you need it.
-*Do: restore last night's dump into a scratch database, count rows, log the time it took.*
+**1. ~~No backups you have restored from~~ — ✅ DONE 2026-07-29.**
+Drill run: newest dump restored into a throwaway database on RDS, **1 second**,
+all 40+ tables intact (items 715, attendance 158, audit_events 647). Production
+untouched; the drill database was dropped.
+⚠️ **But the backups had silently STOPPED** — the newest was 23 July, six days
+stale. They work; they weren't running. *Still to do: schedule them, and alert
+if one doesn't land. A backup nobody checks is the same as no backup.*
 
 **2. No error tracking.**
 Logs now have codes and land in CloudWatch, but nothing tells you a customer hit
@@ -18,9 +21,13 @@ an error — you find out when they email. A restaurant that hits a 500 mid-serv
 does not email; they stop using it.
 *Do: Sentry (free tier is enough) on both frontend and backend, wired to the same codes.*
 
-**3. No uptime monitoring.**
-If the box dies at 2am you learn at 9am from an angry owner.
-*Do: any external pinger on `/api/health` with an alert. Five minutes' work.*
+**3. ~~No uptime monitoring~~ — ✅ DONE 2026-07-29.**
+Route53 health check on `https://dineai.cloud/api/health` every 30s from
+multiple regions, failing after 2 checks → CloudWatch alarm `dineai-api-down`
+→ SNS email. `treat-missing-data breaching`, so silence counts as down rather
+than as fine.
+⚠️ **You must click the SNS confirmation email** (sent to
+ravishankar.vijayan@gmail.com) or no alert can reach you.
 
 **4. Single point of failure.**
 One EC2 instance, one AZ. A hardware failure is a full outage of unknown length.
@@ -34,7 +41,9 @@ gate catches logic errors, not "this migration locks a table for 40 seconds".
 ## 🟠 Will hurt within weeks
 
 **6. Nothing enforces backup freshness.** No alert if backups stop.
-**7. No rate limiting at the edge.** The AI is capped; login and signup are not — brute force and signup spam are unmetered.
+**7. ~~No rate limiting~~ — ✅ DONE 2026-07-29.** Login, signup, forgot-password
+and resend-verification are limited per IP *and* per account — the second window
+catches a distributed run on one login, which a per-IP limit never sees.
 **8. Password reset and email verification aren't load-bearing tested.** They work; nobody has tested them under a real provider failure.
 **9. No GDPR export/delete.** UK customers can legally demand both. There is a "permanent removal" path for staff, but no "give me everything you hold on me".
 **10. No audit of who saw what.** There is an audit trail of *changes*. There is no record of who *read* payroll.
@@ -63,10 +72,10 @@ gate catches logic errors, not "this migration locks a table for 40 seconds".
 
 ## If I could only do five
 
-1. **Restore drill** — prove the backups work.
-2. **Sentry** — know about errors before customers tell you.
-3. **Uptime alert** — know about outages before customers tell you.
-4. **Rate limit auth endpoints** — the cheapest security win available.
+1. ~~Restore drill~~ ✅ — but **schedule the backups**, they had stopped.
+2. **Sentry** — still the biggest gap. You learn about errors from customers.
+3. ~~Uptime alert~~ ✅ — **confirm the SNS email** or it cannot reach you.
+4. ~~Rate limit auth~~ ✅
 5. **Trial-ending + failed-payment emails** — the two highest-ROI messages in any SaaS.
 
 The first three are all "find out before your customer does", which is the
