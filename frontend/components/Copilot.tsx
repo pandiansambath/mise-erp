@@ -113,6 +113,7 @@ export function Copilot() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [expanding, setExpanding] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [speakOn, setSpeakOn] = useState(false);
   const speechBase = useRef("");
   const voice = useVoiceInput((t) =>
@@ -129,10 +130,31 @@ export function Copilot() {
     if (open) router.prefetch("/ai-scan");
   }, [open, router]);
 
+  // Dismiss on a click outside or Escape. Closing is not the same as clearing:
+  // the thread stays exactly where it was and reopening resumes it, because
+  // people close this panel to see the screen behind it, not to start over.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      const el = panelRef.current;
+      if (el && !el.contains(e.target as Node)) closePanel();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closePanel();
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Replay this person's conversation. It lives on the server keyed to THEM,
   // so it survives navigation, a new tab, a different device and logging out.
   useEffect(() => {
-    if (!open || threadId) return;
+    if (!open || threadId) return;  // already loaded: reopening resumes, never resets
     api
       .get<{ thread_id: string; messages: { role: string; content: string }[] }>(
         "/assistant/history",
@@ -378,6 +400,7 @@ export function Copilot() {
 
       {open && (
         <div
+          ref={panelRef}
           className={`${expanding ? "mise-copilot-expand" : closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-20 z-50 flex max-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
           role="dialog"
           aria-label="DineAI Copilot"

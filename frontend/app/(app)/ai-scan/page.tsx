@@ -198,36 +198,33 @@ export default function AiScanPage() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
+  const [threadId, setThreadId] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // If you arrived by expanding the Copilot bubble, carry that conversation in
-  // so the bigger view continues it rather than starting over.
+  // The conversation lives on the server against THIS person, so it survives a
+  // reload, a new tab, another device and logging out. sessionStorage was only
+  // ever a stopgap for the expand animation.
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("copilot:thread");
-      sessionStorage.removeItem("copilot:thread");
-      if (!raw) return;
-      const prior = JSON.parse(raw) as { role: string; content: string }[];
-      if (!Array.isArray(prior) || prior.length === 0) return;
-      setMsgs([
-        ...prior.map((m) => ({
-          id: nid(),
-          who: (m.role === "assistant" ? "ai" : "me") as "ai" | "me",
-          kind: "text" as const,
-          text: m.content,
-        })),
-        {
-          id: nid(),
-          who: "ai" as const,
-          kind: "text" as const,
-          text: "More room here — send me a photo of a bill or a handwritten recipe whenever you're ready.",
-        },
-      ]);
-    } catch {
-      /* nothing handed over, or storage unavailable — the greeting stands */
-    }
+    sessionStorage.removeItem("copilot:thread");
+    api
+      .get<{ thread_id: string; messages: { role: string; content: string }[] }>(
+        "/assistant/history",
+      )
+      .then((d) => {
+        setThreadId(d.thread_id);
+        if (!d.messages.length) return;
+        setMsgs(
+          d.messages.map((m) => ({
+            id: nid(),
+            who: (m.role === "assistant" ? "ai" : "me") as "ai" | "me",
+            kind: "text" as const,
+            text: m.content,
+          })),
+        );
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -341,10 +338,15 @@ export default function AiScanPage() {
       .map((m) => ({ role: m.who === "ai" ? "assistant" : "user", content: m.text }));
 
     try {
-      const r = await api.post<{ reply: string; actions?: Action[] }>("/assistant/chat", {
-        messages: [...history, { role: "user", content: q }],
-        route: "/ai-scan",
-      });
+      const r = await api.post<{ reply: string; actions?: Action[]; thread_id?: string }>(
+        "/assistant/chat",
+        {
+          messages: [...history, { role: "user", content: q }],
+          route: "/ai-scan",
+          thread_id: threadId,
+        },
+      );
+      if (r.thread_id) setThreadId(r.thread_id);
       drop(thinking);
       say(r.reply, r.actions);
     } catch (e) {
@@ -580,9 +582,9 @@ export default function AiScanPage() {
           ✦
         </div>
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-fg">Scan &amp; ask</h1>
+          <h1 className="text-lg font-semibold text-fg">DineAI Copilot</h1>
           <p className="truncate text-xs text-fg-faint">
-            {offline ? "AI is switched off" : "Photograph a bill — I'll read it, you check it"}
+            {offline ? "AI is switched off" : "Ask anything, or photograph a bill"}
           </p>
           {usage?.model && (
             <p className="mt-0.5 truncate text-[11px] text-fg-faint">
@@ -596,6 +598,25 @@ export default function AiScanPage() {
             </p>
           )}
         </div>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const d = await api.post<{ thread_id: string }>("/assistant/history/new", {});
+              setThreadId(d.thread_id);
+            } catch {
+              setThreadId(null);
+            }
+            setMsgs([{ id: nid(), who: "ai", kind: "text", text: GREETING }]);
+          }}
+          title="New chat — your old conversations are kept"
+          className="mise-press ml-auto flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span className="hidden sm:inline">New chat</span>
+        </button>
       </header>
 
       {offline && (
