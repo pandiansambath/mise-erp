@@ -112,10 +112,13 @@ async def test_chat_endpoint_answers(client, make_user, auth_header):
 
 @pytest.mark.asyncio
 async def test_status_endpoint(client, make_user, auth_header):
+    """`configured` used to mean "a Gemini key is set". It now means "the brain
+    is reachable" — Bedrock authenticates via the instance role, so there is no
+    key to check and a real outage surfaces at call time instead."""
     user = await make_user("s@x.com", Role.STAFF.value)
     r = await client.get("/api/assistant/status", headers=auth_header(user))
     assert r.status_code == 200
-    assert r.json()["configured"] is False
+    assert isinstance(r.json()["configured"], bool)
 
 
 # ── Document onboarding (commit path; extraction needs a live key) ─────────────
