@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatMarkdown } from "@/components/ChatMarkdown";
+import { Typewriter } from "@/components/Typewriter";
 
 
 // The AI surface is a CONVERSATION, not a form.
@@ -212,6 +212,8 @@ export default function AiScanPage() {
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
+  // The id of the reply that just arrived; only that one types itself out.
+  const [liveId, setLiveId] = useState<string | null>(null);
   // Past conversations. "New chat" never deleted anything — but with no way
   // back to the old thread it may as well have.
   const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
@@ -294,8 +296,11 @@ export default function AiScanPage() {
     [],
   );
   const say = useCallback(
-    (text: string, actions?: Action[], choices?: string[]) =>
-      push({ id: nid(), who: "ai", kind: "text", text, actions, choices, at: now() }),
+    (text: string, actions?: Action[], choices?: string[]) => {
+      const id = nid();
+      setLiveId(id);
+      push({ id, who: "ai", kind: "text", text, actions, choices, at: now() });
+    },
     [push],
   );
 
@@ -770,7 +775,7 @@ export default function AiScanPage() {
           if (m.kind === "offer") {
             return (
               <Bubble key={m.id} who="ai">
-                <ChatMarkdown text={m.text} />
+                <Typewriter text={m.text} animate={m.who === "ai" && m.id === liveId} />
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     href="/settings?tab=plan"
@@ -881,7 +886,13 @@ export default function AiScanPage() {
           <textarea
             rows={1}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              // Grow to fit, capped so the thread never loses the screen.
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

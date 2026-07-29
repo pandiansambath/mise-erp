@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatMarkdown } from "@/components/ChatMarkdown";
+import { Typewriter } from "@/components/Typewriter";
 
 
 // DineAI Copilot — the project-aware AI, on every page (mounted in AppShell so it
@@ -108,6 +108,9 @@ export function Copilot() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
   const [showThreads, setShowThreads] = useState(false);
+  // True only for a reply that just arrived, so replayed history appears at
+  // once rather than retyping itself.
+  const [justAnswered, setJustAnswered] = useState(false);
 
   const loadThreads = () => {
     api
@@ -179,6 +182,7 @@ export function Copilot() {
       )
       .then((d) => {
         setThreadId(d.thread_id);
+        setJustAnswered(false);
         if (d.messages.length) {
           setMessages(
             d.messages.map((m) => ({
@@ -191,7 +195,7 @@ export function Copilot() {
       .catch(() => {});
   }, [open, threadId]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const modeRef = useRef<string>("ingest:items");
   const sendRef = useRef<(t: string) => void>(() => {});
@@ -256,6 +260,7 @@ export function Copilot() {
       if (res.thread_id) setThreadId(res.thread_id);
       // choices ride on the assistant message so they disappear once answered
       setConfigured(res.configured);
+      setJustAnswered(true);
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions, choices: res.choices });
       maybeSpeak(res.reply);
     } catch (e) {
@@ -512,7 +517,7 @@ export function Copilot() {
                   {/* eslint-disable-next-line @next/next/no-img-element -- data-URL thumbnail, nothing for next/image to optimise */}
                   {m.image && <img src={m.image} alt="attachment" className="mb-1.5 max-h-40 rounded-xl border border-glass/15 object-cover" />}
                   <div className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "rounded-br-md bg-brand-600 text-white shadow-sm" : "rounded-bl-md border border-glass/10 bg-paper-3 text-fg"}`}>
-                    <ChatMarkdown text={m.content} />
+                    <Typewriter text={m.content} animate={m.role === "assistant" && i === messages.length - 1 && justAnswered} />
                   </div>
 
                   {/* Confirm cards (proposed write actions) */}
@@ -701,7 +706,29 @@ export function Copilot() {
                 🎤
               </button>
             )}
-            <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={voice.listening ? "Listening…" : "Ask, or tell me to add something…"} className="min-w-0 flex-1 rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none" />
+            {/* A textarea that grows with what you write. It was a single-line
+                input, so anything past one line scrolled out of sight and you
+                could not read your own message before sending it. */}
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+              }}
+              onKeyDown={(e) => {
+                // Enter sends; Shift+Enter is a new line, as everywhere else.
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send(input);
+                }
+              }}
+              placeholder={voice.listening ? "Listening…" : "Ask, or tell me to add something…"}
+              className="min-w-0 flex-1 resize-none rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none"
+            />
             {ttsSupported && (
               <button
                 type="button"
