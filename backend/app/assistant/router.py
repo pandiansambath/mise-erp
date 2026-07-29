@@ -71,10 +71,13 @@ async def chat(
     answer = await service.answer(db, user, req)
     await memory.remember(db, user, thread_id, "assistant", answer.reply)
     answer.thread_id = thread_id
-    # tokens aren't reported back through the provider abstraction yet, so a chat
-    # turn counts toward the request limits but contributes 0 to the token total
+    # The provider abstraction reports no token usage, so estimate what actually
+    # went over the wire. An approximate number that moves beats an exact zero.
+    sent = sum(guard.estimate_tokens(m.content) for m in req.messages)
     await guard.record(
         db, user, kind="chat", model=settings.bedrock_model_id,
+        input_tokens=sent + guard.SYSTEM_PROMPT_TOKENS,
+        output_tokens=guard.estimate_tokens(answer.reply),
         latency_ms=int((time.monotonic() - started) * 1000),
     )
     return answer

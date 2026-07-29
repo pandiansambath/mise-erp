@@ -66,6 +66,22 @@ async def model_for(db: AsyncSession, user: User) -> str:
     return feat.plan_model(getattr(hotel, "plan", "") or feat.DEFAULT_PLAN)
 
 
+# Roughly four characters per token for English. Crude, but the alternative was
+# recording ZERO for every chat turn, which left the monthly meter reading
+# "0 of 5,000,000" forever. A limit that can never be reached is worse than an
+# approximate one, because nobody can see the wall coming.
+CHARS_PER_TOKEN = 4
+# The system prompt (persona + knowledge + role context) rides along on every
+# call and dwarfs a short question, so ignoring it would under-count badly.
+SYSTEM_PROMPT_TOKENS = 900
+# A typical question + answer, used to turn "tokens left" into "messages left".
+_TYPICAL_TURN_TOKENS = 1400
+
+
+def estimate_tokens(text: str) -> int:
+    return max(1, len(text or "") // CHARS_PER_TOKEN)
+
+
 async def _limits(db: AsyncSession, user: User) -> tuple[int, int, str]:
     """(daily requests, monthly tokens, plan label) for this hotel.
 
@@ -241,6 +257,22 @@ async def summary(db: AsyncSession, user: User) -> dict:
         "month_cost_usd": str(row[2]),
         "today_calls": int(today or 0),
         "plan": plan_label,
+        # What's LEFT, and what that actually buys. A token count means nothing
+        # to a restaurant owner; "about 190 more questions" does.
+        "calls_left": max(0, daily_cap - int(today or 0)) if daily_cap else None,
+        "tokens_left": max(0, monthly_cap - int(row[1])) if monthly_cap else None,
+        "est_messages_left": (
+            min(
+                (max(0, daily_cap - int(today or 0)) if daily_cap else 10**9),
+                (
+                    max(0, monthly_cap - int(row[1])) // _TYPICAL_TURN_TOKENS
+                    if monthly_cap
+                    else 10**9
+                ),
+            )
+            if (daily_cap or monthly_cap)
+            else None
+        ),
         "model": await model_for(db, user),
         "daily_limit": daily_cap,
         "monthly_token_limit": monthly_cap,
