@@ -70,7 +70,7 @@ type Draft = {
 type Action = { label: string; href: string };
 
 type Msg =
-  | { id: string; who: "ai" | "me"; kind: "text"; text: string; actions?: Action[] }
+  | { id: string; who: "ai" | "me"; kind: "text"; text: string; actions?: Action[]; at?: number }
   | { id: string; who: "me"; kind: "photo"; url: string; name: string }
   | { id: string; who: "ai"; kind: "thinking"; note: string }
   | { id: string; who: "ai"; kind: "card" }
@@ -78,6 +78,7 @@ type Msg =
 
 let seq = 0;
 const nid = () => `m${++seq}`;
+const now = () => Date.now();
 
 const GREETING =
   "Hi! Send me a photo of a supplier bill and I'll read it into your books — " +
@@ -156,19 +157,31 @@ function Bubble({
   who,
   children,
   tight = false,
+  grouped = false,
+  at,
 }: {
   who: "ai" | "me";
   children: React.ReactNode;
   tight?: boolean;
+  /** Same speaker as the message above: drop the avatar and tighten the gap. */
+  grouped?: boolean;
+  at?: number;
 }) {
   const mine = who === "me";
   return (
-    <div className={`ai-rise flex gap-2.5 ${mine ? "flex-row-reverse" : ""}`}>
-      {!mine && (
-        <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-sky-400 text-sm text-white shadow-lg shadow-brand-500/20">
-          ✦
-        </div>
-      )}
+    <div
+      className={`ai-rise group flex gap-2.5 ${mine ? "flex-row-reverse" : ""} ${
+        grouped ? "-mt-2" : ""
+      }`}
+    >
+      {!mine &&
+        (grouped ? (
+          <span className="w-8 shrink-0" aria-hidden />
+        ) : (
+          <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-sky-400 text-sm text-white shadow-lg shadow-brand-500/20">
+            ✦
+          </div>
+        ))}
       <div
         className={`max-w-[min(46rem,88%)] rounded-2xl ${tight ? "p-1.5" : "px-4 py-3"} text-sm leading-relaxed ${
           mine
@@ -178,6 +191,13 @@ function Bubble({
       >
         {children}
       </div>
+      {/* Timestamps on hover only — useful when you want them, noise when you
+          don't, and a chat covered in clock text reads like a log file. */}
+      {at && (
+        <span className="self-end pb-1 text-[10px] text-fg-faint opacity-0 transition-opacity group-hover:opacity-100">
+          {new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </span>
+      )}
     </div>
   );
 }
@@ -252,7 +272,7 @@ export default function AiScanPage() {
   );
   const say = useCallback(
     (text: string, actions?: Action[]) =>
-      push({ id: nid(), who: "ai", kind: "text", text, actions }),
+      push({ id: nid(), who: "ai", kind: "text", text, actions, at: now() }),
     [push],
   );
 
@@ -323,12 +343,12 @@ export default function AiScanPage() {
   }
 
   /* typed message → the Copilot, so this is a real conversation */
-  async function send() {
-    const q = text.trim();
+  async function send(preset?: string) {
+    const q = (preset ?? text).trim();
     if (!q || busy) return;
     setText("");
     setBusy(true);
-    push({ id: nid(), who: "me", kind: "text", text: q });
+    push({ id: nid(), who: "me", kind: "text", text: q, at: now() });
     const thinking = nid();
     push({ id: thinking, who: "ai", kind: "thinking", note: "Thinking…" });
 
@@ -630,10 +650,13 @@ export default function AiScanPage() {
 
       {/* the thread */}
       <div className="mise-glass flex-1 space-y-4 overflow-y-auto rounded-2xl p-4">
-        {msgs.map((m) => {
+        {msgs.map((m, i) => {
+          // grouped = same speaker as the message above
+          const prev = msgs[i - 1];
+          const grouped = Boolean(prev && prev.who === m.who && prev.kind !== "card");
           if (m.kind === "photo") {
             return (
-              <Bubble key={m.id} who="me" tight>
+              <Bubble key={m.id} who="me" tight grouped={grouped}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={m.url}
@@ -691,7 +714,7 @@ export default function AiScanPage() {
             );
           }
           return (
-            <Bubble key={m.id} who={m.who}>
+            <Bubble key={m.id} who={m.who} grouped={grouped} at={m.at}>
               <p className="whitespace-pre-wrap">{m.text}</p>
               {m.actions && m.actions.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -709,6 +732,27 @@ export default function AiScanPage() {
             </Bubble>
           );
         })}
+        {/* Openers, shown only while the thread is still empty. Chips that
+            persist through a conversation become wallpaper. */}
+        {msgs.length <= 2 && !busy && (
+          <div className="ai-rise flex flex-wrap gap-2 pl-11">
+            {[
+              "What's low on stock?",
+              "How's this month's profit?",
+              "Which dishes make the least?",
+              "Who's on the rota today?",
+            ].map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => send(q)}
+                className="mise-press rounded-full border border-line px-3 py-1.5 text-xs text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
@@ -751,7 +795,7 @@ export default function AiScanPage() {
           />
           <button
             type="button"
-            onClick={send}
+            onClick={() => send()}
             disabled={busy || !text.trim()}
             className="mise-press grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-paper-2 text-fg-soft hover:bg-paper-3 disabled:opacity-40"
           >
