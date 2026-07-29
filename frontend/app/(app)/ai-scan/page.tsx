@@ -803,7 +803,7 @@ export default function AiScanPage() {
           }
           return (
             <Bubble key={m.id} who={m.who} grouped={grouped} at={m.at}>
-              <p className="whitespace-pre-wrap">{m.text}</p>
+              <Typewriter text={m.text} animate={m.who === "ai" && m.id === liveId} />
               {m.choices && m.choices.length > 0 && (
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   {m.choices.map((c) => (

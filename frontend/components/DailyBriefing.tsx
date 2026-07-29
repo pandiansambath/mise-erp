@@ -26,6 +26,29 @@ const TONE: Record<Insight["severity"], { dot: string; ring: string; label: stri
 
 export function DailyBriefing() {
   const [items, setItems] = useState<Insight[] | null>(null);
+  // Open on arrival — the whole point is that you SEE it when you walk in.
+  // Collapsing is remembered, so someone who finds it noisy isn't nagged daily.
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    try {
+      setOpen(localStorage.getItem("dineai.briefing.closed") !== "1");
+    } catch {
+      /* private mode — default to open */
+    }
+  }, []);
+
+  function toggle() {
+    setOpen((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("dineai.briefing.closed", next ? "0" : "1");
+      } catch {
+        /* nothing to remember it with; fine */
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     api
@@ -39,7 +62,12 @@ export function DailyBriefing() {
 
   return (
     <section className="mise-feel mb-6 overflow-hidden rounded-2xl border border-brand-400/20">
-      <div className="flex items-center gap-2.5 border-b border-line/60 bg-gradient-to-r from-brand-500/10 to-transparent px-4 py-2.5">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 border-b border-line/60 bg-gradient-to-r from-brand-500/10 to-transparent px-4 py-2.5 text-left transition hover:from-brand-500/[0.14]"
+      >
         <span
           className="grid h-6 w-6 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-sky-400 text-[11px] text-white"
           aria-hidden
@@ -47,9 +75,28 @@ export function DailyBriefing() {
           ✦
         </span>
         <h2 className="text-sm font-semibold text-fg">Today&apos;s briefing</h2>
-        <span className="ml-auto text-[11px] text-fg-faint">from your own numbers</span>
-      </div>
+        {!open && (
+          <span className="rounded-full bg-brand-500/15 px-2 py-0.5 text-[11px] font-medium text-brand-300">
+            {items.length}
+          </span>
+        )}
+        <span className="ml-auto hidden text-[11px] text-fg-faint sm:inline">
+          from your own numbers
+        </span>
+        <svg
+          viewBox="0 0 24 24"
+          className={`ml-2 h-4 w-4 shrink-0 text-fg-faint transition-transform ${open ? "" : "-rotate-90"}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
 
+      {open && (
       <ul className="divide-y divide-line/50">
         {items.map((i, n) => {
           const tone = TONE[i.severity] ?? TONE.info;
@@ -76,6 +123,7 @@ export function DailyBriefing() {
           );
         })}
       </ul>
+      )}
     </section>
   );
 }

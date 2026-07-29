@@ -153,7 +153,11 @@ export function TimeRangePicker({
       {open && (
         <div
           role="dialog"
-          className={`mise-pop absolute z-40 mt-2 w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/40 ${
+          // z-[60] and a SOLID background: at z-40 the toast and the Copilot
+          // launcher (both z-50) rendered over it, and a translucent panel let
+          // them bleed through — a date picker you can read another element
+          // through is unusable.
+          className={`mise-pop absolute z-[60] mt-2 w-[min(92vw,420px)] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/50 backdrop-blur-xl ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >
