@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.models import User
 from app.core.rbac import has_permission
 
-from . import provider
+from . import bedrock, guard, provider
 from .knowledge import PAGES, PERSONA, glossary_lookup, knowledge_brief
 from .schemas import Action, ChatRequest, ChatResponse, ProposedAction
 from .tools import EXECUTORS, tools_for
@@ -118,6 +118,28 @@ def _dedupe(actions: list[dict]) -> list[Action]:
     return out
 
 
+async def _gather_for_sonnet(db: AsyncSession, user: User, history: list[dict]) -> str:
+    """Facts for the single-shot Sonnet path.
+
+    The Gemini provider calls tools in a loop; this path has no loop, so we run
+    the cheap read-only tools up front and hand the results over. It costs one
+    call instead of several, and means the assistant answers from real numbers
+    rather than guessing.
+    """
+    import json
+
+    out: dict = {}
+    for name in ("business_overview", "team_and_access", "low_stock", "money_snapshot"):
+        fn = EXECUTORS.get(name)
+        if not fn:
+            continue
+        try:
+            out[name] = await fn(db, user, {})
+        except Exception:  # noqa: BLE001 — a missing section must not kill the answer
+            continue
+    return json.dumps(out, default=str)[:12000]
+
+
 async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse:
     from app.hotels.models import Hotel
 
@@ -145,6 +167,30 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
         if result.get("proposal"):
             proposals.append(result["proposal"])
         return result
+
+    # Bedrock/Sonnet is the real brain. The Gemini path stays as the tool-calling
+    # provider where a key exists, but without one the assistant was dropping
+    # straight to a scripted fallback — which is why asking "how many staff do we
+    # have?" got a generic "here's what I can do" instead of an answer.
+    if not provider.is_configured():
+        try:
+            facts = await _gather_for_sonnet(db, user, history)
+            reply = bedrock.ask(
+                history[-1]["content"] if history else "",
+                hotel_name=hotel_name,
+                context=facts,
+                history=history[:-1],
+                model=await guard.model_for(db, user),
+                system_extra=_build_system(user, req.route, req.user_name, hotel_name) + prior,
+            )
+            return ChatResponse(
+                reply=reply,
+                actions=_dedupe(collected),
+                used_tools=["sonnet"],
+                configured=True,
+            )
+        except bedrock.BedrockUnavailable:
+            pass  # fall through to the deterministic answer
 
     if provider.is_configured():
         try:

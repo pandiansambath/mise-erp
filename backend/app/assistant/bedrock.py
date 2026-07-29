@@ -269,6 +269,7 @@ def ask(
     history: list[dict] | None = None,
     meter: dict[str, Any] | None = None,
     model: str = "",
+    system_extra: str = "",
 ) -> str:
     """Answer a question about THIS hotel. `context` is caller-supplied facts
     (already scoped to the hotel) — the model must not go looking elsewhere."""
@@ -284,7 +285,10 @@ def ask(
         {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1500,
-            "system": _cached_system(_ASSISTANT_SYSTEM.format(hotel=hotel_name)),
+            "system": _cached_system(
+                _ASSISTANT_SYSTEM.format(hotel=hotel_name)
+                + (f"\n\n{system_extra}" if system_extra else "")
+            ),
             "messages": messages,
         },
         meter,
