@@ -51,6 +51,35 @@ def _model_id() -> str:
     return (getattr(settings, "bedrock_model_id", "") or DEFAULT_MODEL).strip()
 
 
+def _invoke_raw(
+    body: dict[str, Any],
+    meter: dict[str, Any] | None = None,
+    model: str = "",
+) -> dict[str, Any]:
+    """The full Bedrock response. The tool-use loop needs the content blocks,
+    not just the text, so it can see what the model wants to call."""
+    try:
+        model_id = model or _model_id()
+        resp = _client().invoke_model(modelId=model_id, body=json.dumps(body))
+        payload = json.loads(resp["body"].read())
+    except Exception as exc:  # noqa: BLE001 — surfaced to the caller as 503
+        msg = str(exc)
+        if "AccessDenied" in msg or "not available" in msg:
+            raise BedrockUnavailable(
+                "Claude isn't switched on for this AWS account yet."
+            ) from exc
+        log.warning("bedrock invoke failed: %s", msg)
+        raise BedrockUnavailable("The AI service is unavailable right now.") from exc
+    if meter is not None:
+        usage = payload.get("usage") or {}
+        meter["model"] = model or _model_id()
+        meter["input_tokens"] = int(usage.get("input_tokens") or 0)
+        meter["output_tokens"] = int(usage.get("output_tokens") or 0)
+        meter["cache_read_tokens"] = int(usage.get("cache_read_input_tokens") or 0)
+        meter["cache_write_tokens"] = int(usage.get("cache_creation_input_tokens") or 0)
+    return payload
+
+
 def _invoke(
     body: dict[str, Any],
     meter: dict[str, Any] | None = None,

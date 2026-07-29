@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.models import User
 from app.core.rbac import has_permission
 
-from . import bedrock, guard, provider
+from . import brain, guard
 from .knowledge import PAGES, PERSONA, glossary_lookup, knowledge_brief
 from .schemas import Action, ChatRequest, ChatResponse, ProposedAction
 from .tools import EXECUTORS, tools_for
@@ -168,39 +168,22 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
             proposals.append(result["proposal"])
         return result
 
-    # Bedrock/Sonnet is the real brain. The Gemini path stays as the tool-calling
-    # provider where a key exists, but without one the assistant was dropping
-    # straight to a scripted fallback — which is why asking "how many staff do we
-    # have?" got a generic "here's what I can do" instead of an answer.
-    if not provider.is_configured():
-        try:
-            facts = await _gather_for_sonnet(db, user, history)
-            reply = bedrock.ask(
-                history[-1]["content"] if history else "",
-                hotel_name=hotel_name,
-                context=facts,
-                history=history[:-1],
-                model=await guard.model_for(db, user),
-                system_extra=_build_system(user, req.route, req.user_name, hotel_name) + prior,
-            )
-            return ChatResponse(
-                reply=reply,
-                actions=_dedupe(collected),
-                used_tools=["sonnet"],
-                configured=True,
-            )
-        except bedrock.BedrockUnavailable:
-            pass  # fall through to the deterministic answer
-
-    if provider.is_configured():
-        try:
-            reply, used = await provider.generate(
-                system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
-                history=history,
-                tools=tools_for(user),
-                execute=execute,
-                attachment=req.attachment.model_dump() if req.attachment else None,
-            )
+    # ONE brain: Claude on Bedrock, model chosen by the hotel's plan. No
+    # third-party key, and therefore no silent drop to a scripted reply when a
+    # key is missing — which is exactly what used to make the assistant look
+    # like it knew nothing about the business.
+    meter: dict = {}
+    try:
+        reply, used = await brain.generate(
+            system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
+            history=history,
+            tools=tools_for(user),
+            execute=execute,
+            attachment=req.attachment.model_dump() if req.attachment else None,
+            model=await guard.model_for(db, user),
+            meter=meter,
+        )
+        if reply:
             return ChatResponse(
                 reply=reply,
                 actions=_dedupe(collected),
@@ -208,13 +191,11 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
                 used_tools=used,
                 configured=True,
             )
-        except provider.ProviderError:
-            # fall through to the deterministic answer below
-            collected.clear()
+    except brain.BrainError:
+        collected.clear()  # fall through to the deterministic answer
 
-    return await _fallback(
-        db, user, history, req.route, collected, configured=provider.is_configured()
-    )
+    # Only reached when Bedrock itself is unreachable.
+    return await _fallback(db, user, history, req.route, collected, configured=False)
 
 
 # ── No-LLM fallback ────────────────────────────────────────────────────────────
