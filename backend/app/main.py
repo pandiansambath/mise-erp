@@ -12,7 +12,7 @@ from app.audit.router import router as audit_router
 from app.auth.roles_router import router as roles_router
 from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
-from app.core import logging_setup
+from app.core import logging_setup, monitoring
 from app.core.config import settings
 from app.documents.router import router as documents_router
 from app.employees.router import attendance_router
@@ -51,6 +51,8 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     # One log format everywhere, before anything can log.
     logging_setup.configure(getattr(settings, "log_level", "INFO"))
+    # Before the app exists, so a failure during construction is still reported.
+    monitoring.init()
 
     app = FastAPI(
         title=settings.app_name,

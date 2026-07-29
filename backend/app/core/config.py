@@ -79,6 +79,16 @@ class Settings(BaseSettings):
     # The AI is the one part of DineAI with UNBOUNDED cost: everything else is a
     # fixed EC2 + RDS bill, but tokens are pay-per-use, so a loop or an abusive
     # client can run up real money. These are enforced BEFORE Bedrock is called.
+    # --- Error reporting -------------------------------------------------
+    # Empty = off. With no DSN the SDK is never initialised, so there is no
+    # client, no network call and no cost; production turns it on with an env
+    # var rather than a deploy.
+    sentry_dsn: str = ""
+    sentry_environment: str = "production"
+    # Traces are sampled to nothing by default. Errors are the point; tracing
+    # every request would exhaust the free tier on healthy traffic alone.
+    sentry_traces_sample_rate: float = 0.0
+
     ai_enabled: bool = True  # global kill switch — off needs no deploy, just an env var
     ai_hotel_daily_requests: int = 300  # per hotel, per rolling day
     ai_hotel_monthly_tokens: int = 8_000_000  # per hotel, per calendar month

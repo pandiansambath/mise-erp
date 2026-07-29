@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
 from app.auth.service import get_user_by_id
+from app.core import logging_setup, monitoring
 from app.core.database import get_db
 from app.core.rbac import has_permission
 from app.core.security import decode_token
@@ -35,6 +36,12 @@ async def get_current_user(
         raise _CREDENTIALS_EXC
     # Operator "view as hotel" tokens are read-only; require() enforces it.
     user.is_impersonated_session = bool(payload.get("imp"))  # transient, not persisted
+    # Identify the caller for the rest of the request. Without this every log
+    # line reads "hotel=-", which defeats the point of having the field: support
+    # cannot filter to one customer. Uses the id here because the handle would
+    # cost a query on every authenticated call; require() upgrades it below.
+    logging_setup.bind(hotel=str(user.hotel_id), user=user.email)
+    monitoring.note_hotel(user.hotel_id)
     return user
 
 
@@ -94,6 +101,11 @@ def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
         # data from it — but unpaid accounts stop spending our money and stop
         # making new commitments. 402 so the client can offer the fix.
         hotel = await db.get(Hotel, user.hotel_id)
+        if hotel is not None and getattr(hotel, "handle", None):
+            # Now that the hotel is loaded anyway, swap the UUID for the handle —
+            # "hotel=milagu" is something support can read off a customer's URL.
+            logging_setup.bind(hotel=hotel.handle)
+            monitoring.note_hotel(user.hotel_id, hotel.handle)
         reason = access.blocks(hotel, permission) if hotel is not None else None
         if reason:
             raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, reason)

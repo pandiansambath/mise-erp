@@ -34,14 +34,32 @@ _user: ContextVar[str] = ContextVar("log_user", default="-")
 _request: ContextVar[str] = ContextVar("log_request", default="-")
 
 
-def bind(hotel: str = "-", user: str = "-", request_id: str = "-") -> None:
-    _hotel.set(hotel or "-")
-    _user.set(user or "-")
-    _request.set(request_id or "-")
+def bind(
+    hotel: str | None = None,
+    user: str | None = None,
+    request_id: str | None = None,
+) -> None:
+    """Attach identity to every log line for the rest of this request.
+
+    Only the fields passed are changed. This matters because binding happens in
+    two places at different times — the request id at the middleware, the hotel
+    once auth has resolved it — and a bind that reset everything would silently
+    erase the request id when the second call landed.
+    """
+    if hotel is not None:
+        _hotel.set(hotel or "-")
+    if user is not None:
+        _user.set(user or "-")
+    if request_id is not None:
+        _request.set(request_id or "-")
 
 
 def clear() -> None:
-    bind()
+    """Reset everything. Called when a request finishes so the next one on this
+    worker cannot inherit the last customer's identity."""
+    _hotel.set("-")
+    _user.set("-")
+    _request.set("-")
 
 
 class DineFormatter(logging.Formatter):
