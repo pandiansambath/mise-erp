@@ -72,6 +72,7 @@ export default function VendorsPage() {
   // add-price form
   const [piItem, setPiItem] = useState("");
   const priceRef = useRef<HTMLInputElement>(null);
+  const [sheetTab, setSheetTab] = useState<"supply" | "price">("supply");
   const [piPrice, setPiPrice] = useState("");
   const [piMode, setPiMode] = useState<"unit" | "pack">("unit"); // enter £/unit or £/pack
 
@@ -459,22 +460,22 @@ export default function VendorsPage() {
         {selectedVendor && (
         <div ref={detailRef}>
 
-          {/* Jump tabs — the supply table sits below the fold on a long list,
-              and scrolling to it was the single most-complained-about thing. */}
-          <nav className="mb-4 flex flex-wrap gap-2">
-            {[
+          {/* Real tabs, not jump links. Only ONE section is mounted at a time,
+              so there is nothing to scroll past and nothing to float over. */}
+          <nav className="mb-4 flex gap-2">
+            {([
               ["supply", `What they supply (${vendorItems.length})`],
-              ["add-price", "Add / update a price"],
-            ].map(([id, label]) => (
+              ["price", "Add / update a price"],
+            ] as const).map(([key, label]) => (
               <button
-                key={id}
+                key={key}
                 type="button"
-                onClick={() =>
-                  document
-                    .getElementById(`vendor-${id}`)
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }
-                className="mise-press rounded-full border border-line px-3 py-1.5 text-xs font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                onClick={() => setSheetTab(key)}
+                className={`mise-press rounded-full px-4 py-2 text-sm font-medium transition ${
+                  sheetTab === key
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : "border border-line text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
+                }`}
               >
                 {label}
               </button>
@@ -483,9 +484,9 @@ export default function VendorsPage() {
 
           <div className="grid grid-cols-1 gap-6">
             {/* What they supply */}
-            <div id="vendor-supply" className="min-w-0 scroll-mt-4">
+            <div className={`min-w-0 ${sheetTab === "supply" ? "" : "hidden"}`}>
               <p className="text-sm font-medium text-fg-soft">What they supply ({vendorItems.length})</p>
-              <div className="mt-2 max-h-[28rem] overflow-auto rounded-xl border border-line">
+              <div className="mt-2 overflow-x-auto rounded-xl border border-line">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-paper">
                     <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
@@ -547,8 +548,7 @@ export default function VendorsPage() {
             </div>
 
             {/* Add / update a price + bulk import */}
-            <span id="vendor-add-price" className="block scroll-mt-4" />
-            {canWrite && (
+            {canWrite && sheetTab === "price" && (
               <div className="min-w-0">
                 <form onSubmit={addPrice}>
                   <p className="text-sm font-medium text-fg-soft">Add / update a price</p>
@@ -563,15 +563,13 @@ export default function VendorsPage() {
                       }}
                     />
                   </div>
-                  {/* Sticky, and it NAMES what you picked. Before this the price
-                      box sat under a long grid: choosing an item pushed the input
-                      off-screen, so you scrolled down to type a number with no
-                      reminder of which item you were pricing. */}
+                  {/* Names what you picked, so you are never typing a price
+                      against an item you cannot see. Not sticky any more: this
+                      section is now the only thing on screen, and the sticky
+                      version floated over the item grid. */}
                   <div
-                    className={`sticky bottom-0 z-10 mt-3 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5 transition ${
-                      piItem
-                        ? "border border-brand-400/40 bg-paper-2/95 shadow-lg shadow-black/20 backdrop-blur"
-                        : "border border-transparent"
+                    className={`mt-3 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5 transition ${
+                      piItem ? "border border-brand-400/40 bg-paper-2/60" : "border border-transparent"
                     }`}
                   >
                     {piItem && (
