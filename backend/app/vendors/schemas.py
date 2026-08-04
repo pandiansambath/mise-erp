@@ -114,3 +114,19 @@ class PriceComparison(BaseModel):
     cheapest_vendor: VendorPriceRow | None
     most_expensive_vendor: VendorPriceRow | None
     potential_saving_per_unit: Decimal  # max price - min price
+
+
+class VendorPaymentCreate(BaseModel):
+    """Money paid to a supplier.
+
+    `category_id` is only used for CASH: that payment also leaves the till, so
+    it is booked as a cash expense as well, or the drawer would be short by
+    exactly this with nothing explaining it.
+    """
+
+    date: date
+    amount: Decimal = Field(gt=0)
+    method: str = "BANK"
+    reference: str | None = None
+    note: str | None = None
+    category_id: uuid.UUID | None = None

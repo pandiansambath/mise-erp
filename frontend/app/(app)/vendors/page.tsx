@@ -10,6 +10,7 @@ import {
   postForm,
   type Item,
   type ItemSuppliers,
+  type ExpenseCategory,
   type Vendor,
   type VendorItem,
 } from "@/lib/api";
@@ -17,6 +18,7 @@ import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars } from "@/components/charts";
 import { spotlight, useDeepLink } from "@/components/fx";
 import { FormShell } from "@/components/EditModal";
+import { VendorLedger } from "@/components/VendorLedger";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -55,6 +57,13 @@ export default function VendorsPage() {
   const [cheapest, setCheapest] = useState<Record<string, number>>({});
   useEffect(() => {
     api
+      .get<ExpenseCategory[]>("/expenses/categories")
+      .then(setExpenseCats)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api
       .get<{ vendors: { vendor_name: string; total: string; orders?: number; price_rises?: number }[] }>(
         "/vendors/spend?days=90",
       )
@@ -76,7 +85,8 @@ export default function VendorsPage() {
   // add-price form
   const [piItem, setPiItem] = useState("");
   const priceRef = useRef<HTMLInputElement>(null);
-  const [sheetTab, setSheetTab] = useState<"supply" | "price">("supply");
+  const [sheetTab, setSheetTab] = useState<"supply" | "price" | "money">("supply");
+  const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [piPrice, setPiPrice] = useState("");
   const [piMode, setPiMode] = useState<"unit" | "pack">("unit"); // enter £/unit or £/pack
 
@@ -579,6 +589,7 @@ export default function VendorsPage() {
             {([
               ["supply", `What they supply (${vendorItems.length})`],
               ["price", "Add / update a price"],
+              ["money", "Money"],
             ] as const).map(([key, label]) => (
               <button
                 key={key}
@@ -596,6 +607,19 @@ export default function VendorsPage() {
           </nav>
 
           <div className="grid grid-cols-1 gap-6">
+            {/* Owed vs paid. Deliveries daily, money weekly — the gap between
+                them is the number nothing could state before. */}
+            <div className={`min-w-0 ${sheetTab === "money" ? "" : "hidden"}`}>
+              {selectedVendor && sheetTab === "money" && (
+                <VendorLedger
+                  vendorId={selectedVendor.id}
+                  vendorName={selectedVendor.name}
+                  categories={expenseCats}
+                  canWrite={canWrite}
+                />
+              )}
+            </div>
+
             {/* What they supply */}
             <div className={`min-w-0 ${sheetTab === "supply" ? "" : "hidden"}`}>
               <p className="text-sm font-medium text-fg-soft">What they supply ({vendorItems.length})</p>

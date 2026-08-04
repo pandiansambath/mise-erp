@@ -97,3 +97,43 @@ class PriceHistory(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class VendorPayment(Base):
+    """Money paid to a supplier.
+
+    You buy daily and settle weekly, monthly, or every ten days. Between those
+    two rhythms sits a balance that nothing in the app could show: it knew what
+    every delivery cost and had no idea what had been paid, so "how much do I
+    owe Chennai Fresh?" was answerable only on paper.
+
+    Payments are recorded against the VENDOR, not against individual purchase
+    orders, because that is how the money actually moves — one transfer covers
+    a fortnight of deliveries. Forcing each payment to be split across POs is
+    the sort of bookkeeping precision that makes people stop entering anything,
+    and the balance is identical either way.
+
+    What is owed is therefore: total of RECEIVED orders, minus total paid. Only
+    received, because an order that has not arrived is not yet a debt.
+    """
+
+    __tablename__ = "vendor_payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vendors.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # CASH matters beyond bookkeeping: a cash payment also leaves the till, so
+    # the drawer has to know about it.
+    method: Mapped[str] = mapped_column(String(20), nullable=False, default="BANK")
+    reference: Mapped[str | None] = mapped_column(String(120))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
