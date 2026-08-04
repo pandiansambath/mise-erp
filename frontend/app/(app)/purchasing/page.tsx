@@ -55,6 +55,20 @@ const poTone: Record<string, "slate" | "amber" | "green"> = {
   RECEIVED: "green",
 };
 
+
+/** "today", "yesterday", "3 days ago" — a date alone makes you count back. */
+function relativeDay(iso: string): string {
+  const then = new Date(iso + "T00:00:00");
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const days = Math.round((now.getTime() - then.getTime()) / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 0) return `in ${-days} day${days === -1 ? "" : "s"}`;
+  if (days < 30) return `${days} days ago`;
+  return "";
+}
+
 export default function PurchasingPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
@@ -649,21 +663,59 @@ export default function PurchasingPage() {
               indents.map((ind) => {
                 const open = openIndent === ind.id;
                 return (
-                  <div key={ind.id} className="overflow-hidden rounded-xl border border-line bg-glass/5 transition hover:border-line-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleIndent(ind)}
-                      aria-expanded={open}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                  <button
+                    key={ind.id}
+                    type="button"
+                    onClick={() => toggleIndent(ind)}
+                    aria-expanded={open}
+                    className={`mise-feel mise-press flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5 ${
+                      ind.status === "PENDING"
+                        ? "border-amber-400/30 bg-amber-400/[0.05]"
+                        : "border-line bg-glass/5 hover:border-line-2"
+                    }`}
+                  >
+                    {/* A tile rather than a chevron: status is the first thing
+                        you need, and colour reads faster than a word. */}
+                    <span
+                      aria-hidden
+                      className={`mise-neo-raised grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg ${
+                        ind.status === "PENDING" ? "text-amber-300"
+                        : ind.status === "APPROVED" ? "text-emerald-300"
+                        : ind.status === "REJECTED" ? "text-rose-300"
+                        : "text-fg-faint"
+                      }`}
                     >
-                      <span aria-hidden className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>›</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium text-fg">{ind.date}</span>
-                        <span className="block text-xs text-fg-faint">{ind.items.length} item{ind.items.length === 1 ? "" : "s"}</span>
+                      {ind.status === "ORDERED" ? "🚚" : ind.status === "APPROVED" ? "✓" : ind.status === "REJECTED" ? "✕" : "📋"}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-display text-sm font-semibold text-fg">
+                        {ind.date}
+                        <span className="ml-2 font-sans text-[11px] font-normal text-fg-faint">
+                          {relativeDay(ind.date)}
+                        </span>
                       </span>
-                      <Badge tone={indentTone[ind.status] ?? "slate"}>{ind.status}</Badge>
-                    </button>
-                  </div>
+                      <span className="block text-xs text-fg-faint">
+                        {ind.items.length} item{ind.items.length === 1 ? "" : "s"}
+                        {(() => {
+                          // Suppliers involved, from lines we already have — no
+                          // extra request just to count them.
+                          const vendors = new Set(
+                            ind.items.map((i) => i.vendor_name).filter(Boolean),
+                          ).size;
+                          return vendors > 0 ? ` · ${vendors} supplier${vendors === 1 ? "" : "s"}` : "";
+                        })()}
+                      </span>
+                    </span>
+                    {indentConsol[ind.id]?.po_count ? (
+                      <span className="shrink-0 text-right">
+                        <span className="block font-display text-sm font-semibold tabular-nums text-fg">
+                          {format(indentConsol[ind.id].grand_total)}
+                        </span>
+                        <span className="block text-[10px] text-fg-faint">ordered</span>
+                      </span>
+                    ) : null}
+                    <Badge tone={indentTone[ind.status] ?? "slate"}>{ind.status}</Badge>
+                  </button>
                 );
               })
             )}
