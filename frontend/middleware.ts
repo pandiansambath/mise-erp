@@ -12,6 +12,7 @@ const SUBDOMAIN_ROUTES: Record<string, string> = {
   order: "/order",
   orders: "/order",
   rider: "/rider",
+  "pandi-dev": "/dev",
 };
 
 // The single-level subdomain label, or null for the apex / www / bare host / localhost.
