@@ -872,3 +872,26 @@ export interface RecipeCostBreakdown {
   has_missing_prices: boolean;
   ingredients: IngredientCost[];
 }
+
+
+/** What is owed to a supplier: delivered minus paid. */
+export interface VendorBalance {
+  delivered: string;
+  paid: string;
+  /** Negative means paid ahead — an advance, not an error. */
+  outstanding: string;
+}
+
+export interface StatementEntry {
+  date: string;
+  kind: "delivery" | "payment";
+  reference: string | null;
+  charge: string;
+  payment: string;
+  balance: string;
+  note: string | null;
+}
+
+export interface VendorStatement extends VendorBalance {
+  entries: StatementEntry[];
+}

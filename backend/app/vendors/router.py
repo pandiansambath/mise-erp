@@ -14,13 +14,15 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
 from app.inventory.service import get_item
-from app.vendors import service
+from app.vendors import ledger, service
+from app.vendors.models import VendorPayment
 from app.vendors.schemas import (
     PriceComparison,
     VendorCreate,
     VendorItemOut,
     VendorItemUpsert,
     VendorOut,
+    VendorPaymentCreate,
     VendorUpdate,
 )
 
@@ -264,3 +266,96 @@ async def remove_vendor_item(
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "This vendor has no price for that item")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── What you owe a supplier ─────────────────────────────────────────────────
+# Deliveries arrive daily, money leaves weekly. Between the two is a balance
+# nothing in the app could state until now.
+
+
+@router.get("/{vendor_id}/balance")
+async def vendor_balance(
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+    return await ledger.balance(db, user.hotel_id, vendor_id)
+
+
+@router.get("/{vendor_id}/statement")
+async def vendor_statement(
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    """Deliveries and payments interleaved, with a running balance.
+
+    Returned alongside the totals so a supplier's invoice can be checked line by
+    line — a bare "you owe £1,240" is unarguable and therefore useless in a
+    disagreement.
+    """
+    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+    return {
+        **(await ledger.balance(db, user.hotel_id, vendor_id)),
+        "entries": await ledger.statement(db, user.hotel_id, vendor_id),
+    }
+
+
+@router.post("/{vendor_id}/payments", status_code=status.HTTP_201_CREATED)
+async def record_payment(
+    vendor_id: uuid.UUID,
+    payload: VendorPaymentCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> dict:
+    """Record money paid to a supplier.
+
+    A CASH payment also leaves the till, so it is booked as a cash expense too —
+    otherwise the drawer would be short by exactly this amount with nothing to
+    explain it, which is the failure the cash work exists to prevent.
+    """
+    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Vendor not found")
+
+    row = VendorPayment(
+        hotel_id=user.hotel_id,
+        vendor_id=vendor_id,
+        date=payload.date,
+        amount=payload.amount,
+        method=payload.method,
+        reference=payload.reference,
+        note=payload.note,
+        created_by=user.id,
+    )
+    db.add(row)
+
+    if payload.method == "CASH" and payload.category_id is not None:
+        from app.expenses.models import Expense
+
+        db.add(
+            Expense(
+                hotel_id=user.hotel_id,
+                category_id=payload.category_id,
+                date=payload.date,
+                amount=payload.amount,
+                payment_method="CASH",
+                notes=(
+                    f"Paid {vendor.name}"
+                    + (f" ({payload.reference})" if payload.reference else "")
+                ),
+                entered_by=user.id,
+            )
+        )
+
+    await db.commit()
+    await db.refresh(row)
+    return {
+        "id": str(row.id),
+        **(await ledger.balance(db, user.hotel_id, vendor_id)),
+    }
