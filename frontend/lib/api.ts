@@ -383,6 +383,42 @@ export interface DayTotals {
   card_sales: string;
 }
 
+/** The workings behind expected_cash, so a shortfall can be checked. */
+export interface DrawerBreakdown {
+  opening: string;
+  cash_sales: string;
+  cash_expenses: string;   // paid out of the till
+  petty_out: string;       // taken and not yet returned
+  petty_returned: string;
+  expected: string;
+  counted: string | null;
+  variance: string | null;
+  unreconciled: { id: string; taken_by: string | null; purpose: string | null; taken: string; spent: string; returned: string; difference: string }[];
+}
+
+export interface PettyCashRow {
+  id: string;
+  date: string;
+  taken_amount: string;
+  spent_amount: string | null;
+  returned_amount: string | null;
+  purpose: string | null;
+  taken_by: string | null;
+  status: string;
+  expense_id: string | null;
+}
+
+export interface CashEvent {
+  id: string;
+  date: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  reason: string | null;
+  source: string;
+  created_at: string;
+}
+
 export interface DaySummary {
   id: string | null;
   date: string;
@@ -390,6 +426,13 @@ export interface DaySummary {
   cash_counted: string | null;
   expected_cash: string;
   cash_variance: string | null;
+  /** Yesterday's close, offered when today has not been opened yet. */
+  suggested_opening: string | null;
+  closed_at: string | null;
+  /** True when the midnight job closed it, not a person. An assumed figure
+   *  must never look like a counted one. */
+  auto_closed: boolean;
+  drawer: DrawerBreakdown | null;
   notes: string | null;
   lines: SalesLine[];
   totals: DayTotals;

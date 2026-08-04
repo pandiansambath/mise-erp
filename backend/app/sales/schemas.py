@@ -37,6 +37,9 @@ class DayUpsert(BaseModel):
     opening_cash: Decimal | None = Field(default=None, ge=0)
     cash_counted: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
+    # Why a figure was changed. Optional, but the UI asks for it when editing a
+    # day that was already closed — that is the edit somebody will question later.
+    reason: str | None = None
 
 
 class LineCreate(BaseModel):
@@ -73,13 +76,78 @@ class DayTotals(BaseModel):
     card_sales: Decimal
 
 
+class DrawerBreakdown(BaseModel):
+    """The workings behind `expected_cash`. Shown in full because "expected 480,
+    counted 455" is an accusation, while the parts that made up 480 are
+    something a manager can actually check."""
+
+    opening: Decimal
+    cash_sales: Decimal
+    cash_expenses: Decimal      # paid out of the till
+    petty_out: Decimal          # taken and not yet returned
+    petty_returned: Decimal     # change put back
+    expected: Decimal
+    counted: Decimal | None
+    variance: Decimal | None
+    unreconciled: list[dict] = []
+
+
+class PettyCashOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    date: date_type
+    taken_amount: Decimal
+    spent_amount: Decimal | None
+    returned_amount: Decimal | None
+    purpose: str | None
+    taken_by: str | None
+    status: str
+    expense_id: uuid.UUID | None
+
+
+class PettyCashTake(BaseModel):
+    taken_amount: Decimal = Field(gt=0)
+    purpose: str | None = None
+    taken_by: str | None = None
+
+
+class PettyCashSettle(BaseModel):
+    """What actually happened to the float. `spent + returned` must equal what
+    was taken, or the difference is money nobody can account for."""
+
+    spent_amount: Decimal = Field(ge=0)
+    returned_amount: Decimal = Field(ge=0)
+    # Book the spend as a real expense so it reaches the P&L, not just the till.
+    category_id: uuid.UUID | None = None
+    note: str | None = None
+
+
+class CashEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    date: date_type
+    field: str
+    old_value: Decimal | None
+    new_value: Decimal | None
+    reason: str | None
+    source: str
+    created_at: datetime
+
+
 class DaySummary(BaseModel):
     id: uuid.UUID | None
     date: date_type
     opening_cash: Decimal
     cash_counted: Decimal | None
-    expected_cash: Decimal  # opening + cash sales
+    expected_cash: Decimal  # opening + cash sales - cash out +/- petty
     cash_variance: Decimal | None  # counted - expected (None until counted)
+    # Yesterday's closing count, offered when today has not been opened yet.
+    suggested_opening: Decimal | None = None
+    closed_at: datetime | None = None
+    auto_closed: bool = False
+    drawer: DrawerBreakdown | None = None
     notes: str | None
     lines: list[LineOut]
     totals: DayTotals

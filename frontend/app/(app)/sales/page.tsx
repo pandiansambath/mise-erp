@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, downloadFile, postForm, type DaySummary, type SalesChannel } from "@/lib/api";
+import { api, ApiError, downloadFile, postForm, type CashEvent, type DaySummary, type ExpenseCategory, type PettyCashRow, type SalesChannel } from "@/lib/api";
+import { PettyCash } from "@/components/PettyCash";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
@@ -31,6 +32,10 @@ export default function SalesPage() {
 
   const [day, setDay] = useState(today());
   const [summary, setSummary] = useState<DaySummary | null>(null);
+  const [pettyRows, setPettyRows] = useState<PettyCashRow[]>([]);
+  const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<CashEvent[] | null>(null);
   const [channels, setChannels] = useState<SalesChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,23 +77,22 @@ export default function SalesPage() {
   }, []);
 
   const loadDay = async (d: string) => {
-    const s = await api.get<DaySummary>(`/sales/days/${d}`);
+    // The carry-forward used to need a SECOND request for yesterday, on every
+    // day change. The server now returns it as `suggested_opening`, so this is
+    // one round trip and the rule lives in one place instead of two.
+    const [s, petty] = await Promise.all([
+      api.get<DaySummary>(`/sales/days/${d}`),
+      api.get<PettyCashRow[]>(`/sales/days/${d}/petty`).catch(() => [] as PettyCashRow[]),
+    ]);
     setSummary(s);
+    setPettyRows(petty);
     setCounted(s.cash_counted ?? "");
-    setCarried(false);
-    if (s.opening_cash) {
+    if (s.opening_cash && s.opening_cash !== "0" && s.opening_cash !== "0.00") {
       setOpening(s.opening_cash);
+      setCarried(false);
     } else {
-      // Auto-carry: yesterday's closing count becomes today's opening (editable).
-      const prev = new Date(d + "T00:00:00");
-      prev.setDate(prev.getDate() - 1);
-      try {
-        const ps = await api.get<DaySummary>(`/sales/days/${localISODate(prev)}`);
-        setOpening(ps.cash_counted ?? "");
-        setCarried(Boolean(ps.cash_counted && ps.cash_counted !== ""));
-      } catch {
-        setOpening("");
-      }
+      setOpening(s.suggested_opening ?? "");
+      setCarried(Boolean(s.suggested_opening));
     }
   };
 
@@ -98,6 +102,7 @@ export default function SalesPage() {
         setChannels(c);
         if (c.length) setChannelId(c[0].id);
       }),
+      api.get<ExpenseCategory[]>("/expenses/categories").then(setExpenseCats).catch(() => {}),
       loadDay(day),
     ]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -514,10 +519,26 @@ export default function SalesPage() {
                 </p>
               )}
             </div>
+            {/* The full workings. "Expected 480, counted 455" is an accusation;
+                showing what made up the 480 is something you can check. Cash
+                expenses and petty cash were invisible here before, so an
+                honestly-run day always looked short. */}
             <div className="flex justify-between border-t border-line pt-3 text-fg-soft">
               <span>+ Cash sales</span>
               <span>{format(summary.totals.cash_sales)}</span>
             </div>
+            {summary.drawer && Number(summary.drawer.cash_expenses) > 0 && (
+              <div className="flex justify-between text-rose-300">
+                <span>− Paid out in cash</span>
+                <span>{format(summary.drawer.cash_expenses)}</span>
+              </div>
+            )}
+            {summary.drawer && Number(summary.drawer.petty_out) > 0 && (
+              <div className="flex justify-between text-amber-300">
+                <span>− Petty cash still out</span>
+                <span>{format(summary.drawer.petty_out)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-medium text-fg">
               <span>= Expected in drawer</span>
               <span>{format(summary.expected_cash)}</span>
@@ -546,6 +567,75 @@ export default function SalesPage() {
                 className="mise-well mt-1 w-full rounded-lg px-3 py-2 outline-none"
               />
               {pad === "counted" && <TillKeypad value={counted} onChange={setCounted} onClose={() => setPad(null)} />}
+              {summary.auto_closed && (
+                <p className="mt-1.5 rounded-lg border border-amber-400/25 bg-amber-400/[0.07] px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-300">
+                  Closed automatically after midnight using the expected figure —
+                  nobody counted it. Enter the real count if you have it.
+                </p>
+              )}
+            </div>
+
+            <PettyCash
+              day={day}
+              rows={pettyRows}
+              categories={expenseCats}
+              canWrite={canWrite}
+              onChanged={() => loadDay(day)}
+            />
+
+            {/* The cash trail. Quiet by default — you only want it when a figure
+                looks wrong — but always there, because a closing amount that can
+                be edited days later needs a record of who changed it and why. */}
+            <div className="mt-4 border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setHistoryOpen((o) => !o);
+                  if (history === null) {
+                    try {
+                      setHistory(await api.get<CashEvent[]>(`/sales/days/${day}/cash-history`));
+                    } catch {
+                      setHistory([]);
+                    }
+                  }
+                }}
+                className="flex items-center gap-1.5 text-[11px] text-fg-faint transition hover:text-fg-soft"
+              >
+                <span aria-hidden className={`transition-transform ${historyOpen ? "rotate-90" : ""}`}>▸</span>
+                Cash history
+              </button>
+              {historyOpen && (
+                <div className="mise-pop mt-2">
+                  {history === null ? (
+                    <p className="text-[11px] text-fg-faint">Loading…</p>
+                  ) : history.length === 0 ? (
+                    <p className="text-[11px] text-fg-faint">No changes recorded for this day.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {history.map((h) => (
+                        <li key={h.id} className="rounded-lg border border-line bg-paper-2/40 px-2.5 py-1.5 text-[11px]">
+                          <span className="text-fg-soft">
+                            {h.field === "cash_counted" ? "Closing count" : "Opening cash"}
+                          </span>{" "}
+                          <span className="text-fg-faint">
+                            {h.old_value !== null ? format(h.old_value) : "—"} →{" "}
+                          </span>
+                          <b className="text-fg">{h.new_value !== null ? format(h.new_value) : "—"}</b>
+                          {h.source === "auto" && (
+                            <span className="ml-1.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] text-amber-300">
+                              automatic
+                            </span>
+                          )}
+                          <span className="block text-fg-faint">
+                            {new Date(h.created_at).toLocaleString()}
+                            {h.reason ? ` · ${h.reason}` : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
             {varianceNum != null && (
               varianceNum === 0 ? (

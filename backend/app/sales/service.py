@@ -1,5 +1,6 @@
 """Daily sales & cash service: channels, daily entry, commission/net, cash variance."""
 import uuid
+from datetime import UTC, datetime
 from datetime import date as date_type
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -111,15 +112,32 @@ async def upsert_day(
     cash_counted: Decimal | None = None,
     notes: str | None = None,
     entered_by: uuid.UUID | None = None,
+    reason: str | None = None,
 ) -> DailySales:
+    from app.sales import cash as cash_mod
+
     record = await _get_day(db, hotel_id, day)
     if record is None:
         record = DailySales(hotel_id=hotel_id, date=day, entered_by=entered_by)
         db.add(record)
+        await db.flush()  # the row must exist before history references it
+    # Each change is written to the append-only history BEFORE it is applied,
+    # while the old value is still readable. This is the only record of who
+    # changed a till figure, when, and from what.
     if opening_cash is not None:
+        await cash_mod.record_change(
+            db, hotel_id, day, "opening_cash", record.opening_cash, opening_cash,
+            user_id=entered_by, reason=reason,
+        )
         record.opening_cash = opening_cash
     if cash_counted is not None:
+        await cash_mod.record_change(
+            db, hotel_id, day, "cash_counted", record.cash_counted, cash_counted,
+            user_id=entered_by, reason=reason,
+        )
         record.cash_counted = cash_counted
+        record.closed_at = datetime.now(UTC)
+        record.auto_closed = False  # a human counted it
     if notes is not None:
         record.notes = notes
     await db.commit()
@@ -196,8 +214,23 @@ async def day_summary(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> 
 
     opening = record.opening_cash if record else Decimal("0")
     counted = record.cash_counted if record else None
-    expected_cash = opening + cash_sales
-    variance = (counted - expected_cash) if counted is not None else None
+
+    # The full drawer. Cash expenses and petty cash move the till too, and
+    # leaving them out made an honest day look short. See app/sales/cash.py.
+    from app.sales import cash as cash_mod
+
+    drawer = await cash_mod.drawer_for(
+        db, hotel_id, day, opening=opening, cash_sales=cash_sales, counted=counted
+    )
+    expected_cash = drawer["expected"]
+    variance = drawer["variance"]
+
+    # If today was never opened, OFFER yesterday's close rather than 0 — the
+    # float does not vanish overnight. A suggestion only; an existing record is
+    # left exactly as entered.
+    suggested_opening = None
+    if record is None or (record.opening_cash == Decimal("0") and counted is None):
+        suggested_opening = await cash_mod.carried_opening(db, hotel_id, day)
 
     return {
         "id": record.id if record else None,
@@ -206,6 +239,11 @@ async def day_summary(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> 
         "cash_counted": counted,
         "expected_cash": expected_cash,
         "cash_variance": variance,
+        "suggested_opening": suggested_opening,
+        "closed_at": record.closed_at if record else None,
+        "auto_closed": bool(record.auto_closed) if record else False,
+        # The workings, so a shortfall can be checked rather than just accused.
+        "drawer": drawer,
         "notes": record.notes if record else None,
         "lines": lines_out,
         "totals": {
