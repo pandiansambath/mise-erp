@@ -197,6 +197,20 @@ export default function AttendancePage() {
           className="mise-well rounded-lg px-3 py-2 text-sm outline-none"
         />
         <span className="text-sm text-fg-faint">{present} present · {employees.length} staff</span>
+        {/* The rota expected them and they have not clocked in. This is the
+            single thing a manager needs at 09:00, and nothing said it before. */}
+        {(() => {
+          const missing = Object.values(rows).filter((r) => r.missing);
+          if (missing.length === 0) return null;
+          return (
+            <span
+              title={missing.map((r) => r.employee_name).join(", ")}
+              className="mise-pop rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-300"
+            >
+              ⚠ {missing.length} rota&apos;d but not clocked in
+            </span>
+          );
+        })()}
         <span className="text-xs text-fg-faint">· times in {timeZone}</span>
         {!isToday && <span className="text-xs text-fg-faint">(punching only works for today)</span>}
         <div className="ml-auto flex gap-2">
