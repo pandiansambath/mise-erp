@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { spotlight, useDeepLink } from "@/components/fx";
+import { FormShell } from "@/components/EditModal";
 
 function marginTone(pct: number): "green" | "amber" | "red" {
   if (pct >= 65) return "green";
@@ -757,10 +758,15 @@ export default function RecipesPage() {
               + New recipe
             </button>
           ) : (
-            <Card id="recipe-form">
-              <p className="mb-3 text-sm font-medium text-fg-soft">
-                {editId ? "Edit recipe" : "New recipe"}
-              </p>
+            <FormShell
+              editing={!!editId}
+              onClose={resetForm}
+              title="Edit recipe"
+              subtitle={name || undefined}
+              icon={dishEmoji(category)}
+            >
+            <Card id="recipe-form" className={editId ? "border-0 bg-transparent p-0 shadow-none" : ""}>
+              {!editId && <p className="mb-3 text-sm font-medium text-fg-soft">New recipe</p>}
               <form onSubmit={createRecipe} className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                   <div className="sm:col-span-2">
@@ -838,6 +844,7 @@ export default function RecipesPage() {
                 </p>
               </form>
             </Card>
+            </FormShell>
           )}
         </div>
       )}

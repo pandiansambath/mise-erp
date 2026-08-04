@@ -16,6 +16,7 @@ import {
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars } from "@/components/charts";
 import { spotlight, useDeepLink } from "@/components/fx";
+import { FormShell } from "@/components/EditModal";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -61,6 +62,9 @@ export default function VendorsPage() {
       .catch(() => {});
   }, []);
 
+  // Which vendor is being edited, if any. Editing reuses the same form so the
+  // fields, validation and submit stay in one place.
+  const [editVendorId, setEditVendorId] = useState<string | null>(null);
   const [vName, setVName] = useState("");
   const [vCat, setVCat] = useState("FOOD");
   const [extraCats, setExtraCats] = useState<string[]>([]); // superadmin-added types
@@ -115,6 +119,21 @@ export default function VendorsPage() {
     // opens in a sheet right where you clicked — no scrolling to the bottom
   }
 
+  function startEditVendor(v: Vendor) {
+    setEditVendorId(v.id);
+    setVName(v.name ?? "");
+    setVCat(v.category ?? "FOOD");
+    setVContact(v.contact_person ?? "");
+    setVMobile(v.mobile ?? "");
+    setError(null);
+  }
+
+  function cancelVendorEdit() {
+    setEditVendorId(null);
+    setVName(""); setVContact(""); setVMobile(""); setVCat("FOOD");
+    setError(null);
+  }
+
   async function addVendor(e: React.FormEvent) {
     e.preventDefault();
     if (!vName.trim()) {
@@ -122,6 +141,24 @@ export default function VendorsPage() {
       return;
     }
     setError(null);
+    // Editing an existing supplier: same form, same fields, PATCH instead of
+    // POST. Anything else would mean a second copy of this form to keep in step.
+    if (editVendorId) {
+      try {
+        await api.patch<Vendor>(`/vendors/${editVendorId}`, {
+          name: vName.trim(),
+          category: vCat,
+          contact_person: vContact.trim() || null,
+          mobile: vMobile.trim() || null,
+        });
+        cancelVendorEdit();
+        load();
+        setNotice("Supplier details updated.");
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Could not save those details.");
+      }
+      return;
+    }
     try {
       const v = await api.post<Vendor>("/vendors", {
         name: vName.trim(),
@@ -302,8 +339,15 @@ export default function VendorsPage() {
       {notice && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
 
       {canWrite && (
-        <Card className="mise-feel mb-6" id="vendor-form">
-          <p className="mb-3 text-sm font-medium text-fg-soft">Add a vendor</p>
+        <FormShell
+          editing={!!editVendorId}
+          onClose={cancelVendorEdit}
+          title="Edit supplier"
+          subtitle={vName || undefined}
+          icon={TYPE_EMOJI[vCat] ?? "🤝"}
+        >
+        <Card className={editVendorId ? "border-0 bg-transparent p-0 shadow-none" : "mise-feel mb-6"} id="vendor-form">
+          {!editVendorId && <p className="mb-3 text-sm font-medium text-fg-soft">Add a vendor</p>}
           <form onSubmit={addVendor} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-sm font-medium text-fg-soft">Name</label>
@@ -370,13 +414,23 @@ export default function VendorsPage() {
                 )}
               </div>
             </div>
-            <div className="sm:col-span-3">
+            <div className="flex gap-2 sm:col-span-3">
               <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                Add vendor
+                {editVendorId ? "Save changes" : "Add vendor"}
               </button>
+              {editVendorId && (
+                <button
+                  type="button"
+                  onClick={cancelVendorEdit}
+                  className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           </form>
         </Card>
+        </FormShell>
       )}
 
       {spend.length > 0 && (
@@ -499,12 +553,20 @@ export default function VendorsPage() {
         }
         actions={
           canWrite && selectedVendor ? (
+            <>
+            <button
+              onClick={() => { startEditVendor(selectedVendor); setSelected(""); }}
+              className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
+            >
+              Edit details
+            </button>
             <button
               onClick={() => toggleActive(selectedVendor)}
               className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
             >
               {selectedVendor.is_active ? "Deactivate" : "Reactivate"}
             </button>
+            </>
           ) : null
         }
       >

@@ -17,6 +17,7 @@ import {
   type SupplierOption,
 } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
+import { FormShell } from "@/components/EditModal";
 import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
@@ -280,12 +281,8 @@ export default function InventoryPage() {
     });
     setAllergensTouched(false);
     setError(null);
-    // Centre the edit form AND drop the caret in it, so you never type into a
-    // field that's scrolled off screen. Pulse it so the click clearly "lands".
-    revealForm(formRef.current, { select: true });
-    setFlash(true);
-    if (flashTimer.current) window.clearTimeout(flashTimer.current);
-    flashTimer.current = window.setTimeout(() => setFlash(false), 1200);
+    // No scrolling: the form opens over the row you clicked. The modal focuses
+    // its first field itself, so the caret still lands where you need it.
   }
 
   function cancelEdit() {
@@ -850,11 +847,21 @@ export default function InventoryPage() {
         </div>
       )}
 
-      <div ref={formRef} className="scroll-mt-4">
-      <Card className={`mb-6 ${flash ? "mise-flash" : ""}`}>
-        <p className="mb-3 text-sm font-medium text-fg-soft">
-          {editingId ? "Edit item" : "Add a new item"}
-        </p>
+      {/* Adding happens at the top of the page (you came here to do it);
+          editing opens WHERE YOU CLICKED, because you were deep in the list. */}
+      <FormShell
+        editing={!!editingId}
+        onClose={cancelEdit}
+        title="Edit item"
+        subtitle={form.name || undefined}
+        icon={categoryEmoji(form.category || "")}
+        innerRef={formRef}
+        flash={flash}
+      >
+      <Card className={editingId ? "border-0 bg-transparent p-0 shadow-none" : "mb-6"}>
+        {!editingId && (
+          <p className="mb-3 text-sm font-medium text-fg-soft">Add a new item</p>
+        )}
         <form onSubmit={submit} className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="flex-1 sm:min-w-[12rem]">
@@ -1044,7 +1051,7 @@ export default function InventoryPage() {
         </form>
         {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
       </Card>
-      </div>
+      </FormShell>
 
       {loading ? (
         <Spinner />
