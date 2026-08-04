@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, ApiError } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner, StatCard, Toggle } from "@/components/ui";
+import { DeleteHotel } from "@/components/DeleteHotel";
 import { OperatorAI } from "@/components/OperatorAI";
 import { Donut, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
@@ -23,6 +24,7 @@ type HotelRow = {
   created_at: string; has_logo: boolean; is_active: boolean;
   user_count: number; admin_email: string | null; plan: string; max_users: number;
   features: Record<string, boolean>;
+  handle?: string | null;
   is_comp?: boolean;
   ai_daily_override?: number | null;
   ai_monthly_override?: number | null;
@@ -429,7 +431,7 @@ function AnnouncementsCard() {
 }
 
 function HotelCard({
-  hotel, features, plans, onToggle, onApplyPlan, onSuspend,
+  hotel, features, plans, onToggle, onApplyPlan, onSuspend, onDeleted,
 }: {
   hotel: HotelRow;
   features: FeatureDef[];
@@ -437,6 +439,8 @@ function HotelCard({
   onToggle: (key: string, value: boolean) => Promise<void>;
   onApplyPlan: (plan: string) => Promise<void>;
   onSuspend: (active: boolean) => Promise<void>;
+  /** The hotel is gone — the parent owns the list, so it re-reads it. */
+  onDeleted: () => void;
 }) {
   const confirm = useConfirm();
   const [resetOpen, setResetOpen] = useState(false);
@@ -726,6 +730,15 @@ function HotelCard({
             {suspendBusy ? "…" : hotel.is_active ? "⛔ Suspend" : "▶ Reactivate"}
           </button>
         </div>
+
+        {/* Deliberately last, quiet, and behind three steps. Suspending is the
+            reversible answer to almost every problem; this is not. */}
+        <DeleteHotel
+          hotelId={hotel.id}
+          hotelName={hotel.name}
+          handle={hotel.handle ?? null}
+          onDeleted={onDeleted}
+        />
         {resetOpen && (
           <div className="mise-fade mise-well mt-3 space-y-2 rounded-xl p-3">
             {users === null ? (
@@ -1179,6 +1192,7 @@ export default function ControlRoomPage() {
                 onToggle={(k, v) => toggle(h.id, k, v)}
                 onApplyPlan={(pl) => applyPlan(h.id, pl)}
                 onSuspend={(a) => suspend(h.id, a)}
+                onDeleted={() => { setSel(null); load(); }}
               />
               </div>
             </div>

@@ -6,6 +6,7 @@ A normal hotel Super Admin CANNOT reach any of this. Capabilities:
   • toggle per-hotel FEATURES (entitlements) — foundation for plan tiers,
   • reset the password of any user in any hotel.
 """
+import logging
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -23,6 +24,7 @@ from app.auth.models import Role, User
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
+from app.platform_admin import deletion
 from app.platform_admin import features as feat
 from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
 
@@ -30,6 +32,8 @@ from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
 async def _plan_price_overrides(db: AsyncSession) -> dict:
     row = await db.get(PlatformConfig, 1)
     return dict(row.plan_prices) if row and row.plan_prices else {}
+
+log = logging.getLogger("mise.platform")
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
@@ -116,6 +120,9 @@ async def list_hotels(
             "created_at": h.created_at.isoformat(),
             "has_logo": h.has_logo,
             "is_active": h.is_active,
+            # The @handle. Deleting a hotel requires typing this exactly, so it
+            # has to reach the client or the confirmation can never match.
+            "handle": h.username,
             "user_count": len(hu),
             "admin_email": admin.email if admin else None,
             "plan": h.plan,
@@ -694,3 +701,81 @@ async def update_operator(
         summary=f"Operator {target.email}: {', '.join(changes) or 'no changes'}",
     )
     return {"id": str(target.id), "is_active": target.is_active}
+
+
+# ── Permanently deleting a restaurant ───────────────────────────────────────
+# The most destructive action in the product. See app/platform_admin/deletion.py
+# for why nothing cascades and why the archive is not optional.
+
+
+@router.get("/hotels/{hotel_id}/deletion-preview")
+async def deletion_preview(
+    hotel_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """What would be destroyed, counted. Reads only."""
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such hotel")
+    return {
+        "hotel_name": hotel.name,
+        "handle": hotel.username,
+        **(await deletion.preview(db, hotel_id)),
+    }
+
+
+class HotelDeleteRequest(BaseModel):
+    """Typing the handle is the confirmation.
+
+    Not a checkbox: a checkbox is muscle memory, typing a name is a decision.
+    """
+
+    confirm_handle: str
+    reason: str | None = None
+
+
+@router.post("/hotels/{hotel_id}/delete", status_code=status.HTTP_200_OK)
+async def delete_hotel(
+    hotel_id: uuid.UUID,
+    payload: HotelDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Archive to S3, then remove every row. Irreversible once the archive ages out.
+
+    POST rather than DELETE on purpose: this needs a body (the typed handle), and
+    a bare DELETE is far too easy to fire by accident from a tool or a stray
+    click.
+    """
+    hotel = await db.get(Hotel, hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such hotel")
+
+    expected = (hotel.username or str(hotel.id)).strip().lower()
+    if payload.confirm_handle.strip().lower() != expected:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"That does not match. Type “{expected}” exactly to confirm.",
+        )
+
+    # Archive FIRST. If it fails, refuse — an irreversible act must not run on a
+    # best-effort backup.
+    key = await deletion.archive(db, hotel_id, hotel.username or "")
+    if key is None:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Could not archive this hotel's data to S3, so nothing was deleted. "
+            "Deleting without a copy is not allowed.",
+        )
+
+    name = hotel.name
+    removed = await deletion.purge(db, hotel_id)
+    await db.commit()
+
+    log.warning(
+        "hotel PERMANENTLY DELETED: %s (%s) by %s — archived to %s",
+        name, expected, operator.email, key,
+        extra={"code": "DINE-B2009"},
+    )
+    return {"deleted": True, "hotel_name": name, "archive_key": key, "removed": removed}
