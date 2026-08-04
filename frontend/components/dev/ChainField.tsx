@@ -30,6 +30,10 @@ type Block = {
   hash: string;
   /** Lights up when a transaction passes through. */
   flash: number;
+  /** >0 while this block is being "mined": its hash churns, then locks. */
+  mining: number;
+  /** Fades after a block locks, so the seal is visible for a moment. */
+  sealed: number;
 };
 
 const BLOCKS_PER_STRAND = 34;
@@ -74,6 +78,8 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
           strand: s,
           hash: shortHash(s * 100 + i),
           flash: 0,
+          mining: 0,
+          sealed: 0,
         });
       }
     }
@@ -82,6 +88,10 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     // up whatever it passes.
     let txPos = -1;
     let txTimer = 1.2;
+    // Mining: every couple of seconds a random block churns its hash and then
+    // locks. This is what makes it read as a CHAIN doing work rather than a
+    // spiral of dots.
+    let mineTimer = 0.8;
 
     let w = 0;
     let h = 0;
@@ -96,6 +106,22 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
     };
     resize();
     window.addEventListener("resize", resize);
+
+    // Where the cursor is, in canvas pixels. The helix leans toward it and
+    // blocks near it wake up — a background that ignores the mouse reads as
+    // wallpaper, and this one should feel like it noticed you.
+    let pointerX = -9999;
+    let pointerY = -9999;
+    let tiltX = 0;   // eased, so the lean is weighty rather than twitchy
+    let tiltTarget = 0;
+    const onPointer = (e: PointerEvent) => {
+      pointerX = e.clientX;
+      pointerY = e.clientY;
+      tiltTarget = (e.clientX / Math.max(window.innerWidth, 1) - 0.5) * 2; // -1..1
+    };
+    const onLeave = () => { pointerX = -9999; pointerY = -9999; tiltTarget = 0; };
+    window.addEventListener("pointermove", onPointer, { passive: true });
+    window.addEventListener("pointerleave", onLeave);
 
     // Reused across frames — allocating these inside draw() would make the GC
     // stutter the animation every few seconds.
@@ -116,6 +142,10 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
       const amp = intensityRef.current;
       ctx.clearRect(0, 0, w, h);
 
+      // Ease the lean toward the cursor. Lerping rather than snapping is the
+      // whole difference between "responsive" and "jittery".
+      tiltX += (tiltTarget - tiltX) * Math.min(dt * 2.6, 1);
+
       // Advance the transaction.
       if (!reduced) {
         if (txPos >= 0) {
@@ -127,6 +157,28 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
             txPos = 0;
             txTimer = 2.5 + Math.random() * 3;
           }
+        }
+
+        // Start mining a new block now and then.
+        mineTimer -= dt;
+        if (mineTimer <= 0) {
+          const pick = blocks[Math.floor(Math.random() * blocks.length)];
+          if (pick.mining <= 0) pick.mining = 1;
+          mineTimer = 1.6 + Math.random() * 2.4;
+        }
+        for (const b of blocks) {
+          if (b.mining > 0) {
+            b.mining -= dt * 1.4;
+            // Churn the visible hash while it works…
+            if (Math.random() < 0.5) b.hash = shortHash(Math.random() * 1e6);
+            if (b.mining <= 0) {
+              // …then it locks, and the seal flashes.
+              b.mining = 0;
+              b.sealed = 1;
+              b.flash = Math.max(b.flash, 0.85);
+            }
+          }
+          if (b.sealed > 0) b.sealed = Math.max(0, b.sealed - dt * 0.8);
         }
       }
 
@@ -147,12 +199,25 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         const z3 = Math.sin(angle) * radius;
         // Weak perspective: near blocks bigger and brighter.
         const depth = (z3 + radius) / (radius * 2); // 0 far, 1 near
-        px[i] = cx + x3 * (0.75 + depth * 0.35);
+        // The lean: near blocks shift further than far ones, which is what
+        // makes it read as parallax rather than the whole image sliding.
+        px[i] = cx + x3 * (0.75 + depth * 0.35) + tiltX * (18 + depth * 46);
         py[i] = y;
         pz[i] = depth;
 
         if (b.flash > 0) b.flash = Math.max(0, b.flash - dt * 2.2);
         if (txPos >= 0 && Math.abs(b.t - txPos) < 0.02) b.flash = 1;
+
+        // Near the cursor? Wake up. Squared distance — no sqrt in a loop that
+        // runs 68 times a frame.
+        const ddx = px[i] - pointerX;
+        const ddy = py[i] - pointerY;
+        const d2 = ddx * ddx + ddy * ddy;
+        if (d2 < 19600) {
+          // 140px radius, falling off smoothly to nothing at the edge.
+          const near2 = 1 - d2 / 19600;
+          b.flash = Math.max(b.flash, near2 * 0.7);
+        }
       }
 
       // ── Links first, so blocks sit on top ────────────────────────────────
@@ -170,6 +235,29 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
             : `rgba(120, 150, 180, ${(0.05 + near * 0.13) * amp})`;
           ctx.lineWidth = lit > 0 ? 1.8 : 0.6 + near * 0.7;
           ctx.stroke();
+
+          // A real LINK at the midpoint, not just a line. A short ellipse
+          // angled along the segment reads as interlocking metal, which is
+          // what makes the thing look chained rather than merely connected.
+          // Only on the near half — drawing 66 of these every frame would be
+          // noise, and you cannot see them at the back anyway.
+          if (near > 0.55) {
+            const mx = (px[a] + px[c]) / 2;
+            const my = (py[a] + py[c]) / 2;
+            const ang = Math.atan2(py[c] - py[a], px[c] - px[a]);
+            const len = Math.hypot(px[c] - px[a], py[c] - py[a]);
+            ctx.save();
+            ctx.translate(mx, my);
+            ctx.rotate(ang);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, Math.min(len * 0.3, 9), 3.1 + near * 1.4, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = lit > 0
+              ? `rgba(240, 160, 100, ${(0.4 + lit * 0.6) * amp})`
+              : `rgba(140, 170, 200, ${(0.07 + near * 0.16) * amp})`;
+            ctx.lineWidth = 1.1;
+            ctx.stroke();
+            ctx.restore();
+          }
         }
       }
 
@@ -199,6 +287,27 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
           ctx.arc(px[i], py[i], size * (2.2 + glow * 2), 0, Math.PI * 2);
           ctx.fillStyle = `rgba(217, 119, 66, ${0.16 * glow * amp})`;
           ctx.fill();
+        }
+
+        // A block that just locked throws one expanding ring — the visible
+        // "sealed" moment. Fades as it grows, so it reads as a pulse leaving
+        // rather than a circle sitting there.
+        if (b.sealed > 0) {
+          ctx.beginPath();
+          ctx.arc(px[i], py[i], size * (1.5 + (1 - b.sealed) * 6), 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(240, 160, 100, ${b.sealed * 0.5 * amp})`;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+
+        // Still mining: a broken arc spinning round it, like work in progress.
+        if (b.mining > 0) {
+          ctx.beginPath();
+          const sweep = spin * 6;
+          ctx.arc(px[i], py[i], size * 2.1, sweep, sweep + Math.PI * 1.2);
+          ctx.strokeStyle = `rgba(240, 160, 100, ${0.55 * amp})`;
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
         }
 
         ctx.beginPath();
@@ -244,6 +353,8 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
       running = false;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
+      window.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("pointerleave", onLeave);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);

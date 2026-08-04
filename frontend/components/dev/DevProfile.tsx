@@ -14,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Album, type Photo } from "./Album";
 import { BootSequence } from "./BootSequence";
 import { ChainField } from "./ChainField";
+import { DecryptText } from "./DecryptText";
+import { Terminal } from "./Terminal";
 
 // First day as a System Engineer. Everything time-based derives from this.
 const CAREER_START = new Date("2024-01-01T00:00:00Z");
@@ -156,16 +158,20 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           className="mt-7 text-center text-4xl font-semibold tracking-tight sm:text-5xl"
           style={entered ? { animation: "devFadeUp .8s .2s ease-out both" } : undefined}
         >
-          Pandian Sambath
+          {entered ? (
+            <DecryptText text="Pandian Sambath" delay={420} replayOnHover />
+          ) : (
+            "Pandian Sambath"
+          )}
         </h1>
 
         <p
           className="mt-2.5 text-center font-mono text-[13px] tracking-[0.14em] text-[#7d93ad]"
           style={entered ? { animation: "devFadeUp .8s .28s ease-out both" } : undefined}
         >
-          SYSTEM ENGINEER
+          {entered ? <DecryptText text="SYSTEM ENGINEER" delay={760} speed={26} /> : "SYSTEM ENGINEER"}
           <span className="mx-2 text-[#d97742]">·</span>
-          TATA CONSULTANCY SERVICES
+          {entered ? <DecryptText text="TATA CONSULTANCY SERVICES" delay={900} speed={20} /> : "TATA CONSULTANCY SERVICES"}
         </p>
 
         <p
@@ -236,11 +242,20 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           ))}
         </div>
 
-        <p
-          className="mt-8 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c]"
-          style={entered ? { animation: "devFadeUp .8s .6s ease-out both" } : undefined}
+        {/* A shell you can actually type into. Passive animation impresses for
+            a few seconds; something that answers back holds people. */}
+        <div
+          className="mt-7 flex w-full max-w-md justify-center"
+          style={entered ? { animation: "devFadeUp .8s .58s ease-out both" } : undefined}
         >
-          TAP THE AVATAR — OR TYPE <span className="text-[#5b6e85]">ALBUM</span>
+          <Terminal onAlbum={openAlbum} experience={exp ? exp.decimal : "2"} />
+        </div>
+
+        <p
+          className="mt-6 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c]"
+          style={entered ? { animation: "devFadeUp .8s .68s ease-out both" } : undefined}
+        >
+          TAP THE AVATAR — OR RUN <span className="text-[#5b6e85]">album</span>
         </p>
       </main>
 
