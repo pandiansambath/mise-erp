@@ -231,7 +231,14 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
       // The helix is taller than the viewport so it reads as passing THROUGH
       // the screen rather than sitting inside it.
       const span = h * 1.35;
-      const radius = Math.min(w, h) * 0.27;
+      // Radius from BOTH axes, not just the smaller one.
+      //
+      // min(w, h) * 0.27 meant a 1920x900 desktop used the HEIGHT — a 243px
+      // helix stranded in the middle of a very wide screen, with the sides
+      // empty. Taking width into account lets it actually spread: ~450px on
+      // that screen, while a phone is unchanged because there width is the
+      // limit anyway.
+      const radius = Math.min(w * 0.32, h * 0.5);
 
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];

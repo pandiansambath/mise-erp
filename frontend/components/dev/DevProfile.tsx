@@ -115,10 +115,17 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
       <main
-        className={`relative z-10 mx-auto flex min-h-dvh max-w-3xl flex-col items-center justify-center px-5 py-12 sm:px-6 sm:py-16 transition-all duration-700 ${
+        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl xl:max-w-6xl ${
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
+      {/* One column on phones, two once there is room. The empty margins on
+          desktop were the content declining to use the width it had — and
+          simply widening a single column would have produced long, unreadable
+          lines instead. Identity on the left, the things you DO on the right. */}
+      <div className="grid w-full items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+        <section className="flex flex-col items-center lg:items-start lg:text-left">
+
         {/* ── Identity ─────────────────────────────────────────────────── */}
         <div className="relative" style={entered ? { animation: "devFadeUp .8s .1s ease-out both" } : undefined}>
           <button
@@ -164,7 +171,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         </div>
 
         <h1
-          className="mt-7 text-center text-4xl font-semibold tracking-tight sm:text-5xl"
+          className="mt-7 text-center text-4xl font-semibold tracking-tight sm:text-5xl lg:text-left lg:text-6xl"
           style={entered ? { animation: "devFadeUp .8s .2s ease-out both" } : undefined}
         >
           {entered ? (
@@ -175,24 +182,31 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         </h1>
 
         <p
-          className="mt-2.5 text-center font-mono text-[13px] tracking-[0.14em] text-[#7d93ad]"
+          className="mt-2.5 text-center font-mono text-[12px] tracking-[0.14em] text-[#7d93ad] sm:text-[13px] lg:text-left"
           style={entered ? { animation: "devFadeUp .8s .28s ease-out both" } : undefined}
         >
           {entered ? <DecryptText text="SYSTEM ENGINEER" delay={760} speed={26} /> : "SYSTEM ENGINEER"}
           <span className="mx-2 text-[#d97742]">·</span>
+          <br className="sm:hidden" />
           {entered ? <DecryptText text="TATA CONSULTANCY SERVICES" delay={900} speed={20} /> : "TATA CONSULTANCY SERVICES"}
         </p>
 
         <p
-          className="mt-1.5 text-center text-sm text-[#5b6e85]"
+          className="mt-1.5 text-center text-sm text-[#5b6e85] lg:text-left"
           style={entered ? { animation: "devFadeUp .8s .34s ease-out both" } : undefined}
         >
           Chennai, India
         </p>
 
+        </section>
+
+        {/* Right column: the live counter, the shell, and the ways to reach
+            him — the parts you interact with, kept together. */}
+        <section className="flex w-full flex-col items-center lg:items-stretch">
+
         {/* ── Live experience ──────────────────────────────────────────── */}
         <div
-          className="mt-9 w-full max-w-md rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 backdrop-blur-sm"
+          className="w-full max-w-md rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 backdrop-blur-sm lg:max-w-none"
           style={entered ? { animation: "devFadeUp .8s .42s ease-out both" } : undefined}
         >
           <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[#d97742]">
@@ -230,7 +244,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
 
         {/* ── Contact ──────────────────────────────────────────────────── */}
         <div
-          className="mt-7 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2"
+          className="mt-6 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2 lg:max-w-none"
           style={entered ? { animation: "devFadeUp .8s .5s ease-out both" } : undefined}
         >
           {LINKS.map((l) => (
@@ -259,18 +273,21 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         {/* A shell you can actually type into. Passive animation impresses for
             a few seconds; something that answers back holds people. */}
         <div
-          className="mt-7 flex w-full max-w-md justify-center"
+          className="mt-6 flex w-full max-w-md justify-center lg:max-w-none"
           style={entered ? { animation: "devFadeUp .8s .58s ease-out both" } : undefined}
         >
           <Terminal onAlbum={openAlbum} experience={exp ? exp.decimal : "2"} />
         </div>
 
         <p
-          className="mt-6 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c]"
+          className="mt-5 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c]"
           style={entered ? { animation: "devFadeUp .8s .68s ease-out both" } : undefined}
         >
           TAP THE AVATAR — OR RUN <span className="text-[#5b6e85]">album</span>
         </p>
+
+        </section>
+      </div>
       </main>
 
       {albumOpen && <Album photos={photos} onClose={() => setAlbumOpen(false)} />}
