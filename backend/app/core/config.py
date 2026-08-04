@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # exists and still refuses off-topic questions, but reports itself as not
     # switched on rather than pretending to search.
     web_search_api_key: str = ""
+    # A SECOND search provider, queried alongside the first. Two indexes
+    # disagree in useful ways: Serper returns Google's ranking (best for "who
+    # sells this near me"), Tavily extracts cleaner article content (best for
+    # rules and guidance). Either alone is fine; both is better.
+    tavily_api_key: str = ""
 
     sentry_dsn: str = ""
     sentry_environment: str = "production"
