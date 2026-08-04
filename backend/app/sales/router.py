@@ -357,8 +357,8 @@ async def settle_petty(
             date=row.date,
             amount=payload.spent_amount,
             payment_method="CASH",
-            notes=payload.note or row.purpose or "Petty cash",
-            entered_by=user.id,
+            description=payload.note or row.purpose or "Petty cash",
+            created_by=user.id,
         )
         db.add(expense)
         await db.flush()
