@@ -20,7 +20,7 @@ import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
 import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
-import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
+import { ItemPicker, categoryEmoji, fmtQty, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -89,6 +89,10 @@ export default function PurchasingPage() {
   const [msg, setMsg] = useState<string | null>(null);
   // Deep link from Inventory: show THIS item's own purchasing history in place.
   const [historyItem, setHistoryItem] = useState<string | null>(null);
+  // Which item's supplier detail is open. Separate from adding it to the order:
+  // "what does this cost me, and from whom" is a question you ask BEFORE
+  // deciding, and it used to mean leaving the page.
+  const [peekItem, setPeekItem] = useState<string | null>(null);
   // The page is three jobs, not one long scroll: raise an order, track indents,
   // track POs. Stacking all three meant whatever you came for was usually below
   // the fold.
@@ -185,10 +189,11 @@ export default function PurchasingPage() {
     if (vendorId) setVendorPick((prev) => ({ ...prev, [itemId]: vendorId }));
     window.history.replaceState(null, "", window.location.pathname); // one-shot
     setTab("new");
-    // Land on THAT ITEM's row, not the top of the composer. Arriving from
-    // Inventory to "add a supplier" and then having to scroll down to find the
-    // line you came for is the same complaint as no deep link at all.
-    // Deferred a frame: the line only exists after setLines commits.
+    // Open that item's suppliers straight away. You came here from Inventory
+    // asking "who sells this?" — scrolling to a highlighted row still left you
+    // to go and find the answer. The row is spotlit underneath for when the
+    // sheet closes.
+    setPeekItem(itemId);
     setTimeout(() => spotlight(`picked-${itemId}`), 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -480,6 +485,91 @@ export default function PurchasingPage() {
       <PageHeader title="Purchasing" subtitle="Kitchen indents → vendor-wise purchase orders." />
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
 
+      {/* One item's suppliers, without leaving the order you are building.
+          Arriving from Inventory's "add supplier" lands straight here, so the
+          question that sent you ("who sells this, and for how much?") is
+          answered on arrival instead of after a scroll. */}
+      {(() => {
+        const it = peekItem ? items.find((i) => i.id === peekItem) : null;
+        if (!it) return null;
+        const opts = [...(suppliers[it.id] ?? [])].sort(
+          (a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
+        );
+        const cheapest = opts[0];
+        const chosen = opts.find((o) => o.is_preferred);
+        return (
+          <DetailSheet
+            open
+            onClose={() => setPeekItem(null)}
+            width="lg"
+            icon={categoryEmoji(it.category ?? "")}
+            title={it.name}
+            subtitle={`${opts.length} supplier${opts.length === 1 ? "" : "s"} · have ${fmtQty(it.current_stock, it.unit)}`}
+            stats={
+              opts.length
+                ? [
+                    { label: "Cheapest", value: format(cheapest.price_per_unit), hint: cheapest.vendor_name, tone: "good" },
+                    {
+                      label: "Chosen",
+                      value: chosen ? format(chosen.price_per_unit) : "—",
+                      hint: chosen ? chosen.vendor_name : "none set — auto picks cheapest",
+                    },
+                    { label: "In stock", value: fmtQty(it.current_stock, it.unit), hint: `min ${it.min_stock_level ?? "—"}` },
+                  ]
+                : undefined
+            }
+            actions={
+              canWrite ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLines((prev) =>
+                      prev.some((l) => l.item_id === it.id) ? prev : [...prev, { item_id: it.id, qty: "" }],
+                    );
+                    setPeekItem(null);
+                    setTimeout(() => spotlight(`picked-${it.id}`), 60);
+                  }}
+                  className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white"
+                >
+                  Add to this order
+                </button>
+              ) : null
+            }
+          >
+            {opts.length === 0 ? (
+              <p className="py-6 text-center text-sm text-fg-faint">
+                No supplier prices this yet, so it cannot be ordered. Add a price on the
+                Vendors page and it becomes orderable and costable.
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {opts.map((o, i) => (
+                  <li
+                    key={o.vendor_id}
+                    className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${
+                      i === 0 ? "border-emerald-400/30 bg-emerald-400/[0.06]" : "border-line"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+                      {o.vendor_name}
+                      {o.is_preferred && <span className="ml-2 text-[11px] text-brand-300">★ chosen</span>}
+                    </span>
+                    <span className={`font-display text-sm font-semibold tabular-nums ${i === 0 ? "text-emerald-300" : "text-fg-soft"}`}>
+                      {format(o.price_per_unit)}/{it.unit}
+                    </span>
+                    {i === 0 && (
+                      <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                        cheapest
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DetailSheet>
+        );
+      })()}
+
       {/* What needs you, before you have chosen anything.
           The pipeline card below only appears on the "new" tab and only once
           there is data, so arriving here used to tell you nothing until you
@@ -581,7 +671,13 @@ export default function PurchasingPage() {
             </p>
           ) : (
           <form onSubmit={submitIndent} className="space-y-3">
-            <ItemPicker items={orderable} lines={lines} onChange={setLines} lineExtra={supplierPicker} />
+            <ItemPicker
+              items={orderable}
+              lines={lines}
+              onChange={setLines}
+              lineExtra={supplierPicker}
+              onOpenDetail={setPeekItem}
+            />
             <div className="flex flex-wrap gap-2">
               <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
                 Submit indent
