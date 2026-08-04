@@ -610,7 +610,7 @@ function HotelCard({
         {/* Operator overrides. Separate from the plan on purpose: a comped or
             boosted hotel should not need a fake plan invented for it. */}
         <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-white/10 pt-3">
-          <label className="flex items-center gap-2 text-xs text-white/70">
+          <label className="flex items-center gap-2 text-xs text-fg-soft">
             <input
               type="checkbox"
               checked={comp}
@@ -619,28 +619,28 @@ function HotelCard({
             />
             <span>
               Comped account
-              <span className="block text-[10px] text-white/35">
+              <span className="block text-[10px] text-fg-faint">
                 full access, never billed, excluded from revenue
               </span>
             </span>
           </label>
 
-          <label className="text-xs text-white/60">
+          <label className="text-xs text-fg-soft">
             <span className="block">AI calls/day</span>
             <input
               value={aiDay}
               onChange={(e) => setAiDay(e.target.value.replace(/[^0-9]/g, ""))}
               placeholder="plan default"
-              className="mt-1 w-28 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-white outline-none"
+              className="mt-1 w-28 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-fg outline-none"
             />
           </label>
-          <label className="text-xs text-white/60">
+          <label className="text-xs text-fg-soft">
             <span className="block">AI tokens/month</span>
             <input
               value={aiMonth}
               onChange={(e) => setAiMonth(e.target.value.replace(/[^0-9]/g, ""))}
               placeholder="plan default"
-              className="mt-1 w-32 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-white outline-none"
+              className="mt-1 w-32 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-fg outline-none"
             />
           </label>
 
