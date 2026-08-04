@@ -22,7 +22,35 @@ async function assertNoHorizontalOverflow(page: Page) {
         ),
       { message: "page must not scroll horizontally", timeout: 8000 }
     )
-    .toBeLessThanOrEqual(2);
+    .toBeLessThanOrEqual(2)
+    .catch(async (err) => {
+      // Name the culprit. "This page overflows" sends someone hunting through a
+      // thousand-line file; "<table class='w-full text-sm'> reaches 512px" does
+      // not. Fixed and sticky elements are skipped — drawers and toasts sit
+      // off-screen legitimately.
+      const worst = await page.evaluate(() => {
+        const vw = document.documentElement.clientWidth;
+        let out: { tag: string; cls: string; right: number } | null = null;
+        for (const el of Array.from(document.querySelectorAll<HTMLElement>("*"))) {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0 || r.right <= vw + 2) continue;
+          const pos = getComputedStyle(el).position;
+          if (pos === "fixed" || pos === "sticky") continue;
+          if (!out || r.right > out.right) {
+            out = {
+              tag: el.tagName.toLowerCase(),
+              cls: (el.className || "").toString().slice(0, 90),
+              right: Math.round(r.right),
+            };
+          }
+        }
+        return out;
+      });
+      throw new Error(
+        `${err.message}
+widest offender: <${worst?.tag} class="${worst?.cls}"> reaches ${worst?.right}px`,
+      );
+    });
 }
 
 async function login(page: Page) {
@@ -231,3 +259,22 @@ test("navigation adapts: hamburger on mobile, sidebar on desktop", async ({ page
     await expect(menuButton).toBeVisible();
   }
 });
+
+// Pages that had no viewport test at all. Each is used daily by a restaurant,
+// so an overflow here is exactly the "worst UI on mobile" complaint.
+for (const [name, path] of [
+  ["dashboard", "/dashboard"],
+  ["vendors", "/vendors"],
+  ["online orders", "/orders"],
+  ["documents", "/documents"],
+  ["waste", "/waste"],
+  ["party orders", "/party-order"],
+  ["hiring", "/hiring"],
+  ["settings", "/settings"],
+] as const) {
+  test(`${name} page fits the viewport`, async ({ page }) => {
+    await login(page);
+    await page.goto(path);
+    await assertNoHorizontalOverflow(page);
+  });
+}
