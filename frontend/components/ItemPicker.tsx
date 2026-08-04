@@ -389,10 +389,15 @@ export function ItemPickerSingle({
   items,
   value,
   onChange,
+  onOpenDetail,
 }: {
   items: Item[];
   value: string;
   onChange: (id: string) => void;
+  /** Open the full detail for an item. When given, each card grows a chevron:
+   *  picking an item and INSPECTING it are different intents, and making the
+   *  comparison something you scroll to find is what made this page tiring. */
+  onOpenDetail?: (id: string) => void;
 }) {
   const { format } = useCurrency();
   const [tab, setTab] = useState<string>("ALL");
@@ -491,6 +496,26 @@ export function ItemPickerSingle({
                 ✓
               </span>
               <span className="block pr-8 text-sm font-medium leading-snug text-fg">{it.name}</span>
+              {onOpenDetail && (
+                // A span, not a nested <button> — a button inside a button is
+                // invalid HTML and browsers resolve it unpredictably.
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`See all supplier prices for ${it.name}`}
+                  onClick={(e) => { e.stopPropagation(); onOpenDetail(it.id); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenDetail(it.id);
+                    }
+                  }}
+                  className="absolute bottom-2 right-2 grid h-6 w-6 cursor-pointer place-items-center rounded-lg border border-line-2 text-xs text-fg-faint transition hover:border-brand-400/60 hover:bg-brand-400/10 hover:text-brand-300"
+                >
+                  ›
+                </span>
+              )}
               <span className={`mt-1.5 block text-xs ${st.cls}`}>
                 {st.dot} {st.label}
               </span>
