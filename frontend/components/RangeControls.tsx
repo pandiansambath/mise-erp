@@ -50,6 +50,44 @@ export const RANGE_PRESETS: { key: string; label: string; make: () => Range }[] 
   },
 ];
 
+
+/** Shift a range backwards or forwards by its own length.
+ *
+ *  This is what "move to previous dates" actually needs. The Quick presets stop
+ *  at "Last month", so reaching June meant opening Absolute and typing two dates
+ *  by hand — for the commonest action on the page. One tap now steps a day back
+ *  from a day, a week from a week, a month from a month.
+ *
+ *  Whole CALENDAR months are stepped as months, not as "30 days": stepping back
+ *  from 1–31 August by 30 days lands on 2–31 July, which is not what anybody
+ *  means by "last month".
+ */
+export function shiftRange(range: Range, direction: -1 | 1): Range {
+  const from = new Date(range.from + "T00:00:00");
+  const to = new Date(range.to + "T00:00:00");
+
+  const isMonth =
+    from.getDate() === 1 &&
+    to.getDate() === new Date(to.getFullYear(), to.getMonth() + 1, 0).getDate() &&
+    from.getMonth() === to.getMonth() &&
+    from.getFullYear() === to.getFullYear();
+
+  if (isMonth) {
+    const m = new Date(from.getFullYear(), from.getMonth() + direction, 1);
+    return {
+      from: localISODate(m),
+      to: localISODate(new Date(m.getFullYear(), m.getMonth() + 1, 0)),
+    };
+  }
+
+  // Otherwise slide by the span, inclusive of both ends.
+  const days = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
+  const shift = days * direction;
+  from.setDate(from.getDate() + shift);
+  to.setDate(to.getDate() + shift);
+  return { from: localISODate(from), to: localISODate(to) };
+}
+
 /** Which preset (if any) exactly matches the current range — so we can highlight it. */
 export function activePreset(range: Range): string | null {
   for (const p of RANGE_PRESETS) {
@@ -171,8 +209,22 @@ export function TimeRangePicker({
   const apply = (r: Range) => { onChange(r); setOpen(false); };
   const active = activePreset(range);
 
+  // Stepping forward must not walk into the future: these ranges report on what
+  // already happened, and an empty future period looks like lost data.
+  const nextRange = shiftRange(range, 1);
+  const canGoForward = nextRange.from <= TODAY;
+
   return (
-    <div ref={wrap} className={`relative inline-block ${className}`}>
+    <div ref={wrap} className={`relative inline-flex items-center gap-1 ${className}`}>
+      <button
+        type="button"
+        onClick={() => onChange(shiftRange(range, -1))}
+        aria-label="Previous period"
+        title="Previous period"
+        className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-line-2 bg-paper-2/60 text-fg-soft transition hover:bg-paper-2 hover:text-fg"
+      >
+        ‹
+      </button>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -183,6 +235,16 @@ export function TimeRangePicker({
         <span aria-hidden>🗓</span>
         <span>{rangeCaption(range)}</span>
         <span aria-hidden className={`text-fg-faint transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => canGoForward && onChange(nextRange)}
+        disabled={!canGoForward}
+        aria-label="Next period"
+        title={canGoForward ? "Next period" : "That would be in the future"}
+        className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-line-2 bg-paper-2/60 text-fg-soft transition hover:bg-paper-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-paper-2/60"
+      >
+        ›
       </button>
 
       {open && mounted && createPortal(
