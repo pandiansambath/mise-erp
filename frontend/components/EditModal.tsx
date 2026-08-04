@@ -17,6 +17,8 @@
 // fields, validation and submit logic are untouched.
 
 import { useEffect, useRef, type ReactNode } from "react";
+
+import { useBackToClose } from "./useBackToClose";
 import { createPortal } from "react-dom";
 
 export function EditModal({
@@ -40,6 +42,9 @@ export function EditModal({
   width?: "sm" | "md" | "lg";
 }) {
   const panel = useRef<HTMLDivElement>(null);
+
+  // Back closes the overlay rather than leaving the page.
+  useBackToClose(open, onClose);
 
   useEffect(() => {
     if (!open) return;
