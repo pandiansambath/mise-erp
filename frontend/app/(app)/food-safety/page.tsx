@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type SafetyLog } from "@/lib/api";
+import { localISODate } from "@/lib/date";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { AreaChart, Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
@@ -278,9 +279,9 @@ export default function FoodSafetyPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
           <h3 className="font-semibold text-fg">Log</h3>
           <div className="flex items-center gap-2 text-sm">
-            <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-fg-soft" />
+            <input type="date" value={from} max={to < localISODate() ? to : localISODate()} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-fg-soft" />
             <span className="text-fg-faint">→</span>
-            <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-fg-soft" />
+            <input type="date" value={to} min={from} max={localISODate()} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-fg-soft" />
           </div>
         </div>
         {logs.length === 0 ? (

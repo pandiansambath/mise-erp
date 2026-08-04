@@ -578,7 +578,7 @@ export default function ExpensesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Date</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+                  <input type="date" value={date} max={localISODate()} onChange={(e) => setDate(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-fg-soft">Payment</label>

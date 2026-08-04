@@ -3,6 +3,7 @@
 import { TimeRangePicker } from "@/components/RangeControls";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
+import { localISODate } from "@/lib/date";
 import Link from "next/link";
 import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { Bars, CalendarHeat } from "@/components/charts";
@@ -188,6 +189,8 @@ export default function AttendancePage() {
         <input
           type="date"
           value={day}
+          // Nobody has worked a shift in the future.
+          max={localISODate()}
           onChange={(e) => changeDay(e.target.value)}
           className="mise-well rounded-lg px-3 py-2 text-sm outline-none"
         />

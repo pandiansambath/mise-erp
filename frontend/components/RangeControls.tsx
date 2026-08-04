@@ -10,6 +10,9 @@ import { localISODate } from "@/lib/date";
 
 export type Range = { from: string; to: string };
 
+/** Today, local. The ceiling for any "what happened" date input. */
+const TODAY = localISODate();
+
 const shift = (n: number) => {
   const x = new Date();
   x.setDate(x.getDate() + n);
@@ -129,13 +132,26 @@ export function TimeRangePicker({
   const [to, setTo] = useState(range.to);
   const wrap = useRef<HTMLDivElement>(null);
 
-  // Whenever it opens, start from whatever the page is currently showing.
+  // Seed the draft dates from the page's current range — but ONLY on the
+  // transition into open.
+  //
+  // This used to run on every render while open, because `range` is passed as an
+  // inline {from, to} literal, so it is a NEW OBJECT on each parent render and
+  // never equal by identity. The effect therefore re-fired constantly and wrote
+  // the page's existing range back over whatever the user had just typed: pick
+  // an earlier "From", it snapped straight back. That is the "can't move to
+  // previous dates" bug, and it hit expenses, reports and attendance alike.
+  //
+  // Tracking the previous open state makes the seed happen once per opening, so
+  // the draft is the user's to edit while the panel stays up.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpen.current) {
       setFrom(range.from);
       setTo(range.to);
       setN(spanDays(range));
     }
+    wasOpen.current = open;
   }, [open, range]);
 
   useEffect(() => {
@@ -266,7 +282,10 @@ export function TimeRangePicker({
                     <input
                       type="date"
                       value={from}
-                      max={to}
+                      // Never past today: every range this picker drives reports
+                      // on what already happened, and a future "from" silently
+                      // returns an empty period that looks like lost data.
+                      max={to < TODAY ? to : TODAY}
                       onChange={(e) => setFrom(e.target.value)}
                       className="mise-well mt-1 w-full rounded-lg px-2.5 py-2 text-sm text-fg outline-none"
                     />
@@ -277,6 +296,7 @@ export function TimeRangePicker({
                       type="date"
                       value={to}
                       min={from}
+                      max={TODAY}
                       onChange={(e) => setTo(e.target.value)}
                       className="mise-well mt-1 w-full rounded-lg px-2.5 py-2 text-sm text-fg outline-none"
                     />

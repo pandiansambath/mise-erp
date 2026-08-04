@@ -247,6 +247,8 @@ export default function SalesPage() {
         <input
           type="date"
           value={day}
+          // Takings cannot be recorded for a day that has not happened.
+          max={localISODate()}
           onChange={(e) => changeDay(e.target.value)}
           className="mise-well rounded-lg px-3 py-2 text-sm outline-none"
         />
