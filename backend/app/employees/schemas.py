@@ -112,7 +112,8 @@ class PunchRequest(BaseModel):
 class AttendanceSet(BaseModel):
     employee_id: uuid.UUID
     date: date_type
-    status: str = AttendanceStatus.PRESENT.value
+    # See the model: absent unless something records otherwise.
+    status: str = AttendanceStatus.ABSENT.value
     working_hours: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
 
@@ -172,3 +173,8 @@ class AttendanceRow(BaseModel):
     on_break: bool = False
     over_break_minutes: int = 0
     break_penalty: Decimal = Decimal("0")
+    # Marked present, but nothing recorded them arriving. A manager CAN mark
+    # someone present who forgot to punch, so this is not an error — but it must
+    # look different from a real punch, or the row silently asserts a shift that
+    # nothing backs up.
+    no_punch: bool = False

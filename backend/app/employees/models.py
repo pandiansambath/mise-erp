@@ -96,8 +96,12 @@ class Attendance(Base):
     break_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     break_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     working_hours: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    # ABSENT until something says otherwise. Defaulting to PRESENT meant a row
+    # created without a punch read "present" with no clock-in and no hours —
+    # the app asserting somebody worked when nothing recorded that they did.
+    # Punching in, or a manager saying so, moves it to PRESENT explicitly.
     status: Mapped[str] = mapped_column(
-        String(10), nullable=False, default=AttendanceStatus.PRESENT.value
+        String(10), nullable=False, default=AttendanceStatus.ABSENT.value
     )
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
