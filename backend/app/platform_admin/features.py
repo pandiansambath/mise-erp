@@ -101,6 +101,11 @@ FEATURES: tuple[Feature, ...] = (
         "ai_insights", "AI daily insights",
         "Proactive 'make today better' nudges.", enforced=True,
     ),
+    Feature(
+        "ai_web", "AI live web lookup",
+        "Let the assistant check ingredient prices, suppliers and food-safety "
+        "rules on the live web.", enforced=True,
+    ),
     # ── Group-level ───────────────────────────────────────────────────────────
     Feature(
         "multi_site", "Multi-site rollup",
@@ -117,7 +122,7 @@ SONNET = "eu.anthropic.claude-sonnet-4-6"
 _BY_KEY = {f.key: f for f in FEATURES}
 ALL_KEYS: tuple[str, ...] = tuple(f.key for f in FEATURES)
 CORE_KEYS: tuple[str, ...] = tuple(f.key for f in FEATURES if f.core)
-AI_KEYS: tuple[str, ...] = ("ai_copilot", "ai_scan", "ai_insights")
+AI_KEYS: tuple[str, ...] = ("ai_copilot", "ai_scan", "ai_insights", "ai_web")
 
 
 def is_valid_feature(key: str) -> bool:
@@ -188,7 +193,7 @@ _PRO_ON: tuple[str, ...] = _STARTER_ON + (
     "food_safety", "allergens", "documents", "audit",
     "employees", "attendance", "rota", "payroll", "self_service", "hiring", "talent",
     "delivery",
-    "ai_copilot", "ai_scan", "ai_insights",
+    "ai_copilot", "ai_scan", "ai_insights", "ai_web",
 )
 
 # Enterprise — everything, several venues.
@@ -221,6 +226,7 @@ PLANS: tuple[Plan, ...] = (
         highlights=(
             "Everything in Starter",
             "Smarter AI (Sonnet) + photograph a bill or handwritten recipe",
+            "AI can check live prices and food-safety rules on the web",
             "Payroll, rota, attendance & staff self-service",
             "Food safety, allergens, documents & audit trail",
             "Price comparison and party orders",

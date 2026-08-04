@@ -196,7 +196,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
         reply, used = await brain.generate(
             system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
             history=history,
-            tools=tools_for(user),
+            tools=tools_for(user, hotel),
             execute=execute,
             attachment=req.attachment.model_dump() if req.attachment else None,
             model=await guard.model_for(db, user),

@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     # Empty = off. With no DSN the SDK is never initialised, so there is no
     # client, no network call and no cost; production turns it on with an env
     # var rather than a deploy.
+    # Live web lookup for the assistant (Brave Search). Empty = the tool still
+    # exists and still refuses off-topic questions, but reports itself as not
+    # switched on rather than pretending to search.
+    web_search_api_key: str = ""
+
     sentry_dsn: str = ""
     sentry_environment: str = "production"
     # Traces are sampled to nothing by default. Errors are the point; tracing

@@ -120,7 +120,11 @@ async def trial_ending(db: AsyncSession, hotel, days_left: int) -> None:
                 "exactly where they are, and picking a plan turns everything back "
                 "on where you left it."
             ),
-            rows=[("Restaurant", name), ("Trial ends", when), ("Current plan", (hotel.plan or "—").title())],
+            rows=[
+                ("Restaurant", name),
+                ("Trial ends", when),
+                ("Current plan", (hotel.plan or "—").title()),
+            ],
             cta_label="Choose a plan",
             cta_url=_billing_url(),
             accent="#059669",

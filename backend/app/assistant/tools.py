@@ -599,7 +599,39 @@ async def query_data(db: AsyncSession, user: User, args: dict) -> dict:
     return await q.run(db, user, args.get("sql") or "")
 
 
+async def web_lookup(db: AsyncSession, user: User, args: dict) -> dict:
+    """Guarded live web search. The guard lives in websearch.allowed()."""
+    from app.assistant import websearch
+
+    return await websearch.search(args.get("query") or "", int(args.get("count") or 5))
+
+
 TOOLS: list[dict] = [
+    {
+        "name": "web_lookup",
+        "description": (
+            "Search the LIVE public web for restaurant and hospitality "
+            "information this restaurant's own records cannot answer: current "
+            "ingredient or wholesale prices, suppliers, food-safety and hygiene "
+            "rules, minimum wage changes, what other venues charge, industry "
+            "news. Use it when the answer depends on the outside world rather "
+            "than their books, and ALWAYS say the figure came from the web "
+            "rather than from their data. It refuses anything outside "
+            "hospitality - medical, legal, financial-advice and similar - and "
+            "you must not try to reword a blocked question to get past it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "What to search for, in plain words",
+                },
+                "count": {"type": "integer", "description": "How many results (1-10, default 5)"},
+            },
+            "required": ["query"],
+        },
+    },
     {
         "name": "query_data",
         "description": (
@@ -1072,6 +1104,7 @@ EXECUTORS: dict[str, Executor] = {
     "team_and_access": team_and_access,
     "staff_today": staff_today,
     "query_data": query_data,
+    "web_lookup": web_lookup,
     "explain_term": explain_term,
     "propose_expense": propose_expense,
     "propose_sale": propose_sale,
@@ -1106,9 +1139,27 @@ TOOL_PERMS: dict[str, str] = {
 }
 
 
-def tools_for(user: User) -> list[dict]:
-    """The tool schemas this user's role may use."""
-    return [
-        t for t in TOOLS
-        if t["name"] not in TOOL_PERMS or has_permission(user.role, TOOL_PERMS[t["name"]])
-    ]
+# Tools gated by a PLAN feature rather than a role permission. Filtered out
+# entirely when the hotel's plan does not include them, so the model never
+# offers a capability the customer has not bought and then has to walk back.
+TOOL_FEATURES: dict[str, str] = {
+    "web_lookup": "ai_web",
+}
+
+
+def tools_for(user: User, hotel=None) -> list[dict]:
+    """The tool schemas this user's role and this hotel's plan allow.
+
+    `hotel` is optional so existing callers keep working; without it the
+    feature-gated tools are simply not offered, which is the safe direction.
+    """
+    out = []
+    for t in TOOLS:
+        name = t["name"]
+        if name in TOOL_PERMS and not has_permission(user.role, TOOL_PERMS[name]):
+            continue
+        feature = TOOL_FEATURES.get(name)
+        if feature and (hotel is None or not hotel.feature_on(feature)):
+            continue
+        out.append(t)
+    return out
