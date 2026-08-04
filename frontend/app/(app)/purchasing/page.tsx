@@ -16,6 +16,7 @@ import {
   type SupplierOption,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
 import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
@@ -461,6 +462,60 @@ export default function PurchasingPage() {
     <div>
       <PageHeader title="Purchasing" subtitle="Kitchen indents → vendor-wise purchase orders." />
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
+
+      {/* What needs you, before you have chosen anything.
+          The pipeline card below only appears on the "new" tab and only once
+          there is data, so arriving here used to tell you nothing until you
+          clicked something. These four are the questions this page exists to
+          answer - is anything waiting on me, is anything late, and how much
+          money is committed - and each one jumps to the rows behind it. */}
+      {(indents.length > 0 || pos.length > 0) && (() => {
+        const today = localISODate();
+        const openPos = pos.filter((x) => x.status !== "RECEIVED");
+        const awaiting = indents.filter((x) => x.status === "PENDING").length;
+        // Late = promised before today and still not received. Compared as ISO
+        // strings on purpose: both sides are already local calendar dates, so
+        // parsing them into Dates would only reintroduce a timezone to get wrong.
+        const overdue = openPos.filter(
+          (x) => x.expected_delivery && x.expected_delivery < today,
+        ).length;
+        const committed = openPos.reduce((sum, x) => sum + (parseFloat(x.total_amount) || 0), 0);
+        const tiles: {
+          label: string; value: string | number; hint: string;
+          tone: "plain" | "warn" | "bad"; go: "new" | "indents" | "orders";
+        }[] = [
+          { label: "Awaiting approval", value: awaiting, hint: awaiting === 1 ? "indent" : "indents",
+            tone: awaiting > 0 ? "warn" : "plain", go: "indents" },
+          { label: "Overdue", value: overdue, hint: "past the promised date",
+            tone: overdue > 0 ? "bad" : "plain", go: "orders" },
+          { label: "In flight", value: openPos.length, hint: "not yet received",
+            tone: "plain", go: "orders" },
+          { label: "Committed", value: format(String(committed)), hint: "on open orders",
+            tone: "plain", go: "orders" },
+        ];
+        return (
+          <div className="mise-stagger mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {tiles.map((t) => (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => setTab(t.go)}
+                className="mise-neo-raised mise-press rounded-2xl px-3.5 py-3 text-left transition hover:-translate-y-0.5"
+              >
+                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-fg-faint">
+                  {t.label}
+                </p>
+                <p className={`mt-0.5 truncate font-display text-2xl font-semibold tabular-nums ${
+                  t.tone === "bad" ? "text-rose-400" : t.tone === "warn" ? "text-amber-400" : "text-fg"
+                }`}>
+                  {t.value}
+                </p>
+                <p className="truncate text-[10px] text-fg-faint">{t.hint}</p>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* One job on screen at a time. Everything is one tap away; nothing is
           reachable only by scrolling. */}
