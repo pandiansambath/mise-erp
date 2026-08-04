@@ -6,6 +6,8 @@ import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/component
 import { Bars } from "@/components/charts";
 import Link from "next/link";
 import { SortTh, useSort } from "@/components/sortable";
+import { DetailSheet } from "@/components/DetailSheet";
+import { useDeepLink } from "@/components/fx";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -135,9 +137,24 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // run-payroll tick cascade + expanded payslip-preview row
+  // run-payroll tick cascade + the payslip open in the detail sheet
   const [runNames, setRunNames] = useState<string[] | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [openSlip, setOpenSlip] = useState<PayrollRow | null>(null);
+
+  // Deep link: /payroll?payslip=<id> opens that person's payslip directly, so
+  // the Copilot (or an email, or a bookmark) can land on the exact record
+  // instead of dropping someone on the page to go and find it. Waits for rows —
+  // firing before the fetch lands would look up an id in an empty list.
+  useDeepLink(
+    {
+      payslip: () => {
+        const id = new URLSearchParams(window.location.search).get("payslip");
+        const row = rows.find((r) => r.id === id);
+        if (row) setOpenSlip(row);
+      },
+    },
+    rows.length > 0,
+  );
 
   // Advances (money paid to staff early, deducted at the next run)
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -756,6 +773,94 @@ export default function PayrollPage() {
         </Card>
       )}
 
+      {/* A payslip is a record, so it opens in place like every other record.
+          Pinned gross/deductions/net means the three numbers anyone opens a
+          payslip FOR are on screen before any scrolling. */}
+      <DetailSheet
+        open={!!openSlip}
+        onClose={() => setOpenSlip(null)}
+        width="md"
+        icon="💷"
+        title={openSlip?.employee_name ?? ""}
+        subtitle={openSlip ? `payslip · ${openSlip.pay_period}` : ""}
+        badge={openSlip ? <Badge tone={statusTone[openSlip.status] ?? "slate"}>{openSlip.status}</Badge> : undefined}
+        stats={
+          openSlip
+            ? [
+                { label: "Gross", value: format(openSlip.gross_pay) },
+                {
+                  label: "Deductions",
+                  value: format(
+                    String(
+                      (parseFloat(openSlip.advance_deduction) || 0) +
+                        (parseFloat(openSlip.other_deductions) || 0),
+                    ),
+                  ),
+                  tone: "bad",
+                },
+                { label: "Net pay", value: format(openSlip.net_pay), tone: "good" },
+              ]
+            : undefined
+        }
+        actions={
+          openSlip ? (
+            <>
+              <button
+                onClick={() =>
+                  downloadFile(
+                    `/payroll/${openSlip.id}/payslip.pdf`,
+                    `payslip-${openSlip.employee_name}-${openSlip.pay_period}.pdf`,
+                  )
+                }
+                className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-400/10"
+              >
+                ⬇ Payslip PDF
+              </button>
+              {canWrite && openSlip.status === "DRAFT" && (
+                <button
+                  onClick={() => { act(openSlip.id, "approve"); setOpenSlip(null); }}
+                  className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                >
+                  Approve
+                </button>
+              )}
+              {canWrite && openSlip.status === "APPROVED" && (
+                <button
+                  onClick={() => { act(openSlip.id, "pay"); setOpenSlip(null); }}
+                  className="mise-press rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
+                >
+                  Mark paid
+                </button>
+              )}
+            </>
+          ) : null
+        }
+      >
+        {openSlip && (
+          <div className="space-y-1.5">
+            <Line
+              label="Basic pay"
+              value={format(String((parseFloat(openSlip.gross_pay) || 0) - (parseFloat(openSlip.overtime_pay) || 0)))}
+            />
+            {(parseFloat(openSlip.overtime_pay) || 0) > 0 && (
+              <Line label="Overtime" value={`+ ${format(openSlip.overtime_pay)}`} tone="text-brand-300" />
+            )}
+            <Line label="Gross" value={format(openSlip.gross_pay)} tone="text-fg" />
+            {(parseFloat(openSlip.advance_deduction) || 0) > 0 && (
+              <Line label="Advance recovered" value={`− ${format(openSlip.advance_deduction)}`} tone="text-rose-400" />
+            )}
+            {(parseFloat(openSlip.other_deductions) || 0) > 0 && (
+              <Line label="Other deductions" value={`− ${format(openSlip.other_deductions)}`} tone="text-rose-400" />
+            )}
+            <div className="flex items-baseline gap-2 border-t border-line pt-3">
+              <span className="text-sm font-semibold text-fg">Net pay</span>
+              <span className="mb-1 flex-1 border-b border-dotted border-line" />
+              <span className="font-mono text-lg font-bold text-brand-300">{format(openSlip.net_pay)}</span>
+            </div>
+          </div>
+        )}
+      </DetailSheet>
+
       <Card className={`p-0 transition-opacity duration-300 ${refreshing ? "pointer-events-none opacity-50" : ""}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -782,8 +887,8 @@ export default function PayrollPage() {
                     r={r}
                     canWrite={canWrite}
                     format={format}
-                    open={expanded === r.id}
-                    onToggle={() => setExpanded((cur) => (cur === r.id ? null : r.id))}
+                    open={openSlip?.id === r.id}
+                    onToggle={() => setOpenSlip((cur) => (cur?.id === r.id ? null : r))}
                     onAct={act}
                     onRemove={remove}
                   />
@@ -842,8 +947,6 @@ function PayslipRow({
   onAct: (id: string, action: "approve" | "pay") => void;
   onRemove: (id: string) => void;
 }) {
-  const overtime = parseFloat(r.overtime_pay) || 0;
-  const basic = (parseFloat(r.gross_pay) || 0) - overtime;
   const adv = parseFloat(r.advance_deduction) || 0;
   const other = parseFloat(r.other_deductions) || 0;
   return (
@@ -891,31 +994,6 @@ function PayslipRow({
           </td>
         )}
       </tr>
-      {open && (
-        <tr className="border-b border-line">
-          <td colSpan={canWrite ? 7 : 6} className="px-5 pb-4 pt-1">
-            <div className="mise-pop mise-well max-w-md rounded-xl p-4">
-              <div className="flex items-baseline justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-faint">Payslip · {r.pay_period}</p>
-                <Badge tone={statusTone[r.status] ?? "slate"}>{r.status}</Badge>
-              </div>
-              <p className="mt-1 font-semibold text-fg">{r.employee_name}</p>
-              <div className="mt-3 space-y-1.5">
-                <Line label="Basic pay" value={format(String(basic))} />
-                {overtime > 0 && <Line label="Overtime" value={`+ ${format(String(overtime))}`} tone="text-brand-300" />}
-                <Line label="Gross" value={format(r.gross_pay)} tone="text-fg" />
-                {adv > 0 && <Line label="Advance recovered" value={`− ${format(String(adv))}`} tone="text-rose-400" />}
-                {other > 0 && <Line label="Other deductions" value={`− ${format(String(other))}`} tone="text-rose-400" />}
-              </div>
-              <div className="mt-3 flex items-baseline gap-2 border-t border-line pt-2">
-                <span className="text-sm font-semibold text-fg">Net pay</span>
-                <span className="mb-1 flex-1 border-b border-dotted border-line" />
-                <span className="font-mono text-lg font-bold text-brand-300">{format(r.net_pay)}</span>
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
     </>
   );
 }
