@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { FormShell } from "@/components/EditModal";
+import { Select } from "@/components/Select";
 import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
@@ -103,6 +104,10 @@ export default function InventoryPage() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [catFilter, setCatFilter] = useState<string>("all");
+  // "Show me what THIS supplier sells me." Column sorting can only order by the
+  // best vendor's name, which answers a different question — this one is how you
+  // review a single supplier before calling them.
+  const [vendorFocus, setVendorFocus] = useState<string>("all");
   const [catMgr, setCatMgr] = useState(false);
   const [catFrom, setCatFrom] = useState("");
   const [catTo, setCatTo] = useState("");
@@ -606,6 +611,13 @@ export default function InventoryPage() {
     if (query && !i.name.toLowerCase().includes(query)) return false;
     if (statusFilter !== "all" && statusOf(i) !== statusFilter) return false;
     if (catFilter !== "all" && (i.category?.trim() || "Other") !== catFilter) return false;
+    // Focused on one supplier: show only what THEY sell. Filtering rather than
+    // re-ordering, because "everything, with theirs near the top" still leaves
+    // you scanning a list to answer "what do I buy from them?".
+    if (vendorFocus !== "all") {
+      const opts = itemSuppliers[i.id] ?? [];
+      if (!opts.some((o) => o.vendor_id === vendorFocus)) return false;
+    }
     return true;
   });
 
@@ -1137,15 +1149,40 @@ export default function InventoryPage() {
 
           {/* Search + filters */}
           <div className="mb-3 space-y-2">
-            <div className="relative max-w-md">
-              <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint">🔍</span>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search items…"
-                aria-label="Search items"
-                className="mise-well w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-fg outline-none"
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-0 flex-1 sm:max-w-md">
+                <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint">🔍</span>
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search items…"
+                  aria-label="Search items"
+                  className="mise-well w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-fg outline-none"
+                />
+              </div>
+              {/* Every supplier that prices at least one item. Built from the
+                  data rather than the vendor list, so it never offers a
+                  supplier with nothing to show. */}
+              {(() => {
+                const seen = new Map<string, string>();
+                Object.values(itemSuppliers).forEach((opts) =>
+                  opts.forEach((o) => seen.set(o.vendor_id, o.vendor_name)),
+                );
+                if (seen.size === 0) return null;
+                return (
+                  <Select
+                    value={vendorFocus}
+                    onChange={setVendorFocus}
+                    className="w-56"
+                    options={[
+                      { value: "all", label: "All suppliers" },
+                      ...[...seen.entries()]
+                        .sort((a, b) => a[1].localeCompare(b[1]))
+                        .map(([id, name]) => ({ value: id, label: name })),
+                    ]}
+                  />
+                );
+              })()}
             </div>
             {/* Two SEPARATE filters that combine (AND). Kept on their own labelled
                 rows + different colours so picking a stock status and a category
