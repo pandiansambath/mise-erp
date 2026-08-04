@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import Column, TemplateSpec
 from app.inventory import export, service
-from app.inventory.models import Item, VendorItemAlias
+from app.inventory.models import Item, MovementType, VendorItemAlias
 from app.inventory.schemas import (
     CategoryRename,
     ItemCreate,
@@ -32,7 +32,7 @@ from app.inventory.schemas import (
     WasteRow,
 )
 from app.vendors import service as vendor_service
-from app.vendors.models import MovementType, Vendor
+from app.vendors.models import Vendor
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 

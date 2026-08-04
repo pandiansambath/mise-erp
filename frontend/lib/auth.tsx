@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { hotelSite } from "@/lib/site";
 import {
   api,
   clearToken,
@@ -92,6 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.post<TokenResponse & { twofa_required?: boolean }>("/auth/login", {
         email,
         password,
+        // Which restaurant's door this is. The server enforces it; sending it
+        // is what lets the server know there is a door to enforce.
+        site: hotelSite(),
       });
       // Two-step accounts get a 6-digit code by email instead of a session.
       if (res.twofa_required) return "otp";
