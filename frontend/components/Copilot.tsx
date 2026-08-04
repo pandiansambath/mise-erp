@@ -20,6 +20,9 @@ type Row = Record<string, unknown>;
 type Pending = {
   kind: string; label: string; summary: string; fields: Row;
   done?: boolean; result?: string; undo?: { type: string; id: string }; undone?: boolean; busy?: boolean;
+  /** The server could not tell which item a supplier's wording meant, and is
+   *  asking rather than guessing — a price on the wrong item is invisible. */
+  choice?: { field: string; query: string; message: string; candidates: { id: string; name: string; score: number }[] };
 };
 type Ingest = { kind: string; rows: Row[]; committed?: boolean; result?: string };
 type ChatResponse = {
@@ -259,14 +262,31 @@ export function Copilot() {
     return () => window.removeEventListener("mise:ask", onAsk);
   }, []);
 
+  // Scroll to the bottom when a NEW message arrives — not when an existing one
+  // changes.
+  //
+  // This used to depend on `messages` as a whole, and confirming an action
+  // PATCHES a message. So every "Confirm & save" threw you to the bottom of the
+  // thread and you had to scroll back up to reach the next item. With twenty
+  // items off a price list that is nineteen pointless scrolls.
+  const lastCount = useRef(0);
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    const grew = messages.length > lastCount.current;
+    lastCount.current = messages.length;
+    if (grew || justOpened.current) {
+      justOpened.current = false;
       // Jump, don't glide: on REOPEN a smooth scroll walks the whole history
       // past you, which is both slow and shows text mid-render.
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "auto" });
       inputRef.current?.focus();
     }
   }, [messages, open]);
+
+  const justOpened = useRef(true);
+  useEffect(() => {
+    if (open) justOpened.current = true;
+  }, [open]);
 
   const push = (m: Msg) => setMessages((prev) => [...prev, m]);
   const patchPending = (mi: number, pi: number, patch: Partial<Pending>) =>
@@ -442,11 +462,70 @@ export function Copilot() {
     if (!p || p.busy || p.done) return;
     patchPending(mi, pi, { busy: true });
     try {
-      const res = await api.post<{ ok: boolean; summary: string; undo?: { type: string; id: string } }>("/assistant/act", { kind: p.kind, fields: p.fields });
-      patchPending(mi, pi, { busy: false, done: true, result: res.summary, undo: res.undo });
+      const res = await api.post<{
+        ok: boolean; summary: string; undo?: { type: string; id: string };
+        needs_choice?: boolean; field?: string; query?: string; error?: string;
+        candidates?: { id: string; name: string; score: number }[];
+      }>("/assistant/act", { kind: p.kind, fields: p.fields });
+
+      // Not an error — a question. Show the options inline so the answer is one
+      // tap, instead of dead-ending on "item not found".
+      if (res.needs_choice) {
+        patchPending(mi, pi, {
+          busy: false,
+          choice: {
+            field: res.field ?? "item",
+            query: res.query ?? "",
+            message: res.error ?? "Which one did you mean?",
+            candidates: res.candidates ?? [],
+          },
+        });
+        return;
+      }
+      patchPending(mi, pi, { busy: false, done: true, result: res.summary, undo: res.undo, choice: undefined });
     } catch (e) {
       patchPending(mi, pi, { busy: false });
       push({ role: "assistant", content: e instanceof ApiError ? e.message : "Sorry — that didn't save." });
+    }
+  }
+
+
+  /** The user picked which item the supplier meant. Re-run with the explicit id;
+   *  the server remembers the answer so this vendor's wording is translated
+   *  automatically from now on. */
+  async function resolveChoice(mi: number, pi: number, itemId: string) {
+    const p = messages[mi]?.pending?.[pi];
+    if (!p) return;
+    patchPending(mi, pi, { busy: true });
+    const fields = { ...p.fields, item_id: itemId };
+    try {
+      const res = await api.post<{ ok: boolean; summary: string; undo?: { type: string; id: string } }>(
+        "/assistant/act", { kind: p.kind, fields },
+      );
+      patchPending(mi, pi, { busy: false, done: true, result: res.summary, undo: res.undo, choice: undefined, fields });
+    } catch (e) {
+      patchPending(mi, pi, { busy: false });
+      push({ role: "assistant", content: e instanceof ApiError ? e.message : "Sorry — that didn't save." });
+    }
+  }
+
+
+  /** Confirm every outstanding action in one message, in order.
+   *
+   *  He asked the assistant for exactly this and was told it was not possible.
+   *  It plainly is: the actions are independent, so they run one after another
+   *  and a failure on one does not stop the rest. Sequential rather than
+   *  parallel on purpose — these write to stock and prices, and twenty
+   *  simultaneous writes is how you get a deadlock instead of a saving.
+   */
+  async function confirmAll(mi: number) {
+    const pendings = messages[mi]?.pending ?? [];
+    for (let k = 0; k < pendings.length; k++) {
+      const p = messages[mi]?.pending?.[k];
+      // Skip anything already done, or waiting on a question only the user can
+      // answer — bulk approval must never answer those on their behalf.
+      if (!p || p.done || p.choice) continue;
+      await confirmAction(mi, k);
     }
   }
 
@@ -651,6 +730,21 @@ export function Copilot() {
                     <Typewriter text={m.content} animate={m.role === "assistant" && i === messages.length - 1 && justAnswered} />
                   </div>
 
+                  {(m.pending?.filter((p) => !p.done && !p.choice).length ?? 0) > 1 && (
+                    <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-brand-500/25 bg-brand-500/[0.07] px-2.5 py-2">
+                      <span className="text-[11px] text-fg-soft">
+                        {m.pending?.filter((p) => !p.done && !p.choice).length} to confirm
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => confirmAll(i)}
+                        disabled={m.pending?.some((p) => p.busy)}
+                        className="mise-press rounded-md bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
+                      >
+                        Approve all
+                      </button>
+                    </div>
+                  )}
                   {/* Confirm cards (proposed write actions) */}
                   {m.pending?.map((p, k) => (
                     <div key={k} className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3">
@@ -721,6 +815,37 @@ export function Copilot() {
                           <span className="text-xs font-medium text-brand-300">✓ {p.result}</span>
                           {p.undo && !p.undone && <button type="button" onClick={() => undoAction(i, k)} disabled={p.busy} className="text-xs text-fg-faint underline hover:text-fg disabled:opacity-40">Undo</button>}
                           {p.undone && <span className="text-xs text-fg-faint">· undone</span>}
+                        </div>
+                      ) : p.choice ? (
+                        /* A question, not a failure. The old behaviour was
+                           "No stock item matches 'Tomatos'" and a dead end. */
+                        <div className="mise-pop mt-2.5 rounded-lg border border-amber-400/30 bg-amber-400/[0.06] p-2.5">
+                          <p className="text-xs font-medium text-amber-200">{p.choice.message}</p>
+                          {p.choice.candidates.length > 0 ? (
+                            <div className="mt-2 space-y-1">
+                              {p.choice.candidates.map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => resolveChoice(i, k, c.id)}
+                                  disabled={p.busy}
+                                  className="flex w-full items-center justify-between gap-2 rounded-md border border-line bg-paper-3/60 px-2.5 py-1.5 text-left text-xs text-fg transition hover:border-brand-400/50 hover:bg-brand-400/10 disabled:opacity-50"
+                                >
+                                  <span className="truncate">{c.name}</span>
+                                  <span className="shrink-0 text-[10px] text-fg-faint">
+                                    {Math.round(c.score * 100)}% match
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-1 text-[11px] text-fg-faint">
+                              Nothing in your inventory looks close. Add the item first, then try again.
+                            </p>
+                          )}
+                          <p className="mt-2 text-[10px] leading-relaxed text-fg-faint">
+                            I&apos;ll remember your answer for this supplier, so I won&apos;t ask again.
+                          </p>
                         </div>
                       ) : (
                         <button type="button" onClick={() => confirmAction(i, k)} disabled={p.busy} className="mt-2.5 w-full rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50">
