@@ -264,7 +264,24 @@ export function Copilot() {
       if (prompt) setTimeout(() => sendRef.current(prompt), 0);
     }
     window.addEventListener("mise:ask", onAsk);
-    return () => window.removeEventListener("mise:ask", onAsk);
+
+    // Let a page hand the Copilot a FILE to read — "upload a bill" on Expenses
+    // opens the bubble and the file chooser in one gesture, so the AI reads the
+    // receipt instead of somebody typing it in.
+    function onAttach(e: Event) {
+      setOpen(true);
+      setClosing(false);
+      const mode = (e as CustomEvent<{ mode?: string }>).detail?.mode ?? "chat:auto";
+      // Deferred: the panel (and its hidden file input) must be mounted before
+      // the click, or the chooser never opens.
+      setTimeout(() => chooseAttachRef.current(mode), 120);
+    }
+    window.addEventListener("mise:attach", onAttach);
+
+    return () => {
+      window.removeEventListener("mise:ask", onAsk);
+      window.removeEventListener("mise:attach", onAttach);
+    };
   }, []);
 
   // Scroll to the bottom when a NEW message arrives — not when an existing one
@@ -365,6 +382,12 @@ export function Copilot() {
     modeRef.current = mode;
     fileRef.current?.click();
   }
+  // Kept in a ref so the window listener above always calls the current one
+  // without re-subscribing on every render.
+  const chooseAttachRef = useRef(chooseAttach);
+  useEffect(() => {
+    chooseAttachRef.current = chooseAttach;
+  });
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

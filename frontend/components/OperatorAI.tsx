@@ -7,6 +7,11 @@
 // the wrong one a question they shouldn't.
 
 import { useState } from "react";
+
+// Colours here are THEME TOKENS, never literal white/black. This panel was
+// written for a dark console and hard-coded text-white; the Control Room
+// follows the operator's theme, so on a light one every label was white on
+// cream — invisible. Tokens resolve correctly in both.
 import { api, ApiError } from "@/lib/api";
 
 const OPENERS = [
@@ -52,8 +57,8 @@ export function OperatorAI() {
           ✦
         </span>
         <div>
-          <h2 className="text-sm font-semibold text-white">Operator assistant</h2>
-          <p className="text-[11px] text-white/40">
+          <h2 className="text-sm font-semibold text-fg">Operator assistant</h2>
+          <p className="text-[11px] text-fg-faint">
             Sees every hotel&apos;s plan, billing and AI spend — never their recipes or books
           </p>
         </div>
@@ -67,7 +72,7 @@ export function OperatorAI() {
                 key={o}
                 type="button"
                 onClick={() => ask(o)}
-                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/60 transition hover:border-amber-400/40 hover:text-amber-200"
+                className="rounded-full border border-line px-3 py-1.5 text-xs text-fg-soft transition hover:border-amber-400/40 hover:text-amber-200"
               >
                 {o}
               </button>
@@ -81,14 +86,14 @@ export function OperatorAI() {
                   className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${
                     t.who === "me"
                       ? "bg-amber-500/20 text-amber-100"
-                      : "border border-white/10 bg-white/[0.04] text-white/85"
+                      : "border border-line bg-paper-2 text-fg"
                   }`}
                 >
                   {t.text}
                 </span>
               </div>
             ))}
-            {busy && <p className="text-xs text-white/40">Thinking…</p>}
+            {busy && <p className="text-xs text-fg-faint">Thinking…</p>}
           </div>
         )}
 
@@ -103,7 +108,7 @@ export function OperatorAI() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Ask about the platform…"
-            className="flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-400/40"
+            className="flex-1 rounded-xl border border-line bg-paper px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-faint focus:border-amber-400/40"
           />
           <button
             type="submit"

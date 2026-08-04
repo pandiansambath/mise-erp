@@ -307,6 +307,18 @@ export default function ExpensesPage() {
             onSelect: () => spotlight("expense-form"),
           },
           {
+            key: "scan",
+            label: "Upload a bill",
+            icon: "📷",
+            // Hands the file straight to the AI rather than making you read a
+            // receipt and retype it. One gesture: the bubble opens and the file
+            // chooser opens with it.
+            onSelect: () =>
+              window.dispatchEvent(
+                new CustomEvent("mise:attach", { detail: { mode: "chat:receipt" } }),
+              ),
+          },
+          {
             key: "month",
             label: "This month",
             icon: "📅",
