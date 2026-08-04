@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type CashEvent, type DaySummary, type ExpenseCategory, type PettyCashRow, type SalesChannel } from "@/lib/api";
 import { PettyCash } from "@/components/PettyCash";
+import { SubNav } from "@/components/SubNav";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
@@ -246,6 +247,31 @@ export default function SalesPage() {
   return (
     <div>
       <PageHeader title="Sales & Cash" subtitle="One day at a time — takings by channel, commissions and the till for the date you pick." />
+
+      {/* The three jobs of this page. Closing the till and settling petty cash
+          were both below the fold, and they are the ones with a deadline. */}
+      <SubNav
+        items={[
+          { key: "today", label: "Today", icon: "📅", onSelect: () => changeDay(localISODate()) },
+          {
+            key: "till",
+            label: summary?.cash_counted ? "Till closed" : "Close the till",
+            icon: "💷",
+            tone: summary?.cash_counted ? "plain" : "warn",
+            onSelect: () => spotlight("cash-drawer"),
+          },
+          {
+            key: "petty",
+            label: "Petty cash",
+            icon: "🧾",
+            // Money in someone's hand, not in the drawer. If this is not zero
+            // the till cannot balance, so it belongs at the top.
+            count: pettyRows.filter((r) => r.status === "OPEN").length,
+            tone: "warn",
+            onSelect: () => spotlight("cash-drawer"),
+          },
+        ]}
+      />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <label className="text-sm font-medium text-fg-soft">Date</label>
@@ -501,7 +527,7 @@ export default function SalesPage() {
         </div>
 
         {/* Cash reconciliation */}
-        <Card>
+        <Card id="cash-drawer" className="scroll-mt-24">
           <h3 className="font-semibold text-fg">Cash drawer</h3>
           <div className="mt-4 space-y-3 text-sm">
             <div>
