@@ -611,7 +611,10 @@ function AttendanceHistoryCard({ employees, format }: {
                 }))} formatValue={(v) => `${v}h`} />
                 <p className="mt-1 text-center text-[10px] text-fg-faint">hours worked each day</p>
               </div>
-              <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-line">
+              {/* overflow-x too: this table gained a "no punch" chip and four
+                  columns, and y-only scrolling meant the whole PAGE scrolled
+                  sideways on a phone instead of the table. */}
+              <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-line">
                 <table className="w-full text-sm">
                   <tbody className="divide-y divide-line">
                     {hist.days.map((d) => (
