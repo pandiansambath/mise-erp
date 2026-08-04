@@ -1460,3 +1460,10 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   /* Respect the setting: arrive, do not travel. */
   [style*="devFadeUp"], [style*="devFade"] { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
+
+@keyframes devSpin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="devSpin"] { animation: none !important; }
+}

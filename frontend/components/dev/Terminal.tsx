@@ -180,7 +180,7 @@ export function Terminal({
         </span>
       </div>
 
-      <div ref={scroller} className="h-44 overflow-y-auto px-3 py-2.5 font-mono text-[11.5px] leading-[1.75]">
+      <div ref={scroller} className="h-44 overflow-y-auto overflow-x-auto px-3 py-2.5 font-mono text-[11px] leading-[1.75] sm:text-[11.5px]">
         {lines.map((l, i) => (
           <p
             key={i}
@@ -189,6 +189,8 @@ export function Terminal({
             }
           >
             {l.kind === "out" && l.text.startsWith("  ") ? (
+              // The padded help columns must not wrap mid-word; the container
+              // scrolls sideways instead of stretching the page.
               <span className="whitespace-pre">{l.text}</span>
             ) : (
               l.text
