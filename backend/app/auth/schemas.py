@@ -13,6 +13,11 @@ _VALID_ROLES = {r.value for r in Role}
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # The hotel subdomain the sign-in page was served from, when there was one.
+    # A door on <handle>.dineai.cloud belongs to THAT restaurant, so it must not
+    # open for anybody else's staff. Sent by the client but ENFORCED here — a
+    # client-side check is a UI nicety, not a boundary.
+    site: str | None = None
 
 
 class ChangePassword(BaseModel):

@@ -1,4 +1,5 @@
 """Auth & user-management endpoints. User management is hotel-scoped."""
+import logging
 import re
 import secrets
 import uuid
@@ -34,6 +35,8 @@ from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
 from app.platform_admin import features as feat
 
+log = logging.getLogger("mise.auth")
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Sensible default currency per country for self-signup.
@@ -61,6 +64,33 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password"
         )
     hotel = await _hotel_or_404(db, user.hotel_id)
+
+    # A hotel's own sign-in page opens only for that hotel's people.
+    #
+    # Without this, every restaurant's subdomain was a working front door to
+    # EVERY account: the page looked like theirs, but any DineAI credentials
+    # signed you in, and the user would then be looking at their own data on
+    # somebody else's branded domain. Confusing at best, and it quietly told
+    # each customer that their subdomain is not really theirs.
+    #
+    # The platform operator is exempt — support has to be able to sign in
+    # anywhere to help.
+    site = (payload.site or "").strip().lower()
+    if site and not getattr(user, "is_platform_owner", False):
+        if (hotel.username or "").lower() != site:
+            log.info(
+                "login refused: wrong site (%s)", site[:40],
+                extra={"code": "DINE-B2003"},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "This sign-in page belongs to a different restaurant. "
+                    "Use your own restaurant's web address, or sign in at "
+                    "dineai.cloud."
+                ),
+            )
+
     # Suspended hotel → nobody in it can log in (platform operator excepted).
     if not hotel.is_active and not getattr(user, "is_platform_owner", False):
         raise HTTPException(

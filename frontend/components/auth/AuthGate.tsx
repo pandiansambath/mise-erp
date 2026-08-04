@@ -12,6 +12,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { hotelSite } from "@/lib/site";
 import { useAuth } from "@/lib/auth";
 import { PasswordInput, SubmitButton, authInput, authLabel } from "@/components/auth/bits";
 import ChefMascot, { type ChefMood } from "@/components/auth/ChefMascot";
@@ -573,7 +574,21 @@ function CinePanel({ mode, onSwitch }: { mode: AuthMode; onSwitch: (m: AuthMode)
 /* ───────────────────────── the gate ───────────────────────── */
 
 export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
+  // On a restaurant's OWN subdomain this is their staff door, not the public
+  // shop window: accounts there are created by the owner, so offering "register
+  // your hotel" is both wrong and confusing. Resolved after mount because the
+  // hostname does not exist during the server render.
+  const [ownSite, setOwnSite] = useState<string | null>(null);
+  useEffect(() => setOwnSite(hotelSite()), []);
+  const lockedToLogin = ownSite !== null;
+
   const [mode, setMode] = useState<AuthMode>(initialMode);
+
+  // If someone arrives at /signup on a hotel subdomain, put them back on the
+  // door they actually meant.
+  useEffect(() => {
+    if (lockedToLogin && mode === "signup") setMode("login");
+  }, [lockedToLogin, mode]);
   const curtain = useCurtain();
   const liveRef = useRef<HTMLParagraphElement>(null);
 
@@ -593,10 +608,11 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
 
   // Mode switch = animation + silent URL sync. Never a navigation.
   const switchTo = useCallback((m: AuthMode) => {
+    if (lockedToLogin && m === "signup") return;
     setMode(m);
     window.history.replaceState(null, "", m === "login" ? "/login" : "/signup");
     document.title = m === "login" ? "Sign in · DineAI" : "Register your hotel · DineAI";
-  }, []);
+  }, [lockedToLogin]);
 
   const isLogin = mode === "login";
   const mTableOk = useDecoded("/experience/m/table.jpg");
