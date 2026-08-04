@@ -14,6 +14,7 @@ import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { spotlight, useDeepLink } from "@/components/fx";
 import { FormShell } from "@/components/EditModal";
+import { SubNav } from "@/components/SubNav";
 
 function marginTone(pct: number): "green" | "amber" | "red" {
   if (pct >= 65) return "green";
@@ -747,6 +748,48 @@ export default function RecipesPage() {
         </div>
       )}
       <PageHeader title="Recipes" subtitle="Cost per plate and profit margin for each dish." />
+
+      {/* The jobs this page does. Sorting by margin and finding the dishes
+          losing money were both buried in controls further down. */}
+      <SubNav
+        items={[
+          ...(canWrite
+            ? [{
+                key: "new",
+                label: "New recipe",
+                icon: "＋",
+                onSelect: () => { resetForm(); setShowForm(true); spotlight("recipe-form"); },
+              }]
+            : []),
+          {
+            key: "margin",
+            label: "Worst margin first",
+            icon: "📉",
+            onSelect: () => setSort("margin-asc"),
+          },
+          {
+            key: "losing",
+            // A dish priced below what it costs to make is the most expensive
+            // thing on this page, and nothing surfaced it.
+            label: "Losing money",
+            icon: "⚠",
+            count: recipes.filter((r) => {
+              const price = parseFloat(r.selling_price ?? "0") || 0;
+              const cost = parseFloat(r.calculated_cost ?? "0") || 0;
+              return price > 0 && cost > 0 && cost >= price;
+            }).length,
+            tone: "bad",
+            onSelect: () => setSort("margin-asc"),
+          },
+          {
+            key: "archived",
+            label: showArchived ? "Hide archived" : "Archived",
+            icon: "📦",
+            onSelect: () => setShowArchived((v) => !v),
+          },
+        ]}
+        active={sort === "margin-asc" ? "margin" : undefined}
+      />
 
       {canWrite && (
         <div className="mb-6">

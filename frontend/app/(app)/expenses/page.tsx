@@ -11,6 +11,7 @@ import {
   type Item,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
+import { SubNav } from "@/components/SubNav";
 import { Bars, Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
@@ -291,6 +292,32 @@ export default function ExpensesPage() {
     <div>
       <PageHeader title="Expenses" subtitle="Fixed overheads and variable costs — what's going out." />
 
+      <SubNav
+        items={[
+          {
+            key: "add",
+            label: "Add expense",
+            icon: "＋",
+            onSelect: () => spotlight("expense-form"),
+          },
+          {
+            key: "month",
+            label: "This month",
+            icon: "📅",
+            onSelect: () => applyRange(monthStart(), today()),
+          },
+          {
+            key: "recurring",
+            label: "Standing bills",
+            icon: "🔁",
+            // Costs that repeat monthly are the ones worth reviewing; they were
+            // detected already but only mentioned in a paragraph.
+            count: recurring.length,
+            onSelect: () => spotlight("recurring-hint"),
+          },
+        ]}
+      />
+
       <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} className="mb-2" />
       <p className="mb-6 text-sm text-fg-faint">
         Showing spends for <b className="text-fg-soft">{rangeCaption({ from, to })}</b>. The totals and list
@@ -347,7 +374,7 @@ export default function ExpensesPage() {
       )}
 
       {recurring.length > 0 && (
-        <Card className="mise-feel mt-6 border-copper-500/25">
+        <Card id="recurring-hint" className="mise-feel mt-6 scroll-mt-24 border-copper-500/25">
           <h2 className="text-sm font-semibold text-fg">🔁 These look like standing bills</h2>
           <p className="text-xs text-fg-faint">
             Same category, near-same amount, seen in more than one of the last 3 months. Put them in{" "}
