@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, api } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
+import { useDeepLink } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
 import { dishPhoto } from "@/lib/dishPhoto";
 
@@ -88,13 +89,15 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(m / 60)}h ${m % 60}m ago`;
 }
 
-function OrderCard({ o, onMove, riders, onAssign }: {
+function OrderCard({ o, onMove, riders, onAssign, forceOpen = false }: {
   o: Order;
   onMove: (id: string, status: string) => void;
   riders?: RiderRow[];
   onAssign?: (orderId: string, riderId: string) => void;
+  /** Open this card regardless of status - used by the ?order= deep link. */
+  forceOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(o.status === "NEW");
+  const [open, setOpen] = useState(o.status === "NEW" || forceOpen);
   const meta = STATUS_META[o.status] ?? STATUS_META.NEW;
   const nexts = FLOW[o.status] ?? [];
   return (
@@ -525,6 +528,14 @@ export default function OrdersPage() {
   const { hotel } = useAuth();
   const [tab, setTab] = useState<"board" | "menu" | "riders">("board");
   const [orders, setOrders] = useState<Order[] | null>(null);
+
+  // Deep link: /orders?order=<id> opens that order. Read once on mount rather
+  // than watched, so it does not re-open a card the user has since closed -
+  // this page polls, and re-applying on every refresh would fight them.
+  const [deepOrderId, setDeepOrderId] = useState<string | null>(null);
+  useDeepLink({
+    order: () => setDeepOrderId(new URLSearchParams(window.location.search).get("order")),
+  });
   const [vitals, setVitals] = useState<Vitals | null>(null);
   const [copied, setCopied] = useState(false);
   const [riders, setRiders] = useState<RiderRow[]>([]);
@@ -772,7 +783,7 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-3">
           {live.map((o) => (
-            <OrderCard key={o.id} o={o} onMove={move} riders={riders} onAssign={assign} />
+            <OrderCard key={o.id} o={o} onMove={move} riders={riders} onAssign={assign} forceOpen={o.id === deepOrderId} />
           ))}
           {done.length > 0 && (
             <details className="pt-2">
@@ -781,7 +792,7 @@ export default function OrdersPage() {
               </summary>
               <div className="mt-3 space-y-3 opacity-75">
                 {done.slice(0, 30).map((o) => (
-                  <OrderCard key={o.id} o={o} onMove={move} />
+                  <OrderCard key={o.id} o={o} onMove={move} forceOpen={o.id === deepOrderId} />
                 ))}
               </div>
             </details>

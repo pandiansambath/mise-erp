@@ -11,6 +11,7 @@ import {
   type Recipe,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { useDeepLink } from "@/components/fx";
 import { useConfirm } from "@/components/confirm";
 import { CURRENCIES, useCurrency } from "@/lib/currency";
 
@@ -28,6 +29,19 @@ export default function PartyOrderPage() {
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [quotes, setQuotes] = useState<PartyQuote[] | null>(null);
   const [openQuoteId, setOpenQuoteId] = useState<string | null>(null);
+
+  // Deep link: /party-order?quote=<id> opens that quote directly. Gated on the
+  // quotes having loaded - firing earlier would set an id that matches nothing
+  // and silently open no quote at all.
+  useDeepLink(
+    {
+      quote: () => {
+        const id = new URLSearchParams(window.location.search).get("quote");
+        if (id && quotes?.some((q) => q.id === id)) setOpenQuoteId(id);
+      },
+    },
+    !!quotes?.length,
+  );
   const [lines, setLines] = useState<Line[]>([]);
   const [search, setSearch] = useState("");
   const [customer, setCustomer] = useState("");
