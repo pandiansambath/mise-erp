@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, postForm, downloadFile } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
+import { useDeepLink } from "@/components/fx";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -79,6 +80,19 @@ export default function HiringPage() {
 
   // pipeline
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // Deep link: /hiring?posting=<id> opens that vacancy. The applicant-alert
+  // email links straight here, so a new application lands on the right role
+  // instead of a list to search through.
+  useDeepLink(
+    {
+      posting: () => {
+        const id = new URLSearchParams(window.location.search).get("posting");
+        if (id && postings.some((p) => p.id === id)) setOpenId(id);
+      },
+    },
+    postings.length > 0,
+  );
   const [apps, setApps] = useState<Record<string, Application[]>>({});
   const [appsBusy, setAppsBusy] = useState(false);
 
