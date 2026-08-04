@@ -31,7 +31,30 @@ type Msg = {
   role: "user" | "assistant"; content: string;
   actions?: Action[]; pending?: Pending[]; ingest?: Ingest; image?: string;
   choices?: string[]; // tappable follow-ups; tapping one is the same as typing it
+  /** What was attached. Kept as a data URL so it stays downloadable later in
+   *  the thread — a receipt you can no longer open is not a record. */
+  file?: { name: string; mime: string; size: number; dataUrl: string };
 };
+
+/** A file the user has chosen but NOT yet sent. */
+type Staged = {
+  file: File; name: string; mime: string; size: number;
+  dataUrl: string; base64: string; mode: string;
+};
+
+const prettySize = (n: number) =>
+  n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+
+/** An icon for what KIND of file this is. Most attachments cannot be previewed,
+ *  and a broken <img> is worse than an honest icon. */
+function fileGlyph(mime: string, name: string): string {
+  const n = name.toLowerCase();
+  if (mime.startsWith("image/")) return "🖼️";
+  if (mime === "application/pdf" || n.endsWith(".pdf")) return "📄";
+  if (/\.(csv|xlsx|xls)$/.test(n)) return "📊";
+  if (/\.(docx?|txt|rtf)$/.test(n)) return "📝";
+  return "📎";
+}
 
 const STARTERS = ["What's low on stock?", "How's this month's profit?", "Add a £40 gas expense", "What is slow stock?"];
 
@@ -69,11 +92,47 @@ const readAsBase64 = (file: File) =>
     fr.readAsDataURL(file);
   });
 
+/** Turn a failed /assistant/chat call into something worth reading.
+ *  Each branch is a DIFFERENT user action: wait, upgrade, sign in, retry. */
+function assistantError(e: unknown): string {
+  if (!(e instanceof ApiError)) {
+    return "I lost the connection there — check your internet and try again.";
+  }
+  const detail =
+    typeof e.detail === "string"
+      ? e.detail
+      : (e.detail as { detail?: string } | null)?.detail ?? e.message;
+  switch (e.status) {
+    case 401:
+      return "Please sign in again.";
+    case 402:
+      return `${detail || "That needs a higher plan."}`;
+    case 403:
+      return detail || "You don't have access to that.";
+    case 413:
+      return "That file is too big for me to read. Try a smaller one, or paste the text.";
+    case 429:
+      return detail || "That's a lot of questions at once — give me a few seconds and ask again.";
+    case 502:
+    case 503:
+    case 504:
+      return "The AI service didn't answer in time. Try again in a moment.";
+    default:
+      // 500s and anything unexpected: show the server's own words when it gave
+      // any, because "something went wrong" is not a bug report.
+      return detail
+        ? `Something went wrong: ${detail}`
+        : "Something went wrong on my side. Please try again.";
+  }
+}
+
 export function Copilot() {
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
+  // A file chosen but not yet sent — see onFile().
+  const [staged, setStaged] = useState<Staged | null>(null);
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [expanding, setExpanding] = useState(false);
@@ -235,6 +294,9 @@ export function Copilot() {
 
   async function send(text: string) {
     const q = text.trim();
+    // A staged file IS the message — it may legitimately carry no text
+    // ("read this"), so an empty box must not block sending it.
+    if (staged && !loading) return sendStaged(q);
     if (!q || loading) return;
     const history: Msg[] = [...messages, { role: "user", content: q }];
     setMessages(history);
@@ -249,7 +311,14 @@ export function Copilot() {
       push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions, choices: res.choices });
       maybeSpeak(res.reply);
     } catch (e) {
-      push({ role: "assistant", content: e instanceof ApiError && e.status === 401 ? "Please sign in again." : "Sorry — I couldn't reach the assistant. Please try again." });
+      // Say what actually went wrong. "Couldn't reach the assistant" was shown
+      // for EVERY failure — including a 429 you just need to wait out and a 402
+      // you can fix by upgrading — so the one message meant nothing and made
+      // real faults impossible to report or diagnose.
+      push({ role: "assistant", content: assistantError(e) });
+      // Keep the real error in the console for diagnosis; the chat bubble stays
+      // human.
+      console.error("assistant request failed", e);
     } finally {
       setLoading(false);
     }
@@ -267,17 +336,36 @@ export function Copilot() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || loading) return;
-    const [channel, kind] = modeRef.current.split(":");
-    if (channel === "ingest") return ingestFile(file, kind);
-
-    // "auto": let the file decide. A spreadsheet is a list to import; anything
-    // else goes to the model, which can read PDFs, photos and text alike.
-    if (kind === "auto") {
-      const name = file.name.toLowerCase();
-      const sheet = /\.(csv|xlsx|xls)$/.test(name);
-      return sheet ? ingestFile(file, "items") : chatWithImage(file, "auto");
+    // STAGE it. Choosing a file used to fire the request immediately, so the
+    // message left before you had finished typing the question that went with
+    // it — and there was no way to change your mind. Now it waits for send.
+    try {
+      const { dataUrl, base64, mime } = await readAsBase64(file);
+      setStaged({
+        file, dataUrl, base64,
+        mime: mime || file.type || "application/octet-stream",
+        name: file.name,
+        size: file.size,
+        mode: modeRef.current,
+      });
+      inputRef.current?.focus();
+    } catch {
+      push({ role: "assistant", content: "I couldn't read that file — try another one." });
     }
-    return chatWithImage(file, kind);
+  }
+
+  /** Send whatever is staged, with the prompt the user has typed. */
+  async function sendStaged(prompt: string) {
+    if (!staged) return;
+    const [channel, kind] = staged.mode.split(":");
+    const sheet = /\.(csv|xlsx|xls)$/.test(staged.name.toLowerCase());
+    const s = staged;
+    setStaged(null);
+    if (channel === "ingest") return ingestFile(s.file, kind);
+    // "auto": let the file decide. A spreadsheet is a list to import; anything
+    // else goes to the model, which reads PDFs, photos and text alike.
+    if (kind === "auto" && sheet) return ingestFile(s.file, "items");
+    return chatWithImage(s, kind, prompt);
   }
 
   // Bulk onboarding: items/suppliers list → preview rows → confirm
@@ -298,22 +386,29 @@ export function Copilot() {
     }
   }
 
-  // Bill/receipt/photo → multimodal chat → the AI reads it and proposes an action
-  async function chatWithImage(file: File, kind: string) {
+  // Any document → multimodal chat → the AI reads it and proposes an action.
+  async function chatWithImage(s: Staged, kind: string, prompt: string) {
     setLoading(true);
     try {
-      const { dataUrl, base64, mime } = await readAsBase64(file);
-      const ask = input.trim() || (kind === "receipt" ? "Please read this bill/receipt and record it." : "Please read this and do what's needed.");
-      const userMsg: Msg = { role: "user", content: ask, image: dataUrl };
+      const ask = prompt.trim() || (kind === "receipt" ? "Please read this bill/receipt and record it." : "Please read this and do what's needed.");
+      const userMsg: Msg = {
+        role: "user",
+        content: ask,
+        // Only real images get an inline preview. A PDF in an <img> renders as
+        // a broken-image icon, which is what it used to do.
+        image: s.mime.startsWith("image/") ? s.dataUrl : undefined,
+        file: { name: s.name, mime: s.mime, size: s.size, dataUrl: s.dataUrl },
+      };
       const history = [...messages, userMsg];
       setMessages(history);
       setInput("");
-      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime, data: base64, name: file.name }, user_name: userName(), thread_id: threadId });
+      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, attachment: { mime: s.mime, data: s.base64, name: s.name }, user_name: userName(), thread_id: threadId });
+      if (res.thread_id) setThreadId(res.thread_id);
       setConfigured(res.configured);
-      push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions });
+      push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions, choices: res.choices });
       maybeSpeak(res.reply);
     } catch (err) {
-      push({ role: "assistant", content: ingestError(err) });
+      push({ role: "assistant", content: assistantError(err) });
     } finally {
       setLoading(false);
     }
@@ -534,7 +629,24 @@ export function Copilot() {
                 )}
                 <div className="max-w-[80%]">
                   {/* eslint-disable-next-line @next/next/no-img-element -- data-URL thumbnail, nothing for next/image to optimise */}
-                  {m.image && <img src={m.image} alt="attachment" className="mb-1.5 max-h-40 rounded-xl border border-glass/15 object-cover" />}
+                  {m.image && <img src={m.image} alt={m.file?.name ?? "attachment"} className="mb-1.5 max-h-40 rounded-xl border border-glass/15 object-cover" />}
+                  {/* Anything that is not an image gets an honest chip instead
+                      of a broken <img>. Downloadable, because a receipt you
+                      cannot reopen is not a record. */}
+                  {m.file && !m.image && (
+                    <a
+                      href={m.file.dataUrl}
+                      download={m.file.name}
+                      className="mb-1.5 flex items-center gap-2.5 rounded-xl border border-glass/15 bg-paper-3/60 px-3 py-2 transition hover:border-brand-400/40 hover:bg-glass/5"
+                    >
+                      <span aria-hidden className="text-lg">{fileGlyph(m.file.mime, m.file.name)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-fg">{m.file.name}</span>
+                        <span className="block text-[10px] text-fg-faint">{prettySize(m.file.size)} · tap to download</span>
+                      </span>
+                      <span aria-hidden className="text-fg-faint">⬇</span>
+                    </a>
+                  )}
                   <div className={`rounded-2xl px-4 py-3 text-[15px] leading-[1.65] ${m.role === "user" ? "rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20" : "mise-neo-raised rounded-bl-md text-fg"}`}>
                     <Typewriter text={m.content} animate={m.role === "assistant" && i === messages.length - 1 && justAnswered} />
                   </div>
@@ -688,6 +800,33 @@ export function Copilot() {
             )}
           </div>
 
+          {/* Staged attachment: visible, removable, and NOT yet sent. */}
+          {staged && (
+            <div className="mise-pop flex items-center gap-2.5 border-t border-glass/10 bg-paper-3/60 px-3 py-2">
+              {staged.mime.startsWith("image/") ? (
+                <img src={staged.dataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-glass/15 object-cover" />
+              ) : (
+                <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-glass/15 bg-paper-3 text-lg">
+                  {fileGlyph(staged.mime, staged.name)}
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium text-fg">{staged.name}</span>
+                <span className="block text-[10px] text-fg-faint">
+                  {prettySize(staged.size)} · add a question, then send
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setStaged(null)}
+                aria-label="Remove attachment"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-faint transition hover:bg-glass/10 hover:text-fg"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Composer */}
           <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="relative flex items-center gap-2 border-t border-glass/10 bg-paper-3/40 p-3">
             <input ref={fileRef} type="file" accept="*/*" onChange={onFile} className="hidden" />
@@ -738,7 +877,7 @@ export function Copilot() {
                 {speakOn ? "🔊" : "🔈"}
               </button>
             )}
-            <button type="submit" disabled={loading || !input.trim()} aria-label="Send" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-500 disabled:opacity-40">↑</button>
+            <button type="submit" disabled={loading || (!input.trim() && !staged)} aria-label="Send" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-500 disabled:opacity-40">↑</button>
           </form>
         </div>
       )}

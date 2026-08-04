@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from contextvars import ContextVar
 
 from app.core.errors import UNKNOWN
@@ -65,7 +66,13 @@ def clear() -> None:
 class DineFormatter(logging.Formatter):
     """timestamp | LEVEL | CODE | hotel/user | req | message"""
 
-    converter = None  # use UTC via formatTime below
+    # time.gmtime, NOT None. Setting this to None shadowed the base class's
+    # converter, so formatTime() called None(record.created) and EVERY log line
+    # raised TypeError — Python then printed "--- Logging error ---" and a
+    # traceback instead of the log. The whole structured format was dead in
+    # production and nobody could tell, because the thing that would have
+    # reported the problem was the broken part.
+    converter = staticmethod(time.gmtime)  # UTC, always
 
     def format(self, record: logging.LogRecord) -> str:
         # A code can be passed explicitly (log.error(..., extra={"code": ...}));
@@ -89,8 +96,6 @@ class DineFormatter(logging.Formatter):
 
 def configure(level: str = "INFO") -> None:
     """Install the format on the root logger. Safe to call twice."""
-    import time
-
     logging.Formatter.converter = time.gmtime  # timestamps in UTC, always
 
     handler = logging.StreamHandler(sys.stdout)
