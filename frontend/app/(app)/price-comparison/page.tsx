@@ -12,7 +12,8 @@ const SRC_TONE: Record<string, "slate" | "amber" | "green"> = {
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { AreaChart } from "@/components/charts";
 import { Select } from "@/components/Select";
-import { ItemPickerSingle } from "@/components/ItemPicker";
+import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
+import { DetailSheet } from "@/components/DetailSheet";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -132,6 +133,9 @@ export default function PriceComparisonPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selected, setSelected] = useState<string>("");
+  // Which item's comparison is open in the sheet (separate from the selection,
+  // because picking and inspecting are different intents).
+  const [peek, setPeek] = useState<string | null>(null);
   const [data, setData] = useState<PriceComparison | null>(null);
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadingCompare, setLoadingCompare] = useState(false);
@@ -253,12 +257,96 @@ export default function PriceComparisonPage() {
     </Card>
   ) : null;
 
+  const peeked = peek ? items.find((i) => i.id === peek) : null;
+
   return (
     <div>
       <PageHeader
         title="Price Comparison"
         subtitle="Who's cheapest for each item — and how much you'd save by switching."
       />
+
+      {/* Every supplier for one item, opened from its card. The saving is
+          pinned in the header because it is the only number that decides
+          anything here. */}
+      <DetailSheet
+        open={!!peeked}
+        onClose={() => setPeek(null)}
+        width="lg"
+        icon={categoryEmoji(peeked?.category ?? "")}
+        title={peeked?.name ?? ""}
+        subtitle={
+          data && data.item_id === peek
+            ? `${data.vendor_count} supplier${data.vendor_count === 1 ? "" : "s"} price this`
+            : "loading…"
+        }
+        stats={
+          data && data.item_id === peek && data.cheapest_vendor
+            ? [
+                {
+                  label: "Cheapest",
+                  value: format(data.cheapest_vendor.price_per_unit),
+                  hint: data.cheapest_vendor.vendor_name,
+                  tone: "good",
+                },
+                {
+                  label: "Priciest",
+                  value: data.most_expensive_vendor
+                    ? format(data.most_expensive_vendor.price_per_unit)
+                    : "—",
+                  hint: data.most_expensive_vendor?.vendor_name ?? "",
+                  tone: "bad",
+                },
+                {
+                  label: "You'd save",
+                  value: format(data.potential_saving_per_unit),
+                  hint: `per ${data.unit}, every order`,
+                  tone: Number(data.potential_saving_per_unit) > 0 ? "warn" : "plain",
+                },
+              ]
+            : undefined
+        }
+      >
+        {loadingCompare || !data || data.item_id !== peek ? (
+          <Spinner />
+        ) : data.comparisons.length === 0 ? (
+          <p className="py-6 text-center text-sm text-fg-faint">
+            No supplier prices this item yet. Add one on the Vendors page and it becomes
+            orderable and costable.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {data.comparisons.map((v) => {
+              const cheapest = v.vendor_id === data.cheapest_vendor?.vendor_id;
+              return (
+                <li
+                  key={v.vendor_id}
+                  className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${
+                    cheapest ? "border-emerald-400/30 bg-emerald-400/[0.06]" : "border-line"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+                    {v.vendor_name}
+                    {v.is_preferred && (
+                      <span className="ml-2 text-[11px] text-brand-300">★ chosen</span>
+                    )}
+                  </span>
+                  <span className={`font-display text-sm font-semibold tabular-nums ${
+                    cheapest ? "text-emerald-300" : "text-fg-soft"
+                  }`}>
+                    {format(v.price_per_unit)}
+                  </span>
+                  {cheapest && (
+                    <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                      cheapest
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </DetailSheet>
 
       {switchSave.count > 0 && (
         <Card className="mise-feel mb-5 border-brand-400/30">
@@ -287,7 +375,15 @@ export default function PriceComparisonPage() {
               <p className="text-sm font-semibold text-fg">🧑‍🍳 Pick an item to compare suppliers</p>
               <p className="text-xs text-fg-faint">★ = its current supplier · you can pick any vendor per order on Purchasing</p>
             </div>
-            <ItemPickerSingle items={items} value={selected} onChange={setSelected} />
+            <ItemPickerSingle
+              items={items}
+              value={selected}
+              onChange={setSelected}
+              // The "›" opens the comparison right here. Before, choosing an
+              // item scrolled the answer somewhere below the fold, so the page
+              // made you hunt for the thing you came to see.
+              onOpenDetail={(id) => { setSelected(id); setPeek(id); }}
+            />
           </div>
 
           {/* The answer first: who to buy from, and what switching saves.

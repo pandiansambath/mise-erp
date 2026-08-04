@@ -273,10 +273,26 @@ async def list_attendance(
     # and a person who simply did not turn up, which is the distinction the
     # manager actually cares about at 09:00.
     off = await leave_service.employee_ids_off(db, user.hotel_id, day)
+    # What the rota expected today. Without this the sheet cannot tell "nobody
+    # was due" from "somebody did not turn up" — completely different mornings,
+    # and only the second one needs a phone call.
+    scheduled = await leave_service.scheduled_on(db, user.hotel_id, day)
+
     out = []
     for r in rows:
-        if r["employee_id"] in off:
+        emp = r["employee_id"]
+        if emp in off:
             r = {**r, "status": "LEAVE", "no_punch": False, "on_leave": True}
+        elif emp in scheduled:
+            shift = scheduled[emp]
+            r = {
+                **r,
+                "scheduled": True,
+                "scheduled_start": shift.start_time.strftime("%H:%M") if shift.start_time else None,
+                # Rota'd, not on leave, and no clock-in. This is the row a
+                # manager needs at 09:00, and nothing surfaced it before.
+                "missing": r.get("clock_in") is None,
+            }
         out.append(AttendanceRow.model_validate(r))
     return out
 

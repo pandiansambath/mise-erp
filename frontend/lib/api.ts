@@ -599,6 +599,11 @@ export interface AttendanceRow {
   no_punch?: boolean;
   /** On booked leave — distinct from absent, which needs chasing. */
   on_leave?: boolean;
+  /** The rota expected this person today. */
+  scheduled?: boolean;
+  scheduled_start?: string | null;
+  /** Expected, not on leave, and never clocked in. The one to chase. */
+  missing?: boolean;
 }
 
 export interface PnL {

@@ -181,6 +181,11 @@ class AttendanceRow(BaseModel):
     # On booked leave. Distinct from "absent": one needs chasing, the other was
     # agreed weeks ago.
     on_leave: bool = False
+    # The rota expected this person today.
+    scheduled: bool = False
+    scheduled_start: str | None = None
+    # Expected, not on leave, and never clocked in — the one that needs chasing.
+    missing: bool = False
 
 
 class LeaveCreate(BaseModel):

@@ -115,3 +115,31 @@ async def blocking_leave(
         f"{who} is on approved {leave.kind.lower()} leave ({when}). "
         "Cancel the leave first if this shift really needs to go ahead."
     )
+
+
+async def scheduled_on(
+    db: AsyncSession, hotel_id: uuid.UUID, day: date_type
+) -> dict[uuid.UUID, Shift]:
+    """Who the rota says is working today, by employee.
+
+    The other half of the link. Leave already stopped the rota promising
+    somebody who is away; this lets attendance notice the reverse — a person
+    the rota expected who never clocked in. Without it the attendance sheet
+    cannot tell "nobody was due" from "somebody did not turn up", and those are
+    completely different mornings.
+    """
+    rows = await db.execute(
+        select(Shift).where(Shift.hotel_id == hotel_id, Shift.date == day)
+    )
+    # One shift per person per day is the norm here; if there are several, the
+    # earliest start is the one attendance should be measured against.
+    out: dict[uuid.UUID, Shift] = {}
+    for shift in rows.scalars():
+        current = out.get(shift.employee_id)
+        earlier = (
+            current is None
+            or (shift.start_time and current.start_time and shift.start_time < current.start_time)
+        )
+        if earlier:
+            out[shift.employee_id] = shift
+    return out
