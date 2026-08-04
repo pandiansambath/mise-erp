@@ -55,6 +55,10 @@ RESERVED_SUBDOMAINS: set[str] = {
     "admin",
     "hello",
     "support",
+    # The developer's own reference page. Kept in the reserved list (rather than
+    # left to the hotel-handle lookup) so no restaurant can ever register the
+    # handle "pandi-dev" and take the subdomain.
+    "pandi-dev",
 }
 
 

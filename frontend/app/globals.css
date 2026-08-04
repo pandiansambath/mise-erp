@@ -1444,3 +1444,19 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .mise-breathe { animation: none; }
 }
+
+/* ── pandi-dev.dineai.cloud ───────────────────────────────────────────────
+   Only used by the developer profile. Namespaced with a dev- prefix so they
+   can never collide with the app's own motion vocabulary. */
+@keyframes devFadeUp {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes devFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Respect the setting: arrive, do not travel. */
+  [style*="devFadeUp"], [style*="devFade"] { animation: none !important; opacity: 1 !important; transform: none !important; }
+}
