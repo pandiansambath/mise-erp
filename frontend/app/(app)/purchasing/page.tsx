@@ -18,6 +18,7 @@ import {
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
+import { SubNav } from "@/components/SubNav";
 import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPicker, categoryEmoji, fmtQty, type PickedLine } from "@/components/ItemPicker";
@@ -626,28 +627,37 @@ export default function PurchasingPage() {
 
       {/* One job on screen at a time. Everything is one tap away; nothing is
           reachable only by scrolling. */}
-      <nav className="mb-5 flex flex-wrap gap-2">
-        {([
-          ["new", "New order", canWrite],
-          ["indents", `Indents (${indents.length})`, true],
-          ["orders", `Purchase orders (${pos.length})`, true],
-        ] as const)
-          .filter(([, , show]) => show)
-          .map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={`mise-press rounded-full px-4 py-2 text-sm font-medium transition ${
-                tab === key
-                  ? "bg-brand-600 text-white shadow-sm"
-                  : "border border-line text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-      </nav>
+      {/* The same SubNav every other section uses, so Purchasing stops being
+          the odd one out — and the counts now say what needs attention rather
+          than just how many exist. */}
+      <SubNav
+        active={tab}
+        items={[
+          ...(canWrite
+            ? [{ key: "new", label: "New order", icon: "＋", onSelect: () => setTab("new") }]
+            : []),
+          {
+            key: "indents",
+            label: "Indents",
+            icon: "📋",
+            count: indents.filter((i) => i.status === "PENDING").length || indents.length,
+            tone: indents.some((i) => i.status === "PENDING") ? "warn" : "plain",
+            onSelect: () => setTab("indents"),
+          },
+          {
+            key: "orders",
+            label: "Purchase orders",
+            icon: "🚚",
+            count: pos.filter((p) => p.status !== "RECEIVED").length || pos.length,
+            tone: pos.some(
+              (p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr,
+            )
+              ? "bad"
+              : "plain",
+            onSelect: () => setTab("orders"),
+          },
+        ]}
+      />
 
       {canWrite && tab === "new" && (
         <Card className="mb-6" id="indent-form">
@@ -857,20 +867,36 @@ export default function PurchasingPage() {
                 const detail = poDetail[po.id];
                 const busy = poBusy === po.id;
                 return (
-                  <div key={po.id} className="overflow-hidden rounded-xl border border-line bg-glass/5 transition hover:border-line-2">
+                  <div key={po.id} className={`mise-feel overflow-hidden rounded-2xl border transition ${
+                    po.status !== "RECEIVED" && po.expected_delivery && po.expected_delivery < todayStr
+                      ? "border-rose-400/30 bg-rose-400/[0.04]"
+                      : "border-line bg-glass/5 hover:border-line-2"
+                  }`}>
                     <button
                       type="button"
                       onClick={() => togglePo(po.id)}
                       aria-expanded={open}
                       className="flex w-full items-center gap-3 px-4 py-3 text-left"
                     >
-                      <span aria-hidden className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>›</span>
+                      {/* A status tile, matching the indent rows. Colour reads
+                          faster than a word, and an order that has ARRIVED is a
+                          different thing from one still out. */}
+                      <span
+                        aria-hidden
+                        className={`mise-neo-raised grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base ${
+                          po.status === "RECEIVED" ? "text-emerald-300"
+                          : po.expected_delivery && po.expected_delivery < todayStr ? "text-rose-300"
+                          : "text-fg-faint"
+                        }`}
+                      >
+                        {po.status === "RECEIVED" ? "✓" : "🚚"}
+                      </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-fg">{po.po_number}</span>
+                        <span className="block truncate font-display text-sm font-semibold text-fg">{po.po_number}</span>
                         <span className="block truncate text-xs text-fg-faint">{po.vendor_name || "—"}</span>
                       </span>
                       <span className="shrink-0 text-right">
-                        <span className="block text-sm font-semibold text-fg">{format(po.total_amount)}</span>
+                        <span className="block font-display text-sm font-semibold tabular-nums text-fg">{format(po.total_amount)}</span>
                         <span className="flex items-center justify-end gap-1.5">
                           {po.status !== "RECEIVED" && po.expected_delivery && (() => {
                             const t = todayStr;
