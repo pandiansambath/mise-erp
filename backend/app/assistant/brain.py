@@ -26,6 +26,24 @@ ExecuteFn = Callable[[str, dict], Awaitable[dict]]
 MAX_LAPS = 4
 
 
+def _brief(payload: dict) -> str:
+    """One short line describing what a tool was asked for.
+
+    Trimmed hard: this is shown to a restaurant owner, not logged for a
+    developer, and a wall of JSON is worse than nothing. Long values are cut
+    because a pasted price list would otherwise fill the panel.
+    """
+    if not payload:
+        return ""
+    bits = []
+    for key, value in list(payload.items())[:3]:
+        text = str(value)
+        bits.append(f"{key}: {text[:60]}{'…' if len(text) > 60 else ''}")
+    return " · ".join(bits)
+
+
+
+
 class BrainError(RuntimeError):
     """The model could not be reached. Callers degrade rather than 500."""
 
@@ -51,6 +69,9 @@ async def generate(
     attachment: dict | None = None,
     model: str = "",
     meter: dict[str, Any] | None = None,
+    # Filled in as it works, so the caller can show what happened rather than a
+    # spinner. Optional: nothing depends on it being collected.
+    trace: list[dict] | None = None,
 ) -> tuple[str, list[str]]:
     """One assistant turn, tools included. Returns (reply, tools it used)."""
     messages: list[dict[str, Any]] = []
@@ -143,10 +164,17 @@ async def generate(
 
         # Run what it asked for, hand back the results, let it continue.
         messages.append({"role": "assistant", "content": blocks})
+        # What it said to itself before reaching for tools. Users waiting on a
+        # slow answer deserve to see the work, not a spinner — and this is the
+        # only place that reasoning exists before it is thrown away.
+        if text and trace is not None:
+            trace.append({"kind": "thought", "text": text[:400]})
         results = []
         for c in calls:
             name = c.get("name", "")
             used.append(name)
+            if trace is not None:
+                trace.append({"kind": "tool", "name": name, "input": _brief(c.get("input") or {})})
             try:
                 out = await execute(name, c.get("input") or {})
             except Exception as exc:  # noqa: BLE001 — one bad tool must not kill the turn

@@ -29,6 +29,7 @@ type ChatResponse = {
   thread_id?: string; // which conversation this reply belongs to
   choices?: string[]; // tappable follow-ups the assistant offered
   reply: string; actions: Action[]; pending_actions: Pending[]; used_tools: string[]; configured: boolean;
+  trace?: { kind: string; text?: string; name?: string; input?: string }[];
 };
 type Msg = {
   role: "user" | "assistant"; content: string;
@@ -37,6 +38,8 @@ type Msg = {
   /** What was attached. Kept as a data URL so it stays downloadable later in
    *  the thread — a receipt you can no longer open is not a record. */
   file?: { name: string; mime: string; size: number; dataUrl: string };
+  /** What it did to get here: reasoning and tool calls, in order. */
+  trace?: { kind: string; text?: string; name?: string; input?: string }[];
 };
 
 /** A file the user has chosen but NOT yet sent. */
@@ -136,6 +139,8 @@ export function Copilot() {
   const [input, setInput] = useState("");
   // A file chosen but not yet sent — see onFile().
   const [staged, setStaged] = useState<Staged | null>(null);
+  // Seconds since the current question was sent. Reset on each send.
+  const [elapsed, setElapsed] = useState(0);
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [expanding, setExpanding] = useState(false);
@@ -288,6 +293,15 @@ export function Copilot() {
     if (open) justOpened.current = true;
   }, [open]);
 
+  // Count up while the assistant works, so "is it doing anything?" is answered
+  // by the screen instead of by waiting.
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const started = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
+
   const push = (m: Msg) => setMessages((prev) => [...prev, m]);
   const patchPending = (mi: number, pi: number, patch: Partial<Pending>) =>
     setMessages((prev) => prev.map((m, i) =>
@@ -328,7 +342,7 @@ export function Copilot() {
       // choices ride on the assistant message so they disappear once answered
       setConfigured(res.configured);
       setJustAnswered(true);
-      push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions, choices: res.choices });
+      push({ role: "assistant", content: res.reply, actions: res.actions, pending: res.pending_actions, choices: res.choices, trace: res.trace });
       maybeSpeak(res.reply);
     } catch (e) {
       // Say what actually went wrong. "Couldn't reach the assistant" was shown
@@ -591,7 +605,7 @@ export function Copilot() {
       {open && (
         <div
           ref={panelRef}
-          className={`${expanding ? "mise-copilot-expand" : closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-20 z-50 flex max-h-[72dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
+          className={`${expanding ? "mise-copilot-expand" : closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-[5.5rem] z-50 flex max-h-[68dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
           role="dialog"
           aria-label="DineAI Copilot"
         >
@@ -891,6 +905,39 @@ export function Copilot() {
                       ))}
                     </div>
                   )}
+                  {/* The working, collapsed. Open it and you can see the steps
+                      it took; leave it shut and the answer stands alone. Only
+                      shown when there is something worth showing — a one-step
+                      reply has no story to tell. */}
+                  {m.role === "assistant" && (m.trace?.length ?? 0) > 0 && (
+                    <details className="mt-2 group">
+                      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] text-fg-faint transition hover:text-fg-soft">
+                        <span aria-hidden className="transition-transform group-open:rotate-90">▸</span>
+                        How I worked this out
+                        <span className="rounded-full bg-glass/10 px-1.5 py-0.5 text-[9px] tabular-nums">
+                          {m.trace!.filter((t) => t.kind === "tool").length} step
+                          {m.trace!.filter((t) => t.kind === "tool").length === 1 ? "" : "s"}
+                        </span>
+                      </summary>
+                      <ol className="mise-pop mt-1.5 space-y-1.5 border-l border-glass/15 pl-3">
+                        {m.trace!.map((t, ti) => (
+                          <li key={ti} className="text-[11px] leading-relaxed">
+                            {t.kind === "thought" ? (
+                              <span className="italic text-fg-faint">{t.text}</span>
+                            ) : (
+                              <span className="text-fg-soft">
+                                <span className="font-mono text-[10px] text-brand-300">
+                                  {(t.name ?? "").replace(/_/g, " ")}
+                                </span>
+                                {t.input ? <span className="text-fg-faint"> — {t.input}</span> : null}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    </details>
+                  )}
+
                   {m.actions && m.actions.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {m.actions.map((a, j) => (
@@ -911,7 +958,18 @@ export function Copilot() {
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" />
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" style={{ animationDelay: "0.2s" }} />
                   <span className="mise-bob h-2 w-2 rounded-full bg-brand-400" style={{ animationDelay: "0.4s" }} />
-                  <span className="text-xs text-fg-faint">cooking an answer…</span>
+                  {/* An elapsed count, not a fixed phrase. On a slow question
+                      the assistant can run several tool calls, and a static
+                      "thinking…" is indistinguishable from a hang — you sat
+                      waiting with no sign it was alive. A number that keeps
+                      moving is proof that it is. */}
+                  <span className="text-xs tabular-nums text-fg-faint">
+                    {elapsed < 4
+                      ? "thinking…"
+                      : elapsed < 12
+                        ? `working on it… ${elapsed}s`
+                        : `still going — this one needs a few steps… ${elapsed}s`}
+                  </span>
                 </div>
               </div>
             )}
@@ -987,8 +1045,11 @@ export function Copilot() {
                   send(input);
                 }
               }}
-              placeholder={voice.listening ? "Listening…" : "Ask, or tell me to add something…"}
-              className="min-w-0 flex-1 resize-none rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none"
+              placeholder={voice.listening ? "Listening…" : "Ask me anything…"}
+              // min-h + overflow-hidden rather than a fixed row count: a one-row
+              // box cannot show a placeholder that wraps, and cutting it mid-word
+              // is the first thing anyone sees on a phone.
+              className="min-h-[2.75rem] min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none"
             />
             {ttsSupported && (
               <button

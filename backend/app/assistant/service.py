@@ -192,6 +192,9 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     # key is missing — which is exactly what used to make the assistant look
     # like it knew nothing about the business.
     meter: dict = {}
+    # What the assistant actually did, in order. Returned so the UI can show the
+    # work instead of a spinner that gives no sign the thing is alive.
+    trace: list[dict] = []
     try:
         reply, used = await brain.generate(
             system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
@@ -201,6 +204,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
             attachment=req.attachment.model_dump() if req.attachment else None,
             model=await guard.model_for(db, user),
             meter=meter,
+            trace=trace,
         )
         if reply:
             reply, choices = _split_choices(reply)
@@ -210,6 +214,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
                 actions=_dedupe(collected),
                 pending_actions=[ProposedAction(**p) for p in proposals],
                 used_tools=used,
+                trace=trace,
                 configured=True,
             )
     except brain.BrainError:
