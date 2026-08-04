@@ -396,6 +396,12 @@ def _attendance_row(a: Attendance, e: Employee, allowance: int, ppm: Decimal) ->
         "on_break": a.break_start is not None,
         "over_break_minutes": over,
         "break_penalty": penalty,
+        # Present on paper with nothing recording an arrival. A manager may
+        # legitimately mark someone who forgot to punch, so this is a flag to
+        # show, not an error to raise — but it must not look like a real shift.
+        "no_punch": a.status == AttendanceStatus.PRESENT.value
+        and a.clock_in is None
+        and not a.working_hours,
     }
 
 

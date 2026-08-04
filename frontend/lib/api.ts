@@ -593,6 +593,10 @@ export interface AttendanceRow {
   on_break: boolean;
   over_break_minutes: number;
   break_penalty: string;
+  /** Marked present, but nothing recorded them arriving. Not an error — a
+   *  manager can mark someone who forgot to punch — but it must not look
+   *  like a real shift. */
+  no_punch?: boolean;
 }
 
 export interface PnL {

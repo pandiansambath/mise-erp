@@ -32,6 +32,8 @@ type AttHistory = {
   days: {
     date: string; status: string; working_hours: string | null;
     clock_in: string | null; clock_out: string | null; break_minutes: number;
+    /** Present on paper, with nothing recording an arrival. */
+    no_punch?: boolean;
   }[];
 };
 
@@ -617,6 +619,16 @@ function AttendanceHistoryCard({ employees, format }: {
                         <td className="px-3 py-2 font-mono text-fg-soft">{d.date}</td>
                         <td className={`px-3 py-2 font-semibold ${STATUS_TONE[d.status] ?? "text-fg-faint"}`}>
                           {d.status.replace("_", "-").toLowerCase()}
+                          {/* "present" with no clock-in and no hours is the app
+                              asserting a shift nothing recorded. Say so. */}
+                          {d.no_punch && (
+                            <span
+                              title="Marked present, but no clock-in was recorded"
+                              className="ml-1.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300"
+                            >
+                              no punch
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-fg-faint">
                           {d.clock_in ? `${d.clock_in.slice(11, 16)}–${d.clock_out ? d.clock_out.slice(11, 16) : "…"}` : "—"}
