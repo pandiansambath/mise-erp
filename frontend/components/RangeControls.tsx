@@ -169,6 +169,8 @@ export function TimeRangePicker({
   const [from, setFrom] = useState(range.from);
   const [to, setTo] = useState(range.to);
   const wrap = useRef<HTMLDivElement>(null);
+  // The portalled panel, so the outside-click check can see it.
+  const panel = useRef<HTMLDivElement>(null);
 
   // Seed the draft dates from the page's current range — but ONLY on the
   // transition into open.
@@ -195,7 +197,15 @@ export function TimeRangePicker({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+      // The panel is PORTALLED to <body>, so it is not inside `wrap` — testing
+      // only `wrap` meant every click inside the panel counted as "outside".
+      // mousedown closed it, the button unmounted, and the click never landed:
+      // presets did nothing while the arrows (which ARE inside wrap) worked
+      // fine. Both containers have to count as inside.
+      const t = e.target as Node;
+      if (wrap.current?.contains(t)) return;
+      if (panel.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDown);
@@ -249,6 +259,7 @@ export function TimeRangePicker({
 
       {open && mounted && createPortal(
         <div
+          ref={panel}
           role="dialog"
           // Portalled to <body> and FIXED. An absolute panel is trapped inside
           // any ancestor with a stacking context (a transform, filter or
