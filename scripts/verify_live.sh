@@ -69,6 +69,27 @@ HDRS=$(curl -sI --max-time 20 "$BASE/" 2>/dev/null)
 printf '%s' "$HDRS" | grep -qi "strict-transport-security" \
   && ok "HSTS header present" || bad "HSTS header missing"
 
+head_ "Developer page (pandi-dev)"
+DEV="https://pandi-dev.dineai.cloud"
+DCODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$DEV/" 2>/dev/null)
+case "$DCODE" in
+  200) ok "pandi-dev serves 200 (page is ON)"
+       DBODY=$(curl -s --max-time 25 "$DEV/")
+       printf '%s' "$DBODY" | grep -q "Pandian Sambath" && ok "identity renders" || bad "identity missing"
+       # The brief was explicit: no client names, no project detail, no packages.
+       LEAK=0
+       for secret in "British Airways" "Apache Camel" "LPA"; do
+         printf '%s' "$DBODY" | grep -qi "$secret" && { bad "LEAKED company detail: $secret"; LEAK=1; }
+       done
+       [ "$LEAK" = "0" ] && ok "no company/project detail leaked"
+       # The album must actually be reachable, not just referenced.
+       ACODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$DEV/dev/thumb/p00.webp")
+       [ "$ACODE" = "200" ] && ok "album thumbnails serve" || bad "album thumb returned $ACODE"
+       ;;
+  404) skip "pandi-dev returns 404 — page is switched OFF (DEV_PROFILE_ENABLED=0)";;
+  *)   bad "pandi-dev returned $DCODE";;
+esac
+
 head_ "Signed-in checks"
 if [ -z "${VERIFY_EMAIL:-}" ] || [ -z "${VERIFY_PASSWORD:-}" ]; then
   skip "no VERIFY_EMAIL/VERIFY_PASSWORD exported — signed-in checks not run"
