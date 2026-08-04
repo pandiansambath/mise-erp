@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
+import { LeavePanel } from "@/components/LeavePanel";
 import { Bars, Meter } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
@@ -392,6 +393,12 @@ export default function RotaPage() {
   return (
     <div>
       <PageHeader title="Rota" subtitle="Schedule shifts and see forecast labour cost as a % of sales." />
+
+      {/* Leave lives beside the rota because that is where it has to be obeyed:
+          scheduling somebody who is off is the mistake this prevents. */}
+      <Card className="mb-6">
+        <LeavePanel employees={employees} canWrite={canWrite} onChanged={() => { reload().catch(() => {}); }} />
+      </Card>
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

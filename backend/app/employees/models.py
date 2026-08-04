@@ -107,3 +107,48 @@ class Attendance(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class LeaveStatus(str, enum.Enum):
+    REQUESTED = "REQUESTED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
+class Leave(Base):
+    """Planned time off.
+
+    Until now leave existed only as an attendance status on a single day, which
+    could not answer the question anyone actually asks: "is anybody off next
+    Tuesday?" You could only find out by opening each day one at a time, so in
+    practice the rota was built without knowing, and the clash surfaced when
+    somebody did not turn up.
+
+    Stored as a RANGE rather than a row per day, because that is how leave is
+    requested and how people think about it — "the 14th to the 20th", not seven
+    separate facts. Days are expanded on read where a per-day answer is needed.
+    """
+
+    __tablename__ = "leaves"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    # Inclusive: a single day has start == end. Exclusive ends read as an
+    # off-by-one to everybody who is not a programmer.
+    end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="ANNUAL")
+    status: Mapped[str] = mapped_column(
+        String(12), nullable=False, default=LeaveStatus.APPROVED.value
+    )
+    reason: Mapped[str | None] = mapped_column(Text)
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

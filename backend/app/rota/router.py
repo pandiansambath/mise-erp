@@ -14,6 +14,7 @@ from app.auth.models import User
 from app.core import template_io
 from app.core.database import get_db
 from app.core.template_io import Column, TemplateSpec
+from app.employees import leave
 from app.hotels.models import Hotel
 from app.rota import export, service
 from app.rota.schemas import LabourSummary, ShiftCreate, ShiftOut
@@ -71,6 +72,14 @@ async def create_shift(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("employees:write")),
 ) -> ShiftOut:
+    # The rota must not promise somebody who is on approved leave. Refusing here
+    # — with the dates, and how to proceed — is the difference between the app
+    # knowing about leave and the app USING it. Without this, the clash surfaced
+    # on the day, when the person did not turn up.
+    clash = await leave.blocking_leave(db, user.hotel_id, payload.employee_id, payload.date)
+    if clash is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, clash[1])
+
     await service.create_shift(db, user.hotel_id, **payload.model_dump())
     # re-read via list so the response carries employee_name + computed hours/cost
     rows = await service.list_shifts(db, user.hotel_id, payload.date, payload.date)
