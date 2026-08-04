@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { hotelSite } from "@/lib/site";
+import { forgetAll } from "@/lib/rangeMemory";
 import {
   api,
   clearToken,
@@ -132,6 +133,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearToken();
+    // Remembered date ranges are per-session by design. On a shared terminal
+    // the next person must not inherit the last one's view.
+    forgetAll();
     setUser(null);
     setHotel(null);
     router.push("/login");

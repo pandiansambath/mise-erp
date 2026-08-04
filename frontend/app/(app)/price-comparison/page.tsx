@@ -14,6 +14,7 @@ import { AreaChart } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
 import { DetailSheet } from "@/components/DetailSheet";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -321,8 +322,12 @@ export default function PriceComparisonPage() {
               return (
                 <li
                   key={v.vendor_id}
-                  className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${
-                    cheapest ? "border-emerald-400/30 bg-emerald-400/[0.06]" : "border-line"
+                  className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition ${
+                    v.is_preferred
+                      ? "border-brand-400/40 bg-brand-400/[0.08]"
+                      : cheapest
+                        ? "border-emerald-400/30 bg-emerald-400/[0.06]"
+                        : "border-line"
                   }`}
                 >
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
@@ -336,11 +341,43 @@ export default function PriceComparisonPage() {
                   }`}>
                     {format(v.price_per_unit)}
                   </span>
-                  {cheapest && (
+                  {cheapest && !v.is_preferred && (
                     <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
                       cheapest
                     </span>
                   )}
+                  {/* The point of opening this is to DECIDE. Listing prices and
+                      making you close the sheet to act on them was half a
+                      feature. */}
+                  {canWrite && (
+                    v.is_preferred ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreferred(null)}
+                        className="mise-press shrink-0 rounded-lg border border-line px-2.5 py-1 text-[11px] font-medium text-fg-faint hover:text-fg"
+                      >
+                        Clear
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPreferred(v.vendor_id)}
+                        className="mise-press shrink-0 rounded-lg border border-brand-400/40 bg-brand-400/10 px-2.5 py-1 text-[11px] font-medium text-brand-300"
+                      >
+                        Choose
+                      </button>
+                    )
+                  )}
+                  {/* Straight to that supplier's page — "who are they, what else
+                      do they sell, what do I owe them" is the obvious next
+                      question and it was a manual hunt. */}
+                  <Link
+                    href={`/vendors?vendor=${v.vendor_id}`}
+                    title={`Open ${v.vendor_name} on the Vendors page`}
+                    className="mise-press grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line text-xs text-fg-faint transition hover:border-brand-400/50 hover:text-brand-300"
+                  >
+                    ↗
+                  </Link>
                 </li>
               );
             })}
