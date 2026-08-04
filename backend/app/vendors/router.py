@@ -345,11 +345,11 @@ async def record_payment(
                 date=payload.date,
                 amount=payload.amount,
                 payment_method="CASH",
-                notes=(
+                description=(
                     f"Paid {vendor.name}"
                     + (f" ({payload.reference})" if payload.reference else "")
                 ),
-                entered_by=user.id,
+                created_by=user.id,
             )
         )
 
