@@ -178,3 +178,24 @@ class AttendanceRow(BaseModel):
     # look different from a real punch, or the row silently asserts a shift that
     # nothing backs up.
     no_punch: bool = False
+    # On booked leave. Distinct from "absent": one needs chasing, the other was
+    # agreed weeks ago.
+    on_leave: bool = False
+
+
+class LeaveCreate(BaseModel):
+    """Time off, as a range.
+
+    end_date is INCLUSIVE — a single day has start == end. An exclusive end
+    reads as an off-by-one to everyone who is not a programmer, and this form is
+    filled in by managers.
+    """
+
+    employee_id: uuid.UUID
+    start_date: date_type
+    end_date: date_type
+    kind: str = "ANNUAL"
+    # Defaults to APPROVED: a manager booking leave IS the approval. A request
+    # workflow can come later without changing this shape.
+    status: str = "APPROVED"
+    reason: str | None = None

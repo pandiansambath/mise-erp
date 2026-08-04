@@ -4,13 +4,16 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
+from app.employees import leave as leave_service
 from app.employees import service, timesheet
+from app.employees.models import Employee, Leave, LeaveStatus
 from app.employees.schemas import (
     AttendanceEdit,
     AttendanceOut,
@@ -20,6 +23,7 @@ from app.employees.schemas import (
     EmployeeCreate,
     EmployeeOut,
     EmployeeUpdate,
+    LeaveCreate,
     PunchRequest,
     VisaAlert,
 )
@@ -263,7 +267,18 @@ async def list_attendance(
 ) -> list[AttendanceRow]:
     day = on or date_type.today()
     rows = await service.list_attendance(db, user.hotel_id, day)
-    return [AttendanceRow.model_validate(r) for r in rows]
+
+    # Someone on booked leave is not "absent" in the sense that needs chasing.
+    # Without this the attendance sheet reads the same for a person on holiday
+    # and a person who simply did not turn up, which is the distinction the
+    # manager actually cares about at 09:00.
+    off = await leave_service.employee_ids_off(db, user.hotel_id, day)
+    out = []
+    for r in rows:
+        if r["employee_id"] in off:
+            r = {**r, "status": "LEAVE", "no_punch": False, "on_leave": True}
+        out.append(AttendanceRow.model_validate(r))
+    return out
 
 
 @attendance_router.get("/timesheet.pdf")
@@ -392,3 +407,108 @@ async def edit_attendance(
         break_minutes=payload.break_minutes,
     )
     return AttendanceOut.model_validate(rec)
+
+
+# ── Leave ───────────────────────────────────────────────────────────────────
+# Time off as a RANGE, so "is anybody off next Tuesday?" is one question rather
+# than seven. The rota consults this before scheduling; attendance consults it
+# before calling somebody absent.
+
+
+@router.get("/leave/list")
+async def list_leave(
+    date_from: date_type | None = Query(default=None),
+    date_to: date_type | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> list[dict]:
+    """Leave overlapping a window, soonest first."""
+    q = select(Leave, Employee).join(Employee, Leave.employee_id == Employee.id).where(
+        Leave.hotel_id == user.hotel_id
+    )
+    # Overlap, not containment: leave that STARTED before the window but runs
+    # into it is exactly the leave you need to see.
+    if date_from:
+        q = q.where(Leave.end_date >= date_from)
+    if date_to:
+        q = q.where(Leave.start_date <= date_to)
+    rows = await db.execute(q.order_by(Leave.start_date))
+    return [
+        {
+            "id": str(lv.id),
+            "employee_id": str(lv.employee_id),
+            "employee_name": emp.full_name,
+            "start_date": lv.start_date.isoformat(),
+            "end_date": lv.end_date.isoformat(),
+            "days": (lv.end_date - lv.start_date).days + 1,
+            "kind": lv.kind,
+            "status": lv.status,
+            "reason": lv.reason,
+        }
+        for lv, emp in rows.all()
+    ]
+
+
+@router.post("/leave", status_code=status.HTTP_201_CREATED)
+async def create_leave(
+    payload: LeaveCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    """Book time off, and say if it collides with shifts already rota'd.
+
+    A collision does NOT block the booking — plans change, and the leave is the
+    newer decision. But it must be SAID, or the rota keeps showing somebody who
+    is on holiday and nobody finds out until the day.
+    """
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "The end date is before the start date.")
+
+    employee = await db.get(Employee, payload.employee_id)
+    if employee is None or employee.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+
+    clashes = await leave_service.shifts_clashing(
+        db, user.hotel_id, payload.employee_id, payload.start_date, payload.end_date
+    )
+
+    row = Leave(
+        hotel_id=user.hotel_id,
+        employee_id=payload.employee_id,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        kind=payload.kind,
+        status=payload.status,
+        reason=payload.reason,
+        approved_by=user.id if payload.status == LeaveStatus.APPROVED.value else None,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {
+        "id": str(row.id),
+        "clashing_shifts": [
+            {"id": str(sh.id), "date": sh.date.isoformat()} for sh in clashes
+        ],
+        "warning": (
+            f"{employee.full_name} is already rota'd on "
+            f"{', '.join(sh.date.isoformat() for sh in clashes)}. "
+            "Remove those shifts, or the rota will still show them working."
+            if clashes
+            else None
+        ),
+    }
+
+
+@router.delete("/leave/{leave_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_leave(
+    leave_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> Response:
+    row = await db.get(Leave, leave_id)
+    if row is None or row.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such leave")
+    await db.delete(row)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

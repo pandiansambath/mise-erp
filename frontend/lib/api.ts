@@ -597,6 +597,8 @@ export interface AttendanceRow {
    *  manager can mark someone who forgot to punch — but it must not look
    *  like a real shift. */
   no_punch?: boolean;
+  /** On booked leave — distinct from absent, which needs chasing. */
+  on_leave?: boolean;
 }
 
 export interface PnL {
