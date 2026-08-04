@@ -16,7 +16,13 @@ show_state() {
   echo "--- setting ---"
   grep "DEV_PROFILE_ENABLED" "$COMPOSE" || echo "not set (defaults to ON)"
   echo "--- live response ---"
-  code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: pandi-dev.dineai.cloud' http://localhost/ || echo "???")
+  # --resolve, not a Host header. Two earlier attempts got this wrong:
+  #   http://localhost  -> 308, because port 80 redirects every Host to https
+  #   https://localhost -> 000, because the SNI was "localhost", so Caddy tried
+  #                        to mint a cert for that name and the ask endpoint
+  #                        (correctly) refused, killing the handshake
+  # --resolve sends the real hostname in SNI while still dialling the local box.
+  code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 15     --resolve pandi-dev.dineai.cloud:443:127.0.0.1     https://pandi-dev.dineai.cloud/ || echo "???")
   echo "pandi-dev.dineai.cloud -> $code"
 }
 
