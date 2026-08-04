@@ -30,6 +30,7 @@ an integration.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -105,7 +106,11 @@ def allowed(query: str) -> tuple[bool, str]:
 
 
 def configured() -> bool:
-    return bool(getattr(settings, "web_search_api_key", ""))
+    """Either provider is enough — one working index beats none."""
+    return bool(
+        getattr(settings, "web_search_api_key", "")
+        or getattr(settings, "tavily_api_key", "")
+    )
 
 
 async def search(query: str, count: int = 5) -> dict:
@@ -129,62 +134,136 @@ async def search(query: str, count: int = 5) -> dict:
             ),
         }
 
-    try:
-        import httpx
+    results: list[dict] = []
+    # Both providers at once. Sequential would double the wait for an assistant
+    # that already feels slow; asyncio.gather makes two sources cost the time of
+    # the slower one, not the sum. return_exceptions so one provider being down
+    # degrades the answer instead of losing it.
+    outcomes = await asyncio.gather(
+        _serper(query, count),
+        _tavily(query, count),
+        return_exceptions=True,
+    )
+    for outcome in outcomes:
+        if isinstance(outcome, Exception):
+            log.warning("a search provider failed", exc_info=outcome, extra={"code": "DINE-A3011"})
+            continue
+        results.extend(outcome)
 
-        # Serper (serper.dev) — a thin API over Google's own results, with a
-        # free tier that needs no card. Chosen over Brave for exactly that
-        # reason: an integration nobody can switch on is not an integration.
-        # Google's index also matters here, because half these questions are
-        # local ("paneer suppliers Birmingham") and that is where Google is
-        # strongest.
-        async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.post(
-                "https://google.serper.dev/search",
-                json={"q": query, "num": max(1, min(count, 10)), "gl": "gb"},
-                headers={
-                    "X-API-KEY": settings.web_search_api_key,
-                    "Content-Type": "application/json",
-                },
-            )
-        if resp.status_code >= 300:
-            log.warning(
-                "web search failed http=%s", resp.status_code, extra={"code": "DINE-A3011"}
-            )
-            return {"error": "The search service didn't answer. Try again in a moment."}
-
-        payload = resp.json()
-        results = []
-        # An answer box, when Google has one, is usually the best single result
-        # for a factual question — put it first rather than burying it.
-        box = payload.get("answerBox") or {}
-        if box.get("answer") or box.get("snippet"):
-            results.append(
-                {
-                    "title": box.get("title", "Direct answer"),
-                    "url": box.get("link", ""),
-                    "summary": (box.get("answer") or box.get("snippet") or "")[:400],
-                    "age": "",
-                }
-            )
-        for r in (payload.get("organic") or [])[:count]:
-            results.append(
-                {
-                    "title": r.get("title", ""),
-                    "url": r.get("link", ""),
-                    "summary": (r.get("snippet") or "")[:400],
-                    "age": r.get("date") or "",
-                }
-            )
-        return {
-            "query": query,
-            "results": results,
-            "note": (
-                "These came from the public web, not from this restaurant's "
-                "records. Say where a figure came from when you use one, and do "
-                "not present it as their own data."
-            ),
-        }
-    except Exception:  # noqa: BLE001 — a failed lookup must not kill the reply
-        log.exception("web search errored", extra={"code": "DINE-A3012"})
+    if not results:
         return {"error": "I couldn't reach the web just now."}
+
+    # Same page from both providers is one fact, not two. Dedupe on the URL and
+    # keep the first — otherwise the model sees agreement where there is only
+    # repetition, and weights it accordingly.
+    seen: set[str] = set()
+    merged = []
+    for r in results:
+        key = (r.get("url") or r.get("title") or "").rstrip("/").lower()
+        if key and key in seen:
+            continue
+        seen.add(key)
+        merged.append(r)
+
+    return {
+        "query": query,
+        "results": merged[: count * 2],
+        "note": (
+            "These came from the public web, not from this restaurant's records. "
+            "Say where a figure came from when you use one, and do not present it "
+            "as their own data. Where two sources agree the figure is safer; "
+            "where they disagree, say so rather than picking one."
+        ),
+    }
+
+
+async def _serper(query: str, count: int) -> list[dict]:
+    """Google's index, via serper.dev. Strongest for local and commercial
+    queries — "paneer suppliers Birmingham" is a Google question."""
+    if not settings.web_search_api_key:
+        return []
+    import httpx
+
+    async with httpx.AsyncClient(timeout=8) as client:
+        resp = await client.post(
+            "https://google.serper.dev/search",
+            json={"q": query, "num": max(1, min(count, 10)), "gl": "gb"},
+            headers={
+                "X-API-KEY": settings.web_search_api_key,
+                "Content-Type": "application/json",
+            },
+        )
+    if resp.status_code >= 300:
+        log.warning("serper http=%s", resp.status_code, extra={"code": "DINE-A3011"})
+        return []
+
+    payload = resp.json()
+    out: list[dict] = []
+    # An answer box, when Google has one, is usually the best single result for
+    # a factual question — first, not buried.
+    box = payload.get("answerBox") or {}
+    if box.get("answer") or box.get("snippet"):
+        out.append({
+            "title": box.get("title", "Direct answer"),
+            "url": box.get("link", ""),
+            "summary": (box.get("answer") or box.get("snippet") or "")[:400],
+            "age": "",
+            "source": "google",
+        })
+    for r in (payload.get("organic") or [])[:count]:
+        out.append({
+            "title": r.get("title", ""),
+            "url": r.get("link", ""),
+            "summary": (r.get("snippet") or "")[:400],
+            "age": r.get("date") or "",
+            "source": "google",
+        })
+    return out
+
+
+async def _tavily(query: str, count: int) -> list[dict]:
+    """Tavily — built for feeding models rather than humans, so it returns
+    extracted page CONTENT instead of a search snippet. Better on rules and
+    guidance ("what does the FSA require"), where the answer is a paragraph
+    inside a page rather than the page's title."""
+    key = getattr(settings, "tavily_api_key", "")
+    if not key:
+        return []
+    import httpx
+
+    async with httpx.AsyncClient(timeout=8) as client:
+        resp = await client.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": key,
+                "query": query,
+                "max_results": max(1, min(count, 8)),
+                "search_depth": "basic",
+                "include_answer": True,
+            },
+        )
+    if resp.status_code >= 300:
+        log.warning("tavily http=%s", resp.status_code, extra={"code": "DINE-A3011"})
+        return []
+
+    payload = resp.json()
+    out: list[dict] = []
+    if payload.get("answer"):
+        out.append({
+            "title": "Summary",
+            "url": "",
+            "summary": str(payload["answer"])[:400],
+            "age": "",
+            "source": "tavily",
+        })
+    for r in (payload.get("results") or [])[:count]:
+        out.append({
+            "title": r.get("title", ""),
+            "url": r.get("url", ""),
+            "summary": (r.get("content") or "")[:400],
+            "age": r.get("published_date") or "",
+            "source": "tavily",
+        })
+    return out
+
+
