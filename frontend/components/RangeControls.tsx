@@ -88,6 +88,21 @@ export function shiftRange(range: Range, direction: -1 | 1): Range {
   return { from: localISODate(from), to: localISODate(to) };
 }
 
+
+/** "3 Aug" for one day, "1 – 31 Jul" within a month, "28 Jul – 3 Aug" across.
+ *  Short on purpose: this sits under a preset label in a narrow tile. */
+function shortSpan(r: Range): string {
+  const f = new Date(r.from + "T00:00:00");
+  const t = new Date(r.to + "T00:00:00");
+  const d = (x: Date) => x.getDate();
+  const m = (x: Date) => x.toLocaleDateString(undefined, { month: "short" });
+  if (r.from === r.to) return `${d(f)} ${m(f)}`;
+  if (f.getMonth() === t.getMonth() && f.getFullYear() === t.getFullYear()) {
+    return `${d(f)} – ${d(t)} ${m(t)}`;
+  }
+  return `${d(f)} ${m(f)} – ${d(t)} ${m(t)}`;
+}
+
 /** Which preset (if any) exactly matches the current range — so we can highlight it. */
 export function activePreset(range: Range): string | null {
   for (const p of RANGE_PRESETS) {
@@ -267,23 +282,28 @@ export function TimeRangePicker({
           // never lifted it above the toast — the toast was in a different
           // context entirely. Position is measured from the trigger below.
           style={{ top: pos.top, left: pos.left, width: pos.width }}
-          className="mise-pop fixed z-[100] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/50"
+          className="mise-pop fixed z-[100] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/60 ring-1 ring-black/5"
         >
-          <div className="flex border-b border-line">
-            {([["quick", "Quick"], ["relative", "Relative"], ["absolute", "Absolute"]] as const).map(
-              ([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setTab(k)}
-                  className={`flex-1 px-3 py-2.5 text-xs font-semibold transition ${
-                    tab === k ? "border-b-2 border-brand-500 text-fg" : "text-fg-faint hover:text-fg-soft"
-                  }`}
-                >
-                  {label}
-                </button>
-              ),
-            )}
+          <div className="flex items-center gap-1 border-b border-line bg-paper-2/40 p-1.5">
+            {([
+              ["quick", "Quick", "⚡"],
+              ["relative", "Relative", "↻"],
+              ["absolute", "Absolute", "📅"],
+            ] as const).map(([k, label, icon]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setTab(k)}
+                className={`mise-press flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  tab === k
+                    ? "bg-paper text-fg shadow-sm"
+                    : "text-fg-faint hover:bg-paper/60 hover:text-fg-soft"
+                }`}
+              >
+                <span aria-hidden className="text-[11px] opacity-70">{icon}</span>
+                {label}
+              </button>
+            ))}
           </div>
 
           <div className="p-3">
@@ -291,16 +311,35 @@ export function TimeRangePicker({
               <div className="grid grid-cols-2 gap-1.5">
                 {RANGE_PRESETS.map((p) => {
                   const on = active === p.key;
+                  // Show the dates each preset resolves to. "Last month" is a
+                  // guess until you see "1 Jul - 31 Jul"; with the dates there
+                  // is nothing to work out and nothing to get wrong.
+                  const r = p.make();
+                  const span = spanDays(r);
                   return (
                     <button
                       key={p.key}
                       type="button"
-                      onClick={() => apply(p.make())}
-                      className={`rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
-                        on ? "bg-brand-600 text-white" : "text-fg-soft hover:bg-paper-2"
+                      onClick={() => apply(r)}
+                      className={`mise-press rounded-xl border px-3 py-2 text-left transition ${
+                        on
+                          ? "border-transparent bg-brand-600 text-white shadow-sm"
+                          : "border-transparent text-fg-soft hover:border-line hover:bg-paper-2"
                       }`}
                     >
-                      {p.label}
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold">{p.label}</span>
+                        {span > 1 && (
+                          <span className={`text-[9px] tabular-nums ${on ? "text-white/70" : "text-fg-faint"}`}>
+                            {span}d
+                          </span>
+                        )}
+                      </span>
+                      <span className={`mt-0.5 block truncate text-[10px] tabular-nums ${
+                        on ? "text-white/80" : "text-fg-faint"
+                      }`}>
+                        {shortSpan(r)}
+                      </span>
                     </button>
                   );
                 })}
@@ -385,6 +424,21 @@ export function TimeRangePicker({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* What is selected right now. The trigger button is often covered by
+              this panel, so without it you lose track of what you are changing. */}
+          <div className="flex items-center justify-between gap-2 border-t border-line bg-paper-2/40 px-3 py-2">
+            <span className="truncate text-[11px] text-fg-faint">
+              Showing <b className="text-fg-soft">{rangeCaption(range)}</b>
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="mise-press shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium text-fg-faint transition hover:bg-paper hover:text-fg"
+            >
+              Close
+            </button>
           </div>
         </div>,
         document.body,
