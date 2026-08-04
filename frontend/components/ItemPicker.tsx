@@ -325,7 +325,14 @@ export function ItemPicker({
         ) : (
           <ul className="mt-2 grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
             {chosen.map(({ line, item }) => (
-              <li key={item.id} className="mise-pop rounded-lg border border-line bg-paper/80 px-3 py-2">
+              // The id lets a caller scroll to and ring ONE line — arriving from
+              // Inventory should land on that item's supplier row, not the top
+              // of the page with the row somewhere below the fold.
+              <li
+                key={item.id}
+                id={`picked-${item.id}`}
+                className="mise-pop scroll-mt-24 rounded-lg border border-line bg-paper/80 px-3 py-2"
+              >
                 {/* Row 1: name + remove. Row 2: quantity controls. Stacking the
                     qty inputs onto their own row keeps them usable on the
                     narrowest phones (no cramping the kg/g fields). */}

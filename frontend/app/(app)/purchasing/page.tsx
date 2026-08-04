@@ -170,9 +170,12 @@ export default function PurchasingPage() {
     const vendorId = params.get("vendor");
     if (vendorId) setVendorPick((prev) => ({ ...prev, [itemId]: vendorId }));
     window.history.replaceState(null, "", window.location.pathname); // one-shot
-    // land the user IN the composer: scroll to it, ring it, focus the first field
     setTab("new");
-    spotlight("indent-form");
+    // Land on THAT ITEM's row, not the top of the composer. Arriving from
+    // Inventory to "add a supplier" and then having to scroll down to find the
+    // line you came for is the same complaint as no deep link at all.
+    // Deferred a frame: the line only exists after setLines commits.
+    setTimeout(() => spotlight(`picked-${itemId}`), 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
