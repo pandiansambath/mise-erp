@@ -96,7 +96,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
   const exp = now ? elapsed(CAREER_START, now) : null;
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[#070a0f] text-[#e6edf5]">
+    <div className="relative min-h-dvh overflow-x-hidden bg-[#070a0f] text-[#e6edf5]">
       <ChainField intensity={entered ? 1 : 0.35} />
 
       {/* Warm the corners so the chain never fights the text for attention. */}
@@ -105,14 +105,17 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         className="pointer-events-none fixed inset-0"
         style={{
           background:
-            "radial-gradient(120% 80% at 50% 0%, rgba(217,119,66,.10), transparent 55%), radial-gradient(100% 70% at 50% 100%, rgba(10,14,20,.9), transparent 60%)",
+            // Copper from the top, teal from the bottom-left: the two strands' 
+            // colours bleeding into the page so the background and the content 
+            // read as one system.
+            "radial-gradient(110% 70% at 70% 0%, rgba(217,119,66,.11), transparent 55%), radial-gradient(90% 60% at 15% 85%, rgba(45,212,191,.09), transparent 60%), radial-gradient(100% 70% at 50% 100%, rgba(8,12,18,.92), transparent 60%)",
         }}
       />
 
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
       <main
-        className={`relative z-10 mx-auto flex min-h-dvh max-w-3xl flex-col items-center justify-center px-6 py-16 transition-all duration-700 ${
+        className={`relative z-10 mx-auto flex min-h-dvh max-w-3xl flex-col items-center justify-center px-5 py-12 sm:px-6 sm:py-16 transition-all duration-700 ${
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
@@ -128,7 +131,13 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
             <span
               aria-hidden
               className="absolute -inset-3 rounded-[2rem] opacity-60 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
-              style={{ background: "conic-gradient(from 0deg, #d97742, transparent, #d97742)" }}
+              // Both strands, orbiting. A single-hue halo reads as a glow;
+              // two make it look like the same system the background runs.
+              style={{
+                background:
+                  "conic-gradient(from 0deg, #d97742, #2dd4bf, transparent, #d97742)",
+                animation: "devSpin 8s linear infinite",
+              }}
             />
             <span className="absolute inset-0 overflow-hidden rounded-3xl border border-white/10">
               <img
@@ -189,6 +198,11 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           <p className="text-center font-mono text-[10px] tracking-[0.3em] text-[#d97742]">
             TIME IN THE CHAIN
           </p>
+          <div
+            aria-hidden
+            className="mx-auto mt-2 h-px w-24"
+            style={{ background: "linear-gradient(90deg, transparent, #d97742, #2dd4bf, transparent)" }}
+          />
           <p className="mt-2 text-center text-5xl font-semibold tabular-nums tracking-tight">
             {exp ? exp.decimal : "—"}
             <span className="ml-2 text-base font-normal text-[#5b6e85]">years</span>
@@ -225,9 +239,9 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
               href={l.href}
               target={l.href.startsWith("mailto") ? undefined : "_blank"}
               rel="noopener noreferrer"
-              className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#d97742]/40 hover:bg-[#d97742]/[0.06]"
+              className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2dd4bf]/40 hover:bg-[#2dd4bf]/[0.06]"
             >
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/30 font-mono text-xs text-[#7d93ad] transition-colors group-hover:border-[#d97742]/40 group-hover:text-[#f0a064]">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/30 font-mono text-xs text-[#7d93ad] transition-colors group-hover:border-[#2dd4bf]/40 group-hover:text-[#7df0dc]">
                 {l.glyph}
               </span>
               <span className="min-w-0">

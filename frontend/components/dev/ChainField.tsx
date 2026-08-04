@@ -40,6 +40,22 @@ const BLOCKS_PER_STRAND = 34;
 const STRANDS = 2;
 const HEX = "0123456789abcdef";
 
+// One colour per strand. Copper is the product's; teal is the counterweight —
+// warm against cool, both legible on near-black, and it gives the two helixes
+// an identity instead of being one colour drawn twice.
+//
+// Held as raw channels so alpha can be varied per-frame without building
+// hundreds of rgba() strings in the draw loop.
+const STRAND_RGB: [number, number, number][] = [
+  [217, 119, 66],   // copper
+  [45, 212, 191],   // teal
+];
+const STRAND_HOT: [number, number, number][] = [
+  [240, 160, 100],  // copper, lit
+  [125, 240, 220],  // teal, lit
+];
+const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+
 function shortHash(seed: number): string {
   // Deterministic so the same block keeps its label across frames.
   let h = "";
@@ -86,8 +102,16 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
 
     // A transaction is just a position along the chain that advances and lights
     // up whatever it passes.
+    // TWO transactions, one per strand, travelling in OPPOSITE directions.
+    // They are the thing that makes the field feel like a system under load
+    // rather than a screensaver — and when they pass each other, they collide.
     let txPos = -1;
     let txTimer = 1.2;
+    let txPos2 = -1;
+    let txTimer2 = 2.6;
+    // Where two transactions met, and how long ago. Drives the shockwave.
+    let collideAt = -1;
+    let collideAge = 0;
     // Mining: every couple of seconds a random block churns its hash and then
     // locks. This is what makes it read as a CHAIN doing work rather than a
     // spiral of dots.
@@ -159,6 +183,26 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
           }
         }
 
+        // The counter-transaction, running backwards along the other strand.
+        if (txPos2 >= 0) {
+          txPos2 -= dt * 0.48;
+          if (txPos2 < 0) txPos2 = -1;
+        } else {
+          txTimer2 -= dt;
+          if (txTimer2 <= 0) {
+            txPos2 = 1;
+            txTimer2 = 3.2 + Math.random() * 3;
+          }
+        }
+
+        // Collision: both live and passing through the same point. The two
+        // strands are not decoration, they are two flows meeting.
+        if (txPos >= 0 && txPos2 >= 0 && Math.abs(txPos - txPos2) < 0.015 && collideAge <= 0) {
+          collideAt = (txPos + txPos2) / 2;
+          collideAge = 1;
+        }
+        if (collideAge > 0) collideAge = Math.max(0, collideAge - dt * 0.85);
+
         // Start mining a new block now and then.
         mineTimer -= dt;
         if (mineTimer <= 0) {
@@ -206,7 +250,15 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         pz[i] = depth;
 
         if (b.flash > 0) b.flash = Math.max(0, b.flash - dt * 2.2);
-        if (txPos >= 0 && Math.abs(b.t - txPos) < 0.02) b.flash = 1;
+        // Each transaction lights only its own strand — that is what makes two
+        // flows readable as two rather than one wide one.
+        if (b.strand === 0 && txPos >= 0 && Math.abs(b.t - txPos) < 0.02) b.flash = 1;
+        if (b.strand === 1 && txPos2 >= 0 && Math.abs(b.t - txPos2) < 0.02) b.flash = 1;
+        // A collision lights BOTH strands, and wider — the point is that it
+        // reads as an event, not another pulse going by.
+        if (collideAge > 0 && Math.abs(b.t - collideAt) < 0.06) {
+          b.flash = Math.max(b.flash, collideAge);
+        }
 
         // Near the cursor? Wake up. Squared distance — no sqrt in a loop that
         // runs 68 times a frame.
@@ -231,8 +283,8 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
           ctx.moveTo(px[a], py[a]);
           ctx.lineTo(px[c], py[c]);
           ctx.strokeStyle = lit > 0
-            ? `rgba(217, 119, 66, ${(0.25 + lit * 0.75) * amp})`
-            : `rgba(120, 150, 180, ${(0.05 + near * 0.13) * amp})`;
+            ? rgba(STRAND_HOT[s], (0.25 + lit * 0.75) * amp)
+            : rgba(STRAND_RGB[s], (0.06 + near * 0.16) * amp);
           ctx.lineWidth = lit > 0 ? 1.8 : 0.6 + near * 0.7;
           ctx.stroke();
 
@@ -252,8 +304,8 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
             ctx.beginPath();
             ctx.ellipse(0, 0, Math.min(len * 0.3, 9), 3.1 + near * 1.4, 0, 0, Math.PI * 2);
             ctx.strokeStyle = lit > 0
-              ? `rgba(240, 160, 100, ${(0.4 + lit * 0.6) * amp})`
-              : `rgba(140, 170, 200, ${(0.07 + near * 0.16) * amp})`;
+              ? rgba(STRAND_HOT[s], (0.4 + lit * 0.6) * amp)
+              : rgba(STRAND_RGB[s], (0.09 + near * 0.2) * amp);
             ctx.lineWidth = 1.1;
             ctx.stroke();
             ctx.restore();
@@ -270,8 +322,14 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         ctx.beginPath();
         ctx.moveTo(px[a], py[a]);
         ctx.lineTo(px[c], py[c]);
-        ctx.strokeStyle = `rgba(120, 150, 180, ${(0.03 + near * 0.07) * amp})`;
-        ctx.lineWidth = 0.5;
+        // A gradient, not a flat line: this rung physically spans copper to
+        // teal, so drawing it in one colour would hide the only place the two
+        // systems actually touch.
+        const grad = ctx.createLinearGradient(px[a], py[a], px[c], py[c]);
+        grad.addColorStop(0, rgba(STRAND_RGB[0], (0.05 + near * 0.12) * amp));
+        grad.addColorStop(1, rgba(STRAND_RGB[1], (0.05 + near * 0.12) * amp));
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 0.7;
         ctx.stroke();
       }
 
@@ -285,7 +343,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         if (glow > 0) {
           ctx.beginPath();
           ctx.arc(px[i], py[i], size * (2.2 + glow * 2), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(217, 119, 66, ${0.16 * glow * amp})`;
+          ctx.fillStyle = rgba(STRAND_RGB[b.strand], 0.18 * glow * amp);
           ctx.fill();
         }
 
@@ -295,7 +353,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         if (b.sealed > 0) {
           ctx.beginPath();
           ctx.arc(px[i], py[i], size * (1.5 + (1 - b.sealed) * 6), 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(240, 160, 100, ${b.sealed * 0.5 * amp})`;
+          ctx.strokeStyle = rgba(STRAND_HOT[b.strand], b.sealed * 0.55 * amp);
           ctx.lineWidth = 1.2;
           ctx.stroke();
         }
@@ -305,7 +363,7 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
           ctx.beginPath();
           const sweep = spin * 6;
           ctx.arc(px[i], py[i], size * 2.1, sweep, sweep + Math.PI * 1.2);
-          ctx.strokeStyle = `rgba(240, 160, 100, ${0.55 * amp})`;
+          ctx.strokeStyle = rgba(STRAND_HOT[b.strand], 0.6 * amp);
           ctx.lineWidth = 1.4;
           ctx.stroke();
         }
@@ -317,17 +375,43 @@ export function ChainField({ intensity = 1 }: { intensity?: number }) {
         const y0 = py[i] - size / 2;
         ctx.roundRect(x0, y0, size, size, r);
         ctx.fillStyle = glow > 0
-          ? `rgba(240, 160, 100, ${(0.5 + glow * 0.5) * amp})`
-          : `rgba(150, 180, 210, ${(0.10 + near * 0.42) * amp})`;
+          ? rgba(STRAND_HOT[b.strand], (0.5 + glow * 0.5) * amp)
+          : rgba(STRAND_RGB[b.strand], (0.12 + near * 0.45) * amp);
         ctx.fill();
 
         // Hash labels only on the nearest blocks — every block labelled is
         // noise, a few labelled reads as a ledger.
         if (near > 0.86 && size > 8) {
           ctx.font = "9px ui-monospace, monospace";
-          ctx.fillStyle = `rgba(150, 180, 210, ${(near - 0.86) * 2.2 * amp})`;
+          ctx.fillStyle = rgba(STRAND_RGB[b.strand], (near - 0.86) * 2.4 * amp);
           ctx.fillText(`0x${b.hash}`, px[i] + size, py[i] + 3);
         }
+      }
+
+      // ── The collision ────────────────────────────────────────────────────
+      // Drawn last so it sits over everything. Two rings expanding from where
+      // the flows met, one in each colour, chasing each other outward — the
+      // two systems briefly interfering rather than politely coexisting.
+      if (collideAge > 0) {
+        // Find the meeting point in screen space by interpolating down the
+        // helix, rather than storing it: the helix is still turning, so a
+        // remembered x/y would drift away from the chain within a frame.
+        const y = cy + (collideAt - 0.5) * span;
+        const age = 1 - collideAge; // 0 at impact, 1 as it fades
+        for (let k = 0; k < 2; k++) {
+          ctx.beginPath();
+          ctx.arc(cx + tiltX * 40, y, 12 + age * (150 + k * 40), 0, Math.PI * 2);
+          ctx.strokeStyle = rgba(STRAND_HOT[k], collideAge * (0.5 - k * 0.15) * amp);
+          ctx.lineWidth = 2.4 - k * 0.9;
+          ctx.stroke();
+        }
+        // A brief flare at the point itself.
+        const flare = ctx.createRadialGradient(cx + tiltX * 40, y, 0, cx + tiltX * 40, y, 90);
+        flare.addColorStop(0, rgba(STRAND_HOT[0], collideAge * 0.22 * amp));
+        flare.addColorStop(0.5, rgba(STRAND_HOT[1], collideAge * 0.1 * amp));
+        flare.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = flare;
+        ctx.fillRect(cx + tiltX * 40 - 90, y - 90, 180, 180);
       }
 
       if (running && !reduced) raf = requestAnimationFrame(draw);
