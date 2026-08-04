@@ -11,6 +11,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -83,6 +84,49 @@ class StockMovement(Base):
     reference_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     reference_type: Mapped[str | None] = mapped_column(String(30))
     notes: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class VendorItemAlias(Base):
+    """A confirmed answer to "which of my items is this supplier's name for?".
+
+    The point is that it COMPOUNDS. Without it, every weekly price list asks the
+    same forty questions and people stop importing. With it, the first upload
+    teaches the mapping and every later one is exact.
+
+    Scoped to a vendor when known, because suppliers name things differently and
+    one shop's shorthand should not answer for another's. A null vendor_id is a
+    hotel-wide alias, used only when no vendor-specific one exists.
+
+    `original_text` keeps what was actually written, since `alias_text` is the
+    normalised form — when reviewing the list later, "TOMATOS 1KG BOX" is
+    recognisable in a way that "tomato" is not.
+    """
+
+    __tablename__ = "vendor_item_aliases"
+    __table_args__ = (
+        UniqueConstraint(
+            "hotel_id", "vendor_id", "alias_text", name="uq_alias_hotel_vendor_text"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="CASCADE")
+    )
+    # The normalised form — what lookups compare against.
+    alias_text: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    # What the supplier actually wrote, kept so the list is readable by a human.
+    original_text: Mapped[str | None] = mapped_column(String(200))
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("items.id", ondelete="CASCADE"), nullable=False
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

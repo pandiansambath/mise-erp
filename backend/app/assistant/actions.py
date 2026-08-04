@@ -24,6 +24,7 @@ from app.employees import service as employee_service
 from app.employees.models import Employee
 from app.expenses import service as expense_service
 from app.expenses.models import Expense
+from app.inventory import matching
 from app.inventory import service as inventory_service
 from app.inventory.models import Item, MovementType
 from app.purchasing import service as purchasing_service
@@ -308,12 +309,44 @@ async def execute(db: AsyncSession, user: User, kind: str, fields: dict) -> dict
             }
         undo = {}  # the previous choice isn't stored to restore
     elif kind == "vendor_price":
-        item = await _find_item(db, hotel, f["item"])
-        if item is None:
-            return {"ok": False, "error": f"No stock item matches '{f['item']}'."}
         vendor = await _find_vendor(db, hotel, f["vendor"])
         if vendor is None:
             return {"ok": False, "error": f"No supplier matches '{f['vendor']}'."}
+
+        # An explicit item_id means the user already answered the "which item?"
+        # question in the UI — trust it, and remember the answer so this
+        # supplier's wording is translated automatically next time.
+        if f.get("item_id"):
+            item = await db.get(Item, uuid.UUID(str(f["item_id"])))
+            if item is None or item.hotel_id != hotel:
+                return {"ok": False, "error": "That stock item no longer exists."}
+            await matching.remember(
+                db, hotel, f["item"], item.id, vendor_id=vendor.id, user_id=user.id
+            )
+        else:
+            match = await resolve_item(db, hotel, f["item"], vendor_id=vendor.id)
+            if not match.certain:
+                # Do not guess. Hand back the options so the user can choose,
+                # because a price on the wrong item is silently wrong for ever.
+                return {
+                    "ok": False,
+                    "needs_choice": True,
+                    "field": "item",
+                    "query": f["item"],
+                    "error": (
+                        f"I could not tell which item “{f['item']}” is."
+                        if not match.candidates
+                        else f"Which item is “{f['item']}”?"
+                    ),
+                    "candidates": [
+                        {"id": str(c.item_id), "name": c.name, "score": c.score}
+                        for c in match.candidates
+                    ],
+                }
+            item = await db.get(Item, match.item_id)
+            if item is None:
+                return {"ok": False, "error": f"No stock item matches '{f['item']}'."}
+
         await vendor_service.upsert_vendor_item(db, vendor.id, item.id, Decimal(f["price"]))
         undo = {}
     elif kind == "stock_count":
@@ -402,12 +435,33 @@ def _recipe_fields(f: dict) -> dict:
 
 
 async def _find_item(db: AsyncSession, hotel: uuid.UUID, name: str) -> Item | None:
-    """Resolve a stock item by exact name, else a loose contains-match."""
+    """Resolve a stock item, but only when we are CERTAIN.
+
+    Returns None rather than a best guess. Callers turn that into a question for
+    the user — see `resolve_item`, which carries the candidates so the answer is
+    a choice rather than a dead end.
+    """
     item = await inventory_service.get_item_by_name(db, hotel, name)
-    if item is None:
-        items = await inventory_service.list_items(db, hotel)
-        item = next((i for i in items if name.lower() in (i.name or "").lower()), None)
-    return item
+    if item is not None:
+        return item
+    result = await matching.resolve(db, hotel, name)
+    if result.certain and result.item_id:
+        return await db.get(Item, result.item_id)
+    return None
+
+
+async def resolve_item(
+    db: AsyncSession, hotel: uuid.UUID, name: str, vendor_id: uuid.UUID | None = None
+) -> matching.MatchResult:
+    """Full match result, including candidates when it is unsure.
+
+    The old behaviour was a substring test in ONE direction: "tomatos" is not
+    inside "tomato", so a supplier's plural killed the whole import with "item
+    not found". Now a normalised form matches it exactly, and anything still
+    ambiguous comes back as candidates for the user to pick from — never as a
+    silent guess, because a price attached to the wrong item is invisible.
+    """
+    return await matching.resolve(db, hotel, name, vendor_id=vendor_id)
 
 
 async def _find_vendor(db: AsyncSession, hotel: uuid.UUID, name: str) -> Vendor | None:

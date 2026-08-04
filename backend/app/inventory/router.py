@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import Column, TemplateSpec
 from app.inventory import export, service
-from app.inventory.models import Item, MovementType
+from app.inventory.models import Item, VendorItemAlias
 from app.inventory.schemas import (
     CategoryRename,
     ItemCreate,
@@ -32,6 +32,7 @@ from app.inventory.schemas import (
     WasteRow,
 )
 from app.vendors import service as vendor_service
+from app.vendors.models import MovementType, Vendor
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -535,3 +536,54 @@ async def import_template_commit(
             summary=f"Imported {len(created)} items from a template", entity_type="items",
         )
     return {"created": created, "skipped": skipped, "linked": linked, "notes": notes}
+
+
+# ── Supplier name translations ──────────────────────────────────────────────
+# A vendor's "Tomatos 1kg Box" means your "Tomato". Once confirmed, that answer
+# is remembered so the same question is never asked twice. Kept visible and
+# deletable on purpose: a remembered decision that is WRONG would otherwise be
+# wrong silently for ever, which is the one real risk of making them permanent.
+
+
+@router.get("/aliases")
+async def list_aliases(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:read")),
+) -> list[dict]:
+    """Every supplier wording this hotel has confirmed, newest first."""
+    rows = await db.execute(
+        select(VendorItemAlias, Item, Vendor)
+        .join(Item, VendorItemAlias.item_id == Item.id)
+        .outerjoin(Vendor, VendorItemAlias.vendor_id == Vendor.id)
+        .where(VendorItemAlias.hotel_id == user.hotel_id)
+        .order_by(VendorItemAlias.created_at.desc())
+    )
+    return [
+        {
+            "id": str(alias.id),
+            # What the supplier actually wrote — the normalised form is not
+            # recognisable to a human reviewing this list.
+            "supplier_wording": alias.original_text or alias.alias_text,
+            "item_id": str(item.id),
+            "item_name": item.name,
+            "vendor_id": str(vendor.id) if vendor else None,
+            "vendor_name": vendor.name if vendor else "any supplier",
+            "created_at": alias.created_at.isoformat(),
+        }
+        for alias, item, vendor in rows.all()
+    ]
+
+
+@router.delete("/aliases/{alias_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_alias(
+    alias_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> Response:
+    """Forget one translation. The next import will ask again."""
+    row = await db.get(VendorItemAlias, alias_id)
+    if row is None or row.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such alias")
+    await db.delete(row)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
