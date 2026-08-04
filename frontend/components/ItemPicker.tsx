@@ -73,7 +73,16 @@ export function weighedParts(unit: string): { big: string; sub: string } | null 
     inventory, recipes etc. all read the same way. */
 export function fmtQty(quantity: string | number, unit: string): string {
   const parts = weighedParts(unit);
-  if (!parts) return `${quantity} ${unit}`;
+  if (!parts) {
+    // Numeric(12,3) comes back as "23.000", and printing it raw gave
+    // "have 23.000 pack" beside a tidy "have 17 kg" — it reads as a bug even
+    // though the number is right. Trim the trailing zeros a decimal column
+    // always carries, and keep any decimals that actually mean something
+    // ("1.5 pack" stays 1.5).
+    const n = typeof quantity === "number" ? quantity : parseFloat(quantity);
+    if (!Number.isFinite(n)) return `${quantity} ${unit}`;
+    return `${Number(n.toFixed(3))} ${unit}`;
+  }
   const { big, sub } = parts;
   const q = typeof quantity === "number" ? quantity : parseFloat(quantity) || 0;
   const whole = Math.floor(q);
@@ -323,7 +332,12 @@ export function ItemPicker({
             Tap items above to add them here, then enter how much you need.
           </p>
         ) : (
-          <ul className="mt-2 grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+          // No inner scrollbar until the list is genuinely long. A short list
+          // inside its own scroll area gave two scrollbars on one screen and a
+          // cramped window for two items — the page can just grow instead.
+          <ul className={`mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 ${
+            chosen.length > 6 ? "max-h-96 overflow-y-auto pr-1" : ""
+          }`}>
             {chosen.map(({ line, item }) => (
               // The id lets a caller scroll to and ring ONE line — arriving from
               // Inventory should land on that item's supplier row, not the top
