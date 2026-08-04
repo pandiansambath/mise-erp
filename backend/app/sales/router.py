@@ -1,5 +1,6 @@
 """Daily sales & cash endpoints. Hotel-scoped."""
 import uuid
+from datetime import UTC, datetime
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -13,10 +14,13 @@ from app.core import template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import Column, TemplateSpec
+from app.expenses.models import Expense
 from app.hotels.models import Hotel
+from app.sales import cash, service
 from app.sales import pdf as sales_pdf
-from app.sales import service
+from app.sales.models import PettyCash
 from app.sales.schemas import (
+    CashEventOut,
     ChannelCreate,
     ChannelOut,
     ChannelUpdate,
@@ -27,6 +31,9 @@ from app.sales.schemas import (
     DishSalesIn,
     DishSalesOut,
     LineCreate,
+    PettyCashOut,
+    PettyCashSettle,
+    PettyCashTake,
     RangeSummary,
 )
 
@@ -195,6 +202,7 @@ async def upsert_day(
         cash_counted=payload.cash_counted,
         notes=payload.notes,
         entered_by=user.id,
+        reason=payload.reason,
     )
     return DayCreatedOut.model_validate(record)
 
@@ -272,3 +280,109 @@ async def set_dish_sales(
     )
     counts = await service.list_dish_sales(db, user.hotel_id, day)
     return DishSalesOut(date=day, counts=[DishCount(recipe_id=k, qty=v) for k, v in counts.items()])
+
+
+# ── Petty cash & the cash trail ──────────────────────────────────────────────
+# Money that leaves the till in someone's hand is the commonest reason a drawer
+# will not balance, and until now nothing recorded it.
+
+
+@router.get("/days/{day}/petty", response_model=list[PettyCashOut])
+async def list_petty(
+    day: date_type,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:read")),
+) -> list[PettyCashOut]:
+    rows = await cash.petty_for(db, user.hotel_id, day)
+    return [PettyCashOut.model_validate(r) for r in rows]
+
+
+@router.post("/days/{day}/petty", response_model=PettyCashOut, status_code=status.HTTP_201_CREATED)
+async def take_petty(
+    day: date_type,
+    payload: PettyCashTake,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:write")),
+) -> PettyCashOut:
+    """Someone took money out of the till. The drawer is short by this until
+    they come back — which is exactly what the expected figure now says."""
+    row = PettyCash(
+        hotel_id=user.hotel_id,
+        date=day,
+        taken_amount=payload.taken_amount,
+        purpose=payload.purpose,
+        taken_by=payload.taken_by,
+        created_by=user.id,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return PettyCashOut.model_validate(row)
+
+
+@router.post("/petty/{petty_id}/settle", response_model=PettyCashOut)
+async def settle_petty(
+    petty_id: uuid.UUID,
+    payload: PettyCashSettle,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:write")),
+) -> PettyCashOut:
+    """They came back: this much was spent, this much returned.
+
+    The spend becomes a real expense so it reaches the P&L, and the drawer stops
+    counting the float as missing. Refuses to settle when spent + returned does
+    not equal what was taken — that difference is unexplained money, and quietly
+    accepting it is exactly how a till goes wrong without anyone noticing.
+    """
+    row = await db.get(PettyCash, petty_id)
+    if row is None or row.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such petty-cash record")
+    if row.status == "SETTLED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "That float is already settled")
+
+    total = payload.spent_amount + payload.returned_amount
+    if total != row.taken_amount:
+        diff = row.taken_amount - total
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Spent + returned must equal the {row.taken_amount} taken. "
+            f"That leaves {diff} unaccounted for.",
+        )
+
+    # Book the spend as an expense, so it is in the P&L as well as the till.
+    if payload.spent_amount > 0 and payload.category_id is not None:
+        expense = Expense(
+            hotel_id=user.hotel_id,
+            category_id=payload.category_id,
+            date=row.date,
+            amount=payload.spent_amount,
+            payment_method="CASH",
+            notes=payload.note or row.purpose or "Petty cash",
+            entered_by=user.id,
+        )
+        db.add(expense)
+        await db.flush()
+        row.expense_id = expense.id
+
+    row.spent_amount = payload.spent_amount
+    row.returned_amount = payload.returned_amount
+    row.status = "SETTLED"
+    row.settled_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(row)
+    return PettyCashOut.model_validate(row)
+
+
+@router.get("/days/{day}/cash-history", response_model=list[CashEventOut])
+async def cash_history(
+    day: date_type,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("sales:read")),
+) -> list[CashEventOut]:
+    """Every change ever made to this day's cash figures, newest first.
+
+    Read-only by design: the history is append-only, so there is no endpoint
+    that edits or deletes one. An audit trail you can rewrite is not an audit
+    trail.
+    """
+    return [CashEventOut.model_validate(e) for e in await cash.history_for(db, user.hotel_id, day)]
