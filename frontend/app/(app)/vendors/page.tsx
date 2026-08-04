@@ -18,6 +18,7 @@ import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars } from "@/components/charts";
 import { spotlight, useDeepLink } from "@/components/fx";
 import { FormShell } from "@/components/EditModal";
+import { SubNav } from "@/components/SubNav";
 import { VendorLedger } from "@/components/VendorLedger";
 import { ItemPickerSingle } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
@@ -338,6 +339,39 @@ export default function VendorsPage() {
         subtitle="Your suppliers and what each one sells. Set an item's price here so it can be costed and ordered."
       />
 
+      <SubNav
+        items={[
+          {
+            key: "add",
+            label: "Add supplier",
+            icon: "＋",
+            onSelect: () => { cancelVendorEdit(); spotlight("vendor-form"); },
+          },
+          {
+            key: "owed",
+            label: "Who I owe",
+            icon: "💷",
+            onSelect: () => {
+              // Straight into the supplier you spend most with, on the Money
+              // tab — the question is "who do I owe", not "open a vendor".
+              const top = [...spend].sort(
+                (a, b) => (parseFloat(b.total) || 0) - (parseFloat(a.total) || 0),
+              )[0];
+              const match = vendors.find((v) => v.name === top?.vendor_name) ?? vendors[0];
+              if (match) { setSheetTab("money"); selectVendor(match.id); }
+            },
+          },
+          {
+            key: "rises",
+            label: "Price rises",
+            icon: "↗",
+            count: spend.reduce((n, r) => n + (r.price_rises ?? 0), 0),
+            tone: "warn",
+            onSelect: () => spotlight("vendor-spend"),
+          },
+        ]}
+      />
+
       <div className="mb-6 rounded-xl border border-line bg-paper-2 p-4 text-sm text-fg-soft">
         <b>How it works:</b> add a vendor → open them → add the items they supply <i>with a price</i>. Those prices feed{" "}
         <b>Price Comparison</b> and let <b>Purchasing</b> turn an indent into a PO. An item with no
@@ -444,7 +478,7 @@ export default function VendorsPage() {
       )}
 
       {spend.length > 0 && (
-        <Card className="mise-feel mb-6">
+        <Card className="mise-feel mb-6 scroll-mt-24" id="vendor-spend">
           <div className="flex items-baseline justify-between">
             <h3 className="font-semibold text-fg">Who gets your money</h3>
             <span className="text-xs text-fg-faint">received orders · last 90 days</span>

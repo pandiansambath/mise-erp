@@ -932,8 +932,8 @@ export default function AiScanPage() {
                 send();
               }
             }}
-            placeholder="Send a photo, or ask me anything about your kitchen…"
-            className="max-h-32 min-h-[2.5rem] flex-1 resize-none bg-transparent px-1 py-2 text-sm text-fg outline-none placeholder:text-fg-faint"
+            placeholder="Ask, or send a file…"
+            className="max-h-32 min-h-[2.75rem] flex-1 resize-none overflow-hidden bg-transparent px-1 py-2 text-sm text-fg outline-none placeholder:text-fg-faint"
           />
           <button
             type="button"

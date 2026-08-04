@@ -19,6 +19,7 @@ import {
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
+import { SubNav } from "@/components/SubNav";
 import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
 import { categoryEmoji, fmtQty, QtyInput, stockState } from "@/components/ItemPicker";
@@ -26,7 +27,7 @@ import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { noDigits, numeric } from "@/lib/sanitize";
 import { useConfirm } from "@/components/confirm";
 import { CURRENCIES, useCurrency } from "@/lib/currency";
-import { AnimatedNumber } from "@/components/fx";
+import { AnimatedNumber, spotlight } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 
@@ -750,6 +751,51 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      {/* What this page can DO, said out loud. Everything below was reachable
+          only by knowing where to look. */}
+      <SubNav
+        items={[
+          {
+            key: "add",
+            label: "Add item",
+            icon: "＋",
+            onSelect: () => {
+              cancelEdit();
+              revealForm(formRef.current, { select: true });
+            },
+          },
+          {
+            key: "search",
+            label: "Find an item",
+            icon: "🔍",
+            onSelect: () => {
+              setStatusFilter("all");
+              setCatFilter("all");
+              setVendorFocus("all");
+              spotlight("inventory-search");
+            },
+          },
+          {
+            key: "low",
+            label: "Running low",
+            icon: "⚠",
+            count: counts.low + counts.out,
+            tone: counts.out > 0 ? "bad" : "warn",
+            onSelect: () => {
+              setStatusFilter(counts.out > 0 ? "out" : "low");
+              spotlight("inventory-search");
+            },
+          },
+          {
+            key: "categories",
+            label: "Categories",
+            icon: "🗂",
+            onSelect: () => setCatMgr(true),
+          },
+        ]}
+        active={statusFilter === "low" || statusFilter === "out" ? "low" : undefined}
+      />
+
       {notice && (
         <p className="mt-3 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-sm text-brand-200">
           {notice}
@@ -1150,7 +1196,7 @@ export default function InventoryPage() {
           {/* Search + filters */}
           <div className="mb-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-0 flex-1 sm:max-w-md">
+              <div id="inventory-search" className="relative min-w-0 flex-1 scroll-mt-24 sm:max-w-md">
                 <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint">🔍</span>
                 <input
                   value={q}

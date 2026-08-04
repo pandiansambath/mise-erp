@@ -23,7 +23,10 @@ refusal text says which words to change rather than just saying no.
 prompt does the rest of the work. Anyone extending this should assume it can be
 worded around and keep the model's own instructions strict too.
 
-Off unless WEB_SEARCH_API_KEY is set, same as every other integration here.
+Off unless WEB_SEARCH_API_KEY is set, same as every other integration here. The
+provider is Serper (a thin API over Google's results) rather than Brave, because
+Brave's free tier demands a card and an integration nobody can switch on is not
+an integration.
 """
 from __future__ import annotations
 
@@ -129,13 +132,19 @@ async def search(query: str, count: int = 5) -> dict:
     try:
         import httpx
 
+        # Serper (serper.dev) — a thin API over Google's own results, with a
+        # free tier that needs no card. Chosen over Brave for exactly that
+        # reason: an integration nobody can switch on is not an integration.
+        # Google's index also matters here, because half these questions are
+        # local ("paneer suppliers Birmingham") and that is where Google is
+        # strongest.
         async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(
-                "https://api.search.brave.com/res/v1/web/search",
-                params={"q": query, "count": max(1, min(count, 10)), "country": "GB"},
+            resp = await client.post(
+                "https://google.serper.dev/search",
+                json={"q": query, "num": max(1, min(count, 10)), "gl": "gb"},
                 headers={
-                    "Accept": "application/json",
-                    "X-Subscription-Token": settings.web_search_api_key,
+                    "X-API-KEY": settings.web_search_api_key,
+                    "Content-Type": "application/json",
                 },
             )
         if resp.status_code >= 300:
@@ -144,14 +153,27 @@ async def search(query: str, count: int = 5) -> dict:
             )
             return {"error": "The search service didn't answer. Try again in a moment."}
 
+        payload = resp.json()
         results = []
-        for r in (resp.json().get("web", {}) or {}).get("results", [])[:count]:
+        # An answer box, when Google has one, is usually the best single result
+        # for a factual question — put it first rather than burying it.
+        box = payload.get("answerBox") or {}
+        if box.get("answer") or box.get("snippet"):
+            results.append(
+                {
+                    "title": box.get("title", "Direct answer"),
+                    "url": box.get("link", ""),
+                    "summary": (box.get("answer") or box.get("snippet") or "")[:400],
+                    "age": "",
+                }
+            )
+        for r in (payload.get("organic") or [])[:count]:
             results.append(
                 {
                     "title": r.get("title", ""),
-                    "url": r.get("url", ""),
-                    "summary": (r.get("description") or "")[:400],
-                    "age": r.get("age") or "",
+                    "url": r.get("link", ""),
+                    "summary": (r.get("snippet") or "")[:400],
+                    "age": r.get("date") or "",
                 }
             )
         return {
