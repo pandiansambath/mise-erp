@@ -18,6 +18,8 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { useBackToClose } from "./useBackToClose";
+
 export function DetailSheet({
   open,
   onClose,
@@ -49,6 +51,9 @@ export function DetailSheet({
   width?: "md" | "lg";
 }) {
   const panel = useRef<HTMLDivElement>(null);
+
+  // Back closes the overlay rather than leaving the page.
+  useBackToClose(open, onClose);
 
   useEffect(() => {
     if (!open) return;

@@ -87,11 +87,20 @@ function JobBoardCard() {
     employment_type: string; location: string | null; created_at: string; applications: number;
   };
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
   const load = useCallback(
     () =>
-      api.get<{ postings: Row[] }>("/platform/jobs").then((r) => setRows(r.postings)).catch(() => setRows([])),
+      api
+        .get<{ postings: Row[] }>("/platform/jobs")
+        .then((r) => { setRows(r.postings); setLoadErr(null); })
+        // Swallowing the error made a FAILED request look identical to "there
+        // are no postings" — which is exactly how a 403 read as an empty board.
+        .catch((e) => {
+          setRows([]);
+          setLoadErr(e instanceof ApiError ? e.message : "Could not load the job board.");
+        }),
     [],
   );
 
@@ -121,6 +130,8 @@ function JobBoardCard() {
         <div className="mise-fade mt-4">
           {rows === null ? (
             <p className="py-3 text-center text-sm text-fg-faint">Loading…</p>
+          ) : loadErr ? (
+            <p className="py-3 text-center text-sm text-rose-300">{loadErr}</p>
           ) : rows.length === 0 ? (
             <p className="py-3 text-center text-sm text-fg-faint">No postings anywhere yet.</p>
           ) : (
@@ -679,7 +690,24 @@ function HotelCard({
             title="Open this hotel's app on a 15-minute READ-ONLY token (audited)"
             onClick={async () => {
               const r = await api.post<{ token: string }>(`/platform/hotels/${hotel.id}/impersonate`, {});
-              window.open(`/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
+              // Open on the APEX domain, not this subdomain.
+              //
+              // A relative URL kept this on controlroom.<domain>, where the
+              // impersonation token was written to `mise_token` — the very key
+              // holding the OPERATOR's own session, on the same origin. The
+              // operator was signed out of their own Control Room by using it:
+              // every /platform call then 403'd, which is why "View as" looked
+              // like it wanted a login and the job board looked empty.
+              //
+              // The apex is a different origin, so it has its own localStorage
+              // and the two sessions cannot overwrite each other.
+              const host = window.location.hostname;
+              const apex = host.split(".").slice(-2).join(".");
+              const base =
+                host === "localhost" || /^\d+(\.\d+){3}$/.test(host)
+                  ? window.location.origin
+                  : `${window.location.protocol}//${apex}`;
+              window.open(`${base}/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
             }}
             className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-violet-300"
           >
