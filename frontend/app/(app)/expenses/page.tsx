@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
 import { SubNav } from "@/components/SubNav";
+import { recall, remember } from "@/lib/rangeMemory";
 import { Bars, Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
@@ -54,8 +55,12 @@ export default function ExpensesPage() {
     setCategories(await api.get<ExpenseCategory[]>("/expenses/categories"));
   };
 
-  const [from, setFrom] = useState(monthStart());
-  const [to, setTo] = useState(today());
+  // Start from what the user last chose THIS SESSION, falling back to the
+  // page's default. Expenses default to the month because a single day of
+  // overheads answers nothing.
+  const remembered = typeof window === "undefined" ? null : recall("expenses");
+  const [from, setFrom] = useState(remembered?.from ?? monthStart());
+  const [to, setTo] = useState(remembered?.to ?? today());
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const sort = useSort<"date" | "category" | "amount">("date", "desc");
@@ -111,6 +116,7 @@ export default function ExpensesPage() {
   function applyRange(f: string, t: string) {
     setFrom(f);
     setTo(t);
+    remember("expenses", { from: f, to: t });
     setLoading(true);
     loadData(f, t).finally(() => setLoading(false));
   }

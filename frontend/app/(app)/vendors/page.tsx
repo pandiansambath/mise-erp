@@ -121,7 +121,19 @@ export default function VendorsPage() {
 
   // Deep link from Inventory's "+ add supplier": /vendors?new=1 lands the user
   // ON the add-vendor form, scrolled in, ringed, first field focused.
-  useDeepLink({ new: () => spotlight("vendor-form") }, !loading);
+  useDeepLink(
+    {
+      new: () => spotlight("vendor-form"),
+      // /vendors?vendor=<id> opens that supplier's sheet. Price Comparison links
+      // here so "who are they, what else do they sell, what do I owe them" is
+      // one tap from the price that raised the question.
+      vendor: () => {
+        const id = new URLSearchParams(window.location.search).get("vendor");
+        if (id && vendors.some((v) => v.id === id)) selectVendor(id);
+      },
+    },
+    !loading && vendors.length > 0,
+  );
 
   function selectVendor(id: string) {
     setSelected(id);

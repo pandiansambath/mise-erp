@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, downloadFile, type PnL } from "@/lib/api";
 import { Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { recall, remember } from "@/lib/rangeMemory";
 import { Bars, Donut, Meter } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
@@ -47,8 +48,11 @@ export default function ReportsPage() {
   const { format, currency } = useCurrency();
   const rate = CURRENCIES[currency].rate;
   const symbol = CURRENCIES[currency].symbol;
-  const [from, setFrom] = useState(monthStart());
-  const [to, setTo] = useState(today());
+  // Session memory, falling back to the page default. A P&L defaults to the
+  // MONTH because one day of profit is not a report.
+  const remembered = typeof window === "undefined" ? null : recall("reports");
+  const [from, setFrom] = useState(remembered?.from ?? monthStart());
+  const [to, setTo] = useState(remembered?.to ?? today());
   const [pnl, setPnl] = useState<PnL | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +75,7 @@ export default function ReportsPage() {
   }, []);
 
   function applyRange(f: string, t: string) {
+    remember("reports", { from: f, to: t });
     setFrom(f);
     setTo(t);
     setLoading(true);

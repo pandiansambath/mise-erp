@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type CashEvent, type DaySummary, type ExpenseCategory, type PettyCashRow, type SalesChannel } from "@/lib/api";
 import { PettyCash } from "@/components/PettyCash";
 import { SubNav } from "@/components/SubNav";
+import { recall, remember } from "@/lib/rangeMemory";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
 import { Select } from "@/components/Select";
@@ -31,7 +32,11 @@ export default function SalesPage() {
     setChannels(await api.get<SalesChannel[]>("/sales/channels"));
   };
 
-  const [day, setDay] = useState(today());
+  // Sales defaults to TODAY, not a range: a till is counted daily, and
+  // yesterday's takings are not what you open this page for. Still remembered
+  // within a session so stepping back a day survives a trip to another page.
+  const rememberedDay = typeof window === "undefined" ? null : recall("sales");
+  const [day, setDay] = useState(rememberedDay?.from ?? today());
   const [summary, setSummary] = useState<DaySummary | null>(null);
   const [pettyRows, setPettyRows] = useState<PettyCashRow[]>([]);
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
@@ -110,6 +115,7 @@ export default function SalesPage() {
   }, []);
 
   async function changeDay(d: string) {
+    remember("sales", { from: d, to: d });
     setDay(d);
     setLoading(true);
     await loadDay(d).finally(() => setLoading(false));
