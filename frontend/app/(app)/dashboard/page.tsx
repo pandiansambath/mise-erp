@@ -11,6 +11,7 @@ import { api, type DashboardKpis, type PnL, type POSummary } from "@/lib/api";
 import { AreaChart, Bars, CalendarHeat, Donut, Meter, type DonutSegment } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
+import { Onboarding } from "@/components/Onboarding";
 import { DailyBriefing } from "@/components/DailyBriefing";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -237,6 +238,11 @@ export default function DashboardPage() {
           </Button>
         }
       />
+
+      {/* A new restaurant lands here on a dashboard of zeroes with nothing
+          saying which of fifteen sections to open first. This names the next
+          step and removes itself once there is nothing left to do. */}
+      <Onboarding hotelName={hotel?.name} />
 
       {/* What changed since yesterday, and what to do about it. */}
       <DailyBriefing />
