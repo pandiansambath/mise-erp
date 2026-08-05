@@ -224,6 +224,85 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     return await _fallback(db, user, history, req.route, collected, configured=False)
 
 
+async def answer_stream(db: AsyncSession, user: User, req: ChatRequest):
+    """The same answer, narrated as it is worked out.
+
+    Yields the events the panel renders live: what it thought, which tool it
+    reached for, then the reply a few words at a time. The final `done` carries
+    everything the buffered endpoint would have returned — reply, actions,
+    proposals, trace — so the client ends up in exactly the same state either
+    way, and a dropped `delta` costs nothing.
+
+    Falls back to the deterministic answer for the same reason `answer` does:
+    if Bedrock is unreachable, a real reply beats an error.
+    """
+    from app.hotels.models import Hotel
+
+    hotel = await db.get(Hotel, user.hotel_id)
+    hotel_name = getattr(hotel, "name", None) or "this restaurant"
+
+    prior = ""
+    if req.thread_id:
+        from app.assistant import memory
+
+        prior = await memory.carryover(db, user, req.thread_id)
+    history = [{"role": m.role, "content": m.content} for m in req.messages]
+    collected: list[dict] = []
+    proposals: list[dict] = []
+    trace: list[dict] = []
+
+    async def execute(name: str, args: dict) -> dict:
+        fn = EXECUTORS.get(name)
+        if fn is None:
+            return {"error": f"unknown tool {name}"}
+        result = await fn(db, user, args)
+        collected.extend(result.get("actions") or [])
+        if result.get("proposal"):
+            proposals.append(result["proposal"])
+        return result
+
+    meter: dict = {}
+    try:
+        async for ev in brain.generate_stream(
+            system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
+            history=history,
+            tools=tools_for(user, hotel),
+            execute=execute,
+            attachment=req.attachment.model_dump() if req.attachment else None,
+            model=await guard.model_for(db, user),
+            meter=meter,
+        ):
+            kind = ev.get("type")
+            if kind == "thought":
+                trace.append({"kind": "thought", "text": ev["text"]})
+                yield ev
+            elif kind == "tool":
+                trace.append({"kind": "tool", "name": ev["name"], "input": ev.get("input", "")})
+                yield ev
+            elif kind == "delta":
+                yield ev
+            elif kind == "done":
+                reply, choices = _split_choices(ev.get("text") or "")
+                if not reply:
+                    break  # nothing usable — take the deterministic route below
+                final = ChatResponse(
+                    reply=reply,
+                    choices=choices,
+                    actions=_dedupe(collected),
+                    pending_actions=[ProposedAction(**p) for p in proposals],
+                    used_tools=ev.get("tools") or [],
+                    trace=trace,
+                    configured=True,
+                )
+                yield {"type": "done", "response": final.model_dump(mode="json"), "meter": meter}
+                return
+    except brain.BrainError:
+        collected.clear()
+
+    fallback = await _fallback(db, user, history, req.route, collected, configured=False)
+    yield {"type": "done", "response": fallback.model_dump(mode="json"), "meter": meter}
+
+
 # ── No-LLM fallback ────────────────────────────────────────────────────────────
 _LOW_WORDS = (
     "low", "running out", "run out", "reorder", "re-order",

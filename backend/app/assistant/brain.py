@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-from app.assistant import bedrock
+from app.assistant import bedrock, streaming
 
 log = logging.getLogger("mise.assistant.brain")
 
@@ -60,20 +60,17 @@ def _to_anthropic_tools(tools: list[dict]) -> list[dict]:
     ]
 
 
-async def generate(
-    *,
-    system: str,
+def build_messages(
     history: list[dict],
-    tools: list[dict],
-    execute: ExecuteFn,
     attachment: dict | None = None,
-    model: str = "",
-    meter: dict[str, Any] | None = None,
-    # Filled in as it works, so the caller can show what happened rather than a
-    # spinner. Optional: nothing depends on it being collected.
-    trace: list[dict] | None = None,
-) -> tuple[str, list[str]]:
-    """One assistant turn, tools included. Returns (reply, tools it used)."""
+) -> list[dict[str, Any]]:
+    """Turn the conversation (and any attachment) into Anthropic messages.
+
+    Shared by the buffered and streaming paths. Kept in one place because the
+    attachment handling below is the fiddliest code in this file and already
+    had a bug where a non-image file uploaded, was dropped, and the model was
+    then asked about nothing.
+    """
     messages: list[dict[str, Any]] = []
     for turn in history[-12:]:
         role = "assistant" if turn.get("role") == "assistant" else "user"
@@ -137,6 +134,24 @@ async def generate(
                         },
                     )
 
+    return messages
+
+
+async def generate(
+    *,
+    system: str,
+    history: list[dict],
+    tools: list[dict],
+    execute: ExecuteFn,
+    attachment: dict | None = None,
+    model: str = "",
+    meter: dict[str, Any] | None = None,
+    # Filled in as it works, so the caller can show what happened rather than a
+    # spinner. Optional: nothing depends on it being collected.
+    trace: list[dict] | None = None,
+) -> tuple[str, list[str]]:
+    """One assistant turn, tools included. Returns (reply, tools it used)."""
+    messages = build_messages(history, attachment)
     spec = _to_anthropic_tools(tools)
     used: list[str] = []
 
@@ -206,3 +221,94 @@ async def generate(
                 raise BrainError(str(exc)) from exc
 
     return "", used
+
+
+async def generate_stream(
+    *,
+    system: str,
+    history: list[dict],
+    tools: list[dict],
+    execute: ExecuteFn,
+    attachment: dict | None = None,
+    model: str = "",
+    meter: dict[str, Any] | None = None,
+) -> AsyncIterator[dict]:
+    """The same turn, narrated as it happens.
+
+    Yields, in order: `thought` and `tool` events while it works, `delta`
+    events as the reply is written, and one final `done` carrying the whole
+    text so the client never has to reassemble fragments it may have missed.
+
+    Why the deltas are held back on early laps: you cannot know whether a lap
+    ends in an answer or a tool call until the blocks arrive. Forwarding text
+    from a lap that then calls a tool would type the model's private "let me
+    check the sales" out as if it were the reply.
+    """
+    messages = build_messages(history, attachment)
+    spec = _to_anthropic_tools(tools)
+    used: list[str] = []
+    queue: list[str] = []
+
+    async def emit(piece: str) -> None:
+        queue.append(piece)
+
+    for lap in range(MAX_LAPS):
+        body: dict[str, Any] = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1600,
+            "system": bedrock._cached_system(system),
+            "messages": messages,
+        }
+        # The last lap gets no tools: it must answer from what it has rather
+        # than spending another round-trip it does not have left.
+        if spec and lap < MAX_LAPS - 1:
+            body["tools"] = spec
+
+        queue.clear()
+        try:
+            text, calls, usage = await streaming._one_lap(body, model, on_delta=emit)
+        except bedrock.BedrockUnavailable as exc:
+            raise BrainError(str(exc)) from exc
+
+        if meter is not None:
+            meter["model"] = model or bedrock._model_id()
+            for key, value in usage.items():
+                meter[key] = meter.get(key, 0) + value
+
+        if not calls:
+            # This lap WAS the answer. Everything buffered is real reply text.
+            for piece in queue:
+                yield {"type": "delta", "text": piece}
+            yield {"type": "done", "text": text, "tools": used}
+            return
+
+        # Otherwise it is thinking out loud on the way to a tool.
+        if text.strip():
+            yield {"type": "thought", "text": text.strip()[:400]}
+
+        blocks: list[dict] = []
+        if text.strip():
+            blocks.append({"type": "text", "text": text})
+        blocks.extend(calls)
+        messages.append({"role": "assistant", "content": blocks})
+
+        results = []
+        for c in calls:
+            name = c.get("name", "")
+            used.append(name)
+            yield {"type": "tool", "name": name, "input": _brief(c.get("input") or {})}
+            try:
+                out = await execute(name, c.get("input") or {})
+            except Exception as exc:  # noqa: BLE001 — one bad tool must not kill the turn
+                log.warning("tool %s failed", name, exc_info=True)
+                out = {"error": str(exc)[:200]}
+            results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": c.get("id"),
+                    "content": json.dumps(out, default=str)[:6000],
+                }
+            )
+        messages.append({"role": "user", "content": results})
+
+    yield {"type": "done", "text": "", "tools": used}
