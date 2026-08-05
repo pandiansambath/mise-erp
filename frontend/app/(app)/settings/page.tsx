@@ -6,6 +6,7 @@ import HotelSite, { DEFAULT_LANDING, HERO_STYLES, LANDING_THEMES, PALETTES } fro
 import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { rippleEnabled, setRippleEnabled } from "@/lib/ripplePref";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { numeric } from "@/lib/sanitize";
 
@@ -58,6 +59,10 @@ function senderEmail(): string {
 export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
   const { user, hotel, refreshHotel } = useAuth();
+  const [ripple, setRipple] = useState(true);
+  useEffect(() => {
+    setRipple(rippleEnabled(hotel?.id));
+  }, [hotel?.id]);
   const isAdmin = user?.role === "SUPER_ADMIN";
 
   const [allowance, setAllowance] = useState("0");
@@ -365,6 +370,32 @@ export default function SettingsPage() {
             📱 SMS codes to your phone are coming later (needs an SMS provider) — email codes
             work today.
           </p>
+
+          {/* Motion comfort, per restaurant. Kept on this device rather than in
+              the database on purpose: it is a preference about what a screen
+              does to the person looking at it, and one operator should not be
+              deciding that for every member of staff. */}
+          <div className="mise-well mt-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-0.5 text-lg" aria-hidden>💧</span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-fg">Ripple when you tap</p>
+                <p className="text-xs text-fg-faint">
+                  a ring spreads from wherever you touch, like a drop in water — turn it off
+                  if you would rather the screen stayed still
+                </p>
+              </div>
+            </div>
+            <Switch
+              on={ripple}
+              onToggle={() => {
+                const next = !ripple;
+                setRipple(next);
+                if (hotel?.id) setRippleEnabled(hotel.id, next);
+              }}
+              label="Ripple when you tap"
+            />
+          </div>
         </div>
       </Card>
 

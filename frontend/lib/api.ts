@@ -43,15 +43,33 @@ export function setTabToken(token: string) {
   window.sessionStorage.setItem(TOKEN_KEY, token);
 }
 
-export function clearToken() {
-  window.localStorage.removeItem(TOKEN_KEY);
-  // Signing out must end a support session too, or closing it would leave a
-  // live token behind in the tab.
+/** Is THIS tab running on a tab-scoped support session? */
+export function isTabSession(): boolean {
+  if (typeof window === "undefined") return false;
   try {
-    window.sessionStorage.removeItem(TOKEN_KEY);
+    return window.sessionStorage.getItem(TOKEN_KEY) !== null;
   } catch {
-    /* private mode */
+    return false;
   }
+}
+
+export function clearToken() {
+  // A support tab must only ever clear ITSELF.
+  //
+  // This was the bug behind "the Control Room also logs me out": the support
+  // view runs on the same origin, `/auth/me` failed there for its own reasons,
+  // and the catch called clearToken() — which wiped localStorage too, taking
+  // the operator's Control Room login with it. One tab's failure must never
+  // sign somebody out of another.
+  try {
+    if (window.sessionStorage.getItem(TOKEN_KEY) !== null) {
+      window.sessionStorage.removeItem(TOKEN_KEY);
+      return;
+    }
+  } catch {
+    /* private mode — fall through to the normal sign-out */
+  }
+  window.localStorage.removeItem(TOKEN_KEY);
 }
 
 /** POST that reads server-sent events as they arrive.

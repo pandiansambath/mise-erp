@@ -696,12 +696,25 @@ function HotelCard({
             title="Open this hotel's app on a 15-minute READ-ONLY token (audited)"
             onClick={async () => {
               const r = await api.post<{ token: string }>(`/platform/hotels/${hotel.id}/impersonate`, {});
-              // Same origin is fine now: the support tab keeps its session in
-              // sessionStorage, which is per-TAB. Relying on the apex being a
-              // different origin was the bug — the Control Room is reachable at
-              // dineai.cloud/control-room too, where it is the SAME origin, and
-              // the support token overwrote the operator's own login.
-              window.open(`/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
+              // Open the HOTEL's app, on the apex — belt and braces.
+              //
+              // The session is already tab-scoped (sessionStorage), which alone
+              // stops the two logins colliding. But the support view is the
+              // restaurant's app, and serving it from controlroom.dineai.cloud
+              // meant the operator's Control Room and a hotel's dashboard shared
+              // one origin and one storage area for no reason at all. Different
+              // origin, different everything.
+              const host = window.location.hostname;
+              const apex = host.split(".").slice(-2).join(".");
+              const base =
+                host === "localhost" || /^\d+(\.\d+){3}$/.test(host)
+                  ? window.location.origin
+                  : `${window.location.protocol}//${apex}`;
+              window.open(
+                `${base}/impersonate#t=${encodeURIComponent(r.token)}`,
+                "_blank",
+                "noopener",
+              );
             }}
             className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-violet-300"
           >
