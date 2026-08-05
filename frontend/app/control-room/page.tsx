@@ -6,6 +6,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, ApiError } from "@/lib/api";
+import { spotlight } from "@/components/fx";
+import { SubNav } from "@/components/SubNav";
 import { Badge, Button, Card, PageHeader, Spinner, StatCard, Toggle } from "@/components/ui";
 import { DeleteHotel } from "@/components/DeleteHotel";
 import { OperatorAI } from "@/components/OperatorAI";
@@ -61,7 +63,7 @@ function OperatorAuditCard() {
     <Card className="mise-feel mb-6 p-0">
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 [&::-webkit-details-marker]:hidden">
-          <h3 className="font-semibold text-fg">🧾 Operator audit trail</h3>
+          <h3 id="cr-audit" className="scroll-mt-24 font-semibold text-fg">🧾 Operator audit trail</h3>
           <span className="text-xs text-fg-faint">
             {events.length} actions · <span className="group-open:hidden">show ▾</span>
             <span className="hidden group-open:inline">hide ▴</span>
@@ -123,7 +125,7 @@ function JobBoardCard() {
     <Card className="mb-6">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
         <div>
-          <h3 className="font-semibold text-fg">🧑‍💼 Job board</h3>
+          <h3 id="cr-jobs" className="scroll-mt-24 font-semibold text-fg">🧑‍💼 Job board</h3>
           <p className="text-xs text-fg-faint">every vacancy on the public /careers board — close or remove anything, audited</p>
         </div>
         <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▼</span>
@@ -228,7 +230,7 @@ function OperatorsCard() {
     <Card className="mb-6">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
         <div>
-          <h3 className="font-semibold text-fg">🔐 Operator accounts</h3>
+          <h3 id="cr-operators" className="scroll-mt-24 font-semibold text-fg">🔐 Operator accounts</h3>
           <p className="text-xs text-fg-faint">who can open this Control Room — add a colleague, cut access instantly, all audited</p>
         </div>
         <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-180" : ""}`}>▼</span>
@@ -377,7 +379,7 @@ function AnnouncementsCard() {
 
   return (
     <Card className="mise-feel mb-6">
-      <h3 className="font-semibold text-fg">📣 Broadcast to all hotels</h3>
+      <h3 id="cr-broadcast" className="scroll-mt-24 font-semibold text-fg">📣 Broadcast to all hotels</h3>
       <p className="text-xs text-fg-faint">a dismissible banner in every hotel&apos;s app — maintenance notices, new features, price changes</p>
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <div className="min-w-[16rem] flex-1">
@@ -906,7 +908,37 @@ export default function ControlRoomPage() {
         {hotels.length - active > 0 && <span className="text-rose-300">{hotels.length - active} suspended</span>}
         <span className="ml-auto tabular-nums">{utc} UTC</span>
       </div>
-      <PageHeader title="All hotels" subtitle="Every restaurant on DineAI — flip features, reset access, all in one place." />
+      <PageHeader
+        title="All hotels"
+        subtitle="Every restaurant on DineAI — flip features, reset access, all in one place."
+        sticky
+        actions={
+          <div className="text-right">
+            <span className="block text-[10px] font-medium uppercase tracking-wide text-fg-faint">
+              fleet
+            </span>
+            <span className="block font-display text-lg font-semibold tabular-nums text-fg">
+              {active}/{hotels.length} live
+            </span>
+          </div>
+        }
+      />
+
+      {/* The Control Room is one very long page and an operator arrives with a
+          specific job — read the audit trail, post a broadcast, check the
+          funnel. Same sub-nav the rest of the app now has. */}
+      <SubNav
+        items={[
+          { key: "fleet", label: "Hotels", icon: "🏨", count: hotels.length, onSelect: () => spotlight("cr-fleet") },
+          { key: "audit", label: "Audit trail", icon: "🧾", onSelect: () => spotlight("cr-audit") },
+          { key: "ops", label: "Operators", icon: "🔐", onSelect: () => spotlight("cr-operators") },
+          { key: "jobs", label: "Job board", icon: "🧑\u200d💼", onSelect: () => spotlight("cr-jobs") },
+          { key: "cast", label: "Broadcast", icon: "📣", onSelect: () => spotlight("cr-broadcast") },
+          { key: "growth", label: "Signups", icon: "📈", onSelect: () => spotlight("cr-signups") },
+          { key: "funnel", label: "Funnel", icon: "🔻", onSelect: () => spotlight("cr-funnel") },
+          { key: "pricing", label: "Plans", icon: "💷", onSelect: () => spotlight("cr-pricing") },
+        ]}
+      />
 
       {/* The one assistant with a cross-hotel view. */}
       <OperatorAI />
@@ -924,7 +956,7 @@ export default function ControlRoomPage() {
       {hotels.length > 0 && (
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card className="mise-feel">
-            <h3 className="font-semibold text-fg">Signups — last 12 months</h3>
+            <h3 id="cr-signups" className="scroll-mt-24 font-semibold text-fg">Signups — last 12 months</h3>
             <p className="text-xs text-fg-faint">new hotels joining DineAI per month</p>
             {(() => {
               const now = new Date();
@@ -949,7 +981,7 @@ export default function ControlRoomPage() {
             })()}
           </Card>
           <Card className="mise-feel">
-            <h3 className="font-semibold text-fg">Fleet by plan</h3>
+            <h3 id="cr-plans-chart" className="scroll-mt-24 font-semibold text-fg">Fleet by plan</h3>
             <p className="text-xs text-fg-faint">who&apos;s on which tier</p>
             <div className="mt-4">
               <Donut
@@ -969,7 +1001,7 @@ export default function ControlRoomPage() {
       {hotels.length > 0 && (
         <Card className="mise-feel mb-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold text-fg">Signup funnel</h3>
+            <h3 id="cr-funnel" className="scroll-mt-24 font-semibold text-fg">Signup funnel</h3>
             <span className="text-xs text-fg-faint">signed up → actually trading</span>
           </div>
           {(() => {
@@ -1011,7 +1043,7 @@ export default function ControlRoomPage() {
         <Card className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="font-semibold text-fg">Plans &amp; pricing</h3>
+              <h3 id="cr-pricing" className="scroll-mt-24 font-semibold text-fg">Plans &amp; pricing</h3>
               <p className="text-xs text-fg-faint">Edit each plan&apos;s displayed price — it updates the public pricing page instantly.</p>
             </div>
             <button
@@ -1064,6 +1096,8 @@ export default function ControlRoomPage() {
           </button>
         ))}
       </div>
+
+      <div id="cr-fleet" className="scroll-mt-24" />
 
       {filtered.length === 0 ? (
         <Card><p className="text-sm text-fg-faint">No hotels match.</p></Card>
