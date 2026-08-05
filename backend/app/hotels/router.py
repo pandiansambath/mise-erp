@@ -10,6 +10,7 @@ from app.auth.schemas import HotelOut, HotelUpdate
 from app.core import timezones
 from app.core.database import get_db
 from app.core.storage import get_storage
+from app.hotels import onboarding
 from app.hotels.models import Hotel
 
 router = APIRouter(prefix="/hotels", tags=["hotels"])
@@ -22,6 +23,20 @@ async def list_timezones(user: User = Depends(get_current_user)) -> dict:
     """The zones Settings may offer. Served from the same list the server
     validates against, so the dropdown can never show an unaccepted option."""
     return {"timezones": timezones.CHOICES, "default": timezones.DEFAULT}
+
+
+@router.get("/onboarding")
+async def onboarding_status(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """What a new restaurant still has to set up, and what to do next.
+
+    Read-only and counted from real rows, so it cannot disagree with the app.
+    Everyone can see it — a manager filling in stock is exactly who this is
+    for, not only the owner.
+    """
+    return await onboarding.status(db, user.hotel_id)
 
 
 @router.get("/me", response_model=HotelOut)
