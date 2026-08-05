@@ -16,7 +16,13 @@ export default function ImpersonatePage() {
       return;
     }
     try {
-      localStorage.setItem("mise_token", token);
+      // sessionStorage, NOT localStorage: this tab gets its own session so the
+      // operator's Control Room login survives, even when the Control Room is
+      // open on the same origin. See getToken() in lib/api.ts.
+      sessionStorage.setItem("mise_token", token);
+      // These two stay in localStorage because that is where they are READ
+      // from. They only suppress a tour in the operator's own browser, so
+      // there is nothing to isolate — unlike the token.
       localStorage.setItem("mise.tour.done", "1");
       localStorage.setItem("mise.setup.done", "1");
     } catch {

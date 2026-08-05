@@ -12,6 +12,7 @@ import { useState } from "react";
 // written for a dark console and hard-coded text-white; the Control Room
 // follows the operator's theme, so on a light one every label was white on
 // cream — invisible. Tokens resolve correctly in both.
+import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { api, ApiError } from "@/lib/api";
 
 const OPENERS = [
@@ -83,13 +84,17 @@ export function OperatorAI() {
             {turns.map((t, i) => (
               <div key={i} className={t.who === "me" ? "text-right" : ""}>
                 <span
-                  className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${
+                  className={`inline-block max-w-[85%] rounded-2xl px-3.5 py-2 text-left text-sm ${
                     t.who === "me"
-                      ? "bg-amber-500/20 text-amber-100"
+                      ? "whitespace-pre-wrap bg-amber-500/20 text-amber-100"
                       : "border border-line bg-paper-2 text-fg"
                   }`}
                 >
-                  {t.text}
+                  {/* The model writes markdown — headings, bullets, **bold**,
+                      tables. Printed raw it reads like a .md file, which is
+                      exactly what it looked like. The hotel-facing chat has
+                      rendered it properly all along; this one never got it. */}
+                  {t.who === "me" ? t.text : <ChatMarkdown text={t.text} />}
                 </span>
               </div>
             ))}

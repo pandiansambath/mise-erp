@@ -10,17 +10,48 @@ export const API_BASE =
 
 const TOKEN_KEY = "mise_token";
 
+/** "View as hotel" runs in its own TAB, not its own origin.
+ *
+ *  The first attempt at this leaned on the apex being a different origin from
+ *  the Control Room's subdomain, so the two sessions would have separate
+ *  localStorage. But the Control Room is reachable at BOTH
+ *  `controlroom.dineai.cloud` and `dineai.cloud/control-room` — and on the
+ *  second one the origins are identical, so the support token landed on the
+ *  operator's own `mise_token` and signed them out of the Control Room. Every
+ *  /platform call then 403'd, which is what "View as asks me to log in" and
+ *  "the job board shows zero" both were.
+ *
+ *  sessionStorage is scoped to the TAB. A support view opened with
+ *  target=_blank gets its own, whatever the origin, so the operator's session
+ *  cannot be touched — and closing the tab ends the support session, which is
+ *  the right lifetime for a 15-minute read-only token anyway.
+ */
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  // Tab-scoped first: inside a support tab that IS the session.
+  return (
+    window.sessionStorage.getItem(TOKEN_KEY) ?? window.localStorage.getItem(TOKEN_KEY)
+  );
 }
 
 export function setToken(token: string) {
   window.localStorage.setItem(TOKEN_KEY, token);
 }
 
+/** Sign in for THIS TAB only. Used by the impersonation landing page. */
+export function setTabToken(token: string) {
+  window.sessionStorage.setItem(TOKEN_KEY, token);
+}
+
 export function clearToken() {
   window.localStorage.removeItem(TOKEN_KEY);
+  // Signing out must end a support session too, or closing it would leave a
+  // live token behind in the tab.
+  try {
+    window.sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* private mode */
+  }
 }
 
 /** POST that reads server-sent events as they arrive.
@@ -214,6 +245,10 @@ export interface UserOut {
   preferred_name?: string | null;
   is_platform_owner?: boolean; // the DineAI operator — unlocks the Control Room
   last_login?: string | null;
+  /** The designed role this person holds, if any. Without it the staff list
+   *  could only ever show the archetype, so "Kitchen Manager (view-only
+   *  payroll)" would display as plain "Manager". */
+  custom_role_id?: string | null;
 }
 
 export interface LandingConfig {

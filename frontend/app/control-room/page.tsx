@@ -694,24 +694,12 @@ function HotelCard({
             title="Open this hotel's app on a 15-minute READ-ONLY token (audited)"
             onClick={async () => {
               const r = await api.post<{ token: string }>(`/platform/hotels/${hotel.id}/impersonate`, {});
-              // Open on the APEX domain, not this subdomain.
-              //
-              // A relative URL kept this on controlroom.<domain>, where the
-              // impersonation token was written to `mise_token` — the very key
-              // holding the OPERATOR's own session, on the same origin. The
-              // operator was signed out of their own Control Room by using it:
-              // every /platform call then 403'd, which is why "View as" looked
-              // like it wanted a login and the job board looked empty.
-              //
-              // The apex is a different origin, so it has its own localStorage
-              // and the two sessions cannot overwrite each other.
-              const host = window.location.hostname;
-              const apex = host.split(".").slice(-2).join(".");
-              const base =
-                host === "localhost" || /^\d+(\.\d+){3}$/.test(host)
-                  ? window.location.origin
-                  : `${window.location.protocol}//${apex}`;
-              window.open(`${base}/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
+              // Same origin is fine now: the support tab keeps its session in
+              // sessionStorage, which is per-TAB. Relying on the apex being a
+              // different origin was the bug — the Control Room is reachable at
+              // dineai.cloud/control-room too, where it is the SAME origin, and
+              // the support token overwrote the operator's own login.
+              window.open(`/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
             }}
             className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-violet-300"
           >

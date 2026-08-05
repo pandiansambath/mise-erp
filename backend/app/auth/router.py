@@ -364,7 +364,37 @@ async def update_user(
     user = await service.get_user_by_id(db, user_id)
     if user is None or user.hotel_id != admin.hotel_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    user = await service.update_user(db, user, role=payload.role, is_active=payload.is_active)
+
+    # A designed role from ANOTHER restaurant would be a cross-tenant privilege
+    # grant — the single worst thing this endpoint could be talked into.
+    if payload.custom_role_id is not None:
+        from app.auth.models import CustomRole
+
+        cr = await db.get(CustomRole, payload.custom_role_id)
+        if cr is None or cr.hotel_id != admin.hotel_id or not cr.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="No such role"
+            )
+        # The base archetype must match the role the person holds, or the
+        # overrides were clipped against an envelope that no longer applies.
+        target_role = payload.role or user.role
+        if cr.base_role != target_role:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"“{cr.name}” is built on {cr.base_role.replace('_', ' ').title()}. "
+                    f"Set this person to that role first."
+                ),
+            )
+
+    user = await service.update_user(
+        db,
+        user,
+        role=payload.role,
+        is_active=payload.is_active,
+        custom_role_id=payload.custom_role_id,
+        clear_custom_role=payload.clear_custom_role,
+    )
     return UserOut.model_validate(user)
 
 
