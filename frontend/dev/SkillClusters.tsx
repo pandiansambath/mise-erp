@@ -1,0 +1,134 @@
+"use client";
+
+// What he works with, and where he studied — written out, not just orbiting.
+//
+// The orbit is the showpiece; this is the record. Two reasons it exists rather
+// than the orbit carrying everything:
+//
+// **Twenty chips will not fit on a phone.** Not at a readable size, not at any
+// radius. Shrinking them until they do produces something nobody can read on
+// the device most likely to open the page.
+//
+// **An orbit cannot be skimmed.** A recruiter looking for "does he know ECS"
+// should not have to wait for a chip to come round. Motion for delight,
+// columns for answers.
+//
+// The education block leads with the claim and puts the verification link
+// immediately beside it. A rank that cannot be checked is a rank nobody
+// believes.
+
+import { CLUSTERS, EDUCATION } from "@/dev/skills";
+
+export function SkillClusters({ entered }: { entered: boolean }) {
+  return (
+    <div className="w-full space-y-4">
+      {CLUSTERS.map((c, i) => (
+        <section
+          key={c.key}
+          className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
+          style={
+            entered
+              ? { animation: `devFadeUp .8s ${0.42 + i * 0.08}s ease-out both` }
+              : undefined
+          }
+        >
+          {/* A wash in the family's own colour, so the three blocks are
+              distinguishable at a glance without shouting. */}
+          <span
+            aria-hidden
+            className="absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-[0.13] blur-3xl transition-opacity duration-500 group-hover:opacity-25"
+            style={{ background: c.hue }}
+          />
+
+          <div className="relative flex items-baseline gap-2.5">
+            <span aria-hidden className="text-base" style={{ color: c.hue }}>
+              {c.glyph}
+            </span>
+            <h3 className="font-mono text-[11px] tracking-[0.24em]" style={{ color: c.hue }}>
+              {c.label.toUpperCase()}
+            </h3>
+            <span
+              aria-hidden
+              className="mb-1 h-px flex-1"
+              style={{ background: `linear-gradient(90deg, ${c.hue}55, transparent)` }}
+            />
+            <span className="font-mono text-[10px] tabular-nums text-[#4a5c70]">
+              {c.items.length}
+            </span>
+          </div>
+
+          <p className="relative mt-1.5 text-[12px] leading-relaxed text-[#7d93ad]">{c.blurb}</p>
+
+          <ul className="relative mt-3 flex flex-wrap gap-1.5">
+            {c.items.map((item) => (
+              <li
+                key={item}
+                className="rounded-lg border px-2.5 py-1 font-mono text-[11px] text-[#c3d3e4] transition-colors duration-300"
+                style={{
+                  borderColor: `${c.hue}2e`,
+                  background: `${c.hue}0f`,
+                }}
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {/* ── Education ────────────────────────────────────────────────────
+          The honour is the headline and the proof sits next to it. */}
+      <section
+        className="relative overflow-hidden rounded-2xl border border-[#d97742]/25 bg-[#d97742]/[0.05] p-4 backdrop-blur-sm sm:p-5"
+        style={entered ? { animation: "devFadeUp .8s .68s ease-out both" } : undefined}
+      >
+        <span
+          aria-hidden
+          className="absolute -left-12 -top-12 h-36 w-36 rounded-full bg-[#d97742] opacity-[0.16] blur-3xl"
+        />
+        <div className="relative flex items-baseline gap-2.5">
+          <span aria-hidden className="text-base text-[#f0a064]">
+            ⌾
+          </span>
+          <h3 className="font-mono text-[11px] tracking-[0.24em] text-[#f0a064]">EDUCATION</h3>
+          <span
+            aria-hidden
+            className="mb-1 h-px flex-1"
+            style={{ background: "linear-gradient(90deg, #d9774255, transparent)" }}
+          />
+        </div>
+
+        <p className="relative mt-2.5 text-lg font-semibold leading-snug text-[#e6edf5]">
+          {EDUCATION.honour}
+        </p>
+        <p className="relative mt-1 text-sm text-[#a9bdd2]">
+          {EDUCATION.degree} · {EDUCATION.year}
+        </p>
+
+        <a
+          href={EDUCATION.schoolUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="relative mt-2 block text-sm text-[#c3d3e4] underline-offset-4 transition hover:text-[#f0a064] hover:underline"
+        >
+          {EDUCATION.school}
+        </a>
+        <p className="relative mt-0.5 text-[12px] text-[#7d93ad]">{EDUCATION.affiliation}</p>
+
+        <a
+          href={EDUCATION.verifyUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="relative mt-3.5 inline-flex items-center gap-2 rounded-full border border-[#d97742]/40 bg-[#d97742]/10 px-3.5 py-1.5 font-mono text-[11px] text-[#f0a064] transition hover:border-[#d97742]/70 hover:bg-[#d97742]/20"
+        >
+          <span aria-hidden>✓</span>
+          verify on {EDUCATION.verifyLabel}
+          <span aria-hidden>↗</span>
+        </a>
+        <p className="relative mt-2 font-mono text-[10px] leading-relaxed text-[#4a5c70]">
+          {EDUCATION.exam}
+        </p>
+      </section>
+    </div>
+  );
+}

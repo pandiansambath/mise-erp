@@ -25,32 +25,15 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Body = { label: string; ring: number };
+import { HUE_OF, ORBIT_RINGS } from "@/dev/skills";
 
-// From the résumé, grouped by how close they are to the daily work. Ring 0 is
-// what he writes every day; ring 2 is what he reaches for.
-const BODIES: Body[] = [
-  { label: "Python", ring: 0 },
-  { label: "SQL", ring: 0 },
-  { label: "AWS", ring: 0 },
-  { label: "Django REST", ring: 1 },
-  { label: "Docker", ring: 1 },
-  { label: "Kubernetes", ring: 1 },
-  { label: "Terraform", ring: 1 },
-  { label: "Lambda", ring: 2 },
-  { label: "ECS", ring: 2 },
-  { label: "SQS", ring: 2 },
-  { label: "DynamoDB", ring: 2 },
-  { label: "Apache Camel", ring: 2 },
-  { label: "GitHub Actions", ring: 2 },
-];
-
-// radius in px, seconds per revolution, direction
-const RINGS = [
-  { r: 96, period: 26, dir: 1 },
-  { r: 148, period: 42, dir: -1 },
-  { r: 205, period: 64, dir: 1 },
-];
+// Radii are a FRACTION of the container, not pixels. The old fixed 96/148/205
+// meant the outer ring was off-screen on a phone — the device most likely to
+// open this page. Everything scales with the box now.
+// Kept comfortably inside the box: a chip sits ON its ring, so a radius of
+// exactly half the container would hang the outer labels over the edge and
+// give a phone a horizontal scrollbar.
+const RINGS = ORBIT_RINGS.map((r, i) => ({ ...r, frac: [0.245, 0.335, 0.425][i] }));
 
 export function SkillOrbit({ photos }: { photos: string[] }) {
   const [i, setI] = useState(0);
@@ -79,7 +62,7 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
   return (
     <div
       ref={wrap}
-      className="relative mx-auto grid aspect-square w-full max-w-[min(30rem,88vw)] place-items-center"
+      className="relative mx-auto grid aspect-square w-full max-w-[min(34rem,92vw)] place-items-center [container-type:size]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -90,8 +73,8 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
           aria-hidden
           className="absolute rounded-full border border-white/[0.06]"
           style={{
-            width: ring.r * 2,
-            height: ring.r * 2,
+            width: `${ring.frac * 200}%`,
+            height: `${ring.frac * 200}%`,
             // A whisper of the two brand strands, so the rings belong to the
             // same system as the chain background rather than sitting on top.
             boxShadow:
@@ -105,7 +88,7 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
       {/* Orbiting skills. One rotating shell per ring, each chip pinned to its
           own angle inside it, each chip counter-rotating so it stays upright. */}
       {RINGS.map((ring, ri) => {
-        const onRing = BODIES.filter((b) => b.ring === ri);
+        const onRing = ring.items;
         return (
           <div
             key={`o${ri}`}
@@ -120,29 +103,36 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
                   }
             }
           >
-            {onRing.map((b, bi) => {
+            {onRing.map((label, bi) => {
               const angle = (360 / onRing.length) * bi;
+              const hue = HUE_OF[label] ?? "#8aa0b6";
               return (
                 <span
-                  key={b.label}
+                  key={label}
                   className="absolute"
                   style={{
-                    transform: `rotate(${angle}deg) translateX(${ring.r}px) rotate(-${angle}deg)`,
+                    // translateX in % of the CHIP is meaningless, so the offset
+                    // rides on a wrapper sized to the ring instead.
+                    transform: `rotate(${angle}deg) translateX(${ring.frac * 100}cqw) rotate(-${angle}deg)`,
                   }}
                 >
                   <span
-                    className="block whitespace-nowrap rounded-full border border-white/10 bg-[#0d1219]/85 px-2.5 py-1 font-mono text-[10px] tracking-wide text-[#a9bdd2] backdrop-blur-sm sm:text-[11px]"
-                    style={
-                      still
-                        ? undefined
+                    className="block whitespace-nowrap rounded-full border bg-[#0d1219]/85 px-2 py-[3px] font-mono text-[9px] tracking-wide backdrop-blur-sm sm:px-2.5 sm:py-1 sm:text-[11px]"
+                    style={{
+                      // Coloured by family, so the orbit says WHICH world each
+                      // skill belongs to without a legend.
+                      borderColor: `${hue}44`,
+                      color: hue,
+                      ...(still
+                        ? {}
                         : {
                             // Undo the shell's rotation so the words stay level.
                             animation: `devOrbit ${ring.period}s linear infinite${ring.dir < 0 ? "" : " reverse"}`,
                             animationPlayState: paused ? "paused" : "running",
-                          }
-                    }
+                          }),
+                    }}
                   >
-                    {b.label}
+                    {label}
                   </span>
                 </span>
               );

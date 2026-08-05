@@ -34,12 +34,12 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 # Anchored to the repo root, not the working directory: this script moved into
-# pandi-dev/scripts/ and "python pandi-dev/scripts/build_dev_album.py" from
+# dev/scripts/ and "python dev/scripts/build_dev_album.py" from
 # anywhere must still find the same two folders.
 ROOT = Path(__file__).resolve().parent.parent.parent
 SRC = ROOT / "my_photos"
 # The images MUST stay under frontend/public — that is the only directory Next
-# serves statically. Everything else about this page lives in pandi-dev/.
+# serves statically. Everything else about this page lives in dev/.
 OUT = ROOT / "frontend" / "public" / "dev"
 TIERS = {"thumb": (720, 74), "full": (1800, 82)}
 LQIP_WIDTH = 24

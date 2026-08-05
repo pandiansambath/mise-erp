@@ -13,11 +13,11 @@ code."* So this is the map, and it is kept accurate.
 
 | What | Where | Why not here |
 |---|---|---|
-| **UI components** | `frontend/pandi-dev/*.tsx` | Next resolves `@/…` inside `frontend/`, so they must live in that tree. This is the only folder they're in. |
+| **UI components** | `frontend/dev/*.tsx` | Next resolves `@/…` inside `frontend/`, so they must live in that tree. This is the only folder they're in. |
 | **The route** | `frontend/app/dev/page.tsx` | Next requires routes under `app/`. Thin file: reads the env switch, loads the photo list, renders `DevProfile`. |
 | **Photos** | `frontend/public/dev/` | `public/` is the only directory Next serves statically. Built output — never hand-edited. |
 | **Source photos** | `my_photos/album/` | Gitignored originals off his phone. |
-| **Build + ops scripts** | `pandi-dev/scripts/` | ← you are here |
+| **Build + ops scripts** | `dev/scripts/` | ← you are here |
 | **Subdomain routing** | `frontend/middleware.ts` + `backend/app/api/site.py` | One line each: `pandi-dev` is recognised as a host and rewritten to `/dev`. Deliberately shared with the product's subdomain handling rather than duplicated. |
 
 ## The components
@@ -42,12 +42,12 @@ can never collide with the product's own motion vocabulary. Each has a
 
 ```bash
 # Rebuild the album from my_photos/album/ into three tiers (thumb/full/blur).
-python pandi-dev/scripts/build_dev_album.py
+python dev/scripts/build_dev_album.py
 
 # The kill switch. Takes the page down WITHOUT a deploy or a code change.
-bash pandi-dev/scripts/toggle_dev_site.sh off      # 404, as if it never existed
-bash pandi-dev/scripts/toggle_dev_site.sh on
-bash pandi-dev/scripts/toggle_dev_site.sh status
+bash dev/scripts/toggle_dev_site.sh off      # 404, as if it never existed
+bash dev/scripts/toggle_dev_site.sh on
+bash dev/scripts/toggle_dev_site.sh status
 ```
 
 `_dev_site_remote.sh` runs **on the EC2 box** and is invoked by
