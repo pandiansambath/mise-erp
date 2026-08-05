@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
+import { Select } from "@/components/Select";
 import { DetailSheet, SheetRing } from "@/components/DetailSheet";
 import {
   api,
@@ -85,6 +86,11 @@ export default function VendorsPage() {
 
   // add-price form
   const [piItem, setPiItem] = useState("");
+  // Creating a stock item without leaving the price you came here to enter.
+  // A unit is required — an item with no unit cannot be costed, ordered or
+  // put in a recipe — so this asks for one rather than guessing "each".
+  const [newItem, setNewItem] = useState<{ name: string; unit: string } | null>(null);
+  const [creating, setCreating] = useState(false);
   const priceRef = useRef<HTMLInputElement>(null);
   const [sheetTab, setSheetTab] = useState<"supply" | "price" | "money">("supply");
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
@@ -223,6 +229,28 @@ export default function VendorsPage() {
       selectVendor(selected);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save price");
+    }
+  }
+
+  async function createItemInline() {
+    if (!newItem || !newItem.name.trim() || !newItem.unit.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const made = await api.post<Item>("/inventory/items", {
+        name: newItem.name.trim(),
+        unit: newItem.unit.trim(),
+      });
+      // Put it in the list in memory so the picker can select it immediately —
+      // a refetch would work too, but this keeps the price form untouched.
+      setItems((prev) => [...prev, made]);
+      setPiItem(made.id);
+      setNewItem(null);
+      window.setTimeout(() => priceRef.current?.focus(), 60);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not create that item");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -744,7 +772,60 @@ export default function VendorsPage() {
                         // straight to the only remaining step
                         if (v) window.setTimeout(() => priceRef.current?.focus(), 60);
                       }}
+                      // A supplier selling something you have not stocked yet
+                      // used to mean leaving for Inventory and finding your way
+                      // back — by which time the price you came to enter is gone.
+                      onCreate={(name) => setNewItem({ name, unit: "kg" })}
                     />
+                    {newItem && (
+                      <div className="mise-pop mt-2 rounded-xl border border-brand-400/40 bg-brand-400/[0.06] p-3">
+                        <p className="text-xs font-medium text-fg">
+                          New stock item — what is it measured in?
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-fg-faint">
+                          The base unit it is STOCKED and COSTED in. Buying it by the box is
+                          fine — set the pack size later in Inventory.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <input
+                            value={newItem.name}
+                            onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                            className="mise-well min-w-0 flex-1 rounded-lg px-3 py-2 text-sm outline-none"
+                            placeholder="Item name"
+                          />
+                          <Select
+                            value={newItem.unit}
+                            onChange={(u: string) => setNewItem({ ...newItem, unit: u })}
+                            options={[
+                              { value: "kg", label: "kg" },
+                              { value: "g", label: "g" },
+                              { value: "litre", label: "litre" },
+                              { value: "ml", label: "ml" },
+                              { value: "each", label: "each" },
+                              { value: "pack", label: "pack" },
+                              { value: "bottle", label: "bottle" },
+                                            ]}
+                          />
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={createItemInline}
+                            disabled={creating || !newItem.name.trim()}
+                            className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                          >
+                            {creating ? "Creating…" : "Create and price it"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewItem(null)}
+                            className="rounded-lg px-3 py-1.5 text-xs text-fg-faint hover:text-fg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {/* Names what you picked, so you are never typing a price
                       against an item you cannot see. Not sticky any more: this

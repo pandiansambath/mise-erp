@@ -15,6 +15,7 @@ import {
   type ReorderSuggestion,
   type SupplierOption,
 } from "@/lib/api";
+import Link from "next/link";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
@@ -94,6 +95,30 @@ export default function PurchasingPage() {
   // "what does this cost me, and from whom" is a question you ask BEFORE
   // deciding, and it used to mean leaving the page.
   const [peekItem, setPeekItem] = useState<string | null>(null);
+  // Recorded price changes for whichever item is open. Fetched on demand
+  // rather than for every item in the picker — most are never opened.
+  const [peekHistory, setPeekHistory] = useState<
+    { vendor_name: string; old_price: string | null; new_price: string; source: string; at: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (!peekItem) {
+      setPeekHistory([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get<{ history: typeof peekHistory }>(`/vendors/items/${peekItem}/price-history`)
+      .then((r) => {
+        if (!cancelled) setPeekHistory(r.history);
+      })
+      .catch(() => {
+        if (!cancelled) setPeekHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [peekItem]);
   // The page is three jobs, not one long scroll: raise an order, track indents,
   // track POs. Stacking all three meant whatever you came for was usually below
   // the fold.
@@ -566,6 +591,50 @@ export default function PurchasingPage() {
                   </li>
                 ))}
               </ul>
+            )}
+
+            {/* What this item has actually cost, and who moved it. Asking "is
+                this price normal?" used to mean leaving a half-built indent to
+                go to Price Comparison. */}
+            {peekHistory.length > 0 && (
+              <div className="mt-5 border-t border-line pt-4">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Recent price changes
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {peekHistory.slice(0, 6).map((h, i) => {
+                    const was = h.old_price ? parseFloat(h.old_price) : null;
+                    const now = parseFloat(h.new_price) || 0;
+                    const up = was !== null && now > was;
+                    const down = was !== null && now < was;
+                    return (
+                      <li
+                        key={i}
+                        className="mise-well flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-fg-soft">{h.vendor_name}</span>
+                        {was !== null && (
+                          <span className="text-fg-faint">{format(h.old_price!)} →</span>
+                        )}
+                        <span
+                          className={`font-mono ${up ? "text-rose-300" : down ? "text-emerald-300" : "text-fg"}`}
+                        >
+                          {up ? "▲" : down ? "▼" : ""} {format(h.new_price)}
+                        </span>
+                        <span className="text-[10px] text-fg-faint">
+                          {h.source} · {new Date(h.at).toLocaleDateString()}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <Link
+                  href={`/price-comparison?item=${it.id}`}
+                  className="mt-2 inline-block text-[11px] text-brand-400 underline-offset-4 hover:underline"
+                >
+                  Full history and every supplier&apos;s line →
+                </Link>
+              </div>
             )}
           </DetailSheet>
         );
