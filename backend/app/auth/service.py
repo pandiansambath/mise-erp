@@ -116,12 +116,27 @@ async def purge_user(db: AsyncSession, user: User) -> str:
 
 
 async def update_user(
-    db: AsyncSession, user: User, *, role: str | None = None, is_active: bool | None = None
+    db: AsyncSession,
+    user: User,
+    *,
+    role: str | None = None,
+    is_active: bool | None = None,
+    custom_role_id=None,
+    clear_custom_role: bool = False,
 ) -> User:
     if role is not None:
         user.role = role
+        # Changing the archetype invalidates a custom role built on the old
+        # one: its overrides were clipped to a different envelope, and keeping
+        # it would silently apply permissions the new base may never hold.
+        if custom_role_id is None and not clear_custom_role:
+            user.custom_role_id = None
     if is_active is not None:
         user.is_active = is_active
+    if clear_custom_role:
+        user.custom_role_id = None
+    elif custom_role_id is not None:
+        user.custom_role_id = custom_role_id
     await db.commit()
     await db.refresh(user)
     return user

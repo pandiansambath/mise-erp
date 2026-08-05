@@ -20,6 +20,11 @@ export default function StaffPage() {
 
   const [users, setUsers] = useState<UserOut[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // The roles this hotel has DESIGNED. Building one and never being able to
+  // give it to anybody made the whole feature ornamental.
+  const [customRoles, setCustomRoles] = useState<
+    { id: string; name: string; base_role: string; is_active: boolean; permissions: string[] }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
 
@@ -43,6 +48,12 @@ export default function StaffPage() {
   }
 
   useEffect(() => {
+    api
+      .get<{ id: string; name: string; base_role: string; is_active: boolean; permissions: string[] }[]>(
+        "/roles",
+      )
+      .then((r) => setCustomRoles(r.filter((x) => x.is_active)))
+      .catch(() => setCustomRoles([]));
     if (!canRead) {
       setDenied(true);
       setLoading(false);
@@ -110,6 +121,20 @@ export default function StaffPage() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not remove the account");
+    }
+  }
+
+  async function assignCustomRole(u: UserOut, roleId: string) {
+    setError(null);
+    try {
+      await api.patch(`/auth/users/${u.id}`,
+        roleId
+          ? { custom_role_id: roleId }
+          : { clear_custom_role: true },
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not change that role");
     }
   }
 
@@ -259,14 +284,40 @@ export default function StaffPage() {
                       </td>
                       <td className="px-5 py-3">
                         {canWrite && !isSelf ? (
-                          <Select
-                            value={u.role}
-                            onChange={(v) => changeRole(u.id, v)}
-                            className="w-40"
-                            options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
-                          />
+                          <div className="space-y-1.5">
+                            <Select
+                              value={u.role}
+                              onChange={(v) => changeRole(u.id, v)}
+                              className="w-44"
+                              options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+                            />
+                            {/* Only the designed roles built on THIS archetype:
+                                a role's overrides were clipped to one envelope
+                                and mean nothing against another. Offering the
+                                rest would be offering a rejection. */}
+                            {customRoles.some((c) => c.base_role === u.role) && (
+                              <Select
+                                value={u.custom_role_id ?? ""}
+                                onChange={(v) => assignCustomRole(u, v)}
+                                className="w-44"
+                                options={[
+                                  { value: "", label: `— plain ${ROLE_LABELS[u.role] ?? u.role} —` },
+                                  ...customRoles
+                                    .filter((c) => c.base_role === u.role)
+                                    .map((c) => ({ value: c.id, label: `⚙ ${c.name}` })),
+                                ]}
+                              />
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-fg-soft">{ROLE_LABELS[u.role] ?? u.role}</span>
+                          <span className="text-fg-soft">
+                            {ROLE_LABELS[u.role] ?? u.role}
+                            {u.custom_role_id && (
+                              <span className="block text-[11px] text-brand-300">
+                                ⚙ {customRoles.find((c) => c.id === u.custom_role_id)?.name ?? "custom"}
+                              </span>
+                            )}
+                          </span>
                         )}
                       </td>
                       <td className="px-5 py-3">

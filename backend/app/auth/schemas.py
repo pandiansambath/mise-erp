@@ -50,6 +50,10 @@ class UserOut(BaseModel):
     preferred_name: str | None = None
     is_platform_owner: bool = False
     last_login: datetime | None = None
+    # The designed role, if any. Without this the staff list can only ever show
+    # the archetype, so "Kitchen Manager (view-only payroll)" would silently
+    # display as plain "Manager".
+    custom_role_id: uuid.UUID | None = None
 
 
 class MeUpdate(BaseModel):
@@ -117,6 +121,13 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     role: str | None = None
     is_active: bool | None = None
+    # Which designed role this person holds. Explicitly nullable so clearing it
+    # is expressible — "back to the plain archetype" has to be a thing you can
+    # say, or a custom role could never be taken away.
+    custom_role_id: uuid.UUID | None = None
+    # Distinguishes "leave it alone" from "clear it", which `None` alone
+    # cannot: every PATCH omits most fields.
+    clear_custom_role: bool = False
 
     @field_validator("role")
     @classmethod
