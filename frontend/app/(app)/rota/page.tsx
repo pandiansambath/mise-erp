@@ -172,6 +172,8 @@ export default function RotaPage() {
   const [dropDay, setDropDay] = useState<string | null>(null);
   // Approved leave overlapping the visible week, by ISO day.
   const [leaveByDay, setLeaveByDay] = useState<Record<string, { name: string; kind: string }[]>>({});
+  // Bumped when leave changes anywhere on the site, to re-run the fetch.
+  const [leaveTick, setLeaveTick] = useState(0);
   // every drop stacks a move ticket: it PERSISTS until you keep or undo it,
   // each move can be undone on its own, Ctrl+Z pops the latest.
   type Move = {
@@ -377,6 +379,50 @@ export default function RotaPage() {
     }
   }
 
+
+  // Approved leave across the visible week. Keyed off the week's two ISO
+  // strings, which are already derived once — no callback to memoise, and
+  // nothing that changes identity on every render.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<
+        { employee_name: string; start_date: string; end_date: string; kind: string; status: string }[]
+      >(`/employees/leave/list?date_from=${from}&date_to=${to}`)
+      .then((rows) => {
+        if (cancelled) return;
+        const map: Record<string, { name: string; kind: string }[]> = {};
+        for (const lv of rows) {
+          // Only approved leave stops anything — a request nobody agreed to is
+          // not yet a fact about the world.
+          if (lv.status !== "APPROVED") continue;
+          for (let i = 0; i < 7; i++) {
+            const d = new Date(`${from}T12:00:00`);
+            d.setDate(d.getDate() + i);
+            const day = iso(d);
+            if (day >= lv.start_date && day <= lv.end_date) {
+              (map[day] ??= []).push({ name: lv.employee_name, kind: lv.kind });
+            }
+          }
+        }
+        setLeaveByDay(map);
+      })
+      .catch(() => {
+        if (!cancelled) setLeaveByDay({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to, leaveTick]);
+
+  useEffect(() => {
+    // Leave booked from the attendance sheet is the same fact seen twice, so
+    // this page re-reads rather than sitting there stale.
+    const onChanged = () => setLeaveTick((n) => n + 1);
+    window.addEventListener(LEAVE_CHANGED, onChanged);
+    return () => window.removeEventListener(LEAVE_CHANGED, onChanged);
+  }, []);
+
   if (loading && !labour) return <Spinner />;
 
   // Day columns always sort by START TIME (ties: name) — a dropped shift slots
@@ -394,38 +440,6 @@ export default function RotaPage() {
           ? "text-amber-400"
           : "text-rose-400";
 
-
-  const loadLeave = useCallback(async () => {
-    if (weekDates.length === 0) return;
-    try {
-      const rows = await api.get<
-        { employee_name: string; start_date: string; end_date: string; kind: string; status: string }[]
-      >(`/employees/leave/list?date_from=${iso(weekDates[0])}&date_to=${iso(weekDates[weekDates.length - 1])}`);
-      const map: Record<string, { name: string; kind: string }[]> = {};
-      for (const lv of rows) {
-        // Only approved leave stops anything — a request nobody agreed to is
-        // not yet a fact about the world.
-        if (lv.status !== "APPROVED") continue;
-        for (const d of weekDates) {
-          const day = iso(d);
-          if (day >= lv.start_date && day <= lv.end_date) {
-            (map[day] ??= []).push({ name: lv.employee_name, kind: lv.kind });
-          }
-        }
-      }
-      setLeaveByDay(map);
-    } catch {
-      setLeaveByDay({});
-    }
-  }, [weekDates]);
-
-  useEffect(() => { loadLeave(); }, [loadLeave]);
-  useEffect(() => {
-    // Leave booked from the attendance sheet is the same fact seen twice.
-    const onChanged = () => { loadLeave(); };
-    window.addEventListener(LEAVE_CHANGED, onChanged);
-    return () => window.removeEventListener(LEAVE_CHANGED, onChanged);
-  }, [loadLeave]);
 
   return (
     <div>
