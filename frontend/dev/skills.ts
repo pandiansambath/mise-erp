@@ -77,26 +77,21 @@ export const EDUCATION = {
   honour: "17th University Rank · Gold Medalist",
   cgpa: "9.19",
   exam: "Anna University · Rank List, April / May 2023 examinations",
-  // ⚠️ THE VERIFICATION LINK — read this before changing it.
+  // Self-hosted, deliberately.
   //
-  // The direct PDF (m.stucor.in/files/uploads/RANK_AFF_UG_2023.pdf) was tried
-  // first and REJECTED: it answers 302 to a sign-in wall for anyone without a
-  // STUCOR session. A "verify" button that lands a stranger on a login form
-  // proves nothing and reads worse than no link at all — they leave.
+  // The direct link on the mirror (m.stucor.in) answers 302 to a sign-in wall
+  // for anyone without a session — I followed it rather than assuming. A
+  // "verify" button that lands a recruiter on a login form proves nothing and
+  // reads worse than no link: they leave, having been invited to check a claim
+  // they then couldn't.
   //
-  // ✅ BEST: self-host it. Drop the PDF at
-  //    frontend/public/dev/anna-university-rank-list-2023.pdf
-  // and set verifyUrl to "/dev/anna-university-rank-list-2023.pdf". No login,
-  // no third party, works forever, and it is a public university document so
-  // there is nothing to gate.
-  //
-  // Until then this points at the listing page, which DOES load without an
-  // account and shows the April/May 2023 UG rank list exists.
-  verifyUrl: "https://stucor.in/news/ranklist/",
-  verifyLabel: "the April/May 2023 rank list",
+  // This is the same public university document, served from our own origin.
+  // No login, no third party, no chance of it disappearing.
+  verifyUrl: "/dev/RANK_AFF_UG_2023.pdf",
+  verifyLabel: "Anna University rank list (PDF)",
   // Where to look once it opens. A 49-page PDF with no pointer is only
   // technically evidence — nobody scrolls a stranger's rank list.
-  verifyHint: "UG 2023 · page 35 · B.Tech IT · rank 17",
+  verifyHint: "page 35 · B.Tech Information Technology · rank 17",
   // The university itself, as the source behind the mirror.
   officialUrl: "https://www.annauniv.edu/",
   schoolUrl: "https://www.panimalar.ac.in/",

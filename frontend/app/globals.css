@@ -1445,6 +1445,56 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   .mise-breathe { animation: none; }
 }
 
+/* ── Touch ripple ─────────────────────────────────────────────────────────
+   A drop in water at the point of contact. Sits above everything and can
+   never take a click (pointer-events: none on the layer). transform +
+   opacity only, so it stays on the compositor — a ripple that costs a frame
+   is worse than none, because the jank is then attached to every tap. */
+.mise-ripple {
+  position: absolute;
+  /* The rings are centred on the touch point rather than starting there. */
+  translate: -50% -50%;
+  pointer-events: none;
+  animation: mise-ripple-life 900ms linear forwards;
+}
+.mise-ripple-ring {
+  position: absolute;
+  inset: 0;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 9999px;
+  border: 1.5px solid color-mix(in oklab, var(--color-brand-400, #34d399) 70%, transparent);
+  animation: mise-ripple-out 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+/* The second wave, later and weaker — one stone makes more than one ring, and
+   a lone expanding circle reads as a loading spinner. */
+.mise-ripple-ring-2 {
+  animation-delay: 110ms;
+  animation-duration: 1000ms;
+  opacity: 0.55;
+}
+@keyframes mise-ripple-out {
+  from { transform: scale(1); opacity: 0.75; }
+  to   { transform: scale(16); opacity: 0; }
+}
+/* Owns the lifetime, so onAnimationEnd fires exactly once per drop. */
+@keyframes mise-ripple-life {
+  to { opacity: 1; }
+}
+
+/* The sheet scrim on phones. */
+@keyframes mise-scrim {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.mise-scrim-in { animation: mise-scrim 220ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-ripple, .mise-ripple-ring { animation: none !important; display: none; }
+  .mise-scrim-in { animation: none; }
+}
+
 /* ── pandi-dev.dineai.cloud ───────────────────────────────────────────────
    Only used by the developer profile. Namespaced with a dev- prefix so they
    can never collide with the app's own motion vocabulary. */

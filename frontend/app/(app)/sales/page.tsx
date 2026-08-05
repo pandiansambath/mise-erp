@@ -214,6 +214,17 @@ export default function SalesPage() {
         cash_counted: counted === "" ? null : counted,
       });
       await loadDay(day);
+      // This save just wrote a history line. Drop the cached copy so the panel
+      // shows it rather than the list from before the change.
+      if (historyOpen) {
+        try {
+          setHistory(await api.get<CashEvent[]>(`/sales/days/${day}/cash-history`));
+        } catch {
+          /* the figures saved; a stale panel is not worth an error */
+        }
+      } else {
+        setHistory(null);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save cash");
     }
@@ -253,37 +264,35 @@ export default function SalesPage() {
   return (
     <div>
       <PageHeader
-        sticky
         title="Sales & Cash"
         subtitle="One day at a time — takings by channel, commissions and the till for the date you pick."
-        // What is in the till right now, pinned. It was three sections down, and
-        // it is the number people open this page to find. Clicking it jumps to
-        // the drawer where you can count and close.
-        actions={
-          <button
-            type="button"
-            onClick={() => spotlight("cash-drawer")}
-            title="Open the cash drawer"
-            className="mise-press mise-feel rounded-2xl border border-brand-400/30 bg-gradient-to-b from-brand-400/[0.12] to-brand-400/[0.04] px-4 py-2.5 text-right shadow-lg shadow-black/20"
-          >
-            <span className="flex items-center justify-end gap-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-faint">
-              <span aria-hidden>🪙</span> In the cash box
-            </span>
-            <span className="mt-0.5 block font-display text-xl font-semibold tabular-nums text-fg">
-              {format(summary.expected_cash)}
-            </span>
-            <span className="mt-0.5 block text-[10px] text-fg-faint">
-              {summary.cash_counted
-                ? varianceNum === 0
-                  ? "counted · balanced ✓"
-                  : `counted ${format(summary.cash_counted)} · ${
-                      (varianceNum ?? 0) > 0 ? "over" : "short"
-                    } ${format(String(Math.abs(varianceNum ?? 0).toFixed(2)))}`
-                : "expected — till not counted yet"}
-            </span>
-          </button>
-        }
       />
+
+      {/* Just the number, pinned. The whole header was sticky before, which
+          pinned a title and a subtitle nobody needs to keep reading and left a
+          tall translucent band sitting over the page. */}
+      <div className="sticky top-0 z-30 mb-5 flex items-center justify-end gap-3 rounded-2xl border border-line/60 bg-paper/90 px-4 py-2.5 shadow-sm backdrop-blur-md">
+        <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+          <span aria-hidden className="mr-1">🪙</span> In the cash box
+        </span>
+        <button
+          type="button"
+          onClick={() => spotlight("cash-drawer")}
+          title="Open the cash drawer"
+          className="mise-press flex items-baseline gap-2 rounded-xl px-2 py-1 text-right transition hover:bg-glass/5"
+        >
+          <span className="font-display text-xl font-semibold tabular-nums text-fg">
+            {format(summary.expected_cash)}
+          </span>
+          <span className="text-[10px] text-fg-faint">
+            {summary.cash_counted
+              ? varianceNum === 0
+                ? "counted \u00b7 balanced \u2713"
+                : `${(varianceNum ?? 0) > 0 ? "over" : "short"} ${format(String(Math.abs(varianceNum ?? 0).toFixed(2)))}`
+              : "expected"}
+          </span>
+        </button>
+      </div>
 
       {/* The three jobs of this page. Closing the till and settling petty cash
           were both below the fold, and they are the ones with a deadline. */}
@@ -653,13 +662,18 @@ export default function SalesPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  setHistoryOpen((o) => !o);
-                  if (history === null) {
-                    try {
-                      setHistory(await api.get<CashEvent[]>(`/sales/days/${day}/cash-history`));
-                    } catch {
-                      setHistory([]);
-                    }
+                  const opening = !historyOpen;
+                  setHistoryOpen(opening);
+                  // Always re-read when opening. The old guard was
+                  // `if (history === null)`, so it fetched once per page load
+                  // and then never again — save the till three times and the
+                  // panel still showed the empty list it had cached before the
+                  // first save. An audit trail that lies is worse than none.
+                  if (!opening) return;
+                  try {
+                    setHistory(await api.get<CashEvent[]>(`/sales/days/${day}/cash-history`));
+                  } catch {
+                    setHistory([]);
                   }
                 }}
                 className="flex items-center gap-1.5 text-[11px] text-fg-faint transition hover:text-fg-soft"

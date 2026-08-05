@@ -1,3 +1,4 @@
+import { Ripple } from "@/components/Ripple";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -47,7 +48,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-full">
         <AuthProvider>
           <ThemeProvider>
-            <CurrencyProvider>{children}</CurrencyProvider>
+            <CurrencyProvider>
+              {children}
+              {/* A drop in water wherever you touch — app, landing, dev page
+                  alike. It sits above everything and can never take a click. */}
+              <Ripple />
+            </CurrencyProvider>
           </ThemeProvider>
         </AuthProvider>
       </body>

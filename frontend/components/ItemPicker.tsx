@@ -433,6 +433,7 @@ export function ItemPickerSingle({
   value,
   onChange,
   gridCls,
+  suppliers,
   onCreate,
   onOpenDetail,
 }: {
@@ -442,6 +443,13 @@ export function ItemPickerSingle({
   /** Column classes for the card grid. A picker sitting in half a page needs
    *  fewer, wider columns than one spanning the whole width. */
   gridCls?: string;
+  /** item id -> vendors, cheapest first. When given, each card lists its top
+   *  few suppliers inline. Opening a sheet to read two numbers is a lot of
+   *  ceremony for two numbers. */
+  suppliers?: Record<
+    string,
+    { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]
+  >;
   /** Offered when a search matches nothing. A supplier selling something you
    *  have not stocked yet used to mean leaving for Inventory, creating it, and
    *  finding your way back — and the price you came to enter is gone by then.
@@ -547,7 +555,7 @@ export function ItemPickerSingle({
               type="button"
               aria-pressed={sel}
               onClick={() => onChange(it.id)}
-              className={`mise-feel relative rounded-2xl border p-3 pb-9 text-left transition duration-200 hover:-translate-y-0.5 ${
+              className={`mise-feel relative flex flex-col rounded-2xl border p-3 pb-11 text-left transition duration-200 hover:-translate-y-0.5 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
                   : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
@@ -596,17 +604,70 @@ export function ItemPickerSingle({
               <span className="mt-0.5 block text-xs text-fg-faint">
                 have {fmtQty(it.current_stock, it.unit)}
               </span>
-              {it.best_vendor ? (
-                <span
-                  className={`mt-1 block truncate text-xs ${it.best_vendor_chosen ? "text-brand-300" : "text-amber-300"}`}
-                >
-                  {it.best_vendor_chosen ? "★ " : ""}
-                  {it.best_vendor}
-                  {it.best_vendor_price ? ` · ${format(it.best_vendor_price)}` : ""}
-                </span>
-              ) : (
-                <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>
-              )}
+              {/* Who sells it and for how much — the question this page exists
+                  to answer, on the card rather than one click away. Cheapest
+                  first, four at most; the rest sit behind "compare". */}
+              {(() => {
+                const rows = suppliers?.[it.id];
+                if (!rows) {
+                  // No supplier data supplied by the caller: fall back to the
+                  // single best vendor the item itself carries.
+                  return it.best_vendor ? (
+                    <span
+                      className={`mt-1 block truncate text-xs ${it.best_vendor_chosen ? "text-brand-300" : "text-amber-300"}`}
+                    >
+                      {it.best_vendor_chosen ? "★ " : ""}
+                      {it.best_vendor}
+                      {it.best_vendor_price ? ` · ${format(it.best_vendor_price)}` : ""}
+                    </span>
+                  ) : (
+                    <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>
+                  );
+                }
+                if (rows.length === 0) {
+                  return <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>;
+                }
+                const best = parseFloat(rows[0].price_per_unit) || 0;
+                return (
+                  <span className="mt-2 block border-t border-line/70 pt-1.5">
+                    {rows.slice(0, 4).map((v, vi) => {
+                      const extra = (parseFloat(v.price_per_unit) || 0) - best;
+                      return (
+                        <span
+                          key={v.vendor_name}
+                          className="flex items-baseline gap-1.5 text-[11px] leading-relaxed"
+                        >
+                          <span
+                            className={`min-w-0 flex-1 truncate ${
+                              v.is_preferred ? "font-medium text-brand-300" : "text-fg-soft"
+                            }`}
+                          >
+                            {v.is_preferred ? "★ " : ""}
+                            {v.vendor_name}
+                          </span>
+                          <span
+                            className={`shrink-0 font-mono tabular-nums ${
+                              vi === 0 ? "text-emerald-300" : "text-fg-faint"
+                            }`}
+                          >
+                            {format(v.price_per_unit)}
+                          </span>
+                          {extra > 0.001 && (
+                            <span className="shrink-0 text-[9px] text-rose-300/80">
+                              +{extra.toFixed(2)}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
+                    {rows.length > 4 && (
+                      <span className="mt-0.5 block text-[10px] text-fg-faint">
+                        +{rows.length - 4} more — open compare
+                      </span>
+                    )}
+                  </span>
+                );
+              })()}
             </button>
           );
         })}
