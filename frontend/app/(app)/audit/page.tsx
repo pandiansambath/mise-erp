@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api, type AuditEvent } from "@/lib/api";
+import { RangeControls, rangeCaption } from "@/components/RangeControls";
+import { recall, remember } from "@/lib/rangeMemory";
+import { localISODate } from "@/lib/date";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Sparkline } from "@/components/charts";
 
@@ -23,17 +26,26 @@ function when(iso: string): string {
   });
 }
 
+const monthStart = () =>
+  localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+
 export default function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
+  // A month back by default — long enough to cover "what happened recently"
+  // without a wall nobody reads. Remembered for the session, per page.
+  const remembered = typeof window === "undefined" ? null : recall("audit");
+  const [from, setFrom] = useState(remembered?.from ?? monthStart());
+  const [to, setTo] = useState(remembered?.to ?? localISODate());
+
   useEffect(() => {
     api
-      .get<AuditEvent[]>("/audit")
+      .get<AuditEvent[]>(`/audit?date_from=${from}&date_to=${to}&limit=1000`)
       .then(setEvents)
       .catch(() => setErr("Could not load the audit log."));
-  }, []);
+  }, [from, to]);
 
   // events per day, last 14 days — the house's pulse
   const pulse = useMemo(() => {
@@ -73,6 +85,19 @@ export default function AuditPage() {
         title="Audit log"
         subtitle="Who changed what — price changes, chosen suppliers, received POs and waste. Newest first."
       />
+
+      <RangeControls
+        range={{ from, to }}
+        onChange={(r) => {
+          setFrom(r.from);
+          setTo(r.to);
+          remember("audit", r);
+        }}
+        className="mb-2"
+      />
+      <p className="mb-5 text-sm text-fg-faint">
+        Events from <b className="text-fg-soft">{rangeCaption({ from, to })}</b>.
+      </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-4">
         <div className="mise-well flex max-w-sm flex-1 items-center gap-2 rounded-xl px-3.5 py-2">

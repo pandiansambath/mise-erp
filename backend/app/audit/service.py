@@ -1,5 +1,7 @@
 """Audit service: record an event (best-effort, never breaks the main action) + list."""
 import uuid
+from datetime import date as date_type
+from datetime import datetime, time
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,13 +39,26 @@ async def record(
         return None
 
 
-async def list_events(db: AsyncSession, hotel_id: uuid.UUID, limit: int = 150) -> list[AuditEvent]:
-    rows = await db.execute(
-        select(AuditEvent)
-        .where(AuditEvent.hotel_id == hotel_id)
-        .order_by(desc(AuditEvent.created_at))
-        .limit(limit)
-    )
+async def list_events(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    limit: int = 150,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+) -> list[AuditEvent]:
+    """Recent events, or a window of them.
+
+    Unwindowed this returns the last 150 and nothing else — which means an
+    older event, exactly the kind you go looking for when checking who changed
+    a price in March, was unreachable from the page that exists to answer that.
+    """
+    q = select(AuditEvent).where(AuditEvent.hotel_id == hotel_id)
+    if date_from:
+        q = q.where(AuditEvent.created_at >= datetime.combine(date_from, time.min))
+    if date_to:
+        # Inclusive of the end day: a range ending "today" must contain today.
+        q = q.where(AuditEvent.created_at <= datetime.combine(date_to, time.max))
+    rows = await db.execute(q.order_by(desc(AuditEvent.created_at)).limit(limit))
     return list(rows.scalars().all())
 
 

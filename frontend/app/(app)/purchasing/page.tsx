@@ -681,21 +681,25 @@ export default function PurchasingPage() {
             </p>
           ) : (
           <form onSubmit={submitIndent} className="space-y-3">
+            {/* Submit lives INSIDE the tray. It used to sit under the whole
+                picker, so the more you ordered the further away it got. */}
             <ItemPicker
               items={orderable}
               lines={lines}
               onChange={setLines}
               lineExtra={supplierPicker}
               onOpenDetail={setPeekItem}
+              trayFooter={
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={lines.length === 0} className="mise-press rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40">
+                    Submit indent{lines.length > 0 ? ` · ${lines.length}` : ""}
+                  </button>
+                  <button type="button" onClick={resetIndent} className="mise-raised mise-press rounded-lg px-4 py-1.5 text-sm font-medium text-fg-soft">
+                    Clear
+                  </button>
+                </div>
+              }
             />
-            <div className="flex flex-wrap gap-2">
-              <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
-                Submit indent
-              </button>
-              <button type="button" onClick={resetIndent} className="mise-raised mise-press rounded-lg px-4 py-1.5 text-sm font-medium text-fg-soft">
-                Clear
-              </button>
-            </div>
           </form>
           )}
         </Card>
