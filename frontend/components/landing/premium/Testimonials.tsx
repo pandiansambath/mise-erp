@@ -5,6 +5,7 @@
 
 import { Reveal } from "@/components/Reveal";
 import { Aurora, SectionHead } from "./bits";
+import { Photo } from "@/components/Photo";
 
 const VOICES = [
   {
@@ -33,9 +34,8 @@ const VOICES = [
 export default function Testimonials() {
   return (
     <section className="mise-cv relative overflow-hidden">
-      <img
+      <Photo
         src="/experience/garden.jpg"
-        alt=""
         loading="lazy"
         className="absolute inset-0 h-full w-full object-cover opacity-[0.16]"
       />

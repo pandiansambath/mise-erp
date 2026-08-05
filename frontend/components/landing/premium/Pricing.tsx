@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { Reveal } from "@/components/Reveal";
 import { API_BASE } from "@/lib/api";
 import { Aurora, Magnetic, SectionHead } from "./bits";
+import { Photo } from "@/components/Photo";
 
 type LivePlan = {
   key: string;
@@ -114,9 +115,8 @@ export default function Pricing() {
   return (
     <section id="pricing" className="mise-cv relative overflow-hidden">
       {/* dawn sky, barely there */}
-      <img
+      <Photo
         src="/experience/sky.jpg"
-        alt=""
         loading="lazy"
         className="absolute inset-0 h-full w-full object-cover opacity-[0.14]"
       />
