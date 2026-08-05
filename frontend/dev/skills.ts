@@ -75,7 +75,7 @@ export const EDUCATION = {
   affiliation: "Affiliated to Anna University, Chennai",
   year: "2023",
   honour: "17th University Rank · Gold Medalist",
-  cgpa: "9.19",
+  percentage: "92%",
   exam: "Anna University · Rank List, April / May 2023 examinations",
   // Self-hosted, deliberately.
   //

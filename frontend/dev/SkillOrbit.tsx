@@ -35,22 +35,24 @@ import { HUE_OF, ORBIT_RINGS } from "@/dev/skills";
 // give a phone a horizontal scrollbar.
 const RINGS = ORBIT_RINGS.map((r, i) => ({ ...r, frac: [0.245, 0.335, 0.425][i] }));
 
-export function SkillOrbit({ photos }: { photos: string[] }) {
+export function SkillOrbit({
+  photos,
+  onOpenAlbum,
+}: {
+  photos: string[];
+  /** Clicking the portrait opens the album. A separate button underneath
+   *  was one more thing on a page that is already busy, and the photo is
+   *  the obvious thing to press. */
+  onOpenAlbum?: () => void;
+}) {
   const [i, setI] = useState(0);
-  const [paused, setPaused] = useState(false);
-  // Hover-to-pause belongs to a mouse. On a touch screen `onMouseEnter` fires
-  // on tap and `onMouseLeave` often never does, so one tap froze the system
-  // permanently — the "revolution stops after some time" bug.
-  const [canHover, setCanHover] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
-    setCanHover(mq.matches);
-    const on = () => setCanHover(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
+  // Nothing pauses this. Hover-to-pause was tried and removed twice: on a
+  // phone `onMouseEnter` fires on tap and `onMouseLeave` never does, and on a
+  // desktop the orbit fills half the screen so the pointer is inside it nearly
+  // always. Either way it stood still. He asked for infinite revolution, and a
+  // system that stops when you look at it is not a system.
 
   // Auto-swap the portrait every 5 seconds.
   //
@@ -79,8 +81,6 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
     <div
       ref={wrap}
       className="relative mx-auto grid aspect-square w-full max-w-[min(34rem,92vw)] place-items-center [container-type:size]"
-      onMouseEnter={canHover ? () => setPaused(true) : undefined}
-      onMouseLeave={canHover ? () => setPaused(false) : undefined}
     >
       {/* The rings themselves — faint, so the chips read as the content */}
       {RINGS.map((ring, ri) => (
@@ -115,7 +115,6 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
                 ? undefined
                 : {
                     animation: `devOrbit ${ring.period}s linear infinite${ring.dir < 0 ? " reverse" : ""}`,
-                    animationPlayState: canHover && paused ? "paused" : "running",
                   }
             }
           >
@@ -144,8 +143,7 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
                         : {
                             // Undo the shell's rotation so the words stay level.
                             animation: `devOrbit ${ring.period}s linear infinite${ring.dir < 0 ? "" : " reverse"}`,
-                            animationPlayState: canHover && paused ? "paused" : "running",
-                          }),
+                                  }),
                     }}
                   >
                     {label}
@@ -174,7 +172,13 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
                            background instead of a hard cut-out circle
             4. shadow    — an inset dark rim, so he sits IN the page, not ON it
       */}
-      <div className="relative z-10 h-40 w-40 sm:h-48 sm:w-48 lg:h-56 lg:w-56">
+      <button
+        type="button"
+        onClick={onOpenAlbum}
+        aria-label="Open the photo album"
+        title="Open the album"
+        className="group relative z-10 h-40 w-40 rounded-full sm:h-48 sm:w-48 lg:h-56 lg:w-56"
+      >
         <span
           aria-hidden
           className="absolute -inset-4 rounded-full opacity-70 blur-2xl"
@@ -238,14 +242,21 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
           {/* 4 — an inset rim. Sitting IN the page rather than on it. */}
           <span
             aria-hidden
-            className="absolute inset-0 rounded-full"
+            className="absolute inset-0 rounded-full transition-shadow duration-500 group-hover:shadow-[inset_0_0_26px_-6px_rgba(6,10,15,.95),inset_0_0_0_1px_rgba(240,160,100,.55)]"
             style={{
               boxShadow:
                 "inset 0 0 26px -6px rgba(6,10,15,.95), inset 0 0 0 1px rgba(255,255,255,.10)",
             }}
           />
         </span>
-      </div>
+        {/* Says what the photo does, without a button taking up room. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -bottom-6 text-center font-mono text-[10px] tracking-wide text-[#5b6e85] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        >
+          ⌗ open the album
+        </span>
+      </button>
     </div>
   );
 }

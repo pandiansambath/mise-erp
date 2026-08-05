@@ -19,6 +19,10 @@ credentials*
 *.xlsx
 *.xls
 *.pdf
+# ...except the public evidence on the developer page. A verification link that
+# 404s is worse than no link, and this one was silently excluded by the rule
+# above for exactly that reason.
+!frontend/public/dev/*.pdf
 client_data/
 raw_data/
 
