@@ -23,6 +23,72 @@ export function clearToken() {
   window.localStorage.removeItem(TOKEN_KEY);
 }
 
+/** POST that reads server-sent events as they arrive.
+ *
+ * A POST, not an EventSource: EventSource cannot send a body or an
+ * Authorization header, and the usual workaround — a token in the query string
+ * — writes credentials into logs and browser history.
+ *
+ * `onEvent` is called with each parsed `data:` payload. Errors are thrown as
+ * ApiError so callers can treat a failed stream exactly like a failed request.
+ */
+export async function postStream(
+  path: string,
+  body: unknown,
+  onEvent: (ev: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok || !res.body) {
+    // Read the error body the same way `request` does, so the message the user
+    // sees is the server's, not "stream failed".
+    let detail: unknown = null;
+    try {
+      detail = JSON.parse(await res.text());
+    } catch {
+      /* non-JSON error body */
+    }
+    const message =
+      (detail as { detail?: string })?.detail || `Request failed (${res.status})`;
+    throw new ApiError(res.status, message, detail);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // SSE frames are separated by a blank line. A frame can arrive split
+    // across reads, so only complete ones are consumed.
+    let cut: number;
+    while ((cut = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      for (const line of frame.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        try {
+          onEvent(JSON.parse(line.slice(5).trim()));
+        } catch {
+          /* a malformed frame is not worth killing the stream over */
+        }
+      }
+    }
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown; // structured error body (e.g. { errors: [...] }) when present

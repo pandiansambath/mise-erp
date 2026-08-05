@@ -1,10 +1,13 @@
 """Copilot endpoint. Any authenticated user may ask; tools enforce their own
 permission + hotel scope, so answers never leak across roles or tenants."""
+import json
+import logging
 import time
 import uuid
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +32,8 @@ from app.core.database import get_db
 from app.core.rbac import has_permission
 
 # Whole Copilot is gated on the hotel's ai_copilot entitlement (Control Room toggle).
+log = logging.getLogger("mise.assistant.router")
+
 router = APIRouter(
     prefix="/assistant",
     tags=["assistant"],
@@ -82,6 +87,85 @@ async def chat(
         latency_ms=int((time.monotonic() - started) * 1000),
     )
     return answer
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    req: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """The same turn as /chat, sent as server-sent events while it happens.
+
+    The owner's complaint was not that answers were wrong, it was that fifteen
+    silent seconds are indistinguishable from a hang. This sends what the
+    assistant is doing as it does it, then the reply as it is written.
+
+    A POST rather than an EventSource, deliberately: EventSource cannot send a
+    body or an Authorization header, and the alternative — a token in the query
+    string — puts credentials in logs and browser history for a feature whose
+    only job is cosmetic.
+
+    Every guard from /chat applies first. Streaming must not become the cheap
+    door into the expensive thing.
+    """
+    if not req.messages:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No message provided")
+    if len(req.messages) > _MAX_MESSAGES:
+        req.messages = req.messages[-_MAX_MESSAGES:]
+    if any(len(m.content) > _MAX_CHARS for m in req.messages):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Message too long")
+    if req.attachment and len(req.attachment.data) > 20_000_000:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Attachment too large")
+    await guard.enforce(db, user, "chat")
+
+    thread_id = req.thread_id or await memory.latest_thread(db, user) or uuid.uuid4()
+    asked = req.messages[-1].content if req.messages else ""
+    await memory.touch_thread(db, user, thread_id, asked)
+    await memory.remember(db, user, thread_id, "user", asked)
+    started = time.monotonic()
+
+    async def events():
+        reply_text = ""
+        try:
+            async for ev in service.answer_stream(db, user, req):
+                if ev.get("type") == "done":
+                    payload = ev.get("response") or {}
+                    payload["thread_id"] = str(thread_id)
+                    reply_text = payload.get("reply", "")
+                    yield f"data: {json.dumps({'type': 'done', 'response': payload})}\n\n"
+                else:
+                    yield f"data: {json.dumps(ev)}\n\n"
+        except Exception as exc:  # noqa: BLE001
+            log.warning("chat stream failed", exc_info=True)
+            # An error the user can read beats a socket that just closes.
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)[:200]})}\n\n"
+        finally:
+            # Persist and meter whatever was produced, even on a broken stream:
+            # tokens were spent either way, and a half-answer the user saw
+            # should still be in the thread when they come back.
+            if reply_text:
+                await memory.remember(db, user, thread_id, "assistant", reply_text)
+            sent = sum(guard.estimate_tokens(m.content) for m in req.messages)
+            await guard.record(
+                db, user, kind="chat", model=settings.bedrock_model_id,
+                input_tokens=sent + guard.SYSTEM_PROMPT_TOKENS,
+                output_tokens=guard.estimate_tokens(reply_text),
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            # Without this an nginx-style proxy buffers the whole response and
+            # delivers it at the end — which is precisely the behaviour this
+            # endpoint exists to remove.
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # ── Document onboarding ────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ import { Typewriter } from "@/components/Typewriter";
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, postForm } from "@/lib/api";
+import { api, ApiError, postStream, postForm } from "@/lib/api";
 import { speak, speechOutputSupported, stopSpeaking, useVoiceInput } from "@/lib/useVoice";
 import ChefMascot from "@/components/auth/ChefMascot";
 
@@ -141,6 +141,13 @@ export function Copilot() {
   const [staged, setStaged] = useState<Staged | null>(null);
   // Seconds since the current question was sent. Reset on each send.
   const [elapsed, setElapsed] = useState(0);
+  // What it is doing RIGHT NOW, and the reply as it is written. The elapsed
+  // counter proved the assistant was alive; this shows what it is alive DOING,
+  // which is what was actually asked for.
+  const [liveTrace, setLiveTrace] = useState<
+    { kind: string; text?: string; name?: string; input?: string }[]
+  >([]);
+  const [liveText, setLiveText] = useState("");
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [expanding, setExpanding] = useState(false);
@@ -353,8 +360,37 @@ export function Copilot() {
     setMessages(history);
     setInput("");
     setLoading(true);
+    setLiveTrace([]);
+    setLiveText("");
     try {
-      const res = await api.post<ChatResponse>("/assistant/chat", { messages: payloadFrom(history), route: pathname, user_name: userName(), thread_id: threadId });
+      const body = { messages: payloadFrom(history), route: pathname, user_name: userName(), thread_id: threadId };
+      let done: ChatResponse | null = null;
+      // Stream by default; the buffered endpoint is still there and is used
+      // whenever streaming cannot be established (an old proxy, a corporate
+      // filter, a browser without ReadableStream). A degraded answer beats
+      // none, and the two paths end in the same state.
+      try {
+        await postStream("/assistant/chat/stream", body, (ev) => {
+          if (ev.type === "thought" || ev.type === "tool") {
+            setLiveTrace((prev) => [...prev, ev as { kind: string }]);
+          } else if (ev.type === "delta") {
+            setLiveText((prev) => prev + String(ev.text ?? ""));
+          } else if (ev.type === "done") {
+            done = ev.response as ChatResponse;
+          } else if (ev.type === "error") {
+            throw new Error(String(ev.message ?? "stream failed"));
+          }
+        });
+      } catch (streamErr) {
+        // A 4xx is a real refusal (rate limit, payment, message too long) and
+        // must surface as itself rather than being retried against an endpoint
+        // that will refuse identically.
+        if (streamErr instanceof ApiError && streamErr.status < 500) throw streamErr;
+        console.warn("streaming unavailable, falling back", streamErr);
+        done = await api.post<ChatResponse>("/assistant/chat", body);
+      }
+      const res = done as ChatResponse | null;
+      if (!res) throw new Error("The assistant stopped before answering.");
       if (res.thread_id) setThreadId(res.thread_id);
       // choices ride on the assistant message so they disappear once answered
       setConfigured(res.configured);
@@ -372,6 +408,10 @@ export function Copilot() {
       console.error("assistant request failed", e);
     } finally {
       setLoading(false);
+      // The finished message now carries the trace; leaving the live copy up
+      // would show it twice.
+      setLiveTrace([]);
+      setLiveText("");
     }
   }
   useEffect(() => {
@@ -987,12 +1027,53 @@ export function Copilot() {
                       waiting with no sign it was alive. A number that keeps
                       moving is proof that it is. */}
                   <span className="text-xs tabular-nums text-fg-faint">
-                    {elapsed < 4
-                      ? "thinking…"
-                      : elapsed < 12
-                        ? `working on it… ${elapsed}s`
-                        : `still going — this one needs a few steps… ${elapsed}s`}
+                    {liveTrace.length > 0
+                      ? `${liveTrace[liveTrace.length - 1].kind === "tool" ? "reading" : "thinking"} · ${elapsed}s`
+                      : elapsed < 4
+                        ? "thinking…"
+                        : elapsed < 12
+                          ? `working on it… ${elapsed}s`
+                          : `still going — this one needs a few steps… ${elapsed}s`}
                   </span>
+                </div>
+              </div>
+            )}
+
+            {/* The work, as it happens. This is the whole point: fifteen silent
+                seconds and a hang looked identical, and the trace that already
+                existed only arrived once everything was over. */}
+            {loading && liveTrace.length > 0 && (
+              <div className="ml-9 space-y-1">
+                {liveTrace.map((t, i) => (
+                  <div
+                    key={i}
+                    className="mise-pop flex items-start gap-1.5 text-[11px] leading-relaxed text-fg-faint"
+                  >
+                    <span aria-hidden className="mt-px shrink-0">
+                      {t.kind === "tool" ? "🔧" : "💭"}
+                    </span>
+                    <span className="min-w-0">
+                      {t.kind === "tool" ? (
+                        <>
+                          <b className="font-medium text-fg-soft">{t.name}</b>
+                          {t.input ? <span className="opacity-80"> · {t.input}</span> : null}
+                        </>
+                      ) : (
+                        t.text
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* The reply, arriving as it is written. */}
+            {loading && liveText && (
+              <div className="flex justify-start gap-2">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-[13px] text-white shadow-sm" aria-hidden>✨</span>
+                <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-glass/10 bg-paper-3 px-4 py-3 text-sm leading-relaxed text-fg">
+                  {liveText}
+                  <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-brand-400 align-text-bottom" />
                 </div>
               </div>
             )}
