@@ -9,6 +9,8 @@
 // switches, and one-click import from priced recipes.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SubNav } from "@/components/SubNav";
+import { spotlight } from "@/components/fx";
 import { API_BASE, api } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useDeepLink } from "@/components/fx";
@@ -276,7 +278,7 @@ function MenuTab() {
     <div className="space-y-5">
       <Card className="mise-feel">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-semibold text-fg">Add to the menu</h3>
+          <h3 id="menu-add" className="scroll-mt-24 font-semibold text-fg">Add to the menu</h3>
           <button
             type="button"
             onClick={importRecipes}
@@ -443,7 +445,7 @@ function RidersTab() {
   return (
     <div className="space-y-5">
       <Card className="mise-feel">
-        <h3 className="font-semibold text-fg">Add a rider</h3>
+        <h3 id="rider-add" className="scroll-mt-24 font-semibold text-fg">Add a rider</h3>
         <p className="mt-1 text-sm text-fg-faint">
           They sign in at <b className="text-fg-soft">{originHost}/rider</b> with this
           phone + PIN — no email, no app install. Their location streams to customers only
@@ -467,7 +469,7 @@ function RidersTab() {
         </Card>
       ) : (
         <Card className="mise-feel">
-          <h3 className="font-semibold text-fg">Your riders</h3>
+          <h3 id="rider-list" className="scroll-mt-24 font-semibold text-fg">Your riders</h3>
           <div className="mt-2 divide-y divide-line">
             {riders.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
@@ -613,6 +615,29 @@ export default function OrdersPage() {
       <PageHeader
         title="Online Orders"
         subtitle="Your public menu, and every order the moment it lands."
+      />
+
+      <SubNav
+        items={[
+          {
+            key: "menu",
+            label: "Add to the menu",
+            icon: "＋",
+            onSelect: () => spotlight("menu-add"),
+          },
+          {
+            key: "riders",
+            label: "Your riders",
+            icon: "🛵",
+            onSelect: () => spotlight("rider-list"),
+          },
+          {
+            key: "addrider",
+            label: "Add a rider",
+            icon: "👤",
+            onSelect: () => spotlight("rider-add"),
+          },
+        ]}
       />
 
       {/* vitals */}

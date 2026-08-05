@@ -2,6 +2,8 @@
 
 import { TimeRangePicker } from "@/components/RangeControls";
 import { useCallback, useEffect, useState } from "react";
+import { SubNav } from "@/components/SubNav";
+import { spotlight } from "@/components/fx";
 import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
 import { localISODate } from "@/lib/date";
 import Link from "next/link";
@@ -188,6 +190,30 @@ export default function AttendancePage() {
     <div>
       <PageHeader title="Attendance" subtitle="Clock in → (break → resume) → clock out. Hours auto-calculate." />
 
+      <SubNav
+        items={[
+          { key: "today", label: "Today", icon: "📅", onSelect: () => setDay(today()) },
+          {
+            key: "clock",
+            label: "Punch clock",
+            icon: "⏱",
+            onSelect: () => spotlight("punch-clock"),
+          },
+          {
+            key: "history",
+            label: "History by person",
+            icon: "📖",
+            onSelect: () => spotlight("att-history"),
+          },
+          {
+            key: "legend",
+            label: "What the markers mean",
+            icon: "🔑",
+            onSelect: () => spotlight("att-legend"),
+          },
+        ]}
+      />
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
           type="date"
@@ -260,7 +286,7 @@ export default function AttendancePage() {
                 <ChefMascot mood={state.type === null ? "happy" : r?.on_break ? "think" : "point"} look={0} />
               </div>
               <div className="min-w-[12rem] flex-1">
-                <h3 className="font-semibold text-fg">Punch clock</h3>
+                <h3 id="punch-clock" className="scroll-mt-24 font-semibold text-fg">Punch clock</h3>
                 <p className="mb-2 text-xs text-fg-faint">pick a person, press the button — that&apos;s the whole job</p>
                 <Select
                   value={emp.id}
@@ -339,7 +365,7 @@ export default function AttendancePage() {
         );
       })()}
 
-      <AttendanceLegend />
+      <div id="att-legend" className="scroll-mt-24"><AttendanceLegend /></div>
 
       <Card className="p-0">
         <div className="overflow-x-auto">
@@ -574,7 +600,7 @@ function AttendanceHistoryCard({ employees, format }: {
 
   return (
     <Card className="mise-feel mb-6">
-      <h3 className="font-semibold text-fg">📖 Attendance history by person</h3>
+      <h3 id="att-history" className="scroll-mt-24 font-semibold text-fg">📖 Attendance history by person</h3>
       <p className="mt-1 text-sm text-fg-faint">
         No more clicking day by day — pick a person and a range and see the whole picture:
         every day, total hours, and the pay it would earn. Download it too.
