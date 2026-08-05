@@ -21,6 +21,8 @@
 // attached to every single tap.
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { rippleEnabled } from "@/lib/ripplePref";
 
 type Drop = { id: number; x: number; y: number };
 
@@ -29,8 +31,19 @@ const MAX = 6;
 
 export function Ripple() {
   const [drops, setDrops] = useState<Drop[]>([]);
+  const { hotel } = useAuth();
+  // Each restaurant gets its own answer, and Settings can flip it live.
+  const [on, setOn] = useState(true);
 
   useEffect(() => {
+    const read = () => setOn(rippleEnabled(hotel?.id));
+    read();
+    window.addEventListener("mise:ripple-pref", read);
+    return () => window.removeEventListener("mise:ripple-pref", read);
+  }, [hotel?.id]);
+
+  useEffect(() => {
+    if (!on) return;
     // Honour a reader who has asked for less motion — this fires on EVERY
     // interaction, so it is the last thing that should ignore that setting.
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -46,9 +59,9 @@ export function Ripple() {
     // finger stops the event from bubbling, which plenty of controls do.
     window.addEventListener("pointerdown", onDown, { capture: true, passive: true });
     return () => window.removeEventListener("pointerdown", onDown, { capture: true });
-  }, []);
+  }, [on]);
 
-  if (drops.length === 0) return null;
+  if (!on || drops.length === 0) return null;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[200] overflow-hidden" aria-hidden>
