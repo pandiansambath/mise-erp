@@ -38,15 +38,31 @@ const RINGS = ORBIT_RINGS.map((r, i) => ({ ...r, frac: [0.245, 0.335, 0.425][i] 
 export function SkillOrbit({ photos }: { photos: string[] }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Hover-to-pause belongs to a mouse. On a touch screen `onMouseEnter` fires
+  // on tap and `onMouseLeave` often never does, so one tap froze the system
+  // permanently — the "revolution stops after some time" bug.
+  const [canHover, setCanHover] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
 
-  // Auto-swap the portrait. 65 seconds, as asked — long enough that it reads
-  // as the page breathing rather than a slideshow demanding attention.
   useEffect(() => {
-    if (photos.length < 2 || paused) return;
-    const t = window.setInterval(() => setI((n) => (n + 1) % photos.length), 65_000);
+    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
+    setCanHover(mq.matches);
+    const on = () => setCanHover(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
+  // Auto-swap the portrait every 5 seconds.
+  //
+  // Independent of `paused` on purpose: pausing is about not yanking the
+  // orbit out from under a pointer, and it must never be able to stop the
+  // photographs — the last version tied the two together, so a stuck pause
+  // froze the portrait as well.
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const t = window.setInterval(() => setI((n) => (n + 1) % photos.length), 5_000);
     return () => window.clearInterval(t);
-  }, [photos.length, paused]);
+  }, [photos.length]);
 
   // Respect a reader who has asked the OS for less motion. Thirteen orbiting
   // chips is exactly the kind of thing that setting exists for.
@@ -63,8 +79,8 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
     <div
       ref={wrap}
       className="relative mx-auto grid aspect-square w-full max-w-[min(34rem,92vw)] place-items-center [container-type:size]"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseEnter={canHover ? () => setPaused(true) : undefined}
+      onMouseLeave={canHover ? () => setPaused(false) : undefined}
     >
       {/* The rings themselves — faint, so the chips read as the content */}
       {RINGS.map((ring, ri) => (
@@ -99,7 +115,7 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
                 ? undefined
                 : {
                     animation: `devOrbit ${ring.period}s linear infinite${ring.dir < 0 ? " reverse" : ""}`,
-                    animationPlayState: paused ? "paused" : "running",
+                    animationPlayState: canHover && paused ? "paused" : "running",
                   }
             }
           >
@@ -128,7 +144,7 @@ export function SkillOrbit({ photos }: { photos: string[] }) {
                         : {
                             // Undo the shell's rotation so the words stay level.
                             animation: `devOrbit ${ring.period}s linear infinite${ring.dir < 0 ? "" : " reverse"}`,
-                            animationPlayState: paused ? "paused" : "running",
+                            animationPlayState: canHover && paused ? "paused" : "running",
                           }),
                     }}
                   >

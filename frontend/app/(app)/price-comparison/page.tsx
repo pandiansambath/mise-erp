@@ -267,6 +267,18 @@ export default function PriceComparisonPage() {
   const peeked = peek ? items.find((i) => i.id === peek) : null;
   const chosenItem = items.find((i) => i.id === selected) ?? null;
 
+  // item id -> its vendors, cheapest first. Already fetched for the savings
+  // banner at the top; the cards can read the same thing for free.
+  const supplierMap = (() => {
+    const m: Record<string, { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]> = {};
+    for (const row of allSuppliers) {
+      m[row.item_id] = [...row.vendors].sort(
+        (a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
+      );
+    }
+    return m;
+  })();
+
   return (
     <div>
       <PageHeader
@@ -419,7 +431,7 @@ export default function PriceComparisonPage() {
               item pushed the answer under the fold and you scrolled to find
               what you had just asked for. Nothing here moves out of reach. */}
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1.02fr),minmax(0,1fr)] lg:items-start">
-            <div className="rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20 lg:sticky lg:top-4">
+            <div className="min-w-0 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20 lg:sticky lg:top-4">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Pick an item</p>
                 <p className="text-[11px] text-fg-faint">★ = its current supplier</p>
@@ -428,14 +440,18 @@ export default function PriceComparisonPage() {
                 items={items}
                 value={selected}
                 onChange={setSelected}
-                gridCls="grid-cols-2 xl:grid-cols-3"
+                gridCls="grid-cols-1 sm:grid-cols-2"
+                // Top suppliers right on the card. Opening a sheet to learn
+                // that one vendor is £4.50 and another £4.77 is a lot of
+                // ceremony for two numbers.
+                suppliers={supplierMap}
                 // The "compare ›" opens the full sheet. Picking an item and
                 // inspecting it are different intents.
                 onOpenDetail={(id) => { setSelected(id); setPeek(id); }}
               />
             </div>
 
-            <div className="lg:sticky lg:top-4">
+            <div className="min-w-0 lg:sticky lg:top-4">
               {loadingCompare || !data ? (
                 <Card><Spinner /></Card>
               ) : data.vendor_count === 0 ? (
@@ -450,7 +466,7 @@ export default function PriceComparisonPage() {
                 </>
               ) : (
                 <Card className="mise-feel p-0">
-                  <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
                     <span aria-hidden className="mise-neo-raised grid h-9 w-9 shrink-0 place-items-center rounded-xl text-lg">
                       {categoryEmoji(chosenItem?.category ?? "")}
                     </span>
@@ -471,7 +487,7 @@ export default function PriceComparisonPage() {
                       the change log answer "why" — useful, but not what you
                       opened the page for, and they were pushing the decision
                       off the screen. */}
-                  <div className="flex gap-1 border-b border-line px-3 pt-2" role="tablist">
+                  <div className="flex gap-1 overflow-x-auto border-b border-line px-3 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
                     {([
                       ["suppliers", `Suppliers (${data.vendor_count})`],
                       ["history", "What you paid"],
@@ -483,7 +499,7 @@ export default function PriceComparisonPage() {
                         role="tab"
                         aria-selected={pane === key}
                         onClick={() => setPane(key)}
-                        className={`rounded-t-lg px-3 py-2 text-xs font-medium transition ${
+                        className={`shrink-0 whitespace-nowrap rounded-t-lg px-3 py-2 text-xs font-medium transition ${
                           pane === key
                             ? "border-b-2 border-brand-500 text-fg"
                             : "border-b-2 border-transparent text-fg-faint hover:text-fg-soft"

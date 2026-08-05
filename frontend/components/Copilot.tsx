@@ -12,6 +12,7 @@ import { Typewriter } from "@/components/Typewriter";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, postStream, postForm } from "@/lib/api";
+import { useDraggable } from "@/components/useDraggable";
 import { speak, speechOutputSupported, stopSpeaking, useVoiceInput } from "@/lib/useVoice";
 import ChefMascot from "@/components/auth/ChefMascot";
 
@@ -648,14 +649,30 @@ export function Copilot() {
 
   function go(href: string) { voice.stop(); stopSpeaking(); setOpen(false); setClosing(false); router.push(href); }
 
+  // Where the user has decided this thing belongs.
+  const drag = useDraggable("mise.copilot.pos");
+
   return (
     <>
       {!open && (
         <button
           type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Ask DineAI Copilot"
-          className="mise-launcher-in group fixed bottom-20 left-4 z-50 lg:bottom-6 lg:left-6 flex items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-brand-500 hover:shadow-xl active:scale-95 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))]"
+          // Touch and move to reposition, tap to open — no long-press, no
+          // handle, no mode. The gesture tells us which it was: past a few
+          // pixels it is a drag. It was covering things that mattered in the
+          // corner we happened to choose.
+          {...drag.handlers}
+          onClick={() => {
+            if (drag.wasDrag()) return;
+            setOpen(true);
+          }}
+          aria-label="Ask DineAI Copilot — drag to move"
+          style={drag.style}
+          className={`mise-launcher-in group fixed bottom-20 left-4 z-50 lg:bottom-6 lg:left-6 flex touch-none items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 hover:bg-brand-500 hover:shadow-xl [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] ${
+            drag.dragging
+              ? "scale-110 cursor-grabbing opacity-90 shadow-2xl"
+              : "cursor-grab transition active:scale-95"
+          }`}
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
             <path d="M12 2.5l1.7 5.3a3 3 0 0 0 1.9 1.9L21 11.4l-5.3 1.7a3 3 0 0 0-1.9 1.9L12 20.3l-1.7-5.3a3 3 0 0 0-1.9-1.9L3 11.4l5.3-1.7a3 3 0 0 0 1.9-1.9z" />
@@ -663,6 +680,21 @@ export function Copilot() {
           </svg>
           <span className="hidden text-sm font-semibold sm:inline">Ask DineAI</span>
         </button>
+      )}
+
+      {/* A scrim, on phones only.
+          The panel already capped itself at 68dvh, but with the page still at
+          full brightness behind it the two read as one cluttered screen rather
+          than a sheet over a page — "it's really making the UI clumsy". This
+          is what every native app does: dim what is behind, and tapping the
+          dimmed part closes. On a desktop the panel is a small corner card
+          with plenty of page around it, so a scrim there would be theatre. */}
+      {open && (
+        <div
+          className="mise-scrim-in fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] sm:hidden"
+          onClick={() => setOpen(false)}
+          aria-hidden
+        />
       )}
 
       {open && (
