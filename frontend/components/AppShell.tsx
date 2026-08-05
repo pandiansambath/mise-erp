@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { API_BASE, api, featureOn } from "@/lib/api";
+import { API_BASE, api, featureOn, getToken, clearToken } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
@@ -117,7 +117,16 @@ export function ThemeSwitcher() {
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
-          <div className="mise-pop absolute right-0 z-40 mt-2 max-h-[min(70vh,26rem)] w-56 overflow-y-auto overscroll-contain rounded-xl border border-glass/10 bg-paper-2/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div
+            // Opaque, and no backdrop-blur.
+            //
+            // A translucent, blurred panel over a page that is itself full of
+            // translucent, blurred cards produces bands where the layers
+            // cancel out — rows that look blank or unreadable. A menu is the
+            // one surface that must always be legible, so it gets a solid
+            // background and borrows nothing from what is behind it.
+            className="mise-pop absolute right-0 z-40 mt-2 max-h-[min(70vh,26rem)] w-56 overflow-y-auto overscroll-contain rounded-xl border border-line-2 bg-paper-2 p-2 shadow-2xl shadow-black/50"
+          >
             <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">☀ Light</p>
             {light.map((k) => <Row key={k} k={k} />)}
             <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">🌙 Dark</p>
@@ -287,7 +296,12 @@ function ImpersonationBanner() {
   const [imp, setImp] = useState(false);
   useEffect(() => {
     try {
-      const tok = localStorage.getItem("mise_token");
+      // getToken(), not localStorage: a support view keeps its token in
+      // sessionStorage so it cannot clobber the operator's own login. Reading
+      // localStorage here meant the purple "read-only" ribbon never appeared
+      // in the very tab it exists for — the operator had no way to tell they
+      // were inside somebody else's restaurant.
+      const tok = getToken();
       if (!tok) return;
       const payload = JSON.parse(atob(tok.split(".")[1] ?? ""));
       setImp(Boolean(payload?.imp));
@@ -301,7 +315,9 @@ function ImpersonationBanner() {
       <button
         type="button"
         onClick={() => {
-          try { localStorage.removeItem("mise_token"); } catch { /* ignore */ }
+          // clearToken() knows which scope this tab is in — a support tab must
+          // only end ITSELF, never the operator's console session.
+          clearToken();
           window.location.assign("/login");
         }}
         className="mise-press rounded-md border border-violet-300/40 px-2 py-0.5 hover:bg-violet-400/10"
