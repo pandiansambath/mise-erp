@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { LeavePanel } from "@/components/LeavePanel";
+import { LEAVE_CHANGED } from "@/components/QuickLeave";
+import { RotaLegend } from "@/components/RotaLegend";
 import { Bars, Meter } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
@@ -168,6 +170,8 @@ export default function RotaPage() {
     }
   }
   const [dropDay, setDropDay] = useState<string | null>(null);
+  // Approved leave overlapping the visible week, by ISO day.
+  const [leaveByDay, setLeaveByDay] = useState<Record<string, { name: string; kind: string }[]>>({});
   // every drop stacks a move ticket: it PERSISTS until you keep or undo it,
   // each move can be undone on its own, Ctrl+Z pops the latest.
   type Move = {
@@ -389,6 +393,39 @@ export default function RotaPage() {
         : parseFloat(labour.labour_pct) <= 35
           ? "text-amber-400"
           : "text-rose-400";
+
+
+  const loadLeave = useCallback(async () => {
+    if (weekDates.length === 0) return;
+    try {
+      const rows = await api.get<
+        { employee_name: string; start_date: string; end_date: string; kind: string; status: string }[]
+      >(`/employees/leave/list?date_from=${iso(weekDates[0])}&date_to=${iso(weekDates[weekDates.length - 1])}`);
+      const map: Record<string, { name: string; kind: string }[]> = {};
+      for (const lv of rows) {
+        // Only approved leave stops anything — a request nobody agreed to is
+        // not yet a fact about the world.
+        if (lv.status !== "APPROVED") continue;
+        for (const d of weekDates) {
+          const day = iso(d);
+          if (day >= lv.start_date && day <= lv.end_date) {
+            (map[day] ??= []).push({ name: lv.employee_name, kind: lv.kind });
+          }
+        }
+      }
+      setLeaveByDay(map);
+    } catch {
+      setLeaveByDay({});
+    }
+  }, [weekDates]);
+
+  useEffect(() => { loadLeave(); }, [loadLeave]);
+  useEffect(() => {
+    // Leave booked from the attendance sheet is the same fact seen twice.
+    const onChanged = () => { loadLeave(); };
+    window.addEventListener(LEAVE_CHANGED, onChanged);
+    return () => window.removeEventListener(LEAVE_CHANGED, onChanged);
+  }, [loadLeave]);
 
   return (
     <div>
@@ -656,6 +693,8 @@ export default function RotaPage() {
           </div>
         </div>
       )}
+      <RotaLegend />
+
       {canWrite && moves.length === 0 && (
         <p className="mb-1.5 text-[11px] text-fg-faint">
           ✥ drag any shift card onto another day to move it — like a board ticket
@@ -696,6 +735,21 @@ export default function RotaPage() {
                 <span>{DAYS[i]} <span className="text-fg-faint">{d.getDate()}/{d.getMonth() + 1}</span></span>
                 {shifts.length > 0 && <span className="text-[10px] font-normal text-fg-faint">{shifts.length}</span>}
               </p>
+              {(leaveByDay[iso(d)] ?? []).length > 0 && (
+                <ul className="mb-2 space-y-1">
+                  {(leaveByDay[iso(d)] ?? []).map((lv) => (
+                    <li
+                      key={lv.name}
+                      title={`${lv.name} is on approved ${lv.kind.toLowerCase()} leave — they cannot be rota'd`}
+                      className="flex items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-400/[0.08] px-2 py-1 text-[11px] text-sky-300"
+                    >
+                      <span aria-hidden>🌴</span>
+                      <span className="min-w-0 flex-1 truncate">{lv.name}</span>
+                      <span className="text-[9px] uppercase opacity-70">{lv.kind}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {shifts.length === 0 ? (
                 <p className="py-3 text-center text-xs text-fg-faint">—</p>
               ) : (
