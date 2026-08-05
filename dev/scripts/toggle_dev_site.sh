@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Turn pandi-dev.dineai.cloud on or off, live.
 #
-#   bash pandi-dev/scripts/toggle_dev_site.sh off
-#   bash pandi-dev/scripts/toggle_dev_site.sh on
+#   bash dev/scripts/toggle_dev_site.sh off
+#   bash dev/scripts/toggle_dev_site.sh on
 #   bash scripts/toggle_dev_site.sh status
 #
 # OFF makes the page 404 on the SERVER — it is not hidden with CSS, it is never

@@ -15,6 +15,7 @@
 // lookup in the table below, and there is nothing to inject into.
 
 import { useEffect, useRef, useState } from "react";
+import { CLUSTERS, EDUCATION } from "@/dev/skills";
 
 type Line = { kind: "in" | "out" | "err"; text: string };
 
@@ -59,10 +60,12 @@ export function Terminal({
     skills: {
       help: "what he works with",
       run: () => {
-        say("languages   Python, SQL");
-        say("cloud       AWS — ECS, Lambda, SQS, S3, RDS, DynamoDB, IAM, VPC");
-        say("frameworks  Django REST Framework, Apache Camel");
-        say("devops      Docker, Kubernetes, Terraform, GitHub Actions");
+        // Read from the one shared list, so this can never drift from the
+        // orbit and the cards again — it was still claiming SQL long after
+        // he said he does not work in it.
+        for (const c of CLUSTERS) {
+          say(`${c.label.toLowerCase().padEnd(11)} ${c.items.join(", ")}`);
+        }
       },
     },
     contact: {
@@ -100,9 +103,11 @@ export function Terminal({
     education: {
       help: "where he studied",
       run: () => {
-        say("B.Tech Information Technology — Anna University");
-        say("Panimalar Institute of Technology, Chennai · 2023");
-        say("Gold Medalist · 17th rank overall · 92%");
+        // Same source as the card, so the terminal cannot contradict it.
+        say(`${EDUCATION.degree} — ${EDUCATION.affiliation}`);
+        say(`${EDUCATION.school} · ${EDUCATION.year}`);
+        say(EDUCATION.honour);
+        say(`verify: ${EDUCATION.verifyUrl}`);
       },
     },
     uptime: {

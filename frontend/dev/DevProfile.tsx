@@ -12,8 +12,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Album, type Photo } from "./Album";
-import { SkillOrbit } from "@/pandi-dev/SkillOrbit";
-import { Atmosphere } from "@/pandi-dev/Atmosphere";
+import { SkillClusters } from "@/dev/SkillClusters";
+import { SkillOrbit } from "@/dev/SkillOrbit";
+import { Atmosphere } from "@/dev/Atmosphere";
 import { BootSequence } from "./BootSequence";
 import { ChainField } from "./ChainField";
 import { DecryptText } from "./DecryptText";
@@ -229,6 +230,15 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
               ? `+ ${String(exp.hours).padStart(2, "0")}:${String(exp.minutes).padStart(2, "0")}:${String(exp.seconds).padStart(2, "0")} AND COUNTING`
               : "SYNCING…"}
           </p>
+        </div>
+
+        {/* ── What he works with, and where he studied ─────────────────
+            The orbit is the showpiece; these are the answers. A recruiter
+            checking "does he know ECS" should not have to wait for a chip to
+            come round, and twenty chips will not fit on a phone at any
+            readable size. */}
+        <div className="mt-6 w-full max-w-md lg:max-w-none">
+          <SkillClusters entered={entered} />
         </div>
 
         {/* ── Contact ──────────────────────────────────────────────────── */}
