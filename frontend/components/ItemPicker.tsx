@@ -433,6 +433,7 @@ export function ItemPickerSingle({
   value,
   onChange,
   gridCls,
+  onCreate,
   onOpenDetail,
 }: {
   items: Item[];
@@ -441,6 +442,11 @@ export function ItemPickerSingle({
   /** Column classes for the card grid. A picker sitting in half a page needs
    *  fewer, wider columns than one spanning the whole width. */
   gridCls?: string;
+  /** Offered when a search matches nothing. A supplier selling something you
+   *  have not stocked yet used to mean leaving for Inventory, creating it, and
+   *  finding your way back — and the price you came to enter is gone by then.
+   *  Receives what was typed. */
+  onCreate?: (name: string) => void;
   /** Open the full detail for an item. When given, each card grows a chevron:
    *  picking an item and INSPECTING it are different intents, and making the
    *  comparison something you scroll to find is what made this page tiring. */
@@ -517,9 +523,20 @@ export function ItemPickerSingle({
         }`}
       >
         {visible.length === 0 && (
-          <p className="col-span-full py-6 text-center text-sm text-fg-faint">
-            No items match{query ? ` “${q.trim()}”` : " this section"}.
-          </p>
+          <div className="col-span-full py-6 text-center">
+            <p className="text-sm text-fg-faint">
+              No items match{query ? ` “${q.trim()}”` : " this section"}.
+            </p>
+            {onCreate && query && (
+              <button
+                type="button"
+                onClick={() => onCreate(q.trim())}
+                className="mise-press mt-2 rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
+              >
+                ＋ Create “{q.trim()}” as a new item
+              </button>
+            )}
+          </div>
         )}
         {visible.map((it) => {
           const sel = value === it.id;

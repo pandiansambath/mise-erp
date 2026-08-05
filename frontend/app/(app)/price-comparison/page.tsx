@@ -207,7 +207,12 @@ export default function PriceComparisonPage() {
       .get<Item[]>("/inventory/items")
       .then((i) => {
         setItems(i);
-        if (i.length) setSelected(i[0].id);
+        // Arriving from Purchasing's "full history" link lands on THAT item,
+        // not the alphabetical first one. A deep link that drops you on an
+        // unrelated item is worse than no link.
+        const wanted = new URLSearchParams(window.location.search).get("item");
+        const found = wanted && i.some((x) => x.id === wanted) ? wanted : i[0]?.id;
+        if (found) setSelected(found);
       })
       .finally(() => setLoadingItems(false));
   }, []);
