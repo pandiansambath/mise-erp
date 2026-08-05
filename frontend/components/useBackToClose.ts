@@ -30,7 +30,10 @@ export function useBackToClose(open: boolean, onClose: () => void) {
   useEffect(() => {
     if (!open) return;
 
-    window.history.pushState({ overlay: true }, "");
+    // A token unique to THIS overlay, so cleanup can tell its own history
+    // entry from somebody else's.
+    const id = `ov-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    window.history.pushState({ overlay: id }, "");
     pushed.current = true;
 
     const onPop = () => {
@@ -44,10 +47,19 @@ export function useBackToClose(open: boolean, onClose: () => void) {
       window.removeEventListener("popstate", onPop);
       // Closed some other way: take our entry back off, or the next Back press
       // would appear to do nothing at all.
-      if (pushed.current) {
+      //
+      // ⚠️ ONLY if the top of the stack is still OURS. One overlay opening
+      // another — the vendor sheet's "Edit details" — closes the first while
+      // the second has already pushed. A blind history.back() then popped the
+      // NEW overlay's entry, whose popstate handler closed it immediately: the
+      // edit form opened and vanished in the same frame, which looked exactly
+      // like a dead button. If somebody else is on top, leave the stack alone.
+      const top = (window.history.state as { overlay?: string } | null)?.overlay;
+      if (pushed.current && top === id) {
         pushed.current = false;
         window.history.back();
       }
+      pushed.current = false;
     };
   }, [open]);
 }

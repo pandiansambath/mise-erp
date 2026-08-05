@@ -17,6 +17,7 @@ import app.hotels.models  # noqa: F401
 import app.inventory.models  # noqa: F401
 import app.party.models  # noqa: F401
 import app.payroll.models  # noqa: F401
+import app.platform_admin.models  # noqa: F401
 import app.purchasing.models  # noqa: F401
 import app.recipes.models  # noqa: F401
 import app.sales.models  # noqa: F401

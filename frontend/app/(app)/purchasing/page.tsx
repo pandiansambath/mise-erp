@@ -757,6 +757,10 @@ export default function PurchasingPage() {
               lines={lines}
               onChange={setLines}
               lineExtra={supplierPicker}
+              // The prices, on the card. Deciding what to order IS deciding
+              // what it costs, and that number was one click away on the page
+              // whose entire job is spending money.
+              suppliers={suppliers}
               onOpenDetail={setPeekItem}
               trayFooter={
                 <div className="flex flex-wrap gap-2">

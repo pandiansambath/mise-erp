@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, ApiError } from "@/lib/api";
 import { spotlight } from "@/components/fx";
+import { DeletedHotels, SupportWindowPicker } from "@/components/DeletedHotels";
 import { SubNav } from "@/components/SubNav";
 import { Badge, Button, Card, PageHeader, Spinner, StatCard, Toggle } from "@/components/ui";
 import { DeleteHotel } from "@/components/DeleteHotel";
@@ -695,7 +696,11 @@ function HotelCard({
             type="button"
             title="Open this hotel's app on a 15-minute READ-ONLY token (audited)"
             onClick={async () => {
-              const r = await api.post<{ token: string }>(`/platform/hotels/${hotel.id}/impersonate`, {});
+              const mins = Number(localStorage.getItem("mise.imp.minutes") || 15);
+              const r = await api.post<{ token: string }>(
+                `/platform/hotels/${hotel.id}/impersonate?minutes=${mins}`,
+                {},
+              );
               // Open the HOTEL's app, on the apex — belt and braces.
               //
               // The session is already tab-scoped (sessionStorage), which alone
@@ -926,13 +931,16 @@ export default function ControlRoomPage() {
         subtitle="Every restaurant on DineAI — flip features, reset access, all in one place."
         sticky
         actions={
-          <div className="text-right">
-            <span className="block text-[10px] font-medium uppercase tracking-wide text-fg-faint">
-              fleet
-            </span>
-            <span className="block font-display text-lg font-semibold tabular-nums text-fg">
-              {active}/{hotels.length} live
-            </span>
+          <div className="flex flex-wrap items-center gap-4">
+            <SupportWindowPicker />
+            <div className="text-right">
+              <span className="block text-[10px] font-medium uppercase tracking-wide text-fg-faint">
+                fleet
+              </span>
+              <span className="block font-display text-lg font-semibold tabular-nums text-fg">
+                {active}/{hotels.length} live
+              </span>
+            </div>
           </div>
         }
       />
@@ -944,6 +952,7 @@ export default function ControlRoomPage() {
         items={[
           { key: "fleet", label: "Hotels", icon: "🏨", count: hotels.length, onSelect: () => spotlight("cr-fleet") },
           { key: "audit", label: "Audit trail", icon: "🧾", onSelect: () => spotlight("cr-audit") },
+          { key: "deleted", label: "Deleted", icon: "🗑", onSelect: () => spotlight("cr-deleted") },
           { key: "ops", label: "Operators", icon: "🔐", onSelect: () => spotlight("cr-operators") },
           { key: "jobs", label: "Job board", icon: "🧑\u200d💼", onSelect: () => spotlight("cr-jobs") },
           { key: "cast", label: "Broadcast", icon: "📣", onSelect: () => spotlight("cr-broadcast") },
@@ -1109,6 +1118,8 @@ export default function ControlRoomPage() {
           </button>
         ))}
       </div>
+
+      <DeletedHotels />
 
       <div id="cr-fleet" className="scroll-mt-24" />
 
