@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs ON the EC2 box. Not called directly — scripts/toggle_dev_site.sh
+# Runs ON the EC2 box. Not called directly — pandi-dev/scripts/toggle_dev_site.sh
 # base64-encodes this and sends it via SSM.
 #
 # It exists as its own file for one reason: the earlier version embedded Python

@@ -12,6 +12,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Album, type Photo } from "./Album";
+import { SkillOrbit } from "@/pandi-dev/SkillOrbit";
+import { Atmosphere } from "@/pandi-dev/Atmosphere";
 import { BootSequence } from "./BootSequence";
 import { ChainField } from "./ChainField";
 import { DecryptText } from "./DecryptText";
@@ -112,6 +114,10 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         }}
       />
 
+      {/* Light on the structure. The chain is the engineering; this is the
+          weather over it. Two layers doing different jobs read as depth. */}
+      <Atmosphere />
+
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
       <main
@@ -126,46 +132,29 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
       <div className="grid w-full items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
         <section className="flex flex-col items-center lg:items-start lg:text-left">
 
-        {/* ── Identity ─────────────────────────────────────────────────── */}
-        <div className="relative" style={entered ? { animation: "devFadeUp .8s .1s ease-out both" } : undefined}>
+        {/* ── Identity ─────────────────────────────────────────────────
+            He is the star; the skills orbit him. The old version was a 128px
+            square you had to click to see a second photo — on a desktop it was
+            the smallest thing on a page that is entirely about him. */}
+        <div
+          className="relative w-full"
+          style={entered ? { animation: "devFadeUp .8s .1s ease-out both" } : undefined}
+        >
+          <SkillOrbit photos={["/dev/profile.webp", "/dev/profile-alt.webp"]} />
           <button
             onClick={openAlbum}
             onMouseEnter={() => setHint(true)}
             onMouseLeave={() => setHint(false)}
             aria-label="Open the photo album"
-            className="group relative block h-32 w-32 rounded-3xl sm:h-36 sm:w-36"
+            className="mise-press mx-auto mt-4 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 font-mono text-[11px] tracking-wide text-[#a9bdd2] backdrop-blur-sm transition hover:border-[#d97742]/40 hover:text-[#f0a064]"
           >
+            <span aria-hidden>⌗</span>
+            open the album
             <span
               aria-hidden
-              className="absolute -inset-3 rounded-[2rem] opacity-60 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
-              // Both strands, orbiting. A single-hue halo reads as a glow;
-              // two make it look like the same system the background runs.
-              style={{
-                background:
-                  "conic-gradient(from 0deg, #d97742, #2dd4bf, transparent, #d97742)",
-                animation: "devSpin 8s linear infinite",
-              }}
-            />
-            <span className="absolute inset-0 overflow-hidden rounded-3xl border border-white/10">
-              <img
-                src="/dev/profile.webp"
-                alt="Pandian Sambath"
-                className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 group-hover:opacity-0"
-              />
-              {/* The second photo is not decoration — hovering swaps to it. */}
-              <img
-                src="/dev/profile-alt.webp"
-                alt=""
-                aria-hidden
-                className="absolute inset-0 h-full w-full scale-105 object-cover opacity-0 transition-all duration-500 group-hover:scale-100 group-hover:opacity-100"
-              />
-            </span>
-            <span
-              className={`absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-xl border border-[#d97742]/40 bg-[#0d1219] text-xs text-[#f0a064] transition-all duration-300 ${
-                hint ? "scale-100 opacity-100" : "scale-75 opacity-0"
-              }`}
+              className={`transition-transform duration-300 ${hint ? "translate-x-0.5" : ""}`}
             >
-              ⌗
+              →
             </span>
           </button>
         </div>

@@ -1467,3 +1467,33 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   [style*="devSpin"] { animation: none !important; }
 }
+
+/* The skills in orbit. One shell per ring rotates; each chip counter-rotates
+   at the same period so its label never tumbles. Text that spins is
+   unreadable, and unreadable text reads as cheap. */
+@keyframes devOrbit {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="devOrbit"] { animation: none !important; }
+}
+
+/* Aurora: three vast, slow, blurred blooms. The blur is what sells it — a
+   sharp gradient reads as a shape, a heavily blurred one reads as light. */
+@keyframes devAurora {
+  0%   { transform: translate3d(-6%, -4%, 0) scale(1);    opacity: .55; }
+  33%  { transform: translate3d(6%, 5%, 0) scale(1.15);   opacity: .8; }
+  66%  { transform: translate3d(-3%, 7%, 0) scale(1.05);  opacity: .6; }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1);    opacity: .55; }
+}
+
+/* Waves: two SVG bands sliding at different speeds. Parallax from nothing but
+   a speed difference — the cheapest depth cue there is. */
+@keyframes devWave {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="devAurora"], [style*="devWave"] { animation: none !important; }
+}

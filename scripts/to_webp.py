@@ -28,7 +28,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent / "frontend" / "public"
 
 # The photography. Icons and logos are SVG and already tiny; the dev album has
-# its own build pipeline (scripts/build_dev_album.py) and is left to it.
+# its own build pipeline (pandi-dev/scripts/build_dev_album.py) and is left to it.
 FOLDERS = ("site", "experience", "dishes", "chef")
 
 QUALITY = 82  # visually indistinguishable from the JPEGs at these sizes
