@@ -45,13 +45,21 @@ export function DeleteHotel({
   const expected = (handle ?? hotelId).toLowerCase();
 
   async function openPreview() {
+    // Open the panel FIRST, then fetch into it.
+    //
+    // It used to wait for the round trip before anything on screen changed, so
+    // a slow reply looked exactly like a dead button — "I clicked, nothing
+    // happened, clicked again, nothing" until one of them appeared to work.
+    // Nothing was wrong with the click; the interface simply said nothing for
+    // a second or two.
+    setStage("preview");
     setBusy(true);
     setError(null);
     try {
       setPreview(await api.get<Preview>(`/platform/hotels/${hotelId}/deletion-preview`));
-      setStage("preview");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not read this hotel.");
+      setStage("idle");
     } finally {
       setBusy(false);
     }
@@ -79,7 +87,7 @@ export function DeleteHotel({
           type="button"
           onClick={openPreview}
           disabled={busy}
-          className="text-xs text-fg-faint underline-offset-4 transition hover:text-rose-400 hover:underline"
+          className="mise-press w-full rounded-xl border border-rose-500/30 px-3 py-2.5 text-sm font-medium text-rose-300 transition hover:border-rose-500/60 hover:bg-rose-500/10 disabled:opacity-60"
         >
           {busy ? "Checking…" : "Permanently delete this restaurant"}
         </button>
@@ -96,7 +104,11 @@ export function DeleteHotel({
         Permanently delete {hotelName}
       </h4>
 
-      {stage === "preview" && (
+      {stage === "preview" && busy && (
+        <p className="mt-2 text-xs text-fg-soft">Counting what would be destroyed…</p>
+      )}
+
+      {stage === "preview" && !busy && (
         <>
           <p className="mt-1.5 text-xs leading-relaxed text-fg-soft">
             This removes <b className="text-fg">{preview?.total_rows ?? 0}</b> records and cannot
