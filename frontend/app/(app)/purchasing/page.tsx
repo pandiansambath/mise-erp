@@ -761,6 +761,10 @@ export default function PurchasingPage() {
               // what it costs, and that number was one click away on the page
               // whose entire job is spending money.
               suppliers={suppliers}
+              // Rows, not cards. Sixty items as cards is a wall you scroll
+              // past; the same thing as rows is a list you can actually work
+              // down while building an order.
+              dense
               onOpenDetail={setPeekItem}
               trayFooter={
                 <div className="flex flex-wrap gap-2">

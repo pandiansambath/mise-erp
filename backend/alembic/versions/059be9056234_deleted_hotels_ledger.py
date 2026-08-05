@@ -7,7 +7,7 @@ was recording. The only place a deletion note can survive is a table with no
 hotel_id foreign key at all.
 
 Revision ID: 059be9056234
-Revises: 59d7a43b217b
+Revises: a3371eb5891b
 """
 from collections.abc import Sequence
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "059be9056234"
-down_revision: str | None = "59d7a43b217b"
+down_revision: str | None = "a3371eb5891b"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
