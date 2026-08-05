@@ -13,8 +13,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { DevProfile } from "@/components/dev/DevProfile";
-import type { Photo } from "@/components/dev/Album";
+import { DevProfile } from "@/pandi-dev/DevProfile";
+import type { Photo } from "@/pandi-dev/Album";
 
 // Read at request time, not build time: flipping the switch should take effect
 // on restart without rebuilding the image.
