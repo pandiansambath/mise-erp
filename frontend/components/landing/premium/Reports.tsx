@@ -6,6 +6,7 @@
 
 import { Reveal } from "@/components/Reveal";
 import { Aurora, Counter, SectionHead, useInView } from "./bits";
+import { Photo } from "@/components/Photo";
 
 const PNL = [
   { n: "Net sales", v: "£41,208", pct: 100, deduct: false },
@@ -150,9 +151,8 @@ export default function Reports() {
   return (
     <section id="reports" className="mise-cv relative overflow-hidden">
       {/* the liquid-gold cinematic, veiled */}
-      <img
+      <Photo
         src="/experience/gold.jpg"
-        alt=""
         loading="lazy"
         className="absolute inset-0 h-full w-full object-cover opacity-30"
       />

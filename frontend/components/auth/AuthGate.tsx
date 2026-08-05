@@ -20,6 +20,7 @@ import { Sparkline } from "@/components/charts";
 import { Curtain, useCurtain } from "@/components/Curtain";
 import { AnimatedNumber, Aurora } from "@/components/fx";
 import { Logo } from "@/components/Logo";
+import { Photo } from "@/components/Photo";
 
 export type AuthMode = "login" | "signup";
 
@@ -471,7 +472,11 @@ function useDecoded(src: string): boolean {
     const done = () => {
       if (!cancelled) setOk(true);
     };
-    im.src = src;
+    // Probe the SAME file <Photo> will render. Pointing this at the .jpg while
+    // the picture element serves the .webp downloads both, which is worse than
+    // never having converted. A browser without WebP errors here and `done`
+    // fires anyway — the same tolerance this already had.
+    im.src = src.replace(/\.(jpe?g|png)$/i, ".webp");
     if (im.decode) im.decode().then(done).catch(done);
     else {
       im.onload = done;
@@ -494,17 +499,13 @@ function CinePanel({ mode, onSwitch }: { mode: AuthMode; onSwitch: (m: AuthMode)
   return (
     <div className="relative flex h-full flex-col justify-between overflow-hidden p-8 lg:p-10">
       {/* full-vibrancy film stills, crossfading with the mode */}
-      <img
+      <Photo
         src="/experience/table.jpg"
-        alt=""
-        decoding="async"
         className="mise-l-ken absolute inset-0 h-full w-full object-cover"
         style={{ opacity: mode === "login" && tableOk ? 1 : 0, transition: "opacity 700ms ease" }}
       />
-      <img
+      <Photo
         src="/experience/dawn.jpg"
-        alt=""
-        decoding="async"
         className="mise-l-ken absolute inset-0 h-full w-full object-cover"
         style={{ opacity: mode === "signup" && dawnOk ? 1 : 0, transition: "opacity 700ms ease" }}
       />
@@ -671,17 +672,13 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
       <div className="mise-noscrollbar relative flex h-full flex-col overflow-y-auto lg:hidden">
         {/* the 9:16 film stills the user shot for phones — full vibrancy */}
         <div className="fixed inset-0" aria-hidden>
-          <img
+          <Photo
             src="/experience/m/table.jpg"
-            alt=""
-            decoding="async"
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
             style={{ opacity: isLogin && mTableOk ? 1 : 0, transition: "opacity 700ms ease" }}
           />
-          <img
+          <Photo
             src="/experience/m/dawn.jpg"
-            alt=""
-            decoding="async"
             className="mise-l-ken absolute inset-0 h-full w-full object-cover"
             style={{ opacity: !isLogin && mDawnOk ? 1 : 0, transition: "opacity 700ms ease" }}
           />

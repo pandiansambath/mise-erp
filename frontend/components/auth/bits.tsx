@@ -5,6 +5,7 @@
 // cinematic DNA: film-still backdrop, aurora, tactile inputs.
 
 import { useState } from "react";
+import { Photo } from "@/components/Photo";
 
 export const authInput =
   "w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-brand-400/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-brand-500/20";
@@ -15,10 +16,8 @@ export const authLabel = "block text-sm font-medium text-slate-300";
 export function AuthBackdrop({ still = "table" }: { still?: string }) {
   return (
     <>
-      <img
+      <Photo
         src={`/experience/${still}.jpg`}
-        alt=""
-        decoding="async"
         className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.22]"
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink-950/70 via-ink-950/45 to-ink-950" />
