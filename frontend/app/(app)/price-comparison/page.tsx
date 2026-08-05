@@ -436,18 +436,17 @@ export default function PriceComparisonPage() {
                 <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Pick an item</p>
                 <p className="text-[11px] text-fg-faint">★ = its current supplier</p>
               </div>
+              {/* Rows, not cards. Sixty-one items as 240px cards is a wall you
+                  scroll past; the same information as rows is a list you scan.
+                  And no sheet from here — the panel on the right already IS
+                  the detail, so opening a modal over it showed the same thing
+                  twice and hid the page underneath. */}
               <ItemPickerSingle
                 items={items}
                 value={selected}
                 onChange={setSelected}
-                gridCls="grid-cols-1 sm:grid-cols-2"
-                // Top suppliers right on the card. Opening a sheet to learn
-                // that one vendor is £4.50 and another £4.77 is a lot of
-                // ceremony for two numbers.
+                dense
                 suppliers={supplierMap}
-                // The "compare ›" opens the full sheet. Picking an item and
-                // inspecting it are different intents.
-                onOpenDetail={(id) => { setSelected(id); setPeek(id); }}
               />
             </div>
 

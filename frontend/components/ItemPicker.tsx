@@ -186,6 +186,7 @@ export function ItemPicker({
   lineExtra,
   trayFooter,
   suppliers,
+  dense,
   onOpenDetail,
 }: {
   items: Item[];
@@ -195,11 +196,14 @@ export function ItemPicker({
   /** Goes at the bottom of the pinned tray — the submit button belongs WITH the
    *  list it submits, not a scroll below the grid that keeps growing. */
   trayFooter?: ReactNode;
-  /** item id -> vendors. When given, each card lists its cheapest few. */
+  /** item id -> vendors. When given, each row lists its cheapest few. */
   suppliers?: Record<
     string,
     { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]
   >;
+  /** Rows instead of cards — see the note on ItemPickerSingle. Sixty items in
+   *  cards is a wall; in rows it is a list. */
+  dense?: boolean;
   /** Extra controls per tray row (e.g. a supplier picker on Purchasing). */
   lineExtra?: (line: PickedLine, item: Item) => ReactNode;
   /** Open an item's full detail. Adding it to an order and INSPECTING it are
@@ -299,7 +303,11 @@ export function ItemPicker({
       {/* Item cards — key remounts the grid per tab/search so the stagger replays */}
       <div
         key={query ? `q:${query}` : tab}
-        className="mise-stagger grid max-h-[28rem] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
+        className={
+          dense
+            ? "mise-stagger max-h-[28rem] divide-y divide-line/60 overflow-y-auto rounded-xl border border-line"
+            : "mise-stagger grid max-h-[28rem] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
+        }
       >
         {visible.length === 0 && (
           <p className="col-span-full py-6 text-center text-sm text-fg-faint">
@@ -309,6 +317,87 @@ export function ItemPicker({
         {visible.map((it) => {
           const sel = picked.has(it.id);
           const st = stockState(it);
+
+          if (dense) {
+            const rows = suppliers?.[it.id];
+            const sorted = rows
+              ? [...rows].sort(
+                  (a, b) =>
+                    (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
+                )
+              : null;
+            return (
+              <div
+                key={it.id}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 transition ${
+                  sel ? "bg-brand-400/[0.13]" : "hover:bg-glass/5"
+                }`}
+              >
+                <button
+                  type="button"
+                  aria-pressed={sel}
+                  onClick={() => toggle(it)}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                >
+                  <span
+                    aria-hidden
+                    className={`grid h-4 w-4 shrink-0 place-items-center rounded text-[9px] leading-none ${
+                      sel ? "bg-brand-500 text-white" : "border border-line-2 text-transparent"
+                    }`}
+                  >
+                    ✓
+                  </span>
+                  <span aria-hidden className="shrink-0 text-base">
+                    {categoryEmoji(groupKey(it))}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span
+                        className={`truncate text-sm ${sel ? "font-semibold text-fg" : "font-medium text-fg-soft"}`}
+                      >
+                        {it.name}
+                      </span>
+                      <span className={`shrink-0 text-[10px] ${st.cls}`}>{st.dot}</span>
+                      <span className="shrink-0 text-[10px] text-fg-faint">
+                        {fmtQty(it.current_stock, it.unit)}
+                      </span>
+                    </span>
+                    {sorted && sorted.length > 0 && (
+                      <span className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[10.5px] leading-tight">
+                        {sorted.slice(0, 3).map((v, vi) => (
+                          <span key={v.vendor_name} className="whitespace-nowrap">
+                            <span className={v.is_preferred ? "text-brand-300" : "text-fg-faint"}>
+                              {v.is_preferred ? "★" : ""}
+                              {v.vendor_name}
+                            </span>{" "}
+                            <span
+                              className={`font-mono ${vi === 0 ? "text-emerald-300" : "text-fg-faint"}`}
+                            >
+                              {format(v.price_per_unit)}
+                            </span>
+                          </span>
+                        ))}
+                        {sorted.length > 3 && (
+                          <span className="text-[10px] text-fg-faint">+{sorted.length - 3}</span>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                {onOpenDetail && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenDetail(it.id)}
+                    aria-label={`See suppliers and prices for ${it.name}`}
+                    className="mise-press shrink-0 rounded-lg border border-line-2 px-2 py-1 text-[10px] font-medium text-fg-faint transition hover:border-brand-400/60 hover:text-brand-300"
+                  >
+                    compare ›
+                  </button>
+                )}
+              </div>
+            );
+          }
+
           return (
             <button
               key={it.id}
@@ -499,6 +588,7 @@ export function ItemPickerSingle({
   onChange,
   gridCls,
   suppliers,
+  dense,
   onCreate,
   onOpenDetail,
 }: {
@@ -508,13 +598,21 @@ export function ItemPickerSingle({
   /** Column classes for the card grid. A picker sitting in half a page needs
    *  fewer, wider columns than one spanning the whole width. */
   gridCls?: string;
-  /** item id -> vendors, cheapest first. When given, each card lists its top
+  /** item id -> vendors, cheapest first. When given, each row lists its top
    *  few suppliers inline. Opening a sheet to read two numbers is a lot of
    *  ceremony for two numbers. */
   suppliers?: Record<
     string,
     { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]
   >;
+  /** Rows instead of cards.
+   *
+   *  Cards are for a handful of things you are choosing between. Sixty-one
+   *  items in cards is a wall you scroll past, not a list you scan — each one
+   *  240px tall to carry four words. Dense rows put the same information in a
+   *  fifth of the height, which is the difference between seeing three items
+   *  and seeing fifteen. */
+  dense?: boolean;
   /** Offered when a search matches nothing. A supplier selling something you
    *  have not stocked yet used to mean leaving for Inventory, creating it, and
    *  finding your way back — and the price you came to enter is gone by then.
@@ -591,9 +689,13 @@ export function ItemPickerSingle({
       )}
       <div
         key={query ? `q:${query}` : tab}
-        className={`mise-stagger grid max-h-[30rem] gap-2 overflow-y-auto pr-1 ${
-          gridCls ?? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-        }`}
+        className={
+          dense
+            ? "mise-stagger max-h-[32rem] divide-y divide-line/60 overflow-y-auto rounded-xl border border-line"
+            : `mise-stagger grid max-h-[30rem] gap-2 overflow-y-auto pr-1 ${
+                gridCls ?? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+              }`
+        }
       >
         {visible.length === 0 && (
           <div className="col-span-full py-6 text-center">
@@ -614,6 +716,78 @@ export function ItemPickerSingle({
         {visible.map((it) => {
           const sel = value === it.id;
           const st = stockState(it);
+          const rows = suppliers?.[it.id];
+
+          if (dense) {
+            const sorted = rows
+              ? [...rows].sort(
+                  (a, b) =>
+                    (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
+                )
+              : null;
+            return (
+              <button
+                key={it.id}
+                type="button"
+                aria-pressed={sel}
+                onClick={() => onChange(it.id)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition ${
+                  sel ? "bg-brand-400/[0.13]" : "hover:bg-glass/5"
+                }`}
+              >
+                <span aria-hidden className="shrink-0 text-base">
+                  {categoryEmoji(groupKey(it))}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <span
+                      className={`truncate text-sm ${sel ? "font-semibold text-fg" : "font-medium text-fg-soft"}`}
+                    >
+                      {it.name}
+                    </span>
+                    <span className={`shrink-0 text-[10px] ${st.cls}`}>{st.dot}</span>
+                    <span className="shrink-0 text-[10px] text-fg-faint">
+                      {fmtQty(it.current_stock, it.unit)}
+                    </span>
+                  </span>
+                  {/* The suppliers, on one line. Everything he asked to see,
+                      in the height of a single row rather than a card. */}
+                  {sorted && sorted.length > 0 && (
+                    <span className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[10.5px] leading-tight">
+                      {sorted.slice(0, 4).map((v, vi) => (
+                        <span key={v.vendor_name} className="whitespace-nowrap">
+                          <span className={v.is_preferred ? "text-brand-300" : "text-fg-faint"}>
+                            {v.is_preferred ? "★" : ""}
+                            {v.vendor_name}
+                          </span>{" "}
+                          <span
+                            className={`font-mono ${vi === 0 ? "text-emerald-300" : "text-fg-faint"}`}
+                          >
+                            {format(v.price_per_unit)}
+                          </span>
+                        </span>
+                      ))}
+                      {sorted.length > 4 && (
+                        <span className="text-[10px] text-fg-faint">+{sorted.length - 4}</span>
+                      )}
+                    </span>
+                  )}
+                  {sorted && sorted.length === 0 && (
+                    <span className="mt-0.5 block text-[10.5px] text-amber-300/90">
+                      no supplier yet
+                    </span>
+                  )}
+                </span>
+                <span
+                  aria-hidden
+                  className={`shrink-0 text-xs ${sel ? "text-brand-300" : "text-fg-faint"}`}
+                >
+                  ›
+                </span>
+              </button>
+            );
+          }
+
           return (
             <button
               key={it.id}
