@@ -185,6 +185,7 @@ export function ItemPicker({
   emptyHint = "Nothing here yet.",
   lineExtra,
   trayFooter,
+  suppliers,
   onOpenDetail,
 }: {
   items: Item[];
@@ -194,12 +195,18 @@ export function ItemPicker({
   /** Goes at the bottom of the pinned tray — the submit button belongs WITH the
    *  list it submits, not a scroll below the grid that keeps growing. */
   trayFooter?: ReactNode;
+  /** item id -> vendors. When given, each card lists its cheapest few. */
+  suppliers?: Record<
+    string,
+    { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]
+  >;
   /** Extra controls per tray row (e.g. a supplier picker on Purchasing). */
   lineExtra?: (line: PickedLine, item: Item) => ReactNode;
   /** Open an item's full detail. Adding it to an order and INSPECTING it are
    *  different intents; the tile click still adds. */
   onOpenDetail?: (id: string) => void;
 }) {
+  const { format } = useCurrency();
   const [tab, setTab] = useState<string>("ALL");
   const [q, setQ] = useState("");
 
@@ -288,7 +295,7 @@ export function ItemPicker({
       {/* Pick on the left, the list you are building on the right — both in
           view at once. Stacked, every item added pushed the submit button
           further down the page. */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),minmax(0,21rem)] lg:items-start">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] lg:items-start">
       {/* Item cards — key remounts the grid per tab/search so the stagger replays */}
       <div
         key={query ? `q:${query}` : tab}
@@ -308,7 +315,7 @@ export function ItemPicker({
               type="button"
               aria-pressed={sel}
               onClick={() => toggle(it)}
-              className={`mise-feel relative rounded-2xl border p-3 pb-9 text-left transition duration-200 hover:-translate-y-0.5 ${
+              className={`mise-feel relative flex flex-col rounded-2xl border p-3 pb-11 text-left transition duration-200 hover:-translate-y-0.5 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
                   : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
@@ -357,6 +364,64 @@ export function ItemPicker({
               <span className="mt-0.5 block text-xs text-fg-faint">
                 have {fmtQty(it.current_stock, it.unit)}
               </span>
+
+              {/* What it costs, and from whom. Deciding what to order IS
+                  deciding what it costs — that number had no business being
+                  one click away on the page whose whole job is spending. */}
+              {(() => {
+                const rows = suppliers?.[it.id];
+                if (!rows) return null;
+                if (rows.length === 0) {
+                  return (
+                    <span className="mt-2 block text-[11px] text-amber-300/90">
+                      no supplier yet
+                    </span>
+                  );
+                }
+                const sorted = [...rows].sort(
+                  (a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
+                );
+                const best = parseFloat(sorted[0].price_per_unit) || 0;
+                return (
+                  <span className="mt-2 block border-t border-line/70 pt-1.5">
+                    {sorted.slice(0, 4).map((v, vi) => {
+                      const extra = (parseFloat(v.price_per_unit) || 0) - best;
+                      return (
+                        <span
+                          key={v.vendor_name}
+                          className="flex items-baseline gap-1.5 text-[11px] leading-relaxed"
+                        >
+                          <span
+                            className={`min-w-0 flex-1 truncate ${
+                              v.is_preferred ? "font-medium text-brand-300" : "text-fg-soft"
+                            }`}
+                          >
+                            {v.is_preferred ? "★ " : ""}
+                            {v.vendor_name}
+                          </span>
+                          <span
+                            className={`shrink-0 font-mono tabular-nums ${
+                              vi === 0 ? "text-emerald-300" : "text-fg-faint"
+                            }`}
+                          >
+                            {format(v.price_per_unit)}
+                          </span>
+                          {extra > 0.001 && (
+                            <span className="shrink-0 text-[9px] text-rose-300/80">
+                              +{extra.toFixed(2)}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
+                    {sorted.length > 4 && (
+                      <span className="mt-0.5 block text-[10px] text-fg-faint">
+                        +{sorted.length - 4} more — open compare
+                      </span>
+                    )}
+                  </span>
+                );
+              })()}
             </button>
           );
         })}

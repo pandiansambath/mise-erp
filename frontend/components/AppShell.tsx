@@ -315,14 +315,22 @@ function ImpersonationBanner() {
       <button
         type="button"
         onClick={() => {
-          // clearToken() knows which scope this tab is in — a support tab must
-          // only end ITSELF, never the operator's console session.
+          // End the support session and go back where the operator came from,
+          // rather than dumping them on a login page. clearToken() knows which
+          // scope this tab is in, so the console session is untouched.
           clearToken();
-          window.location.assign("/login");
+          const host = window.location.hostname;
+          const parts = host.split(".");
+          const control =
+            parts.length >= 3 || host === "localhost" || /^\d+(\.\d+){3}$/.test(host)
+              ? "/control-room"
+              : `${window.location.protocol}//controlroom.${host}/control-room`;
+          window.location.assign(control);
         }}
         className="mise-press rounded-md border border-violet-300/40 px-2 py-0.5 hover:bg-violet-400/10"
+        title="End this support session and return to the Control Room"
       >
-        Leave
+        Close &amp; back to Control Room
       </button>
     </div>
   );

@@ -11,7 +11,7 @@ import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -442,6 +442,7 @@ async def active_announcements(
 @router.post("/hotels/{hotel_id}/impersonate")
 async def impersonate_hotel(
     hotel_id: uuid.UUID,
+    minutes: int = Query(default=15, ge=5, le=120),
     db: AsyncSession = Depends(get_db),
     operator: User = Depends(require_platform_owner),
 ) -> dict:
@@ -457,13 +458,53 @@ async def impersonate_hotel(
     )).scalars().first()
     if admin is None:
         raise HTTPException(status_code=404, detail="Hotel has no admin user")
-    token = create_access_token(str(admin.id), admin.role, expires_minutes=15, impersonated=True)
+    # Bounded on purpose: five minutes is long enough to be useful and two
+    # hours is the most a read-only key into somebody's business should
+    # ever live, however the operator feels about it.
+    token = create_access_token(
+        str(admin.id), admin.role, expires_minutes=minutes, impersonated=True
+    )
     await audit_service.record(
         db, hotel_id=hotel_id, user=operator, action="platform.impersonate",
-        summary=f"Operator opened a 15-min READ-ONLY view as {admin.email}",
+        summary=f"Operator opened a {minutes}-min READ-ONLY view as {admin.email}",
         entity_type="user", entity_id=admin.id,
     )
-    return {"token": token, "email": admin.email, "expires_minutes": 15}
+    return {"token": token, "email": admin.email, "expires_minutes": minutes}
+
+
+@router.get("/deleted-hotels")
+async def deleted_hotels(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_owner),
+) -> list[dict]:
+    """Every restaurant ever permanently deleted, newest first.
+
+    The only surviving trace once the rows are gone, so it carries the things
+    somebody would actually ask three months later: what it was called, where
+    it was, who removed it, why, how much went, and where the archive lives.
+    """
+    from app.platform_admin.models import DeletedHotel
+
+    rows = (
+        await db.execute(select(DeletedHotel).order_by(DeletedHotel.deleted_at.desc()))
+    ).scalars()
+    return [
+        {
+            "id": str(r.id),
+            "hotel_id": str(r.hotel_id),
+            "hotel_name": r.hotel_name,
+            "handle": r.handle,
+            "where": " · ".join([x for x in (r.city, r.country) if x]),
+            "plan": r.plan,
+            "deleted_by": r.deleted_by,
+            "reason": r.reason,
+            "archive_key": r.archive_key,
+            "total_rows": r.total_rows,
+            "removed": r.removed or {},
+            "deleted_at": r.deleted_at.isoformat() if r.deleted_at else None,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/audit")
@@ -770,6 +811,28 @@ async def delete_hotel(
         )
 
     name = hotel.name
+    # Write the ledger line BEFORE the purge, while the hotel row is still
+    # readable — its city, country and plan are about to stop existing.
+    from app.platform_admin.models import DeletedHotel
+
+    counts = await deletion.preview(db, hotel_id)
+    db.add(
+        DeletedHotel(
+            hotel_id=hotel_id,
+            hotel_name=hotel.name,
+            handle=hotel.username,
+            city=hotel.city,
+            country=hotel.country,
+            plan=hotel.plan,
+            deleted_by=operator.email,
+            reason=(payload.reason or "").strip() or None,
+            archive_key=key,
+            total_rows=int(counts.get("total_rows") or 0),
+            removed=counts.get("counts") or {},
+        )
+    )
+    await db.flush()
+
     removed = await deletion.purge(db, hotel_id)
     await db.commit()
 

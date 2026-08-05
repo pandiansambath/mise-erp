@@ -430,7 +430,7 @@ export default function PriceComparisonPage() {
               used to stack picker → banner → table → chart → log, so choosing an
               item pushed the answer under the fold and you scrolled to find
               what you had just asked for. Nothing here moves out of reach. */}
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.02fr),minmax(0,1fr)] lg:items-start">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1fr)] lg:items-start">
             <div className="min-w-0 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20 lg:sticky lg:top-4">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Pick an item</p>
