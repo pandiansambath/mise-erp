@@ -101,8 +101,12 @@ export function SkillClusters({ entered }: { entered: boolean }) {
         <p className="relative mt-2.5 text-lg font-semibold leading-snug text-[#e6edf5]">
           {EDUCATION.honour}
         </p>
-        <p className="relative mt-1 text-sm text-[#a9bdd2]">
-          {EDUCATION.degree} · {EDUCATION.year}
+        <p className="relative mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-[#a9bdd2]">
+          <span>{EDUCATION.degree}</span>
+          <span aria-hidden className="text-[#4a5c70]">·</span>
+          <span>{EDUCATION.year}</span>
+          <span aria-hidden className="text-[#4a5c70]">·</span>
+          <span className="font-mono tabular-nums text-[#f0a064]">CGPA {EDUCATION.cgpa}</span>
         </p>
 
         <a
@@ -115,18 +119,32 @@ export function SkillClusters({ entered }: { entered: boolean }) {
         </a>
         <p className="relative mt-0.5 text-[12px] text-[#7d93ad]">{EDUCATION.affiliation}</p>
 
-        <a
-          href={EDUCATION.verifyUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="relative mt-3.5 inline-flex items-center gap-2 rounded-full border border-[#d97742]/40 bg-[#d97742]/10 px-3.5 py-1.5 font-mono text-[11px] text-[#f0a064] transition hover:border-[#d97742]/70 hover:bg-[#d97742]/20"
-        >
-          <span aria-hidden>✓</span>
-          verify on {EDUCATION.verifyLabel}
-          <span aria-hidden>↗</span>
-        </a>
+        {/* The proof, one click away and with a pointer to the right page.
+            A 49-page PDF and no page number is only technically evidence —
+            nobody scrolls a stranger's rank list looking for their name. */}
+        <div className="relative mt-3.5 flex flex-wrap items-center gap-2">
+          <a
+            href={EDUCATION.verifyUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center gap-2 rounded-full border border-[#d97742]/40 bg-[#d97742]/10 px-3.5 py-1.5 font-mono text-[11px] text-[#f0a064] transition hover:border-[#d97742]/70 hover:bg-[#d97742]/20"
+          >
+            <span aria-hidden>✓</span>
+            verify · {EDUCATION.verifyLabel}
+            <span aria-hidden>↗</span>
+          </a>
+          <a
+            href={EDUCATION.officialUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="font-mono text-[10px] text-[#4a5c70] underline-offset-4 transition hover:text-[#7d93ad] hover:underline"
+          >
+            annauniv.edu
+          </a>
+        </div>
         <p className="relative mt-2 font-mono text-[10px] leading-relaxed text-[#4a5c70]">
           {EDUCATION.exam}
+          <span className="mt-0.5 block text-[#7d93ad]">↳ {EDUCATION.verifyHint}</span>
         </p>
       </section>
     </div>
