@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { SubNav } from "@/components/SubNav";
+import { spotlight } from "@/components/fx";
 import { api, ApiError, downloadFile, type Employee, type PayrollRow } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { Bars } from "@/components/charts";
@@ -379,10 +381,39 @@ export default function PayrollPage() {
       {openInfo && <div className="fixed inset-0 z-30" onClick={() => setOpenInfo(null)} aria-hidden />}
       <PageHeader title="Payroll" subtitle="Run pay for the period, approve, and issue payslips." />
 
+      <SubNav
+        items={[
+          {
+            key: "one",
+            label: "Pay one person",
+            icon: "👤",
+            onSelect: () => spotlight("one-person"),
+          },
+          {
+            key: "advances",
+            label: "Salary advances",
+            icon: "💵",
+            onSelect: () => spotlight("advances"),
+          },
+          {
+            key: "history",
+            label: "Pay history",
+            icon: "📖",
+            onSelect: () => spotlight("pay-history"),
+          },
+          {
+            key: "help",
+            label: "How pay is worked out",
+            icon: "❓",
+            onSelect: () => { setHelpOpen(true); spotlight("payroll-help"); },
+          },
+        ]}
+      />
+
       {/* Plain-English explainer so a first-time owner understands every number. */}
       <Card className="mb-6 border-brand-500/20 bg-brand-500/5">
         <button onClick={() => setHelpOpen(!helpOpen)} className="flex w-full items-center justify-between text-left">
-          <h3 className="font-semibold text-fg">How is this pay worked out?</h3>
+          <h3 id="payroll-help" className="scroll-mt-24 font-semibold text-fg">How is this pay worked out?</h3>
           <span className={`text-fg-faint transition-transform duration-200 ${helpOpen ? "rotate-180" : ""}`}>▼</span>
         </button>
         {helpOpen && (
@@ -530,7 +561,7 @@ export default function PayrollPage() {
 
       {canWrite && (
         <Card className="mise-feel mb-6">
-          <h3 className="font-semibold text-fg">👤 Run pay for ONE person</h3>
+          <h3 id="one-person" className="scroll-mt-24 font-semibold text-fg">👤 Run pay for ONE person</h3>
           <p className="mt-1 text-sm text-fg-faint">
             For individual schedules — paid on the 18th, paid every Sunday, catching up a missed
             week. Pick the person, pick the dates, <b className="text-fg-soft">preview first</b>, then run.
@@ -625,7 +656,7 @@ export default function PayrollPage() {
       )}
 
       <Card className="mise-feel mb-6">
-        <h3 className="font-semibold text-fg">📖 Pay history by person</h3>
+        <h3 id="pay-history" className="scroll-mt-24 font-semibold text-fg">📖 Pay history by person</h3>
         <p className="mt-1 text-sm text-fg-faint">
           The permanent record — every run they ever had (weekly, monthly or custom), whatever
           period the page above is showing. Download any payslip, or their whole history as one PDF.
@@ -694,7 +725,7 @@ export default function PayrollPage() {
       {canWrite && (
         <Card className="mb-6">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-fg">Salary advances</h3>
+            <h3 id="advances" className="scroll-mt-24 font-semibold text-fg">Salary advances</h3>
             <InfoDot
               id="adv"
               open={openInfo === "adv"}

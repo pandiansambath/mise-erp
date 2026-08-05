@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SubNav } from "@/components/SubNav";
+import { spotlight } from "@/components/fx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -86,7 +88,7 @@ function BudgetCard() {
   return (
     <Card className="mise-feel mt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold text-fg">Budget vs actual — this month</h3>
+        <h3 id="budget-vs-actual" className="scroll-mt-24 font-semibold text-fg">Budget vs actual — this month</h3>
         {canWrite && (
           <Button variant="soft" size="sm" onClick={() => setEdit((v) => !v)}>
             {edit ? "Close" : "✎ Set targets"}
@@ -210,7 +212,7 @@ function MenuEngineeringCard() {
     <Card className="mise-feel mt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-fg">Menu engineering</h3>
+          <h3 id="menu-engineering" className="scroll-mt-24 font-semibold text-fg">Menu engineering</h3>
           <p className="text-xs text-fg-faint">
             Popularity × margin — what to promote (⭐), re-price (🐎), reposition (🧩) or cut (🐕).
             {me.has_data &&
@@ -413,6 +415,29 @@ export default function MoneyPage() {
         subtitle={`Every plate, every penny — where profit is made and lost. Month to date: ${data.date_from} → ${data.date_to}.`}
       />
 
+      <SubNav
+        items={[
+          {
+            key: "profit",
+            label: "Profit",
+            icon: "💷",
+            onSelect: () => spotlight("profit-after"),
+          },
+          {
+            key: "budget",
+            label: "Budget vs actual",
+            icon: "🎯",
+            onSelect: () => spotlight("budget-vs-actual"),
+          },
+          {
+            key: "menu",
+            label: "Menu engineering",
+            icon: "🍽",
+            onSelect: () => spotlight("menu-engineering"),
+          },
+        ]}
+      />
+
       {/* Headline KPIs */}
       <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
@@ -441,7 +466,7 @@ export default function MoneyPage() {
       {pnl && (
         <Card className="mise-feel mt-6">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-fg">Profit — after everything</h3>
+            <h3 id="profit-after" className="scroll-mt-24 font-semibold text-fg">Profit — after everything</h3>
             <span className="text-xs text-fg-faint">month to date</span>
           </div>
           <p className="mt-1 text-xs text-fg-faint">

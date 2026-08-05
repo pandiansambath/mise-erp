@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SubNav } from "@/components/SubNav";
 import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { LeavePanel } from "@/components/LeavePanel";
@@ -445,6 +446,35 @@ export default function RotaPage() {
     <div>
       <PageHeader title="Rota" subtitle="Schedule shifts and see forecast labour cost as a % of sales." />
 
+      <SubNav
+        items={[
+          {
+            key: "week",
+            label: "This week",
+            icon: "📅",
+            onSelect: () => setWeekStart(mondayOf(new Date())),
+          },
+          {
+            key: "copy",
+            label: "Copy last week",
+            icon: "⧉",
+            onSelect: () => spotlight("rota-copy"),
+          },
+          {
+            key: "labour",
+            label: "Labour by person",
+            icon: "💷",
+            onSelect: () => spotlight("labour-by-person"),
+          },
+          {
+            key: "legend",
+            label: "What you're looking at",
+            icon: "🔑",
+            onSelect: () => spotlight("rota-legend"),
+          },
+        ]}
+      />
+
       {/* Leave lives beside the rota because that is where it has to be obeyed:
           scheduling somebody who is off is the mistake this prevents. */}
       <Card className="mb-6">
@@ -707,7 +737,7 @@ export default function RotaPage() {
           </div>
         </div>
       )}
-      <RotaLegend />
+      <div id="rota-legend" className="scroll-mt-24"><RotaLegend /></div>
 
       {canWrite && moves.length === 0 && (
         <p className="mb-1.5 text-[11px] text-fg-faint">
@@ -834,7 +864,7 @@ export default function RotaPage() {
 
       {labour && labour.by_employee.length > 0 && (
         <Card className="mise-feel mt-6">
-          <h3 className="font-semibold text-fg">Labour by person (this week)</h3>
+          <h3 id="labour-by-person" className="scroll-mt-24 font-semibold text-fg">Labour by person (this week)</h3>
           <div className="mise-well mt-3 rounded-xl p-3">
             <Bars
               formatValue={(v) => format(String(v))}

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { SubNav } from "@/components/SubNav";
+import { spotlight } from "@/components/fx";
 import { api, downloadFile, type PnL } from "@/lib/api";
 import { Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { recall, remember } from "@/lib/rangeMemory";
@@ -110,6 +112,36 @@ export default function ReportsPage() {
     <div>
       <PageHeader title="Reports" subtitle="Profit & Loss — did the restaurant make money in a chosen period?" />
 
+      <SubNav
+        items={[
+          { key: "pnl", label: "P&L", icon: "🧾", onSelect: () => spotlight("pnl-table") },
+          {
+            key: "vs",
+            label: "vs last period",
+            icon: "⇄",
+            onSelect: () => spotlight("vs-previous"),
+          },
+          {
+            key: "where",
+            label: "Where it went",
+            icon: "🍩",
+            onSelect: () => spotlight("where-money-went"),
+          },
+          {
+            key: "health",
+            label: "Health checks",
+            icon: "🩺",
+            onSelect: () => spotlight("health-checks"),
+          },
+          {
+            key: "archive",
+            label: "Monthly snapshots",
+            icon: "📂",
+            onSelect: () => spotlight("snapshots"),
+          },
+        ]}
+      />
+
       <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
         <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} />
         <div className="flex gap-2">
@@ -153,7 +185,7 @@ export default function ReportsPage() {
       {/* the snapshot archive: any past month's P&L, one tap, straight to PDF */}
       <Card className="mise-feel mb-6">
         <div className="flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold text-fg">📂 Monthly snapshot archive</h3>
+          <h3 id="snapshots" className="scroll-mt-24 text-sm font-semibold text-fg">📂 Monthly snapshot archive</h3>
           <span className="text-xs text-fg-faint">each opens that whole month as a one-page PDF</span>
         </div>
         <div className="mise-noscrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
@@ -196,7 +228,7 @@ export default function ReportsPage() {
 
           {compare && prev && (
             <Card className="mise-pop mise-feel mt-6">
-              <h3 className="font-semibold text-fg">This period vs the one before</h3>
+              <h3 id="vs-previous" className="scroll-mt-24 font-semibold text-fg">This period vs the one before</h3>
               <p className="text-xs text-fg-faint">
                 {prev.date_from} → {prev.date_to} <span className="mx-1">·</span> then {pnl.date_from} → {pnl.date_to}
               </p>
@@ -273,7 +305,7 @@ export default function ReportsPage() {
           {/* The period as one picture: where every pound went + health gauges */}
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Card className="mise-feel">
-              <h3 className="font-semibold text-fg">Where the money went</h3>
+              <h3 id="where-money-went" className="scroll-mt-24 font-semibold text-fg">Where the money went</h3>
               <p className="text-xs text-fg-faint">of {format(pnl.net_sales)} taken in</p>
               <div className="mt-4">
                 <Donut
@@ -290,7 +322,7 @@ export default function ReportsPage() {
             </Card>
 
             <Card className="mise-feel lg:col-span-2">
-              <h3 className="font-semibold text-fg">Health checks</h3>
+              <h3 id="health-checks" className="scroll-mt-24 font-semibold text-fg">Health checks</h3>
               <p className="text-xs text-fg-faint">the two numbers a kitchen lives or dies by</p>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="mise-well mise-feel rounded-xl p-4">
@@ -313,7 +345,7 @@ export default function ReportsPage() {
 
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Card className="mise-feel lg:col-span-2">
-              <h3 className="mb-2 font-semibold text-fg">Profit &amp; Loss</h3>
+              <h3 id="pnl-table" className="scroll-mt-24 mb-2 font-semibold text-fg">Profit &amp; Loss</h3>
               <div className="text-sm">
                 <PnlLine label="Gross sales" value={pnl.gross_sales} />
                 <PnlLine label="Delivery commission" value={pnl.commission} sign="minus" />
@@ -326,7 +358,7 @@ export default function ReportsPage() {
             </Card>
 
             <Card className="mise-feel">
-              <h3 className="font-semibold text-fg">Expense breakdown</h3>
+              <h3 id="expense-breakdown" className="scroll-mt-24 font-semibold text-fg">Expense breakdown</h3>
               {pnl.expense_breakdown.length === 0 ? (
                 <p className="py-6 text-center text-sm text-fg-faint">No expenses in range.</p>
               ) : (

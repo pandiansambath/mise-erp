@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SubNav } from "@/components/SubNav";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Donut } from "@/components/charts";
@@ -124,8 +125,49 @@ export default function EmployeesPage() {
     <div>
       <PageHeader title="Employees" subtitle="Your team — pay, UK compliance, and each person’s login & access (verify, email, password, history) on their 🔐 Login button." />
 
+      {/* What this page can DO. Everything here existed; none of it was
+          findable without scrolling and recognising it. */}
+      <SubNav
+        items={[
+          ...(canWrite
+            ? [{
+                key: "add",
+                label: editingId ? "Editing…" : "Add someone",
+                icon: "＋",
+                onSelect: () => spotlight("employee-form"),
+              }]
+            : []),
+          {
+            key: "team",
+            label: "The team",
+            icon: "👥",
+            count: employees.length,
+            onSelect: () => spotlight("team-list"),
+          },
+          ...(alerts.length > 0
+            ? [{
+                key: "visa",
+                label: "Visa runway",
+                icon: "🛂",
+                count: alerts.length,
+                // Expired or about to expire is not a neutral number.
+                tone: alerts.some((a) => a.days_left <= 30) ? ("bad" as const) : ("warn" as const),
+                onSelect: () => spotlight("visa-runway"),
+              }]
+            : []),
+          ...(employees.length > 1
+            ? [{
+                key: "paymix",
+                label: "How they're paid",
+                icon: "🍩",
+                onSelect: () => spotlight("pay-mix"),
+              }]
+            : []),
+        ]}
+      />
+
       {alerts.length > 0 && (
-        <Card className="mise-feel mb-6 border-amber-400/30">
+        <Card id="visa-runway" className="mise-feel mb-6 scroll-mt-24 border-amber-400/30">
           <p className="text-sm font-semibold text-amber-200">⚠️ Visa runway — who needs action, and when</p>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
@@ -160,7 +202,7 @@ export default function EmployeesPage() {
       )}
 
       {canWrite && (
-        <Card className="mb-6" id="employee-form">
+        <Card className="mb-6 scroll-mt-24" id="employee-form">
           <p className="mb-3 text-sm font-medium text-fg-soft">
             {editingId ? "Edit employee" : "Add employee"}
           </p>
@@ -256,7 +298,7 @@ export default function EmployeesPage() {
       )}
 
       {employees.length > 1 && (
-        <Card className="mise-feel mb-6">
+        <Card id="pay-mix" className="mise-feel mb-6 scroll-mt-24">
           <h3 className="font-semibold text-fg">How the team is paid</h3>
           <p className="text-xs text-fg-faint">hourly staff go on WEEKLY payroll runs; salaried on monthly</p>
           <div className="mt-4">
@@ -272,7 +314,7 @@ export default function EmployeesPage() {
         </Card>
       )}
 
-      <Card className="p-0">
+      <Card id="team-list" className="scroll-mt-24 p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
