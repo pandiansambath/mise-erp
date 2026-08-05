@@ -13,6 +13,7 @@ and an accident:
 The archive is patched out in most of these because we are testing the refusal
 logic, not S3. The one test that matters most is the one where archiving FAILS.
 """
+import json
 import uuid
 
 import pytest
@@ -138,6 +139,7 @@ async def test_a_successful_delete_leaves_nothing_behind(
     pointing at a hotel that no longer exists are the failure mode this is
     ordered to prevent."""
     monkeypatch.setattr(deletion, "archive", _fake_archive)
+    victim_id = victim.id
 
     res = await client.post(
         f"/api/platform/hotels/{victim.id}/delete",
@@ -149,9 +151,11 @@ async def test_a_successful_delete_leaves_nothing_behind(
     assert body["removed"]["items"] == 2
     assert body["archive_key"]
 
+    # Hold the id BEFORE expiring: reading an attribute off an expired instance
+    # triggers a synchronous refresh, which an async session cannot do.
     db.expire_all()
-    assert await db.get(Hotel, victim.id) is None
-    assert (await deletion.preview(db, victim.id))["total_rows"] == 0
+    assert await db.get(Hotel, victim_id) is None
+    assert (await deletion.preview(db, victim_id))["total_rows"] == 0
 
 
 async def test_deleting_one_hotel_does_not_touch_another(
@@ -160,19 +164,20 @@ async def test_deleting_one_hotel_does_not_touch_another(
     """Every delete is filtered by hotel_id. The whole tenancy model rests on
     that being true here, of all places."""
     monkeypatch.setattr(deletion, "archive", _fake_archive)
-    db.add(Item(hotel_id=hotel.id, name="Survivor", unit="kg", current_stock=1))
+    victim_id, survivor_id = victim.id, hotel.id
+    db.add(Item(hotel_id=survivor_id, name="Survivor", unit="kg", current_stock=1))
     await db.commit()
 
     res = await client.post(
-        f"/api/platform/hotels/{victim.id}/delete",
+        f"/api/platform/hotels/{victim_id}/delete",
         json={"confirm_handle": "doomed"},
         headers=auth_header(operator),
     )
     assert res.status_code == 200
 
     db.expire_all()
-    assert await db.get(Hotel, hotel.id) is not None
-    assert (await deletion.preview(db, hotel.id))["counts"]["items"] == 1
+    assert await db.get(Hotel, survivor_id) is not None
+    assert (await deletion.preview(db, survivor_id))["counts"]["items"] == 1
 
 
 async def test_deleting_a_hotel_that_does_not_exist_is_a_404(
@@ -216,3 +221,67 @@ async def test_the_table_order_puts_children_before_parents(db) -> None:
 async def _fake_archive(*_a, **_kw) -> str:
     """S3 is not what these tests are about; refusing without one is."""
     return "deleted-hotels/test-archive.json"
+
+
+# ── the archive itself ────────────────────────────────────────────────────
+# Patched out above, because those tests are about the refusals. But the
+# archive is what decides whether an irreversible action may run at all, so it
+# needs its own.
+
+
+async def test_no_bucket_configured_means_no_archive_and_so_no_delete(
+    db, victim, monkeypatch
+) -> None:
+    """A stack with nowhere to put the copy must not delete. This is the
+    likeliest real-world version of the failure: a fresh environment where the
+    bucket was never set."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "s3_bucket", "", raising=False)
+    assert await deletion.archive(db, victim.id, "doomed") is None
+
+
+async def test_the_archive_contains_every_row_and_the_hotel_itself(
+    db, victim, monkeypatch
+) -> None:
+    """What gets written IS the way back, so it has to be everything — the
+    child rows AND the hotel record, or the restaurant cannot be reconstructed
+    from it."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "s3_bucket", "test-bucket", raising=False)
+    written: dict = {}
+
+    class _FakeS3:
+        def put_object(self, **kw):
+            written.update(kw)
+
+    monkeypatch.setattr(
+        "boto3.client", lambda *_a, **_kw: _FakeS3()
+    )
+
+    key = await deletion.archive(db, victim.id, "doomed")
+    assert key is not None
+    assert key.startswith("deleted-hotels/doomed-")
+    assert written["Bucket"] == "test-bucket"
+
+    dump = json.loads(written["Body"].decode())
+    assert len(dump["items"]) == 2
+    assert len(dump["hotels"]) == 1
+    assert dump["hotels"][0]["name"] == "Doomed Diner"
+
+
+async def test_a_broken_s3_reports_failure_rather_than_pretending(
+    db, victim, monkeypatch
+) -> None:
+    """It must return None — the caller reads that as "refuse". Swallowing the
+    error and returning a key would let a delete proceed with no copy."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "s3_bucket", "test-bucket", raising=False)
+
+    def _explode(*_a, **_kw):
+        raise RuntimeError("S3 is down")
+
+    monkeypatch.setattr("boto3.client", _explode)
+    assert await deletion.archive(db, victim.id, "doomed") is None
