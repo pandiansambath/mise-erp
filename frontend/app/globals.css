@@ -1518,6 +1518,35 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   [style*="devSpin"] { animation: none !important; }
 }
 
+/* Born small, grown, then let go.
+   His words: "when we scroll the cards also need to shrink completely and from
+   shrink they need to reborn — reborn like a child and dying like an elder."
+
+   A scroll-driven animation, not a JavaScript scroll handler: `view()` ties
+   the timeline to the element's own passage through the viewport, so the
+   browser runs it on the compositor and it costs nothing however many cards
+   are on the page. Wrapped in @supports because a browser without it should
+   simply show the card, not a broken one — the fallback is "no animation",
+   never "invisible content". */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .dev-reborn {
+      animation: devReborn linear both;
+      animation-timeline: view();
+      /* Most of the life is spent full-size; the birth and the fade are the
+         first and last fifth. A card that is scaling the whole way down the
+         page is a card nobody can read. */
+      animation-range: entry 5% exit 95%;
+    }
+  }
+}
+@keyframes devReborn {
+  0%   { opacity: 0; transform: scale(.68) translateY(34px); filter: blur(3px); }
+  20%  { opacity: 1; transform: scale(1) translateY(0);      filter: blur(0); }
+  80%  { opacity: 1; transform: scale(1) translateY(0);      filter: blur(0); }
+  100% { opacity: 0; transform: scale(.74) translateY(-26px); filter: blur(3px); }
+}
+
 /* The skills in orbit. One shell per ring rotates; each chip counter-rotates
    at the same period so its label never tumbles. Text that spins is
    unreadable, and unreadable text reads as cheap. */

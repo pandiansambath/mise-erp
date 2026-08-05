@@ -25,7 +25,7 @@ export function SkillClusters({ entered }: { entered: boolean }) {
       {CLUSTERS.map((c, i) => (
         <section
           key={c.key}
-          className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
+          className="dev-reborn group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 backdrop-blur-sm transition-colors duration-500 hover:border-white/[0.14] sm:p-5"
           style={
             entered
               ? { animation: `devFadeUp .8s ${0.42 + i * 0.08}s ease-out both` }
@@ -79,7 +79,7 @@ export function SkillClusters({ entered }: { entered: boolean }) {
       {/* ── Education ────────────────────────────────────────────────────
           The honour is the headline and the proof sits next to it. */}
       <section
-        className="relative overflow-hidden rounded-2xl border border-[#d97742]/25 bg-[#d97742]/[0.05] p-4 backdrop-blur-sm sm:p-5"
+        className="dev-reborn relative overflow-hidden rounded-2xl border border-[#d97742]/25 bg-[#d97742]/[0.05] p-4 backdrop-blur-sm sm:p-5"
         style={entered ? { animation: "devFadeUp .8s .68s ease-out both" } : undefined}
       >
         <span
@@ -106,7 +106,7 @@ export function SkillClusters({ entered }: { entered: boolean }) {
           <span aria-hidden className="text-[#4a5c70]">·</span>
           <span>{EDUCATION.year}</span>
           <span aria-hidden className="text-[#4a5c70]">·</span>
-          <span className="font-mono tabular-nums text-[#f0a064]">CGPA {EDUCATION.cgpa}</span>
+          <span className="font-mono tabular-nums text-[#f0a064]">{EDUCATION.percentage}</span>
         </p>
 
         <a

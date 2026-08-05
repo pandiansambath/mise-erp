@@ -93,8 +93,36 @@ export function Terminal({
         window.open(url, arg === "email" ? "_self" : "_blank", "noopener");
       },
     },
+    // `touch` CREATES a file — the right verb for opening one on Linux is
+    // `xdg-open` (hand it to the default viewer). `cat` and `less` read a
+    // file, so they earn their place too. All three land on the album; a
+    // shell that only accepts one spelling of an obvious idea is a puzzle,
+    // not a shell.
+    "xdg-open": {
+      help: "open the photo album (try: xdg-open album)",
+      run: (arg?: string) => {
+        if (arg && arg !== "album") return say(`xdg-open: no such file: ${arg}`, "err");
+        say("xdg-open: album — decrypting…");
+        setTimeout(onAlbum, 260);
+      },
+    },
+    cat: {
+      help: "read a file — cat album",
+      run: (arg?: string) => {
+        if (arg && arg !== "album") return say(`cat: ${arg}: No such file or directory`, "err");
+        say("cat: album is a directory of images — opening viewer…");
+        setTimeout(onAlbum, 260);
+      },
+    },
+    ls: {
+      help: "what is here",
+      run: () => {
+        say("album/    resume.txt    skills/    contact/");
+        say("try `xdg-open album`");
+      },
+    },
     album: {
-      help: "open the photo album",
+      help: "shortcut for xdg-open album",
       run: () => {
         say("decrypting album…");
         setTimeout(onAlbum, 260);

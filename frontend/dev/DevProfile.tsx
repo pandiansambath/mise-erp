@@ -60,7 +60,6 @@ function elapsed(from: Date, now: Date) {
 export function DevProfile({ photos }: { photos: Photo[] }) {
   const [entered, setEntered] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
-  const [hint, setHint] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
 
   // Starts null and fills in on the client: rendering a clock on the server
@@ -122,7 +121,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
       <main
-        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl xl:max-w-6xl ${
+        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 lg:justify-start lg:py-16 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl xl:max-w-6xl ${
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
@@ -130,39 +129,18 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           desktop were the content declining to use the width it had — and
           simply widening a single column would have produced long, unreadable
           lines instead. Identity on the left, the things you DO on the right. */}
-      <div className="grid w-full items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
-        <section className="flex flex-col items-center lg:items-start lg:text-left">
+      <div className="grid w-full items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+        <section className="flex min-w-0 flex-col items-center lg:sticky lg:top-10 lg:items-start lg:text-left">
 
-        {/* ── Identity ─────────────────────────────────────────────────
-            He is the star; the skills orbit him. The old version was a 128px
-            square you had to click to see a second photo — on a desktop it was
-            the smallest thing on a page that is entirely about him. */}
-        <div
-          className="relative w-full"
-          style={entered ? { animation: "devFadeUp .8s .1s ease-out both" } : undefined}
-        >
-          <SkillOrbit photos={["/dev/profile.webp", "/dev/profile-alt.webp"]} />
-          <button
-            onClick={openAlbum}
-            onMouseEnter={() => setHint(true)}
-            onMouseLeave={() => setHint(false)}
-            aria-label="Open the photo album"
-            className="mise-press mx-auto mt-4 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 font-mono text-[11px] tracking-wide text-[#a9bdd2] backdrop-blur-sm transition hover:border-[#d97742]/40 hover:text-[#f0a064]"
-          >
-            <span aria-hidden>⌗</span>
-            open the album
-            <span
-              aria-hidden
-              className={`transition-transform duration-300 ${hint ? "translate-x-0.5" : ""}`}
-            >
-              →
-            </span>
-          </button>
-        </div>
-
+        {/* Name first, orbit under it.
+            The orbit was on top and vertically centred, which pushed his name
+            below the fold on a desktop and left a large empty band above it —
+            "why that empty gap… I need to scroll to see my pic and name". The
+            identity is the point of the page; it goes at the top, and on a
+            desktop the whole column is pinned so it never scrolls away at all. */}
         <h1
-          className="mt-7 text-center text-4xl font-semibold tracking-tight sm:text-5xl lg:text-left lg:text-6xl"
-          style={entered ? { animation: "devFadeUp .8s .2s ease-out both" } : undefined}
+          className="text-center font-display text-4xl font-semibold tracking-tight sm:text-5xl lg:text-left lg:text-6xl"
+          style={entered ? { animation: "devFadeUp .8s .1s ease-out both" } : undefined}
         >
           {entered ? (
             <DecryptText text="Pandian Sambath" delay={420} replayOnHover />
@@ -173,7 +151,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
 
         <p
           className="mt-2.5 text-center font-mono text-[12px] tracking-[0.14em] text-[#7d93ad] sm:text-[13px] lg:text-left"
-          style={entered ? { animation: "devFadeUp .8s .28s ease-out both" } : undefined}
+          style={entered ? { animation: "devFadeUp .8s .18s ease-out both" } : undefined}
         >
           {entered ? <DecryptText text="SYSTEM ENGINEER" delay={760} speed={26} /> : "SYSTEM ENGINEER"}
           <span className="mx-2 text-[#d97742]">·</span>
@@ -183,10 +161,20 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
 
         <p
           className="mt-1.5 text-center text-sm text-[#5b6e85] lg:text-left"
-          style={entered ? { animation: "devFadeUp .8s .34s ease-out both" } : undefined}
+          style={entered ? { animation: "devFadeUp .8s .24s ease-out both" } : undefined}
         >
           Chennai, India
         </p>
+
+        <div
+          className="relative mt-6 w-full"
+          style={entered ? { animation: "devFadeUp .8s .3s ease-out both" } : undefined}
+        >
+          <SkillOrbit
+            photos={["/dev/profile.webp", "/dev/profile-alt.webp"]}
+            onOpenAlbum={openAlbum}
+          />
+        </div>
 
         </section>
 
