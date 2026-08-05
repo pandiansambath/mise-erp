@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, postForm, downloadFile } from "@/lib/api";
+import { api, ApiError, postForm, downloadFile, type Employee } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { useDeepLink } from "@/components/fx";
 import { Select } from "@/components/Select";
@@ -410,9 +410,19 @@ function LendStaffSection({ canWrite }: { canWrite: boolean }) {
   const [f, setF] = useState({ worker_name: "", role_title: "", blurb: "", skills: "",
     available_from: "", available_until: "", day_rate: "" });
   const [resume, setResume] = useState<File | null>(null);
+  // Your own staff. Lending someone meant typing their name and job title from
+  // memory — for a person the app already knows everything about.
+  const [staff, setStaff] = useState<Employee[]>([]);
 
   const load = useCallback(() => {
     api.get<StaffPost[]>("/talent/posts").then(setPosts).catch(() => setPosts([]));
+  }, []);
+
+  useEffect(() => {
+    api
+      .get<Employee[]>("/employees")
+      .then((rows) => setStaff(rows.filter((e) => e.is_active)))
+      .catch(() => setStaff([]));
   }, []);
   useEffect(load, [load]);
 
@@ -450,6 +460,32 @@ function LendStaffSection({ canWrite }: { canWrite: boolean }) {
 
       {showForm && canWrite && (
         <form onSubmit={submit} className="mise-pop mt-4 grid gap-3 sm:grid-cols-2">
+          {/* Pick from your own team, and the job title fills itself in. Typing
+              a colleague's name into a form that already has their record is
+              the kind of small friction that stops a feature being used. Free
+              text still works for anyone not on payroll. */}
+          {staff.length > 0 && (
+            <Select
+              value={staff.find((e) => e.full_name === f.worker_name)?.id ?? ""}
+              onChange={(id) => {
+                const chosen = staff.find((e) => e.id === id);
+                if (!chosen) { setF({ ...f, worker_name: "" }); return; }
+                setF({
+                  ...f,
+                  worker_name: chosen.full_name,
+                  // Only fill a blank title — never overwrite something typed.
+                  role_title: f.role_title || chosen.job_title || "",
+                });
+              }}
+              options={[
+                { value: "", label: "Pick from your team…" },
+                ...staff.map((e) => ({
+                  value: e.id,
+                  label: e.job_title ? `${e.full_name} · ${e.job_title}` : e.full_name,
+                })),
+              ]}
+            />
+          )}
           <input required minLength={2} placeholder="Worker name *" value={f.worker_name} onChange={(e) => setF({ ...f, worker_name: e.target.value })} className={inputCls} />
           <input required minLength={2} placeholder="Role (Chef, Waiter…) *" value={f.role_title} onChange={(e) => setF({ ...f, role_title: e.target.value })} className={inputCls} />
           <input placeholder="Skills, comma-separated (tandoor, grill…)" value={f.skills} onChange={(e) => setF({ ...f, skills: e.target.value })} className={`${inputCls} sm:col-span-2`} />

@@ -330,9 +330,9 @@ export function ItemPicker({
                       onOpenDetail(it.id);
                     }
                   }}
-                  className="absolute bottom-2 right-2 grid h-6 w-6 cursor-pointer place-items-center rounded-lg border border-line-2 text-xs text-fg-faint transition hover:border-brand-400/60 hover:bg-brand-400/10 hover:text-brand-300"
+                  className="absolute bottom-2 right-2 flex cursor-pointer items-center gap-1 rounded-lg border border-line-2 px-2 py-1 text-[10px] font-medium text-fg-faint transition hover:border-brand-400/60 hover:bg-brand-400/10 hover:text-brand-300"
                 >
-                  ›
+                  compare ›
                 </span>
               )}
               <span className={`mt-1.5 block text-xs ${st.cls}`}>
@@ -413,11 +413,15 @@ export function ItemPickerSingle({
   items,
   value,
   onChange,
+  gridCls,
   onOpenDetail,
 }: {
   items: Item[];
   value: string;
   onChange: (id: string) => void;
+  /** Column classes for the card grid. A picker sitting in half a page needs
+   *  fewer, wider columns than one spanning the whole width. */
+  gridCls?: string;
   /** Open the full detail for an item. When given, each card grows a chevron:
    *  picking an item and INSPECTING it are different intents, and making the
    *  comparison something you scroll to find is what made this page tiring. */
@@ -489,7 +493,9 @@ export function ItemPickerSingle({
       )}
       <div
         key={query ? `q:${query}` : tab}
-        className="mise-stagger grid max-h-[30rem] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4"
+        className={`mise-stagger grid max-h-[30rem] gap-2 overflow-y-auto pr-1 ${
+          gridCls ?? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+        }`}
       >
         {visible.length === 0 && (
           <p className="col-span-full py-6 text-center text-sm text-fg-faint">
@@ -505,7 +511,7 @@ export function ItemPickerSingle({
               type="button"
               aria-pressed={sel}
               onClick={() => onChange(it.id)}
-              className={`relative rounded-xl border p-3 text-left transition duration-200 ${
+              className={`mise-feel relative rounded-2xl border p-3 pb-9 text-left transition duration-200 hover:-translate-y-0.5 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
                   : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
@@ -519,7 +525,15 @@ export function ItemPickerSingle({
               >
                 ✓
               </span>
-              <span className="block pr-8 text-sm font-medium leading-snug text-fg">{it.name}</span>
+              {/* An emoji tile, like the recipe cards: a picture is recognised
+                  before a word is read, and these grids are scanned not read. */}
+              <span
+                aria-hidden
+                className="mise-neo-raised mb-1.5 grid h-8 w-8 place-items-center rounded-xl text-base"
+              >
+                {categoryEmoji(groupKey(it))}
+              </span>
+              <span className="block pr-8 font-display text-sm font-semibold leading-snug text-fg">{it.name}</span>
               {onOpenDetail && (
                 // A span, not a nested <button> — a button inside a button is
                 // invalid HTML and browsers resolve it unpredictably.

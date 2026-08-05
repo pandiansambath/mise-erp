@@ -6,6 +6,7 @@ import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "
 import { localISODate } from "@/lib/date";
 import Link from "next/link";
 import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { QuickLeave, AttendanceLegend, LEAVE_CHANGED } from "@/components/QuickLeave";
 import { Bars, CalendarHeat } from "@/components/charts";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -338,6 +339,8 @@ export default function AttendancePage() {
         );
       })()}
 
+      <AttendanceLegend />
+
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -362,6 +365,10 @@ export default function AttendancePage() {
                   const clockedIn = !!r?.clock_in;
                   const clockedOut = !!r?.clock_out;
                   const onBreak = !!r?.on_break;
+                  // Both come from the rota via the same leave service the Rota
+                  // page writes to — this sheet and that one cannot disagree.
+                  const onLeave = !!r?.on_leave;
+                  const missing = !!r?.missing;
                   return (
                     <tr key={e.id} className="border-b border-line">
                       <td className="px-5 py-3 font-medium text-fg">
@@ -387,14 +394,34 @@ export default function AttendancePage() {
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        {onBreak ? (
+                        {/* Leave first: someone booked off is NOT absent, and
+                            reading the same for both is what sends a manager
+                            chasing a person who is on holiday. Then the rota's
+                            expectation, which is the difference between "nobody
+                            was due" and "somebody did not turn up". */}
+                        {onLeave ? (
+                          <span className="rounded-full bg-sky-400/15 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+                            🌴 On leave
+                          </span>
+                        ) : onBreak ? (
                           <Badge tone="amber">On break</Badge>
                         ) : clockedOut ? (
                           <Badge tone="slate">Clocked out</Badge>
                         ) : clockedIn ? (
                           <Badge tone="green">Working</Badge>
+                        ) : missing ? (
+                          <span
+                            className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-medium text-rose-300"
+                            title={
+                              r?.scheduled_start
+                                ? `The rota expected them at ${r.scheduled_start}`
+                                : "The rota expected them today"
+                            }
+                          >
+                            Not in yet{r?.scheduled_start ? ` · due ${r.scheduled_start}` : ""}
+                          </span>
                         ) : (
-                          <span className="text-fg-faint">—</span>
+                          <span className="text-fg-faint" title="No shift on the rota today">—</span>
                         )}
                       </td>
                       <td className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_in ?? null)}</td>
@@ -452,6 +479,18 @@ export default function AttendancePage() {
                               <button onClick={() => punch(e.id, "BREAK_END")} className={`${btn} border-brand-400/30 bg-brand-400/10 text-brand-300`}>End break</button>
                             )}
                             <button onClick={() => openEdit(e)} className={`${btn} border-line text-fg-faint hover:bg-paper-2`} title="Manually set / fix times (works for past dates)">Edit</button>
+                            {/* Booking time off belongs where you notice it is
+                                needed — an empty row at 09:15 — not on another
+                                page you have to remember to visit. */}
+                            {!onLeave && (
+                              <QuickLeave
+                                employeeId={e.id}
+                                employeeName={e.full_name}
+                                day={day}
+                                onBooked={() => { load(day); }}
+                                className={`${btn} border-sky-400/30 bg-sky-400/10 text-sky-300`}
+                              />
+                            )}
                           </div>
                         </td>
                       )}

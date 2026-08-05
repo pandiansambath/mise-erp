@@ -103,6 +103,7 @@ export function PageHeader({
   subtitle,
   actions,
   live = false,
+  sticky = false,
 }: {
   title: string;
   subtitle?: string;
@@ -110,9 +111,19 @@ export function PageHeader({
   actions?: ReactNode;
   /** shows a pulsing "live" dot next to the title */
   live?: boolean;
+  /** Keeps the header — and whatever is in `actions` — on screen while the page
+   *  scrolls. For pages where one number stays relevant the whole way down
+   *  (the till on Sales), so it is never something you scroll back up to find. */
+  sticky?: boolean;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div
+      className={`mb-6 flex flex-wrap items-end justify-between gap-3 ${
+        sticky
+          ? "sticky top-0 z-30 -mx-4 border-b border-line/60 bg-paper/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6"
+          : ""
+      }`}
+    >
       <div>
         <h2 className="flex items-center gap-2.5 font-display text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
           {title}

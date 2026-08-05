@@ -252,7 +252,38 @@ export default function SalesPage() {
 
   return (
     <div>
-      <PageHeader title="Sales & Cash" subtitle="One day at a time — takings by channel, commissions and the till for the date you pick." />
+      <PageHeader
+        sticky
+        title="Sales & Cash"
+        subtitle="One day at a time — takings by channel, commissions and the till for the date you pick."
+        // What is in the till right now, pinned. It was three sections down, and
+        // it is the number people open this page to find. Clicking it jumps to
+        // the drawer where you can count and close.
+        actions={
+          <button
+            type="button"
+            onClick={() => spotlight("cash-drawer")}
+            title="Open the cash drawer"
+            className="mise-press mise-feel rounded-2xl border border-brand-400/30 bg-gradient-to-b from-brand-400/[0.12] to-brand-400/[0.04] px-4 py-2.5 text-right shadow-lg shadow-black/20"
+          >
+            <span className="flex items-center justify-end gap-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-faint">
+              <span aria-hidden>🪙</span> In the cash box
+            </span>
+            <span className="mt-0.5 block font-display text-xl font-semibold tabular-nums text-fg">
+              {format(summary.expected_cash)}
+            </span>
+            <span className="mt-0.5 block text-[10px] text-fg-faint">
+              {summary.cash_counted
+                ? varianceNum === 0
+                  ? "counted · balanced ✓"
+                  : `counted ${format(summary.cash_counted)} · ${
+                      (varianceNum ?? 0) > 0 ? "over" : "short"
+                    } ${format(String(Math.abs(varianceNum ?? 0).toFixed(2)))}`
+                : "expected — till not counted yet"}
+            </span>
+          </button>
+        }
+      />
 
       {/* The three jobs of this page. Closing the till and settling petty cash
           were both below the fold, and they are the ones with a deadline. */}

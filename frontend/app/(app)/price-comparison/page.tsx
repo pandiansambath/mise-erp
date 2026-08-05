@@ -146,6 +146,7 @@ export default function PriceComparisonPage() {
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [changeLog, setChangeLog] = useState<PriceChange[]>([]);
   const [allSuppliers, setAllSuppliers] = useState<ItemSuppliers[]>([]);
+  const [pane, setPane] = useState<"suppliers" | "history" | "changes">("suppliers");
   const { format } = useCurrency();
 
   useEffect(() => {
@@ -259,6 +260,7 @@ export default function PriceComparisonPage() {
   ) : null;
 
   const peeked = peek ? items.find((i) => i.id === peek) : null;
+  const chosenItem = items.find((i) => i.id === selected) ?? null;
 
   return (
     <div>
@@ -407,154 +409,221 @@ export default function PriceComparisonPage() {
         </Card>
       ) : (
         <>
-          <div className="mb-6 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-5 shadow-lg shadow-black/20">
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-fg">🧑‍🍳 Pick an item to compare suppliers</p>
-              <p className="text-xs text-fg-faint">★ = its current supplier · you can pick any vendor per order on Purchasing</p>
+          {/* Pick on the left, the answer on the right, both pinned. The page
+              used to stack picker → banner → table → chart → log, so choosing an
+              item pushed the answer under the fold and you scrolled to find
+              what you had just asked for. Nothing here moves out of reach. */}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.02fr),minmax(0,1fr)] lg:items-start">
+            <div className="rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20 lg:sticky lg:top-4">
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Pick an item</p>
+                <p className="text-[11px] text-fg-faint">★ = its current supplier</p>
+              </div>
+              <ItemPickerSingle
+                items={items}
+                value={selected}
+                onChange={setSelected}
+                gridCls="grid-cols-2 xl:grid-cols-3"
+                // The "compare ›" opens the full sheet. Picking an item and
+                // inspecting it are different intents.
+                onOpenDetail={(id) => { setSelected(id); setPeek(id); }}
+              />
             </div>
-            <ItemPickerSingle
-              items={items}
-              value={selected}
-              onChange={setSelected}
-              // The "›" opens the comparison right here. Before, choosing an
-              // item scrolled the answer somewhere below the fold, so the page
-              // made you hunt for the thing you came to see.
-              onOpenDetail={(id) => { setSelected(id); setPeek(id); }}
-            />
-          </div>
 
-          {/* The answer first: who to buy from, and what switching saves.
-              The history and the change log below are the evidence for it —
-              they used to sit above, which buried the actual decision. */}
-          {loadingCompare || !data ? (
-            <Spinner />
-          ) : data.vendor_count === 0 ? (
-            <>
-              <Card>
-                <p className="py-6 text-center text-sm text-fg-faint">
-                  No vendor prices recorded for this item yet — add one below so it can be ordered.
-                </p>
-              </Card>
-              {addPriceForm}
-            </>
-          ) : (
-            <>
-              {parseFloat(data.potential_saving_per_unit) > 0 && (
-                <div className="mb-5 rounded-xl border border-brand-400/30 bg-brand-400/10 p-4">
-                  <p className="text-sm text-brand-300">
-                    Cheapest is{" "}
-                    <span className="font-semibold">{data.cheapest_vendor?.vendor_name}</span> at{" "}
-                    <span className="font-semibold">
-                      {format(data.cheapest_vendor?.price_per_unit)}
-                    </span>{" "}
-                    /{data.unit}. Switching from the priciest saves{" "}
-                    <span className="font-semibold">
-                      {format(data.potential_saving_per_unit)}/{data.unit}
+            <div className="lg:sticky lg:top-4">
+              {loadingCompare || !data ? (
+                <Card><Spinner /></Card>
+              ) : data.vendor_count === 0 ? (
+                <>
+                  <Card>
+                    <p className="py-6 text-center text-sm text-fg-faint">
+                      No vendor prices for <b className="text-fg-soft">{chosenItem?.name}</b> yet —
+                      add one below so it can be ordered and costed.
+                    </p>
+                  </Card>
+                  {addPriceForm}
+                </>
+              ) : (
+                <Card className="mise-feel p-0">
+                  <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+                    <span aria-hidden className="mise-neo-raised grid h-9 w-9 shrink-0 place-items-center rounded-xl text-lg">
+                      {categoryEmoji(chosenItem?.category ?? "")}
                     </span>
-                    .
-                  </p>
-                </div>
-              )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-display text-sm font-semibold text-fg">{chosenItem?.name}</p>
+                      <p className="text-[11px] text-fg-faint">
+                        {data.vendor_count} supplier{data.vendor_count === 1 ? "" : "s"} · per {data.unit}
+                      </p>
+                    </div>
+                    {parseFloat(data.potential_saving_per_unit) > 0 && (
+                      <span className="shrink-0 rounded-full bg-brand-400/15 px-2.5 py-1 text-[11px] font-semibold text-brand-300">
+                        save {format(data.potential_saving_per_unit)}/{data.unit}
+                      </span>
+                    )}
+                  </div>
 
-              <Card className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-faint">
-                        <th className="px-5 py-3 font-medium">Vendor</th>
-                        <th className="px-5 py-3 text-right font-medium">Price / {data.unit}</th>
-                        <th className="px-5 py-3 font-medium"></th>
-                        <th className="px-5 py-3 text-right font-medium"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.comparisons.map((row, idx) => (
-                        <tr
-                          key={row.vendor_id}
-                          className={`border-b border-line ${row.is_preferred ? "bg-brand-400/10" : idx === 0 ? "bg-brand-400/5" : ""}`}
-                        >
-                          <td className="px-5 py-3 font-medium text-fg">
-                            {row.vendor_name}
-                          </td>
-                          <td className="px-5 py-3 text-right font-semibold text-fg">
-                            {format(row.price_per_unit)}
-                          </td>
-                          <td className="px-5 py-3">
-                            <div className="flex gap-1.5">
-                              {idx === 0 && <Badge tone="green">Cheapest</Badge>}
-                              {row.is_preferred && <Badge tone="amber">★ Chosen supplier</Badge>}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            {canWrite && !row.is_preferred && (
-                              <button
-                                onClick={() => setPreferred(row.vendor_id)}
-                                className="mise-raised mise-press rounded-md px-2 py-1 text-xs font-medium text-fg-soft"
+                  {/* Evidence sits behind tabs rather than below. The chart and
+                      the change log answer "why" — useful, but not what you
+                      opened the page for, and they were pushing the decision
+                      off the screen. */}
+                  <div className="flex gap-1 border-b border-line px-3 pt-2" role="tablist">
+                    {([
+                      ["suppliers", `Suppliers (${data.vendor_count})`],
+                      ["history", "What you paid"],
+                      ["changes", `Changes${changeLog.length ? ` (${changeLog.length})` : ""}`],
+                    ] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={pane === key}
+                        onClick={() => setPane(key)}
+                        className={`rounded-t-lg px-3 py-2 text-xs font-medium transition ${
+                          pane === key
+                            ? "border-b-2 border-brand-500 text-fg"
+                            : "border-b-2 border-transparent text-fg-faint hover:text-fg-soft"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="max-h-[26rem] overflow-y-auto p-4">
+                    {pane === "suppliers" && (
+                      <>
+                        {/* Cards, not table rows — the recipe section's language.
+                            Each one carries the decision AND the way out to the
+                            supplier, so nothing needs a second screen. */}
+                        <ul className="mise-stagger space-y-2">
+                          {data.comparisons.map((row, idx) => {
+                            const gap =
+                              parseFloat(row.price_per_unit) -
+                              parseFloat(data.cheapest_vendor?.price_per_unit ?? row.price_per_unit);
+                            return (
+                              <li
+                                key={row.vendor_id}
+                                className={`mise-feel rounded-xl border p-3 transition ${
+                                  row.is_preferred
+                                    ? "border-brand-400/45 bg-brand-400/[0.09]"
+                                    : idx === 0
+                                      ? "border-emerald-400/30 bg-emerald-400/[0.06]"
+                                      : "border-line bg-glass/5"
+                                }`}
                               >
-                                Choose supplier
-                              </button>
-                            )}
-                            {canWrite && row.is_preferred && (
-                              <button
-                                onClick={() => setPreferred(null)}
-                                className="mise-raised mise-press rounded-md px-2 py-1 text-xs text-fg-faint"
-                              >
-                                Clear
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-              <p className="mt-3 text-xs text-fg-faint">
-                <b>How ordering picks a supplier:</b> the vendor you pick on the order itself wins;
-                otherwise your ★ chosen supplier here; otherwise the cheapest. Recipe costing
-                follows the same rule.
-              </p>
-            </>
-          )}
+                                <div className="flex items-center gap-2">
+                                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+                                    {row.vendor_name}
+                                  </span>
+                                  <span
+                                    className={`font-display text-base font-semibold tabular-nums ${
+                                      idx === 0 ? "text-emerald-300" : "text-fg"
+                                    }`}
+                                  >
+                                    {format(row.price_per_unit)}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                  {idx === 0 && <Badge tone="green">Cheapest</Badge>}
+                                  {row.is_preferred && <Badge tone="amber">★ Chosen</Badge>}
+                                  {gap > 0.001 && (
+                                    <span className="rounded-full border border-rose-400/30 px-2 py-0.5 text-[10px] text-rose-300">
+                                      +{format(String(Math.round(gap * 100) / 100))} vs cheapest
+                                    </span>
+                                  )}
+                                  <span className="flex-1" />
+                                  {canWrite &&
+                                    (row.is_preferred ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreferred(null)}
+                                        className="mise-press rounded-lg border border-line px-2.5 py-1 text-[11px] text-fg-faint hover:text-fg"
+                                      >
+                                        Clear
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreferred(row.vendor_id)}
+                                        className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-2.5 py-1 text-[11px] font-medium text-brand-300"
+                                      >
+                                        Choose
+                                      </button>
+                                    ))}
+                                  <Link
+                                    href={`/vendors?vendor=${row.vendor_id}`}
+                                    title={`Open ${row.vendor_name} on the Vendors page`}
+                                    className="mise-press grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line text-xs text-fg-faint transition hover:border-brand-400/50 hover:text-brand-300"
+                                  >
+                                    ↗
+                                  </Link>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        <p className="mt-3 text-[11px] leading-relaxed text-fg-faint">
+                          <b>How ordering picks a supplier:</b> the vendor on the order itself wins;
+                          otherwise your ★ chosen supplier; otherwise the cheapest. Recipe costing
+                          follows the same rule.
+                        </p>
+                        {addPriceForm}
+                      </>
+                    )}
 
-          <Card className="mise-feel mb-5">
-            <h3 className="font-semibold text-fg">Price history — what you&apos;ve paid</h3>
-            <p className="mb-3 text-xs text-fg-faint">
-              From your received purchase orders — green line falling is good, red line climbing is money leaking.
-            </p>
-            <PriceHistoryChart points={history} />
-            <VendorOverlay changes={changeLog} />
-          </Card>
+                    {pane === "history" && (
+                      <>
+                        <p className="mb-3 text-[11px] text-fg-faint">
+                          From your received purchase orders — a falling green line is good, a
+                          climbing red one is money leaking.
+                        </p>
+                        <PriceHistoryChart points={history} />
+                        <VendorOverlay changes={changeLog} />
+                      </>
+                    )}
 
-          {changeLog.length > 0 && (
-            <Card className="mise-feel mb-5">
-              <h3 className="font-semibold text-fg">Price change log</h3>
-              <p className="mb-3 text-xs text-fg-faint">
-                Every recorded price change for this item — kept forever, with where it came from
-                (<b className="text-fg-soft">manual</b> edit, a received <b className="text-fg-soft">PO</b>, or a scanned{" "}
-                <b className="text-fg-soft">invoice</b>). Old prices are never lost.
-              </p>
-              <ul className="space-y-1.5">
-                {changeLog.map((c, i) => (
-                  <li key={i} className="mise-well mise-feel flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-fg">
-                      <b>{c.vendor_name}</b>{" "}
-                      {c.old_price ? (
-                        <span className="text-fg-faint">{format(c.old_price)} → </span>
+                    {pane === "changes" &&
+                      (changeLog.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-fg-faint">
+                          No price changes recorded for this item yet.
+                        </p>
                       ) : (
-                        <span className="text-fg-faint">first price </span>
-                      )}
-                      <b className="text-fg">{format(c.new_price)}</b>
-                    </span>
-                    <span className="flex items-center gap-2 text-xs text-fg-faint">
-                      <Badge tone={SRC_TONE[c.source] ?? "slate"}>{c.source}</Badge>
-                      {new Date(c.at).toLocaleDateString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
+                        <>
+                          <p className="mb-3 text-[11px] leading-relaxed text-fg-faint">
+                            Every recorded change, kept forever, with where it came from (
+                            <b className="text-fg-soft">manual</b> edit, a received{" "}
+                            <b className="text-fg-soft">PO</b>, or a scanned{" "}
+                            <b className="text-fg-soft">invoice</b>). Old prices are never lost.
+                          </p>
+                          <ul className="space-y-1.5">
+                            {changeLog.map((c, i) => (
+                              <li
+                                key={i}
+                                className="mise-well flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm"
+                              >
+                                <span className="text-fg">
+                                  <b>{c.vendor_name}</b>{" "}
+                                  {c.old_price ? (
+                                    <span className="text-fg-faint">{format(c.old_price)} → </span>
+                                  ) : (
+                                    <span className="text-fg-faint">first price </span>
+                                  )}
+                                  <b className="text-fg">{format(c.new_price)}</b>
+                                </span>
+                                <span className="flex items-center gap-2 text-xs text-fg-faint">
+                                  <Badge tone={SRC_TONE[c.source] ?? "slate"}>{c.source}</Badge>
+                                  {new Date(c.at).toLocaleDateString()}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      ))}
+                  </div>
+                </Card>
+              )}
+            </div>
+          </div>
 
         </>
       )}

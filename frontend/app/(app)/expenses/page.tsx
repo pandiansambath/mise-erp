@@ -349,104 +349,106 @@ export default function ExpensesPage() {
         <StatCard label="Total spend" value={format(summary.grand_total)} accent="rose" />
       </div>
 
-      {donutSegs.length > 0 && (
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card className="mise-feel">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold text-fg">Where it went</h2>
-              <span className="text-xs text-fg-faint">{rangeCaption({ from, to })}</span>
-            </div>
-            <Donut
-              segments={donutSegs}
-              centerValue={format(summary.grand_total)}
-              centerLabel="total spend"
-              className="mt-4"
-              formatValue={(v) => format(String(v))}
-            />
-          </Card>
-          <Card className="mise-feel">
-            <div className="mise-well mb-4 rounded-xl p-4">
-              <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                Fixed bills vs variable costs — each square is 1%
-              </p>
-              <Waffle
-                formatValue={(v) => format(String(v))}
-                segments={[
-                  { label: "Variable (moves with sales)", value: parseFloat(summary.variable_total) || 0, color: "#f59e0b" },
-                  { label: "Fixed (arrives regardless)", value: parseFloat(summary.fixed_total) || 0, color: "#94a3b8" },
-                ].filter((x) => x.value > 0)}
-              />
-            </div>
-            <h2 className="text-sm font-semibold text-fg">The expense map</h2>
-            <p className="text-xs text-fg-faint">bigger box = more money — spot the heavy categories in one glance</p>
-            <Treemap
-              className="mt-4"
-              items={summary.by_category.map((c) => ({
-                label: c.category_name,
-                value: parseFloat(c.total) || 0,
-              }))}
-              formatValue={(v) => format(String(v))}
-            />
-          </Card>
-        </div>
-      )}
-
-      {recurring.length > 0 && (
-        <Card id="recurring-hint" className="mise-feel mt-6 scroll-mt-24 border-copper-500/25">
-          <h2 className="text-sm font-semibold text-fg">🔁 These look like standing bills</h2>
-          <p className="text-xs text-fg-faint">
-            Same category, near-same amount, seen in more than one of the last 3 months. Put them in{" "}
-            <Link href="/profile" className="text-brand-400 underline">Profile → Monthly overheads</Link> and they post
-            themselves — no more remembering the rent.
-          </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {recurring.map((r) => (
-              <div key={r.name + r.amount} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-sm">
-                <span className="text-fg">{r.name}</span>
-                <span className="mb-1 flex-1 border-b border-dotted border-line" />
-                <span className="font-mono text-fg-soft">~{format(String(r.amount))}</span>
-                <span className="text-[10px] text-fg-faint">× {r.months} months</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {(() => {
-        // The petty-cash drawer: every small cash spend in this range, largest first.
-        const petty = expenses.filter((e) => e.category_name.toLowerCase() === "petty cash");
-        if (petty.length === 0) return null;
-        const total = petty.reduce((t, e) => t + (parseFloat(e.amount) || 0), 0);
-        return (
-          <Card className="mise-feel mt-6">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold text-fg">🪙 Petty-cash drawer</h2>
-              <span className="font-mono text-sm text-fg-soft">{format(String(total))} total</span>
-            </div>
-            <p className="text-xs text-fg-faint">small cash spends this period, largest first</p>
-            <div className="mise-well mt-4 rounded-xl p-3">
-              <Bars
-                formatValue={(v) => format(String(v))}
-                items={[...petty]
-                  .sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0))
-                  .slice(0, 8)
-                  .map((e) => ({
-                    label: `${e.date.slice(5)} · ${(e.description || "petty cash").slice(0, 28)}`,
-                    value: parseFloat(e.amount) || 0,
-                    color: "#f59e0b",
-                  }))}
-              />
-              {petty.length > 8 && (
-                <p className="mt-2 text-[11px] text-fg-faint">+{petty.length - 8} more smaller spends</p>
-              )}
-            </div>
-          </Card>
-        );
-      })()}
-
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* LEFT — the data (breakdown + entries) */}
-        <div className="min-w-0 space-y-6 lg:col-span-2">
+        {/* LEFT — the analysis, then the entries. All of it reads top-down
+            while the form stays pinned beside it. */}
+        <div className="order-2 min-w-0 space-y-6 lg:order-1 lg:col-span-2">
+
+        {donutSegs.length > 0 && (
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card className="mise-feel">
+              <div className="flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold text-fg">Where it went</h2>
+                <span className="text-xs text-fg-faint">{rangeCaption({ from, to })}</span>
+              </div>
+              <Donut
+                segments={donutSegs}
+                centerValue={format(summary.grand_total)}
+                centerLabel="total spend"
+                className="mt-4"
+                formatValue={(v) => format(String(v))}
+              />
+            </Card>
+            <Card className="mise-feel">
+              <div className="mise-well mb-4 rounded-xl p-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Fixed bills vs variable costs — each square is 1%
+                </p>
+                <Waffle
+                  formatValue={(v) => format(String(v))}
+                  segments={[
+                    { label: "Variable (moves with sales)", value: parseFloat(summary.variable_total) || 0, color: "#f59e0b" },
+                    { label: "Fixed (arrives regardless)", value: parseFloat(summary.fixed_total) || 0, color: "#94a3b8" },
+                  ].filter((x) => x.value > 0)}
+                />
+              </div>
+              <h2 className="text-sm font-semibold text-fg">The expense map</h2>
+              <p className="text-xs text-fg-faint">bigger box = more money — spot the heavy categories in one glance</p>
+              <Treemap
+                className="mt-4"
+                items={summary.by_category.map((c) => ({
+                  label: c.category_name,
+                  value: parseFloat(c.total) || 0,
+                }))}
+                formatValue={(v) => format(String(v))}
+              />
+            </Card>
+          </div>
+        )}
+
+        {recurring.length > 0 && (
+          <Card id="recurring-hint" className="mise-feel mt-6 scroll-mt-24 border-copper-500/25">
+            <h2 className="text-sm font-semibold text-fg">🔁 These look like standing bills</h2>
+            <p className="text-xs text-fg-faint">
+              Same category, near-same amount, seen in more than one of the last 3 months. Put them in{" "}
+              <Link href="/profile" className="text-brand-400 underline">Profile → Monthly overheads</Link> and they post
+              themselves — no more remembering the rent.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {recurring.map((r) => (
+                <div key={r.name + r.amount} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-sm">
+                  <span className="text-fg">{r.name}</span>
+                  <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                  <span className="font-mono text-fg-soft">~{format(String(r.amount))}</span>
+                  <span className="text-[10px] text-fg-faint">× {r.months} months</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {(() => {
+          // The petty-cash drawer: every small cash spend in this range, largest first.
+          const petty = expenses.filter((e) => e.category_name.toLowerCase() === "petty cash");
+          if (petty.length === 0) return null;
+          const total = petty.reduce((t, e) => t + (parseFloat(e.amount) || 0), 0);
+          return (
+            <Card className="mise-feel mt-6">
+              <div className="flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold text-fg">🪙 Petty-cash drawer</h2>
+                <span className="font-mono text-sm text-fg-soft">{format(String(total))} total</span>
+              </div>
+              <p className="text-xs text-fg-faint">small cash spends this period, largest first</p>
+              <div className="mise-well mt-4 rounded-xl p-3">
+                <Bars
+                  formatValue={(v) => format(String(v))}
+                  items={[...petty]
+                    .sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0))
+                    .slice(0, 8)
+                    .map((e) => ({
+                      label: `${e.date.slice(5)} · ${(e.description || "petty cash").slice(0, 28)}`,
+                      value: parseFloat(e.amount) || 0,
+                      color: "#f59e0b",
+                    }))}
+                />
+                {petty.length > 8 && (
+                  <p className="mt-2 text-[11px] text-fg-faint">+{petty.length - 8} more smaller spends</p>
+                )}
+              </div>
+            </Card>
+          );
+        })()}
+
           {summary && summary.by_category.length > 0 && (
             <Card className="p-0">
               <div className="border-b border-line px-5 py-3">
@@ -595,8 +597,9 @@ export default function ExpensesPage() {
           </Card>
         </div>
 
-        {/* RIGHT — add expense + manage (superadmin), sticky on desktop */}
-        <div className="space-y-4 self-start lg:sticky lg:top-4">
+        {/* RIGHT — the form. Pinned, and level with the top of the page:
+            "the main part is placed very bottom" was exactly right. */}
+        <div className="order-1 space-y-4 self-start lg:order-2 lg:sticky lg:top-4">
           {canWrite && (
             <Card id="expense-form">
               <h3 className="mb-3 font-semibold text-fg">{editingId ? "✏️ Edit expense" : "Add expense"}</h3>
