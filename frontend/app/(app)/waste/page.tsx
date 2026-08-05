@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   ApiError,
@@ -15,7 +15,13 @@ import { fmtQty, ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
+import { localISODate } from "@/lib/date";
+
+const monthStart = () =>
+  localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
 import { spotlight, useDeepLink } from "@/components/fx";
+import { RangeControls, rangeCaption } from "@/components/RangeControls";
+import { recall, remember } from "@/lib/rangeMemory";
 
 const REASONS = [
   { label: "Spoiled / expired", emoji: "🥀" },
@@ -44,15 +50,23 @@ export default function WastePage() {
   // ⌘K "Log waste" (?new=1) → spotlight the form
   useDeepLink({ new: () => spotlight("waste-form") }, !loading);
 
-  async function loadWaste() {
-    setData(await api.get<WasteListResponse>("/inventory/waste"));
-  }
+  // A month by default: waste only means something against a period. Whatever
+  // the user picks is remembered for the session, per page.
+  const rememberedRange = typeof window === "undefined" ? null : recall("waste");
+  const [from, setFrom] = useState(rememberedRange?.from ?? monthStart());
+  const [to, setTo] = useState(rememberedRange?.to ?? localISODate());
+
+  const loadWaste = useCallback(async () => {
+    setData(
+      await api.get<WasteListResponse>(`/inventory/waste?date_from=${from}&date_to=${to}`),
+    );
+  }, [from, to]);
 
   useEffect(() => {
     Promise.all([api.get<Item[]>("/inventory/items").then(setItems), loadWaste()])
       .catch(() => setMsg("Could not load waste data — refresh to retry."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadWaste]);
 
   const chosen = useMemo(() => items.find((i) => i.id === itemId), [items, itemId]);
 
@@ -123,6 +137,20 @@ export default function WastePage() {
         title="Waste log"
         subtitle="Spoilage, spillage, over-prep — logging it removes the stock and shows the £ leak on Money."
       />
+      <RangeControls
+        range={{ from, to }}
+        onChange={(r) => {
+          setFrom(r.from);
+          setTo(r.to);
+          remember("waste", r);
+        }}
+        className="mb-2"
+      />
+      <p className="mb-5 text-sm text-fg-faint">
+        Showing waste for <b className="text-fg-soft">{rangeCaption({ from, to })}</b>. The totals
+        and the log below are just this period.
+      </p>
+
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
 
       {canWrite && (

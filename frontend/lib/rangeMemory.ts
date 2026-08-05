@@ -23,7 +23,13 @@ const KEY = "mise.range.";
 /** Sensible starting point for each page, used until the user chooses.
  *  Sales is a single day because a till is counted daily; reports default to the
  *  month because a P&L for one day answers nothing. */
-export type RangeScope = "expenses" | "reports" | "attendance" | "sales";
+export type RangeScope =
+  | "expenses"
+  | "reports"
+  | "attendance"
+  | "sales"
+  | "waste"
+  | "audit";
 
 export function remember(scope: RangeScope, range: Range): void {
   try {

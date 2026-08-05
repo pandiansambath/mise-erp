@@ -279,8 +279,10 @@ async def list_attendance(
     scheduled = await leave_service.scheduled_on(db, user.hotel_id, day)
 
     out = []
+    seen: set[uuid.UUID] = set()
     for r in rows:
         emp = r["employee_id"]
+        seen.add(emp)
         if emp in off:
             r = {**r, "status": "LEAVE", "no_punch": False, "on_leave": True}
         elif emp in scheduled:
@@ -294,6 +296,38 @@ async def list_attendance(
                 "missing": r.get("clock_in") is None,
             }
         out.append(AttendanceRow.model_validate(r))
+
+    # The rows above only exist for people who PUNCHED. But the two states worth
+    # surfacing — on holiday, and rota'd yet nowhere to be seen — are precisely
+    # the ones with nothing recorded, so decorating existing rows could never
+    # reach them. Anyone off or expected today gets a row whether or not they
+    # touched the clock.
+    absentees = (off | set(scheduled)) - seen
+    if absentees:
+        found = await db.execute(select(Employee).where(Employee.id.in_(absentees)))
+        for employee in found.scalars():
+            shift = scheduled.get(employee.id)
+            out.append(
+                AttendanceRow(
+                    employee_id=employee.id,
+                    employee_name=employee.full_name,
+                    date=day,
+                    clock_in=None,
+                    clock_out=None,
+                    working_hours=None,
+                    status="LEAVE" if employee.id in off else "ABSENT",
+                    on_leave=employee.id in off,
+                    scheduled=shift is not None,
+                    scheduled_start=(
+                        shift.start_time.strftime("%H:%M")
+                        if shift is not None and shift.start_time
+                        else None
+                    ),
+                    # Expected, not on leave, and never clocked in.
+                    missing=shift is not None and employee.id not in off,
+                )
+            )
+        out.sort(key=lambda r: r.employee_name)
     return out
 
 

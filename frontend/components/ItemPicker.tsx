@@ -184,12 +184,16 @@ export function ItemPicker({
   onChange,
   emptyHint = "Nothing here yet.",
   lineExtra,
+  trayFooter,
   onOpenDetail,
 }: {
   items: Item[];
   lines: PickedLine[];
   onChange: (lines: PickedLine[]) => void;
   emptyHint?: string;
+  /** Goes at the bottom of the pinned tray — the submit button belongs WITH the
+   *  list it submits, not a scroll below the grid that keeps growing. */
+  trayFooter?: ReactNode;
   /** Extra controls per tray row (e.g. a supplier picker on Purchasing). */
   lineExtra?: (line: PickedLine, item: Item) => ReactNode;
   /** Open an item's full detail. Adding it to an order and INSPECTING it are
@@ -281,10 +285,14 @@ export function ItemPicker({
         </div>
       )}
 
+      {/* Pick on the left, the list you are building on the right — both in
+          view at once. Stacked, every item added pushed the submit button
+          further down the page. */}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),minmax(0,21rem)] lg:items-start">
       {/* Item cards — key remounts the grid per tab/search so the stagger replays */}
       <div
         key={query ? `q:${query}` : tab}
-        className="mise-stagger grid max-h-72 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4"
+        className="mise-stagger grid max-h-[28rem] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
       >
         {visible.length === 0 && (
           <p className="col-span-full py-6 text-center text-sm text-fg-faint">
@@ -300,7 +308,7 @@ export function ItemPicker({
               type="button"
               aria-pressed={sel}
               onClick={() => toggle(it)}
-              className={`relative rounded-xl border p-3 text-left transition duration-200 ${
+              className={`mise-feel relative rounded-2xl border p-3 pb-9 text-left transition duration-200 hover:-translate-y-0.5 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
                   : "border-line bg-glass/5 hover:border-line-2 hover:bg-glass/10"
@@ -314,7 +322,15 @@ export function ItemPicker({
               >
                 ✓
               </span>
-              <span className="block pr-8 text-sm font-medium leading-snug text-fg">{it.name}</span>
+              {/* The emoji tile, as on the recipe cards. These grids are scanned,
+                  not read, and a picture lands before a word does. */}
+              <span
+                aria-hidden
+                className="mise-neo-raised mb-1.5 grid h-8 w-8 place-items-center rounded-xl text-base"
+              >
+                {categoryEmoji(groupKey(it))}
+              </span>
+              <span className="block pr-8 font-display text-sm font-semibold leading-snug text-fg">{it.name}</span>
               {onOpenDetail && (
                 // span + role=button: a <button> inside a <button> is invalid
                 // HTML and browsers resolve the click unpredictably.
@@ -346,8 +362,9 @@ export function ItemPicker({
         })}
       </div>
 
-      {/* Selected tray */}
-      <div className="rounded-xl border border-line bg-paper-2/60 p-3">
+      {/* Selected tray — pinned on desktop so it never scrolls away from the
+          grid feeding it. */}
+      <div className="rounded-xl border border-line bg-paper-2/60 p-3 lg:sticky lg:top-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
           Your list {chosen.length > 0 && `· ${chosen.length} item${chosen.length === 1 ? "" : "s"}`}
         </p>
@@ -359,8 +376,8 @@ export function ItemPicker({
           // No inner scrollbar until the list is genuinely long. A short list
           // inside its own scroll area gave two scrollbars on one screen and a
           // cramped window for two items — the page can just grow instead.
-          <ul className={`mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 ${
-            chosen.length > 6 ? "max-h-96 overflow-y-auto pr-1" : ""
+          <ul className={`mt-2 grid grid-cols-1 gap-2 ${
+            chosen.length > 3 ? "max-h-[24rem] overflow-y-auto pr-1" : ""
           }`}>
             {chosen.map(({ line, item }) => (
               // The id lets a caller scroll to and ring ONE line — arriving from
@@ -402,6 +419,8 @@ export function ItemPicker({
             ))}
           </ul>
         )}
+        {trayFooter && <div className="mt-3 border-t border-line pt-3">{trayFooter}</div>}
+      </div>
       </div>
     </div>
   );
