@@ -107,7 +107,7 @@ async def test_a_range_covers_every_day_inside_it(db, hotel, chef) -> None:
 
 async def test_unapproved_leave_blocks_nothing(db, hotel, chef) -> None:
     """Otherwise anybody could take themselves off the rota by asking."""
-    await _book(db, hotel, chef, TODAY, TODAY, status=LeaveStatus.PENDING.value)
+    await _book(db, hotel, chef, TODAY, TODAY, status=LeaveStatus.REQUESTED.value)
 
     assert await leave_service.employee_ids_off(db, hotel.id, TODAY) == set()
     assert await leave_service.is_off(db, hotel.id, chef.id, TODAY) is None
@@ -303,15 +303,14 @@ async def test_leave_wins_over_a_rota_d_shift_on_the_attendance_sheet(
 async def test_nobody_scheduled_is_not_the_same_as_missing(
     client, make_user, auth_header, hotel, waiter
 ) -> None:
-    """No shift on the rota means there is nothing to chase, and the sheet must
-    not imply otherwise."""
+    """No shift, no leave, no punch — nothing to chase, and nothing to say. The
+    sheet must not manufacture a row that reads like an absence."""
     manager = await make_user("mgr9@test.com", Role.SUPER_ADMIN.value)
     res = await client.get(
         f"/api/attendance?on={TODAY.isoformat()}", headers=auth_header(manager)
     )
-    row = next(r for r in res.json() if r["employee_id"] == str(waiter.id))
-    assert not row.get("missing")
-    assert not row.get("scheduled")
+    rows = [r for r in res.json() if r["employee_id"] == str(waiter.id)]
+    assert rows == [] or not (rows[0]["missing"] or rows[0]["scheduled"])
 
 
 async def test_the_earliest_shift_is_the_one_attendance_is_measured_against(
@@ -345,4 +344,7 @@ async def test_a_single_day_of_leave_reads_as_one_date_not_a_range(db, hotel, ch
     found = await leave_service.blocking_leave(db, hotel.id, chef.id, TODAY)
     assert found is not None
     _, message = found
-    assert " to " not in message
+    # The date appears once, not as "X to X". Checking for " to " alone would
+    # also match the advice sentence that follows.
+    assert f"({TODAY.isoformat()})" in message
+    assert f"{TODAY.isoformat()} to" not in message
