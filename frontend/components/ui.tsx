@@ -120,7 +120,10 @@ export function PageHeader({
     <div
       className={`mb-6 flex flex-wrap items-end justify-between gap-3 ${
         sticky
-          ? "sticky top-0 z-30 -mx-4 border-b border-line/60 bg-paper/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6"
+          // The bleed MUST match AppShell's <main> padding exactly (px-4 lg:px-8).
+            // A wider negative margin pushes the page sideways and the whole
+            // body scrolls horizontally — on a phone, permanently.
+            ? "sticky top-0 z-30 -mx-4 border-b border-line/60 bg-paper/85 px-4 py-3 backdrop-blur-md lg:-mx-8 lg:px-8"
           : ""
       }`}
     >

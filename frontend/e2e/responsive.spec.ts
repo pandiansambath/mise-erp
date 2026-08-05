@@ -271,6 +271,11 @@ for (const [name, path] of [
   ["party orders", "/party-order"],
   ["hiring", "/hiring"],
   ["settings", "/settings"],
+  // The pages rebuilt as pick-left / answer-right. Both columns collapse to one
+  // below `lg`, and a sticky element that bleeds wider than the shell's padding
+  // scrolls the whole body sideways — on a phone, permanently.
+  ["audit log", "/audit"],
+  ["price comparison", "/price-comparison"],
 ] as const) {
   test(`${name} page fits the viewport`, async ({ page }) => {
     await login(page);
