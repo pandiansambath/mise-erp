@@ -73,6 +73,10 @@ export default function KioskPage() {
     return () => window.clearTimeout(t);
   }, [flash]);
 
+  const onCount = staff.filter((e) => rows[e.id]?.clock_in && !rows[e.id]?.clock_out && !rows[e.id]?.on_break).length;
+  const breakCount = staff.filter((e) => rows[e.id]?.on_break).length;
+  const doneCount = staff.filter((e) => rows[e.id]?.clock_out).length;
+
   async function punch(emp: Employee, action: string, label: string) {
     setBusy(emp.id);
     setError(null);
@@ -98,24 +102,89 @@ export default function KioskPage() {
 
   return (
     <div className="mise-app min-h-dvh bg-shell text-fg" data-mode="dark">
-      <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line px-6 py-4">
+      {/* Light in the room. Two slow blooms behind everything, so a screen
+          that lives on a wall for twelve hours a day looks alive rather than
+          like a form somebody left open. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <span
+          className="absolute -left-40 -top-40 h-[38rem] w-[38rem] rounded-full opacity-25 blur-[120px]"
+          style={{ background: "radial-gradient(circle, var(--color-brand-500), transparent 68%)" }}
+        />
+        <span
+          className="absolute -bottom-48 -right-32 h-[34rem] w-[34rem] rounded-full opacity-20 blur-[120px]"
+          style={{ background: "radial-gradient(circle, #38bdf8, transparent 70%)" }}
+        />
+      </div>
+
+      <header className="relative flex flex-wrap items-end justify-between gap-4 px-8 pb-6 pt-8">
         <div className="min-w-0">
-          <h1 className="truncate font-display text-xl font-semibold">
+          <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-fg-faint">
+            {now.toLocaleDateString(undefined, {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
+          <h1 className="mt-1 truncate font-display text-3xl font-semibold tracking-tight">
             {hotel?.name ?? "Attendance"}
           </h1>
-          <p className="text-xs text-fg-faint">Tap your name to clock in or out</p>
+          <p className="mt-1 text-sm text-fg-faint">Tap your name to clock in or out</p>
         </div>
-        <p className="font-display text-3xl font-semibold tabular-nums">
+        {/* The clock is the anchor. Big enough to read from the pass, with
+            seconds ticking so the screen is visibly alive. */}
+        <p className="font-display text-6xl font-semibold leading-none tabular-nums sm:text-7xl">
           {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          <span className="ml-2 align-top text-xl font-normal text-fg-faint">
+            {String(now.getSeconds()).padStart(2, "0")}
+          </span>
         </p>
       </header>
 
+      {/* How the shift is going, in one line. */}
+      <div className="relative flex flex-wrap gap-2 px-8 pb-2">
+        {[
+          { n: onCount, label: "in now", cls: "border-brand-400/40 bg-brand-400/10 text-brand-200" },
+          { n: breakCount, label: "on break", cls: "border-amber-400/40 bg-amber-400/10 text-amber-200" },
+          { n: doneCount, label: "finished", cls: "border-line bg-glass/5 text-fg-faint" },
+        ].map((x) => (
+          <span
+            key={x.label}
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium ${x.cls}`}
+          >
+            <b className="tabular-nums">{x.n}</b> {x.label}
+          </span>
+        ))}
+      </div>
+
       {/* One line, large, then gone. The next person up should not be looking
           at somebody else's confirmation. */}
+      {/* The moment.
+          A tap on a shared screen deserves an unmistakable answer — you should
+          know it worked from across the room, without leaning in to read a
+          small green line. It fills the screen, says the name, and clears
+          itself so the next person never sees somebody else's. */}
       {flash && (
-        <p className="mise-pop mx-6 mt-4 rounded-2xl border border-brand-400/40 bg-brand-400/10 px-5 py-3 text-center text-lg font-semibold text-brand-200">
-          {flash.name} — {flash.what}
-        </p>
+        <div
+          className="mise-pop fixed inset-0 z-50 grid place-items-center bg-shell/92 backdrop-blur-md"
+          onClick={() => setFlash(null)}
+        >
+          <div className="px-8 text-center">
+            <span
+              aria-hidden
+              className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-brand-500/15 text-5xl"
+              style={{ animation: "mise-pop .45s cubic-bezier(.16,1,.3,1) both" }}
+            >
+              ✓
+            </span>
+            <p className="mt-6 font-display text-5xl font-semibold tracking-tight sm:text-6xl">
+              {flash.name}
+            </p>
+            <p className="mt-2 text-xl text-brand-300">{flash.what}</p>
+            <p className="mt-6 font-mono text-sm tabular-nums text-fg-faint">
+              {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          </div>
+        </div>
       )}
       {error && (
         <p className="mx-6 mt-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-5 py-3 text-center text-sm text-rose-200">
@@ -123,7 +192,7 @@ export default function KioskPage() {
         </p>
       )}
 
-      <main className="grid grid-cols-2 gap-3 p-6 sm:grid-cols-3 lg:grid-cols-4">
+      <main className="relative grid grid-cols-2 gap-4 px-8 pb-10 pt-4 sm:grid-cols-3 lg:grid-cols-4">
         {staff.length === 0 && (
           <p className="col-span-full py-16 text-center text-sm text-fg-faint">
             No active staff yet.
@@ -137,17 +206,38 @@ export default function KioskPage() {
           return (
             <div
               key={emp.id}
-              className={`rounded-2xl border p-4 transition ${
+              className={`relative overflow-hidden rounded-3xl border p-5 backdrop-blur-sm transition duration-300 ${
                 onBreak
-                  ? "border-amber-400/40 bg-amber-400/[0.08]"
+                  ? "border-amber-400/40 bg-amber-400/[0.10]"
                   : inNow
-                    ? "border-brand-400/40 bg-brand-400/[0.08]"
+                    ? "border-brand-400/45 bg-brand-400/[0.10] shadow-lg shadow-brand-900/20"
                     : done
-                      ? "border-line bg-glass/[0.03] opacity-70"
-                      : "border-line bg-glass/5"
+                      ? "border-line bg-glass/[0.03] opacity-60"
+                      : "border-line bg-glass/[0.06]"
               }`}
             >
-              <p className="truncate font-display text-base font-semibold">{emp.full_name}</p>
+              {/* A pulse on anyone currently working — the room can see at a
+                  glance who is on the floor. */}
+              {inNow && !onBreak && (
+                <span
+                  aria-hidden
+                  className="absolute right-4 top-4 h-2.5 w-2.5 rounded-full bg-brand-400"
+                  style={{ animation: "mise-pulse 2s ease-in-out infinite" }}
+                />
+              )}
+              <span
+                aria-hidden
+                className={`mb-3 grid h-14 w-14 place-items-center rounded-2xl font-display text-xl font-bold ${
+                  inNow || onBreak ? "bg-white/10 text-fg" : "bg-white/[0.06] text-fg-soft"
+                }`}
+              >
+                {emp.full_name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((w) => w[0]?.toUpperCase())
+                  .join("")}
+              </span>
+              <p className="truncate font-display text-lg font-semibold">{emp.full_name}</p>
               <p className="mt-0.5 text-[11px] text-fg-faint">
                 {done
                   ? `finished ${fmtTime(r?.clock_out ?? null)}`
@@ -166,7 +256,7 @@ export default function KioskPage() {
                     type="button"
                     disabled={busy === emp.id}
                     onClick={() => punch(emp, "CLOCK_IN", "clocked in")}
-                    className="mise-press rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                    className="mise-press rounded-2xl bg-brand-600 py-4 text-base font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
                   >
                     Clock in
                   </button>
@@ -177,7 +267,7 @@ export default function KioskPage() {
                       type="button"
                       disabled={busy === emp.id}
                       onClick={() => punch(emp, "BREAK_START", "on break")}
-                      className="mise-press rounded-xl border border-amber-400/40 bg-amber-400/10 py-2.5 text-sm font-medium text-amber-200 disabled:opacity-50"
+                      className="mise-press rounded-2xl border border-amber-400/40 bg-amber-400/10 py-3 text-base font-medium text-amber-200 disabled:opacity-50"
                     >
                       Start break
                     </button>
@@ -185,7 +275,7 @@ export default function KioskPage() {
                       type="button"
                       disabled={busy === emp.id}
                       onClick={() => punch(emp, "CLOCK_OUT", "clocked out")}
-                      className="mise-press rounded-xl border border-line-2 py-2.5 text-sm font-medium text-fg-soft disabled:opacity-50"
+                      className="mise-press rounded-2xl border border-line-2 py-3 text-base font-medium text-fg-soft disabled:opacity-50"
                     >
                       Clock out
                     </button>
@@ -196,7 +286,7 @@ export default function KioskPage() {
                     type="button"
                     disabled={busy === emp.id}
                     onClick={() => punch(emp, "BREAK_END", "back from break")}
-                    className="mise-press rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                    className="mise-press rounded-2xl bg-brand-600 py-4 text-base font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
                   >
                     End break
                   </button>
