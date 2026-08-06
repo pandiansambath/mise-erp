@@ -74,39 +74,62 @@ async def test_it_is_never_stored_in_the_clear(client, auth_header, owner, db, h
 # ── using it ──────────────────────────────────────────────────────────────
 
 
-async def test_the_right_pin_returns_a_kiosk_token(client, auth_header, owner) -> None:
-    """THE test. What comes back must be attendance-scoped — if it handed back
-    the caller's own access, the tablet on the counter would be an admin
-    session with a modal in front of it."""
+async def test_the_right_pin_returns_a_kiosk_token(
+    client, auth_header, owner, db, hotel
+) -> None:
+    """THE test.
+
+    No login is involved — a cold tablet types the PIN — so what comes back
+    must be attendance-scoped. If it handed back anything wider, the device on
+    the counter would be a real session with a keypad in front of it.
+    """
+    hotel.username = "lockinn"
+    await db.commit()
     await _set_pin(client, auth_header, owner, pin="4821")
 
     res = await client.post(
-        "/api/attendance/lock/unlock", json={"pin": "4821"}, headers=auth_header(owner)
+        "/api/attendance/kiosk-open", json={"site": "lockinn", "pin": "4821"}
     )
     assert res.status_code == 200
 
     payload = decode_token(res.json()["token"])
     assert payload is not None
     assert payload["role"] == Role.KIOSK.value
-    assert payload["sub"] != str(owner.id), "the tab must not keep the owner's identity"
+    assert payload["sub"] != str(owner.id), "the tablet must not carry a person's identity"
 
 
-async def test_the_wrong_pin_gets_nothing(client, auth_header, owner) -> None:
+async def test_the_wrong_pin_gets_nothing(client, auth_header, owner, db, hotel) -> None:
+    hotel.username = "lockinn"
+    await db.commit()
     await _set_pin(client, auth_header, owner, pin="4821")
+
     res = await client.post(
-        "/api/attendance/lock/unlock", json={"pin": "9999"}, headers=auth_header(owner)
+        "/api/attendance/kiosk-open", json={"site": "lockinn", "pin": "9999"}
     )
     assert res.status_code == 403
 
 
-async def test_unlocking_before_a_pin_exists_says_so(client, auth_header, owner) -> None:
-    """Rather than a generic refusal that leaves somebody poking at a keypad
-    that was never going to work."""
+async def test_an_unknown_restaurant_answers_the_same_as_a_wrong_pin(client) -> None:
+    """Both say "that PIN is not right".
+
+    A different answer for a handle that does not exist would turn this into a
+    way to discover which restaurants are on DineAI, from a page with no login
+    in front of it.
+    """
     res = await client.post(
-        "/api/attendance/lock/unlock", json={"pin": "1234"}, headers=auth_header(owner)
+        "/api/attendance/kiosk-open", json={"site": "no-such-place", "pin": "1234"}
     )
-    assert res.status_code == 400
+    assert res.status_code == 403
     assert "PIN" in res.json()["detail"]
+
+
+async def test_a_restaurant_with_no_pin_cannot_be_opened(client, db, hotel) -> None:
+    hotel.username = "nopin"
+    await db.commit()
+    res = await client.post(
+        "/api/attendance/kiosk-open", json={"site": "nopin", "pin": "1234"}
+    )
+    assert res.status_code == 403
 
 
 async def test_the_screen_can_check_the_pin_to_let_somebody_out(
@@ -131,24 +154,26 @@ async def test_the_screen_can_check_the_pin_to_let_somebody_out(
 
 
 async def test_one_restaurants_pin_does_not_open_another(
-    client, make_user, auth_header, owner, db
+    client, auth_header, owner, db, hotel
 ) -> None:
-    """The check is hotel-scoped. It would be a quiet, serious hole if a code
-    shared between two franchises opened both."""
+    """The lookup is by handle, so a code shared between two franchises must
+    not open the wrong kitchen — a quiet, serious hole if it did."""
     from app.hotels.models import Hotel
 
-    other = Hotel(name="Elsewhere", country="GB", base_currency="GBP", city="Hull")
+    hotel.username = "mine"
+    other = Hotel(
+        name="Elsewhere", country="GB", base_currency="GBP", city="Hull", username="theirs"
+    )
     db.add(other)
     await db.commit()
-    await db.refresh(other)
-    stranger = await make_user("owner@elsewhere.test", Role.SUPER_ADMIN.value, hotel_id=other.id)
 
     await _set_pin(client, auth_header, owner, pin="4821")
 
+    # The right PIN, aimed at the wrong restaurant.
     res = await client.post(
-        "/api/attendance/lock/unlock", json={"pin": "4821"}, headers=auth_header(stranger)
+        "/api/attendance/kiosk-open", json={"site": "theirs", "pin": "4821"}
     )
-    assert res.status_code == 400  # that hotel has no PIN of its own
+    assert res.status_code == 403
 
 
 # ── the shape rules, directly ─────────────────────────────────────────────
