@@ -79,6 +79,11 @@ class Hotel(Base):
     delivery_min_order: Mapped[Decimal] = mapped_column(
         Numeric(8, 2), nullable=False, default=Decimal("0")
     )
+    # The door code for the attendance screen. Hashed, never stored in the
+    # clear: it is short and typed in public, so it is exactly the kind of
+    # secret that gets watched over a shoulder — a database leak must not hand
+    # somebody the code as well.
+    attendance_pin_hash: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

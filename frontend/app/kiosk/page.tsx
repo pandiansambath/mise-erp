@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, clearToken, type AttendanceRow, type Employee } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { AnalogClock } from "@/components/AnalogClock";
 import { useHotelTime } from "@/lib/time";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -36,6 +37,26 @@ export default function KioskPage() {
   const [flash, setFlash] = useState<{ name: string; what: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [leaving, setLeaving] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
+
+  async function leave() {
+    setPinError(null);
+    try {
+      const r = await api.post<{ ok: boolean }>("/attendance/lock/verify", { pin });
+      if (!r.ok) {
+        setPinError("That PIN is not right.");
+        return;
+      }
+      // The tab is holding an attendance-only token; ending it leaves nothing
+      // behind for the next person who picks the tablet up.
+      clearToken();
+      window.location.assign("/login");
+    } catch {
+      setPinError("Could not check the PIN.");
+    }
+  }
 
   // A clock people can read from across the room is half of why a device like
   // this earns its place on the wall.
@@ -130,14 +151,10 @@ export default function KioskPage() {
           </h1>
           <p className="mt-1 text-sm text-fg-faint">Tap your name to clock in or out</p>
         </div>
-        {/* The clock is the anchor. Big enough to read from the pass, with
-            seconds ticking so the screen is visibly alive. */}
-        <p className="font-display text-6xl font-semibold leading-none tabular-nums sm:text-7xl">
-          {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          <span className="ml-2 align-top text-xl font-normal text-fg-faint">
-            {String(now.getSeconds()).padStart(2, "0")}
-          </span>
-        </p>
+        {/* A real clock face, hands sweeping, digits in the middle. It says
+            the time AND that the screen is alive, from across the room,
+            without anybody reading it. */}
+        <AnalogClock size={190} />
       </header>
 
       {/* How the shift is going, in one line. */}
@@ -303,18 +320,55 @@ export default function KioskPage() {
       {/* Deliberately small and at the very bottom. Signing the tablet out is
           something a manager does at closing, not something anyone should find
           by accident mid-service. */}
-      <footer className="border-t border-line px-6 py-4 text-center">
+      <footer className="relative border-t border-line px-8 py-5 text-center">
         <button
           type="button"
-          onClick={() => {
-            clearToken();
-            window.location.assign("/login");
-          }}
+          onClick={() => setLeaving(true)}
           className="text-[11px] text-fg-faint underline-offset-4 hover:underline"
         >
-          Sign this tablet out
+          Leave the attendance screen
         </button>
       </footer>
+
+      {/* Leaving needs the PIN too. A lock that only holds one way is a door
+          that opens from the outside. */}
+      {leaving && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-shell/92 p-6 backdrop-blur-md">
+          <div className="mise-pop w-full max-w-sm rounded-3xl border border-line bg-paper-2 p-6 text-center">
+            <p className="text-3xl" aria-hidden>🔒</p>
+            <h2 className="mt-3 font-display text-xl font-semibold">Enter the PIN to leave</h2>
+            <p className="mt-1 text-xs text-fg-faint">
+              This screen stays locked to attendance until somebody types it.
+            </p>
+            <input
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+              inputMode="numeric"
+              autoFocus
+              placeholder="••••"
+              className="mise-well mt-4 w-full rounded-2xl px-4 py-3 text-center font-mono text-2xl tracking-[0.4em] outline-none"
+            />
+            {pinError && <p className="mt-2 text-sm text-rose-400">{pinError}</p>}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={leave}
+                disabled={pin.length < 4}
+                className="mise-press flex-1 rounded-2xl bg-brand-600 py-3 font-semibold text-white disabled:opacity-40"
+              >
+                Unlock
+              </button>
+              <button
+                type="button"
+                onClick={() => { setLeaving(false); setPin(""); setPinError(null); }}
+                className="mise-press rounded-2xl border border-line px-5 py-3 text-fg-soft"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
