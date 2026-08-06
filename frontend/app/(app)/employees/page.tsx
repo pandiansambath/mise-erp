@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SubNav } from "@/components/SubNav";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
+import { FormShell } from "@/components/EditModal";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
@@ -79,7 +80,10 @@ export default function EmployeesPage() {
       bank_account_no: e.bank_account_no ?? "",
       joining_date: e.joining_date ?? "",
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // No scroll. Editing opens over the row you clicked — being thrown to the
+    // top of a list of forty people, having to find your place again after
+    // saving, is the whole complaint behind "wherever we have edit, open a
+    // popup in that place itself".
   }
 
   function reset() {
@@ -202,10 +206,20 @@ export default function EmployeesPage() {
       )}
 
       {canWrite && (
-        <Card className="mb-6 scroll-mt-24" id="employee-form">
-          <p className="mb-3 text-sm font-medium text-fg-soft">
-            {editingId ? "Edit employee" : "Add employee"}
-          </p>
+        <FormShell
+          editing={!!editingId}
+          onClose={reset}
+          title="Edit employee"
+          subtitle={form.full_name || undefined}
+          icon="🧑‍🍳"
+        >
+        <Card
+          className={editingId ? "border-0 bg-transparent p-0 shadow-none" : "mb-6 scroll-mt-24"}
+          id="employee-form"
+        >
+          {!editingId && (
+            <p className="mb-3 text-sm font-medium text-fg-soft">Add employee</p>
+          )}
           <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-sm font-medium text-fg-soft">Full name</label>
@@ -295,6 +309,7 @@ export default function EmployeesPage() {
             </div>
           </form>
         </Card>
+        </FormShell>
       )}
 
       {employees.length > 1 && (
