@@ -57,8 +57,9 @@ async def test_it_can_read_the_staff_list(client, kiosk, auth_header) -> None:
 @pytest.mark.parametrize(
     "method,path",
     [
-        ("get", "/api/payroll/runs"),
+        ("get", "/api/payroll"),
         ("get", "/api/reports/pnl"),
+        ("get", "/api/payroll/history/00000000-0000-0000-0000-000000000000"),
         ("get", "/api/sales/days/2026-08-06"),
         ("get", "/api/expenses"),
         ("get", "/api/vendors"),
