@@ -135,7 +135,17 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           // role, city and a 34rem orbit together are taller than most
           // screens, so it scrolled away — which is why it never felt
           // fixed. Capped to the viewport, it stays put.
-          className="flex min-w-0 flex-col items-center lg:sticky lg:top-8 lg:max-h-[calc(100dvh-4rem)] lg:items-start lg:justify-center lg:text-left"
+          // It has to FIT, not merely be capped.
+          //
+          // `max-h` alone left the column ~96dvh tall, and a sticky element
+          // taller than the viewport cannot stick — it scrolls away, leaving
+          // the empty space on the left he photographed. Worse, centring
+          // content inside a capped box overflows equally at both ends, which
+          // is what cut the top off his name.
+          //
+          // Fixed height that genuinely fits, and the orbit sized from the
+          // leftover room rather than a guess.
+          className="flex min-w-0 flex-col items-center lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)] lg:items-start lg:justify-center lg:text-left"
         >
 
         {/* Name first, orbit under it.
@@ -173,7 +183,9 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         </p>
 
         <div
-          className="relative mt-6 w-full"
+          // Whatever is left after the name, role and city have had their
+          // share. Below `lg` it goes back to being as wide as the column.
+          className="relative mt-6 w-full lg:max-w-[min(32rem,calc(100dvh-17rem))]"
           style={entered ? { animation: "devFadeUp .8s .3s ease-out both" } : undefined}
         >
           <SkillOrbit
