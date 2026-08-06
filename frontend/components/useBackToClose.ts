@@ -2,6 +2,12 @@
 
 import { useEffect, useRef } from "react";
 
+/** Set while WE unwind the history stack, so the resulting popstate is
+ *  ignored by every overlay rather than closing whichever one happens to
+ *  be listening when it lands. Module-level on purpose: the pop is a page
+ *  event, and only one can be in flight. */
+let selfPop = false;
+
 /** Make the browser BACK button close an overlay instead of leaving the page.
  *
  * Without this, opening a modal and pressing back navigates away entirely —
@@ -37,7 +43,18 @@ export function useBackToClose(open: boolean, onClose: () => void) {
     pushed.current = true;
 
     const onPop = () => {
-      // The entry is gone — the browser popped it, not us.
+      // Was this OUR doing?
+      //
+      // history.back() is ASYNCHRONOUS. When one overlay closes and opens
+      // another in the same commit — the vendor sheet's "Edit details" — the
+      // sheet's cleanup calls back(), the modal mounts and subscribes, and
+      // THEN the popstate arrives and hits the modal instead. That is why the
+      // edit form opened and vanished in the same breath, three reports
+      // running. A pop we caused ourselves belongs to nobody.
+      if (selfPop) {
+        selfPop = false;
+        return;
+      }
       pushed.current = false;
       close.current();
     };
@@ -57,6 +74,9 @@ export function useBackToClose(open: boolean, onClose: () => void) {
       const top = (window.history.state as { overlay?: string } | null)?.overlay;
       if (pushed.current && top === id) {
         pushed.current = false;
+        // Claim the pop before it happens, so whichever overlay is listening
+        // when it lands knows it was not meant for them.
+        selfPop = true;
         window.history.back();
       }
       pushed.current = false;

@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, clearToken, type AttendanceRow, type Employee } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AnalogClock } from "@/components/AnalogClock";
+import { KioskGate } from "@/components/KioskGate";
 import { useHotelTime } from "@/lib/time";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -52,7 +53,8 @@ export default function KioskPage() {
       // The tab is holding an attendance-only token; ending it leaves nothing
       // behind for the next person who picks the tablet up.
       clearToken();
-      window.location.assign("/login");
+      // Back to the admin app on the same address — they came from there.
+      window.location.assign("/dashboard");
     } catch {
       setPinError("Could not check the PIN.");
     }
@@ -112,13 +114,14 @@ export default function KioskPage() {
     }
   }
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user) window.location.assign("/login");
-  }, [loading, user]);
-
-  if (loading || !user) {
+  if (loading) {
     return <div className="grid min-h-dvh place-items-center bg-shell text-fg-faint">…</div>;
+  }
+
+  // A cold tablet on the wall: no session, so ask for the PIN rather than
+  // sending somebody to a login page they have no credentials for.
+  if (!user) {
+    return <KioskGate onOpen={() => window.location.reload()} />;
   }
 
   return (
@@ -326,7 +329,7 @@ export default function KioskPage() {
           onClick={() => setLeaving(true)}
           className="text-[11px] text-fg-faint underline-offset-4 hover:underline"
         >
-          Leave the attendance screen
+          Leave · back to DineAI
         </button>
       </footer>
 

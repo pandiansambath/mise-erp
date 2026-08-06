@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
-import { KioskLogin } from "@/components/KioskLogin";
 import { RoleBuilder } from "@/components/RoleBuilder";
 import { Donut } from "@/components/charts";
 import { ROLE_LABELS as RL } from "@/lib/permissions";
@@ -166,10 +165,6 @@ export default function StaffPage() {
           permission to manage staff, which is to say only to the people who
           cannot use it. A Super Admin never saw it, which is why it kept being
           asked for as if it did not exist. */}
-      {/* The device account, next to the human ones — it is a login this
-          restaurant has, and it belongs on the page about logins. */}
-      {canWrite && <KioskLogin />}
-
       {canWrite && (
         <details className="mise-feel group mb-6 overflow-hidden rounded-2xl border border-brand-400/25 bg-brand-400/[0.04]" open>
           <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4">

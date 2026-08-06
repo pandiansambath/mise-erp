@@ -41,6 +41,17 @@ MAX_PIN = 8
 KIOSK_TOKEN_MINUTES = 14 * 60
 
 
+def suggest() -> str:
+    """A random PIN.
+
+    He asked for one generated rather than chosen: a PIN somebody invents is
+    1234, or the year, or the door code they already use everywhere else.
+    """
+    import secrets
+
+    return "".join(str(secrets.randbelow(10)) for _ in range(6))
+
+
 class PinError(ValueError):
     """The PIN is missing, malformed, or wrong."""
 

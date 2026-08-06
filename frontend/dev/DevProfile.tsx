@@ -121,7 +121,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
       <main
-        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 lg:justify-start lg:py-16 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl xl:max-w-6xl ${
+        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl xl:max-w-6xl ${
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
@@ -129,31 +129,16 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           desktop were the content declining to use the width it had — and
           simply widening a single column would have produced long, unreadable
           lines instead. Identity on the left, the things you DO on the right. */}
-      <div className="grid w-full items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
-        <section
-          // Sticky only holds an element SHORTER than the viewport. Name,
-          // role, city and a 34rem orbit together are taller than most
-          // screens, so it scrolled away — which is why it never felt
-          // fixed. Capped to the viewport, it stays put.
-          // It has to FIT, not merely be capped.
-          //
-          // `max-h` alone left the column ~96dvh tall, and a sticky element
-          // taller than the viewport cannot stick — it scrolls away, leaving
-          // the empty space on the left he photographed. Worse, centring
-          // content inside a capped box overflows equally at both ends, which
-          // is what cut the top off his name.
-          //
-          // Fixed height that genuinely fits, and the orbit sized from the
-          // leftover room rather than a guess.
-          className="flex min-w-0 flex-col items-center lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)] lg:items-start lg:justify-center lg:text-left"
-        >
+      <div className="grid w-full items-start gap-10 lg:h-[calc(100dvh-6rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-center lg:gap-14">
+        <section className="flex min-w-0 flex-col items-center lg:items-start lg:text-left">
 
         {/* Name first, orbit under it.
             The orbit was on top and vertically centred, which pushed his name
             below the fold on a desktop and left a large empty band above it —
             "why that empty gap… I need to scroll to see my pic and name". The
-            identity is the point of the page; it goes at the top, and on a
-            desktop the whole column is pinned so it never scrolls away at all. */}
+            identity is the point of the page, so it goes first. On a desktop
+            the row is exactly one screen tall, so this column has nowhere to
+            scroll to and simply stays where it is. */}
         <h1
           className="text-center font-display text-4xl font-semibold tracking-tight sm:text-5xl lg:text-left lg:text-6xl"
           style={entered ? { animation: "devFadeUp .8s .1s ease-out both" } : undefined}
@@ -183,9 +168,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         </p>
 
         <div
-          // Whatever is left after the name, role and city have had their
-          // share. Below `lg` it goes back to being as wide as the column.
-          className="relative mt-6 w-full lg:max-w-[min(32rem,calc(100dvh-17rem))]"
+          className="relative mt-6 w-full"
           style={entered ? { animation: "devFadeUp .8s .3s ease-out both" } : undefined}
         >
           <SkillOrbit
@@ -198,7 +181,12 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
 
         {/* Right column: the live counter, the shell, and the ways to reach
             him — the parts you interact with, kept together. */}
-        <section className="flex w-full flex-col items-center lg:items-stretch">
+        <section
+          // The only thing that moves. The row above is one screen tall,
+          // so his details scroll here while the portrait stays put —
+          // which was the single thing he asked for.
+          className="mise-noscrollbar flex w-full flex-col items-center lg:h-full lg:items-stretch lg:overflow-y-auto lg:pr-1"
+        >
 
         {/* ── Live experience ──────────────────────────────────────────── */}
         <div

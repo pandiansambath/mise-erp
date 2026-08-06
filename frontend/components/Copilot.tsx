@@ -13,6 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, postStream, postForm } from "@/lib/api";
 import { useDraggable } from "@/components/useDraggable";
+import { useResizable } from "@/components/useResizable";
 import { speak, speechOutputSupported, stopSpeaking, useVoiceInput } from "@/lib/useVoice";
 import ChefMascot from "@/components/auth/ChefMascot";
 
@@ -651,6 +652,17 @@ export function Copilot() {
 
   // Where the user has decided this thing belongs.
   const drag = useDraggable("mise.copilot.pos");
+  // How big the assistant is, and where. Remembered, because resizing the same
+  // window twice a day is worse than it being the wrong size once.
+  const panel = useResizable("mise.copilot.box", { w: 400, h: 600 });
+  const [isWide, setIsWide] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const on = () => setIsWide(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   return (
     <>
@@ -700,12 +712,63 @@ export function Copilot() {
       {open && (
         <div
           ref={panelRef}
-          className={`${expanding ? "mise-copilot-expand" : closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-[5.5rem] z-50 flex max-h-[68dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:left-6 sm:h-[600px] sm:max-h-[calc(100dvh_-_3rem)] sm:w-[400px] sm:max-w-[calc(100vw-3rem)]`}
+          data-resizable
+          // `data-narrow` is what makes the CONTENTS obey the size. A panel
+          // that changes its frame and leaves a wide toolbar inside is worse
+          // than one that never resized — so the real width is published here
+          // and the children key off it.
+          data-narrow={panel.box.w < 380 ? "true" : undefined}
+          style={
+            // Below sm the panel is a sheet and stays where it is; dragging a
+            // window around a phone screen is not a thing anyone wants.
+            isWide
+              ? {
+                  width: panel.box.w,
+                  height: panel.box.h,
+                  ...(panel.box.x != null
+                    ? { left: panel.box.x, top: panel.box.y ?? 0, right: "auto", bottom: "auto" }
+                    : {}),
+                }
+              : undefined
+          }
+          className={`${expanding ? "mise-copilot-expand" : closing ? "mise-copilot-out" : "mise-copilot-in"} fixed inset-x-2 bottom-[5.5rem] z-50 flex max-h-[68dvh] flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/[0.98] shadow-2xl shadow-black/50 backdrop-blur-xl sm:bottom-6 [padding-bottom:env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-6 sm:left-6 sm:max-h-none ${
+            panel.active ? "select-none transition-none" : ""
+          }`}
           role="dialog"
           aria-label="DineAI Copilot"
         >
-          {/* Header */}
-          <div className="relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3">
+          {/* Eight grips: four edges, four corners — the shape of every window
+              anybody has ever resized, so nothing has to be explained. Hidden
+              on phones, where the panel is a sheet. */}
+          {isWide && (
+            <>
+              {([
+                ["n", "left-3 right-3 top-0 h-1.5 cursor-ns-resize"],
+                ["s", "left-3 right-3 bottom-0 h-1.5 cursor-ns-resize"],
+                ["w", "left-0 top-3 bottom-3 w-1.5 cursor-ew-resize"],
+                ["e", "right-0 top-3 bottom-3 w-1.5 cursor-ew-resize"],
+                ["nw", "left-0 top-0 h-3 w-3 cursor-nwse-resize"],
+                ["ne", "right-0 top-0 h-3 w-3 cursor-nesw-resize"],
+                ["sw", "left-0 bottom-0 h-3 w-3 cursor-nesw-resize"],
+                ["se", "right-0 bottom-0 h-3 w-3 cursor-nwse-resize"],
+              ] as const).map(([edge, cls]) => (
+                <span
+                  key={edge}
+                  {...panel.grip(edge)}
+                  className={`absolute z-20 touch-none ${cls}`}
+                  aria-hidden
+                />
+              ))}
+            </>
+          )}
+          {/* Header — and the handle. Dragging a window by its title bar is
+              the one gesture nobody needs telling. */}
+          <div
+            {...(isWide ? panel.grip("move") : {})}
+            className={`relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3 ${
+              isWide ? "cursor-grab touch-none active:cursor-grabbing" : ""
+            }`}
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-brand-600/25 via-brand-500/10 to-transparent" aria-hidden />
             <ChefMascot mood={loading ? "think" : "happy"} className="relative w-10 shrink-0" />
             <div className="relative min-w-0 leading-tight">
@@ -1103,7 +1166,7 @@ export function Copilot() {
             {loading && liveText && (
               <div className="flex justify-start gap-2">
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-[13px] text-white shadow-sm" aria-hidden>✨</span>
-                <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-glass/10 bg-paper-3 px-4 py-3 text-sm leading-relaxed text-fg">
+                <div className="mise-chat-msg max-w-[85%] rounded-2xl rounded-bl-md border border-glass/10 bg-paper-3 px-4 py-3 text-sm leading-relaxed text-fg">
                   {liveText}
                   <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-brand-400 align-text-bottom" />
                 </div>
@@ -1185,7 +1248,7 @@ export function Copilot() {
               // min-h + overflow-hidden rather than a fixed row count: a one-row
               // box cannot show a placeholder that wraps, and cutting it mid-word
               // is the first thing anyone sees on a phone.
-              className="min-h-[2.75rem] min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none"
+              className="mise-chat-input min-h-[2.75rem] min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-glass/15 bg-paper px-3.5 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-faint focus:border-brand-500/50 focus:outline-none"
             />
             {ttsSupported && (
               <button
