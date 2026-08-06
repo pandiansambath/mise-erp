@@ -110,6 +110,38 @@ export function ChatMarkdown({ text }: { text: string }) {
       continue;
     }
 
+    // ── headings ─────────────────────────────────────────────────────────
+    // The model writes them constantly ("## Critical: Subscriptions") and
+    // without this they printed as literal hashes — which is precisely the
+    // "it looks like a .md file" complaint. Rendered by DEPTH, not by size
+    // alone: a chat bubble has no room for a 32px h1, so the levels are
+    // distinguished by weight and colour instead.
+    const heading = /^\s{0,3}(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      const depth = heading[1].length;
+      i++;
+      blocks.push(
+        <p
+          key={`h${i}`}
+          className={
+            depth <= 2
+              ? "mb-1 mt-3 text-[13px] font-semibold text-fg first:mt-0"
+              : "mb-0.5 mt-2 text-[12px] font-semibold text-fg-soft first:mt-0"
+          }
+        >
+          {inline(heading[2], `h${i}`)}
+        </p>,
+      );
+      continue;
+    }
+
+    // ── a rule ───────────────────────────────────────────────────────────
+    if (/^\s*([-*_]){2,}\s*$/.test(line)) {
+      i++;
+      blocks.push(<hr key={`r${i}`} className="my-2.5 border-line" />);
+      continue;
+    }
+
     // ── bullets ──────────────────────────────────────────────────────────
     if (/^\s*[-*•]\s+/.test(line)) {
       const items: string[] = [];

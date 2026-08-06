@@ -271,7 +271,14 @@ export default function SalesPage() {
       {/* Just the number, pinned. The whole header was sticky before, which
           pinned a title and a subtitle nobody needs to keep reading and left a
           tall translucent band sitting over the page. */}
-      <div className="sticky top-0 z-30 mb-5 flex items-center justify-end gap-3 rounded-2xl border border-line/60 bg-paper/90 px-4 py-2.5 shadow-sm backdrop-blur-md">
+      <div
+        // Full-bleed and OPAQUE. Inset with rounded corners and a translucent
+        // background, the page scrolled through the strip above it and through
+        // the bar itself — the "gap" that looked broken. A pinned toolbar has
+        // to be a solid lid: it spans the content width exactly (matching
+        // AppShell's px-4 lg:px-8) and nothing passes behind it.
+        className="sticky top-0 z-30 -mx-4 mb-5 flex items-center justify-end gap-3 border-b border-line bg-paper px-4 py-2.5 lg:-mx-8 lg:px-8"
+      >
         <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-fg-faint">
           <span aria-hidden className="mr-1">🪙</span> In the cash box
         </span>

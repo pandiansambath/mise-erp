@@ -25,7 +25,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { HUE_OF, ORBIT_RINGS } from "@/dev/skills";
+import { DOCS, HUE_OF, ORBIT_RINGS } from "@/dev/skills";
 
 // Radii are a FRACTION of the container, not pixels. The old fixed 96/148/205
 // meant the outer ring was off-screen on a phone — the device most likely to
@@ -109,7 +109,7 @@ export function SkillOrbit({
           <div
             key={`o${ri}`}
             aria-hidden
-            className="absolute inset-0 grid place-items-center"
+            className="pointer-events-none absolute inset-0 grid place-items-center"
             style={
               still
                 ? undefined
@@ -131,8 +131,14 @@ export function SkillOrbit({
                     transform: `rotate(${angle}deg) translateX(${ring.frac * 100}cqw) rotate(-${angle}deg)`,
                   }}
                 >
-                  <span
-                    className="block whitespace-nowrap rounded-full border bg-[#0d1219]/85 px-2 py-[3px] font-mono text-[9px] tracking-wide backdrop-blur-sm sm:px-2.5 sm:py-1 sm:text-[11px]"
+                  <a
+                    href={DOCS[label] ?? undefined}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title={`${label} — official docs`}
+                    // The orbit is decoration until you can click it. Now every
+                    // body in the system opens its own documentation.
+                    className="pointer-events-auto block whitespace-nowrap rounded-full border bg-[#0d1219]/85 px-2 py-[3px] font-mono text-[9px] tracking-wide backdrop-blur-sm transition hover:brightness-150 sm:px-2.5 sm:py-1 sm:text-[11px]"
                     style={{
                       // Coloured by family, so the orbit says WHICH world each
                       // skill belongs to without a legend.
@@ -147,7 +153,7 @@ export function SkillOrbit({
                     }}
                   >
                     {label}
-                  </span>
+                  </a>
                 </span>
               );
             })}

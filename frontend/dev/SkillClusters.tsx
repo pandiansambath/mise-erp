@@ -17,7 +17,7 @@
 // immediately beside it. A rank that cannot be checked is a rank nobody
 // believes.
 
-import { CLUSTERS, EDUCATION } from "@/dev/skills";
+import { CLUSTERS, DOCS, EDUCATION } from "@/dev/skills";
 
 export function SkillClusters({ entered }: { entered: boolean }) {
   return (
@@ -60,18 +60,35 @@ export function SkillClusters({ entered }: { entered: boolean }) {
           <p className="relative mt-1.5 text-[12px] leading-relaxed text-[#7d93ad]">{c.blurb}</p>
 
           <ul className="relative mt-3 flex flex-wrap gap-1.5">
-            {c.items.map((item) => (
-              <li
-                key={item}
-                className="rounded-lg border px-2.5 py-1 font-mono text-[11px] text-[#c3d3e4] transition-colors duration-300"
-                style={{
-                  borderColor: `${c.hue}2e`,
-                  background: `${c.hue}0f`,
-                }}
-              >
-                {item}
-              </li>
-            ))}
+            {c.items.map((item) => {
+              const href = DOCS[item];
+              // Every chip goes to the official documentation. A chip that
+              // cannot be clicked is a label; one that can is an invitation to
+              // check he means it.
+              const cls =
+                "block rounded-lg border px-2.5 py-1 font-mono text-[11px] text-[#c3d3e4] transition duration-300";
+              const style = { borderColor: `${c.hue}2e`, background: `${c.hue}0f` };
+              return (
+                <li key={item}>
+                  {href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title={`${item} — official docs`}
+                      className={`${cls} hover:-translate-y-0.5 hover:text-white`}
+                      style={style}
+                    >
+                      {item}
+                    </a>
+                  ) : (
+                    <span className={cls} style={style}>
+                      {item}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ))}

@@ -130,7 +130,13 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           simply widening a single column would have produced long, unreadable
           lines instead. Identity on the left, the things you DO on the right. */}
       <div className="grid w-full items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
-        <section className="flex min-w-0 flex-col items-center lg:sticky lg:top-10 lg:items-start lg:text-left">
+        <section
+          // Sticky only holds an element SHORTER than the viewport. Name,
+          // role, city and a 34rem orbit together are taller than most
+          // screens, so it scrolled away — which is why it never felt
+          // fixed. Capped to the viewport, it stays put.
+          className="flex min-w-0 flex-col items-center lg:sticky lg:top-8 lg:max-h-[calc(100dvh-4rem)] lg:items-start lg:justify-center lg:text-left"
+        >
 
         {/* Name first, orbit under it.
             The orbit was on top and vertically centred, which pushed his name

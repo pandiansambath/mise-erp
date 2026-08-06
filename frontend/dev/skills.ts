@@ -8,6 +8,40 @@
 // AWS is one world with a security half, Python is a language plus what he
 // builds with it, and tooling is the pipeline around both.
 
+/** Where each skill's official documentation lives.
+ *
+ *  His ask: "literally make everything as links". Official docs only — a
+ *  portfolio that links to a blog post about FastAPI says something different
+ *  from one that links to FastAPI. Kept in one map so the orbit and the cards
+ *  cannot drift apart. */
+export const DOCS: Record<string, string> = {
+  // AWS
+  EC2: "https://docs.aws.amazon.com/ec2/",
+  ECS: "https://docs.aws.amazon.com/ecs/",
+  Lambda: "https://docs.aws.amazon.com/lambda/",
+  S3: "https://docs.aws.amazon.com/s3/",
+  DynamoDB: "https://docs.aws.amazon.com/dynamodb/",
+  SQS: "https://docs.aws.amazon.com/sqs/",
+  SNS: "https://docs.aws.amazon.com/sns/",
+  IAM: "https://docs.aws.amazon.com/iam/",
+  VPC: "https://docs.aws.amazon.com/vpc/",
+  "Security Groups":
+    "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html",
+  Subnets: "https://docs.aws.amazon.com/vpc/latest/userguide/configure-subnets.html",
+  // Python
+  Python: "https://docs.python.org/3/",
+  FastAPI: "https://fastapi.tiangolo.com/",
+  Django: "https://docs.djangoproject.com/",
+  DSA: "https://en.wikipedia.org/wiki/Data_structure",
+  // Tooling
+  Docker: "https://docs.docker.com/",
+  "GitHub Actions": "https://docs.github.com/actions",
+  "Git & GitHub": "https://git-scm.com/doc",
+  SonarQube: "https://docs.sonarsource.com/sonarqube-server/latest/",
+  Snyk: "https://docs.snyk.io/",
+  CodeScene: "https://codescene.io/docs/",
+};
+
 export type Cluster = {
   key: string;
   label: string;
