@@ -16,7 +16,14 @@ class Base(DeclarativeBase):
     """Declarative base for all ORM models."""
 
 
-_engine_kwargs: dict = {"echo": settings.debug, "future": True}
+# Echo prints EVERY SQL statement. `settings.debug` defaults to True and the
+# production box never sets DEBUG, so production has been logging every query
+# it runs — to stdout, and from there into CloudWatch. That is real work on
+# every request (an AI turn runs a dozen queries through its tools), real
+# ingestion cost, and it buries the lines worth reading. Echo belongs to a
+# developer watching their own terminal, so it is tied to NOT being deployed.
+_echo_sql = settings.debug and settings.environment not in ("production", "staging")
+_engine_kwargs: dict = {"echo": _echo_sql, "future": True}
 if settings.environment in ("ci", "test"):
     # Per-test event loops + a pooled asyncpg connection don't mix
     # (connections get bound to a closed loop). NullPool sidesteps it.
