@@ -11,8 +11,9 @@ from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
 from app.core.database import get_db
+from app.core.security import verify_password
+from app.employees import attendance_lock, service, timesheet
 from app.employees import leave as leave_service
-from app.employees import service, timesheet
 from app.employees.models import Employee, Leave, LeaveStatus
 from app.employees.schemas import (
     AttendanceEdit,
@@ -329,6 +330,100 @@ async def list_attendance(
             )
         out.sort(key=lambda r: r.employee_name)
     return out
+
+
+class PinSet(BaseModel):
+    """Setting the door code needs the owner's own password.
+
+    A code that unlocks a screen must not be changeable by whoever happens to
+    be sitting at an unlocked one.
+    """
+
+    password: str
+    pin: str
+
+
+class PinUnlock(BaseModel):
+    pin: str
+
+
+@attendance_router.get("/lock")
+async def attendance_lock_status(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> dict:
+    """Whether this restaurant has an attendance PIN set."""
+    hotel = await db.get(Hotel, user.hotel_id)
+    return {
+        "has_pin": attendance_lock.has_pin(hotel) if hotel else False,
+        "can_manage": attendance_lock.can_manage_pin(user),
+    }
+
+
+@attendance_router.post("/lock/pin", status_code=status.HTTP_204_NO_CONTENT)
+async def set_attendance_pin(
+    payload: PinSet,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:write")),
+) -> None:
+    """Set or change the PIN. Owner only, and only with their password."""
+    if not attendance_lock.can_manage_pin(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the owner can set this PIN.")
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "That password is not right.")
+    hotel = await db.get(Hotel, user.hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    try:
+        await attendance_lock.set_pin(db, hotel, payload.pin)
+    except attendance_lock.PinError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+@attendance_router.post("/lock/unlock")
+async def unlock_attendance_view(
+    payload: PinUnlock,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> dict:
+    """Trade the PIN for an attendance-only session.
+
+    The token that comes back is KIOSK-scoped: it can record a punch and read
+    staff names, and nothing else. The caller's own session is NOT what runs
+    the screen afterwards — the tab replaces it — so a tablet left on a counter
+    holds a credential that genuinely cannot reach the money.
+    """
+    hotel = await db.get(Hotel, user.hotel_id)
+    if hotel is None or not attendance_lock.has_pin(hotel):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No attendance PIN has been set yet — the owner sets it on this page.",
+        )
+    if not attendance_lock.verify(hotel, payload.pin):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "That PIN is not right.")
+    token = await attendance_lock.kiosk_token_for(db, user.hotel_id)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="attendance.lock",
+        summary="Attendance screen unlocked on a device",
+    )
+    return {"token": token}
+
+
+@attendance_router.post("/lock/verify")
+async def verify_attendance_pin(
+    payload: PinUnlock,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:write")),
+) -> dict:
+    """Is this the PIN? Used to LEAVE the attendance screen.
+
+    Reachable by the kiosk session itself — otherwise the screen could never
+    check the code it needs to let somebody out, and the lock would be a door
+    that only opens from outside.
+    """
+    hotel = await db.get(Hotel, user.hotel_id)
+    ok = hotel is not None and attendance_lock.verify(hotel, payload.pin)
+    return {"ok": ok}
 
 
 @attendance_router.get("/timesheet.pdf")

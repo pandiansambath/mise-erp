@@ -58,9 +58,16 @@ export function KioskLogin() {
         </span>
       </div>
       <p className="mt-1.5 max-w-prose text-xs leading-relaxed text-fg-faint">
-        Its own login, for the device rather than a person. It can record
-        attendance and read staff names — and nothing else. No wages, no money,
-        no reports, whatever anyone taps.
+        Its own login, for the device rather than a person. It can record attendance and read
+        staff names — and nothing else. No wages, no money, no reports, whatever anyone taps.
+      </p>
+      {/* Two doors, one room. Somebody arriving here should not be left
+          wondering whether they picked the wrong one. */}
+      <p className="mt-2 max-w-prose rounded-lg border border-line bg-glass/5 px-3 py-2 text-[11px] leading-relaxed text-fg-faint">
+        <b className="text-fg-soft">Just need it now?</b> The <b className="text-fg-soft">Attendance</b> page
+        has a PIN that turns whatever device you are holding into the same screen, with the same
+        locked-down access — no login to set up. This one suits a tablet that lives on the wall
+        and should return to the attendance screen by itself after a reboot.
       </p>
 
       {status.exists && (

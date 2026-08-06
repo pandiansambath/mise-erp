@@ -8,6 +8,7 @@ import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "
 import { localISODate } from "@/lib/date";
 import Link from "next/link";
 import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { AttendanceLock } from "@/components/AttendanceLock";
 import { QuickLeave, AttendanceLegend, LEAVE_CHANGED } from "@/components/QuickLeave";
 import { Bars, CalendarHeat } from "@/components/charts";
 import { useAuth } from "@/lib/auth";
@@ -364,6 +365,9 @@ export default function AttendancePage() {
           </div>
         );
       })()}
+
+      {/* Turn this device into the screen by the door. */}
+      <AttendanceLock />
 
       <div id="att-legend" className="scroll-mt-24"><AttendanceLegend /></div>
 
