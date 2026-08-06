@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { RoleAttach } from "@/components/RoleAttach";
 import { RoleBuilder } from "@/components/RoleBuilder";
 import { Donut } from "@/components/charts";
 import { ROLE_LABELS as RL } from "@/lib/permissions";
@@ -186,7 +187,17 @@ export default function StaffPage() {
             </span>
           </summary>
           <div className="border-t border-line px-5 pb-5 pt-4">
+            {/* Two acts, in order, the way IAM does it: write the role, then
+                attach it. The old screen mixed them and he called it "very
+                very confusing". */}
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">
+              step 1 · write the role
+            </p>
             <RoleBuilder />
+            <p className="mb-3 mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">
+              step 2 · attach it to people
+            </p>
+            <RoleAttach />
           </div>
         </details>
       )}
