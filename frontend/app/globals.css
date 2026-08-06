@@ -1445,6 +1445,22 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   .mise-breathe { animation: none; }
 }
 
+/* ── The attendance tablet ────────────────────────────────────────────────
+   A screen that lives on a wall for twelve hours needs to look awake. The
+   pulse marks who is currently on the floor; the pop is the confirmation
+   after a tap, which has to be readable from across the room. */
+@keyframes mise-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .45; transform: scale(.82); }
+}
+@keyframes mise-pop {
+  from { opacity: 0; transform: scale(.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="mise-pulse"], [style*="mise-pop"] { animation: none !important; }
+}
+
 /* ── Touch ripple ─────────────────────────────────────────────────────────
    A drop in water at the point of contact. Sits above everything and can
    never take a click (pointer-events: none on the layer). transform +
