@@ -142,11 +142,6 @@ export default function StaffPage() {
     return (
       <div>
         <PageHeader title="Roles & Access" />
-
-        {/* Custom roles: name them how this hotel actually talks, bounded by
-            what each archetype may ever be trusted with. */}
-        <RoleBuilder />
-
         <Card>
           <p className="py-6 text-center text-sm text-fg-faint">
             You don&apos;t have permission to manage staff. Ask your Super Admin.
@@ -164,6 +159,37 @@ export default function StaffPage() {
         title="Staff"
         subtitle="Who can sign in here and what they can access. To create a login or manage someone’s email, password, verification or history, open their card on the Employees page."
       />
+
+      {/* Designing what a Manager or a Chef can see.
+          This lived in the `denied` branch — rendered ONLY to people without
+          permission to manage staff, which is to say only to the people who
+          cannot use it. A Super Admin never saw it, which is why it kept being
+          asked for as if it did not exist. */}
+      {canWrite && (
+        <details className="mise-feel group mb-6 overflow-hidden rounded-2xl border border-brand-400/25 bg-brand-400/[0.04]" open>
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4">
+            <span aria-hidden className="text-lg">🔑</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-fg">
+                Design what each role can see
+              </span>
+              <span className="block text-xs text-fg-faint">
+                Build a &ldquo;Kitchen Manager&rdquo; or an &ldquo;Accounts Assistant&rdquo; in your own
+                words, and choose exactly what they may view or change
+              </span>
+            </span>
+            <span
+              aria-hidden
+              className="shrink-0 text-fg-faint transition group-open:rotate-90"
+            >
+              ›
+            </span>
+          </summary>
+          <div className="border-t border-line px-5 pb-5 pt-4">
+            <RoleBuilder />
+          </div>
+        </details>
+      )}
 
       {canWrite && (
         <Card className="mise-feel mb-6" id="staff-form">
