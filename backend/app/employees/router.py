@@ -380,33 +380,49 @@ async def set_attendance_pin(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
 
-@attendance_router.post("/lock/unlock")
-async def unlock_attendance_view(
-    payload: PinUnlock,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("attendance:read")),
-) -> dict:
-    """Trade the PIN for an attendance-only session.
+class KioskOpen(BaseModel):
+    """Opening the attendance screen from a cold tablet.
 
-    The token that comes back is KIOSK-scoped: it can record a punch and read
-    staff names, and nothing else. The caller's own session is NOT what runs
-    the screen afterwards — the tab replaces it — so a tablet left on a counter
-    holds a credential that genuinely cannot reach the money.
+    `site` is the restaurant's handle from the subdomain — the tablet is at
+    <hotel>.dineai.cloud/kiosk and nobody has signed in, so the PIN alone has
+    to say WHICH restaurant as well as prove the right to open it.
     """
-    hotel = await db.get(Hotel, user.hotel_id)
-    if hotel is None or not attendance_lock.has_pin(hotel):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "No attendance PIN has been set yet — the owner sets it on this page.",
-        )
+
+    site: str
+    pin: str
+
+
+@attendance_router.post("/kiosk-open")
+async def open_kiosk(
+    payload: KioskOpen,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """PIN in, attendance-only session out. No login required.
+
+    Deliberately unauthenticated: the whole point is that a tablet on the wall
+    boots to this screen and a manager types four digits. Requiring a sign-in
+    first would mean somebody's real session lives on that device, which is
+    exactly what this design avoids.
+
+    What comes back is KIOSK-scoped — record a punch, read staff names, nothing
+    else. A wrong PIN and a wrong restaurant give the same answer, so this
+    cannot be used to discover which handles exist.
+    """
+    site = (payload.site or "").strip().lower()
+    rows = await db.execute(select(Hotel).where(Hotel.username == site))
+    hotel = rows.scalars().first()
+
+    if hotel is None or not hotel.is_active or not attendance_lock.has_pin(hotel):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "That PIN is not right.")
     if not attendance_lock.verify(hotel, payload.pin):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "That PIN is not right.")
-    token = await attendance_lock.kiosk_token_for(db, user.hotel_id)
+
+    token = await attendance_lock.kiosk_token_for(db, hotel.id)
     await audit.record(
-        db, hotel_id=user.hotel_id, user=user, action="attendance.lock",
-        summary="Attendance screen unlocked on a device",
+        db, hotel_id=hotel.id, user=None, action="attendance.kiosk",
+        summary="Attendance screen opened with the PIN",
     )
-    return {"token": token}
+    return {"token": token, "hotel": hotel.name}
 
 
 @attendance_router.post("/lock/verify")

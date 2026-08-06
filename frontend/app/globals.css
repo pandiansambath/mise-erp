@@ -1445,6 +1445,16 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   .mise-breathe { animation: none; }
 }
 
+/* ── A narrow assistant ───────────────────────────────────────────────────
+   The panel publishes its real width as data-narrow, and the contents obey.
+   A resizable box whose insides stay laid out for the old size is worse than
+   one that never resized — you get a slim window with a wide toolbar clipped
+   inside it. These are the things that must give way first. */
+[data-narrow="true"] .mise-chat-wide { display: none; }
+[data-narrow="true"] .mise-chat-msg { max-width: 96%; font-size: 0.8125rem; }
+[data-narrow="true"] .mise-chat-chips { flex-direction: column; align-items: stretch; }
+[data-narrow="true"] .mise-chat-input { font-size: 0.875rem; }
+
 /* ── The attendance tablet ────────────────────────────────────────────────
    A screen that lives on a wall for twelve hours needs to look awake. The
    pulse marks who is currently on the floor; the pop is the confirmation

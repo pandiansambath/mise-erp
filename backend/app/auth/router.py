@@ -354,48 +354,14 @@ async def list_users(
     return [UserOut.model_validate(u) for u in users]
 
 
-@router.get("/kiosk")
-async def kiosk_status(
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require("users:write")),
-) -> dict:
-    """Whether this restaurant has an attendance tablet, and its sign-in name.
-
-    Never the password. It is hashed at rest and shown exactly once, when it is
-    created or rotated — a screen anyone can walk up to must not be able to
-    reveal its own credentials.
-    """
-    from app.auth import kiosk as kiosk_service
-
-    account = await kiosk_service.get_kiosk(db, admin.hotel_id)
-    return {
-        "exists": account is not None,
-        "email": account.email if account else kiosk_service.kiosk_email(admin.hotel_id),
-        "is_active": bool(account.is_active) if account else False,
-        "last_login": account.last_login.isoformat() if account and account.last_login else None,
-    }
-
-
-@router.post("/kiosk")
-async def kiosk_create_or_rotate(
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require("users:write")),
-) -> dict:
-    """Create the attendance tablet's login, or give it a new password.
-
-    The plain password comes back ONCE. There is no way to read it again, on
-    purpose: rotating is cheap, and a recoverable password on a device sitting
-    in a dining room is not a password.
-    """
-    from app.auth import kiosk as kiosk_service
-
-    account, password = await kiosk_service.ensure_kiosk(db, admin.hotel_id)
-    await audit.record(
-        db, hotel_id=admin.hotel_id, user=admin, action="kiosk.rotate",
-        summary="Attendance tablet login created or rotated",
-        entity_type="user", entity_id=account.id,
-    )
-    return {"email": account.email, "password": password}
+# The tablet login is gone.
+#
+# It existed alongside the PIN and the two together confused everybody,
+# including me. He could not sign in with the generated credentials, then found
+# /kiosk already open because he still had a session — two mechanisms, two
+# failure modes, no benefit. One door now: the PIN, on the restaurant's own
+# subdomain. The kiosk ACCOUNT survives as the identity those PIN tokens are
+# minted against, which is why the sealed KIOSK role still matters.
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
