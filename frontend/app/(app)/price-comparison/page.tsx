@@ -146,7 +146,7 @@ export default function PriceComparisonPage() {
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [changeLog, setChangeLog] = useState<PriceChange[]>([]);
   const [allSuppliers, setAllSuppliers] = useState<ItemSuppliers[]>([]);
-  const [pane, setPane] = useState<"suppliers" | "history" | "changes">("suppliers");
+  const [pane, setPane] = useState<"suppliers" | "history" | "changes" | "add">("suppliers");
   const { format } = useCurrency();
 
   useEffect(() => {
@@ -464,7 +464,7 @@ export default function PriceComparisonPage() {
                   {addPriceForm}
                 </>
               ) : (
-                <Card className="mise-feel p-0">
+                <Card className="mise-feel flex flex-col p-0">
                   <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
                     <span aria-hidden className="mise-neo-raised grid h-9 w-9 shrink-0 place-items-center rounded-xl text-lg">
                       {categoryEmoji(chosenItem?.category ?? "")}
@@ -491,6 +491,7 @@ export default function PriceComparisonPage() {
                       ["suppliers", `Suppliers (${data.vendor_count})`],
                       ["history", "What you paid"],
                       ["changes", `Changes${changeLog.length ? ` (${changeLog.length})` : ""}`],
+                      ["add", "＋ Add a price"],
                     ] as const).map(([key, label]) => (
                       <button
                         key={key}
@@ -509,7 +510,7 @@ export default function PriceComparisonPage() {
                     ))}
                   </div>
 
-                  <div className="max-h-[min(26rem,calc(100dvh-22rem))] overflow-y-auto p-4">
+                  <div className="mise-noscrollbar min-h-0 flex-1 overflow-y-auto p-4 lg:max-h-[calc(100dvh-16rem)]">
                     {pane === "suppliers" && (
                       <>
                         {/* Cards, not table rows — the recipe section's language.
@@ -587,7 +588,6 @@ export default function PriceComparisonPage() {
                           otherwise your ★ chosen supplier; otherwise the cheapest. Recipe costing
                           follows the same rule.
                         </p>
-                        {addPriceForm}
                       </>
                     )}
 
@@ -599,6 +599,16 @@ export default function PriceComparisonPage() {
                         </p>
                         <PriceHistoryChart points={history} />
                         <VendorOverlay changes={changeLog} />
+                      </>
+                    )}
+
+                    {pane === "add" && (
+                      <>
+                        <p className="mb-3 text-[11px] leading-relaxed text-fg-faint">
+                          A price makes this item orderable and costable. Adding one here is the
+                          same as adding it on the Vendors page.
+                        </p>
+                        {addPriceForm}
                       </>
                     )}
 
