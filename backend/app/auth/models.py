@@ -18,6 +18,10 @@ class Role(str, enum.Enum):
     ACCOUNTANT = "ACCOUNTANT"  # Payroll, vendor payments, financial reports
     CASHIER = "CASHIER"  # Daily sales & cash entry
     STAFF = "STAFF"  # General staff — own attendance & payslip only
+    # A tablet by the door, not a person. It clocks people in and out and can
+    # reach nothing else. Listed last because it is not a rung on the ladder —
+    # it is a different kind of thing.
+    KIOSK = "KIOSK"
 
 
 class CustomRole(Base):

@@ -7,7 +7,12 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.auth.models import Role
 
-_VALID_ROLES = {r.value for r in Role}
+# KIOSK is deliberately excluded: it is a device account, created only by the
+# kiosk endpoint. Letting it be set from the ordinary role dropdown would mean
+# a real person could be demoted into a shared tablet identity — or, worse,
+# that somebody could hand a human the tablet's sealed permissions and wonder
+# later why the audit trail says a wall screen approved a payroll run.
+_VALID_ROLES = {r.value for r in Role if r is not Role.KIOSK}
 
 
 class LoginRequest(BaseModel):

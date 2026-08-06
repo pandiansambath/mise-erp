@@ -55,6 +55,17 @@ PERMISSIONS: dict[str, list[str]] = {
         "attendance:self",
         "payroll:self",
     ],
+    # The shared tablet by the door.
+    #
+    # It clocks people in and out and does nothing else. It sits unattended on
+    # a counter where anyone can touch it, so every question about what it may
+    # do answers itself: nothing that reveals what people earn, nothing that
+    # touches money, nothing that rewrites a record after the fact. It reads
+    # the employee list only to show names worth tapping.
+    Role.KIOSK.value: [
+        "attendance:write",
+        "employees:read",
+    ],
 }
 
 
@@ -98,6 +109,9 @@ ENVELOPES: dict[str, list[str]] = {
     Role.STAFF.value: PERMISSIONS[Role.STAFF.value] + [
         "rota:self", "documents:self",
     ],
+    # Its ceiling IS its default — nothing may ever be added. A device anybody
+    # can walk up to must not be one mis-tick away from the payroll.
+    Role.KIOSK.value: list(PERMISSIONS[Role.KIOSK.value]),
 }
 
 
