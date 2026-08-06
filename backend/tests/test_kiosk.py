@@ -91,11 +91,17 @@ async def test_it_cannot_add_a_user(client, kiosk, auth_header) -> None:
     assert res.status_code in (401, 403)
 
 
-async def test_it_cannot_set_up_or_rotate_a_kiosk(client, kiosk, auth_header) -> None:
-    """It must not be able to mint credentials — including its own."""
+async def test_it_cannot_change_the_pin_that_guards_it(client, kiosk, auth_header) -> None:
+    """The tablet login itself is gone — a PIN opens the screen now. What must
+    never happen is the screen changing the code that gates it, which would let
+    anybody standing at the counter lock the owner out of their own device."""
     account, _ = kiosk
-    assert (await client.post("/api/auth/kiosk", json={}, headers=auth_header(account))).status_code in (401, 403)
-    assert (await client.get("/api/auth/kiosk", headers=auth_header(account))).status_code in (401, 403)
+    res = await client.post(
+        "/api/attendance/lock/pin",
+        json={"password": "password123", "pin": "0000"},
+        headers=auth_header(account),
+    )
+    assert res.status_code in (401, 403)
 
 
 # ── the permission model itself ───────────────────────────────────────────
