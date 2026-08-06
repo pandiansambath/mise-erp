@@ -450,7 +450,7 @@ export default function PriceComparisonPage() {
               />
             </div>
 
-            <div className="min-w-0 lg:sticky lg:top-4">
+            <div className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
               {loadingCompare || !data ? (
                 <Card><Spinner /></Card>
               ) : data.vendor_count === 0 ? (
@@ -509,7 +509,7 @@ export default function PriceComparisonPage() {
                     ))}
                   </div>
 
-                  <div className="max-h-[26rem] overflow-y-auto p-4">
+                  <div className="max-h-[min(26rem,calc(100dvh-22rem))] overflow-y-auto p-4">
                     {pane === "suppliers" && (
                       <>
                         {/* Cards, not table rows — the recipe section's language.

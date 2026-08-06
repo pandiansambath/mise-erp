@@ -116,7 +116,7 @@ export function ThemeSwitcher() {
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
+          <div className="fixed inset-0 z-[110]" onClick={() => setOpen(false)} aria-hidden />
           <div
             // Opaque, and no backdrop-blur.
             //
@@ -125,7 +125,7 @@ export function ThemeSwitcher() {
             // cancel out — rows that look blank or unreadable. A menu is the
             // one surface that must always be legible, so it gets a solid
             // background and borrows nothing from what is behind it.
-            className="mise-pop absolute right-0 z-40 mt-2 max-h-[min(70vh,26rem)] w-56 overflow-y-auto overscroll-contain rounded-xl border border-line-2 bg-paper-2 p-2 shadow-2xl shadow-black/50"
+            className="mise-pop absolute right-0 z-[120] mt-2 max-h-[min(70vh,26rem)] w-56 overflow-y-auto overscroll-contain rounded-xl border border-line-2 bg-paper-2 p-2 shadow-2xl shadow-black/50"
           >
             <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">☀ Light</p>
             {light.map((k) => <Row key={k} k={k} />)}
