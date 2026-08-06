@@ -11,6 +11,17 @@ TOKEN=$(grep -E '^[[:space:]]*(ghp_|github_pat_)[A-Za-z0-9_]+[[:space:]]*$' gith
 API="https://api.github.com/repos/pandiansambath/mise-erp"
 auth="Authorization: Bearer $TOKEN"
 
+# GitHub keeps one run and one queued; a third dispatch EVICTS the queued one,
+# which is how a deploy ends up "cancelled" while everything looks green. Wait
+# for any in-flight deploy to finish before asking for another.
+API_RUNS="$API/actions/workflows/deploy.yml/runs?per_page=1"
+for _ in $(seq 1 60); do
+  st=$(curl -s -H "$auth" "$API_RUNS"     | python -c "import sys,json;r=json.load(sys.stdin)['workflow_runs'];print(r[0]['status'] if r else 'none')" 2>/dev/null)
+  [ "$st" = "completed" ] || [ "$st" = "none" ] && break
+  echo "  a deploy is already running — waiting rather than evicting it"
+  sleep 30
+done
+
 sh scripts/deploy.sh || exit 1
 echo "watching…"
 
