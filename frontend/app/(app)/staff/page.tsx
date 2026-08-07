@@ -15,11 +15,23 @@ import { can, ROLE_LABELS, ROLES } from "@/lib/permissions";
 export default function StaffPage() {
   const { user } = useAuth();
   const confirm = useConfirm();
+  // Which of the three jobs is on screen.
+  const [job, setJob] = useState<"people" | "roles" | "holders">("people");
+  // Counts for the three cards. Fetched once here rather than reaching into
+  // the child components, which own their own lists.
+  const [roleCount, setRoleCount] = useState(0);
+  useEffect(() => {
+    api
+      .get<{ roles: { is_active: boolean }[] }>("/roles")
+      .then((d) => setRoleCount(d.roles.filter((r) => r.is_active).length))
+      .catch(() => {});
+  }, []);
   const canWrite = can(user?.role, "users:write");
   const canRead = can(user?.role, "users:read");
   const isSuperAdmin = user?.role === "SUPER_ADMIN"; // only they can permanently remove a login
 
   const [users, setUsers] = useState<UserOut[]>([]);
+  const holderCount = users.filter((u) => u.custom_role_id).length;
   const [employees, setEmployees] = useState<Employee[]>([]);
   // The roles this hotel has DESIGNED. Building one and never being able to
   // give it to anybody made the whole feature ornamental.
@@ -157,52 +169,85 @@ export default function StaffPage() {
   return (
     <div>
       <PageHeader
-        title="Staff"
+        title="Roles &amp; Access"
         subtitle="Who can sign in here and what they can access. To create a login or manage someone’s email, password, verification or history, open their card on the Employees page."
       />
+
+      {/* The three jobs, said out loud and kept apart.
+          This page does three different things — who can sign in, what a role
+          grants, and who holds it — and it did all three in one column, so it
+          read as one enormous form. They are three separate acts and now they
+          look like it. */}
+      <div className="mise-stagger mb-5 grid gap-3 sm:grid-cols-3">
+        {([
+          ["people", "🧑‍🍳", "Who can sign in", users.length, "accounts"],
+          ["roles", "🔑", "What roles grant", roleCount, roleCount === 1 ? "role designed" : "roles designed"],
+          ["holders", "🔗", "Who holds one", holderCount, "attached"],
+        ] as const).map(([key, icon, label, n, hint]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setJob(key)}
+            className={`mise-press mise-neo-raised flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition ${
+              job === key ? "ring-2 ring-brand-400/60" : "hover:-translate-y-px"
+            }`}
+          >
+            <span aria-hidden className="text-xl">{icon}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold text-fg">{label}</span>
+              <span className="block text-[11px] text-fg-faint">
+                <b className="text-fg-soft tabular-nums">{n}</b> {hint}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
 
       {/* Designing what a Manager or a Chef can see.
           This lived in the `denied` branch — rendered ONLY to people without
           permission to manage staff, which is to say only to the people who
           cannot use it. A Super Admin never saw it, which is why it kept being
           asked for as if it did not exist. */}
-      {canWrite && (
-        <details className="mise-feel group mb-6 overflow-hidden rounded-2xl border border-brand-400/25 bg-brand-400/[0.04]" open>
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4">
-            <span aria-hidden className="text-lg">🔑</span>
+      {canWrite && job === "roles" && (
+        <section className="mise-feel mb-6 overflow-hidden rounded-2xl border border-brand-400/25 bg-brand-400/[0.04]">
+          <div className="flex items-center gap-3 px-5 py-4">
+            <span aria-hidden className="mise-neo-raised grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg">
+              🔑
+            </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-semibold text-fg">
-                Design what each role can see
-              </span>
+              <span className="block font-semibold text-fg">Design what each role can see</span>
               <span className="block text-xs text-fg-faint">
-                Build a &ldquo;Kitchen Manager&rdquo; or an &ldquo;Accounts Assistant&rdquo; in your own
-                words, and choose exactly what they may view or change
+                Build a &ldquo;Kitchen Manager&rdquo; or an &ldquo;Accounts Assistant&rdquo; in your
+                own words, and choose exactly what they may view or change
               </span>
             </span>
-            <span
-              aria-hidden
-              className="shrink-0 text-fg-faint transition group-open:rotate-90"
-            >
-              ›
-            </span>
-          </summary>
-          <div className="border-t border-line px-5 pb-5 pt-4">
-            {/* Two acts, in order, the way IAM does it: write the role, then
-                attach it. The old screen mixed them and he called it "very
-                very confusing". */}
-            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">
-              step 1 · write the role
-            </p>
-            <RoleBuilder />
-            <p className="mb-3 mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">
-              step 2 · attach it to people
-            </p>
-            <RoleAttach />
           </div>
-        </details>
+          <div className="border-t border-line px-5 pb-5 pt-4">
+            <RoleBuilder />
+          </div>
+        </section>
       )}
 
-      {canWrite && (
+      {canWrite && job === "holders" && (
+        <section className="mise-feel mb-6 overflow-hidden rounded-2xl border border-brand-400/25 bg-brand-400/[0.04]">
+          <div className="flex items-center gap-3 px-5 py-4">
+            <span aria-hidden className="mise-neo-raised grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg">
+              🔗
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-fg">Give a role to somebody</span>
+              <span className="block text-xs text-fg-faint">
+                Write the role first, then attach it — two separate acts, the way IAM does it
+              </span>
+            </span>
+          </div>
+          <div className="border-t border-line px-5 pb-5 pt-4">
+            <RoleAttach />
+          </div>
+        </section>
+      )}
+
+      {canWrite && job === "people" && (
         <Card className="mise-feel mb-6" id="staff-form">
           <p className="mb-3 text-sm font-medium text-fg-soft">Add a team member</p>
           <form onSubmit={addUser} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -295,7 +340,7 @@ export default function StaffPage() {
       {loading ? (
         <Spinner />
       ) : (
-        <Card className="p-0">
+        <Card className={`p-0 ${job === "people" ? "" : "hidden"}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
