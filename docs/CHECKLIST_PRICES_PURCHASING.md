@@ -17,19 +17,19 @@ So this round is not layout. It is what the space is filled with.
 
 ## Price Comparison
 
-- [ ] **The list is the product, so make it look like one.** Sixty-one rows of
+- [x] **The list is the product, so make it look like one.** Sixty-one rows of
       identical grey is a spreadsheet. Each row should carry the saving as a
       figure you can read without stopping — the whole page exists to answer
       "where am I overpaying", and that answer is currently a small pink chip.
-- [ ] **Lead with the money.** A hero line: what switching everything would
+- [x] **Lead with the money.** A hero line: what switching everything would
       save this month, in one number, in the currency, at the top. Presently
       it is a sentence in a tinted box.
-- [ ] **Sort by what it is worth.** Biggest saving first by default, not
+- [x] **Sort by what it is worth.** Biggest saving first by default, not
       alphabetical. Alphabetical is a filing cabinet; this is a decision list.
-- [ ] **The comparison stage has a whole page and uses about a third of it.**
+- [x] **The comparison stage has a whole page and uses about a third of it.**
       Suppliers deserve real cards — price, gap to cheapest, last change,
       trend — side by side, not a stack of thin rows.
-- [ ] **Show the trend where the decision is made.** The price history is
+- [x] **Show the trend where the decision is made.** The price history is
       behind a tab; a sparkline belongs on the supplier card itself.
 - [ ] **One obvious primary action per stage.** Right now "Choose" is a small
       outline button competing with everything around it.
@@ -39,10 +39,10 @@ So this round is not layout. It is what the space is filled with.
 - [ ] **The item rows are the same grey list.** Stock state, the vendor spread
       and the saving should be legible at a glance — this is the page where
       money is actually spent.
-- [ ] **The pinned bar is functional and plain.** It should show the running
+- [x] **The pinned bar is functional and plain.** It should show the running
       TOTAL, not just a count. "4 items" is not a decision; "£212 across 3
       suppliers" is.
-- [ ] **The review stage needs to look like a review.** Grouped by supplier,
+- [x] **The review stage needs to look like a review.** Grouped by supplier,
       with each group's subtotal, so submitting is a considered act.
 - [ ] **"compare ›" on every row is a wasted click if it only opens the same
       sheet.** Either make it carry the saving, or let the row itself open it.
@@ -55,6 +55,18 @@ So this round is not layout. It is what the space is filled with.
       the bar, and it is in the repo already.
 - [ ] Empty and loading states that are not a centred grey sentence.
 - [ ] Mobile: these are both wide-table pages; check them at 390px.
+
+## Where it got to (2026-08-07)
+
+Round one killed the split — plumbing. Round two put things in the space: the
+hero figure, worst-first ordering, real supplier cards with trends, a running
+total and a review stage that states what it comes to.
+
+Still open, and worth doing next:
+- Empty and loading states that are not a centred grey sentence
+- Mobile at 390px on both pages
+- Grouping the review stage BY supplier with per-group subtotals (the total is
+  stated, but the grouping is not)
 
 ## Rule for this work
 
