@@ -249,6 +249,30 @@ export function ItemPicker({
     .map((l) => ({ line: l, item: items.find((it) => it.id === l.item_id) }))
     .filter((x): x is { line: PickedLine; item: Item } => Boolean(x.item));
 
+  // What the list is worth so far, and who it is spread across.
+  //
+  // "4 items" is not a decision — it tells you nothing you did not already
+  // know from looking. This is the page where money is actually spent, so the
+  // bar carries the money. Priced at the chosen supplier where there is one,
+  // the cheapest otherwise, which is the rule ordering itself follows.
+  const running = chosen.reduce(
+    (acc, { line, item }) => {
+      const opts = suppliers?.[item.id] ?? [];
+      if (opts.length === 0) return acc;
+      // Chosen supplier, else cheapest — the same rule ordering follows, so
+      // the figure here matches what the order will actually cost. A per-row
+      // override is picked later; this is the estimate before that.
+      const pick =
+        opts.find((v) => v.is_preferred) ??
+        [...opts].sort((a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0))[0];
+      const qty = parseFloat(String(line.qty ?? "")) || 0;
+      acc.total += (parseFloat(pick.price_per_unit) || 0) * qty;
+      acc.vendors.add(pick.vendor_name);
+      return acc;
+    },
+    { total: 0, vendors: new Set<string>() },
+  );
+
   function toggle(it: Item) {
     if (picked.has(it.id)) onChange(lines.filter((l) => l.item_id !== it.id));
     else onChange([...lines, { item_id: it.id, qty: "" }]);
@@ -624,8 +648,24 @@ export function ItemPicker({
       {staged && trayStage === "pick" && chosen.length > 0 && (
         <div className="sticky bottom-3 z-20 mt-3 flex items-center gap-3 rounded-2xl border border-brand-400/40 bg-paper-2/95 px-4 py-3 shadow-lg shadow-black/30 backdrop-blur">
           <span className="min-w-0 flex-1 text-sm text-fg-soft">
-            <b className="text-fg">{chosen.length}</b> item{chosen.length === 1 ? "" : "s"} on your
-            list
+            {running.total > 0 ? (
+              <>
+                <b className="font-display text-lg tabular-nums text-fg">
+                  {format(running.total.toFixed(2))}
+                </b>{" "}
+                <span className="text-xs">
+                  · {chosen.length} item{chosen.length === 1 ? "" : "s"}
+                  {running.vendors.size > 0 && (
+                    <> across {running.vendors.size} supplier{running.vendors.size === 1 ? "" : "s"}</>
+                  )}
+                </span>
+              </>
+            ) : (
+              <>
+                <b className="text-fg">{chosen.length}</b> item{chosen.length === 1 ? "" : "s"} —
+                <span className="text-xs"> add quantities to see the total</span>
+              </>
+            )}
           </span>
           <button
             type="button"
