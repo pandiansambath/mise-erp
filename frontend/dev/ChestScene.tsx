@@ -59,19 +59,34 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
-      const place = () => {
-        // Pull back on a narrow screen, or the chest runs off the sides.
-        const narrow = host.clientWidth < 420;
-        camera.position.set(0, narrow ? 2.0 : 1.7, narrow ? 8.4 : 6.6);
-        camera.lookAt(0, 0.1, 0);
+      // Stand far enough back that the chest fits the box we have been
+      // given — WIDTH and height both. A short, wide canvas needs distance
+      // for height; a tall narrow one needs it for width. Guessing from a
+      // breakpoint could not know either.
+      const frame = () => {
+        const { w: bw, h: bh } = size();
+        const aspect = bw / Math.max(1, bh);
+        const vFov = (camera.fov * Math.PI) / 180;
+        const CHEST_H = 3.4;
+        const CHEST_W = 3.6;
+        const forHeight = CHEST_H / 2 / Math.tan(vFov / 2);
+        const forWidth = CHEST_W / 2 / Math.tan(vFov / 2) / Math.max(0.35, aspect);
+        const dist = Math.max(forHeight, forWidth) * 1.25;
+        camera.position.set(0, 1.1, dist);
+        camera.lookAt(0, -0.1, 0);
       };
-      place();
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(w, h);
+      renderer.setSize(w, h, false);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      // The canvas fills the box by layout, not by being stretched. A
+      // stretched canvas is the enormous blurry zoom he photographed: the
+      // renderer had drawn at one size and CSS scaled the result up.
+      renderer.domElement.style.display = "block";
+      renderer.domElement.style.width = "100%";
+      renderer.domElement.style.height = "100%";
       host.appendChild(renderer.domElement);
 
       // ── light ──────────────────────────────────────────────────────────
@@ -355,15 +370,24 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
 
       const onResize = () => {
         const n = size();
+        if (n.w < 2 || n.h < 2) return;
         camera.aspect = n.w / n.h;
-        place();
         camera.updateProjectionMatrix();
-        renderer.setSize(n.w, n.h);
+        renderer.setSize(n.w, n.h, false);
+        if (!opened) frame();
       };
+      // A ResizeObserver, not just window.resize. At mount the flex layout has
+      // not settled, so the first measurement is wrong — and window.resize
+      // never fires to correct it. This is what left the scene rendering at a
+      // stale size with CSS blowing it up.
+      const ro = new ResizeObserver(onResize);
+      ro.observe(host);
       window.addEventListener("resize", onResize);
+      onResize();
 
       cleanup = () => {
         cancelAnimationFrame(raf);
+        ro.disconnect();
         window.removeEventListener("resize", onResize);
         scene.traverse((o) => {
           const m = o as InstanceType<typeof THREE.Mesh>;

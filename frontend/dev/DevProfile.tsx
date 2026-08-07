@@ -62,7 +62,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
   const [entered, setEntered] = useState(false);
   // The crossfade is written straight to these two nodes on scroll — no
   // React state, so the page is not re-rendered sixty times a second.
-  const { goingRef, comingRef } = useHandoff<HTMLDivElement, HTMLDivElement>();
+  const { goingRef, comingRef, smokeRef } = useHandoff<HTMLDivElement, HTMLDivElement>();
   const [albumOpen, setAlbumOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
 
@@ -155,7 +155,17 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         {/* Two things, one space.
             Both children are put in the SAME grid cell, so the shell does not
             appear below the portrait — it appears THROUGH it. */}
-        <div className="grid h-full place-content-center [&>*]:col-start-1 [&>*]:row-start-1">
+        <div className="relative grid h-full place-content-center [&>*]:col-start-1 [&>*]:row-start-1">
+
+        {/* The smoke that covers the swap. Sits over both, in the same cell,
+            and is only ever visible in the middle of the transition. */}
+        <div
+          ref={smokeRef}
+          aria-hidden
+          style={{ opacity: 0 }}
+          className="dev-smoke pointer-events-none z-10 hidden self-center justify-self-center lg:block"
+        />
+
 
         <div
           // The portrait, on its way out. `pointer-events` is handed over with

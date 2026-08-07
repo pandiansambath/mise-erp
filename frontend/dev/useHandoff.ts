@@ -18,6 +18,7 @@ import { useEffect, useRef } from "react";
 export function useHandoff<A extends HTMLElement, B extends HTMLElement>() {
   const goingRef = useRef<A>(null); // the portrait, on its way out
   const comingRef = useRef<B>(null); // the shell, on its way in
+  const smokeRef = useRef<HTMLDivElement>(null); // what covers the swap
 
   useEffect(() => {
     let frame = 0;
@@ -42,6 +43,19 @@ export function useHandoff<A extends HTMLElement, B extends HTMLElement>() {
         coming.style.transform = `translateY(${(1 - t) * 18}px)`;
         coming.style.pointerEvents = t > 0.5 ? "" : "none";
       }
+      // Smoke over the join.
+      //
+      // Two things dissolving through each other reads as a glitch, because
+      // for a moment you can see both. Cover the middle of the swap and the
+      // eye accepts it as one thing becoming another — which is the oldest
+      // trick in stagecraft. Peaks at the halfway point and is gone at both
+      // ends, so it costs nothing when nothing is happening.
+      const smoke = smokeRef.current;
+      if (smoke) {
+        const veil = Math.sin(Math.PI * t); // 0 → 1 → 0
+        smoke.style.opacity = String(veil * 0.85);
+        smoke.style.transform = `scale(${1 + veil * 0.35}) translateY(${(0.5 - t) * 30}px)`;
+      }
     };
 
     // Coalesce to one write per frame — scroll fires far faster than paint.
@@ -59,5 +73,5 @@ export function useHandoff<A extends HTMLElement, B extends HTMLElement>() {
     };
   }, []);
 
-  return { goingRef, comingRef };
+  return { goingRef, comingRef, smokeRef };
 }

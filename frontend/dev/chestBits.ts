@@ -77,8 +77,23 @@ export function medalFace(): HTMLCanvasElement {
   // Sparse, the way a bullion coin is marked. He asked for it: a real 1-gram
   // piece carries a figure and a word, not a paragraph. The rest of the story
   // is written under the case, where there is room for it.
-  cut("17", 292, 190);
-  cut("RANK", 356, 46, "500");
+  //
+  // "17th", not "17" — the ordinal set small and raised, the way it is on a
+  // struck coin. Drawn as two pieces so the "th" can sit at the cap height of
+  // the numeral rather than on its baseline.
+  cut("17", 288, 190);
+  const th = (y: number) => {
+    g.textAlign = "left";
+    g.font = "700 64px Georgia, serif";
+    g.fillStyle = "rgba(60,32,8,0.85)";
+    g.fillText("th", 342, y + 2);
+    g.fillStyle = "rgba(255,242,205,0.6)";
+    g.fillText("th", 339, y - 1.5);
+    g.fillStyle = "rgba(96,54,14,0.95)";
+    g.fillText("th", 340.5, y);
+  };
+  th(178);
+  cut("RANK", 352, 46, "500");
 
   // Two rings and a bead course — the framing that makes it read as struck
   // rather than printed.
