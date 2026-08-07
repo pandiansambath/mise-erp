@@ -19,6 +19,7 @@ import { BootSequence } from "./BootSequence";
 import { ChainField } from "./ChainField";
 import { DecryptText } from "./DecryptText";
 import { Terminal } from "./Terminal";
+import { useRevealThenPin } from "./useRevealThenPin";
 
 // First day as a System Engineer. Everything time-based derives from this.
 const CAREER_START = new Date("2024-01-01T00:00:00Z");
@@ -59,6 +60,9 @@ function elapsed(from: Date, now: Date) {
 
 export function DevProfile({ photos }: { photos: Photo[] }) {
   const [entered, setEntered] = useState(false);
+  // The left column: rides the scroll until fully revealed, then holds.
+  // Destructured because `pinned.top` reads to the lint rule as a ref access.
+  const { ref: pinnedRef, top: pinnedTop } = useRevealThenPin<HTMLElement>();
   const [albumOpen, setAlbumOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
 
@@ -121,7 +125,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
       <main
-        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl xl:max-w-6xl ${
+        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl lg:justify-start xl:max-w-6xl ${
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
@@ -129,16 +133,24 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           desktop were the content declining to use the width it had — and
           simply widening a single column would have produced long, unreadable
           lines instead. Identity on the left, the things you DO on the right. */}
-      <div className="grid w-full items-start gap-10 lg:h-[calc(100dvh-6rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-center lg:gap-14">
-        <section className="flex min-w-0 flex-col items-center lg:items-start lg:text-left">
+      <div className="grid w-full items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+        <section
+          ref={pinnedRef}
+          // Sticky, not fixed. It travels with the page until it has been
+          // seen in full, then holds while the right column carries on.
+          //
+          // `self-start` matters: a grid item stretches to the row by default,
+          // and something already as tall as its own scroll area has nowhere
+          // to stick to. The offset is measured — see useRevealThenPin.
+          style={{ top: pinnedTop }}
+          className="flex min-w-0 flex-col items-center lg:sticky lg:self-start lg:items-start lg:text-left"
+        >
 
         {/* Name first, orbit under it.
             The orbit was on top and vertically centred, which pushed his name
             below the fold on a desktop and left a large empty band above it —
             "why that empty gap… I need to scroll to see my pic and name". The
-            identity is the point of the page, so it goes first. On a desktop
-            the row is exactly one screen tall, so this column has nowhere to
-            scroll to and simply stays where it is. */}
+            identity is the point of the page, so it goes first. */}
         <h1
           className="text-center font-display text-4xl font-semibold tracking-tight sm:text-5xl lg:text-left lg:text-6xl"
           style={entered ? { animation: "devFadeUp .8s .1s ease-out both" } : undefined}
@@ -182,10 +194,11 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         {/* Right column: the live counter, the shell, and the ways to reach
             him — the parts you interact with, kept together. */}
         <section
-          // The only thing that moves. The row above is one screen tall,
-          // so his details scroll here while the portrait stays put —
-          // which was the single thing he asked for.
-          className="mise-noscrollbar flex w-full flex-col items-center lg:h-full lg:items-stretch lg:overflow-y-auto lg:pr-1"
+          // Deliberately NOT its own scroll container. When it was one, the
+          // wheel did nothing unless the pointer happened to be over this
+          // half — "wherever I scroll, I need to see the right side
+          // scrolling". The page scrolls; this is simply the tall part of it.
+          className="flex w-full flex-col items-center lg:items-stretch"
         >
 
         {/* ── Live experience ──────────────────────────────────────────── */}

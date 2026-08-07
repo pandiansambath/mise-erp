@@ -26,7 +26,8 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
   const hour = useRef<SVGLineElement>(null);
   const minute = useRef<SVGLineElement>(null);
   const second = useRef<SVGLineElement>(null);
-  const digital = useRef<HTMLParagraphElement>(null);
+  const digital = useRef<HTMLSpanElement>(null);
+  const secs = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     let frame = 0;
@@ -42,11 +43,19 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
       second.current?.setAttribute("transform", `rotate(${s * 6} 100 100)`);
       minute.current?.setAttribute("transform", `rotate(${m * 6} 100 100)`);
       hour.current?.setAttribute("transform", `rotate(${h * 30} 100 100)`);
+      // Hours and minutes big; seconds and the meridiem small beside them.
+      // One long string at one size either overflows the face or forces the
+      // whole readout down to a size nobody can read from the door.
       if (digital.current) {
         digital.current.textContent = now.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
-        });
+        }).replace(/\s*[AaPp][Mm]\s*$/, "");
+      }
+      if (secs.current) {
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        const half = now.getHours() < 12 ? "AM" : "PM";
+        secs.current.textContent = `${ss} ${half}`;
       }
       frame = requestAnimationFrame(tick);
     };
@@ -132,11 +141,24 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
       </svg>
 
       {/* The number, under the hands. For the glance that wants a figure
-          rather than a shape. */}
-      <p
-        ref={digital}
-        className="pointer-events-none absolute inset-x-0 top-[63%] text-center font-display text-2xl font-semibold tabular-nums text-fg"
-      />
+          rather than a shape.
+
+          It sits on a soft plate: bare digits over a sweeping second hand are
+          legible for half of every minute and mush for the other half. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[59%] flex items-baseline justify-center gap-1.5">
+        <span className="rounded-lg bg-shell/55 px-2 py-0.5 backdrop-blur-[2px]">
+          <span
+            ref={digital}
+            className="font-display text-[1.7rem] font-semibold leading-none tabular-nums text-fg"
+          />
+          <span
+            ref={secs}
+            // Seconds are the proof it is live, so they are always shown —
+            // just not competing with the hour for attention.
+            className="ml-1 font-mono text-[0.7rem] font-medium tabular-nums text-brand-300"
+          />
+        </span>
+      </div>
     </div>
   );
 }

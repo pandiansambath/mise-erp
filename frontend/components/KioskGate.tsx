@@ -13,6 +13,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { API_BASE, setTabToken } from "@/lib/api";
+import { themeVars } from "@/lib/theme";
+
+/** How many dots to show at rest — the length `suggest()` generates. */
+const PIN_SLOTS = 6;
 
 /** The restaurant handle, taken from <handle>.dineai.cloud. */
 function siteFromHost(): string {
@@ -84,7 +88,13 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
   });
 
   return (
-    <div className="mise-app grid min-h-dvh place-items-center bg-shell px-6 py-10 text-fg" data-mode="dark">
+    // Pinned dark, like the screen behind it — the account's theme must not
+    // reach a device bolted to a wall in a kitchen.
+    <div
+      className="mise-app grid min-h-dvh place-items-center bg-shell px-6 py-10 text-fg"
+      data-mode="dark"
+      style={themeVars("dark")}
+    >
       {/* Light behind the glass, so a wall screen at rest still looks alive. */}
       <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
         <span
@@ -106,9 +116,13 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
           {site ? `${site} · enter the PIN` : "Enter the PIN"}
         </p>
 
-        {/* Dots, not digits. Somebody is always standing behind you. */}
+        {/* Dots, not digits. Somebody is always standing behind you.
+            SIX of them, because that is the length DineAI generates — four
+            slots in front of a six-digit PIN reads as "it will not fit", and
+            that is exactly how it read. It still grows to eight for a longer
+            one somebody set by hand. */}
         <div className="mt-7 flex justify-center gap-3" aria-hidden>
-          {Array.from({ length: Math.max(4, pin.length || 4) }, (_, i) => (
+          {Array.from({ length: Math.max(PIN_SLOTS, pin.length) }, (_, i) => (
             <span
               key={i}
               className={`h-3.5 w-3.5 rounded-full transition ${
