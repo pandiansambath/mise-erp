@@ -1125,21 +1125,43 @@ export function Copilot() {
                     <Typewriter text={m.content} animate={m.role === "assistant" && i === messages.length - 1 && justAnswered} />
                   </div>
 
-                  {(m.pending?.filter((p) => !p.done && !p.choice).length ?? 0) > 1 && (
-                    <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-brand-500/25 bg-brand-500/[0.07] px-2.5 py-2">
-                      <span className="text-[11px] text-fg-soft">
-                        {m.pending?.filter((p) => !p.done && !p.choice).length} to confirm
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => confirmAll(i)}
-                        disabled={m.pending?.some((p) => p.busy)}
-                        className="mise-press rounded-md bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
-                      >
-                        Approve all
-                      </button>
-                    </div>
-                  )}
+                  {/* Approve everything that CAN be approved.
+                      This used to be hidden unless MORE THAN ONE row needed no
+                      choice — so on a price list where several items did not
+                      match, the count fell to one and the button disappeared
+                      completely. He read that as the assistant refusing to give
+                      him a bulk confirm, and fairly so: it was there and then
+                      it was not, for reasons nothing on screen explained.
+                      It shows whenever there is anything at all to approve, and
+                      says plainly how many still need him to pick an item. */}
+                  {(() => {
+                    const ready = m.pending?.filter((p) => !p.done && !p.choice).length ?? 0;
+                    const asking = m.pending?.filter((p) => !p.done && p.choice).length ?? 0;
+                    if (ready + asking === 0) return null;
+                    return (
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-500/25 bg-brand-500/[0.07] px-2.5 py-2">
+                        <span className="text-[11px] text-fg-soft">
+                          {ready > 0 && <b className="text-fg">{ready} ready</b>}
+                          {ready > 0 && asking > 0 && " · "}
+                          {asking > 0 && (
+                            <span className="text-amber-300">
+                              {asking} need{asking === 1 ? "s" : ""} an item picked
+                            </span>
+                          )}
+                        </span>
+                        {ready > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => confirmAll(i)}
+                            disabled={m.pending?.some((p) => p.busy)}
+                            className="mise-press rounded-md bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
+                          >
+                            Approve {ready}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* Confirm cards (proposed write actions) */}
                   {m.pending?.map((p, k) => (
                     <div key={k} className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3">
