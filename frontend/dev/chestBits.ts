@@ -50,55 +50,93 @@ export function woodTexture(): HTMLCanvasElement {
 /** The coin face: a one-gram bullion piece. Drawn, then mapped on. */
 export function coinFace(): HTMLCanvasElement {
   const c = document.createElement("canvas");
-  c.width = c.height = 512;
+  // 1024, not 512. The coin fills a good part of a laptop screen, and a 512px
+  // texture stretched that far is the blur he spotted on the lettering.
+  c.width = c.height = 1024;
   const g = c.getContext("2d")!;
 
-  const bg = g.createRadialGradient(180, 150, 15, 256, 256, 310);
-  bg.addColorStop(0, "#fff4cf");
-  bg.addColorStop(0.45, "#f0c463");
-  bg.addColorStop(1, "#b8801f");
+  const bg = g.createRadialGradient(360, 300, 30, 512, 512, 620);
+  bg.addColorStop(0, "#fff6d8");
+  bg.addColorStop(0.4, "#f2c765");
+  bg.addColorStop(0.78, "#c98f2c");
+  bg.addColorStop(1, "#8f5f14");
   g.fillStyle = bg;
-  g.fillRect(0, 0, 512, 512);
+  g.fillRect(0, 0, 1024, 1024);
 
   // Engraving reads as depth because of the pair of offset strokes: a dark one
   // down-right and a light one up-left, which is what a cut in metal does to
   // light. Flat text would look printed on.
   const cut = (text: string, y: number, size: number, weight = "700", spacing = 0) => {
     g.textAlign = "center";
-    g.font = `${weight} ${size}px Georgia, serif`;
-    if (spacing) (g as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${spacing}px`;
-    g.fillStyle = "rgba(70,40,8,0.85)";
-    g.fillText(text, 258, y + 2.5);
-    g.fillStyle = "rgba(255,246,214,0.6)";
-    g.fillText(text, 254.5, y - 2);
-    g.fillStyle = "rgba(104,60,14,0.95)";
-    g.fillText(text, 256, y);
-    if (spacing) (g as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = "0px";
+    g.font = `${weight} ${size}px Georgia, "Times New Roman", serif`;
+    const ls = g as CanvasRenderingContext2D & { letterSpacing?: string };
+    if (spacing) ls.letterSpacing = `${spacing}px`;
+    g.fillStyle = "rgba(58,32,4,0.9)";
+    g.fillText(text, 517, y + 5);
+    g.fillStyle = "rgba(255,250,225,0.75)";
+    g.fillText(text, 508, y - 4);
+    g.fillStyle = "rgba(120,72,14,0.96)";
+    g.fillText(text, 512, y);
+    if (spacing) ls.letterSpacing = "0px";
   };
 
-  // What a real one-gram coin carries: the weight, the metal, the fineness.
-  // Nothing else. He was right that the rank belongs in the words underneath,
-  // not stamped across the face.
-  cut("1", 268, 172);
-  cut("GRAM", 330, 56, "600", 4);
-  cut("FINE GOLD", 380, 30, "500", 6);
-  cut("999.9", 418, 26, "500", 3);
+  // The weight and the metal. Nothing else — the fineness line was one thing
+  // too many on a face this size, and he was right that it read as clutter.
+  cut("1", 530, 340);
+  cut("GRAM", 650, 108, "600", 8);
+  cut("FINE GOLD", 730, 52, "500", 12);
 
-  g.strokeStyle = "rgba(96,54,12,0.42)";
-  g.lineWidth = 5;
+  g.strokeStyle = "rgba(110,64,10,0.5)";
+  g.lineWidth = 9;
   g.beginPath();
-  g.arc(256, 256, 210, 0, Math.PI * 2);
+  g.arc(512, 512, 424, 0, Math.PI * 2);
   g.stroke();
-  g.lineWidth = 2;
+  g.lineWidth = 4;
   g.beginPath();
-  g.arc(256, 256, 194, 0, Math.PI * 2);
+  g.arc(512, 512, 392, 0, Math.PI * 2);
   g.stroke();
-  for (let i = 0; i < 84; i++) {
-    const a = (i / 84) * Math.PI * 2;
-    g.fillStyle = "rgba(80,44,10,0.34)";
+  for (let i = 0; i < 96; i++) {
+    const a = (i / 96) * Math.PI * 2;
+    g.fillStyle = "rgba(92,52,8,0.4)";
     g.beginPath();
-    g.arc(256 + Math.cos(a) * 230, 256 + Math.sin(a) * 230, 4, 0, Math.PI * 2);
+    g.arc(512 + Math.cos(a) * 462, 512 + Math.sin(a) * 462, 7, 0, Math.PI * 2);
     g.fill();
+  }
+  return c;
+}
+
+/** The room the metal reflects.
+ *
+ *  This is the single biggest thing separating gold from a yellow circle.
+ *  Metal has almost no colour of its own — what you read as "gold" is mostly
+ *  the ENVIRONMENT bent around a curved surface. Without something to reflect,
+ *  a metalness:1 material renders nearly black and has to be faked with
+ *  emissive, which is exactly why it looked flat and plastic.
+ *
+ *  A bright band near the horizon, warm ground below, deep sky above — the
+ *  cheapest possible studio, and enough for the highlight to travel properly
+ *  as the coin turns. */
+export function studioEnv(): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 256;
+  const g = c.getContext("2d")!;
+  const sky = g.createLinearGradient(0, 0, 0, 256);
+  sky.addColorStop(0, "#10161f");
+  sky.addColorStop(0.36, "#4a3a24");
+  sky.addColorStop(0.47, "#fff0cc");   // the light source, a band not a dot
+  sky.addColorStop(0.53, "#ffe0a0");
+  sky.addColorStop(0.66, "#3a2a16");
+  sky.addColorStop(1, "#0a0806");
+  g.fillStyle = sky;
+  g.fillRect(0, 0, 512, 256);
+  // Two soft lamps, so the surface has more than one thing to catch.
+  for (const [x, r, a] of [[130, 70, 0.85], [370, 52, 0.6]] as const) {
+    const lamp = g.createRadialGradient(x, 118, 2, x, 118, r);
+    lamp.addColorStop(0, `rgba(255,246,222,${a})`);
+    lamp.addColorStop(1, "rgba(255,246,222,0)");
+    g.fillStyle = lamp;
+    g.fillRect(x - r, 118 - r, r * 2, r * 2);
   }
   return c;
 }

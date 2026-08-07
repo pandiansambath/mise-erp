@@ -10,9 +10,15 @@
 // over the top and bottom of it where nothing needs covering, and the way out
 // is a ✕ in the corner.
 
+import { Cinzel } from "next/font/google";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
+
+// Cinzel: cut from Roman inscriptional capitals — the lettering on monuments
+// and coins. He asked for "an ancient feel", and this is literally the shape
+// carved into stone, which is the right voice for an award.
+const ancient = Cinzel({ subsets: ["latin"], weight: ["400", "600", "700"] });
 
 // Browser-only: WebGL cannot be server-rendered, and the renderer should not
 // be in anybody's bundle until they ask for this page.
@@ -25,7 +31,7 @@ export default function AwardPage() {
   const [opened, setOpened] = useState(false);
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]">
+    <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`}>
       {/* The room. Lit from behind the chest, so the object sits IN something
           rather than on a black rectangle — "background is glowing like hell". */}
       <div
@@ -33,7 +39,7 @@ export default function AwardPage() {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(58% 46% at 50% 44%, #4a2f0c 0%, #1d1207 38%, #0a0709 68%, #06050a 100%)",
+            "radial-gradient(62% 50% at 50% 44%, #7a4d0f 0%, #45290a 26%, #1c1207 52%, #0a0709 76%, #06050a 100%)",
         }}
       />
       <div
@@ -51,7 +57,7 @@ export default function AwardPage() {
       {/* Above: whose award it is. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-8">
         <p
-          className="font-mono text-[10px] tracking-[0.42em] text-[#c08a4e] sm:text-[11px]"
+          className="dev-gold text-[10px] font-semibold tracking-[0.42em] sm:text-[11px]"
           style={{ animation: "devFadeUp .8s .1s ease-out both" }}
         >
           ANNA UNIVERSITY · 2023
@@ -71,15 +77,22 @@ export default function AwardPage() {
         }`}
         style={{ background: "linear-gradient(to top, rgba(7,6,10,.94) 34%, transparent)" }}
       >
-        <p className="mx-auto max-w-2xl text-[13px] leading-relaxed text-[#d6c4a4] sm:text-base">
-          Presented to <b className="text-[#ffdfa8]">Pandian Sambath</b> in recognition of
-          placing <b className="text-[#ffdfa8]">17th in the university</b> — B.Tech
+        <p className="dev-gold mx-auto max-w-2xl text-[13px] leading-relaxed sm:text-base">
+          Presented to <b>Pandian Sambath</b> in recognition of
+          placing <b>17th in the university</b> — B.Tech
           Information Technology, 92% — and for work done with care, patience and a
           refusal to leave things half finished.
         </p>
-        <p className="mt-2.5 font-mono text-[9px] tracking-[0.24em] text-[#8a6c44] sm:text-[10px]">
-          RANK LIST · APRIL / MAY 2023 EXAMINATIONS
-        </p>
+        <a
+          href="/dev/RANK_AFF_UG_2023.pdf"
+          target="_blank"
+          rel="noreferrer noopener"
+          // An award nobody can check is a claim. The line that names the
+          // source may as well BE the source.
+          className="dev-gold pointer-events-auto mt-2.5 inline-block text-[9px] tracking-[0.24em] underline-offset-4 hover:underline sm:text-[10px]"
+        >
+          RANK LIST · APRIL / MAY 2023 EXAMINATIONS ↗
+        </a>
       </div>
 
       {/* Out. A corner ✕, like everything full-screen anybody has closed. */}
