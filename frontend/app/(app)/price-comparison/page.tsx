@@ -517,7 +517,19 @@ export default function PriceComparisonPage() {
       {items.length === 0 ? (
         <Card>
           <p className="py-6 text-center text-sm text-fg-faint">
-            No items yet. Add items and vendor prices to compare.
+            <span aria-hidden className="mb-2 block text-3xl opacity-40">⚖</span>
+            <b className="block text-fg">Nothing to compare yet</b>
+            <span className="mt-1 block">
+              Comparing needs the same item priced by two suppliers. Add items in
+              Inventory, then a price per supplier on the Vendors page — the second
+              price is when this page starts earning its place.
+            </span>
+            <Link
+              href="/vendors"
+              className="mise-press mt-3 inline-block rounded-lg border border-brand-400/40 bg-brand-400/10 px-3.5 py-1.5 text-xs font-medium text-brand-300"
+            >
+              Add a supplier price →
+            </Link>
           </p>
         </Card>
       ) : (
@@ -562,7 +574,18 @@ export default function PriceComparisonPage() {
 
             <div className="min-w-0">
               {loadingCompare || !data ? (
-                <Card><Spinner /></Card>
+                // A shape of the thing that is coming, rather than a
+                // spinner in an empty box — the page does not appear to jump
+                // when the real cards land.
+                <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
+                  {[0, 1, 2].map((k) => (
+                    <div key={k} className="mise-neo-raised rounded-2xl p-4">
+                      <div className="h-3 w-24 animate-pulse rounded bg-fg/10" />
+                      <div className="mt-3 h-7 w-28 animate-pulse rounded bg-fg/10" />
+                      <div className="mt-3 h-4 w-20 animate-pulse rounded bg-fg/5" />
+                    </div>
+                  ))}
+                </div>
               ) : data.vendor_count === 0 ? (
                 <>
                   <Card>
