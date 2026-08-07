@@ -87,7 +87,17 @@ export function ThemeSwitcher() {
   const Row = ({ k }: { k: ThemeKey }) => (
     <button
       type="button"
-      onClick={() => { setTheme(k); setOpen(false); }}
+      onClick={() => {
+        setTheme(k);
+        setOpen(false);
+        // Remember it for the RESTAURANT, not just this browser.
+        //
+        // localStorage cannot reach the wall tablet — a device the owner has
+        // never signed into — which is why the kiosk kept coming up green
+        // while the dashboard was burgundy. Best effort: someone without
+        // hotel:config still gets their own theme locally.
+        api.patch("/hotels/me", { theme: k }).catch(() => {});
+      }}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition hover:bg-glass/5 ${
         theme === k ? "font-semibold text-fg" : "text-fg-soft"
       }`}

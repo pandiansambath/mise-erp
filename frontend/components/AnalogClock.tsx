@@ -22,7 +22,16 @@
 
 import { useEffect, useRef } from "react";
 
-export function AnalogClock({ size = 260 }: { size?: number }) {
+/** The same instant, expressed as another zone's wall time. */
+function zoned(at: Date, tz: string): Date {
+  try {
+    return new Date(at.toLocaleString("en-US", { timeZone: tz }));
+  } catch {
+    return at; // an unknown zone should not stop the clock
+  }
+}
+
+export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) {
   const hour = useRef<SVGLineElement>(null);
   const minute = useRef<SVGLineElement>(null);
   const second = useRef<SVGLineElement>(null);
@@ -32,7 +41,14 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
   useEffect(() => {
     let frame = 0;
     const tick = () => {
-      const now = new Date();
+      // In the RESTAURANT's zone, not the browser's.
+      //
+      // A wall clock in London showing Chennai time is worse than no clock:
+      // people read it, trust it, and clock in against it. Reading the parts
+      // through Intl is the only way to get another zone's wall time without
+      // pulling in a date library.
+      const real = new Date();
+      const now = tz ? zoned(real, tz) : real;
       const ms = now.getMilliseconds() / 1000;
       const s = now.getSeconds() + ms;
       const m = now.getMinutes() + s / 60;
@@ -61,7 +77,7 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
     };
     tick();
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [tz]);
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>

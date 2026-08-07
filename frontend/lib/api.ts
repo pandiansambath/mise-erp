@@ -290,6 +290,13 @@ export interface LandingConfig {
 }
 
 export interface Hotel {
+  /** The restaurant's own theme, on the HOTEL rather than in a browser —
+   *  devices the owner never signs into (the wall tablet) have to honour it.
+   *
+   *  `timezone` was already declared here, but the API never actually SENT it:
+   *  it was missing from HotelOut. That is why the kiosk clock fell back to
+   *  whatever zone the tablet happened to be sitting in. */
+  theme?: string | null;
   timezone?: string; // IANA zone — decides which day a sale belongs to
   id: string;
   name: string;

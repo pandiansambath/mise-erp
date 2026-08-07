@@ -99,6 +99,15 @@ class Hotel(Base):
     # tablet is a different browser from the owner's — a theme kept in
     # localStorage would never reach it.
     kiosk_theme: Mapped[str | None] = mapped_column(String(24))
+    # The restaurant's own theme, kept in the DATABASE rather than in each
+    # browser's localStorage.
+    #
+    # localStorage is per browser, so the wall tablet — a different device
+    # entirely — could never see what the owner picked. That is why the kiosk
+    # kept coming up green while his dashboard was burgundy. Anything that has
+    # to look the same on a device the owner has never signed into has to live
+    # here.
+    theme: Mapped[str | None] = mapped_column(String(24))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
