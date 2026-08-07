@@ -137,3 +137,26 @@ class VendorPayment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ItemAlias(Base):
+    """A supplier's word for one of your items.
+
+    Written whenever somebody confirms a match, so the same wording is never
+    queried twice. `vendor_id` is optional: an alias learned from one supplier
+    applies only to them by default, because two suppliers can use the same
+    word for different things — but a null vendor means "anyone who writes
+    this means that".
+    """
+
+    __tablename__ = "item_aliases"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True, nullable=False)
+    item_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True, nullable=False)
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    # Stored already normalised, so the lookup is a plain equality test.
+    alias: Mapped[str] = mapped_column(String(160), index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
