@@ -40,6 +40,13 @@ export default function KioskPage() {
   const [flash, setFlash] = useState<{ name: string; what: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [clockSize, setClockSize] = useState(236);
+  useEffect(() => {
+    const fit = () => setClockSize(window.innerWidth < 640 ? 168 : 236);
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
   const [leaving, setLeaving] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
@@ -214,12 +221,12 @@ export default function KioskPage() {
         />
       </div>
 
-      {/* `items-center`, not `items-end`.
-          The clock is 236px tall and the name block is short, so aligning to
-          the BOTTOM sank the text and left a hole above it on the left — the
-          empty space he photographed. Centred against the clock, the row reads
-          as one band. */}
-      <header className="relative flex flex-wrap items-center justify-between gap-4 px-8 pb-6 pt-8">
+      {/* Top-aligned, and stacked on a phone.
+          `items-end` sank the short name block against a 236px clock and left
+          a hole above it; centring only moved the hole. The date and the name
+          are the first thing anybody reads, so they start at the top and the
+          clock hangs beside them. */}
+      <header className="relative flex flex-col items-center gap-4 px-5 pb-5 pt-6 text-center sm:flex-row sm:items-start sm:justify-between sm:px-8 sm:pb-6 sm:pt-8 sm:text-left">
         <div className="min-w-0">
           <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-fg-faint">
             {now.toLocaleDateString(undefined, {
@@ -237,7 +244,9 @@ export default function KioskPage() {
             the time AND that the screen is alive, from across the room,
             without anybody reading it. */}
         <div className="flex shrink-0 flex-col items-center">
-          <AnalogClock size={236} />
+          {/* Smaller on a phone: at 236px the clock pushed the names — the one
+              thing anybody opens this screen to tap — below the fold. */}
+          <AnalogClock size={clockSize} />
           {/* Which clock this is. A wall screen that disagrees with the phone
               in your pocket starts an argument about hours, and the answer is
               always "whose timezone?" — so it says so up front. */}
@@ -248,7 +257,7 @@ export default function KioskPage() {
       </header>
 
       {/* How the shift is going, in one line. */}
-      <div className="relative flex flex-wrap items-center gap-2 px-8 pb-2">
+      <div className="relative flex flex-wrap items-center gap-2 px-5 pb-2 sm:px-8">
         {[
           { n: onCount, label: "in now", cls: "border-brand-400/40 bg-brand-400/10 text-brand-200" },
           { n: breakCount, label: "on break", cls: "border-amber-400/40 bg-amber-400/10 text-amber-200" },

@@ -26,8 +26,8 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
   const hour = useRef<SVGLineElement>(null);
   const minute = useRef<SVGLineElement>(null);
   const second = useRef<SVGLineElement>(null);
-  const digital = useRef<HTMLSpanElement>(null);
-  const secs = useRef<HTMLSpanElement>(null);
+  const digital = useRef<SVGTextElement>(null);
+  const secs = useRef<SVGTextElement>(null);
 
   useEffect(() => {
     let frame = 0;
@@ -104,6 +104,29 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
           );
         })}
 
+        {/* The printed face, drawn BEFORE the hands.
+            A real clock has its numerals under the movement, and SVG paints in
+            document order — so putting the readout here is what actually makes
+            the hands sweep across it. My first attempt used a negative
+            z-index on an HTML overlay, which did not put it under the hands at
+            all: it put it behind the whole clock, where it could not be seen. */}
+        <text
+          ref={digital}
+          x="100"
+          y="132"
+          textAnchor="middle"
+          className="font-display"
+          style={{ fontSize: 25, fontWeight: 600, fill: "currentColor", opacity: 0.92 }}
+        />
+        <text
+          ref={secs}
+          x="100"
+          y="149"
+          textAnchor="middle"
+          className="font-mono"
+          style={{ fontSize: 10, fill: "var(--color-brand-400)", letterSpacing: "1.5px" }}
+        />
+
         <line
           ref={hour}
           x1="100"
@@ -140,30 +163,6 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
         <circle cx="100" cy="100" r="1.6" fill="var(--color-shell, #0b1220)" />
       </svg>
 
-      {/* The number, under the hands. For the glance that wants a figure
-          rather than a shape.
-
-          It sits on a soft plate: bare digits over a sweeping second hand are
-          legible for half of every minute and mush for the other half. */}
-      {/* Under the hands, not over them.
-          A real clock has its printed face beneath the movement; digits laid
-          on top read as a sticker. `-z-10` puts the readout behind the SVG,
-          which is drawn after it — so the second hand sweeps ACROSS the
-          numbers, which is exactly what he asked for. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[59%] -z-10 flex items-baseline justify-center gap-1.5">
-        <span className="rounded-lg bg-shell/55 px-2 py-0.5 backdrop-blur-[2px]">
-          <span
-            ref={digital}
-            className="font-display text-[1.7rem] font-semibold leading-none tabular-nums text-fg"
-          />
-          <span
-            ref={secs}
-            // Seconds are the proof it is live, so they are always shown —
-            // just not competing with the hour for attention.
-            className="ml-1 font-mono text-[0.7rem] font-medium tabular-nums text-brand-300"
-          />
-        </span>
-      </div>
     </div>
   );
 }
