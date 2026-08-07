@@ -84,6 +84,14 @@ class Hotel(Base):
     # secret that gets watched over a shoulder — a database leak must not hand
     # somebody the code as well.
     attendance_pin_hash: Mapped[str | None] = mapped_column(String(255))
+    # What the wall tablet is allowed to show beyond clocking in and out.
+    #
+    # Decided by the owner when they generate the PIN, because that is the one
+    # moment they are already thinking about what this screen is for. Both
+    # default OFF: a screen by the door is seen by everyone who walks past,
+    # and today's rota is more information than some kitchens want on display.
+    kiosk_show_rota: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    kiosk_show_leave: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

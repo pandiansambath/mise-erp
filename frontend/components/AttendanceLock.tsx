@@ -48,6 +48,12 @@ export function AttendanceLock() {
     return `${window.location.protocol}//${handle}.${apex}/kiosk`;
   })();
 
+  // What the wall tablet may show besides clocking in and out. Decided here
+  // because generating the PIN is the one moment the owner is already
+  // thinking about what that screen is for.
+  const [showRota, setShowRota] = useState(false);
+  const [showLeave, setShowLeave] = useState(false);
+
   function suggest() {
     setPin(String(Math.floor(100000 + Math.random() * 900000)));
   }
@@ -56,7 +62,7 @@ export function AttendanceLock() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/attendance/lock/pin", { password, pin });
+      await api.post("/attendance/lock/pin", { password, pin, show_rota: showRota, show_leave: showLeave });
       setShown(pin);
       setStatus({ has_pin: true, can_manage: true });
       setOpen(false);
@@ -197,6 +203,31 @@ export function AttendanceLock() {
               className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
             />
           </div>
+          {/* What the screen may show besides clocking in and out.
+              Both start OFF: a tablet by the door is read by everyone who
+              walks past it, and who is on leave today is more than some
+              kitchens want on display. Off is the choice you can reverse. */}
+          <div className="rounded-xl border border-line bg-paper-2/50 p-3">
+            <p className="text-xs font-medium text-fg-soft">What the screen may show</p>
+            {([
+              ["rota", "Today's rota", "who is working, and their hours", showRota, setShowRota],
+              ["leave", "Who is off", "today's approved leave", showLeave, setShowLeave],
+            ] as const).map(([key, label, hint, val, set]) => (
+              <label key={key} className="mt-2 flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={val}
+                  onChange={(e) => set(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-brand-500"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium text-fg">{label}</span>
+                  <span className="block text-[11px] text-fg-faint">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+
           {error && <p className="text-xs text-rose-400">{error}</p>}
           <div className="flex gap-2 pt-1">
             <button

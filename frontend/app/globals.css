@@ -1779,3 +1779,14 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 [data-narrow="true"] .mise-chat-title { font-size: 0.78rem; }
 /* The usage ring is a nicety; the ✕ is not. */
 [data-narrow="true"] .mise-usage-ring { display: none; }
+
+/* The launcher curling down to its mark.
+   A spiral rather than a straight shrink: it turns as it contracts, which is
+   what "curl up" looks like and what a straight scale never does. */
+.mise-curl { animation: miseCurl .42s cubic-bezier(.34,1.2,.5,1) both; }
+@keyframes miseCurl {
+  0%   { transform: rotate(0deg) scale(1); }
+  55%  { transform: rotate(-160deg) scale(.82); }
+  100% { transform: rotate(-360deg) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .mise-curl { animation: none; } }

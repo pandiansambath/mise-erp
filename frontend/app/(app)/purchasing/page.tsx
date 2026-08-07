@@ -568,9 +568,9 @@ export default function PurchasingPage() {
                 : undefined
             }
             sections={[
-              { key: "suppliers", label: "Suppliers", icon: "\u{1F91D}", count: opts.length },
-              { key: "history", label: "Price history", icon: "\u{1F4C8}", count: peekHistory.length },
-              ...(canWrite ? [{ key: "order", label: "Order it", icon: "\u{1F6D2}" }] : []),
+              { key: "suppliers", label: "Suppliers", icon: "🤝", count: opts.length },
+              { key: "history", label: "Price history", icon: "📈", count: peekHistory.length },
+              ...(canWrite ? [{ key: "order", label: "Order it", icon: "🛒" }] : []),
             ]}
             active={peekPane}
             onSection={(k) => setPeekPane(k as typeof peekPane)}

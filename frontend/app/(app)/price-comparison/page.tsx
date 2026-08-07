@@ -646,7 +646,7 @@ export default function PriceComparisonPage() {
                             <DetailSheet
                               open
                               onClose={() => setOpenRow(null)}
-                              icon="\u{1F3F7}"
+                              icon="🏷"
                               title={row.vendor_name}
                               subtitle={`${data.item_name} · per ${data.unit}`}
                               badge={row.is_preferred ? <Badge tone="amber">★ chosen</Badge> : undefined}
@@ -695,7 +695,7 @@ export default function PriceComparisonPage() {
                                       }}
                                       className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
                                     >
-                                      {rowBusy ? "Saving\u2026" : "Save"}
+                                      {rowBusy ? "Saving…" : "Save"}
                                     </button>
                                   </div>
 
@@ -714,14 +714,14 @@ export default function PriceComparisonPage() {
                                         onClick={async () => { await setPreferred(row.vendor_id); setOpenRow(null); }}
                                         className="mise-press rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-200"
                                       >
-                                        \u2605 Make them the chosen supplier
+                                        ★ Make them the chosen supplier
                                       </button>
                                     )}
                                     <Link
                                       href={`/vendors?vendor=${row.vendor_id}`}
                                       className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
                                     >
-                                      Open this supplier \u2197
+                                      Open this supplier ↗
                                     </Link>
                                   </div>
                                 </>

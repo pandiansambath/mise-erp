@@ -305,8 +305,16 @@ function NavLinks({
                     >
                       <Link
                         href={item.href}
-                        onClick={onClick}
+                        // No chevron. He did not like the look of it, and it
+                        // was never needed: going to a section and seeing what
+                        // is in it are the same intent. Tapping the row opens
+                        // its list; tapping it again closes it.
+                        onClick={() => {
+                          if (hasSubs) toggleOpen(item.href, !shown);
+                          onClick?.();
+                        }}
                         data-tour={item.href.slice(1)}
+                        aria-expanded={hasSubs ? shown : undefined}
                         className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-sm font-medium"
                       >
                         <span aria-hidden className="text-base">
@@ -314,26 +322,7 @@ function NavLinks({
                         </span>
                         <span className="truncate">{item.label}</span>
                       </Link>
-                      {hasSubs && (
-                        <button
-                          type="button"
-                          // Its own control, so opening the list and GOING to
-                          // the page stay separate acts — one click each way,
-                          // which is what he asked for.
-                          onClick={() => toggleOpen(item.href, !shown)}
-                          aria-expanded={shown}
-                          aria-label={`${shown ? "Hide" : "Show"} ${item.label} sections`}
-                          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[10px] opacity-70 transition hover:bg-black/15 hover:opacity-100"
-                        >
-                          <span
-                            aria-hidden
-                            className="transition-transform duration-200"
-                            style={{ transform: shown ? "rotate(90deg)" : "none" }}
-                          >
-                            ▸
-                          </span>
-                        </button>
-                      )}
+
                     </div>
 
                     {shown && (

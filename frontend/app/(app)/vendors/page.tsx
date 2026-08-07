@@ -639,10 +639,10 @@ export default function VendorsPage() {
             : undefined
         }
         sections={[
-          { key: "supply", label: "Supplies", icon: "\u{1F4E6}", count: vendorItems.length },
-          ...(canWrite ? [{ key: "price", label: "Add a price", icon: "\u{FF0B}" }] : []),
-          { key: "money", label: "Money", icon: "\u{1F4B7}" },
-          ...(canWrite ? [{ key: "details", label: "Details", icon: "\u{270E}" }] : []),
+          { key: "supply", label: "Supplies", icon: "📦", count: vendorItems.length },
+          ...(canWrite ? [{ key: "price", label: "Add a price", icon: "＋" }] : []),
+          { key: "money", label: "Money", icon: "💷" },
+          ...(canWrite ? [{ key: "details", label: "Details", icon: "✎" }] : []),
         ]}
         active={sheetTab}
         onSection={(k) => {

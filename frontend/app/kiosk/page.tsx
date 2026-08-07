@@ -25,6 +25,7 @@ import { api, ApiError, clearToken, type AttendanceRow, type Employee } from "@/
 import { useAuth } from "@/lib/auth";
 import { AnalogClock } from "@/components/AnalogClock";
 import { KioskGate } from "@/components/KioskGate";
+import { KioskPanel } from "@/components/KioskPanels";
 import { useHotelTime } from "@/lib/time";
 import { themeVars } from "@/lib/theme";
 
@@ -42,6 +43,17 @@ export default function KioskPage() {
   const [leaving, setLeaving] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
+  // Which extra panel is open, and whether the owner allowed them at all.
+  const [panel, setPanel] = useState<"rota" | "leave" | null>(null);
+  const [allowed, setAllowed] = useState<{ rota: boolean; leave: boolean }>({ rota: false, leave: false });
+
+  useEffect(() => {
+    if (loading || !user) return;
+    api
+      .get<{ show_rota?: boolean; show_leave?: boolean }>("/attendance/lock")
+      .then((r) => setAllowed({ rota: !!r.show_rota, leave: !!r.show_leave }))
+      .catch(() => {});
+  }, [loading, user]);
 
   async function leave() {
     setPinError(null);
@@ -196,7 +208,7 @@ export default function KioskPage() {
       </header>
 
       {/* How the shift is going, in one line. */}
-      <div className="relative flex flex-wrap gap-2 px-8 pb-2">
+      <div className="relative flex flex-wrap items-center gap-2 px-8 pb-2">
         {[
           { n: onCount, label: "in now", cls: "border-brand-400/40 bg-brand-400/10 text-brand-200" },
           { n: breakCount, label: "on break", cls: "border-amber-400/40 bg-amber-400/10 text-amber-200" },
@@ -209,7 +221,38 @@ export default function KioskPage() {
             <b className="tabular-nums">{x.n}</b> {x.label}
           </span>
         ))}
+
+        {/* Only if the owner turned them on. A wall screen shows what the
+            kitchen agreed it should show, not everything it could. */}
+        {allowed.rota && (
+          <button
+            type="button"
+            onClick={() => setPanel("rota")}
+            className="mise-press ml-auto rounded-full border border-line-2 px-4 py-1.5 text-sm font-medium text-fg-soft"
+          >
+            🗓️ Today&apos;s rota
+          </button>
+        )}
+        {allowed.leave && (
+          <button
+            type="button"
+            onClick={() => setPanel("leave")}
+            className={`mise-press rounded-full border border-line-2 px-4 py-1.5 text-sm font-medium text-fg-soft ${
+              allowed.rota ? "" : "ml-auto"
+            }`}
+          >
+            🌴 Who is off
+          </button>
+        )}
       </div>
+
+      {panel && (
+        <KioskPanel
+          kind={panel}
+          names={Object.fromEntries(staff.map((e) => [e.id, e.full_name]))}
+          onClose={() => setPanel(null)}
+        />
+      )}
 
       {/* One line, large, then gone. The next person up should not be looking
           at somebody else's confirmation. */}
