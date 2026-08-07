@@ -6,6 +6,42 @@ import { api, ApiError, type Item, type ItemSuppliers, type PriceComparison, typ
 type PriceChange = {
   vendor_name: string; old_price: string | null; new_price: string; source: string; at: string;
 };
+/** A vendor's price over time, small enough to sit on a card.
+ *
+ *  "Is this price normal?" is the question that decides whether a number is
+ *  worth acting on, and it was behind a tab — so the decision was made on the
+ *  card and the evidence lived somewhere else. Twelve pixels of shape answers
+ *  it without anyone leaving.
+ *
+ *  Drawn from the change log the page already loads, so it costs no request. */
+function Spark({ points, rising }: { points: number[]; rising: boolean }) {
+  if (points.length < 2) return null;
+  const lo = Math.min(...points);
+  const hi = Math.max(...points);
+  const span = hi - lo || 1;
+  const d = points
+    .map((v, i) => {
+      const x = (i / (points.length - 1)) * 56;
+      const y = 16 - ((v - lo) / span) * 14;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg viewBox="0 0 56 18" className="h-[18px] w-14 shrink-0" aria-hidden>
+      <path
+        d={d}
+        fill="none"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        // Rising is bad news on a page about what you PAY, so it borrows the
+        // same red the gap-to-cheapest chip uses.
+        stroke={rising ? "var(--color-rose-400, #fb7185)" : "var(--color-emerald-400, #34d399)"}
+      />
+    </svg>
+  );
+}
+
 const SRC_TONE: Record<string, "slate" | "amber" | "green"> = {
   manual: "slate", po: "amber", invoice: "green",
 };
@@ -622,16 +658,33 @@ export default function PriceComparisonPage() {
                                 <p className="truncate text-[13px] font-medium text-fg-soft">
                                   {row.vendor_name}
                                 </p>
-                                <p
-                                  className={`mt-1 font-display text-2xl font-semibold tabular-nums ${
-                                    idx === 0 ? "text-emerald-300" : "text-fg"
-                                  }`}
-                                >
-                                  {format(row.price_per_unit)}
-                                  <span className="ml-1 text-[11px] font-normal text-fg-faint">
-                                    /{data.unit}
-                                  </span>
-                                </p>
+                                <div className="mt-1 flex items-end justify-between gap-2">
+                                  <p
+                                    className={`font-display text-2xl font-semibold tabular-nums ${
+                                      idx === 0 ? "text-emerald-300" : "text-fg"
+                                    }`}
+                                  >
+                                    {format(row.price_per_unit)}
+                                    <span className="ml-1 text-[11px] font-normal text-fg-faint">
+                                      /{data.unit}
+                                    </span>
+                                  </p>
+                                  {(() => {
+                                    // This vendor's own line, oldest first.
+                                    const mine = changeLog
+                                      .filter((c) => c.vendor_name === row.vendor_name)
+                                      .slice()
+                                      .reverse();
+                                    if (mine.length === 0) return null;
+                                    const pts = [
+                                      parseFloat(mine[0].old_price ?? mine[0].new_price) || 0,
+                                      ...mine.map((c) => parseFloat(c.new_price) || 0),
+                                    ];
+                                    return (
+                                      <Spark points={pts} rising={pts[pts.length - 1] > pts[0]} />
+                                    );
+                                  })()}
+                                </div>
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {idx === 0 && <Badge tone="green">Cheapest</Badge>}
                                   {row.is_preferred && <Badge tone="amber">★ Chosen</Badge>}
