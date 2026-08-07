@@ -64,8 +64,6 @@ function fileGlyph(mime: string, name: string): string {
   return "📎";
 }
 
-const STARTERS = ["What's low on stock?", "How's this month's profit?", "Add a £40 gas expense", "What is slow stock?"];
-
 // The name the user gave at onboarding — so the Copilot addresses them by it.
 const userName = (): string | undefined => {
   try {
@@ -73,6 +71,80 @@ const userName = (): string | undefined => {
   } catch {
     return undefined;
   }
+};
+
+// Openers, per page.
+//
+// Written as things a chef or an owner would actually say out loud, not as
+// commands. The point is not to teach a syntax — there isn't one — but to
+// show the KIND of question that gets a useful answer, which is the thing an
+// empty text box cannot communicate.
+const STARTERS: Record<string, string[]> = {
+  _default: [
+    "What should I be worried about today?",
+    "Where is my money going this month?",
+    "What is costing me more than it did last month?",
+  ],
+  "/dashboard": [
+    "What should I be worried about today?",
+    "How did last week compare with the one before?",
+    "What is my biggest cost right now?",
+  ],
+  "/inventory": [
+    "What is running low?",
+    "Which items have gone up in price recently?",
+    "What am I holding too much of?",
+  ],
+  "/purchasing": [
+    "What should I order today?",
+    "Am I buying anything from the wrong supplier?",
+    "Which order is late?",
+  ],
+  "/vendors": [
+    "Which supplier is costing me the most?",
+    "Who has raised their prices lately?",
+    "Where could I switch supplier and save?",
+  ],
+  "/price-comparison": [
+    "Where am I overpaying?",
+    "How much would switching everything to the cheapest save me?",
+    "Which price rose the most this month?",
+  ],
+  "/recipes": [
+    "Which dishes are losing me money?",
+    "What is my best margin dish?",
+    "If beef goes up 10%, what does that do to my menu?",
+  ],
+  "/sales": [
+    "How were takings this week?",
+    "Does the till match the cash?",
+    "What is my busiest day?",
+  ],
+  "/expenses": [
+    "What did I spend most on this month?",
+    "Which costs keep repeating?",
+    "Is anything unusual in this month's spend?",
+  ],
+  "/reports": [
+    "Explain my P&L in plain English",
+    "Is my food cost percentage healthy?",
+    "What changed most since last month?",
+  ],
+  "/payroll": [
+    "What is my wage bill this month?",
+    "Is labour cost too high for my takings?",
+    "Who has an advance outstanding?",
+  ],
+  "/attendance": [
+    "Who is in right now?",
+    "Who has been late this week?",
+    "How many hours did we work last week?",
+  ],
+  "/rota": [
+    "Am I overstaffed on any day?",
+    "What will next week's rota cost me?",
+    "Who is not scheduled this week?",
+  ],
 };
 
 const GREETING: Msg = {
@@ -201,6 +273,10 @@ export function Copilot() {
   );
   const ttsSupported = speechOutputSupported();
   const pathname = usePathname();
+  // What to offer before anything has been typed. Keyed off the page, because
+  // "what should I ask" has a different answer standing on Purchasing than on
+  // Payroll — and a generic list is one nobody taps twice.
+  const starters = STARTERS[pathname] ?? STARTERS._default;
   const router = useRouter();
 
   // Warm the full view as soon as the panel opens. Expanding then costs a
@@ -890,6 +966,28 @@ export function Copilot() {
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+            {/* Before anything is typed, say what it can be ASKED.
+                An empty box with a blinking cursor tests whether you can guess
+                the phrasing it wants. These are the real questions, tuned to
+                the page you are standing on, so the first one costs nothing. */}
+            {messages.length <= 1 && !loading && (
+              <div className="mise-stagger space-y-1.5 pt-1">
+                <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Try asking
+                </p>
+                {starters.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => send(q)}
+                    className="mise-press block w-full rounded-xl border border-line px-3 py-2 text-left text-[13px] leading-snug text-fg-soft transition hover:border-brand-400/50 hover:bg-brand-400/[0.06] hover:text-fg"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {messages.map((m, i) => (
               <div key={i} className={`mise-msg-in flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "assistant" && (
@@ -1192,7 +1290,7 @@ export function Copilot() {
 
             {messages.length === 1 && !loading && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {STARTERS.map((s) => (
+                {starters.map((s) => (
                   <button key={s} type="button" onClick={() => send(s)} className="rounded-full border border-glass/15 bg-paper-3/60 px-3 py-1.5 text-xs text-fg-soft transition hover:bg-glass/5">{s}</button>
                 ))}
               </div>
