@@ -162,7 +162,12 @@ export default function KioskPage() {
         />
       </div>
 
-      <header className="relative flex flex-wrap items-end justify-between gap-4 px-8 pb-6 pt-8">
+      {/* `items-center`, not `items-end`.
+          The clock is 236px tall and the name block is short, so aligning to
+          the BOTTOM sank the text and left a hole above it on the left — the
+          empty space he photographed. Centred against the clock, the row reads
+          as one band. */}
+      <header className="relative flex flex-wrap items-center justify-between gap-4 px-8 pb-6 pt-8">
         <div className="min-w-0">
           <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-fg-faint">
             {now.toLocaleDateString(undefined, {
@@ -179,7 +184,15 @@ export default function KioskPage() {
         {/* A real clock face, hands sweeping, digits in the middle. It says
             the time AND that the screen is alive, from across the room,
             without anybody reading it. */}
-        <AnalogClock size={236} />
+        <div className="flex shrink-0 flex-col items-center">
+          <AnalogClock size={236} />
+          {/* Which clock this is. A wall screen that disagrees with the phone
+              in your pocket starts an argument about hours, and the answer is
+              always "whose timezone?" — so it says so up front. */}
+          <p className="mt-1 font-mono text-[10px] tracking-[0.22em] text-fg-faint">
+            {(hotel?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "").replace("_", " ")}
+          </p>
+        </div>
       </header>
 
       {/* How the shift is going, in one line. */}
@@ -370,7 +383,10 @@ export default function KioskPage() {
               onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
               inputMode="numeric"
               autoFocus
-              placeholder="••••"
+              // Six, matching the length DineAI generates. The field always
+              // accepted eight — it was the placeholder that said "four", which
+              // is the same misleading cue the keypad had.
+              placeholder="••••••"
               className="mise-well mt-4 w-full rounded-2xl px-4 py-3 text-center font-mono text-2xl tracking-[0.4em] outline-none"
             />
             {pinError && <p className="mt-2 text-sm text-rose-400">{pinError}</p>}
