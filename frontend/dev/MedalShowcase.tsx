@@ -65,7 +65,7 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
       // chest gets whatever height is left after the words, and the canvas
       // sizes itself to that — which is why it can no longer end up off the
       // top of the screen however far the page behind was scrolled.
-      className="dev-case fixed inset-0 z-[200] flex flex-col overflow-hidden px-5 py-5"
+      className="dev-case fixed inset-0 z-[200] overflow-hidden"
       role="dialog"
       aria-modal="true"
       aria-label="Award"
@@ -98,59 +98,52 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
         }}
       />
 
-      <div
-        className="relative mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col text-center"
-        // The case is the subject; clicking it must not dismiss it.
-        onClick={(e) => e.stopPropagation()}
+      {/* One screen, used fully.
+          Not a dialog with margins around it — "just take 1 screen fully and
+          use that screen fully, just have an x close button at corner". So
+          the stage IS the screen and the words float over the bottom of it,
+          where there is nothing to cover. */}
+      <div className="absolute inset-0" onClick={(e) => e.stopPropagation()}>
+        <ChestScene onOpened={() => setOpened(true)} />
+      </div>
+
+      <p
+        className="pointer-events-none absolute inset-x-0 top-6 text-center font-mono text-[10px] tracking-[0.4em] text-[#c08a4e]"
+        style={{ animation: "devFadeUp .7s .05s ease-out both" }}
       >
-        <p
-          className="shrink-0 font-mono text-[10px] tracking-[0.4em] text-[#c08a4e]"
-          style={{ animation: "devFadeUp .7s .05s ease-out both" }}
-        >
-          ANNA UNIVERSITY
-        </p>
+        ANNA UNIVERSITY
+      </p>
 
-        {/* The stage: everything left over after the words. */}
-        <div className="relative min-h-0 flex-1">
-          <div
-            aria-hidden
-            className="dev-case-glow pointer-events-none absolute inset-x-6 inset-y-8 rounded-full blur-[64px]"
-            style={{ background: "radial-gradient(circle, #ffca6e 0%, transparent 68%)" }}
-          />
-          <ChestScene onOpened={() => setOpened(true)} />
-        </div>
-
-        <p
-          className={`shrink-0 dev-gold mt-2 font-display text-2xl font-semibold transition-opacity duration-700 ${opened ? "opacity-100" : "opacity-0"}`}
-          style={{ animation: "devFadeUp .7s .2s ease-out both" }}
-        >
-          Gold Medalist
-        </p>
-
-        <p
-          className={`shrink-0 mt-3 text-sm leading-relaxed text-[#c3d0dd] transition-opacity duration-700 delay-150 ${opened ? "opacity-100" : "opacity-0"}`}
-          style={{ animation: "devFadeUp .7s .28s ease-out both" }}
-        >
+      {/* The citation, over the foot of the screen. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-8 pt-16 text-center transition-opacity duration-700 ${
+          opened ? "opacity-100" : "opacity-0"
+        }`}
+        style={{
+          background: "linear-gradient(to top, rgba(5,6,10,.92) 30%, transparent)",
+        }}
+      >
+        <p className="dev-gold font-display text-3xl font-semibold">Gold Medalist</p>
+        <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-[#c3d0dd]">
           Awarded to <b className="text-[#f0e2c8]">Pandian Sambath</b> for placing{" "}
           <b className="text-[#f0e2c8]">17th in the university</b> — B.Tech Information
           Technology, 92%.
         </p>
-        <p
-          className={`shrink-0 mt-2 font-mono text-[10px] tracking-[0.22em] text-[#7d6244] transition-opacity duration-700 delay-300 ${opened ? "opacity-100" : "opacity-0"}`}
-          style={{ animation: "devFadeUp .7s .34s ease-out both" }}
-        >
+        <p className="mt-2 font-mono text-[10px] tracking-[0.22em] text-[#7d6244]">
           RANK LIST · APRIL / MAY 2023 EXAMINATIONS
         </p>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-8 rounded-full border border-[#c08a4e]/40 px-5 py-2 font-mono text-[10px] tracking-[0.24em] text-[#c08a4e] transition hover:bg-[#c08a4e]/10 hover:text-[#f0d5a8]"
-          style={{ animation: "devFadeUp .7s .42s ease-out both" }}
-        >
-          CLOSE THE CASE
-        </button>
       </div>
+
+      {/* The way out. A corner, like every full-screen thing anybody has
+          closed before — nothing to explain. */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-5 top-5 z-10 grid h-11 w-11 place-items-center rounded-full border border-[#c08a4e]/35 text-lg text-[#c08a4e] transition hover:border-[#c08a4e]/70 hover:bg-[#c08a4e]/10 hover:text-[#f0d5a8]"
+      >
+        ✕
+      </button>
     </div>
   );
 }
