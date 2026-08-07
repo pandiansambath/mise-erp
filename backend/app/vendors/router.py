@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
@@ -13,9 +14,10 @@ from app.core import template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
+from app.inventory.models import Item
 from app.inventory.service import get_item
-from app.vendors import ledger, service
-from app.vendors.models import VendorPayment
+from app.vendors import ledger, matching, service
+from app.vendors.models import ItemAlias, VendorPayment
 from app.vendors.schemas import (
     PriceComparison,
     VendorCreate,
@@ -359,3 +361,85 @@ async def record_payment(
         "id": str(row.id),
         **(await ledger.balance(db, user.hotel_id, vendor_id)),
     }
+
+
+# ── matching a supplier's wording to our own items (#6) ───────────────────
+
+
+class ResolveIn(BaseModel):
+    name: str
+    vendor_id: uuid.UUID | None = None
+
+
+class TeachIn(BaseModel):
+    """Remember that this supplier's wording means this item."""
+
+    name: str
+    item_id: uuid.UUID
+    vendor_id: uuid.UUID | None = None
+
+
+@router.post("/resolve-item")
+async def resolve_item(
+    payload: ResolveIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    """Which of our items does this supplier mean?
+
+    Answers with a match AND the shortlist behind it, so the caller can either
+    proceed or ask. It never invents an item: creating "Tomatos" beside
+    "Tomato" would split one ingredient's stock across two rows and quietly
+    corrupt costing everywhere it is used.
+    """
+    m = await matching.resolve(db, user.hotel_id, payload.name, vendor_id=payload.vendor_id)
+    return {
+        "matched": m.item_id is not None,
+        "item_id": str(m.item_id) if m.item_id else None,
+        "name": m.name,
+        "score": round(m.score, 3),
+        "how": m.how,
+        "candidates": m.candidates,
+    }
+
+
+@router.post("/resolve-item/teach", status_code=status.HTTP_204_NO_CONTENT)
+async def teach_item(
+    payload: TeachIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> None:
+    """Record a confirmed match so it is never asked about again.
+
+    This is the half that compounds: every answer makes the next upload
+    quieter, which is why it is worth more than a cleverer matcher.
+    """
+    item = await db.get(Item, payload.item_id)
+    if item is None or item.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+
+    alias = matching.normalise(payload.name)
+    if not alias:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to remember.")
+
+    existing = (
+        await db.execute(
+            select(ItemAlias).where(
+                ItemAlias.hotel_id == user.hotel_id,
+                ItemAlias.alias == alias,
+                ItemAlias.vendor_id == payload.vendor_id,
+            )
+        )
+    ).scalars().first()
+    if existing is not None:
+        existing.item_id = payload.item_id
+    else:
+        db.add(
+            ItemAlias(
+                hotel_id=user.hotel_id,
+                item_id=payload.item_id,
+                vendor_id=payload.vendor_id,
+                alias=alias,
+            )
+        )
+    await db.commit()
