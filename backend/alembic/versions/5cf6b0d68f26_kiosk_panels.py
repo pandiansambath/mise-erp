@@ -11,6 +11,7 @@ Revision ID: 5cf6b0d68f26
 Revises: 794cc9d0f1a9
 """
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "5cf6b0d68f26"
