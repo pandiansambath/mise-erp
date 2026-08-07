@@ -86,12 +86,26 @@ export function DecryptText({
 
   return (
     <span
-      className={className}
+      // `relative inline-block` so the scrambling copy can be lifted OUT of
+      // the layout. This is not cosmetic: the noise glyphs are different
+      // widths from the real letters, so rendering them in flow re-laid-out
+      // the heading on every frame and shoved everything beneath it around.
+      // On this page that is the orbit — "the solar system letters are
+      // shaking", and only ever while the reassemble is running.
+      className={`relative inline-block ${className}`}
       onMouseEnter={replayOnHover ? run : undefined}
       // The scrambled text is noise to a screen reader; announce the real thing.
       aria-label={text}
     >
-      <span aria-hidden>{display}</span>
+      {/* Holds the final size open. Invisible, but laid out — so the box never
+          changes shape no matter what is being drawn on top of it. */}
+      <span aria-hidden className="invisible">
+        {text}
+      </span>
+      {/* The animation, out of flow and therefore unable to move anything. */}
+      <span aria-hidden className="absolute inset-0">
+        {display}
+      </span>
     </span>
   );
 }
