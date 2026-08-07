@@ -4,15 +4,66 @@ from __future__ import annotations
 
 import re
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
 from app.core.rbac import has_permission
+from app.inventory import matching
+from app.inventory.models import Item
 
 from . import brain, guard
 from .knowledge import PAGES, PERSONA, glossary_lookup, knowledge_brief
 from .schemas import Action, ChatRequest, ChatResponse, ProposedAction
 from .tools import EXECUTORS, tools_for
+
+
+async def _resolve_proposals(
+    db: AsyncSession, hotel_id, proposals: list[dict]
+) -> list[dict]:
+    """Work out which stock item each vendor_price row means, BEFORE showing it.
+
+    Matching used to happen when the button was pressed, so a price list looked
+    entirely fine and then failed one row at a time — "when I click confirm it
+    says not matching". You could not see what was wrong until you had already
+    committed to it, twenty times over.
+
+    Doing it here means the card arrives already knowing: matched rows say which
+    item they are going to, and unmatched ones carry their shortlist so the
+    choice is made in the same glance rather than after a refusal.
+
+    The items are fetched ONCE for the whole batch — a price list is fifty rows,
+    and fifty identical inventory queries is how a helpful feature becomes a
+    slow one.
+    """
+    rows = [p for p in proposals if p.get("kind") == "vendor_price"]
+    if not rows:
+        return proposals
+
+    items = list((await db.execute(select(Item).where(Item.hotel_id == hotel_id))).scalars())
+    for p in rows:
+        f = p.get("fields") or {}
+        name = str(f.get("item") or "").strip()
+        if not name or f.get("item_id"):
+            continue
+        try:
+            m = await matching.resolve(db, hotel_id, name, items=items)
+        except Exception:  # noqa: BLE001 — a matcher fault must not lose the row
+            continue
+        if m.certain and m.item_id:
+            # Certain enough to fill in. The row still needs confirming; it
+            # simply no longer needs a question first.
+            f["item_id"] = str(m.item_id)
+            f["item_matched"] = m.item_name
+            f["match_how"] = m.status
+        elif m.candidates:
+            f["item_options"] = [
+                {"id": str(c.item_id), "name": c.name, "score": c.score}
+                for c in m.candidates
+            ]
+        p["fields"] = f
+    return proposals
+
 
 
 def _can(user: User):
@@ -212,7 +263,10 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
                 reply=reply,
                 choices=choices,
                 actions=_dedupe(collected),
-                pending_actions=[ProposedAction(**p) for p in proposals],
+                pending_actions=[
+                    ProposedAction(**p)
+                    for p in await _resolve_proposals(db, user.hotel_id, proposals)
+                ],
                 used_tools=used,
                 trace=trace,
                 configured=True,
@@ -289,7 +343,10 @@ async def answer_stream(db: AsyncSession, user: User, req: ChatRequest):
                     reply=reply,
                     choices=choices,
                     actions=_dedupe(collected),
-                    pending_actions=[ProposedAction(**p) for p in proposals],
+                    pending_actions=[
+                    ProposedAction(**p)
+                    for p in await _resolve_proposals(db, user.hotel_id, proposals)
+                ],
                     used_tools=ev.get("tools") or [],
                     trace=trace,
                     configured=True,

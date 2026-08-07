@@ -124,6 +124,67 @@ class MatchResult:
         return self.status in ("exact", "alias")
 
 
+
+# ── Words for the same ingredient ─────────────────────────────────────────
+#
+# Spelling similarity cannot help here. "Cottage cheese" and "paneer" share
+# almost no letters, so the trigram score is near zero — his exact example.
+# The two names are only connected by knowing what they MEAN.
+#
+# Most of that meaning, for a kitchen, is a short list. This is an
+# Indian-British restaurant: the same ingredient routinely arrives under an
+# Indian name from one supplier and a British one from another, and the pairs
+# are stable and well known. A lookup answers instantly, costs nothing, works
+# offline and is auditable — everything an embedding is not.
+#
+# Embeddings still earn their place for the long tail (see `semantic_hint`),
+# but they should not be paying to rediscover that brinjal is aubergine.
+SYNONYMS: list[set[str]] = [
+    {"paneer", "cottage cheese", "indian cheese"},
+    {"aubergine", "brinjal", "eggplant"},
+    {"coriander", "cilantro", "dhania", "coriander leaves"},
+    {"capsicum", "bell pepper", "sweet pepper", "shimla mirch"},
+    {"okra", "ladies finger", "lady finger", "bhindi"},
+    {"prawn", "prawns", "shrimp", "shrimps"},
+    {"chickpeas", "chana", "garbanzo", "garbanzo beans", "kabuli chana"},
+    {"lentils", "dal", "daal", "dhal"},
+    {"clarified butter", "ghee"},
+    {"yoghurt", "yogurt", "curd", "dahi"},
+    {"gram flour", "besan", "chickpea flour"},
+    {"semolina", "sooji", "rava"},
+    {"flatbread", "roti", "chapati", "chapatti"},
+    {"cornflour", "corn starch", "cornstarch"},
+    {"spring onion", "scallion", "green onion"},
+    {"beetroot", "beet", "beets"},
+    {"courgette", "zucchini"},
+    {"rocket", "arugula"},
+    {"swede", "rutabaga"},
+    {"mange tout", "snow peas", "snowpeas"},
+    {"double cream", "heavy cream", "whipping cream"},
+    {"caster sugar", "superfine sugar"},
+    {"plain flour", "all purpose flour", "maida"},
+    {"cumin", "jeera"},
+    {"turmeric", "haldi"},
+    {"fenugreek", "methi"},
+    {"mustard seeds", "rai", "sarson"},
+    {"curry leaves", "kadi patta"},
+    {"black gram", "urad", "urad dal"},
+]
+
+# Built once: every word points at the set it belongs to.
+_SYN_INDEX: dict[str, int] = {}
+for _i, _group in enumerate(SYNONYMS):
+    for _word in _group:
+        _SYN_INDEX[_word] = _i
+
+
+def same_ingredient(a: str, b: str) -> bool:
+    """Do these two names mean the same thing, spelling aside?"""
+    ga = _SYN_INDEX.get(normalise(a))
+    gb = _SYN_INDEX.get(normalise(b))
+    return ga is not None and ga == gb
+
+
 # Below this, a suggestion is noise rather than help.
 SUGGEST_FLOOR = 0.55
 MAX_CANDIDATES = 5
@@ -168,7 +229,23 @@ async def resolve(
         if item is not None:
             return MatchResult(status="alias", item_id=item.id, item_name=item.name)
 
-    # 3. Offer candidates. Deliberately does NOT pick one, however high the
+    # 3. The same ingredient under another name.
+    #
+    #    Treated as a SUGGESTION, not a decision: paneer and cottage cheese
+    #    are near-equivalents rather than identical — paneer does not melt,
+    #    cottage cheese is wetter — and a kitchen may genuinely stock both. So
+    #    it goes to the top of the list and a person still says yes. One
+    #    confirmation writes an alias and it is never asked again.
+    known = [i for i in items if same_ingredient(target, i.name)]
+    if known:
+        return MatchResult(
+            status="unsure",
+            candidates=[
+                Candidate(item_id=i.id, name=i.name, score=0.95) for i in known
+            ],
+        )
+
+    # 4. Offer candidates. Deliberately does NOT pick one, however high the
     #    score — see the note at the top about which failure costs more.
     scored = [
         Candidate(item_id=i.id, name=i.name, score=round(similarity(target, normalise(i.name)), 3))
