@@ -20,7 +20,7 @@
 // **The gradient has hard steps.** Polished metal is dark, then abruptly
 // bright, then dark again; a smooth ramp between two browns reads as plastic.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
 // Code-split, and client-only: a WebGL scene cannot be server-rendered,
@@ -34,6 +34,7 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
   // The citation waits until the chest has actually been broken open —
   // reading the award before you have earned it spoils the whole gesture.
   const [opened, setOpened] = useState(false);
+  const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) setOpened(false);
   }, [open]);
@@ -44,6 +45,10 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
+    // Open at the top of the case. The overlay is its own scroll area, and it
+    // inherited whatever position it happened to have — so opening it from
+    // halfway down the page showed the chest already cut off.
+    requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -62,6 +67,7 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
       // viewport then overflowed at BOTH ends and the top of the medal was
       // simply unreachable — the same centring trap as the main page. Items
       // start from the top and the whole thing scrolls instead.
+      ref={scroller}
       className="dev-case fixed inset-0 z-[200] overflow-y-auto overscroll-contain px-5 py-10"
       role="dialog"
       aria-modal="true"
@@ -73,7 +79,16 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
           in a few situations (and by some privacy settings), and when it was,
           the page behind stayed legible right through the award. The blur is
           a bonus on top of a background that already does the job alone. */}
-      <div className="fixed inset-0 bg-[#05070b]/[0.97] backdrop-blur-2xl" />
+      <div
+        className="fixed inset-0 backdrop-blur-2xl"
+        style={{
+          // Flat black reads as "the page failed to load". A gallery is dark
+          // but LIT — warmer near the plinth, cooler and deeper at the edges,
+          // so the case sits in a room rather than in a void.
+          background:
+            "radial-gradient(70% 55% at 50% 34%, #1b1408 0%, #0c0a08 45%, #05060a 100%)",
+        }}
+      />
 
       {/* A shaft of light falling on the case from above. */}
       <div

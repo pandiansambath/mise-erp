@@ -92,7 +92,13 @@ export function DecryptText({
       // the heading on every frame and shoved everything beneath it around.
       // On this page that is the orbit — "the solar system letters are
       // shaking", and only ever while the reassemble is running.
-      className={`relative inline-block ${className}`}
+      // `block`, not `inline-block`.
+      //
+      // As an inline-block the whole name became one unbreakable box, so at
+      // the moment the scramble started the line could no longer break where
+      // it used to and "Sambath" dropped for a frame. A block element takes
+      // its own line and cannot be pushed around by what sits beside it.
+      className={`relative block ${className}`}
       onMouseEnter={replayOnHover ? run : undefined}
       // The scrambled text is noise to a screen reader; announce the real thing.
       aria-label={text}
