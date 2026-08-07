@@ -27,6 +27,34 @@ const MIN_H = 320;
 
 export type Edge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw" | "move";
 
+/** Breathing room kept between the panel and the edges of the window. */
+const MARGIN = 8;
+
+/** Keep a panel where it can still be grabbed.
+ *
+ *  Nothing bounded this before, and the failure was one-way: the drag handle
+ *  IS the header, so the moment the top edge went above the viewport there was
+ *  nothing left to grab and the panel could never be moved back. He hit
+ *  exactly that — "i cant able to drag and move… also top portion is hidden".
+ *
+ *  So the top is pinned at or below the window's top edge, and the panel is
+ *  never pushed so far sideways that the header leaves the screen. Also used
+ *  when the box is restored from storage and whenever the window is resized —
+ *  a panel saved on a large monitor must not be lost on a laptop. */
+function clamp(b: Box): Box {
+  if (typeof window === "undefined") return b;
+  const w = Math.min(b.w, window.innerWidth - MARGIN * 2);
+  const h = Math.min(b.h, window.innerHeight - MARGIN * 2);
+  if (b.x === null || b.y === null) return { ...b, w, h };
+  return {
+    w,
+    h,
+    x: Math.min(Math.max(b.x, MARGIN), Math.max(MARGIN, window.innerWidth - w - MARGIN)),
+    // The top never goes negative — that is the trap this exists to prevent.
+    y: Math.min(Math.max(b.y, MARGIN), Math.max(MARGIN, window.innerHeight - h - MARGIN)),
+  };
+}
+
 export function useResizable(storageKey: string, initial: { w: number; h: number }) {
   const [box, setBox] = useState<Box>({ ...initial, x: null, y: null });
   const [active, setActive] = useState<Edge | null>(null);
@@ -37,12 +65,19 @@ export function useResizable(storageKey: string, initial: { w: number; h: number
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const p = JSON.parse(raw) as Box;
-        if (typeof p?.w === "number" && typeof p?.h === "number") setBox(p);
+        if (typeof p?.w === "number" && typeof p?.h === "number") setBox(clamp(p));
       }
     } catch {
       /* private mode — the default size is fine */
     }
   }, [storageKey]);
+
+  // A panel positioned on a big screen must not be stranded off a small one.
+  useEffect(() => {
+    const onResize = () => setBox((b) => clamp(b));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const persist = useCallback(
     (next: Box) => {
@@ -78,7 +113,7 @@ export function useResizable(storageKey: string, initial: { w: number; h: number
       const s = start.current;
 
       if (active === "move") {
-        setBox((b) => ({ ...b, x: s.x + dx, y: s.y + dy }));
+        setBox((b) => clamp({ ...b, x: s.x + dx, y: s.y + dy }));
         return;
       }
 
@@ -92,10 +127,7 @@ export function useResizable(storageKey: string, initial: { w: number; h: number
 
       if (w < MIN_W) { if (active.includes("w")) x = s.x + (s.w - MIN_W); w = MIN_W; }
       if (h < MIN_H) { if (active.includes("n")) y = s.y + (s.h - MIN_H); h = MIN_H; }
-      w = Math.min(w, window.innerWidth - 16);
-      h = Math.min(h, window.innerHeight - 16);
-
-      setBox({ w, h, x, y });
+      setBox(clamp({ w, h, x, y }));
     },
     [active],
   );

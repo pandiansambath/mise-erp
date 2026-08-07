@@ -20,7 +20,7 @@
 // **A count, not a badge.** Where a job has a number worth knowing — 4 items low
 // — it is shown plainly. Red dots train people to ignore them.
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 export type SubNavItem = {
   key: string;
@@ -43,6 +43,29 @@ export function SubNav({
   active?: string;
   className?: string;
 }) {
+  // Arriving with ?section=<key> picks that job straight away.
+  //
+  // This lives here rather than in each page on purpose: every one of the
+  // twelve pages using SubNav names its state differently, so wiring them
+  // individually would be twelve chances to get it wrong. The items already
+  // carry their own onSelect — firing the matching one does exactly what
+  // tapping it would.
+  const fired = useRef(false);
+  useEffect(() => {
+    if (fired.current || items.length === 0) return;
+    const want = new URLSearchParams(window.location.search).get("section");
+    if (!want) return;
+    const hit = items.find((i) => i.key === want);
+    if (!hit) return;
+    fired.current = true;
+    hit.onSelect();
+    // Drop the parameter so it does not re-fire on a later render and fight
+    // the next thing the user taps.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("section");
+    window.history.replaceState({}, "", url.toString());
+  }, [items]);
+
   if (items.length === 0) return null;
   return (
     <nav
