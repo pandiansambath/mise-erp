@@ -185,6 +185,7 @@ export function ItemPicker({
   emptyHint = "Nothing here yet.",
   lineExtra,
   trayFooter,
+  staged = false,
   suppliers,
   dense,
   onOpenDetail,
@@ -204,6 +205,17 @@ export function ItemPicker({
   /** Rows instead of cards — see the note on ItemPickerSingle. Sixty items in
    *  cards is a wall; in rows it is a list. */
   dense?: boolean;
+  /** Two stages instead of two columns.
+   *
+   *  Off (the default) keeps the side-by-side tray, which suits Waste and
+   *  stock-take where the list is short and the point is speed. On, the list
+   *  gets the WHOLE width and the tray becomes its own stage behind a pinned
+   *  bar — which is what Purchasing needs, because a 21rem column could not
+   *  hold a quantity, a unit and a supplier per row without an inner scroll
+   *  inside an inner scroll.
+   *
+   *  His rule for this page: kill the split, one thing at a time, full width. */
+  staged?: boolean;
   /** Extra controls per tray row (e.g. a supplier picker on Purchasing). */
   lineExtra?: (line: PickedLine, item: Item) => ReactNode;
   /** Open an item's full detail. Adding it to an order and INSPECTING it are
@@ -211,6 +223,9 @@ export function ItemPicker({
   onOpenDetail?: (id: string) => void;
 }) {
   const { format } = useCurrency();
+  // Which stage a staged picker is showing. Picking is where you start,
+  // because an empty tray is not worth a screen.
+  const [trayStage, setTrayStage] = useState<"pick" | "tray">("pick");
   const [tab, setTab] = useState<string>("ALL");
   const [q, setQ] = useState("");
 
@@ -296,10 +311,16 @@ export function ItemPicker({
         </div>
       )}
 
-      {/* Pick on the left, the list you are building on the right — both in
-          view at once. Stacked, every item added pushed the submit button
-          further down the page. */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] lg:items-start">
+      {/* Side by side when the tray is small enough to earn a column; two
+          full-width stages when it is not. */}
+      <div
+        className={
+          staged
+            ? "block"
+            : "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] lg:items-start"
+        }
+      >
+      <div className={staged && trayStage === "tray" ? "hidden" : "contents"}>
       {/* Item cards — key remounts the grid per tab/search so the stagger replays */}
       <div
         key={query ? `q:${query}` : tab}
@@ -516,9 +537,27 @@ export function ItemPicker({
         })}
       </div>
 
-      {/* Selected tray — pinned on desktop so it never scrolls away from the
-          grid feeding it. */}
-      <div className="rounded-xl border border-line bg-paper-2/60 p-3 lg:sticky lg:top-4">
+      </div>
+
+      {/* Selected tray — a column beside the grid, or a stage of its own. */}
+      <div
+        className={`rounded-xl border border-line bg-paper-2/60 p-3 ${
+          staged
+            ? trayStage === "tray"
+              ? "block"
+              : "hidden"
+            : "lg:sticky lg:top-4"
+        }`}
+      >
+        {staged && (
+          <button
+            type="button"
+            onClick={() => setTrayStage("pick")}
+            className="mise-press mb-3 inline-flex items-center gap-2 rounded-xl border border-line px-3.5 py-2 text-sm font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+          >
+            <span aria-hidden>‹</span> Add more items
+          </button>
+        )}
         <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
           Your list {chosen.length > 0 && `· ${chosen.length} item${chosen.length === 1 ? "" : "s"}`}
         </p>
@@ -576,6 +615,27 @@ export function ItemPicker({
         {trayFooter && <div className="mt-3 border-t border-line pt-3">{trayFooter}</div>}
       </div>
       </div>
+
+      {/* The bar that carries you across.
+          Always in reach while picking, so the list you are building is never
+          out of sight even though it is no longer beside you — and it states
+          the count, because "how many have I got" is the only thing you need
+          from the tray while you are still choosing. */}
+      {staged && trayStage === "pick" && chosen.length > 0 && (
+        <div className="sticky bottom-3 z-20 mt-3 flex items-center gap-3 rounded-2xl border border-brand-400/40 bg-paper-2/95 px-4 py-3 shadow-lg shadow-black/30 backdrop-blur">
+          <span className="min-w-0 flex-1 text-sm text-fg-soft">
+            <b className="text-fg">{chosen.length}</b> item{chosen.length === 1 ? "" : "s"} on your
+            list
+          </span>
+          <button
+            type="button"
+            onClick={() => setTrayStage("tray")}
+            className="mise-press shrink-0 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Review &amp; submit ›
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -837,6 +837,7 @@ export default function PurchasingPage() {
             {/* Submit lives INSIDE the tray. It used to sit under the whole
                 picker, so the more you ordered the further away it got. */}
             <ItemPicker
+              staged
               items={orderable}
               lines={lines}
               onChange={setLines}

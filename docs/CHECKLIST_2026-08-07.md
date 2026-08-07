@@ -74,6 +74,20 @@ and checked with him before the next one starts.
       vendor UI"
 - [ ] Every click earns its place
 
+## Phase 4b — Roles & Access, rebuilt
+
+Added 2026-08-07. He is happy with how it WORKS — the IAM-style write-then-
+attach flow landed — and unhappy with everything about how it looks: "very
+very poor UI, that entire staff page… better destroy whole and recreate."
+
+- [ ] Rebuild `/staff` from scratch. Keep the behaviour, throw away the layout.
+- [ ] Neumorphic / current design language — the `mise-neo-raised`, `mise-feel`,
+      `mise-press` kit the rest of the app already uses, which this page never
+      adopted
+- [ ] The three jobs it does — who can sign in, what a role grants, who holds
+      it — should read as three distinct things, not one long form
+- [ ] Do NOT change the permission model or the attach flow; he likes both
+
 ## Phase 5 — the click audit
 
 - [ ] Go through **every** section and find the wasted clicks: rows that only
@@ -94,6 +108,9 @@ and checked with him before the next one starts.
 - [ ] Daily AI nudge; shared brand component; CloudWatch terraform follow-up
 - [ ] **#6 inventory ↔ vendor name matching — DISCUSS FIRST.** He asked to talk
       before anything is built. Not started, deliberately.
+- [ ] **Microsoft Clarity** — session recordings + heatmaps. Its dead-click
+      report is the Phase 5 audit done with evidence. Decide masking and scope
+      with him first (it records a real restaurant's data).
 - [ ] His own task: rename the Stripe account (cosmetic)
 
 ## Done and live (this session)
