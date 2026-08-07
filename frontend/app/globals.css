@@ -1539,23 +1539,140 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    when you turn it in the light. The band is only 12% of the width, so most
    of the cycle is still gold and the shine is an event rather than a state. */
 .dev-gold {
+  /* More stops than a gradient needs, on purpose. Metal is not a smooth ramp
+     between two browns — it is dark, then suddenly bright, then dark again,
+     because a curved surface turns the light through the eye quickly. The
+     narrow near-white bands at 34% and 62% are the specular hits; everything
+     else is body colour. Two of them so the sweep reads as a rounded surface
+     rather than a single pane of glass sliding past. */
   background: linear-gradient(
-    100deg,
-    #b06a2c 0%, #e8b060 26%, #fff3d4 38%, #e8b060 50%, #c98436 74%, #b06a2c 100%
+    98deg,
+    #7a4718 0%,
+    #b8752e 14%,
+    #f0bd6a 27%,
+    #fffaf0 34%,
+    #f4c877 41%,
+    #c98436 52%,
+    #ffeec2 62%,
+    #d2913f 74%,
+    #a8641f 88%,
+    #7a4718 100%
   );
-  background-size: 280% 100%;
+  background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: devGoldSweep 8s ease-in-out infinite;
+  animation: devGoldSweep 6s ease-in-out infinite;
 }
 @keyframes devGoldSweep {
-  /* Sits still for most of the cycle, then the light crosses. */
-  0%, 62%  { background-position: 120% 0; }
-  100%     { background-position: -40% 0; }
+  /* Rests, then the light crosses — metal at rest, then turned. */
+  0%, 55%  { background-position: 118% 0; }
+  100%     { background-position: -18% 0; }
 }
+
+/* The medal, catching the sun.
+   A warm halo behind the emoji that breathes, so the glyph reads as lit
+   rather than printed. `drop-shadow` rather than `box-shadow` because the
+   emoji is not a box — the glow has to follow its actual shape. */
+.dev-medal {
+  display: inline-block;
+  animation: devMedalShine 6s ease-in-out infinite;
+}
+@keyframes devMedalShine {
+  0%, 55%, 100% {
+    filter: drop-shadow(0 0 3px rgba(255, 208, 112, 0.45));
+    transform: rotate(0deg) scale(1);
+  }
+  72% {
+    filter: drop-shadow(0 0 14px rgba(255, 227, 160, 0.95))
+            drop-shadow(0 0 26px rgba(255, 186, 80, 0.55));
+    transform: rotate(-7deg) scale(1.13);
+  }
+}
+
+/* ── the display case ──────────────────────────────────────────────────── */
+.dev-case { animation: devFade .45s ease-out both; }
+
+/* The lid comes off first, and everything else waits for it.
+   A jewellery case is only impressive because of the beat BEFORE the reveal —
+   the medal appearing instantly would be a picture; the medal appearing after
+   the lid swings is an event. Hinged at the back edge, so it falls away from
+   the viewer rather than sliding. */
+.dev-lid {
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  animation: devLidOpen 1.15s cubic-bezier(.34, 1.3, .5, 1) .25s both;
+}
+@keyframes devLidOpen {
+  0%   { transform: rotateX(0deg); }
+  /* A small lift before it swings — the catch releasing. */
+  18%  { transform: rotateX(-6deg); }
+  100% { transform: rotateX(-118deg); }
+}
+
+/* Light escaping the case as the lid lets go of it. */
+.dev-case-burst { animation: devCaseBurst 1.5s ease-out .5s both; }
+@keyframes devCaseBurst {
+  0%   { opacity: 0; transform: scale(.35); }
+  35%  { opacity: .95; }
+  100% { opacity: .45; transform: scale(1); }
+}
+
+/* The medal rises out of the box, then takes over its own slow turn. */
+.dev-medal-rise {
+  animation: devMedalRise 1.1s cubic-bezier(.22, 1, .3, 1) .62s both;
+}
+@keyframes devMedalRise {
+  0%   { opacity: 0; transform: translateY(46px) scale(.72); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Turned about the vertical axis, not spun flat. Flat is a spinner; this is
+   an object being shown to you. `preserve-3d` so the disc genuinely edges
+   away rather than just squashing. */
+.dev-medal-spin {
+  transform-style: preserve-3d;
+  animation: devMedalTurn 11s linear infinite;
+}
+@keyframes devMedalTurn {
+  from { transform: rotateY(0deg); }
+  to   { transform: rotateY(360deg); }
+}
+
+/* The light is in the ROOM, so it does not turn with the medal. The face
+   moves underneath a highlight that stays put, and that counter-motion is
+   most of what sells it as metal. */
+.dev-medal-sheen {
+  background: linear-gradient(
+    112deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.5) 44%,
+    rgba(255, 255, 255, 0.86) 50%,
+    rgba(255, 255, 255, 0.5) 56%,
+    transparent 70%
+  );
+  background-size: 260% 100%;
+  mix-blend-mode: overlay;
+  animation: devSheen 5.5s ease-in-out infinite;
+}
+@keyframes devSheen {
+  0%, 12%  { background-position: 130% 0; opacity: .35; }
+  50%      { opacity: 1; }
+  100%     { background-position: -30% 0; opacity: .35; }
+}
+
+.dev-case-glow { animation: devCaseGlow 5.5s ease-in-out infinite; }
+@keyframes devCaseGlow {
+  0%, 100% { opacity: .30; transform: scale(.94); }
+  50%      { opacity: .62; transform: scale(1.06); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dev-gold { animation: none; background-position: 40% 0; }
+  .dev-gold { animation: none; background-position: 38% 0; }
+  .dev-medal { animation: none; filter: drop-shadow(0 0 5px rgba(255, 208, 112, 0.5)); }
+  /* The case still opens — it simply stops turning. */
+  .dev-medal-spin, .dev-medal-sheen, .dev-case-glow { animation: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   /* Respect the setting: arrive, do not travel. */

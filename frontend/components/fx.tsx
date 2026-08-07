@@ -81,6 +81,26 @@ export function useDeepLink(handlers: Record<string, () => void>, ready = true) 
   }, [ready]);
 }
 
+/** A short-lived line at the bottom of the screen.
+ *
+ *  Deliberately built from a DOM node rather than React state: it is called
+ *  from `spotlight`, a plain function with no component around it, and the
+ *  alternative — a global toast provider — is a lot of machinery for one
+ *  sentence that appears when something is missing. */
+function say(message: string) {
+  const el = document.createElement("div");
+  el.textContent = message;
+  el.setAttribute("role", "status");
+  el.className =
+    "fixed left-1/2 bottom-6 z-[200] -translate-x-1/2 rounded-xl border border-line bg-paper px-4 py-2.5 " +
+    "text-sm text-fg shadow-2xl transition-opacity duration-300";
+  document.body.appendChild(el);
+  window.setTimeout(() => {
+    el.style.opacity = "0";
+    window.setTimeout(() => el.remove(), 320);
+  }, 3200);
+}
+
 /** Scroll a form into view, pulse a copper ring around it, focus its first field.
  *  Retries for ~2s — the target may render only after a setState or a fetch. */
 export function spotlight(id: string, attempt = 0) {
@@ -88,6 +108,12 @@ export function spotlight(id: string, attempt = 0) {
     const el = document.getElementById(id);
     if (!el) {
       if (attempt < 16) spotlight(id, attempt + 1);
+      // Out of retries: the thing being pointed at is not on the page. This
+      // used to end here, in silence — which is why some sidebar sub-sections
+      // "didn't work": the click was real, the target simply was not there,
+      // and nothing said so. A click that does nothing is the exact thing he
+      // told us never to ship. Say it plainly instead.
+      else say("That part isn't on this page yet — it appears once there is data for it.");
       return;
     }
     el.scrollIntoView({ behavior: "smooth", block: "center" });

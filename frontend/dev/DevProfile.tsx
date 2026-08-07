@@ -19,7 +19,6 @@ import { BootSequence } from "./BootSequence";
 import { ChainField } from "./ChainField";
 import { DecryptText } from "./DecryptText";
 import { Terminal } from "./Terminal";
-import { useRevealThenPin } from "./useRevealThenPin";
 import { useHandoff } from "./useHandoff";
 
 // First day as a System Engineer. Everything time-based derives from this.
@@ -61,9 +60,6 @@ function elapsed(from: Date, now: Date) {
 
 export function DevProfile({ photos }: { photos: Photo[] }) {
   const [entered, setEntered] = useState(false);
-  // The left column: rides the scroll until fully revealed, then holds.
-  // Destructured because `pinned.top` reads to the lint rule as a ref access.
-  const { ref: pinnedRef, top: pinnedTop } = useRevealThenPin<HTMLElement>();
   // 0 while the portrait owns the left column, 1 once the shell has it.
   const handoff = useHandoff();
   const [albumOpen, setAlbumOpen] = useState(false);
@@ -138,22 +134,20 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           lines instead. Identity on the left, the things you DO on the right. */}
       <div className="grid w-full items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
         <section
-          ref={pinnedRef}
-          // Sticky, not fixed. It travels with the page until it has been
-          // seen in full, then holds while the right column carries on.
+          // Exactly one screen tall, pinned near the top.
           //
-          // `self-start` matters: a grid item stretches to the row by default,
-          // and something already as tall as its own scroll area has nowhere
-          // to stick to. The offset is measured — see useRevealThenPin.
-          style={{ top: pinnedTop }}
-          className="min-w-0 lg:sticky lg:self-start"
+          // The measured offset was too clever and it broke: the column's own
+          // height drove where it pinned, so the shell could settle off-screen
+          // and the left half went blank — "still I can see empty space, and
+          // where is the terminal?". A column that IS the viewport can only
+          // pin at one place, and whatever is centred in it is always on
+          // screen. No measuring, nothing to get wrong.
+          className="min-w-0 lg:sticky lg:top-12 lg:h-[calc(100dvh-6rem)] lg:self-start"
         >
         {/* Two things, one space.
             Both children are put in the SAME grid cell, so the shell does not
-            appear below the portrait — it appears THROUGH it. The cell is as
-            tall as the taller of the two, so nothing jumps at the halfway
-            point either. */}
-        <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+            appear below the portrait — it appears THROUGH it. */}
+        <div className="grid h-full place-content-center [&>*]:col-start-1 [&>*]:row-start-1">
 
         <div
           // The portrait, on its way out. `pointer-events` is handed over with
