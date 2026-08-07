@@ -61,34 +61,41 @@ export function medalFace(): HTMLCanvasElement {
   g.fillRect(0, 0, 512, 512);
 
   // Engraving reads as depth because of the pair of offset strokes: a dark
-  // one down-right and a light one up-left, which is what a cut in metal
-  // does to light. Flat text would look printed on.
+  // one down-right and a light one up-left, which is what a cut in metal does
+  // to light. Flat text would look printed on.
   const cut = (text: string, y: number, size: number, weight = "700") => {
     g.textAlign = "center";
     g.font = `${weight} ${size}px Georgia, serif`;
     g.fillStyle = "rgba(60,32,8,0.85)";
-    g.fillText(text, 256 + 2, y + 2);
-    g.fillStyle = "rgba(255,240,200,0.55)";
-    g.fillText(text, 256 - 1.5, y - 1.5);
-    g.fillStyle = "rgba(96,54,14,0.92)";
+    g.fillText(text, 258, y + 2.5);
+    g.fillStyle = "rgba(255,242,205,0.6)";
+    g.fillText(text, 254.5, y - 2);
+    g.fillStyle = "rgba(96,54,14,0.95)";
     g.fillText(text, 256, y);
   };
 
-  cut("17", 250, 150);
-  cut("RANK", 300, 44, "500");
-  cut("92%", 372, 62);
+  // Sparse, the way a bullion coin is marked. He asked for it: a real 1-gram
+  // piece carries a figure and a word, not a paragraph. The rest of the story
+  // is written under the case, where there is room for it.
+  cut("17", 292, 190);
+  cut("RANK", 356, 46, "500");
 
-  // Ring of beads around the field.
-  g.strokeStyle = "rgba(88,48,12,0.5)";
-  g.lineWidth = 4;
+  // Two rings and a bead course — the framing that makes it read as struck
+  // rather than printed.
+  g.strokeStyle = "rgba(88,48,12,0.45)";
+  g.lineWidth = 5;
   g.beginPath();
-  g.arc(256, 256, 205, 0, Math.PI * 2);
+  g.arc(256, 256, 208, 0, Math.PI * 2);
   g.stroke();
-  for (let i = 0; i < 60; i++) {
-    const a = (i / 60) * Math.PI * 2;
-    g.fillStyle = "rgba(70,38,10,0.4)";
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(256, 256, 192, 0, Math.PI * 2);
+  g.stroke();
+  for (let i = 0; i < 72; i++) {
+    const a = (i / 72) * Math.PI * 2;
+    g.fillStyle = "rgba(70,38,10,0.38)";
     g.beginPath();
-    g.arc(256 + Math.cos(a) * 226, 256 + Math.sin(a) * 226, 5, 0, Math.PI * 2);
+    g.arc(256 + Math.cos(a) * 228, 256 + Math.sin(a) * 228, 4.5, 0, Math.PI * 2);
     g.fill();
   }
   return c;
@@ -157,40 +164,61 @@ export function playBreak() {
   if (!a) return;
   const t = a.currentTime;
 
-  const crack = noise(a, 0.4);
-  const hp = a.createBiquadFilter();
-  hp.type = "highpass";
-  hp.frequency.value = 900;
-  const cg = a.createGain();
-  cg.gain.setValueAtTime(0.7, t);
-  cg.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-  crack.connect(hp).connect(cg).connect(a.destination);
-  crack.start(t);
+  // Splintering: three short cracks a few milliseconds apart. One crack is a
+  // door closing; three overlapping is something coming apart.
+  for (let i = 0; i < 3; i++) {
+    const at = t + i * 0.045;
+    const crack = noise(a, 0.35);
+    const bp = a.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1400 + i * 900;
+    bp.Q.value = 0.8;
+    const cg = a.createGain();
+    cg.gain.setValueAtTime(0.75 - i * 0.15, at);
+    cg.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
+    crack.connect(bp).connect(cg).connect(a.destination);
+    crack.start(at);
+  }
 
-  // Thunder: low noise with the top rolled off, decaying over two seconds.
-  const rumble = noise(a, 2.2);
+  // The strike of lightning: a hard, bright snap on top of the thunder.
+  const snap = noise(a, 0.25);
+  const sh = a.createBiquadFilter();
+  sh.type = "highpass";
+  sh.frequency.value = 2600;
+  const sg = a.createGain();
+  sg.gain.setValueAtTime(0.9, t);
+  sg.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  snap.connect(sh).connect(sg).connect(a.destination);
+  snap.start(t);
+
+  // Thunder: low noise with the top rolled off, rolling away for three
+  // seconds. The long tail is what makes it read as distance rather than
+  // as a thud.
+  const rumble = noise(a, 3.2);
   const lp = a.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.setValueAtTime(420, t);
-  lp.frequency.exponentialRampToValueAtTime(90, t + 1.8);
+  lp.frequency.setValueAtTime(560, t);
+  lp.frequency.exponentialRampToValueAtTime(70, t + 2.6);
   const rg = a.createGain();
   rg.gain.setValueAtTime(0.001, t);
-  rg.gain.exponentialRampToValueAtTime(0.6, t + 0.08);
-  rg.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+  rg.gain.exponentialRampToValueAtTime(0.85, t + 0.07);
+  rg.gain.exponentialRampToValueAtTime(0.28, t + 0.9);
+  rg.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
   rumble.connect(lp).connect(rg).connect(a.destination);
   rumble.start(t);
 
-  // And a bell, so the reveal has a note to land on.
-  [523.25, 659.25, 783.99].forEach((f, i) => {
+  // And a chord, so the reveal has somewhere to land.
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
     const o = a.createOscillator();
     o.type = "sine";
     o.frequency.value = f;
     const g = a.createGain();
-    g.gain.setValueAtTime(0, t + 0.25 + i * 0.05);
-    g.gain.linearRampToValueAtTime(0.16, t + 0.3 + i * 0.05);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 2.4);
+    const at = t + 0.42 + i * 0.06;
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.14, at + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 2.6);
     o.connect(g).connect(a.destination);
-    o.start(t + 0.25 + i * 0.05);
-    o.stop(t + 2.5);
+    o.start(at);
+    o.stop(at + 2.7);
   });
 }
