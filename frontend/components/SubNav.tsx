@@ -43,28 +43,45 @@ export function SubNav({
   active?: string;
   className?: string;
 }) {
-  // Arriving with ?section=<key> picks that job straight away.
+  // Being told which job to open, from outside this page.
   //
   // This lives here rather than in each page on purpose: every one of the
   // twelve pages using SubNav names its state differently, so wiring them
   // individually would be twelve chances to get it wrong. The items already
   // carry their own onSelect — firing the matching one does exactly what
   // tapping it would.
-  const fired = useRef(false);
+  //
+  // TWO routes in, because one is not enough:
+  //
+  //   ?section=<key> handles ARRIVING from another page, on mount.
+  //
+  //   A `mise:section` event handles being told while ALREADY here — and that
+  //   is the case that was broken. Moving within a page does not remount this
+  //   component, so a mount-only reader saw the first URL and never the next
+  //   one. Clicking a sidebar sub-section did nothing, exactly as he reported.
+  const latest = useRef(items);
   useEffect(() => {
-    if (fired.current || items.length === 0) return;
-    const want = new URLSearchParams(window.location.search).get("section");
-    if (!want) return;
-    const hit = items.find((i) => i.key === want);
-    if (!hit) return;
-    fired.current = true;
-    hit.onSelect();
-    // Drop the parameter so it does not re-fire on a later render and fight
-    // the next thing the user taps.
-    const url = new URL(window.location.href);
-    url.searchParams.delete("section");
-    window.history.replaceState({}, "", url.toString());
-  }, [items]);
+    latest.current = items;
+  });
+
+  useEffect(() => {
+    const pick = (key: string | null) => {
+      if (!key) return;
+      latest.current.find((i) => i.key === key)?.onSelect();
+    };
+    pick(new URLSearchParams(window.location.search).get("section"));
+
+    const onJump = (e: Event) => pick((e as CustomEvent<{ key?: string }>).detail?.key ?? null);
+    window.addEventListener("mise:section", onJump);
+    return () => window.removeEventListener("mise:section", onJump);
+  }, []);
+
+  // Tell the sidebar which job is open, so it can light the right one —
+  // including when the choice was made here rather than over there.
+  useEffect(() => {
+    if (!active) return;
+    window.dispatchEvent(new CustomEvent("mise:section-open", { detail: { key: active } }));
+  }, [active]);
 
   if (items.length === 0) return null;
   return (

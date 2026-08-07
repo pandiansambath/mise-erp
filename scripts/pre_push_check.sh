@@ -39,11 +39,43 @@ python scripts/check_imports.py || fail=1
 step "backend · coverage gate"
 # The gate is 70%. pytest needs a live Postgres, so this only runs where one is
 # reachable; where it is not, say so rather than implying a pass.
-if (cd backend && python -c "import asyncpg, sqlalchemy" 2>/dev/null); then
-  (cd backend && python -m pytest -q 2>&1 | tail -5) || fail=1
+#
+# This used to read:
+#     (cd backend && python -m pytest -q 2>&1 | tail -5) || fail=1
+# which checks the exit code of TAIL, not of pytest. `tail` always succeeds, so
+# a crashed suite printed its traceback and the script still declared
+# "everything CI checks locally is green". The whole point of this file is to
+# stop a red thing being pushed, and it was structurally incapable of it.
+#
+# So: probe the database FIRST, then run pytest capturing its own status. A
+# missing database is a genuine skip; anything else is a failure.
+db_up=$(
+  cd backend && python - <<'PY' 2>/dev/null || echo no
+import os, socket
+url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://mise:mise@db:5432/mise")
+netloc = url.split("@")[-1].split("/")[0]
+host, _, port = netloc.partition(":")
+s = socket.socket()
+s.settimeout(1.5)
+try:
+    s.connect((host, int(port or 5432)))
+    print("yes")
+except Exception:
+    print("no")
+finally:
+    s.close()
+PY
+)
+
+if [ "$db_up" != "yes" ]; then
+  echo "SKIPPED — no Postgres reachable for the tests. CI enforces the 70% gate."
+  echo "New modules without tests WILL fail the deploy: watch the run afterwards."
+elif (cd backend && python -c "import asyncpg, sqlalchemy" 2>/dev/null); then
+  out=$(cd backend && python -m pytest -q 2>&1); rc=$?
+  printf '%s\n' "$out" | tail -5
+  [ "$rc" -eq 0 ] || fail=1
 else
-  echo "SKIPPED — no local backend deps/Postgres. CI enforces the 70% gate."
-  echo "New modules without tests WILL fail the deploy: check the run afterwards."
+  echo "SKIPPED — backend deps not installed here. CI enforces the 70% gate."
 fi
 
 printf '\n'
