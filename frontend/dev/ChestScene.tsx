@@ -164,10 +164,19 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
       medal.position.set(0, -0.3, 0);
       medal.visible = false;
       scene.add(medal);
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.11, 64), [gold, face, face]);
+      // The engraving goes on flat circles stuck to each side, NOT on the
+      // cylinder's end caps. Cap UVs are laid out radially, so the text came
+      // out turned on its side — "it's showing 17th rank as cross".
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.11, 64), gold);
       disc.rotation.x = Math.PI / 2;
       disc.castShadow = true;
       medal.add(disc);
+      for (const side of [1, -1]) {
+        const f = new THREE.Mesh(new THREE.CircleGeometry(0.78, 64), face);
+        f.position.z = side * 0.056;
+        if (side === -1) f.rotation.y = Math.PI;
+        medal.add(f);
+      }
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.075, 20, 64), gold);
       medal.add(ring);
 
@@ -210,9 +219,9 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
             pts.push(p.clone());
             p = p.clone().add(
               new THREE.Vector3(
-                Math.cos(a) * 0.42 + (Math.random() - 0.5) * 0.5,
-                Math.sin(a) * 0.42 + (Math.random() - 0.5) * 0.5,
-                (Math.random() - 0.5) * 0.3,
+                Math.cos(a) * (bigArcs ? 0.95 : 0.42) + (Math.random() - 0.5) * 0.6,
+                Math.sin(a) * (bigArcs ? 0.95 : 0.42) + (Math.random() - 0.5) * 0.6,
+                (Math.random() - 0.5) * 0.35,
               ),
             );
           }
@@ -229,6 +238,7 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
       let opened = false;
       let openT = 0;
       let swing = 0;
+      let bigArcs = false;
 
       const shards: { m: InstanceType<typeof THREE.Mesh>; v: InstanceType<typeof THREE.Vector3>; s: InstanceType<typeof THREE.Vector3> }[] = [];
       for (let i = 0; i < 30; i++) {
@@ -245,6 +255,10 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
       const burst = () => {
         opened = true;
         playBreak();
+        // A bolt that fills the room, not one that fits in the box.
+        bigArcs = true;
+        strikeArcs();
+        flash = 1.8;
         for (const s of shards) {
           s.m.visible = true;
           s.m.position.set((Math.random() - 0.5) * 2.4, 0, (Math.random() - 0.5) * 1.5);
@@ -313,9 +327,17 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
           chest.position.y = -openT * 2.6;
           chest.rotation.y += dt * 0.25;
 
-          medal.position.y = -0.3 + openT * 1.15;
-          medal.rotation.y += dt * 1.15;
-          medal.scale.setScalar(0.35 + openT * 0.85);
+          // Present it. The coin comes UP and FORWARD into a face-on
+          // close-up, because seen from above at a distance you cannot read
+          // the strike or watch the light cross it — which was the whole
+          // point of making it gold.
+          medal.position.y = -0.3 + openT * 1.55;
+          medal.position.z = openT * 2.4;
+          medal.scale.setScalar(0.35 + openT * 1.05);
+          // Spins fast while it rises, then eases into a slow show turn.
+          medal.rotation.y += dt * (3.2 - openT * 2.3);
+          camera.position.y += (1.35 - camera.position.y) * dt * 1.4;
+          camera.lookAt(0, openT * 1.1, openT * 1.6);
 
           for (const s of shards) {
             if (!s.m.visible) continue;
@@ -362,18 +384,21 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
   }, []);
 
   return (
-    <div className="relative select-none">
+    <div className="relative flex h-full w-full flex-col select-none">
       <div
         ref={mount}
         onPointerDown={strike}
         // Touch has no cursor, so the prompt below carries the instruction on
         // a phone. `touch-none` stops a tap being read as the start of a drag.
-        className={`mx-auto h-[17rem] w-full max-w-md touch-none sm:h-[22rem] ${
+        // Fills the space the case gives it. The case is a fixed,
+        // non-scrolling layout, so this is exactly the room that is left —
+        // which is how the chest can never end up off-screen.
+        className={`h-full w-full touch-none ${
           done ? "" : "cursor-[url(/dev/hammer.svg)_18_18,pointer]"
         }`}
       />
       {!done && (
-        <p className="mt-1 font-mono text-[10px] tracking-[0.3em] text-[#c08a4e]">
+        <p className="absolute inset-x-0 bottom-1 font-mono text-[10px] tracking-[0.3em] text-[#c08a4e]">
           {hits === 0 ? "STRIKE IT" : hits < 2 ? "AGAIN" : "IT IS GIVING…"}
         </p>
       )}

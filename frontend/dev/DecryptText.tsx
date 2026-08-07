@@ -98,7 +98,12 @@ export function DecryptText({
       // the moment the scramble started the line could no longer break where
       // it used to and "Sambath" dropped for a frame. A block element takes
       // its own line and cannot be pushed around by what sits beside it.
-      className={`relative block ${className}`}
+      // `whitespace-nowrap` is the actual fix for "Sambath drops to the next
+      // line". The invisible copy holds the box open at the REAL text's width,
+      // but the scrambled copy inside it is made of different glyphs — wider,
+      // so it no longer fitted and wrapped at the space. Forbidding the wrap
+      // means the line can never break mid-animation.
+      className={`relative block whitespace-nowrap ${className}`}
       onMouseEnter={replayOnHover ? run : undefined}
       // The scrambled text is noise to a screen reader; announce the real thing.
       aria-label={text}

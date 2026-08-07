@@ -20,21 +20,20 @@
 // **The gradient has hard steps.** Polished metal is dark, then abruptly
 // bright, then dark again; a smooth ramp between two browns reads as plastic.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 
 // Code-split, and client-only: a WebGL scene cannot be server-rendered,
 // and the ~150KB should only arrive if somebody actually opens the case.
 const ChestScene = dynamic(() => import("./ChestScene").then((m) => m.ChestScene), {
   ssr: false,
-  loading: () => <div className="mx-auto h-[22rem] w-full max-w-md" />,
+  loading: () => <div className="h-full w-full" />,
 });
 
 export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () => void }) {
   // The citation waits until the chest has actually been broken open —
   // reading the award before you have earned it spoils the whole gesture.
   const [opened, setOpened] = useState(false);
-  const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) setOpened(false);
   }, [open]);
@@ -45,10 +44,6 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    // Open at the top of the case. The overlay is its own scroll area, and it
-    // inherited whatever position it happened to have — so opening it from
-    // halfway down the page showed the chest already cut off.
-    requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -61,14 +56,16 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
 
   return (
     <div
-      // Covers everything, and scrolls if the case is taller than the screen.
+      // It FITS. There is no scrolling here at all.
       //
-      // It was `place-items-center` on a fixed box: content taller than the
-      // viewport then overflowed at BOTH ends and the top of the medal was
-      // simply unreachable — the same centring trap as the main page. Items
-      // start from the top and the whole thing scrolls instead.
-      ref={scroller}
-      className="dev-case fixed inset-0 z-[200] overflow-y-auto overscroll-contain px-5 py-10"
+      // He said this five times and I kept answering it by making the scroll
+      // better, which was the wrong answer: "no need for scroll and all, make
+      // it fit — as you are opening as popup you can take over the entire
+      // page". So the case is exactly one viewport, laid out as a column. The
+      // chest gets whatever height is left after the words, and the canvas
+      // sizes itself to that — which is why it can no longer end up off the
+      // top of the screen however far the page behind was scrolled.
+      className="dev-case fixed inset-0 z-[200] flex flex-col overflow-hidden px-5 py-5"
       role="dialog"
       aria-modal="true"
       aria-label="Award"
@@ -102,39 +99,36 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
       />
 
       <div
-        className="relative mx-auto flex min-h-full w-full max-w-lg flex-col justify-center text-center"
+        className="relative mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col text-center"
         // The case is the subject; clicking it must not dismiss it.
         onClick={(e) => e.stopPropagation()}
       >
         <p
-          className="font-mono text-[10px] tracking-[0.4em] text-[#c08a4e]"
+          className="shrink-0 font-mono text-[10px] tracking-[0.4em] text-[#c08a4e]"
           style={{ animation: "devFadeUp .7s .05s ease-out both" }}
         >
           ANNA UNIVERSITY
         </p>
 
-        {/* The chest. Break it open and the medal is inside.
-            Real geometry under real lights — a moving specular highlight is
-            the one thing a gradient cannot fake, and it is most of what makes
-            gold look like gold. */}
-        <div className="relative mt-4">
+        {/* The stage: everything left over after the words. */}
+        <div className="relative min-h-0 flex-1">
           <div
             aria-hidden
-            className="dev-case-glow pointer-events-none absolute inset-x-8 top-10 h-56 rounded-full blur-[60px]"
+            className="dev-case-glow pointer-events-none absolute inset-x-6 inset-y-8 rounded-full blur-[64px]"
             style={{ background: "radial-gradient(circle, #ffca6e 0%, transparent 68%)" }}
           />
           <ChestScene onOpened={() => setOpened(true)} />
         </div>
 
         <p
-          className={`dev-gold mt-2 font-display text-2xl font-semibold transition-opacity duration-700 ${opened ? "opacity-100" : "opacity-0"}`}
+          className={`shrink-0 dev-gold mt-2 font-display text-2xl font-semibold transition-opacity duration-700 ${opened ? "opacity-100" : "opacity-0"}`}
           style={{ animation: "devFadeUp .7s .2s ease-out both" }}
         >
           Gold Medalist
         </p>
 
         <p
-          className={`mt-3 text-sm leading-relaxed text-[#c3d0dd] transition-opacity duration-700 delay-150 ${opened ? "opacity-100" : "opacity-0"}`}
+          className={`shrink-0 mt-3 text-sm leading-relaxed text-[#c3d0dd] transition-opacity duration-700 delay-150 ${opened ? "opacity-100" : "opacity-0"}`}
           style={{ animation: "devFadeUp .7s .28s ease-out both" }}
         >
           Awarded to <b className="text-[#f0e2c8]">Pandian Sambath</b> for placing{" "}
@@ -142,7 +136,7 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
           Technology, 92%.
         </p>
         <p
-          className={`mt-2 font-mono text-[10px] tracking-[0.22em] text-[#7d6244] transition-opacity duration-700 delay-300 ${opened ? "opacity-100" : "opacity-0"}`}
+          className={`shrink-0 mt-2 font-mono text-[10px] tracking-[0.22em] text-[#7d6244] transition-opacity duration-700 delay-300 ${opened ? "opacity-100" : "opacity-0"}`}
           style={{ animation: "devFadeUp .7s .34s ease-out both" }}
         >
           RANK LIST · APRIL / MAY 2023 EXAMINATIONS
