@@ -88,6 +88,21 @@ very poor UI, that entire staff page… better destroy whole and recreate."
       it — should read as three distinct things, not one long form
 - [ ] Do NOT change the permission model or the attach flow; he likes both
 
+## Phase 6 — every export, checked (added 2026-08-07, LAST)
+
+He opened the rota PDF and found it "very clumsy to see, because of timings" —
+the shift times are what break the layout, so a week of them needs planning as
+a grid rather than poured into a table and hoped for.
+
+- [ ] **Rota PDF first** — it is the one he actually looked at. Times are the
+      problem: they need fixed column widths and a legible per-day block, not
+      free-flowing text
+- [ ] Then audit **every** PDF and Excel export in the app — attendance, sales,
+      payroll/payslips, reports/P&L, purchase orders, stock-take, price lists
+- [ ] Open each one and look at it. An export that compiles is not an export
+      that reads
+- [ ] Fix whatever is clumsy; report what was found either way
+
 ## Phase 5 — the click audit
 
 - [ ] Go through **every** section and find the wasted clicks: rows that only
