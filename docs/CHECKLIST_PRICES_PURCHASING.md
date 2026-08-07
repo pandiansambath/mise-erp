@@ -17,10 +17,10 @@ So this round is not layout. It is what the space is filled with.
 
 ## Price Comparison
 
-- [x] **The list is the product, so make it look like one.** Sixty-one rows of
-      identical grey is a spreadsheet. Each row should carry the saving as a
-      figure you can read without stopping — the whole page exists to answer
-      "where am I overpaying", and that answer is currently a small pink chip.
+- [~] **The list is the product, so make it look like one.** PARTLY: it is now
+      ordered worst-first, so the biggest saving is the top row. The ROWS
+      themselves are unchanged — the saving is still a small chip rather than a
+      figure you read without stopping.
 - [x] **Lead with the money.** A hero line: what switching everything would
       save this month, in one number, in the currency, at the top. Presently
       it is a sentence in a tinted box.
@@ -42,8 +42,9 @@ So this round is not layout. It is what the space is filled with.
 - [x] **The pinned bar is functional and plain.** It should show the running
       TOTAL, not just a count. "4 items" is not a decision; "£212 across 3
       suppliers" is.
-- [x] **The review stage needs to look like a review.** Grouped by supplier,
-      with each group's subtotal, so submitting is a considered act.
+- [~] **The review stage needs to look like a review.** PARTLY: it states the
+      total and the supplier spread up front. It is NOT grouped by supplier
+      with per-group subtotals, which was the actual ask.
 - [ ] **"compare ›" on every row is a wasted click if it only opens the same
       sheet.** Either make it carry the saving, or let the row itself open it.
 
