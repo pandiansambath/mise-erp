@@ -1,42 +1,55 @@
 "use client";
 
-// How far the left column has handed over.
+// How far the left column has handed over — WITHOUT re-rendering the page.
 //
-// The portrait is the point of the page for about one screen. After that it
-// has been seen, it stops earning the space it is pinned in, and the space
-// reads as a hole — "you can see empty space in left side… please fill that
-// space with terminal… so that user won't see that as empty space hereafter".
+// This used to be `useState`, updated on every scroll frame. That is what made
+// everything shake: a state change here re-rendered DevProfile sixty times a
+// second, and with it the orbit, the skill cards and the shell. Anything whose
+// animation is tied to its own render restarted continuously — "literally all
+// things are shaking like earthquake, my skills revolving and all shaking".
 //
-// So the column does not hold one thing, it holds two, and this is the number
-// that crossfades between them: 0 while the portrait is the subject, 1 once
-// the shell has taken over. Nothing moves — the swap happens in place, which
-// is what makes it read as one surface rather than two stacked panels.
-//
-// Driven off scroll position rather than IntersectionObserver because the
-// value is continuous; an observer gives you crossings, not a ramp.
+// So no state. The scroll handler writes opacity and transform STRAIGHT onto
+// two DOM nodes. React renders this page once and then stays out of the way,
+// which is what it should have done from the start: a crossfade is a paint
+// concern, not application state.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
-export function useHandoff() {
-  const [t, setT] = useState(0);
+export function useHandoff<A extends HTMLElement, B extends HTMLElement>() {
+  const goingRef = useRef<A>(null); // the portrait, on its way out
+  const comingRef = useRef<B>(null); // the shell, on its way in
 
   useEffect(() => {
     let frame = 0;
-    const read = () => {
+
+    const paint = () => {
       frame = 0;
       const h = window.innerHeight || 1;
       // Hold the portrait for a third of a screen, then trade over the next
-      // half. Finishing too early swaps while the orbit is still on show.
-      const start = h * 0.34;
-      const span = h * 0.5;
-      const raw = (window.scrollY - start) / span;
-      setT(Math.min(1, Math.max(0, raw)));
+      // half. Finishing sooner swaps while the orbit is still on show.
+      const t = Math.min(1, Math.max(0, (window.scrollY - h * 0.34) / (h * 0.5)));
+
+      const going = goingRef.current;
+      const coming = comingRef.current;
+      if (going) {
+        going.style.opacity = String(1 - t);
+        going.style.transform = `scale(${1 - t * 0.04})`;
+        // The faded ghost must stop swallowing clicks meant for the shell.
+        going.style.pointerEvents = t > 0.5 ? "none" : "";
+      }
+      if (coming) {
+        coming.style.opacity = String(t);
+        coming.style.transform = `translateY(${(1 - t) * 18}px)`;
+        coming.style.pointerEvents = t > 0.5 ? "" : "none";
+      }
     };
-    // Coalesce to one read per frame — scroll fires far faster than paint.
+
+    // Coalesce to one write per frame — scroll fires far faster than paint.
     const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(read);
+      if (!frame) frame = requestAnimationFrame(paint);
     };
-    read();
+
+    paint();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
@@ -46,5 +59,5 @@ export function useHandoff() {
     };
   }, []);
 
-  return t;
+  return { goingRef, comingRef };
 }

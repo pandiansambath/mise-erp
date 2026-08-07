@@ -41,19 +41,29 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
 
   return (
     <div
-      className="dev-case fixed inset-0 z-[120] grid place-items-center px-5"
+      // Covers everything, and scrolls if the case is taller than the screen.
+      //
+      // It was `place-items-center` on a fixed box: content taller than the
+      // viewport then overflowed at BOTH ends and the top of the medal was
+      // simply unreachable — the same centring trap as the main page. Items
+      // start from the top and the whole thing scrolls instead.
+      className="dev-case fixed inset-0 z-[200] overflow-y-auto overscroll-contain px-5 py-10"
       role="dialog"
       aria-modal="true"
       aria-label="Award"
       onClick={onClose}
     >
-      {/* The room, put behind glass. */}
-      <div className="absolute inset-0 bg-[#05070b]/82 backdrop-blur-xl" />
+      {/* The room, put away.
+          Nearly opaque rather than merely tinted: `backdrop-blur` is ignored
+          in a few situations (and by some privacy settings), and when it was,
+          the page behind stayed legible right through the award. The blur is
+          a bonus on top of a background that already does the job alone. */}
+      <div className="fixed inset-0 bg-[#05070b]/[0.97] backdrop-blur-2xl" />
 
       {/* A shaft of light falling on the case from above. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none fixed inset-0"
         style={{
           background:
             "radial-gradient(46% 34% at 50% 30%, rgba(255,209,128,.20), transparent 70%)," +
@@ -62,7 +72,7 @@ export function MedalShowcase({ open, onClose }: { open: boolean; onClose: () =>
       />
 
       <div
-        className="relative w-full max-w-lg text-center"
+        className="relative mx-auto flex min-h-full w-full max-w-lg flex-col justify-center text-center"
         // The case is the subject; clicking it must not dismiss it.
         onClick={(e) => e.stopPropagation()}
       >

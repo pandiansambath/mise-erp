@@ -60,8 +60,9 @@ function elapsed(from: Date, now: Date) {
 
 export function DevProfile({ photos }: { photos: Photo[] }) {
   const [entered, setEntered] = useState(false);
-  // 0 while the portrait owns the left column, 1 once the shell has it.
-  const handoff = useHandoff();
+  // The crossfade is written straight to these two nodes on scroll — no
+  // React state, so the page is not re-rendered sixty times a second.
+  const { goingRef, comingRef } = useHandoff<HTMLDivElement, HTMLDivElement>();
   const [albumOpen, setAlbumOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
 
@@ -101,7 +102,14 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
   const exp = now ? elapsed(CAREER_START, now) : null;
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-[#070a0f] text-[#e6edf5]">
+    // `clip`, not `hidden`.
+    //
+    // `overflow-x: hidden` makes this element a scroll container, and a
+    // `position: sticky` descendant then sticks to THAT rather than to the
+    // viewport — so the left column quietly stopped holding and the half went
+    // blank. `clip` cuts the same overflow without creating a scroll
+    // container, which leaves sticky working.
+    <div className="relative min-h-dvh overflow-x-clip bg-[#070a0f] text-[#e6edf5]">
       <ChainField intensity={entered ? 1 : 0.35} />
 
       {/* Warm the corners so the chain never fights the text for attention. */}
@@ -153,12 +161,8 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           // The portrait, on its way out. `pointer-events` is handed over with
           // the opacity, or the faded ghost keeps swallowing clicks meant for
           // the shell underneath.
-          style={{
-            opacity: 1 - handoff,
-            transform: `scale(${1 - handoff * 0.04})`,
-            pointerEvents: handoff > 0.5 ? "none" : undefined,
-          }}
-          className="flex min-w-0 flex-col items-center transition-opacity duration-200 lg:items-start lg:text-left"
+          ref={goingRef}
+          className="flex min-w-0 flex-col items-center lg:items-start lg:text-left"
         >
 
         {/* Name first, orbit under it.
@@ -210,13 +214,10 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
             Desktop only: on a phone there is one column and nothing to fill,
             so the terminal stays where it was, at the end. */}
         <div
-          aria-hidden={handoff < 0.5}
-          style={{
-            opacity: handoff,
-            transform: `translateY(${(1 - handoff) * 18}px)`,
-            pointerEvents: handoff > 0.5 ? undefined : "none",
-          }}
-          className="relative hidden self-center transition-opacity duration-200 lg:block"
+          ref={comingRef}
+          // Starts invisible; the scroll handler takes it from here.
+          style={{ opacity: 0, pointerEvents: "none" }}
+          className="relative hidden self-center lg:block"
         >
           {/* Light coming up behind the shell as it takes the space.
               The swap alone is a fade; this makes it read as something being
@@ -226,7 +227,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
             aria-hidden
             className="pointer-events-none absolute -inset-x-10 -inset-y-8 -z-10 rounded-[3rem] blur-[70px]"
             style={{
-              opacity: handoff * 0.55,
+              opacity: 0.5,
               background:
                 "radial-gradient(60% 60% at 30% 40%, #2dd4bf, transparent 70%), radial-gradient(55% 55% at 75% 65%, #d97742, transparent 72%)",
             }}
