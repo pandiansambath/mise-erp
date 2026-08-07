@@ -55,7 +55,7 @@ So this round is not layout. It is what the space is filled with.
       never adopted: `mise-neo-raised`, `mise-feel`, `mise-press`, the stat
       bands, the rings. Vendors got this and he said "loving the UI" — that is
       the bar, and it is in the repo already.
-- [ ] Empty and loading states that are not a centred grey sentence.
+- [x] Empty and loading states that are not a centred grey sentence.
 - [ ] Mobile: these are both wide-table pages; check them at 390px.
 
 ## Where it got to (2026-08-07)
