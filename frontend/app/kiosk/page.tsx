@@ -26,6 +26,7 @@ import { useAuth } from "@/lib/auth";
 import { AnalogClock } from "@/components/AnalogClock";
 import { KioskGate } from "@/components/KioskGate";
 import { useHotelTime } from "@/lib/time";
+import { themeVars } from "@/lib/theme";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -115,7 +116,14 @@ export default function KioskPage() {
   }
 
   if (loading) {
-    return <div className="grid min-h-dvh place-items-center bg-shell text-fg-faint">…</div>;
+    return (
+      <div
+        className="grid min-h-dvh place-items-center bg-shell text-fg-faint"
+        style={themeVars("dark")}
+      >
+        …
+      </div>
+    );
   }
 
   // A cold tablet on the wall: no session, so ask for the PIN rather than
@@ -125,7 +133,21 @@ export default function KioskPage() {
   }
 
   return (
-    <div className="mise-app min-h-dvh bg-shell text-fg" data-mode="dark">
+    // The palette is pinned here, not inherited.
+    //
+    // ThemeProvider writes the account's colours onto :root, so a manager who
+    // picks a light theme was silently restyling the wall tablet too — and
+    // this screen is built for dark. The result was the washed-out screen he
+    // photographed, with "1 in now" and "Start break" barely visible.
+    //
+    // Custom properties inherit, so declaring them HERE overrides the root for
+    // everything inside, whatever the account chose. It reuses the real theme
+    // rather than duplicating hexes that would drift.
+    <div
+      className="mise-app min-h-dvh bg-shell text-fg"
+      data-mode="dark"
+      style={themeVars("dark")}
+    >
       {/* Light in the room. Two slow blooms behind everything, so a screen
           that lives on a wall for twelve hours a day looks alive rather than
           like a form somebody left open. */}
@@ -157,7 +179,7 @@ export default function KioskPage() {
         {/* A real clock face, hands sweeping, digits in the middle. It says
             the time AND that the screen is alive, from across the room,
             without anybody reading it. */}
-        <AnalogClock size={190} />
+        <AnalogClock size={236} />
       </header>
 
       {/* How the shift is going, in one line. */}
