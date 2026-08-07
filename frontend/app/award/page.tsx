@@ -80,7 +80,7 @@ export default function AwardPage() {
         className={`pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-7 pt-20 text-center transition-opacity duration-1000 ${
           opened ? "opacity-100" : "opacity-0"
         }`}
-        style={{ background: "linear-gradient(to top, rgba(7,6,10,.94) 34%, transparent)" }}
+        style={{ background: "linear-gradient(to top, rgba(7,6,10,.94) 34%, rgba(7,6,10,.55) 72%, transparent)" }}
       >
         <p className="dev-gold mx-auto max-w-2xl text-[13px] leading-relaxed sm:text-base">
           Presented to <b>Pandian Sambath</b> in recognition of

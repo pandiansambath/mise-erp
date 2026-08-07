@@ -208,6 +208,37 @@ function assistantError(e: unknown): string {
 
 export function Copilot() {
   const [open, setOpen] = useState(false);
+  // Remembered, because a preference you have to set every visit is not a
+  // preference. Defaults to the old behaviour so nothing changes uninvited.
+  const [closeOnOutside, setCloseOnOutside] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // The bubble curled down to just its mark.
+  const [miniBubble, setMiniBubble] = useState(false);
+  useEffect(() => {
+    try {
+      setMiniBubble(localStorage.getItem("mise.copilot.miniBubble") === "1");
+    } catch {
+      /* default is fine */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      setCloseOnOutside(localStorage.getItem("mise.copilot.closeOutside") !== "0");
+    } catch {
+      /* private mode — the default is fine */
+    }
+  }, []);
+  const toggleCloseOutside = () => {
+    setCloseOnOutside((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("mise.copilot.closeOutside", next ? "1" : "0");
+      } catch {
+        /* nothing to do */
+      }
+      return next;
+    });
+  };
   const [closing, setClosing] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -289,9 +320,15 @@ export function Copilot() {
   // Dismiss on a click outside or Escape. Closing is not the same as clearing:
   // the thread stays exactly where it was and reopening resumes it, because
   // people close this panel to see the screen behind it, not to start over.
+  //
+  // Whether an outside click SHOULD close it is a setting, not a decision.
+  // He was right that both camps exist: "some user need like this, some need
+  // like if they click outside means it need to close". Escape and the ✕
+  // always work, so nobody can get stuck either way.
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
+      if (!closeOnOutside) return;
       const el = panelRef.current;
       if (el && !el.contains(e.target as Node)) closePanel();
     }
@@ -305,7 +342,7 @@ export function Copilot() {
       document.removeEventListener("keydown", onKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, closeOnOutside]);
 
   // Replay this person's conversation. It lives on the server keyed to THEM,
   // so it survives navigation, a new tab, a different device and logging out.
@@ -754,7 +791,22 @@ export function Copilot() {
             if (drag.wasDrag()) return;
             setOpen(true);
           }}
-          aria-label="Ask DineAI Copilot — drag to move"
+          aria-label="Ask DineAI Copilot — drag to move, double-click to shrink"
+          // Double-click curls it down to the mark alone. His words: "that
+          // bubble if I double click means it need reduce its size like spiral
+          // and show only logo, currently it taking some space by showing the
+          // full name". Remembered, so it stays how it was left.
+          onDoubleClick={() => {
+            setMiniBubble((v) => {
+              const next = !v;
+              try {
+                localStorage.setItem("mise.copilot.miniBubble", next ? "1" : "0");
+              } catch {
+                /* nothing to do */
+              }
+              return next;
+            });
+          }}
           style={drag.style}
           className={`mise-launcher-in group fixed bottom-20 left-4 z-50 lg:bottom-6 lg:left-6 flex touch-none items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 hover:bg-brand-500 hover:shadow-xl [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] ${
             drag.dragging
@@ -766,7 +818,9 @@ export function Copilot() {
             <path d="M12 2.5l1.7 5.3a3 3 0 0 0 1.9 1.9L21 11.4l-5.3 1.7a3 3 0 0 0-1.9 1.9L12 20.3l-1.7-5.3a3 3 0 0 0-1.9-1.9L3 11.4l5.3-1.7a3 3 0 0 0 1.9-1.9z" />
             <circle cx="18.5" cy="5" r="1.4" />
           </svg>
-          <span className="hidden text-sm font-semibold sm:inline">Ask DineAI</span>
+          {!miniBubble && (
+            <span className="hidden text-sm font-semibold sm:inline">Ask DineAI</span>
+          )}
         </button>
       )}
 
@@ -847,7 +901,7 @@ export function Copilot() {
             // could mean "unreachable".
             onDoubleClick={isWide ? panel.reset : undefined}
             title={isWide ? "Drag to move · double-click to reset" : undefined}
-            className={`relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3 ${
+            className={`mise-chat-head relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3 ${
               isWide ? "cursor-grab touch-none active:cursor-grabbing" : ""
             }`}
           >
@@ -863,10 +917,10 @@ export function Copilot() {
                 ⠿
               </span>
             )}
-            <ChefMascot mood={loading ? "think" : "happy"} className="relative w-10 shrink-0" />
+            <ChefMascot mood={loading ? "think" : "happy"} className="mise-chat-mascot relative w-10 shrink-0" />
             <div className="relative min-w-0 leading-tight">
-              <p className="text-sm font-semibold text-fg">DineAI Copilot</p>
-              <p className="truncate text-[11px] text-fg-faint">
+              <p className="mise-chat-title truncate text-sm font-semibold text-fg">DineAI Copilot</p>
+              <p className="mise-chat-sub truncate text-[11px] text-fg-faint">
                 {configured === false
                   ? "Quick help & navigation"
                   : usage?.model
@@ -961,8 +1015,45 @@ export function Copilot() {
                 <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" />
               </svg>
             </button>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((v) => !v)}
+              aria-label="Panel settings"
+              aria-expanded={settingsOpen}
+              title="Panel settings"
+              className="relative rounded-lg p-1.5 text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
             <button type="button" onClick={closePanel} aria-label="Close" className="relative rounded-lg p-1.5 text-fg-faint hover:bg-glass/5 hover:text-fg">✕</button>
           </div>
+
+          {/* Settings. Deliberately one switch: a panel of options nobody asked
+              for is worse than the thing it was meant to fix. */}
+          {settingsOpen && (
+            <div className="mise-pop border-b border-glass/10 bg-paper-3/60 px-4 py-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={closeOnOutside}
+                  onChange={toggleCloseOutside}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-brand-500"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium text-fg">
+                    Close when I click outside
+                  </span>
+                  <span className="block text-[11px] leading-relaxed text-fg-faint">
+                    Off keeps the panel open while you work on the page behind it.
+                    Escape and ✕ always close it either way.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">

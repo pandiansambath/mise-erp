@@ -564,7 +564,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         className={`h-full w-full touch-none ${done ? "" : "cursor-[url(/dev/hammer.svg)_18_18,pointer]"}`}
       />
       {!done && (
-        <p className="pointer-events-none absolute inset-x-0 bottom-24 text-center font-mono text-[11px] tracking-[0.34em] text-[#e0a95c] sm:bottom-28">
+        <p className="pointer-events-none absolute inset-x-0 bottom-24 text-center text-[11px] tracking-[0.34em] text-[#e0a95c] sm:bottom-28">
           {hits === 0 ? "STRIKE THE CHEST" : hits < 2 ? "AGAIN" : "IT IS BREAKING…"}
         </p>
       )}
