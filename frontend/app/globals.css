@@ -1532,6 +1532,31 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+/* An award, struck in metal.
+   Three golds with a near-white band between them, and the whole gradient
+   slid across the text — which is how a highlight travels over a real medal
+   when you turn it in the light. The band is only 12% of the width, so most
+   of the cycle is still gold and the shine is an event rather than a state. */
+.dev-gold {
+  background: linear-gradient(
+    100deg,
+    #b06a2c 0%, #e8b060 26%, #fff3d4 38%, #e8b060 50%, #c98436 74%, #b06a2c 100%
+  );
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: devGoldSweep 8s ease-in-out infinite;
+}
+@keyframes devGoldSweep {
+  /* Sits still for most of the cycle, then the light crosses. */
+  0%, 62%  { background-position: 120% 0; }
+  100%     { background-position: -40% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dev-gold { animation: none; background-position: 40% 0; }
+}
 @media (prefers-reduced-motion: reduce) {
   /* Respect the setting: arrive, do not travel. */
   [style*="devFadeUp"], [style*="devFade"] { animation: none !important; opacity: 1 !important; transform: none !important; }

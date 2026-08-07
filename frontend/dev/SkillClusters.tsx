@@ -115,8 +115,18 @@ export function SkillClusters({ entered }: { entered: boolean }) {
           />
         </div>
 
-        <p className="relative mt-2.5 text-lg font-semibold leading-snug text-[#e6edf5]">
-          {EDUCATION.honour}
+        {/* The one line on the page that is an award, styled like one.
+            It was plain white — the same colour as every other heading — so
+            the best thing here read as the least important thing here: "that
+            highlighted 1st line is very plain, see others are fine".
+
+            Struck in metal instead: a gold gradient with a highlight that
+            travels across it, the way light crosses a real medal when you
+            turn it. Slow and once every eight seconds, so it reads as
+            material rather than as something blinking for attention. */}
+        <p className="relative mt-2.5 flex items-baseline gap-2 text-lg font-semibold leading-snug">
+          <span aria-hidden className="shrink-0 text-base">🏅</span>
+          <span className="dev-gold">{EDUCATION.honour}</span>
         </p>
         <p className="relative mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-[#a9bdd2]">
           <span>{EDUCATION.degree}</span>
