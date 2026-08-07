@@ -20,6 +20,7 @@ import { ChainField } from "./ChainField";
 import { DecryptText } from "./DecryptText";
 import { Terminal } from "./Terminal";
 import { useRevealThenPin } from "./useRevealThenPin";
+import { useHandoff } from "./useHandoff";
 
 // First day as a System Engineer. Everything time-based derives from this.
 const CAREER_START = new Date("2024-01-01T00:00:00Z");
@@ -63,6 +64,8 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
   // The left column: rides the scroll until fully revealed, then holds.
   // Destructured because `pinned.top` reads to the lint rule as a ref access.
   const { ref: pinnedRef, top: pinnedTop } = useRevealThenPin<HTMLElement>();
+  // 0 while the portrait owns the left column, 1 once the shell has it.
+  const handoff = useHandoff();
   const [albumOpen, setAlbumOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
 
@@ -143,7 +146,25 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           // and something already as tall as its own scroll area has nowhere
           // to stick to. The offset is measured — see useRevealThenPin.
           style={{ top: pinnedTop }}
-          className="flex min-w-0 flex-col items-center lg:sticky lg:self-start lg:items-start lg:text-left"
+          className="min-w-0 lg:sticky lg:self-start"
+        >
+        {/* Two things, one space.
+            Both children are put in the SAME grid cell, so the shell does not
+            appear below the portrait — it appears THROUGH it. The cell is as
+            tall as the taller of the two, so nothing jumps at the halfway
+            point either. */}
+        <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+
+        <div
+          // The portrait, on its way out. `pointer-events` is handed over with
+          // the opacity, or the faded ghost keeps swallowing clicks meant for
+          // the shell underneath.
+          style={{
+            opacity: 1 - handoff,
+            transform: `scale(${1 - handoff * 0.04})`,
+            pointerEvents: handoff > 0.5 ? "none" : undefined,
+          }}
+          className="flex min-w-0 flex-col items-center transition-opacity duration-200 lg:items-start lg:text-left"
         >
 
         {/* Name first, orbit under it.
@@ -189,6 +210,40 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
           />
         </div>
 
+        </div>
+
+        {/* The shell, taking the space over.
+            Desktop only: on a phone there is one column and nothing to fill,
+            so the terminal stays where it was, at the end. */}
+        <div
+          aria-hidden={handoff < 0.5}
+          style={{
+            opacity: handoff,
+            transform: `translateY(${(1 - handoff) * 18}px)`,
+            pointerEvents: handoff > 0.5 ? undefined : "none",
+          }}
+          className="relative hidden self-center transition-opacity duration-200 lg:block"
+        >
+          {/* Light coming up behind the shell as it takes the space.
+              The swap alone is a fade; this makes it read as something being
+              switched ON in that space, which is the difference between a
+              transition you notice and one you remember. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-10 -inset-y-8 -z-10 rounded-[3rem] blur-[70px]"
+            style={{
+              opacity: handoff * 0.55,
+              background:
+                "radial-gradient(60% 60% at 30% 40%, #2dd4bf, transparent 70%), radial-gradient(55% 55% at 75% 65%, #d97742, transparent 72%)",
+            }}
+          />
+          <Terminal onAlbum={openAlbum} experience={exp ? exp.decimal : "2"} />
+          <p className="mt-4 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c] lg:text-left">
+            TAP THE AVATAR — OR RUN <span className="text-[#5b6e85]">album</span>
+          </p>
+        </div>
+
+        </div>
         </section>
 
         {/* Right column: the live counter, the shell, and the ways to reach
@@ -277,16 +332,20 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
         </div>
 
         {/* A shell you can actually type into. Passive animation impresses for
-            a few seconds; something that answers back holds people. */}
+            a few seconds; something that answers back holds people.
+
+            Phones only. On a desktop it now lives in the left column, where it
+            takes over the space the portrait was holding — and the page ends
+            here, at the links, rather than scrolling on past them. */}
         <div
-          className="mt-6 flex w-full max-w-md justify-center lg:max-w-none"
+          className="mt-6 flex w-full max-w-md justify-center lg:hidden"
           style={entered ? { animation: "devFadeUp .8s .58s ease-out both" } : undefined}
         >
           <Terminal onAlbum={openAlbum} experience={exp ? exp.decimal : "2"} />
         </div>
 
         <p
-          className="mt-5 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c]"
+          className="mt-5 text-center font-mono text-[10px] tracking-[0.22em] text-[#2e3c4c] lg:hidden"
           style={entered ? { animation: "devFadeUp .8s .68s ease-out both" } : undefined}
         >
           TAP THE AVATAR — OR RUN <span className="text-[#5b6e85]">album</span>
