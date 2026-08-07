@@ -42,9 +42,9 @@ So this round is not layout. It is what the space is filled with.
 - [x] **The pinned bar is functional and plain.** It should show the running
       TOTAL, not just a count. "4 items" is not a decision; "£212 across 3
       suppliers" is.
-- [~] **The review stage needs to look like a review.** PARTLY: it states the
-      total and the supplier spread up front. It is NOT grouped by supplier
-      with per-group subtotals, which was the actual ask.
+- [x] **The review stage needs to look like a review.** States the total and
+      spread up front, AND is grouped by supplier with per-group subtotals,
+      biggest group first.
 - [ ] **"compare ›" on every row is a wasted click if it only opens the same
       sheet.** Either make it carry the saving, or let the row itself open it.
 
@@ -66,8 +66,6 @@ total and a review stage that states what it comes to.
 Still open, and worth doing next:
 - Empty and loading states that are not a centred grey sentence
 - Mobile at 390px on both pages
-- Grouping the review stage BY supplier with per-group subtotals (the total is
-  stated, but the grouping is not)
 
 ## Rule for this work
 
