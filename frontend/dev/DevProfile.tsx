@@ -132,7 +132,7 @@ export function DevProfile({ photos }: { photos: Photo[] }) {
       {!entered && <BootSequence photoUrls={thumbUrls} onEnter={() => setEntered(true)} />}
 
       <main
-        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl lg:justify-start xl:max-w-6xl ${
+        className={`relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col items-center justify-center px-5 py-12 transition-all duration-700 sm:px-6 sm:py-16 lg:max-w-5xl lg:justify-start lg:pt-28 xl:max-w-6xl ${
           entered ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
         }`}
       >
