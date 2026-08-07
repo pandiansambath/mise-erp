@@ -92,10 +92,12 @@ export default function KioskPage() {
         } catch {
           /* ignore */
         }
-        if (!local && r.theme && r.theme in THEMES) setTheme(r.theme as ThemeKey);
+        // The kiosk's own choice, else the restaurant's theme, else dark.
+        const wanted = r.theme && r.theme in THEMES ? r.theme : hotel?.theme;
+        if (!local && wanted && wanted in THEMES) setTheme(wanted as ThemeKey);
       })
       .catch(() => {});
-  }, [loading, user]);
+  }, [loading, user, hotel]);
 
   async function leave() {
     setPinError(null);
@@ -246,12 +248,12 @@ export default function KioskPage() {
         <div className="flex shrink-0 flex-col items-center">
           {/* Smaller on a phone: at 236px the clock pushed the names — the one
               thing anybody opens this screen to tap — below the fold. */}
-          <AnalogClock size={clockSize} />
+          <AnalogClock size={clockSize} tz={hotel?.timezone} />
           {/* Which clock this is. A wall screen that disagrees with the phone
               in your pocket starts an argument about hours, and the answer is
               always "whose timezone?" — so it says so up front. */}
           <p className="mt-1 font-mono text-[10px] tracking-[0.22em] text-fg-faint">
-            {(hotel?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "").replace("_", " ")}
+            {(hotel?.timezone ?? "").replace("_", " ")}
           </p>
         </div>
       </header>

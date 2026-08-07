@@ -75,6 +75,10 @@ class HotelOut(BaseModel):
     country: str
     city: str | None
     base_currency: str
+    # Never exposed before — which is exactly why the kiosk clock fell back to
+    # the browser's zone and showed Asia/Calcutta for a London restaurant.
+    timezone: str = "Europe/London"
+    theme: str | None = None
     break_allowance_minutes: int = 0
     break_penalty_per_min: Decimal = Decimal("0")
     min_hourly_rate: Decimal = Decimal("11.44")
@@ -85,6 +89,9 @@ class HotelOut(BaseModel):
 
 
 class HotelUpdate(BaseModel):
+    # Saved for the whole restaurant, so devices the owner never signs into
+    # (the wall tablet) can look the way they chose.
+    theme: str | None = None
     """Super-admin tweaks to the hotel (e.g. attendance break policy)."""
     name: str | None = Field(default=None, min_length=1, max_length=120)
     city: str | None = None
