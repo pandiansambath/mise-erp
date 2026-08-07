@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { revealForm } from "@/lib/reveal";
 import { Select } from "@/components/Select";
-import { DetailSheet, SheetRing } from "@/components/DetailSheet";
+import { DetailSheet, DetailRow, SheetRing } from "@/components/DetailSheet";
 import {
   api,
   ApiError,
@@ -18,7 +17,6 @@ import {
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars } from "@/components/charts";
 import { spotlight, useDeepLink } from "@/components/fx";
-import { FormShell } from "@/components/EditModal";
 import { SubNav } from "@/components/SubNav";
 import { VendorLedger } from "@/components/VendorLedger";
 import { ItemPickerSingle } from "@/components/ItemPicker";
@@ -73,9 +71,6 @@ export default function VendorsPage() {
       .catch(() => {});
   }, []);
 
-  // Which vendor is being edited, if any. Editing reuses the same form so the
-  // fields, validation and submit stay in one place.
-  const [editVendorId, setEditVendorId] = useState<string | null>(null);
   const [vName, setVName] = useState("");
   const [vCat, setVCat] = useState("FOOD");
   const [extraCats, setExtraCats] = useState<string[]>([]); // superadmin-added types
@@ -92,7 +87,14 @@ export default function VendorsPage() {
   const [newItem, setNewItem] = useState<{ name: string; unit: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const priceRef = useRef<HTMLInputElement>(null);
-  const [sheetTab, setSheetTab] = useState<"supply" | "price" | "money">("supply");
+  const [sheetTab, setSheetTab] = useState<"supply" | "price" | "money" | "details">("supply");
+  // Editing the supplier WITHOUT leaving the sheet. "Edit details" used to
+  // close it and open a page-level form, which is precisely the "edit button
+  // not working" he reported — the thing he clicked vanished.
+  const [ed, setEd] = useState<{ name: string; category: string; contact: string; mobile: string } | null>(null);
+  const [edBusy, setEdBusy] = useState(false);
+  // One supplied item, opened from the list: a sheet on top of a sheet.
+  const [priceRow, setPriceRow] = useState<VendorItem | null>(null);
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [piPrice, setPiPrice] = useState("");
   const [piMode, setPiMode] = useState<"unit" | "pack">("unit"); // enter £/unit or £/pack
@@ -148,17 +150,8 @@ export default function VendorsPage() {
     // opens in a sheet right where you clicked — no scrolling to the bottom
   }
 
-  function startEditVendor(v: Vendor) {
-    setEditVendorId(v.id);
-    setVName(v.name ?? "");
-    setVCat(v.category ?? "FOOD");
-    setVContact(v.contact_person ?? "");
-    setVMobile(v.mobile ?? "");
-    setError(null);
-  }
-
-  function cancelVendorEdit() {
-    setEditVendorId(null);
+  /** Empty the add-a-vendor form. */
+  function clearVendorForm() {
     setVName(""); setVContact(""); setVMobile(""); setVCat("FOOD");
     setError(null);
   }
@@ -170,24 +163,6 @@ export default function VendorsPage() {
       return;
     }
     setError(null);
-    // Editing an existing supplier: same form, same fields, PATCH instead of
-    // POST. Anything else would mean a second copy of this form to keep in step.
-    if (editVendorId) {
-      try {
-        await api.patch<Vendor>(`/vendors/${editVendorId}`, {
-          name: vName.trim(),
-          category: vCat,
-          contact_person: vContact.trim() || null,
-          mobile: vMobile.trim() || null,
-        });
-        cancelVendorEdit();
-        load();
-        setNotice("Supplier details updated.");
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Could not save those details.");
-      }
-      return;
-    }
     try {
       const v = await api.post<Vendor>("/vendors", {
         name: vName.trim(),
@@ -202,6 +177,51 @@ export default function VendorsPage() {
       selectVendor(v.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add vendor");
+    }
+  }
+
+  /** Open the Details section with the current values loaded. */
+  function editHere(v: Vendor) {
+    setEd({
+      name: v.name ?? "",
+      category: v.category ?? "FOOD",
+      contact: v.contact_person ?? "",
+      mobile: v.mobile ?? "",
+    });
+    setSheetTab("details");
+  }
+
+  async function saveDetails() {
+    if (!selectedVendor || !ed) return;
+    setEdBusy(true);
+    setError(null);
+    try {
+      await api.patch<Vendor>(`/vendors/${selectedVendor.id}`, {
+        name: ed.name.trim(),
+        category: ed.category,
+        contact_person: ed.contact.trim() || null,
+        mobile: ed.mobile.trim() || null,
+      });
+      setNotice("Saved.");
+      setEd(null);
+      setSheetTab("supply");
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save.");
+    } finally {
+      setEdBusy(false);
+    }
+  }
+
+  /** Make this vendor the chosen supplier for that item. */
+  async function chooseSupplier(vi: VendorItem) {
+    try {
+      await api.post(`/vendors/items/${vi.item_id}/preferred`, { vendor_id: selected });
+      selectVendor(selected);
+      setPriceRow(null);
+      setNotice("Chosen supplier updated.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not set the chosen supplier.");
     }
   }
 
@@ -385,7 +405,7 @@ export default function VendorsPage() {
             key: "add",
             label: "Add supplier",
             icon: "＋",
-            onSelect: () => { cancelVendorEdit(); spotlight("vendor-form"); },
+            onSelect: () => { clearVendorForm(); spotlight("vendor-form"); },
           },
           {
             key: "owed",
@@ -423,15 +443,8 @@ export default function VendorsPage() {
       {notice && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
 
       {canWrite && (
-        <FormShell
-          editing={!!editVendorId}
-          onClose={cancelVendorEdit}
-          title="Edit supplier"
-          subtitle={vName || undefined}
-          icon={TYPE_EMOJI[vCat] ?? "🤝"}
-        >
-        <Card className={editVendorId ? "border-0 bg-transparent p-0 shadow-none" : "mise-feel mb-6"} id="vendor-form">
-          {!editVendorId && <p className="mb-3 text-sm font-medium text-fg-soft">Add a vendor</p>}
+        <Card className="mise-feel mb-6" id="vendor-form">
+          <p className="mb-3 text-sm font-medium text-fg-soft">Add a vendor</p>
           <form onSubmit={addVendor} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-sm font-medium text-fg-soft">Name</label>
@@ -500,21 +513,11 @@ export default function VendorsPage() {
             </div>
             <div className="flex gap-2 sm:col-span-3">
               <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                {editVendorId ? "Save changes" : "Add vendor"}
+                Add vendor
               </button>
-              {editVendorId && (
-                <button
-                  type="button"
-                  onClick={cancelVendorEdit}
-                  className="rounded-lg border border-line-2 px-4 py-2 text-sm font-medium text-fg-soft hover:bg-paper-2"
-                >
-                  Cancel
-                </button>
-              )}
             </div>
           </form>
         </Card>
-        </FormShell>
       )}
 
       {spend.length > 0 && (
@@ -635,11 +638,24 @@ export default function VendorsPage() {
               ]
             : undefined
         }
+        sections={[
+          { key: "supply", label: "Supplies", icon: "\u{1F4E6}", count: vendorItems.length },
+          ...(canWrite ? [{ key: "price", label: "Add a price", icon: "\u{FF0B}" }] : []),
+          { key: "money", label: "Money", icon: "\u{1F4B7}" },
+          ...(canWrite ? [{ key: "details", label: "Details", icon: "\u{270E}" }] : []),
+        ]}
+        active={sheetTab}
+        onSection={(k) => {
+          // Opening Details loads the current values, so the section is
+          // immediately editable rather than showing a blank form.
+          if (k === "details" && selectedVendor) editHere(selectedVendor);
+          else setSheetTab(k as typeof sheetTab);
+        }}
         actions={
           canWrite && selectedVendor ? (
             <>
             <button
-              onClick={() => { startEditVendor(selectedVendor); setSelected(""); }}
+              onClick={() => editHere(selectedVendor)}
               className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
             >
               Edit details
@@ -657,30 +673,71 @@ export default function VendorsPage() {
         {selectedVendor && (
         <div ref={detailRef}>
 
-          {/* Real tabs, not jump links. Only ONE section is mounted at a time,
-              so there is nothing to scroll past and nothing to float over. */}
-          <nav className="mb-4 flex gap-2">
-            {([
-              ["supply", `What they supply (${vendorItems.length})`],
-              ["price", "Add / update a price"],
-              ["money", "Money"],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSheetTab(key)}
-                className={`mise-press rounded-full px-4 py-2 text-sm font-medium transition ${
-                  sheetTab === key
-                    ? "bg-brand-600 text-white shadow-sm"
-                    : "border border-line text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-
           <div className="grid grid-cols-1 gap-6">
+            {/* Who they are — editable right here.
+                Clicking "edit" should never close the thing you clicked in. */}
+            {sheetTab === "details" && ed && (
+              <div className="min-w-0">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="block text-sm font-medium text-fg-soft">Name</span>
+                    <input
+                      value={ed.name}
+                      onChange={(e) => setEd({ ...ed, name: e.target.value })}
+                      className={inputCls}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-sm font-medium text-fg-soft">Type</span>
+                    <select
+                      value={ed.category}
+                      onChange={(e) => setEd({ ...ed, category: e.target.value })}
+                      className={inputCls}
+                    >
+                      {allCats.map((c) => (
+                        <option key={c} value={c}>{TYPE_EMOJI[c] ?? ""} {c.toLowerCase()}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="block text-sm font-medium text-fg-soft">Contact</span>
+                    <input
+                      value={ed.contact}
+                      onChange={(e) => setEd({ ...ed, contact: e.target.value })}
+                      placeholder="who you speak to"
+                      className={inputCls}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-sm font-medium text-fg-soft">Mobile</span>
+                    <input
+                      value={ed.mobile}
+                      onChange={(e) => setEd({ ...ed, mobile: e.target.value })}
+                      placeholder="07…"
+                      className={inputCls}
+                    />
+                  </label>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={saveDetails}
+                    disabled={edBusy || !ed.name.trim()}
+                    className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {edBusy ? "Saving…" : "Save changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEd(null); setSheetTab("supply"); }}
+                    className="mise-press rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Owed vs paid. Deliveries daily, money weekly — the gap between
                 them is the number nothing could state before. */}
             <div className={`min-w-0 ${sheetTab === "money" ? "" : "hidden"}`}>
@@ -708,9 +765,15 @@ export default function VendorsPage() {
                   </thead>
                   <tbody>
                     {vendorItems.length === 0 ? (
-                      <tr><td colSpan={3} className="px-4 py-6 text-center text-fg-faint">No prices yet — add one on the right.</td></tr>
+                      <tr><td colSpan={3} className="px-4 py-6 text-center text-fg-faint">No prices yet — use “Add a price” above.</td></tr>
                     ) : vendorItems.map((vi) => (
-                      <tr key={vi.id} className="border-b border-line transition hover:bg-glass/[0.03]">
+                      <tr
+                        key={vi.id}
+                        // Click anything, do anything: the row opens the price
+                        // itself rather than making you find the form for it.
+                        onClick={() => setPriceRow(vi)}
+                        className="cursor-pointer border-b border-line transition hover:bg-glass/[0.03]"
+                      >
                         <td className="px-4 py-2 font-medium text-fg">{itemName(vi.item_id)}</td>
                         <td
                           className={`px-4 py-2 text-right ${
@@ -741,7 +804,7 @@ export default function VendorsPage() {
                             {canWrite && (
                               <button
                                 type="button"
-                                onClick={() => removeVendorItem(vi)}
+                                onClick={(e) => { e.stopPropagation(); removeVendorItem(vi); }}
                                 title="Remove this vendor's price for this item"
                                 aria-label={`Remove price for ${itemName(vi.item_id)}`}
                                 className="rounded-md border border-line px-1.5 py-0.5 text-xs text-fg-faint transition hover:border-rose-400/50 hover:bg-rose-400/10 hover:text-rose-300"
@@ -922,6 +985,109 @@ export default function VendorsPage() {
               </div>
             )}
           </div>
+
+          {/* A sheet on top of a sheet.
+              Rendered INSIDE the vendor sheet on purpose: depth comes down
+              through context, so being a child is what makes this one sit
+              above its parent, inset, with the vendor still visible at the
+              rim. Rendered as a sibling it would be depth 1 and land level
+              with the thing that opened it. */}
+          <DetailSheet
+            open={!!priceRow}
+            onClose={() => setPriceRow(null)}
+            icon="🏷"
+            title={priceRow ? itemName(priceRow.item_id) : ""}
+            subtitle={`${selectedVendor.name} · price per unit`}
+            badge={priceRow?.is_preferred ? <Badge tone="amber">★ chosen</Badge> : undefined}
+          >
+            {priceRow && (() => {
+              const it = items.find((i) => i.id === priceRow.item_id);
+              const mine = parseFloat(priceRow.price_per_unit) || 0;
+              const best = cheapest[priceRow.item_id];
+              const size = parseFloat(it?.pack_size || "0");
+              return (
+                <>
+                  <DetailRow label="Their price" value={format(priceRow.price_per_unit)} hint={it?.unit ? `per ${it.unit}` : undefined} />
+                  {it?.pack_unit && size > 0 && (
+                    <DetailRow
+                      label={`Per ${it.pack_unit}`}
+                      value={format((mine * size).toFixed(2))}
+                      hint={`${size} ${it.unit} in a ${it.pack_unit}`}
+                    />
+                  )}
+                  {best != null && (
+                    <DetailRow
+                      label="Cheapest anywhere"
+                      value={format(best.toFixed(2))}
+                      hint={
+                        mine <= best
+                          ? "this supplier is the cheapest"
+                          : `${format((mine - best).toFixed(2))} more than the best quote`
+                      }
+                    />
+                  )}
+
+                  {canWrite && (
+                    <>
+                      <p className="mt-5 text-xs font-medium uppercase tracking-wide text-fg-faint">
+                        Change the price
+                      </p>
+                      <form
+                        className="mt-2 flex flex-wrap items-end gap-2"
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const val = new FormData(e.currentTarget).get("np");
+                          if (!val) return;
+                          try {
+                            await api.post(`/vendors/${selected}/items`, {
+                              item_id: priceRow.item_id,
+                              price_per_unit: String(val),
+                            });
+                            setPriceRow(null);
+                            selectVendor(selected);
+                            setNotice("Price updated.");
+                          } catch (err) {
+                            setError(err instanceof ApiError ? err.message : "Could not save the price.");
+                          }
+                        }}
+                      >
+                        <input
+                          name="np"
+                          inputMode="decimal"
+                          defaultValue={priceRow.price_per_unit}
+                          onChange={(e) => { e.target.value = numeric(e.target.value); }}
+                          className={`${inputCls} w-32`}
+                          aria-label="New price per unit"
+                        />
+                        <button className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
+                          Save
+                        </button>
+                      </form>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {!priceRow.is_preferred && (
+                          <button
+                            type="button"
+                            onClick={() => chooseSupplier(priceRow)}
+                            className="mise-press rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-200"
+                          >
+                            ★ Make them the chosen supplier
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={async () => { await removeVendorItem(priceRow); setPriceRow(null); }}
+                          className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm text-fg-faint hover:border-rose-400/50 hover:text-rose-300"
+                        >
+                          Remove this price
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </DetailSheet>
         </div>
         )}
       </DetailSheet>

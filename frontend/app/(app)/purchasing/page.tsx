@@ -95,6 +95,11 @@ export default function PurchasingPage() {
   // "what does this cost me, and from whom" is a question you ask BEFORE
   // deciding, and it used to mean leaving the page.
   const [peekItem, setPeekItem] = useState<string | null>(null);
+  // Which view of the item is open. Resets to the suppliers each time a new
+  // item is opened — landing on a previous item's history reads as a bug.
+  const [peekPane, setPeekPane] = useState<"suppliers" | "history" | "order">("suppliers");
+  const [peekQty, setPeekQty] = useState("");
+  const [peekBusy, setPeekBusy] = useState(false);
   // Recorded price changes for whichever item is open. Fetched on demand
   // rather than for every item in the picker — most are never opened.
   const [peekHistory, setPeekHistory] = useState<
@@ -153,6 +158,22 @@ export default function PurchasingPage() {
     const ordered = rows.reduce((n, r) => n + Number(r.line.required_qty || 0), 0);
     return { item, rows, orders, ordered, last: rows[0]?.indent.date ?? null };
   }, [historyItem, items, indents, pos]);
+
+  /** Make this vendor the chosen supplier for the item being peeked at.
+   *  Ordering and recipe costing both follow the chosen supplier, so this is
+   *  a real decision — it just no longer requires a trip to another page. */
+  async function chooseSupplierHere(itemId: string, vendorId: string) {
+    setPeekBusy(true);
+    try {
+      await api.post(`/vendors/items/${itemId}/preferred`, { vendor_id: vendorId });
+      const rows = await api.get<ItemSuppliers[]>("/purchasing/item-suppliers");
+      setSuppliers(Object.fromEntries(rows.map((r) => [r.item_id, r.vendors])));
+    } catch {
+      /* the list simply stays as it was */
+    } finally {
+      setPeekBusy(false);
+    }
+  }
 
   async function load() {
     const [ind, p] = await Promise.all([
@@ -220,6 +241,8 @@ export default function PurchasingPage() {
     // to go and find the answer. The row is spotlit underneath for when the
     // sheet closes.
     setPeekItem(itemId);
+    setPeekPane("suppliers");
+    setPeekQty("");
     setTimeout(() => spotlight(`picked-${itemId}`), 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -544,6 +567,13 @@ export default function PurchasingPage() {
                   ]
                 : undefined
             }
+            sections={[
+              { key: "suppliers", label: "Suppliers", icon: "\u{1F91D}", count: opts.length },
+              { key: "history", label: "Price history", icon: "\u{1F4C8}", count: peekHistory.length },
+              ...(canWrite ? [{ key: "order", label: "Order it", icon: "\u{1F6D2}" }] : []),
+            ]}
+            active={peekPane}
+            onSection={(k) => setPeekPane(k as typeof peekPane)}
             actions={
               canWrite ? (
                 <button
@@ -562,47 +592,101 @@ export default function PurchasingPage() {
               ) : null
             }
           >
-            {opts.length === 0 ? (
+            {peekPane === "suppliers" && (opts.length === 0 ? (
               <p className="py-6 text-center text-sm text-fg-faint">
                 No supplier prices this yet, so it cannot be ordered. Add a price on the
                 Vendors page and it becomes orderable and costable.
               </p>
             ) : (
-              <ul className="space-y-1.5">
-                {opts.map((o, i) => (
-                  <li
-                    key={o.vendor_id}
-                    className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${
-                      i === 0 ? "border-emerald-400/30 bg-emerald-400/[0.06]" : "border-line"
-                    }`}
+              <>
+                <p className="mb-2 text-[11px] leading-relaxed text-fg-faint">
+                  Ordering uses the vendor on the order itself; failing that your ★ chosen
+                  supplier; failing that the cheapest. Tap one to make them the chosen supplier.
+                </p>
+                <ul className="space-y-1.5">
+                  {opts.map((o, i) => (
+                    <li key={o.vendor_id}>
+                      <button
+                        type="button"
+                        disabled={!canWrite || peekBusy || o.is_preferred}
+                        onClick={() => chooseSupplierHere(it.id, o.vendor_id)}
+                        className={`mise-press flex w-full flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition disabled:cursor-default ${
+                          i === 0 ? "border-emerald-400/30 bg-emerald-400/[0.06]" : "border-line"
+                        } ${canWrite && !o.is_preferred ? "hover:border-brand-400/50 hover:bg-brand-400/[0.06]" : ""}`}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+                          {o.vendor_name}
+                          {o.is_preferred && <span className="ml-2 text-[11px] text-brand-300">★ chosen</span>}
+                        </span>
+                        <span className={`font-display text-sm font-semibold tabular-nums ${i === 0 ? "text-emerald-300" : "text-fg-soft"}`}>
+                          {format(o.price_per_unit)}/{it.unit}
+                        </span>
+                        {i === 0 && (
+                          <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                            cheapest
+                          </span>
+                        )}
+                        {canWrite && !o.is_preferred && (
+                          <span aria-hidden className="text-[10px] text-fg-faint">make ★</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ))}
+
+            {/* Order it, without closing this and hunting for the picker. */}
+            {peekPane === "order" && canWrite && (
+              <>
+                <p className="mb-3 text-[11px] leading-relaxed text-fg-faint">
+                  How many {it.unit}? It joins the order you are building — nothing is sent yet.
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <input
+                    inputMode="decimal"
+                    value={peekQty}
+                    onChange={(e) => setPeekQty(e.target.value)}
+                    placeholder={`qty in ${it.unit}`}
+                    className="mise-well w-36 rounded-lg px-3 py-2 text-sm outline-none"
+                    aria-label={`Quantity of ${it.name}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLines((prev) =>
+                        prev.some((l) => l.item_id === it.id)
+                          ? prev.map((l) => (l.item_id === it.id ? { ...l, qty: peekQty } : l))
+                          : [...prev, { item_id: it.id, qty: peekQty }],
+                      );
+                      setPeekItem(null);
+                      setTimeout(() => spotlight(`picked-${it.id}`), 60);
+                    }}
+                    disabled={!peekQty}
+                    className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
                   >
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
-                      {o.vendor_name}
-                      {o.is_preferred && <span className="ml-2 text-[11px] text-brand-300">★ chosen</span>}
-                    </span>
-                    <span className={`font-display text-sm font-semibold tabular-nums ${i === 0 ? "text-emerald-300" : "text-fg-soft"}`}>
-                      {format(o.price_per_unit)}/{it.unit}
-                    </span>
-                    {i === 0 && (
-                      <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                        cheapest
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                    Add to the order
+                  </button>
+                </div>
+                <p className="mt-3 text-[11px] text-fg-faint">
+                  In stock now: {fmtQty(it.current_stock, it.unit)}
+                  {it.min_stock_level ? ` · you keep at least ${it.min_stock_level}` : ""}
+                </p>
+              </>
             )}
 
             {/* What this item has actually cost, and who moved it. Asking "is
                 this price normal?" used to mean leaving a half-built indent to
                 go to Price Comparison. */}
-            {peekHistory.length > 0 && (
-              <div className="mt-5 border-t border-line pt-4">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                  Recent price changes
-                </p>
+            {peekPane === "history" && (peekHistory.length === 0 ? (
+              <p className="py-6 text-center text-sm text-fg-faint">
+                No price changes recorded yet. They appear here as soon as a supplier&apos;s
+                price moves — by hand, on an order, or off an invoice.
+              </p>
+            ) : (
+              <div>
                 <ul className="mt-2 space-y-1">
-                  {peekHistory.slice(0, 6).map((h, i) => {
+                  {peekHistory.map((h, i) => {
                     const was = h.old_price ? parseFloat(h.old_price) : null;
                     const now = parseFloat(h.new_price) || 0;
                     const up = was !== null && now > was;
@@ -635,7 +719,7 @@ export default function PurchasingPage() {
                   Full history and every supplier&apos;s line →
                 </Link>
               </div>
-            )}
+            ))}
           </DetailSheet>
         );
       })()}
