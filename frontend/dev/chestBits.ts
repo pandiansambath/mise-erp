@@ -47,193 +47,136 @@ export function woodTexture(): HTMLCanvasElement {
   return c;
 }
 
-/** The medal face: rank, the word, and the mark. Drawn, then mapped on. */
-export function medalFace(): HTMLCanvasElement {
+/** The coin face: a one-gram bullion piece. Drawn, then mapped on. */
+export function coinFace(): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = c.height = 512;
   const g = c.getContext("2d")!;
 
-  const bg = g.createRadialGradient(190, 160, 20, 256, 256, 300);
-  bg.addColorStop(0, "#ffe6ad");
-  bg.addColorStop(0.5, "#e0a63f");
-  bg.addColorStop(1, "#a86a1f");
+  const bg = g.createRadialGradient(180, 150, 15, 256, 256, 310);
+  bg.addColorStop(0, "#fff4cf");
+  bg.addColorStop(0.45, "#f0c463");
+  bg.addColorStop(1, "#b8801f");
   g.fillStyle = bg;
   g.fillRect(0, 0, 512, 512);
 
-  // Engraving reads as depth because of the pair of offset strokes: a dark
-  // one down-right and a light one up-left, which is what a cut in metal does
-  // to light. Flat text would look printed on.
-  const cut = (text: string, y: number, size: number, weight = "700") => {
+  // Engraving reads as depth because of the pair of offset strokes: a dark one
+  // down-right and a light one up-left, which is what a cut in metal does to
+  // light. Flat text would look printed on.
+  const cut = (text: string, y: number, size: number, weight = "700", spacing = 0) => {
     g.textAlign = "center";
     g.font = `${weight} ${size}px Georgia, serif`;
-    g.fillStyle = "rgba(60,32,8,0.85)";
+    if (spacing) (g as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${spacing}px`;
+    g.fillStyle = "rgba(70,40,8,0.85)";
     g.fillText(text, 258, y + 2.5);
-    g.fillStyle = "rgba(255,242,205,0.6)";
+    g.fillStyle = "rgba(255,246,214,0.6)";
     g.fillText(text, 254.5, y - 2);
-    g.fillStyle = "rgba(96,54,14,0.95)";
+    g.fillStyle = "rgba(104,60,14,0.95)";
     g.fillText(text, 256, y);
+    if (spacing) (g as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = "0px";
   };
 
-  // Sparse, the way a bullion coin is marked. He asked for it: a real 1-gram
-  // piece carries a figure and a word, not a paragraph. The rest of the story
-  // is written under the case, where there is room for it.
-  //
-  // "17th", not "17" — the ordinal set small and raised, the way it is on a
-  // struck coin. Drawn as two pieces so the "th" can sit at the cap height of
-  // the numeral rather than on its baseline.
-  cut("17", 288, 190);
-  const th = (y: number) => {
-    g.textAlign = "left";
-    g.font = "700 64px Georgia, serif";
-    g.fillStyle = "rgba(60,32,8,0.85)";
-    g.fillText("th", 342, y + 2);
-    g.fillStyle = "rgba(255,242,205,0.6)";
-    g.fillText("th", 339, y - 1.5);
-    g.fillStyle = "rgba(96,54,14,0.95)";
-    g.fillText("th", 340.5, y);
-  };
-  th(178);
-  cut("RANK", 352, 46, "500");
+  // What a real one-gram coin carries: the weight, the metal, the fineness.
+  // Nothing else. He was right that the rank belongs in the words underneath,
+  // not stamped across the face.
+  cut("1", 268, 172);
+  cut("GRAM", 330, 56, "600", 4);
+  cut("FINE GOLD", 380, 30, "500", 6);
+  cut("999.9", 418, 26, "500", 3);
 
-  // Two rings and a bead course — the framing that makes it read as struck
-  // rather than printed.
-  g.strokeStyle = "rgba(88,48,12,0.45)";
+  g.strokeStyle = "rgba(96,54,12,0.42)";
   g.lineWidth = 5;
   g.beginPath();
-  g.arc(256, 256, 208, 0, Math.PI * 2);
+  g.arc(256, 256, 210, 0, Math.PI * 2);
   g.stroke();
   g.lineWidth = 2;
   g.beginPath();
-  g.arc(256, 256, 192, 0, Math.PI * 2);
+  g.arc(256, 256, 194, 0, Math.PI * 2);
   g.stroke();
-  for (let i = 0; i < 72; i++) {
-    const a = (i / 72) * Math.PI * 2;
-    g.fillStyle = "rgba(70,38,10,0.38)";
+  for (let i = 0; i < 84; i++) {
+    const a = (i / 84) * Math.PI * 2;
+    g.fillStyle = "rgba(80,44,10,0.34)";
     g.beginPath();
-    g.arc(256 + Math.cos(a) * 228, 256 + Math.sin(a) * 228, 4.5, 0, Math.PI * 2);
+    g.arc(256 + Math.cos(a) * 230, 256 + Math.sin(a) * 230, 4, 0, Math.PI * 2);
     g.fill();
   }
   return c;
 }
 
 // ── sound ─────────────────────────────────────────────────────────────────
-// Synthesised, and created on the first CLICK — browsers refuse to start
-// audio before a gesture, and a hammer blow is exactly the gesture.
+// Real recordings, not synthesis.
+//
+// He asked why I was not downloading them and he was right to — I had assumed
+// the sandbox could not reach the internet and never checked. It can. These
+// are Mixkit's free sound effects (Mixkit Free License: commercial use, no
+// attribution required), picked BY NAME so each one is actually the thing it
+// claims to be:
+//
+//   hit      Metal hammer hit
+//   wood     Wood hard hit
+//   shatter  Shatter shot explosion
+//   thunder  Strong close thunder explosion
+//   shock    Heavy electric shockwave impact
+//   coin     Magic sweep game trophy
+//
+// Preloaded and pooled: a single Audio element cannot overlap with itself, so
+// hitting twice quickly would cut the first blow off mid-strike. Three copies
+// of each, used round-robin, and they can ring over one another the way real
+// impacts do.
 
-let ctx: AudioContext | null = null;
+type Pool = { els: HTMLAudioElement[]; at: number };
+const pools = new Map<string, Pool>();
 
-function audio(): AudioContext | null {
+function pool(name: string, volume: number): Pool | null {
   if (typeof window === "undefined") return null;
-  if (!ctx) {
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC();
+  let p = pools.get(name);
+  if (!p) {
+    p = {
+      els: Array.from({ length: 3 }, () => {
+        const a = new Audio(`/dev/sfx/${name}.mp3`);
+        a.preload = "auto";
+        a.volume = volume;
+        return a;
+      }),
+      at: 0,
+    };
+    pools.set(name, p);
   }
-  if (ctx.state === "suspended") void ctx.resume();
-  return ctx;
+  return p;
 }
 
-function noise(a: AudioContext, seconds: number) {
-  const buf = a.createBuffer(1, a.sampleRate * seconds, a.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  const src = a.createBufferSource();
-  src.buffer = buf;
-  return src;
+function play(name: string, volume = 0.8, rate = 1) {
+  const p = pool(name, volume);
+  if (!p) return;
+  const el = p.els[p.at];
+  p.at = (p.at + 1) % p.els.length;
+  el.volume = volume;
+  el.playbackRate = rate;
+  try {
+    el.currentTime = 0;
+    void el.play();
+  } catch {
+    /* the browser will allow it after the first gesture */
+  }
 }
 
-/** Steel on wood: a bright transient, then a short body. */
+/** Warm the files up on the first gesture, so the first blow is not silent. */
+export function primeSounds() {
+  for (const [n, v] of [["hit", 0.7], ["wood", 0.7], ["shatter", 0.8], ["thunder", 0.7], ["shock", 0.6], ["coin", 0.6]] as const) {
+    pool(n, v);
+  }
+}
+
+/** Steel on wood. Harder blows are louder and pitched a touch lower. */
 export function playHit(power = 1) {
-  const a = audio();
-  if (!a) return;
-  const t = a.currentTime;
-
-  // The strike itself — filtered noise, gone in a tenth of a second.
-  const src = noise(a, 0.25);
-  const bp = a.createBiquadFilter();
-  bp.type = "bandpass";
-  bp.frequency.value = 2200 * power;
-  bp.Q.value = 1.1;
-  const gn = a.createGain();
-  gn.gain.setValueAtTime(0.55 * power, t);
-  gn.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-  src.connect(bp).connect(gn).connect(a.destination);
-  src.start(t);
-
-  // The wood answering underneath it.
-  const osc = a.createOscillator();
-  osc.type = "triangle";
-  osc.frequency.setValueAtTime(150, t);
-  osc.frequency.exponentialRampToValueAtTime(58, t + 0.18);
-  const og = a.createGain();
-  og.gain.setValueAtTime(0.4 * power, t);
-  og.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-  osc.connect(og).connect(a.destination);
-  osc.start(t);
-  osc.stop(t + 0.32);
+  play("hit", Math.min(1, 0.55 * power), 1.06 - power * 0.08);
+  play("wood", Math.min(1, 0.5 * power), 0.95);
 }
 
-/** The break: a crack, then thunder rolling off. */
+/** The break: it comes apart, the sky answers, and the prize rings. */
 export function playBreak() {
-  const a = audio();
-  if (!a) return;
-  const t = a.currentTime;
-
-  // Splintering: three short cracks a few milliseconds apart. One crack is a
-  // door closing; three overlapping is something coming apart.
-  for (let i = 0; i < 3; i++) {
-    const at = t + i * 0.045;
-    const crack = noise(a, 0.35);
-    const bp = a.createBiquadFilter();
-    bp.type = "bandpass";
-    bp.frequency.value = 1400 + i * 900;
-    bp.Q.value = 0.8;
-    const cg = a.createGain();
-    cg.gain.setValueAtTime(0.75 - i * 0.15, at);
-    cg.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
-    crack.connect(bp).connect(cg).connect(a.destination);
-    crack.start(at);
-  }
-
-  // The strike of lightning: a hard, bright snap on top of the thunder.
-  const snap = noise(a, 0.25);
-  const sh = a.createBiquadFilter();
-  sh.type = "highpass";
-  sh.frequency.value = 2600;
-  const sg = a.createGain();
-  sg.gain.setValueAtTime(0.9, t);
-  sg.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-  snap.connect(sh).connect(sg).connect(a.destination);
-  snap.start(t);
-
-  // Thunder: low noise with the top rolled off, rolling away for three
-  // seconds. The long tail is what makes it read as distance rather than
-  // as a thud.
-  const rumble = noise(a, 3.2);
-  const lp = a.createBiquadFilter();
-  lp.type = "lowpass";
-  lp.frequency.setValueAtTime(560, t);
-  lp.frequency.exponentialRampToValueAtTime(70, t + 2.6);
-  const rg = a.createGain();
-  rg.gain.setValueAtTime(0.001, t);
-  rg.gain.exponentialRampToValueAtTime(0.85, t + 0.07);
-  rg.gain.exponentialRampToValueAtTime(0.28, t + 0.9);
-  rg.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
-  rumble.connect(lp).connect(rg).connect(a.destination);
-  rumble.start(t);
-
-  // And a chord, so the reveal has somewhere to land.
-  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-    const o = a.createOscillator();
-    o.type = "sine";
-    o.frequency.value = f;
-    const g = a.createGain();
-    const at = t + 0.42 + i * 0.06;
-    g.gain.setValueAtTime(0, at);
-    g.gain.linearRampToValueAtTime(0.14, at + 0.05);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 2.6);
-    o.connect(g).connect(a.destination);
-    o.start(at);
-    o.stop(at + 2.7);
-  });
+  play("shatter", 0.85, 0.95);
+  play("shock", 0.7, 1);
+  window.setTimeout(() => play("thunder", 0.8, 0.92), 90);
+  window.setTimeout(() => play("coin", 0.65, 1), 620);
 }
