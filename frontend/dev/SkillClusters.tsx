@@ -129,6 +129,19 @@ export function SkillClusters({ entered }: { entered: boolean }) {
           <Link
             href="/award"
             title="Open the award"
+            // Warm the chest while they are still reading this card. By the
+            // time the award page opens the model is usually already in cache,
+            // which is the difference between a wait and no wait.
+            onMouseEnter={() => {
+              const id = "chest-prefetch";
+              if (document.getElementById(id)) return;
+              const l = document.createElement("link");
+              l.id = id;
+              l.rel = "prefetch";
+              l.as = "fetch";
+              l.href = "/dev/models/chest.glb";
+              document.head.appendChild(l);
+            }}
             className="group flex items-baseline gap-2 text-left"
           >
             <span aria-hidden className="dev-medal shrink-0 text-base transition-transform group-hover:scale-125">

@@ -32,6 +32,11 @@ export default function AwardPage() {
 
   return (
     <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`}>
+      {/* Start the chest downloading with the HTML, not after the renderer has
+          booted. It used to be requested only once three.js had parsed and the
+          scene was built, which put the whole model behind a chain of waits. */}
+      {/* eslint-disable-next-line @next/next/no-head-element */}
+      <link rel="preload" as="fetch" href="/dev/models/chest.glb" crossOrigin="anonymous" />
       {/* The room. Lit from behind the chest, so the object sits IN something
           rather than on a black rectangle — "background is glowing like hell". */}
       <div

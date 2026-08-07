@@ -119,35 +119,45 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           const m = o as InstanceType<typeof THREE.Mesh>;
           if (!m.isMesh) return;
           m.castShadow = m.receiveShadow = true;
-          // The model ships flat-lit materials; give them the studio so the
-          // metal bands and gold catch light like the coin does.
+          // The model ships flat-lit; give it the studio so its bands and
+          // gold catch light the way the coin does.
           const mat = m.material as InstanceType<typeof THREE.MeshStandardMaterial>;
-          if (mat && "envMapIntensity" in mat) mat.envMapIntensity = 1.5;
+          if (mat && "envMapIntensity" in mat) mat.envMapIntensity = 1.6;
         });
 
-        // Sit it on the floor of the shot and scale it to the frame the
-        // camera was set up for, whatever units the artist worked in.
+        // Order matters, and getting it wrong is what made the chest vanish.
+        //
+        // Measure FIRST, while the holder is still identity, so every box is
+        // in the model's own units. The previous version measured after
+        // scaling and then applied the scale a second time to the re-parented
+        // halves — so the chest ended up a fraction of its size, somewhere off
+        // camera. It was still there, which is why the hammer kept hitting it.
+        const holder = new THREE.Group();
+        chest.add(holder);
+        holder.add(root);
+
         const box = new THREE.Box3().setFromObject(root);
         const size = new THREE.Vector3();
         box.getSize(size);
-        const k = 2.6 / Math.max(size.x, 0.001);
-        root.scale.setScalar(k);
 
         if (top && base) {
-          // Re-parent the lid onto a hinge at its own back edge.
+          // A hinge at the lid's own back edge, in model units.
           const tb = new THREE.Box3().setFromObject(top);
-          hinge.position.set(0, tb.min.y * k, tb.min.z * k);
-          top.position.multiplyScalar(1);
-          hinge.add(top);
-          top.position.sub(new THREE.Vector3(0, tb.min.y, tb.min.z));
-          chest.add(base);
-          base.scale.setScalar(k);
-          top.scale.setScalar(k);
-        } else {
-          chest.add(root);
+          hinge.position.set(0, tb.min.y, tb.min.z);
+          holder.add(hinge);
+          hinge.add(top);                              // keeps world transform
+          top.position.sub(hinge.position);            // …minus the pivot
+          holder.add(base);
         }
-        const after = new THREE.Box3().setFromObject(chest);
-        chest.position.y -= after.min.y + 1.1;
+
+        // Now, and only now, size it to the frame and stand it on the floor.
+        const k = 3.1 / Math.max(size.x, size.y, size.z, 0.001);
+        holder.scale.setScalar(k);
+        holder.position.set(
+          -((box.min.x + box.max.x) / 2) * k,
+          -box.min.y * k - 1.15,
+          -((box.min.z + box.max.z) / 2) * k,
+        );
       }
 
       // ── the coin ──────────────────────────────────────────────────────
@@ -198,6 +208,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         arcs.push(l);
       }
       let big = false;
+      let camKick = 0;
       const throwArcs = () => {
         const reach = big ? 1.05 : 0.45;
         arcs.forEach((l, i) => {
@@ -218,22 +229,110 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         arcMat.opacity = 1;
       };
 
-      const shards: { m: InstanceType<typeof THREE.Mesh>; v: InstanceType<typeof THREE.Vector3>; s: InstanceType<typeof THREE.Vector3> }[] = [];
-      for (let i = 0; i < 32; i++) {
-        const m = new THREE.Mesh(
-          new THREE.TetrahedronGeometry(0.09 + Math.random() * 0.18),
-          i % 4 === 0 ? iron : wood,
-        );
+      // Debris that came off something.
+      //
+      // Identical tetrahedra read as confetti: same shape, same size, same
+      // tumble. Wreckage does not look like that. So three kinds — long
+      // splinters torn along the grain, chunky iron off the bands, and coins
+      // spilling from inside — each with its own mass, so heavy pieces fall
+      // fast and hard while light ones hang and flutter.
+      type Bit = {
+        m: InstanceType<typeof THREE.Mesh>;
+        v: InstanceType<typeof THREE.Vector3>;
+        s: InstanceType<typeof THREE.Vector3>;
+        mass: number;
+      };
+      const bits: Bit[] = [];
+      const coinGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.022, 16);
+      for (let i = 0; i < 54; i++) {
+        const kind = i < 26 ? "splinter" : i < 42 ? "iron" : "coin";
+        let geo: InstanceType<typeof THREE.BoxGeometry> | InstanceType<typeof THREE.CylinderGeometry>;
+        let mat: InstanceType<typeof THREE.Material>;
+        if (kind === "splinter") {
+          geo = new THREE.BoxGeometry(0.06 + Math.random() * 0.09, 0.03, 0.28 + Math.random() * 0.5);
+          mat = wood;
+        } else if (kind === "iron") {
+          geo = new THREE.BoxGeometry(0.1 + Math.random() * 0.12, 0.05, 0.14 + Math.random() * 0.2);
+          mat = iron;
+        } else {
+          geo = coinGeo;
+          mat = gold;
+        }
+        const m = new THREE.Mesh(geo, mat);
         m.visible = false;
+        m.castShadow = true;
         scene.add(m);
-        shards.push({ m, v: new THREE.Vector3(), s: new THREE.Vector3() });
+        bits.push({
+          m,
+          v: new THREE.Vector3(),
+          s: new THREE.Vector3(),
+          mass: kind === "iron" ? 1.5 : kind === "coin" ? 1.15 : 0.72,
+        });
       }
 
-      // Sparks catching on the coin. Tiny additive points that pop and fade
-      // at their own rates — a glint reads as light on metal only if the
-      // glints are not in step with each other.
+      // The shockwave, along the ground.
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xffd89a, transparent: true, opacity: 0,
+        side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 64), ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = -1.12;
+      ring.visible = false;
+      scene.add(ring);
+      let ringT = 0;
+
+      // Dust thrown up by the blow.
+      const dustMat = new THREE.PointsMaterial({
+        color: 0xc9ab7e, size: 0.16, transparent: true, opacity: 0,
+        depthWrite: false, sizeAttenuation: true,
+      });
+      const DUST = 140;
+      const dustPos = new Float32Array(DUST * 3);
+      const dustVel: InstanceType<typeof THREE.Vector3>[] = [];
+      for (let i = 0; i < DUST; i++) dustVel.push(new THREE.Vector3());
+      const dustGeo = new THREE.BufferGeometry();
+      dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
+      const dust = new THREE.Points(dustGeo, dustMat);
+      dust.visible = false;
+      scene.add(dust);
+      let dustT = 0;
+
+      // Stars catching on the coin.
+      //
+      // A bare Point renders as a hard little rectangle — exactly the squares
+      // he spotted. A sprite with a four-point twinkle and a soft core makes
+      // the same code draw light instead of pixels.
+      const starCanvas = document.createElement("canvas");
+      starCanvas.width = starCanvas.height = 128;
+      {
+        const sg = starCanvas.getContext("2d")!;
+        const core = sg.createRadialGradient(64, 64, 0, 64, 64, 26);
+        core.addColorStop(0, "rgba(255,255,255,1)");
+        core.addColorStop(0.35, "rgba(255,236,190,0.75)");
+        core.addColorStop(1, "rgba(255,210,130,0)");
+        sg.fillStyle = core;
+        sg.fillRect(0, 0, 128, 128);
+        sg.lineCap = "round";
+        // Four spikes: the diffraction cross the eye reads as "sparkle".
+        for (const [dx, dy, len, wdt] of [
+          [1, 0, 58, 3], [0, 1, 58, 3], [1, 1, 30, 1.4], [1, -1, 30, 1.4],
+        ] as const) {
+          const grad = sg.createLinearGradient(64 - dx * len, 64 - dy * len, 64 + dx * len, 64 + dy * len);
+          grad.addColorStop(0, "rgba(255,246,214,0)");
+          grad.addColorStop(0.5, "rgba(255,252,236,0.95)");
+          grad.addColorStop(1, "rgba(255,246,214,0)");
+          sg.strokeStyle = grad;
+          sg.lineWidth = wdt;
+          sg.beginPath();
+          sg.moveTo(64 - dx * len, 64 - dy * len);
+          sg.lineTo(64 + dx * len, 64 + dy * len);
+          sg.stroke();
+        }
+      }
+      const starTex = new THREE.CanvasTexture(starCanvas);
       const sparkMat = new THREE.PointsMaterial({
-        color: 0xfff0c0, size: 0.075, transparent: true, opacity: 0,
+        map: starTex, color: 0xfff2d0, size: 0.19, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
       });
       const SPARKS = 90;
@@ -272,12 +371,35 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
             flash = 2;
             throwArcs();
             playBreak();
-            for (const s of shards) {
-              s.m.visible = true;
-              s.m.position.set((Math.random() - 0.5) * 2.4, 0, (Math.random() - 0.5) * 1.5);
-              s.v.set((Math.random() - 0.5) * 0.17, 0.1 + Math.random() * 0.16, (Math.random() - 0.5) * 0.17);
-              s.s.set(Math.random() * 0.25, Math.random() * 0.25, Math.random() * 0.25);
+            // Everything leaves from where the lid was, and leaves OUTWARD —
+            // speed falling off with mass, so iron goes low and hard while
+            // splinters are thrown high and turn over as they go.
+            for (const b of bits) {
+              b.m.visible = true;
+              b.m.position.set((Math.random() - 0.5) * 1.5, -0.15 + Math.random() * 0.5, (Math.random() - 0.5) * 0.9);
+              const a = Math.random() * Math.PI * 2;
+              const out = (0.06 + Math.random() * 0.16) / b.mass;
+              b.v.set(Math.cos(a) * out, (0.14 + Math.random() * 0.2) / b.mass, Math.sin(a) * out * 0.7);
+              b.s.set(
+                (Math.random() - 0.5) * 0.5 / b.mass,
+                (Math.random() - 0.5) * 0.5 / b.mass,
+                (Math.random() - 0.5) * 0.5 / b.mass,
+              );
+              b.m.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
             }
+            ring.visible = true;
+            ringT = 0;
+            dust.visible = true;
+            dustT = 0;
+            for (let i = 0; i < DUST; i++) {
+              const a = Math.random() * Math.PI * 2;
+              const sp = 0.02 + Math.random() * 0.09;
+              dustPos[i * 3] = (Math.random() - 0.5) * 0.8;
+              dustPos[i * 3 + 1] = -0.6 + Math.random() * 0.5;
+              dustPos[i * 3 + 2] = (Math.random() - 0.5) * 0.6;
+              dustVel[i].set(Math.cos(a) * sp, 0.02 + Math.random() * 0.05, Math.sin(a) * sp);
+            }
+            camKick = 1;
             coin.visible = true;
             sparks.visible = true;
           }
@@ -332,7 +454,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           sparks.position.copy(coin.position);
           sparks.scale.setScalar(0.34 + openT * 0.5);
           sparkMat.opacity = openT * 0.9;
-          const sp = sparkGeo.attributes.position.array as Float32Array;
+          const sp = sparkPos;
           for (let i = 0; i < SPARKS; i++) {
             // Each one breathes on its own clock, so they twinkle instead of
             // pulsing together like a string of fairy lights.
@@ -342,15 +464,58 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           }
           sparkGeo.attributes.position.needsUpdate = true;
 
-          for (const s of shards) {
-            if (!s.m.visible) continue;
-            s.v.y -= 0.006;
-            s.m.position.add(s.v);
-            s.m.rotation.x += s.s.x;
-            s.m.rotation.y += s.s.y;
-            if (s.m.position.y < -3.6) s.m.visible = false;
+          for (const b of bits) {
+            if (!b.m.visible) continue;
+            b.v.y -= 0.0075 * b.mass;   // heavy things fall harder
+            b.v.multiplyScalar(0.995);  // and the air takes a little back
+            b.m.position.add(b.v);
+            b.m.rotation.x += b.s.x;
+            b.m.rotation.y += b.s.y;
+            b.m.rotation.z += b.s.z;
+            // The floor. Wreckage that falls through it is wreckage nobody
+            // believes — so it bounces, loses most of its energy, and settles.
+            if (b.m.position.y < -1.1) {
+              b.m.position.y = -1.1;
+              if (Math.abs(b.v.y) > 0.012) {
+                b.v.y = -b.v.y * 0.36;
+                b.v.x *= 0.72;
+                b.v.z *= 0.72;
+                b.s.multiplyScalar(0.55);
+              } else {
+                b.v.set(0, 0, 0);
+                b.s.set(0, 0, 0);
+              }
+            }
+          }
+
+          if (ring.visible) {
+            ringT = Math.min(1, ringT + dt * 1.15);
+            ring.scale.setScalar(0.4 + ringT * 7);
+            ringMat.opacity = (1 - ringT) * 0.7;
+            if (ringT >= 1) ring.visible = false;
+          }
+
+          if (dust.visible) {
+            dustT = Math.min(1, dustT + dt * 0.42);
+            dustMat.opacity = Math.sin(Math.PI * dustT) * 0.4;
+            for (let i = 0; i < DUST; i++) {
+              dustVel[i].y -= 0.0009;      // rises, hangs, then drops
+              dustVel[i].multiplyScalar(0.982);
+              dustPos[i * 3] += dustVel[i].x;
+              dustPos[i * 3 + 1] += dustVel[i].y;
+              dustPos[i * 3 + 2] += dustVel[i].z;
+            }
+            dustGeo.attributes.position.needsUpdate = true;
+            if (dustT >= 1) dust.visible = false;
           }
         }
+        // A short kick, not a wobble. The camera is a person flinching at a
+        // bang: it recovers in a few frames and then holds perfectly still.
+        if (camKick > 0.001) {
+          camKick *= 0.86;
+          camera.position.x = Math.sin(t * 58) * camKick * 0.13;
+        } else camera.position.x = 0;
+
         renderer.render(scene, camera);
       };
       tick();
@@ -378,7 +543,8 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           const m = o as InstanceType<typeof THREE.Mesh>;
           if (m.geometry) m.geometry.dispose();
         });
-        [wood, iron, gold, faceMat, arcMat, sparkMat].forEach((m) => m.dispose());
+        [wood, iron, gold, faceMat, arcMat, sparkMat, ringMat, dustMat].forEach((m) => m.dispose());
+        starTex.dispose();
         envTex.dispose();
         woodTex.dispose();
         faceTex.dispose();
