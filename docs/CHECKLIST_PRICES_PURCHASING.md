@@ -45,8 +45,9 @@ So this round is not layout. It is what the space is filled with.
 - [x] **The review stage needs to look like a review.** States the total and
       spread up front, AND is grouped by supplier with per-group subtotals,
       biggest group first.
-- [ ] **"compare ›" on every row is a wasted click if it only opens the same
-      sheet.** Either make it carry the saving, or let the row itself open it.
+- [x] **"compare ›" on every row is a wasted click if it only opens the same
+      sheet.** It names the saving where one exists, and stays quiet where the
+      row is already on its best price.
 
 ## Both
 

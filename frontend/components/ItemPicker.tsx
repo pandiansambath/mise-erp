@@ -474,16 +474,38 @@ export function ItemPicker({
                     )}
                   </span>
                 </button>
-                {onOpenDetail && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenDetail(it.id)}
-                    aria-label={`See suppliers and prices for ${it.name}`}
-                    className="mise-press shrink-0 rounded-lg border border-line-2 px-2 py-1 text-[10px] font-medium text-fg-faint transition hover:border-brand-400/60 hover:text-brand-300"
-                  >
-                    compare ›
-                  </button>
-                )}
+                {onOpenDetail && (() => {
+                  // The click has to be worth taking.
+                  //
+                  // "compare ›" said nothing — every row carried the same word,
+                  // so nothing told you WHICH rows were worth opening. Where a
+                  // cheaper supplier exists it now names the saving, which is
+                  // the only reason to open it; otherwise it stays quiet and
+                  // says the row is already on its best price.
+                  const opts = sorted ?? [];
+                  const best = opts.length ? parseFloat(opts[0].price_per_unit) || 0 : 0;
+                  const chosen = opts.find((v) => v.is_preferred);
+                  const now = chosen ? parseFloat(chosen.price_per_unit) || 0 : best;
+                  const gap = now - best;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => onOpenDetail(it.id)}
+                      aria-label={
+                        gap > 0.001
+                          ? `${it.name}: ${opts.length} suppliers, cheapest saves ${gap.toFixed(2)} per unit`
+                          : `See suppliers and prices for ${it.name}`
+                      }
+                      className={`mise-press shrink-0 rounded-lg border px-2 py-1 text-[10px] font-medium transition ${
+                        gap > 0.001
+                          ? "border-amber-400/50 bg-amber-400/10 text-amber-300 hover:border-amber-400"
+                          : "border-line-2 text-fg-faint hover:border-brand-400/60 hover:text-brand-300"
+                      }`}
+                    >
+                      {gap > 0.001 ? `save ${format(gap.toFixed(2))} ›` : "compare ›"}
+                    </button>
+                  );
+                })()}
               </div>
             );
           }
