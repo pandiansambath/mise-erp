@@ -255,6 +255,51 @@ export function ItemPicker({
   // know from looking. This is the page where money is actually spent, so the
   // bar carries the money. Priced at the chosen supplier where there is one,
   // the cheapest otherwise, which is the rule ordering itself follows.
+  /** The supplier a line will actually be bought from, by the ordering rule:
+   *  the chosen one, else the cheapest. Same rule the running total uses. */
+  const supplierFor = (itemId: string): { name: string; price: number } | null => {
+    const opts = suppliers?.[itemId] ?? [];
+    if (opts.length === 0) return null;
+    const pick =
+      opts.find((v) => v.is_preferred) ??
+      [...opts].sort((a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0))[0];
+    return { name: pick.vendor_name, price: parseFloat(pick.price_per_unit) || 0 };
+  };
+
+  /** One line in the tray. Defined once because it is now drawn in two
+   *  places — the flat list, and the review stage grouped by supplier. */
+  const pickedRow = (line: PickedLine, item: Item) => (
+    <>
+                {/* Row 1: name + remove. Row 2: quantity controls. Stacking the
+                    qty inputs onto their own row keeps them usable on the
+                    narrowest phones (no cramping the kg/g fields). */}
+                <div className="flex items-start gap-2">
+                  <span aria-hidden className="mt-0.5">{categoryEmoji(groupKey(item))}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-fg">{item.name}</span>
+                    <span className="block text-xs text-fg-faint">
+                      {stockState(item).dot} have {fmtQty(item.current_stock, item.unit)}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggle(item)}
+                    aria-label={`Remove ${item.name}`}
+                    className="shrink-0 rounded-lg border border-line px-2 py-1 text-sm text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
+                  <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
+                  {!weighedParts(item.unit) && (
+                    <span className="text-xs text-fg-faint">{item.unit}</span>
+                  )}
+                </div>
+                {lineExtra && <div className="mt-1.5 pl-7">{lineExtra(line, item)}</div>}
+    </>
+  );
+
   const running = chosen.reduce(
     (acc, { line, item }) => {
       const opts = suppliers?.[item.id] ?? [];
@@ -608,6 +653,53 @@ export function ItemPicker({
           <p className="py-3 text-center text-sm text-fg-faint">
             Tap items above to add them here, then enter how much you need.
           </p>
+        ) : staged && trayStage === "tray" ? (
+          // Grouped by supplier, with each group's subtotal.
+          //
+          // One order becomes several purchase orders — one per supplier — so
+          // reviewing it as a flat list hides the shape of what is actually
+          // being sent. Grouped, you can see one supplier carrying most of the
+          // spend before committing to it.
+          <div className="mt-3 space-y-4">
+            {Object.entries(
+              chosen.reduce<Record<string, typeof chosen>>((acc, row) => {
+                const who = supplierFor(row.item.id)?.name ?? "No supplier priced";
+                (acc[who] ??= []).push(row);
+                return acc;
+              }, {}),
+            )
+              // Biggest group first: the supplier taking most of the money is
+              // the one worth a second look before you send it.
+              .sort((a, b) => b[1].length - a[1].length)
+              .map(([who, rows]) => {
+                const sub = rows.reduce((t, { line, item }) => {
+                  const sup = supplierFor(item.id);
+                  return t + (sup ? sup.price * (parseFloat(String(line.qty ?? "")) || 0) : 0);
+                }, 0);
+                return (
+                  <div key={who}>
+                    <div className="mb-1.5 flex items-baseline justify-between gap-3 border-b border-line pb-1.5">
+                      <span className="min-w-0 truncate text-[13px] font-semibold text-fg">{who}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-fg-soft">
+                        {rows.length} item{rows.length === 1 ? "" : "s"}
+                        {sub > 0 && <b className="ml-2 text-fg">{format(sub.toFixed(2))}</b>}
+                      </span>
+                    </div>
+                    <ul className="grid grid-cols-1 gap-2">
+                      {rows.map(({ line, item }) => (
+                        <li
+                          key={item.id}
+                          id={`picked-${item.id}`}
+                          className="mise-pop scroll-mt-24 rounded-lg border border-line bg-paper/80 px-3 py-2"
+                        >
+                          {pickedRow(line, item)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+          </div>
         ) : (
           // No inner scrollbar until the list is genuinely long. A short list
           // inside its own scroll area gave two scrollbars on one screen and a
@@ -624,33 +716,7 @@ export function ItemPicker({
                 id={`picked-${item.id}`}
                 className="mise-pop scroll-mt-24 rounded-lg border border-line bg-paper/80 px-3 py-2"
               >
-                {/* Row 1: name + remove. Row 2: quantity controls. Stacking the
-                    qty inputs onto their own row keeps them usable on the
-                    narrowest phones (no cramping the kg/g fields). */}
-                <div className="flex items-start gap-2">
-                  <span aria-hidden className="mt-0.5">{categoryEmoji(groupKey(item))}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-fg">{item.name}</span>
-                    <span className="block text-xs text-fg-faint">
-                      {stockState(item).dot} have {fmtQty(item.current_stock, item.unit)}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => toggle(item)}
-                    aria-label={`Remove ${item.name}`}
-                    className="shrink-0 rounded-lg border border-line px-2 py-1 text-sm text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
-                  <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
-                  {!weighedParts(item.unit) && (
-                    <span className="text-xs text-fg-faint">{item.unit}</span>
-                  )}
-                </div>
-                {lineExtra && <div className="mt-1.5 pl-7">{lineExtra(line, item)}</div>}
+                {pickedRow(line, item)}
               </li>
             ))}
           </ul>
