@@ -195,6 +195,24 @@ export default function PriceComparisonPage() {
     return { total, count };
   })();
 
+  // What each item is costing by being on the wrong supplier.
+  //
+  // The page exists to answer "where am I overpaying", and it was answering it
+  // alphabetically — which is a filing cabinet, not a decision list. With this
+  // the worst offender is the first thing you see.
+  const savingByItem: Record<string, number> = {};
+  for (const row of allSuppliers) {
+    if (row.vendors.length < 2) continue;
+    const cheapest = Math.min(...row.vendors.map((v) => parseFloat(v.price_per_unit) || Infinity));
+    const chosen = row.vendors.find((v) => v.is_preferred);
+    const cur = chosen ? parseFloat(chosen.price_per_unit) : cheapest;
+    if (cur - cheapest > 0.001) savingByItem[row.item_id] = cur - cheapest;
+  }
+  // Biggest saving first, then everything else as it was.
+  const rankedItems = [...items].sort(
+    (a, b) => (savingByItem[b.id] ?? -1) - (savingByItem[a.id] ?? -1),
+  );
+
   async function setPreferred(vendorId: string | null) {
     const res = await api.post<PriceComparison>(`/vendors/items/${selected}/preferred`, {
       vendor_id: vendorId,
@@ -429,18 +447,35 @@ export default function PriceComparisonPage() {
         )}
       </DetailSheet>
 
-      {switchSave.count > 0 && (
-        <Card className="mise-feel mb-5 border-brand-400/30">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-fg">
-              <span aria-hidden className="mr-1.5">💡</span>
-              <b>{switchSave.count}</b> item{switchSave.count === 1 ? " isn't" : "s aren't"} on their cheapest supplier —
-              switching saves <b className="text-brand-400">{format(String(Math.round(switchSave.total * 100) / 100))}</b>
-              <span className="text-xs text-fg-faint"> per unit of each, every order</span>
+      {/* Lead with the money.
+          This was a sentence in a tinted box — the single most valuable number
+          on the page, set at the same size as everything around it. A page
+          whose whole job is "where am I overpaying" should answer that before
+          it asks anything. */}
+      {switchSave.count > 0 && stage === "list" && (
+        <div className="mise-feel mb-5 overflow-hidden rounded-2xl border border-brand-400/30 bg-gradient-to-br from-brand-400/[0.10] via-paper to-paper">
+          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 p-5 sm:p-6">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fg-faint">
+                Sitting on the table
+              </p>
+              <p className="mt-1 font-display text-4xl font-semibold tabular-nums text-brand-300 sm:text-5xl">
+                {format(String(Math.round(switchSave.total * 100) / 100))}
+              </p>
+              <p className="mt-1 text-sm text-fg-soft">
+                per unit, every order — across{" "}
+                <b className="text-fg">{switchSave.count}</b> item
+                {switchSave.count === 1 ? "" : "s"} on the wrong supplier
+              </p>
+            </div>
+            <p className="text-[11px] leading-relaxed text-fg-faint">
+              Worst first, below.
+              <span className="mt-0.5 block">
+                Pick ★ per item, or override per order on Purchasing.
+              </span>
             </p>
-            <span className="text-[11px] text-fg-faint">pick ★ per item below, or override per order on Purchasing</span>
           </div>
-        </Card>
+        </div>
       )}
 
       {items.length === 0 ? (
@@ -469,7 +504,7 @@ export default function PriceComparisonPage() {
                   the detail, so opening a modal over it showed the same thing
                   twice and hid the page underneath. */}
               <ItemPickerSingle
-                items={items}
+                items={rankedItems}
                 value={selected}
                 onChange={openItem}
                 dense
