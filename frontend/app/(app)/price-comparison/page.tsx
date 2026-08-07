@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type Item, type ItemSuppliers, type PriceComparison, type PricePoint, type Vendor } from "@/lib/api";
 
 type PriceChange = {
@@ -148,6 +148,27 @@ export default function PriceComparisonPage() {
   const [allSuppliers, setAllSuppliers] = useState<ItemSuppliers[]>([]);
   const [pane, setPane] = useState<"suppliers" | "history" | "changes" | "add">("suppliers");
   // One supplier's line, opened from the list — a sheet over the comparison.
+  // Which of the two stages the page is showing.
+  //
+  // Not derived from `selected`: going BACK has to leave the chosen item
+  // chosen, so the list opens with it still highlighted and reopening it
+  // costs nothing. Two separate ideas — what you picked, and what you are
+  // looking at.
+  const [stage, setStage] = useState<"list" | "item">("list");
+  const listScroll = useRef(0);
+
+  const openItem = (id: string) => {
+    listScroll.current = window.scrollY;   // remember where they were reading
+    setSelected(id);
+    setStage("item");
+    window.scrollTo({ top: 0 });
+  };
+  const backToList = () => {
+    setStage("list");
+    // Put them back on the row they left from, not at the top of a long list.
+    requestAnimationFrame(() => window.scrollTo({ top: listScroll.current }));
+  };
+
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [rowPrice, setRowPrice] = useState("");
   const [rowBusy, setRowBusy] = useState(false);
@@ -430,12 +451,14 @@ export default function PriceComparisonPage() {
         </Card>
       ) : (
         <>
-          {/* Pick on the left, the answer on the right, both pinned. The page
-              used to stack picker → banner → table → chart → log, so choosing an
-              item pushed the answer under the fold and you scrolled to find
-              what you had just asked for. Nothing here moves out of reach. */}
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1fr)] lg:items-start">
-            <div className="min-w-0 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20 lg:sticky lg:top-4">
+          {/* One thing at a time, each with the whole page.
+              Two cards side by side meant neither had room: the list was a
+              narrow column and the comparison was squeezed into what was left,
+              so everything needed its own inner scroll. His call, and the
+              right one — "kill the split". Pick an item and the comparison
+              TAKES OVER; go back and the list does. */}
+          <div className={stage === "list" ? "block" : "hidden"}>
+            <div className="min-w-0 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Pick an item</p>
                 <p className="text-[11px] text-fg-faint">★ = its current supplier</p>
@@ -448,13 +471,25 @@ export default function PriceComparisonPage() {
               <ItemPickerSingle
                 items={items}
                 value={selected}
-                onChange={setSelected}
+                onChange={openItem}
                 dense
                 suppliers={supplierMap}
               />
             </div>
+          </div>
 
-            <div className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
+          <div className={stage === "item" ? "block" : "hidden"}>
+            {/* Out, and back to where they were. The only navigation on this
+                stage, because there is only one way back. */}
+            <button
+              type="button"
+              onClick={backToList}
+              className="mise-press mb-3 inline-flex items-center gap-2 rounded-xl border border-line px-3.5 py-2 text-sm font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+            >
+              <span aria-hidden>‹</span> All items
+            </button>
+
+            <div className="min-w-0">
               {loadingCompare || !data ? (
                 <Card><Spinner /></Card>
               ) : data.vendor_count === 0 ? (
