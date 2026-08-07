@@ -93,6 +93,15 @@ export function useResizable(storageKey: string, initial: { w: number; h: number
   const begin = useCallback(
     (edge: Edge) => (e: React.PointerEvent<HTMLElement>) => {
       if (e.button !== 0) return;
+      // Never swallow a press meant for a control.
+      //
+      // The whole header is the drag handle, and the header also holds the
+      // settings, expand and ✕ buttons. Calling preventDefault on every
+      // pointerdown killed the click before it could become one — so those
+      // buttons did nothing at all, which is exactly what he hit: "I can see
+      // setting button but it's not working, also even the X button".
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("button, a, input, textarea, select, [role='button']")) return;
       e.preventDefault();
       e.stopPropagation();
       const panel = e.currentTarget.closest("[data-resizable]") as HTMLElement | null;

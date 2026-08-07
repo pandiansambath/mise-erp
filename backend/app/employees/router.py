@@ -341,6 +341,10 @@ class PinSet(BaseModel):
 
     password: str
     pin: str
+    # Optional, so a caller that only rotates the PIN keeps whatever was
+    # chosen last time rather than silently switching the panels off.
+    show_rota: bool | None = None
+    show_leave: bool | None = None
 
 
 class PinUnlock(BaseModel):
@@ -357,6 +361,8 @@ async def attendance_lock_status(
     return {
         "has_pin": attendance_lock.has_pin(hotel) if hotel else False,
         "can_manage": attendance_lock.can_manage_pin(user),
+        "show_rota": bool(hotel and hotel.kiosk_show_rota),
+        "show_leave": bool(hotel and hotel.kiosk_show_leave),
     }
 
 
@@ -374,6 +380,13 @@ async def set_attendance_pin(
     hotel = await db.get(Hotel, user.hotel_id)
     if hotel is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    # The panels are decided here rather than in a settings page nobody
+    # visits: generating the PIN is the one moment the owner is already
+    # thinking about what this screen is for.
+    if payload.show_rota is not None:
+        hotel.kiosk_show_rota = payload.show_rota
+    if payload.show_leave is not None:
+        hotel.kiosk_show_leave = payload.show_leave
     try:
         await attendance_lock.set_pin(db, hotel, payload.pin)
     except attendance_lock.PinError as exc:

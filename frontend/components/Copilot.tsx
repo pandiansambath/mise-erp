@@ -214,6 +214,7 @@ export function Copilot() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The bubble curled down to just its mark.
   const [miniBubble, setMiniBubble] = useState(false);
+  const clickTimer = useRef(0);
   useEffect(() => {
     try {
       setMiniBubble(localStorage.getItem("mise.copilot.miniBubble") === "1");
@@ -789,7 +790,18 @@ export function Copilot() {
           {...drag.handlers}
           onClick={() => {
             if (drag.wasDrag()) return;
-            setOpen(true);
+            // Wait a beat before opening.
+            //
+            // Opening on the FIRST click meant a double-click could never
+            // complete: the panel was already up and the bubble gone by the
+            // time the second one landed, so the shrink appeared to do
+            // nothing. A short window lets the second click arrive and cancel
+            // the open — the standard way a control carries both gestures.
+            if (clickTimer.current) return;
+            clickTimer.current = window.setTimeout(() => {
+              clickTimer.current = 0;
+              setOpen(true);
+            }, 230);
           }}
           aria-label="Ask DineAI Copilot — drag to move, double-click to shrink"
           // Double-click curls it down to the mark alone. His words: "that
@@ -797,6 +809,11 @@ export function Copilot() {
           // and show only logo, currently it taking some space by showing the
           // full name". Remembered, so it stays how it was left.
           onDoubleClick={() => {
+            // Cancel the pending open — this press was never about opening.
+            if (clickTimer.current) {
+              window.clearTimeout(clickTimer.current);
+              clickTimer.current = 0;
+            }
             setMiniBubble((v) => {
               const next = !v;
               try {
@@ -808,7 +825,7 @@ export function Copilot() {
             });
           }}
           style={drag.style}
-          className={`mise-launcher-in group fixed bottom-20 left-4 z-50 lg:bottom-6 lg:left-6 flex touch-none items-center gap-2 rounded-2xl border border-glass/10 bg-brand-600 px-3.5 py-3 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 hover:bg-brand-500 hover:shadow-xl [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] ${
+          className={`mise-launcher-in group fixed bottom-20 left-4 z-50 lg:bottom-6 lg:left-6 flex touch-none items-center gap-2 border border-glass/10 bg-brand-600 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition-all duration-300 hover:bg-brand-500 hover:shadow-xl [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] ${miniBubble ? "mise-curl rounded-full p-3" : "rounded-2xl px-3.5 py-3"} ${
             drag.dragging
               ? "scale-110 cursor-grabbing opacity-90 shadow-2xl"
               : "cursor-grab transition active:scale-95"
