@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SECTIONS } from "@/lib/sections";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -249,23 +250,46 @@ function NavLinks({
             <div className="flex flex-col gap-0.5">
               {inGroup.map((item) => {
                 const active = pathname === item.href;
+                // The page's own jobs, opened out under it while you are
+                // there. Only for the current page — showing every section of
+                // every page would be a wall of links nobody reads.
+                const subs = active ? SECTIONS[item.href] : undefined;
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onClick}
-                    data-tour={item.href.slice(1)}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition duration-200 ${
-                      active
-                        ? "mise-raised !bg-brand-600 text-white"
-                        : "text-fg-faint hover:translate-x-0.5 hover:bg-glass/5 hover:text-fg"
-                    }`}
-                  >
-                    <span aria-hidden className="text-base">
-                      {item.icon}
-                    </span>
-                    {item.label}
-                  </Link>
+                  <div key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onClick}
+                      data-tour={item.href.slice(1)}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition duration-200 ${
+                        active
+                          ? "mise-raised !bg-brand-600 text-white"
+                          : "text-fg-faint hover:translate-x-0.5 hover:bg-glass/5 hover:text-fg"
+                      }`}
+                    >
+                      <span aria-hidden className="text-base">
+                        {item.icon}
+                      </span>
+                      {item.label}
+                    </Link>
+
+                    {subs && subs.length > 0 && (
+                      <ul className="mise-stagger relative ml-6 mt-1 flex flex-col gap-0.5 border-l border-line pl-3">
+                        {subs.map((sub) => (
+                          <li key={sub.key}>
+                            <Link
+                              // SubNav reads ?section= on arrival and fires
+                              // that job, so this works even from another page.
+                              href={`${item.href}?section=${sub.key}`}
+                              onClick={onClick}
+                              className="block rounded-md px-2 py-1.5 text-[12px] text-fg-faint transition hover:bg-glass/5 hover:text-fg"
+                            >
+                              {sub.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 );
               })}
             </div>

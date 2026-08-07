@@ -765,11 +765,28 @@ export function Copilot() {
               the one gesture nobody needs telling. */}
           <div
             {...(isWide ? panel.grip("move") : {})}
+            // Double-click puts it back where it started. `reset` existed but
+            // nothing called it, so a panel dragged somewhere awkward had no
+            // way home — and the drag handle is this header, so "awkward"
+            // could mean "unreachable".
+            onDoubleClick={isWide ? panel.reset : undefined}
+            title={isWide ? "Drag to move · double-click to reset" : undefined}
             className={`relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3 ${
               isWide ? "cursor-grab touch-none active:cursor-grabbing" : ""
             }`}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-brand-600/25 via-brand-500/10 to-transparent" aria-hidden />
+            {/* A grip you can SEE. A grab cursor only appears once the pointer
+                is already there, so it cannot tell you the thing is movable —
+                which is why he thought it was not. */}
+            {isWide && (
+              <span
+                aria-hidden
+                className="relative -ml-1 select-none text-xs leading-none tracking-tighter text-fg-faint/60"
+              >
+                ⠿
+              </span>
+            )}
             <ChefMascot mood={loading ? "think" : "happy"} className="relative w-10 shrink-0" />
             <div className="relative min-w-0 leading-tight">
               <p className="text-sm font-semibold text-fg">DineAI Copilot</p>
