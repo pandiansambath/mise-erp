@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { THEMES, useTheme, type ThemeKey } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 
 type LockStatus = { has_pin: boolean; can_manage: boolean };
@@ -53,6 +54,11 @@ export function AttendanceLock() {
   // thinking about what that screen is for.
   const [showRota, setShowRota] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
+  // Defaults to whatever theme the owner is looking at right now, so it
+  // "follows the hotel" without them having to think about it — and it is
+  // stored server-side, because the tablet is a different browser.
+  const { theme: appTheme } = useTheme();
+  const [kioskTheme, setKioskTheme] = useState<ThemeKey>(appTheme);
 
   function suggest() {
     setPin(String(Math.floor(100000 + Math.random() * 900000)));
@@ -62,7 +68,7 @@ export function AttendanceLock() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/attendance/lock/pin", { password, pin, show_rota: showRota, show_leave: showLeave });
+      await api.post("/attendance/lock/pin", { password, pin, show_rota: showRota, show_leave: showLeave, theme: kioskTheme });
       setShown(pin);
       setStatus({ has_pin: true, can_manage: true });
       setOpen(false);
@@ -226,6 +232,28 @@ export function AttendanceLock() {
                 </span>
               </label>
             ))}
+
+            <p className="mt-3 text-xs font-medium text-fg-soft">How it should look</p>
+            <p className="text-[11px] text-fg-faint">
+              Starts as your own theme. Anyone at the tablet can change it for that device.
+            </p>
+            <div className="mt-2 grid grid-cols-7 gap-1.5">
+              {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKioskTheme(k)}
+                  title={THEMES[k].label}
+                  aria-label={THEMES[k].label}
+                  className={`grid h-8 place-items-center rounded-lg ring-1 ${
+                    k === kioskTheme ? "ring-brand-400" : "ring-glass/20"
+                  }`}
+                  style={{ background: THEMES[k].surfaces[1] }}
+                >
+                  <span className="h-3 w-3 rounded-full" style={{ background: THEMES[k].brand["500"] }} />
+                </button>
+              ))}
+            </div>
           </div>
 
           {error && <p className="text-xs text-rose-400">{error}</p>}

@@ -27,7 +27,7 @@ import { AnalogClock } from "@/components/AnalogClock";
 import { KioskGate } from "@/components/KioskGate";
 import { KioskPanel } from "@/components/KioskPanels";
 import { useHotelTime } from "@/lib/time";
-import { themeVars } from "@/lib/theme";
+import { THEMES, themeVars, type ThemeKey } from "@/lib/theme";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -46,12 +46,47 @@ export default function KioskPage() {
   // Which extra panel is open, and whether the owner allowed them at all.
   const [panel, setPanel] = useState<"rota" | "leave" | null>(null);
   const [allowed, setAllowed] = useState<{ rota: boolean; leave: boolean }>({ rota: false, leave: false });
+  // What this screen looks like.
+  //
+  // The hotel's choice arrives from the server, because the tablet is a
+  // different browser from the owner's and a theme in localStorage would never
+  // reach it. Anyone standing AT the screen can override it for this device —
+  // the light in a kitchen is not the light the owner picked it under.
+  const [theme, setTheme] = useState<ThemeKey>("dark");
+  const [themeOpen, setThemeOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const local = localStorage.getItem("mise.kiosk.theme") as ThemeKey | null;
+      if (local && local in THEMES) setTheme(local);
+    } catch {
+      /* private mode — the hotel's choice still applies */
+    }
+  }, []);
+  const pickTheme = (k: ThemeKey) => {
+    setTheme(k);
+    setThemeOpen(false);
+    try {
+      localStorage.setItem("mise.kiosk.theme", k);
+    } catch {
+      /* nothing to do */
+    }
+  };
 
   useEffect(() => {
     if (loading || !user) return;
     api
-      .get<{ show_rota?: boolean; show_leave?: boolean }>("/attendance/lock")
-      .then((r) => setAllowed({ rota: !!r.show_rota, leave: !!r.show_leave }))
+      .get<{ show_rota?: boolean; show_leave?: boolean; theme?: string }>("/attendance/lock")
+      .then((r) => {
+        setAllowed({ rota: !!r.show_rota, leave: !!r.show_leave });
+        // Only if this device has not been given one of its own.
+        let local: string | null = null;
+        try {
+          local = localStorage.getItem("mise.kiosk.theme");
+        } catch {
+          /* ignore */
+        }
+        if (!local && r.theme && r.theme in THEMES) setTheme(r.theme as ThemeKey);
+      })
       .catch(() => {});
   }, [loading, user]);
 
@@ -157,8 +192,13 @@ export default function KioskPage() {
     // rather than duplicating hexes that would drift.
     <div
       className="mise-app min-h-dvh bg-shell text-fg"
-      data-mode="dark"
-      style={themeVars("dark")}
+      // Follows the hotel now, not a hard-coded dark. `data-mode` still has to
+      // travel with it — the light-theme legibility rules in globals.css key
+      // off that attribute, and it is what stops a pale palette turning the
+      // accent text into something nobody can read. That was the original
+      // washed-out bug, and it is only avoided by keeping the two in step.
+      data-mode={THEMES[theme].light ? "light" : "dark"}
+      style={themeVars(theme)}
     >
       {/* Light in the room. Two slow blooms behind everything, so a screen
           that lives on a wall for twelve hours a day looks alive rather than
@@ -233,6 +273,47 @@ export default function KioskPage() {
             🗓️ Today&apos;s rota
           </button>
         )}
+        {/* A device-level override. The owner sets what it should be; the
+            person standing in front of it gets the last word, because they
+            are the one who can see the screen. */}
+        <div className={`relative ${allowed.rota || allowed.leave ? "" : "ml-auto"}`}>
+          <button
+            type="button"
+            onClick={() => setThemeOpen((v) => !v)}
+            aria-label="Change how this screen looks"
+            className="mise-press grid h-9 w-9 place-items-center rounded-full border border-line-2"
+          >
+            <span
+              className="h-4 w-4 rounded-full ring-1 ring-glass/30"
+              style={{ background: THEMES[theme].brand["500"] }}
+            />
+          </button>
+          {themeOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setThemeOpen(false)} aria-hidden />
+              <div className="absolute left-0 z-50 mt-2 grid w-64 grid-cols-4 gap-2 rounded-2xl border border-line bg-paper p-3 shadow-2xl">
+                {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => pickTheme(k)}
+                    title={THEMES[k].label}
+                    className={`grid h-10 place-items-center rounded-xl ring-1 ${
+                      k === theme ? "ring-brand-400" : "ring-glass/20"
+                    }`}
+                    style={{ background: THEMES[k].surfaces[1] }}
+                  >
+                    <span
+                      className="h-3.5 w-3.5 rounded-full"
+                      style={{ background: THEMES[k].brand["500"] }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         {allowed.leave && (
           <button
             type="button"
@@ -326,7 +407,7 @@ export default function KioskPage() {
               <span
                 aria-hidden
                 className={`mb-3 grid h-14 w-14 place-items-center rounded-2xl font-display text-xl font-bold ${
-                  inNow || onBreak ? "bg-white/10 text-fg" : "bg-white/[0.06] text-fg-soft"
+                  inNow || onBreak ? "bg-glass/15 text-fg" : "bg-glass/[0.08] text-fg-soft"
                 }`}
               >
                 {emp.full_name
@@ -354,7 +435,7 @@ export default function KioskPage() {
                     type="button"
                     disabled={busy === emp.id}
                     onClick={() => punch(emp, "CLOCK_IN", "clocked in")}
-                    className="mise-press rounded-2xl bg-brand-600 py-4 text-base font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
+                    className="mise-press rounded-2xl bg-brand-600 py-4 text-base font-semibold text-[color:var(--color-brand-50,#fff)] transition hover:bg-brand-500 disabled:opacity-50"
                   >
                     Clock in
                   </button>
@@ -384,7 +465,7 @@ export default function KioskPage() {
                     type="button"
                     disabled={busy === emp.id}
                     onClick={() => punch(emp, "BREAK_END", "back from break")}
-                    className="mise-press rounded-2xl bg-brand-600 py-4 text-base font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
+                    className="mise-press rounded-2xl bg-brand-600 py-4 text-base font-semibold text-[color:var(--color-brand-50,#fff)] transition hover:bg-brand-500 disabled:opacity-50"
                   >
                     End break
                   </button>
@@ -438,7 +519,7 @@ export default function KioskPage() {
                 type="button"
                 onClick={leave}
                 disabled={pin.length < 4}
-                className="mise-press flex-1 rounded-2xl bg-brand-600 py-3 font-semibold text-white disabled:opacity-40"
+                className="mise-press flex-1 rounded-2xl bg-brand-600 py-3 font-semibold text-[color:var(--color-brand-50,#fff)] disabled:opacity-40"
               >
                 Unlock
               </button>

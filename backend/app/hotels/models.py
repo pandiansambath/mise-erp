@@ -92,6 +92,13 @@ class Hotel(Base):
     # and today's rota is more information than some kitchens want on display.
     kiosk_show_rota: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     kiosk_show_leave: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # What the wall tablet LOOKS like. Null means "dark", which is the safe
+    # default for a screen that lives in a kitchen.
+    #
+    # It is stored per hotel rather than read from the browser because the
+    # tablet is a different browser from the owner's — a theme kept in
+    # localStorage would never reach it.
+    kiosk_theme: Mapped[str | None] = mapped_column(String(24))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

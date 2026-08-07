@@ -345,6 +345,7 @@ class PinSet(BaseModel):
     # chosen last time rather than silently switching the panels off.
     show_rota: bool | None = None
     show_leave: bool | None = None
+    theme: str | None = None
 
 
 class PinUnlock(BaseModel):
@@ -363,6 +364,7 @@ async def attendance_lock_status(
         "can_manage": attendance_lock.can_manage_pin(user),
         "show_rota": bool(hotel and hotel.kiosk_show_rota),
         "show_leave": bool(hotel and hotel.kiosk_show_leave),
+        "theme": (hotel.kiosk_theme if hotel else None) or "dark",
     }
 
 
@@ -387,6 +389,8 @@ async def set_attendance_pin(
         hotel.kiosk_show_rota = payload.show_rota
     if payload.show_leave is not None:
         hotel.kiosk_show_leave = payload.show_leave
+    if payload.theme is not None:
+        hotel.kiosk_theme = payload.theme[:24]
     try:
         await attendance_lock.set_pin(db, hotel, payload.pin)
     except attendance_lock.PinError as exc:

@@ -188,7 +188,14 @@ export const THEMES: Record<ThemeKey, ThemeDef> = {
 };
 
 const STORAGE_KEY = "mise_theme";
-const DEFAULT: ThemeKey = "emerald";
+// Burgundy, not green. His call: a hotel opening its dashboard for the FIRST
+// time should land on the brand's own colour.
+//
+// This only decides what somebody sees before they have chosen anything —
+// ThemeProvider reads localStorage first, so every existing account keeps
+// exactly the theme it is on and nobody's screen changes underneath them.
+// "claret" is Burgundy (Light); "burgundy" is the dark cut of the same hue.
+const DEFAULT: ThemeKey = "claret";
 
 /** Every CSS variable a theme drives. Apply to the dashboard shell container. */
 export function themeVars(key: ThemeKey): CSSProperties {
