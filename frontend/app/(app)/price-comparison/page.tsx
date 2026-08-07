@@ -13,7 +13,7 @@ import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { AreaChart } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
-import { DetailSheet } from "@/components/DetailSheet";
+import { DetailSheet, DetailRow } from "@/components/DetailSheet";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -147,6 +147,10 @@ export default function PriceComparisonPage() {
   const [changeLog, setChangeLog] = useState<PriceChange[]>([]);
   const [allSuppliers, setAllSuppliers] = useState<ItemSuppliers[]>([]);
   const [pane, setPane] = useState<"suppliers" | "history" | "changes" | "add">("suppliers");
+  // One supplier's line, opened from the list — a sheet over the comparison.
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const [rowPrice, setRowPrice] = useState("");
+  const [rowBusy, setRowBusy] = useState(false);
   const { format } = useCurrency();
 
   useEffect(() => {
@@ -524,7 +528,14 @@ export default function PriceComparisonPage() {
                             return (
                               <li
                                 key={row.vendor_id}
-                                className={`mise-feel rounded-xl border p-3 transition ${
+                                // The whole card is the door. Everything you
+                                // might want to do to this supplier's price is
+                                // behind it, so nothing needs another screen.
+                                onClick={() => {
+                                  setOpenRow(row.vendor_id);
+                                  setRowPrice(row.price_per_unit);
+                                }}
+                                className={`mise-feel cursor-pointer rounded-xl border p-3 transition hover:border-brand-400/50 ${
                                   row.is_preferred
                                     ? "border-brand-400/45 bg-brand-400/[0.09]"
                                     : idx === 0
@@ -557,7 +568,7 @@ export default function PriceComparisonPage() {
                                     (row.is_preferred ? (
                                       <button
                                         type="button"
-                                        onClick={() => setPreferred(null)}
+                                        onClick={(e) => { e.stopPropagation(); setPreferred(null); }}
                                         className="mise-press rounded-lg border border-line px-2.5 py-1 text-[11px] text-fg-faint hover:text-fg"
                                       >
                                         Clear
@@ -565,7 +576,7 @@ export default function PriceComparisonPage() {
                                     ) : (
                                       <button
                                         type="button"
-                                        onClick={() => setPreferred(row.vendor_id)}
+                                        onClick={(e) => { e.stopPropagation(); setPreferred(row.vendor_id); }}
                                         className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-2.5 py-1 text-[11px] font-medium text-brand-300"
                                       >
                                         Choose
@@ -573,6 +584,7 @@ export default function PriceComparisonPage() {
                                     ))}
                                   <Link
                                     href={`/vendors?vendor=${row.vendor_id}`}
+                                    onClick={(e) => e.stopPropagation()}
                                     title={`Open ${row.vendor_name} on the Vendors page`}
                                     className="mise-press grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line text-xs text-fg-faint transition hover:border-brand-400/50 hover:text-brand-300"
                                   >
@@ -588,6 +600,100 @@ export default function PriceComparisonPage() {
                           otherwise your ★ chosen supplier; otherwise the cheapest. Recipe costing
                           follows the same rule.
                         </p>
+
+                        {/* Everything you can do to one supplier's price. */}
+                        {(() => {
+                          const row = data.comparisons.find((r) => r.vendor_id === openRow);
+                          if (!row) return null;
+                          const best = parseFloat(data.cheapest_vendor?.price_per_unit ?? row.price_per_unit);
+                          const gap = parseFloat(row.price_per_unit) - best;
+                          return (
+                            <DetailSheet
+                              open
+                              onClose={() => setOpenRow(null)}
+                              icon="\u{1F3F7}"
+                              title={row.vendor_name}
+                              subtitle={`${data.item_name} · per ${data.unit}`}
+                              badge={row.is_preferred ? <Badge tone="amber">★ chosen</Badge> : undefined}
+                            >
+                              <DetailRow label="Their price" value={format(row.price_per_unit)} />
+                              <DetailRow
+                                label="Cheapest"
+                                value={format(String(best))}
+                                hint={
+                                  gap > 0.001
+                                    ? `they are ${format(String(Math.round(gap * 100) / 100))} more`
+                                    : "this is the cheapest quote"
+                                }
+                              />
+
+                              {canWrite && (
+                                <>
+                                  <p className="mt-5 text-xs font-medium uppercase tracking-wide text-fg-faint">
+                                    Change what they charge
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                                    <input
+                                      inputMode="decimal"
+                                      value={rowPrice}
+                                      onChange={(e) => setRowPrice(e.target.value)}
+                                      className="mise-well w-32 rounded-lg px-3 py-2 text-sm outline-none"
+                                      aria-label={`New price from ${row.vendor_name}`}
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={rowBusy || !rowPrice}
+                                      onClick={async () => {
+                                        setRowBusy(true);
+                                        try {
+                                          await api.post(`/vendors/${row.vendor_id}/items`, {
+                                            item_id: selected,
+                                            price_per_unit: rowPrice,
+                                          });
+                                          setOpenRow(null);
+                                          reloadCompare();
+                                        } catch {
+                                          /* the sheet stays open with what was typed */
+                                        } finally {
+                                          setRowBusy(false);
+                                        }
+                                      }}
+                                      className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                                    >
+                                      {rowBusy ? "Saving\u2026" : "Save"}
+                                    </button>
+                                  </div>
+
+                                  <div className="mt-4 flex flex-wrap gap-2">
+                                    {row.is_preferred ? (
+                                      <button
+                                        type="button"
+                                        onClick={async () => { await setPreferred(null); setOpenRow(null); }}
+                                        className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm text-fg-soft"
+                                      >
+                                        Stop choosing them
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={async () => { await setPreferred(row.vendor_id); setOpenRow(null); }}
+                                        className="mise-press rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-200"
+                                      >
+                                        \u2605 Make them the chosen supplier
+                                      </button>
+                                    )}
+                                    <Link
+                                      href={`/vendors?vendor=${row.vendor_id}`}
+                                      className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
+                                    >
+                                      Open this supplier \u2197
+                                    </Link>
+                                  </div>
+                                </>
+                              )}
+                            </DetailSheet>
+                          );
+                        })()}
                       </>
                     )}
 
