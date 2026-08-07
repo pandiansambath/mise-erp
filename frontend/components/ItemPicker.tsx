@@ -585,6 +585,25 @@ export function ItemPicker({
         <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
           Your list {chosen.length > 0 && `· ${chosen.length} item${chosen.length === 1 ? "" : "s"}`}
         </p>
+
+        {/* What it comes to, and who it is going to.
+            Submitting an order is a considered act, so the review stage should
+            read like one — the total and the spread stated before the lines,
+            not left for somebody to add up in their head. */}
+        {staged && trayStage === "tray" && running.total > 0 && (
+          <div className="mise-neo-raised mt-2 flex flex-wrap items-baseline justify-between gap-3 rounded-xl px-4 py-3">
+            <span className="font-display text-2xl font-semibold tabular-nums text-fg">
+              {format(running.total.toFixed(2))}
+            </span>
+            <span className="text-[11px] text-fg-faint">
+              {chosen.length} item{chosen.length === 1 ? "" : "s"} · {running.vendors.size} supplier
+              {running.vendors.size === 1 ? "" : "s"}
+              <span className="mt-0.5 block">
+                priced at your chosen supplier, or the cheapest where none is set
+              </span>
+            </span>
+          </div>
+        )}
         {chosen.length === 0 ? (
           <p className="py-3 text-center text-sm text-fg-faint">
             Tap items above to add them here, then enter how much you need.
