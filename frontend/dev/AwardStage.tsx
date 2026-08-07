@@ -12,7 +12,7 @@
 // screenful of plank. A safe view first, refined after.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { coinFace, playBreak, playHit, primeSounds, woodTexture } from "./chestBits";
+import { coinFace, playBreak, playHit, primeSounds, studioEnv, woodTexture } from "./chestBits";
 
 export function AwardStage({ onOpened }: { onOpened?: () => void }) {
   const mount = useRef<HTMLDivElement>(null);
@@ -79,55 +79,83 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       halo.position.set(0, 0.6, 1.6);
       scene.add(halo);
 
+      // Give the metal a room to reflect. Without this a metalness:1 surface
+      // renders nearly black and has to be faked with emissive — which is
+      // exactly why the coin read as flat yellow plastic.
+      const envTex = new THREE.CanvasTexture(studioEnv());
+      envTex.mapping = THREE.EquirectangularReflectionMapping;
+      envTex.colorSpace = THREE.SRGBColorSpace;
+      scene.environment = envTex;
+
       const woodTex = new THREE.CanvasTexture(woodTexture());
       const wood = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.8, metalness: 0.05 });
       const iron = new THREE.MeshStandardMaterial({ color: 0x5c4a2e, metalness: 1, roughness: 0.4 });
+      // Low roughness so the reflection stays a sharp highlight rather than a
+      // smear, and envMapIntensity above 1 so the studio reads hot on the rim.
       const gold = new THREE.MeshStandardMaterial({
-        color: 0xffc861, metalness: 1, roughness: 0.12,
+        color: 0xffcf76, metalness: 1, roughness: 0.09, envMapIntensity: 2.1,
       });
 
       // ── chest ─────────────────────────────────────────────────────────
+      // A real pirate chest, not a box I built. CC0 from Poly Pizza (see
+      // public/dev/models/CREDITS.md) and chosen because its lid is a
+      // SEPARATE node — `Chest_Top` beside `Chest_Base` — which is what
+      // lets it be hinged and thrown open. A chest welded into one mesh
+      // would have had to be faked.
       const chest = new THREE.Group();
       scene.add(chest);
-      const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.3, 1.8), wood);
-      body.position.y = -0.42;
-      body.castShadow = body.receiveShadow = true;
-      chest.add(body);
-      for (const x of [-0.9, 0.9]) {
-        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.19, 1.36, 1.86), iron);
-        strap.position.set(x, -0.42, 0);
-        chest.add(strap);
-      }
-      for (let i = 0; i < 10; i++) {
-        const r = new THREE.Mesh(new THREE.SphereGeometry(0.043, 10, 10), iron);
-        r.position.set(-1.1 + (i % 5) * 0.55, i < 5 ? 0.06 : -0.9, 0.91);
-        chest.add(r);
-      }
-      const lock = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.46, 0.12), gold);
-      lock.position.set(0, -0.24, 0.93);
-      chest.add(lock);
-
       const hinge = new THREE.Group();
-      hinge.position.set(0, 0.24, -0.9);
       chest.add(hinge);
-      const dome = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.9, 0.9, 2.6, 28, 1, false, 0, Math.PI), wood,
-      );
-      dome.rotation.z = Math.PI / 2;
-      dome.position.set(0, 0, 0.9);
-      dome.castShadow = true;
-      hinge.add(dome);
-      for (const x of [-0.9, 0.9]) {
-        const band = new THREE.Mesh(new THREE.TorusGeometry(0.91, 0.05, 10, 24, Math.PI), iron);
-        band.rotation.y = Math.PI / 2;
-        band.position.set(x, 0, 0.9);
-        hinge.add(band);
+
+      const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+      const gltf = await new GLTFLoader().loadAsync("/dev/models/chest.glb").catch(() => null);
+      if (!alive) return;
+      if (gltf) {
+        const root = gltf.scene;
+        const base = root.getObjectByName("Chest_Base");
+        const top = root.getObjectByName("Chest_Top");
+
+        root.traverse((o) => {
+          const m = o as InstanceType<typeof THREE.Mesh>;
+          if (!m.isMesh) return;
+          m.castShadow = m.receiveShadow = true;
+          // The model ships flat-lit materials; give them the studio so the
+          // metal bands and gold catch light like the coin does.
+          const mat = m.material as InstanceType<typeof THREE.MeshStandardMaterial>;
+          if (mat && "envMapIntensity" in mat) mat.envMapIntensity = 1.5;
+        });
+
+        // Sit it on the floor of the shot and scale it to the frame the
+        // camera was set up for, whatever units the artist worked in.
+        const box = new THREE.Box3().setFromObject(root);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const k = 2.6 / Math.max(size.x, 0.001);
+        root.scale.setScalar(k);
+
+        if (top && base) {
+          // Re-parent the lid onto a hinge at its own back edge.
+          const tb = new THREE.Box3().setFromObject(top);
+          hinge.position.set(0, tb.min.y * k, tb.min.z * k);
+          top.position.multiplyScalar(1);
+          hinge.add(top);
+          top.position.sub(new THREE.Vector3(0, tb.min.y, tb.min.z));
+          chest.add(base);
+          base.scale.setScalar(k);
+          top.scale.setScalar(k);
+        } else {
+          chest.add(root);
+        }
+        const after = new THREE.Box3().setFromObject(chest);
+        chest.position.y -= after.min.y + 1.1;
       }
 
       // ── the coin ──────────────────────────────────────────────────────
       const faceTex = new THREE.CanvasTexture(coinFace());
+      faceTex.anisotropy = 8; // the lettering is read at an angle; without
+      faceTex.colorSpace = THREE.SRGBColorSpace; // this it smears as it turns
       const faceMat = new THREE.MeshStandardMaterial({
-        map: faceTex, metalness: 0.98, roughness: 0.14,
+        map: faceTex, metalness: 0.94, roughness: 0.16, envMapIntensity: 1.9,
         emissiveMap: faceTex, emissive: 0xffffff, emissiveIntensity: 0,
       });
       const coin = new THREE.Group();
@@ -201,6 +229,30 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
         shards.push({ m, v: new THREE.Vector3(), s: new THREE.Vector3() });
       }
 
+      // Sparks catching on the coin. Tiny additive points that pop and fade
+      // at their own rates — a glint reads as light on metal only if the
+      // glints are not in step with each other.
+      const sparkMat = new THREE.PointsMaterial({
+        color: 0xfff0c0, size: 0.075, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+      });
+      const SPARKS = 90;
+      const sparkPos = new Float32Array(SPARKS * 3);
+      const sparkPhase = new Float32Array(SPARKS);
+      for (let i = 0; i < SPARKS; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = 0.55 + Math.random() * 0.9;
+        sparkPos[i * 3] = Math.cos(a) * r;
+        sparkPos[i * 3 + 1] = Math.sin(a) * r * 0.9;
+        sparkPos[i * 3 + 2] = (Math.random() - 0.5) * 0.7;
+        sparkPhase[i] = Math.random() * Math.PI * 2;
+      }
+      const sparkGeo = new THREE.BufferGeometry();
+      sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparkPos, 3));
+      const sparks = new THREE.Points(sparkGeo, sparkMat);
+      sparks.visible = false;
+      scene.add(sparks);
+
       let shake = 0, flash = 0, damage = 0, swing = 0, openT = 0;
       let opened = false;
 
@@ -227,6 +279,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
               s.s.set(Math.random() * 0.25, Math.random() * 0.25, Math.random() * 0.25);
             }
             coin.visible = true;
+            sparks.visible = true;
           }
         },
       };
@@ -266,13 +319,28 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           hinge.rotation.x = -0.4 - openT * 1.9;
           chest.position.y = -openT * 3;
           coin.position.y = -0.3 + openT * 0.95;
-          coin.position.z = openT * 3.1;
-          coin.scale.setScalar(0.4 + openT * 0.9);
+          coin.position.z = openT * 1.5;
+          coin.scale.setScalar(0.34 + openT * 0.5);
           coin.rotation.y += dt * (3.4 - openT * 2.6);
           // It lights up as it comes: gold that emits reads as gold in a
           // spotlight, which is what "super shining" actually looks like.
-          faceMat.emissiveIntensity = openT * 0.32;
+          // A whisper of glow only. The shine should come from the
+          // reflection; emissive past this point flattens the engraving.
+          faceMat.emissiveIntensity = openT * 0.1;
           halo.intensity = openT * 26;
+
+          sparks.position.copy(coin.position);
+          sparks.scale.setScalar(0.34 + openT * 0.5);
+          sparkMat.opacity = openT * 0.9;
+          const sp = sparkGeo.attributes.position.array as Float32Array;
+          for (let i = 0; i < SPARKS; i++) {
+            // Each one breathes on its own clock, so they twinkle instead of
+            // pulsing together like a string of fairy lights.
+            const k = 0.9 + Math.sin(t * 3.1 + sparkPhase[i]) * 0.12;
+            sp[i * 3 + 2] = Math.sin(t * 1.4 + sparkPhase[i]) * 0.35;
+            sparks.scale.setScalar((0.34 + openT * 0.5) * k);
+          }
+          sparkGeo.attributes.position.needsUpdate = true;
 
           for (const s of shards) {
             if (!s.m.visible) continue;
@@ -310,7 +378,8 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
           const m = o as InstanceType<typeof THREE.Mesh>;
           if (m.geometry) m.geometry.dispose();
         });
-        [wood, iron, gold, faceMat, arcMat].forEach((m) => m.dispose());
+        [wood, iron, gold, faceMat, arcMat, sparkMat].forEach((m) => m.dispose());
+        envTex.dispose();
         woodTex.dispose();
         faceTex.dispose();
         renderer.dispose();
