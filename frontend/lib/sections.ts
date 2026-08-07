@@ -14,6 +14,7 @@ export type PageSection = { key: string; label: string };
 
 export const SECTIONS: Record<string, PageSection[]> = {
   "/inventory": [
+    { key: "items", label: "View items" },
     { key: "add", label: "Add an item" },
     { key: "low", label: "What's low" },
     { key: "search", label: "Find something" },

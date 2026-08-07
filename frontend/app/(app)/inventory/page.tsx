@@ -787,6 +787,20 @@ export default function InventoryPage() {
             },
           },
           {
+            key: "items",
+            label: "View items",
+            icon: "📋",
+            count: items.length,
+            focus: "inventory-list",
+            // The page's whole reason for existing was the one job missing
+            // from its own list of jobs — so from anywhere else in the app
+            // there was no way to say "just show me the stock".
+            onSelect: () => {
+              setStatusFilter("all");
+              setCatMgr(false);
+            },
+          },
+          {
             key: "categories",
             label: "Categories",
             icon: "🗂",
@@ -1380,7 +1394,7 @@ export default function InventoryPage() {
             )}
           </div>
 
-          <Card className="hidden p-0 lg:block">
+          <Card id="inventory-list" className="hidden scroll-mt-24 p-0 lg:block">
             <div className="max-h-[62vh] overflow-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-paper">

@@ -21,6 +21,7 @@
 // — it is shown plainly. Red dots train people to ignore them.
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { spotlight } from "./fx";
 
 export type SubNavItem = {
   key: string;
@@ -30,6 +31,14 @@ export type SubNavItem = {
   count?: number;
   /** Draws attention when the count means something needs doing. */
   tone?: "plain" | "warn" | "bad";
+  /** The id of the thing this job is ABOUT.
+   *
+   *  Given one, choosing the job scrolls to it and pulses a ring around it.
+   *  Pages that switch a tab used to change silently — on a long screen the
+   *  new content can be entirely below the fold, so the click looked ignored.
+   *  Naming the target here means every section confirms itself the same way,
+   *  rather than each page inventing its own. */
+  focus?: string;
   onSelect: () => void;
 };
 
@@ -67,7 +76,11 @@ export function SubNav({
   useEffect(() => {
     const pick = (key: string | null) => {
       if (!key) return;
-      latest.current.find((i) => i.key === key)?.onSelect();
+      const hit = latest.current.find((i) => i.key === key);
+      if (!hit) return;
+      hit.onSelect();
+      // Let the tab actually switch before hunting for the target.
+      if (hit.focus) window.setTimeout(() => spotlight(hit.focus!), 60);
     };
     pick(new URLSearchParams(window.location.search).get("section"));
 
@@ -97,7 +110,10 @@ export function SubNav({
           <button
             key={item.key}
             type="button"
-            onClick={item.onSelect}
+            onClick={() => {
+              item.onSelect();
+              if (item.focus) window.setTimeout(() => spotlight(item.focus!), 60);
+            }}
             aria-current={on ? "true" : undefined}
             className={`mise-press flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
               on

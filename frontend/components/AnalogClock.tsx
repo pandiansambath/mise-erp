@@ -145,7 +145,12 @@ export function AnalogClock({ size = 260 }: { size?: number }) {
 
           It sits on a soft plate: bare digits over a sweeping second hand are
           legible for half of every minute and mush for the other half. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[59%] flex items-baseline justify-center gap-1.5">
+      {/* Under the hands, not over them.
+          A real clock has its printed face beneath the movement; digits laid
+          on top read as a sticker. `-z-10` puts the readout behind the SVG,
+          which is drawn after it — so the second hand sweeps ACROSS the
+          numbers, which is exactly what he asked for. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[59%] -z-10 flex items-baseline justify-center gap-1.5">
         <span className="rounded-lg bg-shell/55 px-2 py-0.5 backdrop-blur-[2px]">
           <span
             ref={digital}
