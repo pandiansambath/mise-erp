@@ -237,6 +237,41 @@ function NavLinks({
   pathname: string;
   onClick?: () => void;
 }) {
+  // Which section lists are open. Remembered, because re-opening the same
+  // three every visit is a chore the sidebar can just not impose.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [openSection, setOpenSection] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("mise.nav.open");
+      if (raw) setOpen(JSON.parse(raw) as Record<string, boolean>);
+    } catch {
+      /* private mode — defaults are fine */
+    }
+  }, []);
+
+  const toggleOpen = (href: string, next: boolean) => {
+    setOpen((prev) => {
+      const merged = { ...prev, [href]: next };
+      try {
+        localStorage.setItem("mise.nav.open", JSON.stringify(merged));
+      } catch {
+        /* nothing to do */
+      }
+      return merged;
+    });
+  };
+
+  // The page announces which job it has open — including when the choice was
+  // made on the page itself — so the sidebar lights the same one.
+  useEffect(() => {
+    const onOpen = (e: Event) =>
+      setOpenSection((e as CustomEvent<{ key?: string }>).detail?.key ?? null);
+    window.addEventListener("mise:section-open", onOpen);
+    return () => window.removeEventListener("mise:section-open", onOpen);
+  }, []);
+
   return (
     <nav className="flex flex-col px-3">
       {NAV_GROUPS.map((group) => {
@@ -253,40 +288,88 @@ function NavLinks({
                 // The page's own jobs, opened out under it while you are
                 // there. Only for the current page — showing every section of
                 // every page would be a wall of links nobody reads.
-                const subs = active ? SECTIONS[item.href] : undefined;
+                // Every section that HAS jobs shows them, not only the page
+                // you happen to be standing on — "we want this sub-section in
+                // all the sections". Open by default where you are.
+                const subs = SECTIONS[item.href];
+                const hasSubs = !!subs && subs.length > 0;
+                const shown = hasSubs && (open[item.href] ?? active);
                 return (
                   <div key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={onClick}
-                      data-tour={item.href.slice(1)}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition duration-200 ${
+                    <div
+                      className={`flex items-center rounded-lg pr-1 transition duration-200 ${
                         active
                           ? "mise-raised !bg-brand-600 text-white"
                           : "text-fg-faint hover:translate-x-0.5 hover:bg-glass/5 hover:text-fg"
                       }`}
                     >
-                      <span aria-hidden className="text-base">
-                        {item.icon}
-                      </span>
-                      {item.label}
-                    </Link>
+                      <Link
+                        href={item.href}
+                        onClick={onClick}
+                        data-tour={item.href.slice(1)}
+                        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-sm font-medium"
+                      >
+                        <span aria-hidden className="text-base">
+                          {item.icon}
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                      {hasSubs && (
+                        <button
+                          type="button"
+                          // Its own control, so opening the list and GOING to
+                          // the page stay separate acts — one click each way,
+                          // which is what he asked for.
+                          onClick={() => toggleOpen(item.href, !shown)}
+                          aria-expanded={shown}
+                          aria-label={`${shown ? "Hide" : "Show"} ${item.label} sections`}
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[10px] opacity-70 transition hover:bg-black/15 hover:opacity-100"
+                        >
+                          <span
+                            aria-hidden
+                            className="transition-transform duration-200"
+                            style={{ transform: shown ? "rotate(90deg)" : "none" }}
+                          >
+                            ▸
+                          </span>
+                        </button>
+                      )}
+                    </div>
 
-                    {subs && subs.length > 0 && (
+                    {shown && (
                       <ul className="mise-stagger relative ml-6 mt-1 flex flex-col gap-0.5 border-l border-line pl-3">
-                        {subs.map((sub) => (
-                          <li key={sub.key}>
-                            <Link
-                              // SubNav reads ?section= on arrival and fires
-                              // that job, so this works even from another page.
-                              href={`${item.href}?section=${sub.key}`}
-                              onClick={onClick}
-                              className="block rounded-md px-2 py-1.5 text-[12px] text-fg-faint transition hover:bg-glass/5 hover:text-fg"
-                            >
-                              {sub.label}
-                            </Link>
-                          </li>
-                        ))}
+                        {subs.map((sub) => {
+                          const on = active && openSection === sub.key;
+                          return (
+                            <li key={sub.key}>
+                              <Link
+                                href={`${item.href}?section=${sub.key}`}
+                                onClick={(e) => {
+                                  // Already here? Then there is nothing to
+                                  // navigate to — tell the page directly.
+                                  // Relying on the URL alone was the bug: the
+                                  // page does not remount, so it never saw the
+                                  // new value and nothing happened.
+                                  if (pathname === item.href) {
+                                    e.preventDefault();
+                                    setOpenSection(sub.key);
+                                    window.dispatchEvent(
+                                      new CustomEvent("mise:section", { detail: { key: sub.key } }),
+                                    );
+                                  }
+                                  onClick?.();
+                                }}
+                                className={`block rounded-md px-2 py-1.5 text-[12px] transition ${
+                                  on
+                                    ? "bg-brand-400/15 font-medium text-brand-300"
+                                    : "text-fg-faint hover:bg-glass/5 hover:text-fg"
+                                }`}
+                              >
+                                {sub.label}
+                              </Link>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </div>

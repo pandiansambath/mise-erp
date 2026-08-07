@@ -184,3 +184,39 @@ async def test_one_restaurants_tablet_is_not_anothers(db, hotel) -> None:
     assert a.id != b.id
     assert a.hotel_id != b.hotel_id
     assert a.email != b.email
+
+
+async def test_the_kiosk_session_can_resolve_itself(client, kiosk, auth_header) -> None:
+    """GET /auth/me must work for the tablet.
+
+    This is the call the kiosk makes immediately after the PIN is accepted, and
+    it answered 500 in production: the synthetic address used `.local`, a
+    reserved special-use domain that email-validator refuses, so `UserOut.email`
+    could not serialise. The PIN worked, the token was minted, and then the page
+    reloaded straight back to the keypad.
+
+    Nothing about that is visible from the kiosk-open endpoint, which is why it
+    shipped — so the assertion belongs here, on the call that actually broke.
+    """
+    account, _ = kiosk
+    res = await client.get("/api/auth/me", headers=auth_header(account))
+    assert res.status_code == 200, res.text
+    assert res.json()["user"]["role"] == "KIOSK"
+
+
+def test_the_kiosk_address_is_a_usable_email() -> None:
+    """Directly, so the reason is not lost.
+
+    It is never delivered to — but it has to be WELL FORMED, or every endpoint
+    returning a UserOut breaks for this account.
+    """
+    import uuid
+
+    from pydantic import BaseModel, EmailStr
+
+    from app.auth.kiosk import kiosk_email
+
+    class Probe(BaseModel):
+        email: EmailStr
+
+    Probe(email=kiosk_email(uuid.uuid4()))  # raises if the domain is special-use

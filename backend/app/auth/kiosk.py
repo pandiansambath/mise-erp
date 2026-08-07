@@ -52,8 +52,19 @@ def kiosk_email(hotel_id: uuid.UUID) -> str:
 
     Deterministic so a second call finds the existing kiosk rather than
     quietly creating a rival one.
+
+    The domain is a REAL one we own, not `.local`. That is not cosmetic:
+    `.local` is a reserved special-use name, and email-validator refuses it —
+    so `UserOut.email` (an EmailStr) could not serialise a kiosk account and
+    GET /auth/me answered 500 for every kiosk session. The PIN was accepted,
+    the token was minted, and then the reload could not resolve the session,
+    so the keypad simply came back: "i entered the pin… but still nothing is
+    happening".
+
+    Nothing is ever delivered here — no inbox exists, and the account is
+    created pre-verified — it only has to be a WELL-FORMED address.
     """
-    return f"kiosk+{hotel_id}@kiosk.dineai.local"
+    return f"kiosk+{hotel_id}@kiosk.dineai.cloud"
 
 
 async def get_kiosk(db: AsyncSession, hotel_id: uuid.UUID) -> User | None:
