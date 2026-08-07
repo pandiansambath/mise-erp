@@ -1766,3 +1766,16 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .dev-smoke { animation: none; }
 }
+
+/* The chat header, when the panel has been made small.
+   The width rules covered the MESSAGES but never the header, so shrinking the
+   panel left the title, the usage ring and the buttons fighting over the same
+   few pixels — "when we shrink, the UI is tight and clumsy". At this size the
+   header keeps only what identifies the panel and the controls; the mascot and
+   the model line are the first things a small window can do without. */
+[data-narrow="true"] .mise-chat-head { gap: 0.5rem; padding-left: 0.6rem; padding-right: 0.6rem; }
+[data-narrow="true"] .mise-chat-mascot { display: none; }
+[data-narrow="true"] .mise-chat-sub { display: none; }
+[data-narrow="true"] .mise-chat-title { font-size: 0.78rem; }
+/* The usage ring is a nicety; the ✕ is not. */
+[data-narrow="true"] .mise-usage-ring { display: none; }
