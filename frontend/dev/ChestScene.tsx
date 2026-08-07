@@ -1,53 +1,49 @@
 "use client";
 
-// A real 3D chest, and a hammer.
+// A chest, a hammer, and lightning.
 //
-// He asked for this twice: "there will be a treasure box and we will break
-// that treasure box with hammer — how hard we hitting it will break and show
-// the medal", and "css is not impressive… the showcase coin also not 3d".
-// Fair. Flat gradients cannot do what light does to metal.
+// His brief: "when we hit with hammer we need a Thor effect — if he hits,
+// lightning will spread across… with sound effects… a best UI/UX animation".
 //
-// Built in geometry rather than downloaded. Free chest models are mostly
-// low-poly game assets — the exact "looks cartoon" problem that got WebGL
-// thrown off the landing page once already — and they carry attribution
-// terms. What actually sells metal is the LIGHTING, not the mesh: a real
-// specular highlight that moves as the object turns is something no texture
-// can fake, and that comes free once the scene is lit properly.
+// Everything here is built or synthesised, nothing downloaded: geometry for
+// the chest, a canvas for the wood and for the engraving, WebAudio for the
+// impact. What sells it is not polygon count — it is that the light, the
+// sound and the motion all arrive on the SAME frame as the blow. A hit that
+// only moves the mesh feels like a click; a hit that flashes the room, cracks
+// in your ears and shoves the object feels like a hit.
 //
-// three.js is imported inside the effect, so it is code-split: the page still
-// loads without a renderer, and the ~150KB only arrives if somebody opens the
-// case. A portfolio that takes three seconds to appear has already lost.
+// three.js is imported inside the effect, so none of it reaches anybody who
+// does not open the case.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-type Phase = "sealed" | "broken";
+import { medalFace, playBreak, playHit, woodTexture } from "./chestBits";
 
 export function ChestScene({ onOpened }: { onOpened?: () => void }) {
   const mount = useRef<HTMLDivElement>(null);
   const [hits, setHits] = useState(0);
-  const [phase, setPhase] = useState<Phase>("sealed");
-  // The scene writes here; React never re-renders on a frame.
-  const api = useRef<{ hit: (power: number) => void; dispose: () => void } | null>(null);
-  const lastHit = useRef(0);
+  const [done, setDone] = useState(false);
+  const api = useRef<{ hit: (power: number) => void } | null>(null);
+  const last = useRef(0);
 
   const strike = useCallback(() => {
-    // How hard you hit it: rapid blows land heavier, so hammering fast
-    // genuinely breaks it sooner — which is what he described.
+    if (done) return;
+    // Blows landed quickly count for more, so hammering hard genuinely
+    // breaks it sooner — the part he actually asked for.
     const now = performance.now();
-    const gap = now - lastHit.current;
-    lastHit.current = now;
-    const power = gap < 320 ? 1.6 : gap < 700 ? 1.2 : 1;
+    const gap = now - last.current;
+    last.current = now;
+    const power = gap < 300 ? 1.7 : gap < 650 ? 1.25 : 1;
 
     api.current?.hit(power);
     setHits((h) => {
       const next = h + power;
-      if (next >= 3 && phase === "sealed") {
-        setPhase("broken");
+      if (next >= 3.4) {
+        setDone(true);
         onOpened?.();
       }
       return next;
     });
-  }, [phase, onOpened]);
+  }, [done, onOpened]);
 
   useEffect(() => {
     let alive = true;
@@ -56,15 +52,20 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
     (async () => {
       const THREE = await import("three");
       if (!alive || !mount.current) return;
-
       const host = mount.current;
-      const w = host.clientWidth || 420;
-      const h = host.clientHeight || 420;
+
+      const size = () => ({ w: host.clientWidth || 360, h: host.clientHeight || 360 });
+      const { w, h } = size();
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
-      camera.position.set(0, 1.5, 6.2);
-      camera.lookAt(0, 0.2, 0);
+      const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+      const place = () => {
+        // Pull back on a narrow screen, or the chest runs off the sides.
+        const narrow = host.clientWidth < 420;
+        camera.position.set(0, narrow ? 2.0 : 1.7, narrow ? 8.4 : 6.6);
+        camera.lookAt(0, 0.1, 0);
+      };
+      place();
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(w, h);
@@ -73,166 +74,256 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       host.appendChild(renderer.domElement);
 
-      // ── light ────────────────────────────────────────────────────────────
-      // A key, a warm rim and a cool fill. The rim is what draws a bright
-      // edge down the side of the gold and stops it reading as a flat shape.
-      scene.add(new THREE.AmbientLight(0xffe6c0, 0.35));
-      const key = new THREE.DirectionalLight(0xfff0d0, 2.4);
-      key.position.set(3, 6, 4);
+      // ── light ──────────────────────────────────────────────────────────
+      scene.add(new THREE.AmbientLight(0xffe6c0, 0.4));
+      const key = new THREE.DirectionalLight(0xfff0d0, 2.6);
+      key.position.set(3.5, 6, 4);
       key.castShadow = true;
       key.shadow.mapSize.set(1024, 1024);
       scene.add(key);
-      const rim = new THREE.PointLight(0xffb45c, 22, 18);
-      rim.position.set(-3.4, 1.6, -2.4);
+      const rim = new THREE.PointLight(0xffb45c, 26, 20);
+      rim.position.set(-3.6, 1.8, -2.6);
       scene.add(rim);
-      const fill = new THREE.PointLight(0x6ec6ff, 8, 16);
-      fill.position.set(2.6, -1.2, 3);
-      scene.add(fill);
+      // The storm light: dark until a blow lands, then it screams.
+      const bolt = new THREE.PointLight(0x9fd4ff, 0, 26);
+      bolt.position.set(0, 2.6, 1.6);
+      scene.add(bolt);
 
-      const gold = new THREE.MeshStandardMaterial({
-        color: 0xd9a441, metalness: 1, roughness: 0.22,
-      });
-      const darkGold = new THREE.MeshStandardMaterial({
-        color: 0x8a5a22, metalness: 1, roughness: 0.36,
-      });
-      const wood = new THREE.MeshStandardMaterial({
-        color: 0x4a2b10, metalness: 0.15, roughness: 0.75,
-      });
+      // ── materials ──────────────────────────────────────────────────────
+      const woodTex = new THREE.CanvasTexture(woodTexture());
+      woodTex.wrapS = woodTex.wrapT = THREE.RepeatWrapping;
+      const wood = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.82, metalness: 0.06 });
+      const iron = new THREE.MeshStandardMaterial({ color: 0x6b5433, metalness: 1, roughness: 0.38 });
+      const gold = new THREE.MeshStandardMaterial({ color: 0xd9a441, metalness: 1, roughness: 0.18 });
 
-      // ── the chest ────────────────────────────────────────────────────────
+      // ── chest ──────────────────────────────────────────────────────────
       const chest = new THREE.Group();
       scene.add(chest);
 
-      const base = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.3, 1.8), wood);
-      base.position.y = -0.35;
-      base.castShadow = base.receiveShadow = true;
-      chest.add(base);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.35, 1.85), wood);
+      body.position.y = -0.4;
+      body.castShadow = body.receiveShadow = true;
+      chest.add(body);
 
-      // Bands across the body — the detail that says "chest" instantly.
-      for (const x of [-0.85, 0.85]) {
-        const band = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.36, 1.86), darkGold);
-        band.position.set(x, -0.35, 0);
-        band.castShadow = true;
-        chest.add(band);
+      // Iron straps and corner brackets — what stops it reading as a crate.
+      for (const x of [-0.92, 0.92]) {
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.42, 1.92), iron);
+        strap.position.set(x, -0.4, 0);
+        strap.castShadow = true;
+        chest.add(strap);
       }
-      const lock = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.16), gold);
-      lock.position.set(0, -0.18, 0.94);
+      for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          const corner = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.4, 0.16), iron);
+          corner.position.set(sx * 1.33, -0.4, sz * 0.91);
+          chest.add(corner);
+        }
+      }
+      // Rivets.
+      for (let i = 0; i < 12; i++) {
+        const r = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), iron);
+        r.position.set(-1.2 + (i % 6) * 0.48, i < 6 ? 0.14 : -0.92, 0.94);
+        chest.add(r);
+      }
+      const lock = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.52, 0.14), gold);
+      lock.position.set(0, -0.2, 0.96);
       lock.castShadow = true;
       chest.add(lock);
+      const keyhole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 12), iron);
+      keyhole.rotation.x = Math.PI / 2;
+      keyhole.position.set(0, -0.2, 1.03);
+      chest.add(keyhole);
 
-      // The lid, hinged at the BACK edge. Its pivot is an empty group, so the
-      // mesh can be offset inside it and still rotate about the hinge.
+      // The lid is a HALF CYLINDER, not a slab — a domed lid is the single
+      // strongest cue that this is a treasure chest and not a box.
       const hinge = new THREE.Group();
-      hinge.position.set(0, 0.3, -0.9);
+      hinge.position.set(0, 0.27, -0.92);
       chest.add(hinge);
-      const lid = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.55, 1.8), wood);
-      lid.position.set(0, 0.12, 0.9);
-      lid.castShadow = true;
-      hinge.add(lid);
-      const lidBand = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.14, 1.88), darkGold);
-      lidBand.position.set(0, 0.36, 0.9);
-      hinge.add(lidBand);
+      const dome = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.92, 0.92, 2.7, 28, 1, false, 0, Math.PI),
+        wood,
+      );
+      dome.rotation.z = Math.PI / 2;
+      dome.position.set(0, 0, 0.92);
+      dome.castShadow = true;
+      hinge.add(dome);
+      for (const x of [-0.92, 0.92]) {
+        const band = new THREE.Mesh(
+          new THREE.TorusGeometry(0.93, 0.055, 10, 24, Math.PI),
+          iron,
+        );
+        band.rotation.y = Math.PI / 2;
+        band.position.set(x, 0, 0.92);
+        hinge.add(band);
+      }
 
-      // ── the medal, waiting inside ────────────────────────────────────────
+      // ── the medal, engraved ────────────────────────────────────────────
+      const faceTex = new THREE.CanvasTexture(medalFace());
+      const face = new THREE.MeshStandardMaterial({ map: faceTex, metalness: 0.95, roughness: 0.22 });
       const medal = new THREE.Group();
-      medal.position.set(0, -0.2, 0);
+      medal.position.set(0, -0.3, 0);
       medal.visible = false;
       scene.add(medal);
-
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.1, 64), gold);
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.11, 64), [gold, face, face]);
       disc.rotation.x = Math.PI / 2;
       disc.castShadow = true;
       medal.add(disc);
-      const rimRing = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.07, 20, 64), darkGold);
-      medal.add(rimRing);
-      const inner = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.025, 16, 64), gold);
-      inner.position.z = 0.055;
-      medal.add(inner);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.075, 20, 64), gold);
+      medal.add(ring);
 
-      // ── shards, for when it gives way ────────────────────────────────────
-      const shards: { mesh: InstanceType<typeof THREE.Mesh>; vel: InstanceType<typeof THREE.Vector3>; spin: InstanceType<typeof THREE.Vector3> }[] = [];
-      for (let i = 0; i < 26; i++) {
-        const s = new THREE.Mesh(
-          new THREE.TetrahedronGeometry(0.1 + Math.random() * 0.16),
-          i % 3 === 0 ? darkGold : wood,
+      // ── the hammer ─────────────────────────────────────────────────────
+      const hammer = new THREE.Group();
+      hammer.position.set(2.1, 2.5, 1.4);
+      hammer.rotation.z = -0.5;
+      scene.add(hammer);
+      const haft = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 1.7, 16), wood);
+      haft.position.y = -0.75;
+      haft.castShadow = true;
+      hammer.add(haft);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.42, 0.42), iron);
+      head.castShadow = true;
+      hammer.add(head);
+      const collar = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.46, 0.46), gold);
+      collar.position.x = -0.34;
+      hammer.add(collar);
+
+      // ── lightning ──────────────────────────────────────────────────────
+      // Jagged polylines struck outward from the point of impact. Rebuilt on
+      // every blow, because a bolt that repeats is a decoration.
+      const arcs: InstanceType<typeof THREE.Line>[] = [];
+      const arcMat = new THREE.LineBasicMaterial({ color: 0xbfe4ff, transparent: true, opacity: 0 });
+      for (let i = 0; i < 9; i++) {
+        const geo = new THREE.BufferGeometry().setFromPoints(
+          Array.from({ length: 9 }, () => new THREE.Vector3()),
         );
-        s.visible = false;
-        s.castShadow = true;
-        scene.add(s);
-        shards.push({
-          mesh: s,
-          vel: new THREE.Vector3(),
-          spin: new THREE.Vector3(),
-        });
+        const line = new THREE.Line(geo, arcMat);
+        line.visible = false;
+        scene.add(line);
+        arcs.push(line);
       }
+      const strikeArcs = () => {
+        arcs.forEach((line, i) => {
+          const a = (i / arcs.length) * Math.PI * 2 + Math.random();
+          const pts: InstanceType<typeof THREE.Vector3>[] = [];
+          let p = new THREE.Vector3(0, 0.3, 0.9);
+          for (let k = 0; k < 9; k++) {
+            pts.push(p.clone());
+            p = p.clone().add(
+              new THREE.Vector3(
+                Math.cos(a) * 0.42 + (Math.random() - 0.5) * 0.5,
+                Math.sin(a) * 0.42 + (Math.random() - 0.5) * 0.5,
+                (Math.random() - 0.5) * 0.3,
+              ),
+            );
+          }
+          line.geometry.setFromPoints(pts);
+          line.visible = true;
+        });
+        arcMat.opacity = 1;
+      };
 
-      // ── state the loop reads ─────────────────────────────────────────────
+      // ── loop state ─────────────────────────────────────────────────────
       let shake = 0;
+      let flash = 0;
       let damage = 0;
       let opened = false;
       let openT = 0;
+      let swing = 0;
+
+      const shards: { m: InstanceType<typeof THREE.Mesh>; v: InstanceType<typeof THREE.Vector3>; s: InstanceType<typeof THREE.Vector3> }[] = [];
+      for (let i = 0; i < 30; i++) {
+        const m = new THREE.Mesh(
+          new THREE.TetrahedronGeometry(0.1 + Math.random() * 0.18),
+          i % 4 === 0 ? iron : wood,
+        );
+        m.visible = false;
+        m.castShadow = true;
+        scene.add(m);
+        shards.push({ m, v: new THREE.Vector3(), s: new THREE.Vector3() });
+      }
 
       const burst = () => {
         opened = true;
+        playBreak();
         for (const s of shards) {
-          s.mesh.visible = true;
-          s.mesh.position.set((Math.random() - 0.5) * 2.2, 0.1, (Math.random() - 0.5) * 1.4);
-          s.vel.set((Math.random() - 0.5) * 0.14, 0.09 + Math.random() * 0.13, (Math.random() - 0.5) * 0.14);
-          s.spin.set(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
+          s.m.visible = true;
+          s.m.position.set((Math.random() - 0.5) * 2.4, 0, (Math.random() - 0.5) * 1.5);
+          s.v.set((Math.random() - 0.5) * 0.16, 0.1 + Math.random() * 0.15, (Math.random() - 0.5) * 0.16);
+          s.s.set(Math.random() * 0.24, Math.random() * 0.24, Math.random() * 0.24);
         }
         medal.visible = true;
       };
 
       api.current = {
         hit: (power) => {
-          shake = 0.42 * power;
+          if (opened) return;
+          playHit(power);
+          shake = 0.5 * power;
+          flash = 1;
+          swing = 1;
           damage += power;
-          // Each blow leaves the lid a little more askew — visible progress,
-          // so you can see it giving before it goes.
-          hinge.rotation.x = -Math.min(0.34, damage * 0.1);
-          if (damage >= 3 && !opened) burst();
+          hinge.rotation.x = -Math.min(0.4, damage * 0.11);
+          strikeArcs();
+          if (damage >= 3.4) burst();
         },
-        dispose: () => {},
       };
 
       let raf = 0;
       const clock = new THREE.Clock();
       const tick = () => {
         raf = requestAnimationFrame(tick);
-        const dt = clock.getDelta();
+        const dt = Math.min(clock.getDelta(), 0.05);
         const t = clock.getElapsedTime();
 
+        // The hammer falls, then lifts back out of shot.
+        if (swing > 0.001) {
+          swing = Math.max(0, swing - dt * 3.4);
+          const s = 1 - swing;
+          hammer.position.set(2.1 - s * 1.5, 2.5 - s * 1.9, 1.4 - s * 0.3);
+          hammer.rotation.z = -0.5 + s * 1.5;
+          hammer.visible = true;
+        } else {
+          hammer.visible = false;
+        }
+
+        if (flash > 0.001) {
+          flash *= 0.82;
+          bolt.intensity = flash * 90;
+          arcMat.opacity = flash;
+          if (flash < 0.08) arcs.forEach((a) => (a.visible = false));
+        } else {
+          bolt.intensity = 0;
+        }
+
         if (shake > 0.001) {
-          // Decaying jolt, on the CHEST only — the camera stays still,
-          // because shaking the camera reads as an earthquake, not a blow.
-          chest.position.x = Math.sin(t * 70) * shake * 0.22;
-          chest.position.y = Math.sin(t * 90) * shake * 0.1;
-          chest.rotation.z = Math.sin(t * 60) * shake * 0.05;
-          shake *= 0.86;
+          chest.position.x = Math.sin(t * 74) * shake * 0.22;
+          chest.position.y = Math.sin(t * 96) * shake * 0.1;
+          chest.rotation.z = Math.sin(t * 62) * shake * 0.05;
+          shake *= 0.85;
         } else {
           chest.position.set(0, 0, 0);
           chest.rotation.z = 0;
         }
 
         if (!opened) {
-          chest.rotation.y = Math.sin(t * 0.4) * 0.16;
+          chest.rotation.y = Math.sin(t * 0.35) * 0.14;
         } else {
-          openT = Math.min(1, openT + dt * 0.9);
-          hinge.rotation.x = -0.34 - openT * 1.9;
-          chest.position.y = -openT * 2.4;
-          chest.rotation.y += dt * 0.2;
+          openT = Math.min(1, openT + dt * 0.85);
+          hinge.rotation.x = -0.4 - openT * 1.9;
+          chest.position.y = -openT * 2.6;
+          chest.rotation.y += dt * 0.25;
 
-          medal.position.y = -0.2 + openT * 1.1;
-          medal.rotation.y += dt * 1.1;
-          medal.scale.setScalar(0.4 + openT * 0.75);
+          medal.position.y = -0.3 + openT * 1.15;
+          medal.rotation.y += dt * 1.15;
+          medal.scale.setScalar(0.35 + openT * 0.85);
 
           for (const s of shards) {
-            if (!s.mesh.visible) continue;
-            s.vel.y -= 0.0055; // gravity
-            s.mesh.position.add(s.vel);
-            s.mesh.rotation.x += s.spin.x;
-            s.mesh.rotation.y += s.spin.y;
-            if (s.mesh.position.y < -3) s.mesh.visible = false;
+            if (!s.m.visible) continue;
+            s.v.y -= 0.006;
+            s.m.position.add(s.v);
+            s.m.rotation.x += s.s.x;
+            s.m.rotation.y += s.s.y;
+            if (s.m.position.y < -3.4) s.m.visible = false;
           }
         }
 
@@ -241,26 +332,26 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
       tick();
 
       const onResize = () => {
-        const nw = host.clientWidth || 420;
-        const nh = host.clientHeight || 420;
-        camera.aspect = nw / nh;
+        const n = size();
+        camera.aspect = n.w / n.h;
+        place();
         camera.updateProjectionMatrix();
-        renderer.setSize(nw, nh);
+        renderer.setSize(n.w, n.h);
       };
       window.addEventListener("resize", onResize);
 
       cleanup = () => {
         cancelAnimationFrame(raf);
         window.removeEventListener("resize", onResize);
-        renderer.dispose();
         scene.traverse((o) => {
           const m = o as InstanceType<typeof THREE.Mesh>;
           if (m.geometry) m.geometry.dispose();
         });
-        gold.dispose();
-        darkGold.dispose();
-        wood.dispose();
-        host.removeChild(renderer.domElement);
+        [wood, iron, gold, face, arcMat].forEach((m) => m.dispose());
+        woodTex.dispose();
+        faceTex.dispose();
+        renderer.dispose();
+        if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement);
       };
     })();
 
@@ -271,17 +362,19 @@ export function ChestScene({ onOpened }: { onOpened?: () => void }) {
   }, []);
 
   return (
-    <div className="relative">
+    <div className="relative select-none">
       <div
         ref={mount}
-        onClick={phase === "sealed" ? strike : undefined}
-        className={`mx-auto h-[22rem] w-full max-w-md ${
-          phase === "sealed" ? "cursor-[url(/dev/hammer.svg)_16_16,pointer]" : ""
+        onPointerDown={strike}
+        // Touch has no cursor, so the prompt below carries the instruction on
+        // a phone. `touch-none` stops a tap being read as the start of a drag.
+        className={`mx-auto h-[17rem] w-full max-w-md touch-none sm:h-[22rem] ${
+          done ? "" : "cursor-[url(/dev/hammer.svg)_18_18,pointer]"
         }`}
       />
-      {phase === "sealed" && (
-        <p className="mt-1 animate-pulse font-mono text-[10px] tracking-[0.3em] text-[#c08a4e]">
-          {hits === 0 ? "HIT IT" : hits < 2 ? "AGAIN — IT IS GIVING" : "ONE MORE"}
+      {!done && (
+        <p className="mt-1 font-mono text-[10px] tracking-[0.3em] text-[#c08a4e]">
+          {hits === 0 ? "STRIKE IT" : hits < 2 ? "AGAIN" : "IT IS GIVING…"}
         </p>
       )}
     </div>
