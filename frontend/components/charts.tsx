@@ -685,7 +685,12 @@ export function Waffle({
       className={`relative ${className}`}
     >
       <ChartTip tip={tip} />
-      <div className="grid grid-cols-10 gap-1">
+      {/* Capped, and it has to be.
+          Ten square columns with no maximum means each cell is a tenth of
+          whatever it is dropped into — so in a full-width card the block grew
+          to roughly 1300px tall and swallowed the screen: "huge UI, what the
+          hell is this". A waffle is a compact 10x10 read, never a backdrop. */}
+      <div className="grid max-w-[17rem] grid-cols-10 gap-1">
         {colors.map((c, i) => (
           <span
             key={i}

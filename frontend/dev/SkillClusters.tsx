@@ -17,9 +17,14 @@
 // immediately beside it. A rank that cannot be checked is a rank nobody
 // believes.
 
+import { useState } from "react";
 import { CLUSTERS, DOCS, EDUCATION } from "@/dev/skills";
+import { MedalShowcase } from "@/dev/MedalShowcase";
 
 export function SkillClusters({ entered }: { entered: boolean }) {
+  // Touch the medal and it goes into a case. His idea — the award is the
+  // best thing on the page, so it gets somewhere to be looked at.
+  const [caseOpen, setCaseOpen] = useState(false);
   return (
     <div className="w-full space-y-4">
       {CLUSTERS.map((c, i) => (
@@ -125,8 +130,19 @@ export function SkillClusters({ entered }: { entered: boolean }) {
             turn it. Slow and once every eight seconds, so it reads as
             material rather than as something blinking for attention. */}
         <p className="relative mt-2.5 flex items-baseline gap-2 text-lg font-semibold leading-snug">
-          <span aria-hidden className="shrink-0 text-base">🏅</span>
-          <span className="dev-gold">{EDUCATION.honour}</span>
+          <button
+            type="button"
+            onClick={() => setCaseOpen(true)}
+            title="Open the award"
+            className="group flex items-baseline gap-2 text-left"
+          >
+            <span aria-hidden className="dev-medal shrink-0 text-base transition-transform group-hover:scale-125">
+              🏅
+            </span>
+            <span className="dev-gold underline-offset-4 group-hover:underline">
+              {EDUCATION.honour}
+            </span>
+          </button>
         </p>
         <p className="relative mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-[#a9bdd2]">
           <span>{EDUCATION.degree}</span>
@@ -174,6 +190,8 @@ export function SkillClusters({ entered }: { entered: boolean }) {
           <span className="mt-0.5 block text-[#7d93ad]">↳ {EDUCATION.verifyHint}</span>
         </p>
       </section>
+
+      <MedalShowcase open={caseOpen} onClose={() => setCaseOpen(false)} />
     </div>
   );
 }
