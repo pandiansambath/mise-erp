@@ -584,13 +584,16 @@ export default function PriceComparisonPage() {
                     ))}
                   </div>
 
-                  <div className="mise-noscrollbar min-h-0 flex-1 overflow-y-auto p-4 lg:max-h-[calc(100dvh-16rem)]">
+                  {/* No inner scroll cap. It existed to fit a 21rem column; the stage has
+        the whole page now, so capping it only recreated the scroll-inside-a-
+        scroll the split was killed to remove. */}
+      <div className="p-4 sm:p-5">
                     {pane === "suppliers" && (
                       <>
                         {/* Cards, not table rows — the recipe section's language.
                             Each one carries the decision AND the way out to the
                             supplier, so nothing needs a second screen. */}
-                        <ul className="mise-stagger space-y-2">
+                        <ul className="mise-stagger grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
                           {data.comparisons.map((row, idx) => {
                             const gap =
                               parseFloat(row.price_per_unit) -
@@ -605,7 +608,7 @@ export default function PriceComparisonPage() {
                                   setOpenRow(row.vendor_id);
                                   setRowPrice(row.price_per_unit);
                                 }}
-                                className={`mise-feel cursor-pointer rounded-xl border p-3 transition hover:border-brand-400/50 ${
+                                className={`mise-feel mise-neo-raised cursor-pointer rounded-2xl border p-4 transition hover:-translate-y-px hover:border-brand-400/50 ${
                                   row.is_preferred
                                     ? "border-brand-400/45 bg-brand-400/[0.09]"
                                     : idx === 0
@@ -613,18 +616,22 @@ export default function PriceComparisonPage() {
                                       : "border-line bg-glass/5"
                                 }`}
                               >
-                                <div className="flex items-center gap-2">
-                                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
-                                    {row.vendor_name}
+                                {/* The price is the point, so it is the biggest
+                                    thing on the card — not a number tucked at
+                                    the end of a row the same size as the name. */}
+                                <p className="truncate text-[13px] font-medium text-fg-soft">
+                                  {row.vendor_name}
+                                </p>
+                                <p
+                                  className={`mt-1 font-display text-2xl font-semibold tabular-nums ${
+                                    idx === 0 ? "text-emerald-300" : "text-fg"
+                                  }`}
+                                >
+                                  {format(row.price_per_unit)}
+                                  <span className="ml-1 text-[11px] font-normal text-fg-faint">
+                                    /{data.unit}
                                   </span>
-                                  <span
-                                    className={`font-display text-base font-semibold tabular-nums ${
-                                      idx === 0 ? "text-emerald-300" : "text-fg"
-                                    }`}
-                                  >
-                                    {format(row.price_per_unit)}
-                                  </span>
-                                </div>
+                                </p>
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {idx === 0 && <Badge tone="green">Cheapest</Badge>}
                                   {row.is_preferred && <Badge tone="amber">★ Chosen</Badge>}
