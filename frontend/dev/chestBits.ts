@@ -142,67 +142,105 @@ export function studioEnv(): HTMLCanvasElement {
 }
 
 // ── sound ─────────────────────────────────────────────────────────────────
-// Real recordings, not synthesis.
+// Decoded up front and played from memory.
 //
-// He asked why I was not downloading them and he was right to — I had assumed
-// the sandbox could not reach the internet and never checked. It can. These
-// are Mixkit's free sound effects (Mixkit Free License: commercial use, no
-// attribution required), picked BY NAME so each one is actually the thing it
-// claims to be:
+// The delay he heard was not the recordings — it was WHEN they were fetched.
+// `primeSounds()` ran on the first CLICK, so the first blow kicked off the
+// download and tried to play it in the same instant. 686KB later, the clang
+// arrived. Worse, an <audio> element decodes on demand, so even a cached file
+// costs tens of milliseconds before the first sample — enough to feel wrong on
+// something that is supposed to land WITH the hammer.
 //
-//   hit      Metal hammer hit
-//   wood     Wood hard hit
-//   shatter  Shatter shot explosion
-//   thunder  Strong close thunder explosion
-//   shock    Heavy electric shockwave impact
-//   coin     Magic sweep game trophy
+// So: fetch and decode into AudioBuffers as soon as the scene mounts, long
+// before anybody swings. Playing one is then just wiring a BufferSource to the
+// output and calling start() — no I/O, no decode, sample-accurate.
 //
-// Preloaded and pooled: a single Audio element cannot overlap with itself, so
-// hitting twice quickly would cut the first blow off mid-strike. Three copies
-// of each, used round-robin, and they can ring over one another the way real
-// impacts do.
+// Browsers will happily DOWNLOAD without a gesture; they only refuse to make
+// noise. So the context is created suspended and resumed on the first click,
+// which is a gesture we already have.
+//
+// Recordings are Mixkit's free sound effects (Mixkit Free License: commercial
+// use, no attribution required), picked BY NAME so each is what it claims:
+//   hit  Metal hammer hit · wood  Wood hard hit · shatter  Shatter shot
+//   thunder  Strong close thunder · shock  Heavy electric shockwave
+//   coin  Magic sweep game trophy
 
-type Pool = { els: HTMLAudioElement[]; at: number };
-const pools = new Map<string, Pool>();
+type Sfx = "hit" | "wood" | "shatter" | "thunder" | "shock" | "coin";
+const NAMES: Sfx[] = ["hit", "wood", "shatter", "thunder", "shock", "coin"];
 
-function pool(name: string, volume: number): Pool | null {
+let ctx: AudioContext | null = null;
+const buffers = new Map<Sfx, AudioBuffer>();
+// <audio> fallback for anything without WebAudio; still better than nothing.
+const tags = new Map<Sfx, HTMLAudioElement>();
+let warming: Promise<void> | null = null;
+
+function audioCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
-  let p = pools.get(name);
-  if (!p) {
-    p = {
-      els: Array.from({ length: 3 }, () => {
-        const a = new Audio(`/dev/sfx/${name}.mp3`);
-        a.preload = "auto";
-        a.volume = volume;
-        return a;
+  if (!ctx) {
+    const AC =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+  }
+  return ctx;
+}
+
+/** Fetch and decode everything. Call it when the scene mounts, not on click. */
+export function primeSounds(): Promise<void> {
+  if (warming) return warming;
+  warming = (async () => {
+    const a = audioCtx();
+    await Promise.all(
+      NAMES.map(async (n) => {
+        const url = `/dev/sfx/${n}.mp3`;
+        try {
+          if (a) {
+            const res = await fetch(url);
+            const raw = await res.arrayBuffer();
+            buffers.set(n, await a.decodeAudioData(raw));
+            return;
+          }
+        } catch {
+          /* fall through to the tag */
+        }
+        const el = new Audio(url);
+        el.preload = "auto";
+        el.load();
+        tags.set(n, el);
       }),
-      at: 0,
-    };
-    pools.set(name, p);
-  }
-  return p;
+    );
+  })();
+  return warming;
 }
 
-function play(name: string, volume = 0.8, rate = 1) {
-  const p = pool(name, volume);
-  if (!p) return;
-  const el = p.els[p.at];
-  p.at = (p.at + 1) % p.els.length;
-  el.volume = volume;
-  el.playbackRate = rate;
-  try {
-    el.currentTime = 0;
-    void el.play();
-  } catch {
-    /* the browser will allow it after the first gesture */
-  }
+/** Browsers refuse audio until a gesture. The hammer IS the gesture. */
+export function unlockSound() {
+  const a = audioCtx();
+  if (a && a.state === "suspended") void a.resume();
 }
 
-/** Warm the files up on the first gesture, so the first blow is not silent. */
-export function primeSounds() {
-  for (const [n, v] of [["hit", 0.7], ["wood", 0.7], ["shatter", 0.8], ["thunder", 0.7], ["shock", 0.6], ["coin", 0.6]] as const) {
-    pool(n, v);
+function play(name: Sfx, volume = 0.8, rate = 1, delay = 0) {
+  const a = audioCtx();
+  const buf = buffers.get(name);
+  if (a && buf) {
+    const src = a.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = a.createGain();
+    g.gain.value = volume;
+    src.connect(g).connect(a.destination);
+    // Every blow gets its OWN source node, so rapid hits ring over each other
+    // instead of cutting one another off the way a single element would.
+    src.start(a.currentTime + delay);
+    return;
   }
+  const el = tags.get(name);
+  if (!el) return;
+  const clone = el.cloneNode() as HTMLAudioElement;
+  clone.volume = volume;
+  clone.playbackRate = rate;
+  window.setTimeout(() => void clone.play().catch(() => {}), delay * 1000);
 }
 
 /** Steel on wood. Harder blows are louder and pitched a touch lower. */
@@ -215,6 +253,9 @@ export function playHit(power = 1) {
 export function playBreak() {
   play("shatter", 0.85, 0.95);
   play("shock", 0.7, 1);
-  window.setTimeout(() => play("thunder", 0.8, 0.92), 90);
-  window.setTimeout(() => play("coin", 0.65, 1), 620);
+  // Scheduled on the audio clock rather than with setTimeout, so the thunder
+  // lands exactly 90ms after the crack instead of whenever the main thread
+  // next gets a turn.
+  play("thunder", 0.8, 0.92, 0.09);
+  play("coin", 0.65, 1, 0.62);
 }

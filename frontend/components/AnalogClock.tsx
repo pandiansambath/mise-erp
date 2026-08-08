@@ -140,7 +140,11 @@ export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) 
           y="149"
           textAnchor="middle"
           className="font-mono"
-          style={{ fontSize: 10, fill: "var(--color-brand-400)", letterSpacing: "1.5px" }}
+          // `currentColor`, like the hour and minute. The brand accent is red on a
+          // burgundy theme and it read as an alert rather than a time — his note:
+          // "seconds and am should be in black text not red". Following the text
+          // colour also means it stays legible on a light theme and a dark one.
+          style={{ fontSize: 10, fill: "currentColor", opacity: 0.62, letterSpacing: "1.5px" }}
         />
 
         <line

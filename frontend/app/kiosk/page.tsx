@@ -94,7 +94,16 @@ export default function KioskPage() {
         }
         // The kiosk's own choice, else the restaurant's theme, else dark.
         const wanted = r.theme && r.theme in THEMES ? r.theme : hotel?.theme;
-        if (!local && wanted && wanted in THEMES) setTheme(wanted as ThemeKey);
+        if (!local && wanted && wanted in THEMES) {
+          setTheme(wanted as ThemeKey);
+          // Remember it for the GATE, which runs before anyone is signed in
+          // and so has no other way to learn what this restaurant looks like.
+          try {
+            localStorage.setItem("mise.kiosk.theme", wanted);
+          } catch {
+            /* nothing to do */
+          }
+        }
       })
       .catch(() => {});
   }, [loading, user, hotel]);
