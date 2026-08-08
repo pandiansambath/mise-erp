@@ -12,7 +12,7 @@
 // screenful of plank. A safe view first, refined after.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { coinFace, playBreak, playHit, primeSounds, studioEnv, woodTexture } from "./chestBits";
+import { coinFace, playBreak, playHit, primeSounds, studioEnv, unlockSound, woodTexture } from "./chestBits";
 
 export function AwardStage({ onOpened }: { onOpened?: () => void }) {
   const mount = useRef<HTMLDivElement>(null);
@@ -23,7 +23,7 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
 
   const strike = useCallback(() => {
     if (done) return;
-    primeSounds(); // first gesture: browsers allow audio from here on
+    unlockSound(); // the gesture browsers require; the audio is already decoded
     const now = performance.now();
     const gap = now - last.current;
     last.current = now;
@@ -38,6 +38,12 @@ export function AwardStage({ onOpened }: { onOpened?: () => void }) {
       return next;
     });
   }, [done, onOpened]);
+
+  // Fetch and decode the audio the moment the scene mounts, so the first
+  // blow plays from memory instead of starting a download.
+  useEffect(() => {
+    void primeSounds();
+  }, []);
 
   useEffect(() => {
     let alive = true;

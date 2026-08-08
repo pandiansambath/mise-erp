@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { API_BASE, setTabToken } from "@/lib/api";
-import { themeVars } from "@/lib/theme";
+import { THEMES, themeVars, type ThemeKey } from "@/lib/theme";
 
 /** How many dots to show at rest — the length `suggest()` generates. */
 const PIN_SLOTS = 6;
@@ -33,6 +33,20 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [site, setSite] = useState("");
+  // The gate runs BEFORE anyone signs in, so it cannot ask the server which
+  // theme this restaurant uses. The kiosk stores it the moment it knows, and
+  // the gate reads that back — so the keypad matches the screen behind it from
+  // the second visit onward. First ever load falls back to dark, which is the
+  // safe look for a device on a kitchen wall.
+  const [theme, setTheme] = useState<ThemeKey>("dark");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("mise.kiosk.theme") as ThemeKey | null;
+      if (saved && saved in THEMES) setTheme(saved);
+    } catch {
+      /* private mode — dark is fine */
+    }
+  }, []);
 
   useEffect(() => setSite(siteFromHost()), []);
 
@@ -88,12 +102,13 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
   });
 
   return (
-    // Pinned dark, like the screen behind it — the account's theme must not
-    // reach a device bolted to a wall in a kitchen.
+    // Follows the restaurant, like the screen behind it. `data-mode` travels
+    // WITH the palette — the light-theme legibility rules key off it, and
+    // pinning one while changing the other is what made text unreadable before.
     <div
       className="mise-app grid min-h-dvh place-items-center bg-shell px-6 py-10 text-fg"
-      data-mode="dark"
-      style={themeVars("dark")}
+      data-mode={THEMES[theme].light ? "light" : "dark"}
+      style={themeVars(theme)}
     >
       {/* Light behind the glass, so a wall screen at rest still looks alive. */}
       <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -126,7 +141,7 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
             <span
               key={i}
               className={`h-3.5 w-3.5 rounded-full transition ${
-                i < pin.length ? "scale-110 bg-brand-400" : "bg-white/15"
+                i < pin.length ? "scale-110 bg-brand-400" : "bg-glass/25"
               }`}
             />
           ))}
@@ -140,7 +155,7 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
               key={d}
               type="button"
               onClick={() => press(d)}
-              className="mise-press grid h-16 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] font-display text-2xl font-semibold transition hover:bg-white/[0.12]"
+              className="mise-press grid h-16 place-items-center rounded-2xl border border-line-2 bg-glass/[0.10] font-display text-2xl font-semibold transition hover:bg-glass/20"
             >
               {d}
             </button>
@@ -148,7 +163,7 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
           <button
             type="button"
             onClick={() => setPin((p) => p.slice(0, -1))}
-            className="mise-press grid h-16 place-items-center rounded-2xl text-xl text-fg-faint transition hover:bg-white/[0.06]"
+            className="mise-press grid h-16 place-items-center rounded-2xl text-xl text-fg-faint transition hover:bg-glass/[0.10]"
             aria-label="Delete"
           >
             ⌫
@@ -156,7 +171,7 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
           <button
             type="button"
             onClick={() => press("0")}
-            className="mise-press grid h-16 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] font-display text-2xl font-semibold transition hover:bg-white/[0.12]"
+            className="mise-press grid h-16 place-items-center rounded-2xl border border-line-2 bg-glass/[0.10] font-display text-2xl font-semibold transition hover:bg-glass/20"
           >
             0
           </button>
@@ -164,7 +179,7 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
             type="button"
             onClick={() => submit(pin)}
             disabled={busy || pin.length < 4}
-            className="mise-press grid h-16 place-items-center rounded-2xl bg-brand-600 text-xl font-semibold text-white transition hover:bg-brand-500 disabled:opacity-30"
+            className="mise-press grid h-16 place-items-center rounded-2xl bg-brand-600 text-xl font-semibold text-[color:var(--color-brand-50,#fff)] transition hover:bg-brand-500 disabled:opacity-30"
             aria-label="Open"
           >
             {busy ? "…" : "→"}
