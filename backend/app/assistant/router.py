@@ -503,3 +503,36 @@ async def vision_commit(
         entity_type="expense", entity_id=exp.id,
     )
     return {"expense_id": str(exp.id), "amount": str(exp.amount), "date": str(exp.date)}
+
+
+class KioskQuoteIn(BaseModel):
+    on: str = ""
+
+
+@router.post("/kiosk-quote")
+async def kiosk_quote(
+    payload: KioskQuoteIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> dict:
+    """One encouraging line for the wall, changed daily.
+
+    Readable by the KIOSK role, because the tablet is what asks for it.
+
+    Deliberately cheap and deliberately optional. It is one short sentence
+    once a day, the frontend already has a written set on screen before this
+    is called, and any failure here is silent — a wall screen showing an error
+    where a kind sentence should be is worse than one that never tried.
+    """
+    try:
+        text = await service.short_line(
+            db,
+            user,
+            "Write ONE short encouraging line for a restaurant kitchen's wall "
+            "screen — the staff read it as they clock in. Under 15 words, warm, "
+            "about craft, care, teamwork or not wasting food. No quotation "
+            "marks, no attribution, no emoji. Just the sentence.",
+        )
+    except Exception:  # noqa: BLE001 — the written set is already on screen
+        return {"text": ""}
+    return {"text": (text or "").strip().strip('"')[:160]}

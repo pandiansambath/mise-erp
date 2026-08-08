@@ -69,7 +69,17 @@ export function KioskGate({ onOpen }: { onOpen: () => void }) {
           );
           return;
         }
-        const body = (await res.json()) as { token: string };
+        const body = (await res.json()) as { token: string; theme?: string };
+        // The door tells us how this restaurant looks. Store it before the
+        // reload so the screen comes back already dressed, rather than
+        // flashing the default and correcting itself a moment later.
+        if (body.theme) {
+          try {
+            localStorage.setItem("mise.kiosk.theme", body.theme);
+          } catch {
+            /* nothing to do */
+          }
+        }
         // Tab-scoped, so the tablet holds an attendance-only session and
         // nothing else — see lib/api.ts.
         setTabToken(body.token);

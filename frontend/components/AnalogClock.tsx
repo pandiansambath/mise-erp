@@ -31,12 +31,69 @@ function zoned(at: Date, tz: string): Date {
   }
 }
 
-export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) {
+// Twelve faces, taken from real horological traditions rather than invented.
+// Each one is defined by what it REMOVES and what it makes dominant — that is
+// how clock design actually differs, not by decoration added on top.
+//
+//   classic    sixty marks, the default wall clock
+//   minimal    quarters only; the dial as a logo
+//   roman      XII I II III, twelve marks
+//   bold       heavy batons, read from the far end of a kitchen
+//   braun      Dieter Rams: fine marks, one coloured second hand, nothing else
+//   railway    Swiss station: the red disc on the second hand
+//   bauhaus    thin, geometric, numerals in a plain grotesque
+//   skeleton   no marks at all — hands and a rim
+//   dots       twelve dots instead of lines
+//   arc        the minute drawn as an arc around the rim
+//   halo       a ring that fills as the hour passes
+//   regulator  the MINUTE hand dominant, the hour small and offset
+export type ClockFace =
+  | "classic"
+  | "minimal"
+  | "roman"
+  | "bold"
+  | "braun"
+  | "railway"
+  | "bauhaus"
+  | "skeleton"
+  | "dots"
+  | "arc"
+  | "halo"
+  | "regulator";
+
+const ROMAN = [
+  "XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI",
+];
+
+export function AnalogClock({
+  size = 260,
+  tz,
+  face = "classic",
+  numerals = false,
+  digital = true,
+  onToggleNumerals,
+}: {
+  size?: number;
+  tz?: string;
+  /** Which face. They differ in what they REMOVE, not what they add — a clock
+   *  is legible because of what is missing from it. */
+  face?: ClockFace;
+  /** 1–12 around the rim. Off by default: a wall clock is read by hand
+   *  POSITION from across a room, and numerals are for the closer glance. */
+  numerals?: boolean;
+  digital?: boolean;
+  /** Double-tapping the face is the fastest way to ask for the numbers, and
+   *  it is the gesture he asked for. */
+  onToggleNumerals?: () => void;
+}) {
   const hour = useRef<SVGLineElement>(null);
   const minute = useRef<SVGLineElement>(null);
   const second = useRef<SVGLineElement>(null);
-  const digital = useRef<SVGTextElement>(null);
+  const digitalRef = useRef<SVGTextElement>(null);
   const secs = useRef<SVGTextElement>(null);
+  const arc = useRef<SVGCircleElement>(null);
+  const disc = useRef<SVGCircleElement>(null);
+  const digitalOn = digital;
 
   useEffect(() => {
     let frame = 0;
@@ -57,13 +114,22 @@ export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) 
       const h = (now.getHours() % 12) + m / 60;
 
       second.current?.setAttribute("transform", `rotate(${s * 6} 100 100)`);
+      // The disc rides the second hand, so it turns about the same centre.
+      disc.current?.setAttribute("transform", `rotate(${s * 6} 100 100)`);
+      // arc  → the minute filling the rim.  halo → the hour filling it.
+      if (arc.current) {
+        const whole = Number(arc.current.getAttribute("strokeDasharray") ?? 0) ||
+          2 * Math.PI * Number(arc.current.getAttribute("r") ?? 88);
+        const frac = arc.current.getAttribute("stroke-width") === "7" ? h / 12 : m / 60;
+        arc.current.setAttribute("stroke-dasharray", `${whole * frac} ${whole}`);
+      }
       minute.current?.setAttribute("transform", `rotate(${m * 6} 100 100)`);
       hour.current?.setAttribute("transform", `rotate(${h * 30} 100 100)`);
       // Hours and minutes big; seconds and the meridiem small beside them.
       // One long string at one size either overflows the face or forces the
       // whole readout down to a size nobody can read from the door.
-      if (digital.current) {
-        digital.current.textContent = now.toLocaleTimeString([], {
+      if (digitalRef.current) {
+        digitalRef.current.textContent = now.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         }).replace(/\s*[AaPp][Mm]\s*$/, "");
@@ -80,7 +146,12 @@ export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) 
   }, [tz]);
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <div
+      className={`relative shrink-0 ${onToggleNumerals ? "cursor-pointer select-none" : ""}`}
+      style={{ width: size, height: size }}
+      onDoubleClick={onToggleNumerals}
+      title={onToggleNumerals ? "Double-tap for the numbers" : undefined}
+    >
       <svg viewBox="0 0 200 200" className="h-full w-full" aria-hidden>
         <defs>
           <radialGradient id="clockFace" cx="50%" cy="38%">
@@ -101,24 +172,121 @@ export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) 
         />
 
         {/* Sixty marks: the twelve that matter, longer and brighter. A face
-            with only four marks reads as a logo, not a clock. */}
-        {Array.from({ length: 60 }, (_, i) => {
-          const big = i % 5 === 0;
-          return (
-            <line
-              key={i}
-              x1="100"
-              y1={big ? 12 : 15}
-              x2="100"
-              y2={big ? 24 : 18}
-              stroke="currentColor"
-              strokeOpacity={big ? 0.55 : 0.2}
-              strokeWidth={big ? 2.4 : 1}
-              strokeLinecap="round"
-              transform={`rotate(${i * 6} 100 100)`}
-            />
-          );
-        })}
+            with only four marks reads as a logo, not a clock — which is
+            exactly why "minimal" keeps only four, and looks like a logo on
+            purpose. The faces differ in what they REMOVE. */}
+        {face === "dots"
+          ? Array.from({ length: 12 }, (_, i) => {
+              const a = ((i * 30 - 90) * Math.PI) / 180;
+              return (
+                <circle
+                  key={i}
+                  cx={100 + Math.cos(a) * 82}
+                  cy={100 + Math.sin(a) * 82}
+                  r={i % 3 === 0 ? 4 : 2.4}
+                  fill="currentColor"
+                  opacity={i % 3 === 0 ? 0.6 : 0.3}
+                />
+              );
+            })
+          : face === "skeleton"
+            ? null
+            : Array.from({ length: 60 }, (_, i) => {
+                const big = i % 5 === 0;
+                if (face === "minimal" && i % 15 !== 0) return null;
+                if ((face === "roman" || face === "bauhaus" || face === "halo") && !big)
+                  return null;
+                if (face === "regulator" && !big && i % 5 !== 0) return null;
+
+                // Length, weight and reach are the whole vocabulary here.
+                const len =
+                  face === "bold" ? (big ? 30 : 20)
+                  : face === "braun" ? (big ? 20 : 17)
+                  : face === "railway" ? (big ? 26 : 16)
+                  : face === "bauhaus" ? 22
+                  : big ? 24 : 18;
+                const w =
+                  face === "bold" ? (big ? 4 : 1.4)
+                  : face === "railway" ? (big ? 3.4 : 1.2)
+                  : face === "bauhaus" ? 1.6
+                  : face === "braun" ? (big ? 1.8 : 0.9)
+                  : big ? 2.4 : 1;
+                return (
+                  <line
+                    key={i}
+                    x1="100"
+                    y1={big ? 12 : 15}
+                    x2="100"
+                    y2={len}
+                    stroke="currentColor"
+                    strokeOpacity={
+                      big ? (face === "bold" || face === "railway" ? 0.8 : 0.55) : 0.2
+                    }
+                    strokeWidth={w}
+                    strokeLinecap={face === "railway" ? "butt" : "round"}
+                    transform={`rotate(${i * 6} 100 100)`}
+                  />
+                );
+              })}
+
+        {/* Faces that say the time with a SHAPE rather than a mark. */}
+        {face === "arc" && (
+          <circle
+            ref={arc}
+            cx="100"
+            cy="100"
+            r="88"
+            fill="none"
+            stroke="var(--color-brand-400)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            opacity="0.85"
+            transform="rotate(-90 100 100)"
+            strokeDasharray="553"
+          />
+        )}
+        {face === "halo" && (
+          <circle
+            ref={arc}
+            cx="100"
+            cy="100"
+            r="92"
+            fill="none"
+            stroke="var(--color-brand-400)"
+            strokeWidth="7"
+            strokeLinecap="round"
+            opacity="0.55"
+            transform="rotate(-90 100 100)"
+            strokeDasharray="578"
+          />
+        )}
+
+        {/* The numbers, when they are asked for. Placed on a circle rather
+            than rotated into place — a rotated "4" is upside down at the
+            bottom of the dial, which nobody wants to read. */}
+        {numerals &&
+          Array.from({ length: 12 }, (_, i) => {
+            const a = ((i * 30 - 90) * Math.PI) / 180;
+            const r = face === "bold" ? 62 : 68;
+            return (
+              <text
+                key={i}
+                x={100 + Math.cos(a) * r}
+                y={100 + Math.sin(a) * r}
+                textAnchor="middle"
+                dominantBaseline="central"
+                className={face === "roman" ? "font-display" : "font-mono"}
+                style={{
+                  fontSize: face === "roman" ? 13 : 15,
+                  fontWeight: 600,
+                  fill: "currentColor",
+                  opacity: 0.72,
+                }}
+              >
+                {face === "roman" ? ROMAN[i] : i === 0 ? 12 : i}
+              </text>
+            );
+          })}
 
         {/* The printed face, drawn BEFORE the hands.
             A real clock has its numerals under the movement, and SVG paints in
@@ -126,8 +294,10 @@ export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) 
             the hands sweep across it. My first attempt used a negative
             z-index on an HTML overlay, which did not put it under the hands at
             all: it put it behind the whole clock, where it could not be seen. */}
+        {digitalOn && (
+        <>
         <text
-          ref={digital}
+          ref={digitalRef}
           x="100"
           y="132"
           textAnchor="middle"
@@ -146,16 +316,20 @@ export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) 
           // colour also means it stays legible on a light theme and a dark one.
           style={{ fontSize: 10, fill: "currentColor", opacity: 0.62, letterSpacing: "1.5px" }}
         />
+        </>
+        )}
 
         <line
           ref={hour}
           x1="100"
-          y1="108"
+          y1={face === "regulator" ? "104" : "108"}
           x2="100"
-          y2="56"
+          // The regulator's hour hand is deliberately stubby: on a regulator
+          // the MINUTE is the reading you take, and the hour is a reference.
+          y2={face === "regulator" ? "74" : face === "bold" ? "50" : "56"}
           stroke="currentColor"
-          strokeWidth="6"
-          strokeLinecap="round"
+          strokeWidth={face === "bold" ? 8 : face === "railway" ? 7 : face === "braun" ? 4.5 : 6}
+          strokeLinecap={face === "railway" || face === "bauhaus" ? "butt" : "round"}
           opacity=".92"
         />
         <line
@@ -163,23 +337,33 @@ export function AnalogClock({ size = 260, tz }: { size?: number; tz?: string }) 
           x1="100"
           y1="110"
           x2="100"
-          y2="34"
+          y2={face === "regulator" ? "22" : "34"}
           stroke="currentColor"
-          strokeWidth="4"
-          strokeLinecap="round"
+          strokeWidth={face === "bold" ? 5.5 : face === "railway" ? 4.6 : face === "braun" ? 3 : 4}
+          strokeLinecap={face === "railway" || face === "bauhaus" ? "butt" : "round"}
           opacity=".8"
         />
         <line
           ref={second}
           x1="100"
-          y1="118"
+          y1={face === "arc" || face === "halo" ? "112" : "118"}
           x2="100"
-          y2="26"
+          y2={face === "arc" || face === "halo" ? "40" : "26"}
           stroke="var(--color-brand-400)"
           strokeWidth="1.8"
           strokeLinecap="round"
         />
-        <circle cx="100" cy="100" r="4.5" fill="var(--color-brand-400)" />
+        {/* Swiss station clocks carry a red disc near the tip of the second
+            hand — the single detail that makes the face unmistakable. */}
+        {face === "railway" && (
+          <circle ref={disc} cx="100" cy="34" r="9" fill="var(--color-brand-500)" />
+        )}
+        <circle
+          cx="100"
+          cy="100"
+          r={face === "bold" ? 6 : 4.5}
+          fill="var(--color-brand-400)"
+        />
         <circle cx="100" cy="100" r="1.6" fill="var(--color-shell, #0b1220)" />
       </svg>
 

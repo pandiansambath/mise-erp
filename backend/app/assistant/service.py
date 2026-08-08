@@ -467,3 +467,35 @@ def _help_text(configured: bool) -> str:
             "key to unlock full conversational answers.)"
         )
     return base
+
+
+async def short_line(db: AsyncSession, user, prompt: str) -> str:
+    """One short sentence, no tools, no context, no memory.
+
+    Used for the kiosk's daily line. Kept deliberately thin: the caller
+    already has something on screen, so this is a nicety and must cost close
+    to nothing — no tool loop, no history, no document context, and it still
+    passes through the guard so it counts against the same allowance as
+    everything else rather than being a hole in the metering.
+    """
+    model = await guard.model_for(db, user)
+    meter: dict[str, object] = {}
+    reply, _ = await brain.generate(
+        system="You write one short line and nothing else. No preamble.",
+        history=[{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        tools=[],
+        execute=lambda *_a, **_k: {"ok": False},
+        model=model,
+        meter=meter,
+    )
+    # Counted against the same allowance as everything else, so this is not a
+    # hole in the metering just because it is small.
+    await guard.record(
+        db,
+        user,
+        kind="kiosk-quote",
+        model=model,
+        input_tokens=int(meter.get("input_tokens", 60) or 60),
+        output_tokens=int(meter.get("output_tokens", 30) or 30),
+    )
+    return reply or ""

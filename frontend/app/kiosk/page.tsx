@@ -23,9 +23,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, clearToken, type AttendanceRow, type Employee } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { AnalogClock } from "@/components/AnalogClock";
+import { AnalogClock, type ClockFace } from "@/components/AnalogClock";
+import { KioskMenu } from "@/components/KioskMenu";
 import { KioskGate } from "@/components/KioskGate";
 import { KioskPanel } from "@/components/KioskPanels";
+import { KioskQuote } from "@/components/KioskQuote";
 import { useHotelTime } from "@/lib/time";
 import { THEMES, themeVars, type ThemeKey } from "@/lib/theme";
 
@@ -60,7 +62,37 @@ export default function KioskPage() {
   // reach it. Anyone standing AT the screen can override it for this device —
   // the light in a kitchen is not the light the owner picked it under.
   const [theme, setTheme] = useState<ThemeKey>("dark");
-  const [themeOpen, setThemeOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // How the clock reads, per device. A tablet on a bright wall and one in a
+  // dim corridor want different faces, and neither should have to argue with
+  // the other about it.
+  const [face, setFace] = useState<ClockFace>("classic");
+  const [numerals, setNumerals] = useState(false);
+  const [digital, setDigital] = useState(true);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("mise.kiosk.clock");
+      if (raw) {
+        const c = JSON.parse(raw) as { face?: ClockFace; numerals?: boolean; digital?: boolean };
+        if (c.face) setFace(c.face);
+        if (typeof c.numerals === "boolean") setNumerals(c.numerals);
+        if (typeof c.digital === "boolean") setDigital(c.digital);
+      }
+    } catch {
+      /* private mode — the defaults are fine */
+    }
+  }, []);
+  const saveClock = (next: Partial<{ face: ClockFace; numerals: boolean; digital: boolean }>) => {
+    const merged = { face, numerals, digital, ...next };
+    if (next.face !== undefined) setFace(next.face);
+    if (next.numerals !== undefined) setNumerals(next.numerals);
+    if (next.digital !== undefined) setDigital(next.digital);
+    try {
+      localStorage.setItem("mise.kiosk.clock", JSON.stringify(merged));
+    } catch {
+      /* nothing to do */
+    }
+  };
   useEffect(() => {
     try {
       const local = localStorage.getItem("mise.kiosk.theme") as ThemeKey | null;
@@ -71,7 +103,7 @@ export default function KioskPage() {
   }, []);
   const pickTheme = (k: ThemeKey) => {
     setTheme(k);
-    setThemeOpen(false);
+    setMenuOpen(false);
     try {
       localStorage.setItem("mise.kiosk.theme", k);
     } catch {
@@ -92,7 +124,9 @@ export default function KioskPage() {
         } catch {
           /* ignore */
         }
-        // The kiosk's own choice, else the restaurant's theme, else dark.
+        // The server already applies the precedence (kiosk → hotel → dark),
+        // so whatever it says is the answer. Second-guessing it here is how
+        // the two ended up disagreeing.
         const wanted = r.theme && r.theme in THEMES ? r.theme : hotel?.theme;
         if (!local && wanted && wanted in THEMES) {
           setTheme(wanted as ThemeKey);
@@ -250,6 +284,10 @@ export default function KioskPage() {
             {hotel?.name ?? "Attendance"}
           </h1>
           <p className="mt-1 text-sm text-fg-faint">Tap your name to clock in or out</p>
+          {/* The band beside the clock had nothing in it, on a screen dozens of
+              people read dozens of times a shift. That is a rare amount of
+              attention to be spending on blank space. */}
+          <KioskQuote />
         </div>
         {/* A real clock face, hands sweeping, digits in the middle. It says
             the time AND that the screen is alive, from across the room,
@@ -257,7 +295,14 @@ export default function KioskPage() {
         <div className="flex shrink-0 flex-col items-center">
           {/* Smaller on a phone: at 236px the clock pushed the names — the one
               thing anybody opens this screen to tap — below the fold. */}
-          <AnalogClock size={clockSize} tz={hotel?.timezone} />
+          <AnalogClock
+            size={clockSize}
+            tz={hotel?.timezone}
+            face={face}
+            numerals={numerals}
+            digital={digital}
+            onToggleNumerals={() => saveClock({ numerals: !numerals })}
+          />
           {/* Which clock this is. A wall screen that disagrees with the phone
               in your pocket starts an argument about hours, and the answer is
               always "whose timezone?" — so it says so up front. */}
@@ -282,69 +327,29 @@ export default function KioskPage() {
           </span>
         ))}
 
-        {/* Only if the owner turned them on. A wall screen shows what the
-            kitchen agreed it should show, not everything it could. */}
-        {allowed.rota && (
-          <button
-            type="button"
-            onClick={() => setPanel("rota")}
-            className="mise-press ml-auto rounded-full border border-line-2 px-4 py-1.5 text-sm font-medium text-fg-soft"
-          >
-            🗓️ Today&apos;s rota
-          </button>
-        )}
-        {/* A device-level override. The owner sets what it should be; the
-            person standing in front of it gets the last word, because they
-            are the one who can see the screen. */}
-        <div className={`relative ${allowed.rota || allowed.leave ? "" : "ml-auto"}`}>
-          <button
-            type="button"
-            onClick={() => setThemeOpen((v) => !v)}
-            aria-label="Change how this screen looks"
-            className="mise-press grid h-9 w-9 place-items-center rounded-full border border-line-2"
-          >
-            <span
-              className="h-4 w-4 rounded-full ring-1 ring-glass/30"
-              style={{ background: THEMES[theme].brand["500"] }}
-            />
-          </button>
-          {themeOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setThemeOpen(false)} aria-hidden />
-              <div className="absolute left-0 z-50 mt-2 grid w-64 grid-cols-4 gap-2 rounded-2xl border border-line bg-paper p-3 shadow-2xl">
-                {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => pickTheme(k)}
-                    title={THEMES[k].label}
-                    className={`grid h-10 place-items-center rounded-xl ring-1 ${
-                      k === theme ? "ring-brand-400" : "ring-glass/20"
-                    }`}
-                    style={{ background: THEMES[k].surfaces[1] }}
-                  >
-                    <span
-                      className="h-3.5 w-3.5 rounded-full"
-                      style={{ background: THEMES[k].brand["500"] }}
-                    />
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+        {/* One ⋮ instead of a growing row of loose buttons.
+            Four or five controls along a counter row stop reading as "things
+            you can do" and start reading as clutter, on a screen whose whole
+            job is a list of names. */}
+        <div className="relative ml-auto">
+          <KioskMenu
+            open={menuOpen}
+            onOpen={() => setMenuOpen(true)}
+            onClose={() => setMenuOpen(false)}
+            theme={theme}
+            onTheme={pickTheme}
+            face={face}
+            onFace={(f) => saveClock({ face: f })}
+            numerals={numerals}
+            onNumerals={(v) => saveClock({ numerals: v })}
+            digital={digital}
+            onDigital={(v) => saveClock({ digital: v })}
+            showRota={allowed.rota}
+            showLeave={allowed.leave}
+            onRota={() => setPanel("rota")}
+            onLeave={() => setPanel("leave")}
+          />
         </div>
-
-        {allowed.leave && (
-          <button
-            type="button"
-            onClick={() => setPanel("leave")}
-            className={`mise-press rounded-full border border-line-2 px-4 py-1.5 text-sm font-medium text-fg-soft ${
-              allowed.rota ? "" : "ml-auto"
-            }`}
-          >
-            🌴 Who is off
-          </button>
-        )}
       </div>
 
       {panel && (
