@@ -10,6 +10,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { Item } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { numeric } from "@/lib/sanitize";
+import { Pocket, flyToPocket } from "@/components/Pocket";
 
 export type PickedLine = { item_id: string; qty: string };
 
@@ -318,7 +319,15 @@ export function ItemPicker({
     { total: 0, vendors: new Set<string>() },
   );
 
-  function toggle(it: Item) {
+  /** Add or remove, and throw a copy into the pocket when adding. */
+  function toggle(it: Item, from?: HTMLElement | null) {
+    // Only on the way IN. Nothing flies out when you remove something — you
+    // are already looking at the list you removed it from.
+    if (staged && from && !picked.has(it.id)) flyToPocket(from, it.name);
+    return toggleInner(it);
+  }
+
+  function toggleInner(it: Item) {
     if (picked.has(it.id)) onChange(lines.filter((l) => l.item_id !== it.id));
     else onChange([...lines, { item_id: it.id, qty: "" }]);
   }
@@ -426,7 +435,7 @@ export function ItemPicker({
                 <button
                   type="button"
                   aria-pressed={sel}
-                  onClick={() => toggle(it)}
+                  onClick={(e) => toggle(it, e.currentTarget)}
                   className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                 >
                   <span
@@ -515,7 +524,7 @@ export function ItemPicker({
               key={it.id}
               type="button"
               aria-pressed={sel}
-              onClick={() => toggle(it)}
+              onClick={(e) => toggle(it, e.currentTarget)}
               className={`mise-feel relative flex flex-col rounded-2xl border p-3 pb-11 text-left transition duration-200 hover:-translate-y-0.5 ${
                 sel
                   ? "border-brand-500 bg-brand-400/15 shadow-lg shadow-brand-600/20"
@@ -798,6 +807,7 @@ export function ItemPickerSingle({
   dense,
   onCreate,
   onOpenDetail,
+  onGather,
 }: {
   items: Item[];
   value: string;
@@ -829,6 +839,13 @@ export function ItemPickerSingle({
    *  picking an item and INSPECTING it are different intents, and making the
    *  comparison something you scroll to find is what made this page tiring. */
   onOpenDetail?: (id: string) => void;
+  /** Gather this item into a pocket rather than opening it.
+   *
+   *  Passed the element that was tapped, so the flight can start from the row
+   *  the person is actually looking at — a ghost that appears from nowhere
+   *  does not connect the tap to the count. */
+  onGather?: (id: string, from: HTMLElement) => void;
+
 }) {
   const { format } = useCurrency();
   const [tab, setTab] = useState<string>("ALL");
@@ -991,6 +1008,30 @@ export function ItemPickerSingle({
                 >
                   ›
                 </span>
+                {onGather && (
+                  // A span, not a nested <button> — a button inside a button is
+                  // invalid HTML and browsers resolve it unpredictably.
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Add ${it.name} to your shortlist`}
+                    title="Add to shortlist"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onGather(it.id, e.currentTarget as HTMLElement);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onGather(it.id, e.currentTarget as HTMLElement);
+                      }
+                    }}
+                    className="mise-press grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-lg border border-line-2 text-sm text-fg-faint transition hover:border-brand-400/60 hover:bg-brand-400/10 hover:text-brand-300"
+                  >
+                    ＋
+                  </span>
+                )}
               </button>
             );
           }
