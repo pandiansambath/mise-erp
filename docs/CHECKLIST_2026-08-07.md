@@ -88,6 +88,12 @@ very poor UI, that entire staff page… better destroy whole and recreate."
       it — should read as three distinct things, not one long form
 - [ ] Do NOT change the permission model or the attach flow; he likes both
 
+## Kiosk — the counters become doors (added 2026-08-08)
+
+- [ ] "0 in now", "0 on break", "0 finished" are labels; they should OPEN.
+      Tap one and see WHO — the same wall-readable treatment as the rota and
+      leave panels. His slogan applies: every click must have a meaning.
+
 ## Phase 6 — every export, checked (added 2026-08-07, LAST)
 
 He opened the rota PDF and found it "very clumsy to see, because of timings" —

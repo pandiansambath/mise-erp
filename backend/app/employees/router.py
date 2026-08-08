@@ -364,7 +364,15 @@ async def attendance_lock_status(
         "can_manage": attendance_lock.can_manage_pin(user),
         "show_rota": bool(hotel and hotel.kiosk_show_rota),
         "show_leave": bool(hotel and hotel.kiosk_show_leave),
-        "theme": (hotel.kiosk_theme if hotel else None) or "dark",
+        # kiosk-specific choice, else the RESTAURANT's theme, else dark.
+        #
+        # This used to be `kiosk_theme or "dark"`, and "dark" is truthy — so a
+        # restaurant that had never set a kiosk theme got "dark" handed to it as
+        # though it were a decision, and the client had no way to tell that
+        # apart from a real one. It then never fell through to the hotel's own
+        # theme. "Carbon (Dark)" carries an emerald accent, which is exactly the
+        # green he kept seeing on a burgundy restaurant.
+        "theme": (hotel.kiosk_theme or hotel.theme or "dark") if hotel else "dark",
     }
 
 
@@ -439,7 +447,13 @@ async def open_kiosk(
         db, hotel_id=hotel.id, user=None, action="attendance.kiosk",
         summary="Attendance screen opened with the PIN",
     )
-    return {"token": token, "hotel": hotel.name}
+    return {
+        "token": token,
+        "hotel": hotel.name,
+        # So a tablet that has never been here draws itself correctly the
+        # moment it opens, instead of flashing the default first.
+        "theme": hotel.kiosk_theme or hotel.theme or "dark",
+    }
 
 
 @attendance_router.post("/lock/verify")
