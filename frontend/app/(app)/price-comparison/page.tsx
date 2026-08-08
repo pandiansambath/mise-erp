@@ -50,6 +50,7 @@ import { AreaChart } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
 import { DetailSheet, DetailRow } from "@/components/DetailSheet";
+import { Pocket, flyToPocket } from "@/components/Pocket";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -192,6 +193,25 @@ export default function PriceComparisonPage() {
   // looking at.
   const [stage, setStage] = useState<"list" | "item">("list");
   const listScroll = useRef(0);
+
+  // A shortlist you build up, which this page had no concept of.
+  //
+  // Comparing one item at a time answers "is THIS one right?" — but the
+  // question an owner actually arrives with is "where am I losing money?",
+  // and that is answered across several items at once. So items can be
+  // gathered into a pocket and looked at together: what each is costing by
+  // being on the wrong supplier, and what the whole lot adds up to.
+  const [shortlist, setShortlist] = useState<string[]>([]);
+  const [pocketOpen, setPocketOpen] = useState(false);
+
+  const gather = (id: string, from?: HTMLElement | null) => {
+    if (shortlist.includes(id)) return;
+    const it = items.find((i) => i.id === id);
+    if (from) flyToPocket(from, it?.name);
+    setShortlist((l) => [...l, id]);
+  };
+
+  const shortlistTotal = shortlist.reduce((t, id) => t + (savingByItem[id] ?? 0), 0);
 
   const openItem = (id: string) => {
     listScroll.current = window.scrollY;   // remember where they were reading
@@ -514,6 +534,93 @@ export default function PriceComparisonPage() {
         </div>
       )}
 
+      {stage === "list" && (
+        <Pocket
+          icon="⚖"
+          count={shortlist.length}
+          label={shortlist.length === 1 ? "item to review" : "items to review"}
+          hint={shortlistTotal > 0 ? `${format(String(Math.round(shortlistTotal * 100) / 100))} on the table` : undefined}
+          onOpen={() => setPocketOpen(true)}
+        />
+      )}
+
+      {/* Everything gathered, side by side.
+          One item at a time answers "is this one right?"; several at once
+          answers "where am I losing money?", which is the question that
+          actually brings somebody to this page. */}
+      <DetailSheet
+        open={pocketOpen}
+        onClose={() => setPocketOpen(false)}
+        width="lg"
+        icon="⚖"
+        title="Your shortlist"
+        subtitle={`${shortlist.length} item${shortlist.length === 1 ? "" : "s"} gathered`}
+        stats={
+          shortlistTotal > 0
+            ? [
+                {
+                  label: "On the table",
+                  value: format(String(Math.round(shortlistTotal * 100) / 100)),
+                  hint: "per unit, every order",
+                  tone: "warn",
+                },
+              ]
+            : undefined
+        }
+        actions={
+          shortlist.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShortlist([])}
+              className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm text-fg-soft hover:bg-paper-2"
+            >
+              Empty the pocket
+            </button>
+          ) : null
+        }
+      >
+        <ul className="space-y-2">
+          {shortlist.map((id) => {
+            const it = items.find((i) => i.id === id);
+            if (!it) return null;
+            const save = savingByItem[id] ?? 0;
+            return (
+              <li
+                key={id}
+                className="mise-neo-raised flex flex-wrap items-center gap-3 rounded-xl px-3.5 py-3"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-fg">{it.name}</span>
+                  <span className="block text-[11px] text-fg-faint">
+                    {save > 0
+                      ? `${format(String(Math.round(save * 100) / 100))} per ${it.unit} above the cheapest`
+                      : "already on its best price"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPocketOpen(false);
+                    openItem(id);
+                  }}
+                  className="mise-press shrink-0 rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-xs font-medium text-brand-300"
+                >
+                  Compare ›
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShortlist((l) => l.filter((x) => x !== id))}
+                  aria-label={`Remove ${it.name}`}
+                  className="mise-press shrink-0 rounded-lg border border-line px-2 py-1.5 text-xs text-fg-faint hover:text-rose-300"
+                >
+                  ✕
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </DetailSheet>
+
       {items.length === 0 ? (
         <Card>
           <p className="py-6 text-center text-sm text-fg-faint">
@@ -555,6 +662,7 @@ export default function PriceComparisonPage() {
                 items={rankedItems}
                 value={selected}
                 onChange={openItem}
+                onGather={gather}
                 dense
                 suppliers={supplierMap}
               />
