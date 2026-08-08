@@ -4,7 +4,6 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
@@ -14,10 +13,11 @@ from app.core import template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
+from app.inventory import matching
 from app.inventory.models import Item
 from app.inventory.service import get_item
-from app.vendors import ledger, matching, service
-from app.vendors.models import ItemAlias, VendorPayment
+from app.vendors import ledger, service
+from app.vendors.models import VendorPayment
 from app.vendors.schemas import (
     PriceComparison,
     VendorCreate,
@@ -394,12 +394,14 @@ async def resolve_item(
     """
     m = await matching.resolve(db, user.hotel_id, payload.name, vendor_id=payload.vendor_id)
     return {
-        "matched": m.item_id is not None,
+        "matched": m.certain,
         "item_id": str(m.item_id) if m.item_id else None,
-        "name": m.name,
-        "score": round(m.score, 3),
-        "how": m.how,
-        "candidates": m.candidates,
+        "name": m.item_name or payload.name,
+        "how": m.status,
+        "candidates": [
+            {"item_id": str(c.item_id), "name": c.name, "score": c.score}
+            for c in m.candidates
+        ],
     }
 
 
@@ -418,28 +420,13 @@ async def teach_item(
     if item is None or item.hotel_id != user.hotel_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
 
-    alias = matching.normalise(payload.name)
-    if not alias:
+    saved = await matching.remember(
+        db,
+        user.hotel_id,
+        payload.name,
+        payload.item_id,
+        vendor_id=payload.vendor_id,
+        user_id=user.id,
+    )
+    if saved is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to remember.")
-
-    existing = (
-        await db.execute(
-            select(ItemAlias).where(
-                ItemAlias.hotel_id == user.hotel_id,
-                ItemAlias.alias == alias,
-                ItemAlias.vendor_id == payload.vendor_id,
-            )
-        )
-    ).scalars().first()
-    if existing is not None:
-        existing.item_id = payload.item_id
-    else:
-        db.add(
-            ItemAlias(
-                hotel_id=user.hotel_id,
-                item_id=payload.item_id,
-                vendor_id=payload.vendor_id,
-                alias=alias,
-            )
-        )
-    await db.commit()
