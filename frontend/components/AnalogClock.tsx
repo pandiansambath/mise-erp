@@ -107,7 +107,18 @@ export function AnalogClock({
       const real = new Date();
       const now = tz ? zoned(real, tz) : real;
       const ms = now.getMilliseconds() / 1000;
-      const s = now.getSeconds() + ms;
+      let s = now.getSeconds() + ms;
+
+      // "Stop2go", and I had this wrong until I looked it up.
+      //
+      // The Mondaine second hand does NOT sweep evenly. It runs the full
+      // circle in 58 seconds, then WAITS at twelve for the minute pulse from
+      // the master clock — that pause is the single most recognisable thing
+      // about a Swiss station clock, and a smooth sweep is not it.
+      // https://mondaine.com/pages/stop2go
+      if (face === "railway") {
+        s = s >= 58 ? 0 : (s / 58) * 60;
+      }
       const m = now.getMinutes() + s / 60;
       // The hour hand carries the minutes with it — that drift is what makes
       // a clock face look real rather than drawn.
@@ -143,7 +154,7 @@ export function AnalogClock({
     };
     tick();
     return () => cancelAnimationFrame(frame);
-  }, [tz]);
+  }, [tz, face]);
 
   return (
     <div
@@ -349,20 +360,28 @@ export function AnalogClock({
           y1={face === "arc" || face === "halo" ? "112" : "118"}
           x2="100"
           y2={face === "arc" || face === "halo" ? "40" : "26"}
-          stroke="var(--color-brand-400)"
-          strokeWidth="1.8"
+          // Braun's second hand is YELLOW — it is the one piece of colour on
+          // an otherwise monochrome dial and the reason the face is
+          // recognisable at all. Everything else there is grey.
+          // https://us.braun-clocks.com/
+          stroke={face === "braun" ? "#f5c518" : "var(--color-brand-400)"}
+          strokeWidth={face === "braun" ? 1.4 : 1.8}
           strokeLinecap="round"
         />
         {/* Swiss station clocks carry a red disc near the tip of the second
             hand — the single detail that makes the face unmistakable. */}
+        {/* The disc is the shape of the signalling baton a railway guard held,
+            added to the design in 1953. Red, always — it is the identity of
+            the face, not a theme colour.
+            https://en.wikipedia.org/wiki/Swiss_railway_clock */}
         {face === "railway" && (
-          <circle ref={disc} cx="100" cy="34" r="9" fill="var(--color-brand-500)" />
+          <circle ref={disc} cx="100" cy="34" r="9" fill="#d40000" />
         )}
         <circle
           cx="100"
           cy="100"
           r={face === "bold" ? 6 : 4.5}
-          fill="var(--color-brand-400)"
+          fill={face === "railway" ? "#d40000" : face === "braun" ? "#f5c518" : "var(--color-brand-400)"}
         />
         <circle cx="100" cy="100" r="1.6" fill="var(--color-shell, #0b1220)" />
       </svg>
