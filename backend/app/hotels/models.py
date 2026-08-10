@@ -43,6 +43,14 @@ class Hotel(Base):
     # Customizable public landing page shown at <username>.dineai.cloud
     # (tagline/about/quote/accent/theme/show_order). Empty {} = sensible defaults.
     landing: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    #: How this restaurant wants its numbers and its paperwork. Taste, not
+    #: entitlement — `features` decides what they may use, `prefs` decides how
+    #: it looks. Keys currently read:
+    #:   pdf_group_by    "category" | "none"   group order/stock PDFs
+    #:   qty_decimals    int 0-3               places on a quantity
+    #:   money_decimals  int 0-4               places on a price
+    prefs: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Subscription plan (starter | pro | enterprise) — sets the feature preset + limits.
     plan: Mapped[str] = mapped_column(String(20), nullable=False, default="pro")
     # Stripe billing (test mode): who this hotel is at Stripe + where the

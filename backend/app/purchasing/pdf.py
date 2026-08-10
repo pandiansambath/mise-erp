@@ -3,11 +3,23 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 from app.core.pdf_logo import draw_hotel_logo
+from app.hotels.prefs import pref
 
 BRAND = (16, 185, 129)
 DARK = (15, 23, 42)
 MUTED = (100, 116, 139)
 LIGHT = (241, 245, 249)
+
+
+def _q(value, unit: str = "") -> str:
+    """A quantity as a person writes it. Numeric(12,3) hands over "5.000", and
+    a real user said it plainly: "no need like 1.5000, want like 1.5 kilo"."""
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return f"{value} {unit}".strip()
+    txt = f"{n:.3f}".rstrip("0").rstrip(".") or "0"
+    return f"{txt} {unit}".strip()
 
 
 def _s(value) -> str:
@@ -18,6 +30,10 @@ def _s(value) -> str:
 def generate_po_pdf(
     po, vendor_name: str, items: list[dict], hotel, *, received: bool = False
 ) -> bytes:
+    # How this restaurant wants it grouped is theirs to choose, not ours to
+    # decide — Settings -> "Group order PDFs by". Default is by category,
+    # because that is what his users asked for.
+    group_by = pref(hotel, "pdf_group_by")
     """The purchase order. `received=True` renders the GOODS RECEIVED NOTE instead: an
     extra 'Received' column beside 'Ordered' (short/over qty in red) + the receive note,
     so what was ordered vs what actually arrived stays on record."""
@@ -70,16 +86,33 @@ def generate_po_pdf(
 
     pdf.set_text_color(*DARK)
     pdf.set_font("Helvetica", "", 10)
+    current_cat = None
     for i, it in enumerate(items):
+        # A heading whenever the category changes. Real users' words: "PDF need
+        # categorisation, like vegetables should be in one place". A flat
+        # alphabetical list walks the picker back and forth across the store.
+        cat = (it.get("category") or "Other").strip() or "Other"
+        if group_by == "category" and cat != current_cat:
+            current_cat = cat
+            pdf.set_x(14)
+            pdf.set_fill_color(*BRAND)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.cell(
+                182, 6, text=_s(f"  {cat.upper()}"), fill=True,
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+            )
+            pdf.set_text_color(*DARK)
+            pdf.set_font("Helvetica", "", 10)
         pdf.set_x(14)
         fill = i % 2 == 1
         pdf.set_fill_color(*LIGHT)
         if received:
             pdf.cell(72, 8, text=_s(f"  {it['item_name']}"), fill=fill)
-            pdf.cell(24, 8, text=str(it["ordered_qty"]), align="R", fill=fill)
+            pdf.cell(24, 8, text=_q(it["ordered_qty"], it.get("unit", "")), align="R", fill=fill)
             if str(it["received_qty"]) != str(it["ordered_qty"]):
                 pdf.set_text_color(200, 50, 50)  # short/over delivery stands out
-            pdf.cell(24, 8, text=str(it["received_qty"]), align="R", fill=fill)
+            pdf.cell(24, 8, text=_q(it["received_qty"], it.get("unit", "")), align="R", fill=fill)
             pdf.set_text_color(*DARK)
             pdf.cell(30, 8, text=f"{cur} {it['unit_price']}", align="R", fill=fill)
             pdf.cell(
@@ -88,7 +121,7 @@ def generate_po_pdf(
             )
         else:
             pdf.cell(86, 8, text=_s(f"  {it['item_name']}"), fill=fill)
-            pdf.cell(28, 8, text=str(it["ordered_qty"]), align="R", fill=fill)
+            pdf.cell(28, 8, text=_q(it["ordered_qty"], it.get("unit", "")), align="R", fill=fill)
             pdf.cell(34, 8, text=f"{cur} {it['unit_price']}", align="R", fill=fill)
             pdf.cell(
                 34, 8, text=f"{cur} {it['line_total']}  ", align="R", fill=fill,

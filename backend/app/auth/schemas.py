@@ -102,6 +102,10 @@ class HotelUpdate(BaseModel):
     # IANA zone. Validated against the offered list rather than accepted freely:
     # a typo here silently shifts which DAY every sale and shift belongs to.
     timezone: str | None = None
+    # Display preferences — how PDFs group, how many decimals a number shows.
+    # MERGED into whatever is stored, not swapped for it: sending one key must
+    # not silently clear the others.
+    prefs: dict | None = None
 
 
 class TokenResponse(BaseModel):
