@@ -1,5 +1,7 @@
 "use client";
 
+import SplashCursor from "@/components/reactbits/SplashCursor";
+
 // The DineAI landing experience — composition root.
 //
 //   cinema hero (dish → live dashboard) → trust strip → three-beat story →
@@ -54,6 +56,19 @@ function ScrollProgress() {
       style={{ transform: "scaleX(0)" }}
     />
   );
+}
+
+/** SplashCursor, but only where a cursor exists. */
+function FluidCursor() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    setOn(
+      window.matchMedia("(pointer: fine)").matches &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+  }, []);
+  if (!on) return null;
+  return <SplashCursor />;
 }
 
 /** A soft emerald spotlight that follows the cursor (fine pointers only).
@@ -434,7 +449,15 @@ export default function PremiumLanding() {
       </div>
 
       <ScrollProgress />
-      <CursorGlow />
+      {/* The cursor, as liquid.
+          A 41KB WebGL fluid simulation on a continuous loop — which is why it
+          is HERE and nowhere near a working screen. This page is already gated
+          to visitors who have not asked for reduced motion (the others get the
+          classic landing), and Splash gates itself again to fine pointers, so a
+          phone never pays for a cursor effect it has no cursor for.
+          It replaces CursorGlow rather than joining it: two cursor effects at
+          once is just one of them ruining the other. */}
+      <FluidCursor />
       <Nav />
 
       <main>
