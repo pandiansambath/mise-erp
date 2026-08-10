@@ -491,10 +491,28 @@ export default function PriceComparisonPage() {
                       <span className="ml-2 text-[11px] text-brand-300">★ chosen</span>
                     )}
                   </span>
-                  <span className={`font-display text-sm font-semibold tabular-nums ${
-                    cheapest ? "text-emerald-300" : "text-fg-soft"
-                  }`}>
-                    {format(v.price_per_unit)}
+                  {/* The price, and what it BUYS. Without the second line a
+                      £120 box sits beside a £0.45 packet with nothing saying
+                      why one is not obviously the dear one — which is exactly
+                      how this page used to recommend the wrong supplier. */}
+                  <span className="text-right">
+                    <span
+                      className={`block font-display text-sm font-semibold tabular-nums ${
+                        cheapest ? "text-emerald-300" : "text-fg-soft"
+                      }`}
+                    >
+                      {format(v.price_per_unit)}
+                      {v.pack_level_name && (
+                        <span className="ml-1 text-[11px] font-normal text-fg-faint">
+                          per {v.pack_level_name}
+                        </span>
+                      )}
+                    </span>
+                    {v.pack_level_name && v.price_per_base && (
+                      <span className="block text-[11px] tabular-nums text-fg-faint">
+                        = {format(v.price_per_base)} per {data.unit}
+                      </span>
+                    )}
                   </span>
                   {cheapest && !v.is_preferred && (
                     <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
