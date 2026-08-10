@@ -68,13 +68,23 @@ also how a chef would say it out loud.
 - [ ] **`1.5000` must not appear.** Quantities pick their natural unit and drop
       trailing zeros: `1.5 kg`, `250 g`, `1.2 L`, `3 pieces`
 - [ ] Decimal places **configurable** — he asked "shall we keep configurable?".
-      Money and quantity are different questions and get separate settings
+      Money and quantity are different questions and get separate settings.
+      `hotels.prefs.qty_decimals` / `.money_decimals` exist with defaults; they
+      still need to be read at every render and exposed in Settings
 - [ ] Apply everywhere the number is shown: lists, sheets, exports, PDFs
 
 ## Exports
 
-- [ ] **PDFs grouped by category** — vegetables together, dairy together. A
-      flat alphabetical list is a filing cabinet, not a shopping list
+- [x] **PDFs grouped by category** — vegetables together, dairy together. A
+      flat alphabetical list is a filing cabinet, not a shopping list.
+      **Configurable, per his follow-up: "it can be configurable, so user can
+      get how they wanted".** Settings → *Group order PDFs by* →
+      `category` (default) or `none` (the old flat list). Stored in the new
+      `hotels.prefs` JSON, which is also where the decimal settings go — a
+      preference should not cost a migration each time he asks for one.
+      Quantities in the PO PDF stopped saying "5.000" at the same time.
+- [ ] Settings UI for it (the API and the default are in; the screen is not)
+- [ ] Same grouping for the stock-take and price-list PDFs
 - [ ] **Rota PDF — "very very clumsy"**. His instruction: *remove anything to
       solve it*, keep the data that is needed, make it look good. The times are
       what break the layout, so a week of shifts wants a fixed grid with

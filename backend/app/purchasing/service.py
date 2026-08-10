@@ -288,13 +288,18 @@ async def po_items(db: AsyncSession, po_id: uuid.UUID) -> list[dict]:
         select(POItem, Item)
         .join(Item, POItem.item_id == Item.id)
         .where(POItem.po_id == po_id)
-        .order_by(Item.name)
+        # Grouped by category, then by name. A picker walking the cold room
+        # wants every vegetable together, not an alphabetical list that sends
+        # them back and forth across the store.
+        .order_by(Item.category.nulls_last(), Item.name)
     )
     return [
         {
             "po_item_id": pi.id,
             "item_id": pi.item_id,
             "item_name": it.name,
+            "category": (it.category or "").strip() or "Other",
+            "unit": it.unit,
             "ordered_qty": pi.ordered_qty,
             "received_qty": pi.received_qty,
             "unit_price": pi.unit_price,

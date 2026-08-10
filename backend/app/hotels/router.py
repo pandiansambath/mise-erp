@@ -11,6 +11,7 @@ from app.core import timezones
 from app.core.database import get_db
 from app.core.storage import get_storage
 from app.hotels import onboarding
+from app.hotels import prefs as prefs_mod
 from app.hotels.models import Hotel
 
 router = APIRouter(prefix="/hotels", tags=["hotels"])
@@ -68,6 +69,20 @@ async def update_my_hotel(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"{tz!r} is not a timezone we support.",
         )
+
+    # Preferences merge. setattr would replace the whole bag, so a request that
+    # only changes how PDFs group would wipe the decimal settings with it.
+    incoming = data.pop("prefs", None)
+    if incoming is not None:
+        merged = dict(hotel.prefs or {})
+        merged.update(incoming)
+        unknown = set(merged) - set(prefs_mod.DEFAULTS)
+        if unknown:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Unknown preference(s): {', '.join(sorted(unknown))}",
+            )
+        hotel.prefs = merged
 
     for key, value in data.items():
         setattr(hotel, key, value)
