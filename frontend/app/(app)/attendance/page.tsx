@@ -1,5 +1,7 @@
 "use client";
 
+import { fmtHours } from "@/lib/quantity";
+
 import { TimeRangePicker } from "@/components/RangeControls";
 import { useCallback, useEffect, useState } from "react";
 import { SubNav } from "@/components/SubNav";
@@ -87,14 +89,6 @@ export default function AttendancePage() {
   const toHHMM = (iso: string | null | undefined): string =>
     iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }) : "";
 
-  // Decimal hours → "12h 30m" (10.50 reads as ten-and-a-half hours, not 10:50)
-  const fmtHours = (dec: string | number | null | undefined): string => {
-    if (dec == null || dec === "") return "—";
-    const n = typeof dec === "number" ? dec : parseFloat(dec);
-    if (!isFinite(n)) return "—";
-    const mins = Math.round(n * 60);
-    return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`;
-  };
 
   // Live preview for the edit dialog — the exact math the server will do:
   // (out − in, rolling past midnight) − break. No more surprise numbers.
@@ -476,7 +470,7 @@ export default function AttendancePage() {
                           "—"
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right text-fg-soft" title={r?.working_hours ? `${r.working_hours} h (break already deducted)` : undefined}>
+                      <td className="px-5 py-3 text-right text-fg-soft" title={r?.working_hours ? `${fmtHours(r.working_hours)} — the unpaid break is already taken out` : undefined}>
                         {fmtHours(r?.working_hours)}
                         {r?.clock_in && (() => {
                           // the day as a strip: 06:00→24:00, shift filled in
@@ -746,7 +740,7 @@ function AttendanceHistoryCard({ employees, format }: {
                               : undefined
                           }
                         >
-                          {d.working_hours ?? "0"}h
+                          {fmtHours(d.working_hours)}
                         </td>
                       </tr>
                     ))}

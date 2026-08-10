@@ -1879,3 +1879,18 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 .mise-bench-rail {
   top: var(--mise-topbar, 0px);
 }
+
+/* Where the workbench tally comes to rest.
+   Below lg a fixed tab bar owns the bottom of the screen, so a strip pinned at
+   0 hides underneath it. At lg there is no tab bar and it rests at the edge. */
+.mise-app {
+  --mise-tabbar: 4.75rem;
+}
+@media (min-width: 1024px) {
+  .mise-app {
+    --mise-tabbar: 0px;
+  }
+}
+.mise-bench-tally {
+  bottom: var(--mise-tabbar, 0px);
+}

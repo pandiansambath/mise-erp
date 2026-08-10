@@ -1,5 +1,7 @@
 "use client";
 
+import { fmtHours } from "@/lib/quantity";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
@@ -303,7 +305,7 @@ export default function MySpacePage() {
                     <td className="px-5 py-2 text-fg-soft">{a.date}</td>
                     <td className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_in)}</td>
                     <td className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_out)}</td>
-                    <td className="px-5 py-2 text-right text-fg-soft">{a.working_hours ?? "—"}</td>
+                    <td className="px-5 py-2 text-right text-fg-soft">{fmtHours(a.working_hours)}</td>
                   </tr>
                 ))}
               </tbody>
