@@ -217,3 +217,36 @@ not a layout-container job, and it is the real remaining work:
 - [ ] Purchasing: the four tiles are good; the list under them is not dense
       enough to show anything useful above the fold
 - [ ] Decide per page what the ONE question is, then fit its answer on screen
+
+---
+
+## The £2.33 that meant nothing — 2026-08-10
+
+> also last image whats theat big 2pounds means? ist hth impoaratnt what taht i
+> dont undertsn
+
+He could not read it because **it was not readable**. Price Comparison summed
+the per-unit saving across every mispriced item and printed the total as money:
+
+    Bay Leaves   £1.00 cheaper per KG
+    Butter       £0.72 cheaper per KG
+    something    £0.61 cheaper per PIECE
+    ────────────────────────────────────
+    "£2.33 sitting on the table"
+
+You cannot add £/kg to £/piece. The total is not money, not a rate, not
+anything — you could not spend it, budget with it, or check it. A big
+confident number that means nothing is worse than no number.
+
+**Now:** the hero says what the page actually knows — *how many* items are on a
+dearer supplier, and the single worst one **with its unit** ("worst is Bay
+Leaves at £1.00 more per kg"). True, checkable, and it points at the next
+action.
+
+- [ ] **The real number, properly.** Money saved = (what you pay − cheapest) ×
+      **how much you actually buy**. The volumes exist in `po_items`; what is
+      missing is an aggregate endpoint — purchased quantity per item over a
+      window. Then the hero can say "£X a month, on what you bought last
+      month", which is a number he can act on and verify
+- [ ] Same trap worth checking elsewhere: any other place that adds up
+      per-unit figures across different units
