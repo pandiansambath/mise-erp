@@ -355,6 +355,16 @@ export interface MeResponse {
   hotel: Hotel;
 }
 
+export interface PackLevel {
+  id: string;
+  position: number;
+  name: string;
+  contains: string;
+  /** How many BASE units one of these is — worked out server-side so no screen
+   *  re-derives 15000 from 50 x 30 x 10 and gets it subtly different. */
+  base_size: string;
+}
+
 export interface Item {
   id: string;
   name: string;
@@ -362,6 +372,10 @@ export interface Item {
   unit: string;
   pack_unit?: string | null; // buying pack name (box/bag) — optional
   pack_size?: string | null; // base units per pack: 1 pack_unit = pack_size unit
+  /** The buying chain, smallest first. Empty when bought loose. An item made
+   *  before the chain existed reports its old pack_unit/pack_size as one rung,
+   *  so every screen reads one shape. */
+  pack_levels?: PackLevel[];
   current_stock: string;
   min_stock_level: string | null;
   max_stock_level: string | null;

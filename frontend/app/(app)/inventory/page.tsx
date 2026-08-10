@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
+import { PackChainEditor, type PackLevel } from "@/components/PackChainEditor";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
 import { SubNav } from "@/components/SubNav";
@@ -98,6 +99,9 @@ export default function InventoryPage() {
   // so reaching your own stock meant scrolling past it. Now it opens where
   // editing already opened: in place, over the list.
   const [adding, setAdding] = useState(false);
+  // The buying chain, smallest first. Held apart from `form` because it is a
+  // list of rows rather than a field, and it is saved as a whole.
+  const [packLevels, setPackLevels] = useState<PackLevel[]>([]);
   // item_id -> every vendor that prices it. Drives the form's supplier picker:
   // you can only choose a supplier who actually quotes this item.
   const [itemSuppliers, setItemSuppliers] = useState<Record<string, SupplierOption[]>>({});
@@ -290,6 +294,14 @@ export default function InventoryPage() {
       packUnit: item.pack_unit ?? "",
       packSize: item.pack_size ?? "",
     });
+    // Items from before the chain existed report their old pack_unit/pack_size
+    // as a single rung, so this is the same shape either way.
+    setPackLevels(
+      (item.pack_levels ?? []).map((lv) => ({
+        name: lv.name,
+        contains: String(lv.contains),
+      })),
+    );
     setAllergensTouched(false);
     setError(null);
     // No scrolling: the form opens over the row you clicked. The modal focuses
@@ -299,6 +311,7 @@ export default function InventoryPage() {
   function cancelEdit() {
     setEditingId(null);
     setAdding(false);
+    setPackLevels([]);
     setFormVendor("");
     setVendorMsg(null);
     setForm(EMPTY);
@@ -326,6 +339,11 @@ export default function InventoryPage() {
       // Pack is optional: 1 packUnit = packSize units. Blank pack_size clears it.
       pack_unit: form.packUnit.trim() || null,
       pack_size: form.packUnit.trim() && form.packSize ? form.packSize : null,
+      // Sent whole. Each rung counts the one below it, so a half-written chain
+      // would leave "1 box = 10 small boxes" pointing at nothing.
+      pack_levels: packLevels
+        .filter((l) => l.name.trim() && parseFloat(l.contains) > 0)
+        .map((l) => ({ name: l.name.trim(), contains: l.contains })),
     };
     // Write allergens whenever the user touched the picker (works for add + edit).
     // Left untouched → stays "not reviewed" so the Allergens sheet still prompts.
@@ -1019,35 +1037,17 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* Optional purchase pack: 1 pack = N base units. Stock/recipes stay in the base unit. */}
-          <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-paper-2/40 p-3">
-            <div className="w-full text-xs text-fg-faint sm:max-w-xs">
-              <span className="text-sm font-medium text-fg-soft">Sold in packs?</span>{" "}
-              <span className="text-fg-faint">(optional)</span>
-              <p className="mt-0.5">
-                If you buy this in a box/bag/case, say how much is inside. Ordering can then use packs, but
-                stock &amp; recipes still count in <b className="text-fg-soft">{form.unit || "the base unit"}</b>.
-              </p>
-            </div>
-            <div className="w-28">
-              <label className="block text-sm font-medium text-fg-soft">Pack name</label>
-              <input value={form.packUnit} onChange={(e) => setForm({ ...form, packUnit: noDigits(e.target.value) })} placeholder="e.g. box" className={inputCls} />
-            </div>
-            <div className="flex items-end gap-1.5">
-              <span className="pb-2 text-sm text-fg-faint">1 {form.packUnit.trim() || "pack"} =</span>
-              <div className="w-24">
-                <label className="block text-sm font-medium text-fg-soft">Pack size</label>
-                <input
-                  value={form.packSize}
-                  onChange={(e) => setForm({ ...form, packSize: numeric(e.target.value) })}
-                  inputMode="decimal"
-                  placeholder="0"
-                  disabled={!form.packUnit.trim()}
-                  className={`${inputCls} disabled:opacity-50`}
-                />
-              </div>
-              <span className="pb-2 text-sm text-fg-faint">{form.unit || "unit"}</span>
-            </div>
+          {/* The buying chain. One "Sold in packs?" box could say
+              "1 box = 15 kg" and nothing else — it could not say a box holds
+              10 small boxes holding 30 packets of 50 g, which is what he
+              actually buys, and so ordering could only ever offer the one
+              shape somebody picked when the item was created. */}
+          <div className="mt-3">
+            <PackChainEditor
+              baseUnit={form.unit}
+              levels={packLevels}
+              onChange={setPackLevels}
+            />
           </div>
 
           {/* Supplier + price. You can only pick a vendor who actually quotes
