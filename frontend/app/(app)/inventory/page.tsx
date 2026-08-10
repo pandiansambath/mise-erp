@@ -102,6 +102,9 @@ export default function InventoryPage() {
   // The buying chain, smallest first. Held apart from `form` because it is a
   // list of rows rather than a field, and it is saved as a whole.
   const [packLevels, setPackLevels] = useState<PackLevel[]>([]);
+  // The money bento starts closed so the stock list is the first thing on
+  // the page, which is what the page is for.
+  const [showMoney, setShowMoney] = useState(false);
   // item_id -> every vendor that prices it. Drives the form's supplier picker:
   // you can only choose a supplier who actually quotes this item.
   const [itemSuppliers, setItemSuppliers] = useState<Record<string, SupplierOption[]>>({});
@@ -1163,8 +1166,28 @@ export default function InventoryPage() {
         <Spinner />
       ) : (
         <>
-          {/* ── the shelf, as a bento: rings + live vitals + the nudge ── */}
-          {items.length > 0 && (() => {
+          {/* ── the shelf, as a bento: rings + live vitals + the nudge ──
+              CLOSED by default. His correction on what "no scroll" means:
+              "we need to show data in different UI style where no need to
+              scroll... but if i want to see i need to scroll". This panel is a
+              donut and six tiles, and it owned the entire first screen of a
+              page whose job is showing stock — so you scrolled past a picture
+              of your money to reach your money.
+              The numbers it leads with are already on the pinned tally at the
+              bottom, always visible. So it opens on request instead. */}
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowMoney((v) => !v)}
+              aria-expanded={showMoney}
+              className="mise-press mb-3 flex w-full items-center gap-2 rounded-xl border border-line px-3.5 py-2 text-left text-sm text-fg-soft transition hover:border-brand-400/40"
+            >
+              <span aria-hidden>📊</span>
+              <span className="flex-1">Where your stock money sits</span>
+              <span aria-hidden className="text-fg-faint">{showMoney ? "▲" : "▼"}</span>
+            </button>
+          )}
+          {showMoney && items.length > 0 && (() => {
             const active = items.filter((i) => i.is_active);
             const valued = active
               .map((i) => ({

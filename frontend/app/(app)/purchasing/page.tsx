@@ -833,24 +833,37 @@ export default function PurchasingPage() {
           { label: "Committed", value: format(String(committed)), hint: "on open orders",
             tone: "plain", go: "orders" },
         ];
+        // One compact row, not four cards.
+        //
+        // These four numbers are the questions the page answers — is anything
+        // waiting on me, is anything late, how much is committed — so they keep
+        // their place and they still jump to the rows behind them. But as
+        // 2xl-type cards they took a fifth of the screen ABOVE the order form,
+        // and the same four numbers are already on the pinned tally at the
+        // bottom, in view the whole time.
+        //
+        // Compact keeps the click and gives the height back to the work. Only
+        // what needs attention is coloured, so a glance still finds it.
         return (
-          <div className="mise-stagger mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="mise-stagger mb-3 flex flex-wrap items-center gap-1.5">
             {tiles.map((t) => (
               <button
                 key={t.label}
                 type="button"
                 onClick={() => setTab(t.go)}
-                className="mise-neo-raised mise-press rounded-2xl px-3.5 py-3 text-left transition hover:-translate-y-0.5"
+                title={`${t.label} — ${t.hint}`}
+                className={`mise-press inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
+                  t.tone === "bad"
+                    ? "border-rose-400/40 bg-rose-400/10 text-rose-200"
+                    : t.tone === "warn"
+                      ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
+                      : "border-line text-fg-soft hover:border-brand-400/40"
+                }`}
               >
-                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-fg-faint">
-                  {t.label}
-                </p>
-                <p className={`mt-0.5 truncate font-display text-2xl font-semibold tabular-nums ${
-                  t.tone === "bad" ? "text-rose-400" : t.tone === "warn" ? "text-amber-400" : "text-fg"
-                }`}>
+                <span className="font-display text-sm font-semibold tabular-nums">
                   {t.value}
-                </p>
-                <p className="truncate text-[10px] text-fg-faint">{t.hint}</p>
+                </span>
+                <span className="truncate">{t.label.toLowerCase()}</span>
               </button>
             ))}
           </div>
