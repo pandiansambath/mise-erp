@@ -4,6 +4,7 @@ from decimal import Decimal
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+from app.core.pdf import money
 from app.core.pdf_logo import draw_hotel_logo
 
 BRAND = (16, 185, 129)  # emerald
@@ -80,15 +81,19 @@ def _draw(pdf: FPDF, payroll, employee, hotel) -> None:
             new_x=XPos.LMARGIN, new_y=YPos.NEXT,
         )
 
-    line("Gross pay", f"{cur} {payroll.gross_pay}", shade=True)
-    line("Overtime", f"{cur} {payroll.overtime_pay}")
-    line("Advance deduction", f"- {cur} {payroll.advance_deduction}", shade=True)
-    line("Other deductions", f"- {cur} {payroll.other_deductions}")
+    line("Gross pay", money(payroll.gross_pay, cur), shade=True)
+    line("Overtime", money(payroll.overtime_pay, cur))
+    line("Advance deduction", "- " + money(payroll.advance_deduction, cur), shade=True)
+    line("Other deductions", "- " + money(payroll.other_deductions, cur))
     pdf.ln(2)
-    line("NET PAY", f"{cur} {payroll.net_pay}", net=True)
+    line("NET PAY", money(payroll.net_pay, cur), net=True)
 
     # ── footer ──
     pdf.set_text_color(*MUTED)
+    # y=280 on A4 is below fpdf's bottom margin, so writing the footer there
+    # started a fresh page to hold it — the blank last sheet again, this being
+    # the fourth file with its own footer and therefore its own copy of it.
+    pdf.set_auto_page_break(False)
     pdf.set_xy(14, 280)
     pdf.set_font("Helvetica", "I", 8)
     pdf.cell(
