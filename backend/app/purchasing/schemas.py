@@ -103,6 +103,8 @@ class SupplierOption(BaseModel):
     vendor_id: uuid.UUID
     vendor_name: str
     price_per_unit: Decimal
+    #: Which size this supplier's price buys. None = one base unit.
+    pack_level_id: uuid.UUID | None = None
     is_preferred: bool
 
 

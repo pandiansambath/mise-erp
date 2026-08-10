@@ -629,6 +629,8 @@ export interface SupplierOption {
   vendor_id: string;
   vendor_name: string;
   price_per_unit: string;
+  /** Which size this supplier sells in. null = they quote per base unit. */
+  pack_level_id?: string | null;
   is_preferred: boolean;
 }
 

@@ -9,7 +9,7 @@ import { fmtQty as fmtQtyBase, weighedParts as weighedPartsBase } from "@/lib/qu
 // weighed items. Used by Purchasing (indents), Recipes (ingredients) and — in
 // single-select mode — Price Comparison.
 import { useMemo, useState, type ReactNode } from "react";
-import type { Item } from "@/lib/api";
+import type { Item, SupplierOption } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { numeric } from "@/lib/sanitize";
 import { Pocket, flyToPocket } from "@/components/Pocket";
@@ -148,8 +148,32 @@ export function QtyInput({
    costing are untouched — only the typing changes. Pick "packets", type 30, and
    1500 g is what gets recorded. The line underneath says so, every time, because
    a conversion you cannot see is a conversion you cannot check. */
-function QtyFields({ item, qty, onQty }: { item: Item; qty: string; onQty: (v: string) => void }) {
-  const chain = item.pack_levels ?? [];
+function QtyFields({
+  item,
+  qty,
+  onQty,
+  supplier,
+}: {
+  item: Item;
+  qty: string;
+  onQty: (v: string) => void;
+  /** Who this line is being bought from, when that is already decided. */
+  supplier?: SupplierOption;
+}) {
+  const full = item.pack_levels ?? [];
+  // Offer only what THIS supplier actually sells. "we cant say all the vendors
+  // will have this BOX type, some vendor will have small packets too, only they
+  // will sell" — so a supplier who prices packets should not be offering boxes.
+  // With no supplier chosen yet, the item's whole chain is fair game.
+  const chain =
+    supplier?.pack_level_id
+      ? full.filter(
+          (lv) =>
+            lv.id === supplier.pack_level_id ||
+            full.findIndex((x) => x.id === lv.id) <
+              full.findIndex((x) => x.id === supplier.pack_level_id),
+        )
+      : full;
   // 0 = the base unit itself. Anything above is a rung of the chain.
   const [level, setLevel] = useState(0);
 
@@ -234,10 +258,10 @@ export function ItemPicker({
    *  list it submits, not a scroll below the grid that keeps growing. */
   trayFooter?: ReactNode;
   /** item id -> vendors. When given, each row lists its cheapest few. */
-  suppliers?: Record<
-    string,
-    { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]
-  >;
+  /** item id -> every supplier pricing it. The full SupplierOption now, because
+   *  the quantity box needs `pack_level_id` to know which sizes this supplier
+   *  actually sells. */
+  suppliers?: Record<string, SupplierOption[]>;
   /** Rows instead of cards — see the note on ItemPickerSingle. Sixty items in
    *  cards is a wall; in rows it is a list. */
   dense?: boolean;
@@ -293,12 +317,22 @@ export function ItemPicker({
   // the cheapest otherwise, which is the rule ordering itself follows.
   /** The supplier a line will actually be bought from, by the ordering rule:
    *  the chosen one, else the cheapest. Same rule the running total uses. */
-  const supplierFor = (itemId: string): { name: string; price: number } | null => {
+  /** The same pick, but the whole option — the quantity box needs its
+   *  pack_level_id to know which sizes this supplier actually sells. */
+  const supplierOptionFor = (itemId: string): SupplierOption | undefined => {
     const opts = suppliers?.[itemId] ?? [];
-    if (opts.length === 0) return null;
-    const pick =
+    if (opts.length === 0) return undefined;
+    return (
       opts.find((v) => v.is_preferred) ??
-      [...opts].sort((a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0))[0];
+      [...opts].sort(
+        (a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
+      )[0]
+    );
+  };
+
+  const supplierFor = (itemId: string): { name: string; price: number } | null => {
+    const pick = supplierOptionFor(itemId);
+    if (!pick) return null;
     return { name: pick.vendor_name, price: parseFloat(pick.price_per_unit) || 0 };
   };
 
@@ -327,7 +361,12 @@ export function ItemPicker({
                   </button>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
-                  <QtyFields item={item} qty={line.qty} onQty={(v) => setQty(item.id, v)} />
+                  <QtyFields
+                    item={item}
+                    qty={line.qty}
+                    onQty={(v) => setQty(item.id, v)}
+                    supplier={supplierOptionFor(item.id)}
+                  />
                   {!weighedParts(item.unit) && (
                     <span className="text-xs text-fg-faint">{item.unit}</span>
                   )}
@@ -854,10 +893,10 @@ export function ItemPickerSingle({
   /** item id -> vendors, cheapest first. When given, each row lists its top
    *  few suppliers inline. Opening a sheet to read two numbers is a lot of
    *  ceremony for two numbers. */
-  suppliers?: Record<
-    string,
-    { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]
-  >;
+  /** item id -> every supplier pricing it. The full SupplierOption now, because
+   *  the quantity box needs `pack_level_id` to know which sizes this supplier
+   *  actually sells. */
+  suppliers?: Record<string, SupplierOption[]>;
   /** Rows instead of cards.
    *
    *  Cards are for a handful of things you are choosing between. Sixty-one
