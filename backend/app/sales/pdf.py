@@ -2,6 +2,8 @@
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+from app.core.pdf import money
+
 BRAND = (16, 185, 129)
 DARK = (15, 23, 42)
 MUTED = (100, 116, 139)
@@ -58,10 +60,10 @@ def generate_day_pdf(summary: dict, hotel) -> bytes:
         pdf.set_fill_color(*LIGHT)
         pdf.cell(64, 8, text=_s(f"  {ln['channel_name']}"), fill=fill)
         pdf.cell(28, 8, text=str(ln["payment_method"]), align="C", fill=fill)
-        pdf.cell(30, 8, text=f"{cur} {ln['gross_amount']}", align="R", fill=fill)
-        pdf.cell(30, 8, text=f"{cur} {ln['commission']}", align="R", fill=fill)
+        pdf.cell(30, 8, text=money(ln["gross_amount"], cur), align="R", fill=fill)
+        pdf.cell(30, 8, text=money(ln["commission"], cur), align="R", fill=fill)
         pdf.cell(
-            30, 8, text=f"{cur} {ln['net_amount']}  ", align="R", fill=fill,
+            30, 8, text=money(ln["net_amount"], cur) + "  ", align="R", fill=fill,
             new_x=XPos.LMARGIN, new_y=YPos.NEXT,
         )
 
@@ -71,10 +73,10 @@ def generate_day_pdf(summary: dict, hotel) -> bytes:
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(92, 10, text="  Totals", fill=True)
-    pdf.cell(30, 10, text=f"{cur} {t['gross']}", align="R", fill=True)
-    pdf.cell(30, 10, text=f"{cur} {t['commission']}", align="R", fill=True)
+    pdf.cell(30, 10, text=money(t["gross"], cur), align="R", fill=True)
+    pdf.cell(30, 10, text=money(t["commission"], cur), align="R", fill=True)
     pdf.cell(
-        30, 10, text=f"{cur} {t['net']}  ", align="R", fill=True,
+        30, 10, text=money(t["net"], cur) + "  ", align="R", fill=True,
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 
@@ -88,19 +90,29 @@ def generate_day_pdf(summary: dict, hotel) -> bytes:
     counted = summary["cash_counted"]
     variance = summary["cash_variance"]
     rec = [
-        ("Opening float", f"{cur} {summary['opening_cash']}"),
-        ("Cash sales", f"{cur} {t['cash_sales']}"),
-        ("Expected in drawer", f"{cur} {summary['expected_cash']}"),
-        ("Counted", f"{cur} {counted}" if counted is not None else "not counted"),
-        ("Variance", f"{cur} {variance}" if variance is not None else "-"),
+        ("Opening float", money(summary["opening_cash"], cur)),
+        ("Cash sales", money(t["cash_sales"], cur)),
+        ("Expected in drawer", money(summary["expected_cash"], cur)),
+        ("Counted", money(counted, cur) if counted is not None else "not counted"),
+        ("Variance", money(variance, cur) if variance is not None else "-"),
     ]
+    short = variance is not None and float(variance) != 0
     for label, value in rec:
         pdf.set_x(14)
         bold = label in ("Expected in drawer", "Variance")
         pdf.set_font("Helvetica", "B" if bold else "", 11)
+        # Cash missing from the drawer is the one line on this page anyone ever
+        # chases, and it was set in the same black as the opening float.
+        if label == "Variance" and short:
+            pdf.set_text_color(190, 40, 40)
         pdf.cell(92, 8, text=f"  {label}")
         pdf.cell(60, 8, text=f"{value}  ", align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_text_color(*DARK)
 
+    # Writing at y=280 on an A4 page sits below fpdf's bottom margin, so it
+    # started a fresh sheet to hold the footer — the blank last page the rota
+    # and every shared-helper export had.
+    pdf.set_auto_page_break(False)
     pdf.set_text_color(*MUTED)
     pdf.set_xy(14, 280)
     pdf.set_font("Helvetica", "I", 8)
