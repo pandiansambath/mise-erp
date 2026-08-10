@@ -163,3 +163,88 @@ export function KioskPanel({
     </div>
   );
 }
+
+/** Who is in, who is on break, who has finished — the counters, opened.
+ *
+ *  "0 in now / 0 on break / 0 finished" were labels. His law: every click must
+ *  have a meaning, so a number on a wall screen that cannot tell you WHICH
+ *  three people is a number doing half its job.
+ *
+ *  Same enormous, shrink-to-fit type as the rota, because it is read from the
+ *  same distance by the same person carrying the same tray. The data is already
+ *  on the page, so this opens instantly and never waits on the network.
+ */
+export function KioskWho({
+  title,
+  rows,
+  onClose,
+}: {
+  title: string;
+  rows: { who: string; detail: string }[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const longest = rows.reduce((n, r) => Math.max(n, r.who.length), 0);
+  const cols = rows.length <= 3 ? 1 : longest > 14 ? 2 : 3;
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-shell/97 backdrop-blur-xl">
+      <header className="flex shrink-0 items-center justify-between gap-4 px-8 pt-8">
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-fg-faint">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
+          <h2 className="mt-1 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+            {title}
+            <span className="ml-3 text-2xl font-normal text-fg-faint">{rows.length}</span>
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Back"
+          className="mise-press grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-line-2 text-2xl text-fg-soft"
+        >
+          ✕
+        </button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-8 pt-6">
+        {rows.length === 0 ? (
+          <p className="py-20 text-center text-3xl text-fg-faint">Nobody yet.</p>
+        ) : (
+          <ul
+            className="grid gap-x-10 gap-y-4"
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+          >
+            {rows.map((r) => (
+              <li key={r.who} className="flex items-baseline justify-between gap-4 border-b border-line pb-3">
+                <span
+                  className="min-w-0 truncate font-display font-semibold tracking-tight"
+                  style={{ fontSize: "clamp(1.5rem, 3.2vw, 3rem)" }}
+                >
+                  {r.who}
+                </span>
+                <span
+                  className="shrink-0 tabular-nums text-fg-faint"
+                  style={{ fontSize: "clamp(1rem, 1.6vw, 1.6rem)" }}
+                >
+                  {r.detail}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
