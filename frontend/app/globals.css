@@ -1849,3 +1849,20 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     transition: none;
   }
 }
+
+/* Where the workbench rail comes to rest.
+   Below lg the DOCUMENT scrolls and the top bar is sticky at 0, so a rail also
+   pinned at 0 parks itself UNDERNEATH the top bar and disappears. At lg the
+   scroll container is <main>, which already begins below the top bar, so the
+   rail's rest position there is simply 0. */
+.mise-app {
+  --mise-topbar: 3.0625rem;
+}
+@media (min-width: 1024px) {
+  .mise-app {
+    --mise-topbar: 0px;
+  }
+}
+.mise-bench-rail {
+  top: var(--mise-topbar, 0px);
+}

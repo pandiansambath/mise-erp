@@ -1,48 +1,38 @@
 "use client";
 
-// A page that fits the screen.
+// A page whose controls stay put while its data moves.
 //
-// The complaint was "clumsy and collapsed", and it was not a styling problem.
-// Inventory put a 180-line "add item" FORM between the header and your stock
-// list; Purchasing did the same with the indent form. So the first thing you
-// did on a page whose job is to show you your stock was scroll past a form you
-// use a few times a day. Then the list itself was capped at max-h-[60vh] and
-// scrolled INSIDE the page that was already scrolling — a scrollbar inside a
-// scrollbar. That is where both words came from: collapsed, because the list
-// only ever got the leftovers; clumsy, because two scrollbars fight.
+// WHAT I BROKE, AND WHY, because the shape of this file is a direct answer to
+// it. The first version took the viewport over: AppShell handed `main` its
+// padding and its scrollbar, and the page rebuilt itself as a flex column with
+// its own inner scroller. That works only if every link in the chain holds —
+// main flex, bench flex-1 + min-h-0, scroller flex-1 + min-h-0. One link did
+// not hold in production, so the content overflowed a box with
+// `overflow: hidden` on it.
 //
-// So the shape is inverted here. The page IS the list. It fills the screen
-// exactly and the page itself never scrolls. Making things — the form — moves
-// behind a button and opens in place, which is the rule he set:
+// An `overflow: hidden` box still scrolls when SCRIPT moves it, and never
+// scrolls for a wheel or a finger. That is precisely what he saw: "only
+// buttons are working... pressed button took me here". His data was reachable
+// by the sub-nav and unreachable by scrolling.
 //
-//     Click anything, do anything.
+// My harness tested the flex chain in isolation and passed, which is why I
+// shipped it. It proved the mechanism could work, not that it did work in the
+// real tree — those are different claims and I reported the wrong one.
 //
-// The layout, top to bottom:
+// So: no height hijacking. The page scrolls the way every other page scrolls.
+// The rail is `sticky top-0` and the tally is `sticky bottom-0`, which pins
+// them with no dependency on any ancestor's layout. Sticky either sticks or it
+// scrolls with the page; it cannot produce a page that refuses the wheel.
 //
-//   ┌────────────────────────────────────────────┐
-//   │ Title · subtitle              [ do this ]  │  rail — pinned
-//   │ [ tabs ]        [ search ]      [ filter ] │  tools — pinned
-//   ├────────────────────────────────────────────┤
-//   │                                            │
-//   │   the thing the page is FOR                │  the only scroller,
-//   │   (takes every pixel that is left)         │  and it takes the rest
-//   │                                            │
-//   ├────────────────────────────────────────────┤
-//   │ 148 items · £4,210 on hand · 6 low         │  tally — pinned
-//   └────────────────────────────────────────────┘
+// What he actually asked for is not "no scrollbar" — he said it himself:
 //
-// The rail condenses as you scroll, handing its height to the list. That is
-// driven by writing to a ref rather than through React state — the dev page
-// taught that lesson expensively: state updated once per scroll frame
-// re-renders the whole tree sixty times a second, and the screen shakes.
+//     "this means we need to show data in a different UI style where no need
+//      to scroll ... but if I want to see I need to scroll"
+//
+// So the job is to make the first screen answer the question, and let
+// scrolling work normally for everything behind it.
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 export function Workbench({
   title,
@@ -58,43 +48,46 @@ export function Workbench({
   action?: ReactNode;
   /** Tabs, search, filters. Pinned: you can always retarget the list. */
   tools?: ReactNode;
-  /** Live totals. Pinned, so the numbers never require a scroll to the end. */
+  /** Live totals. Pinned to the bottom, so the number the page exists to
+   *  produce never needs a scroll to reach. */
   tally?: ReactNode;
   children: ReactNode;
 }) {
   const rail = useRef<HTMLDivElement>(null);
-  const scroller = useRef<HTMLDivElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
 
-  // Condense the rail once the list has moved. Threshold + a flag, so we touch
-  // the DOM on the crossing rather than on every frame.
+  // Condense the rail once the page has moved past it. An IntersectionObserver
+  // on a one-pixel sentinel rather than a scroll listener: it does not care
+  // WHICH ancestor scrolls, it fires only on the crossing, and it costs nothing
+  // per frame. The dev page taught what per-frame work does to this app.
   const condensed = useRef(false);
-  const onScroll = useCallback(() => {
-    const past = (scroller.current?.scrollTop ?? 0) > 24;
-    if (past === condensed.current) return;
-    condensed.current = past;
-    rail.current?.setAttribute("data-condensed", past ? "true" : "false");
+  const apply = useCallback((v: boolean) => {
+    if (v === condensed.current) return;
+    condensed.current = v;
+    rail.current?.setAttribute("data-condensed", v ? "true" : "false");
   }, []);
 
   useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [onScroll]);
+    const el = sentinel.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => apply(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [apply]);
 
   return (
-    // data-bench is the signal to AppShell: this page manages its own height,
-    // so drop main's padding and stop main from scrolling.
-    // The bottom padding on mobile clears the fixed tab bar; without it the
-    // tally strip hides underneath it.
-    <div
-      data-bench
-      className="flex min-h-0 flex-1 flex-col bg-shell pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0"
-    >
+    <div data-bench className="min-w-0">
+      {/* One pixel, at the very top. When it leaves the viewport the rail
+          condenses; when it returns, the rail opens back up. */}
+      <div ref={sentinel} aria-hidden className="h-px" />
+
       <div
         ref={rail}
         data-condensed="false"
-        className="mise-bench-rail z-20 shrink-0 border-b border-glass/10 bg-shell/80 px-4 backdrop-blur-xl lg:px-8"
+        className="mise-bench-rail sticky z-30 -mx-4 border-b border-glass/10 bg-shell/90 px-4 backdrop-blur-xl lg:-mx-8 lg:px-8"
       >
         <div className="mise-bench-head flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -102,9 +95,7 @@ export function Workbench({
               {title}
             </h1>
             {subtitle && (
-              <p className="mise-bench-sub truncate text-sm text-fg-faint">
-                {subtitle}
-              </p>
+              <p className="mise-bench-sub truncate text-sm text-fg-faint">{subtitle}</p>
             )}
           </div>
           {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
@@ -112,17 +103,10 @@ export function Workbench({
         {tools && <div className="pb-3">{tools}</div>}
       </div>
 
-      {/* The one scroll region on the page. overscroll-contain stops a flick at
-          the end of the list from bouncing the whole window behind it. */}
-      <div
-        ref={scroller}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 lg:px-8"
-      >
-        {children}
-      </div>
+      <div className="pt-4">{children}</div>
 
       {tally && (
-        <div className="z-20 shrink-0 border-t border-glass/10 bg-shell/85 px-4 py-2.5 backdrop-blur-xl lg:px-8 lg:pr-24">
+        <div className="sticky bottom-0 z-20 -mx-4 mt-4 border-t border-glass/10 bg-shell/90 px-4 py-2.5 backdrop-blur-xl lg:-mx-8 lg:px-8 lg:pr-24">
           {tally}
         </div>
       )}
@@ -143,15 +127,13 @@ export function BenchEmpty({
   action?: ReactNode;
 }) {
   return (
-    <div className="grid h-full min-h-[14rem] place-items-center px-6 text-center">
+    <div className="grid min-h-[14rem] place-items-center px-6 text-center">
       <div>
         <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl border border-line text-2xl text-fg-faint">
           {icon}
         </div>
         <p className="font-display text-base font-semibold text-fg">{title}</p>
-        {hint && (
-          <p className="mx-auto mt-1 max-w-sm text-sm text-fg-faint">{hint}</p>
-        )}
+        {hint && <p className="mx-auto mt-1 max-w-sm text-sm text-fg-faint">{hint}</p>}
         {action && <div className="mt-4">{action}</div>}
       </div>
     </div>
@@ -162,9 +144,8 @@ export function BenchEmpty({
  *
  *  Inventory carried five buttons across its header — common items, template,
  *  import, export, CSV — each permanently occupying the top of a page whose
- *  job is showing stock. Import runs perhaps weekly. A row of five buttons is
- *  where "things you can do" stops reading as help and starts reading as
- *  clutter, so the one you came for stays out front and the rest live here.
+ *  job is showing stock. Import runs perhaps weekly. The one you came for
+ *  stays out front and the rest live here.
  */
 export function BenchMenu({ items }: { items: BenchAction[] }) {
   const [open, setOpen] = useState(false);
@@ -210,7 +191,9 @@ export function BenchMenu({ items }: { items: BenchAction[] }) {
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium text-fg">{it.label}</span>
                     {it.hint && (
-                      <span className="block text-[11px] leading-snug text-fg-faint">{it.hint}</span>
+                      <span className="block text-[11px] leading-snug text-fg-faint">
+                        {it.hint}
+                      </span>
                     )}
                   </span>
                 </button>
