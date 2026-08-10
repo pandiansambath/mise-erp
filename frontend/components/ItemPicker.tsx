@@ -713,25 +713,50 @@ export function ItemPicker({
 
       </div>
 
-      {/* Selected tray — a column beside the grid, or a stage of its own. */}
+      {/* The pocket, opened.
+          It used to swap the picker to a "tray stage" IN PLACE, which dropped
+          you back into the same long scrolling column you had just left. His
+          words: "when i click pocket ui it take me to old again scroll area..
+          worst". It is a proper popup now — a sheet over the page, with the
+          list you are building inside it and the page still visible behind. */}
+      {staged && trayStage === "tray" && (
+        <div
+          className="mise-fade fixed inset-0 z-[60] bg-black/55 backdrop-blur-[2px]"
+          onClick={() => setTrayStage("pick")}
+          aria-hidden
+        />
+      )}
       <div
-        className={`rounded-xl border border-line bg-paper-2/60 p-3 ${
+        role={staged && trayStage === "tray" ? "dialog" : undefined}
+        aria-label={staged && trayStage === "tray" ? "Your order" : undefined}
+        className={
           staged
             ? trayStage === "tray"
-              ? "block"
+              ? "mise-pop-lg fixed inset-x-2 bottom-2 top-16 z-[61] flex flex-col overflow-hidden rounded-3xl border border-line bg-paper p-4 shadow-2xl sm:inset-x-6 sm:top-20 lg:inset-x-24"
               : "hidden"
-            : "lg:sticky lg:top-4"
-        }`}
+            : "rounded-xl border border-line bg-paper-2/60 p-3 lg:sticky lg:top-4"
+        }
       >
         {staged && (
-          <button
-            type="button"
-            onClick={() => setTrayStage("pick")}
-            className="mise-press mb-3 inline-flex items-center gap-2 rounded-xl border border-line px-3.5 py-2 text-sm font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
-          >
-            <span aria-hidden>‹</span> Add more items
-          </button>
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setTrayStage("pick")}
+              className="mise-press inline-flex items-center gap-2 rounded-xl border border-line px-3.5 py-2 text-sm font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+            >
+              <span aria-hidden>‹</span> Add more items
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrayStage("pick")}
+              aria-label="Close"
+              className="mise-press grid h-10 w-10 place-items-center rounded-full border border-line-2 text-fg-soft"
+            >
+              ✕
+            </button>
+          </div>
         )}
+        <div className={staged && trayStage === "tray" ? "min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" : undefined}>
         <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
           Your list {chosen.length > 0 && `· ${chosen.length} item${chosen.length === 1 ? "" : "s"}`}
         </p>
@@ -826,7 +851,13 @@ export function ItemPicker({
             ))}
           </ul>
         )}
-        {trayFooter && <div className="mt-3 border-t border-line pt-3">{trayFooter}</div>}
+        </div>
+        {/* The submit action sits OUTSIDE the scroller, so in the popup it is
+            pinned at the bottom and reachable without scrolling to the end of
+            a long order — which is the whole complaint about the old stage. */}
+        {trayFooter && (
+          <div className="mt-3 shrink-0 border-t border-line pt-3">{trayFooter}</div>
+        )}
       </div>
       </div>
 

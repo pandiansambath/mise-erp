@@ -25,6 +25,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /** Throw a copy of `from` into the pocket. */
+/** How long an item takes to reach the pocket. The pocket waits this long
+ *  before reacting, so the throw and the catch read as one movement. */
+export const FLIGHT_MS = 620;
+
 export function flyToPocket(from: HTMLElement | null, label?: string) {
   if (typeof window === "undefined" || !from) return;
   const target = document.getElementById("mise-pocket");
@@ -62,7 +66,7 @@ export function flyToPocket(from: HTMLElement | null, label?: string) {
       },
       { transform: `translate(${dx}px, ${dy}px) scale(.12)`, opacity: 0.2 },
     ],
-    { duration: 620, easing: "cubic-bezier(.4,.02,.2,1)" },
+    { duration: FLIGHT_MS, easing: "cubic-bezier(.4,.02,.2,1)" },
   );
   anim.onfinish = () => {
     ghost.remove();
@@ -99,9 +103,18 @@ export function Pocket({
 
   useEffect(() => {
     if (count > seen.current) {
-      setBump(true);
-      const t = window.setTimeout(() => setBump(false), 400);
-      return () => window.clearTimeout(t);
+      // Wait for the flight to arrive before reacting.
+      //
+      // The count changes the instant you tap, so the pocket used to jump while
+      // the item was still in the air — the catch happened before the throw
+      // landed, which reads as two unrelated twitches rather than one movement.
+      // FLIGHT_MS matches the arc in flyToPocket.
+      const land = window.setTimeout(() => setBump(true), FLIGHT_MS - 60);
+      const done = window.setTimeout(() => setBump(false), FLIGHT_MS + 400);
+      return () => {
+        window.clearTimeout(land);
+        window.clearTimeout(done);
+      };
     }
     seen.current = count;
   }, [count]);
@@ -110,9 +123,15 @@ export function Pocket({
     seen.current = count;
   }, [count]);
 
-  // Empty pockets are not worth screen space, and an empty one you can tap is
-  // a click that leads to "nothing here yet".
-  if (count === 0) return null;
+  // The pocket exists from the start, even empty.
+  //
+  // It used to return null at zero, which meant the FIRST tap on an item had no
+  // #mise-pocket to fly to: the animation silently did nothing, and since the
+  // pocket only appeared afterwards there was no feedback at all at the moment
+  // you clicked. "checkbox click not working" is exactly what that feels like.
+  //
+  // So it is always mounted and always the flight's destination; at zero it is
+  // simply invisible and untappable, and it fades in as the first item lands.
 
   return (
     <button
@@ -120,9 +139,12 @@ export function Pocket({
       type="button"
       onClick={onOpen}
       aria-label={`${count} ${label} — open`}
-      className={`mise-press fixed right-4 top-20 z-40 flex items-center gap-2.5 rounded-2xl border border-brand-400/45 bg-paper-2/95 px-3.5 py-2.5 shadow-lg shadow-black/30 backdrop-blur transition sm:right-6 sm:top-24 ${
-        bump ? "ring-2 ring-brand-400" : ""
-      }`}
+      disabled={count === 0}
+      className={`mise-press fixed bottom-24 right-4 z-[55] flex items-center gap-2.5 rounded-2xl border border-brand-400/45 bg-paper-2/95 px-3.5 py-2.5 shadow-xl shadow-black/40 backdrop-blur transition-all duration-300 sm:right-6 lg:bottom-8 ${
+        count === 0
+          ? "pointer-events-none translate-y-3 scale-90 opacity-0"
+          : "translate-y-0 scale-100 opacity-100"
+      } ${bump ? "mise-pocket-bump ring-2 ring-brand-400" : ""}`}
     >
       <span aria-hidden className="relative text-xl leading-none">
         {icon}

@@ -1894,3 +1894,20 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 .mise-bench-tally {
   bottom: var(--mise-tabbar, 0px);
 }
+
+/* The pocket taking a delivery.
+   A ring alone was too polite to notice on a busy page — the thing you just
+   tapped flew all the way here and nothing visibly happened. This is the catch:
+   a quick squash and rebound, the way a basket takes a weight. */
+@keyframes mise-pocket-bump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.14) translateY(-3px); }
+  60%  { transform: scale(0.96) translateY(1px); }
+  100% { transform: scale(1); }
+}
+.mise-pocket-bump {
+  animation: mise-pocket-bump 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-pocket-bump { animation: none; }
+}
