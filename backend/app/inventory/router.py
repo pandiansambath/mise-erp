@@ -15,7 +15,7 @@ from app.core import template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import Column, TemplateSpec
-from app.inventory import export, service
+from app.inventory import export, pack_service, service
 from app.inventory.models import Item, MovementType, VendorItemAlias
 from app.inventory.schemas import (
     CategoryRename,
@@ -23,6 +23,7 @@ from app.inventory.schemas import (
     ItemOut,
     ItemUpdate,
     LowStockAlert,
+    PackLevelOut,
     PurchaseByVendorRow,
     ReceiptLine,
     StockMovementCreate,
@@ -39,19 +40,38 @@ XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
+async def _item_out(db: AsyncSession, item) -> ItemOut:
+    """One item, with its buying chain attached.
+
+    Items created before the chain existed report their old pack_unit/pack_size
+    as a single rung, so every screen reads one shape.
+    """
+    row = ItemOut.model_validate(item)
+    chains = await pack_service.levels_for(db, [item.id])
+    row.pack_levels = [
+        PackLevelOut(**r) for r in pack_service.out_rows(item, chains.get(item.id))
+    ]
+    return row
+
+
 @router.post("/items", response_model=ItemOut, status_code=status.HTTP_201_CREATED)
 async def create_item(
     payload: ItemCreate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("inventory:write")),
 ) -> ItemOut:
+    fields = payload.model_dump(exclude_none=True)
+    # The chain is rows of its own, not a column, so it cannot ride along into
+    # Item(**fields).
+    levels = fields.pop("pack_levels", None)
     try:
-        item = await service.create_item(
-            db, user.hotel_id, **payload.model_dump(exclude_none=True)
-        )
+        item = await service.create_item(db, user.hotel_id, **fields)
     except service.DuplicateItemError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    return ItemOut.model_validate(item)
+    if levels is not None:
+        await pack_service.set_levels(db, item, payload.pack_levels or [])
+        await db.commit()
+    return await _item_out(db, item)
 
 
 @router.get("/items", response_model=list[ItemOut])
@@ -64,9 +84,13 @@ async def list_items(
     counts = await service.vendor_counts(db, user.hotel_id)
     pv_counts = await service.purchase_vendor_counts(db, user.hotel_id)
     best = await service.best_vendors(db, user.hotel_id)
+    chains = await pack_service.levels_for(db, [i.id for i in items])
     out = []
     for i in items:
         row = ItemOut.model_validate(i)
+        row.pack_levels = [
+            PackLevelOut(**r) for r in pack_service.out_rows(i, chains.get(i.id))
+        ]
         row.vendor_count = counts.get(i.id, 0)
         row.purchase_vendor_count = pv_counts.get(i.id, 0)
         chosen = best.get(i.id)
@@ -116,11 +140,20 @@ async def update_item(
     item = await service.get_item(db, item_id, user.hotel_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    fields = payload.model_dump(exclude_unset=True)
+    # Rows, not a column — and `exclude_unset` matters here: a request that does
+    # not mention pack_levels must leave the chain alone, while one that sends
+    # an empty list is deliberately clearing it.
+    sent_levels = "pack_levels" in fields
+    fields.pop("pack_levels", None)
     try:
-        item = await service.update_item(db, item, **payload.model_dump(exclude_unset=True))
+        item = await service.update_item(db, item, **fields)
     except service.DuplicateItemError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    return ItemOut.model_validate(item)
+    if sent_levels:
+        await pack_service.set_levels(db, item, payload.pack_levels or [])
+        await db.commit()
+    return await _item_out(db, item)
 
 
 @router.get("/seed-starter")
