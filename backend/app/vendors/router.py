@@ -201,6 +201,7 @@ async def upsert_vendor_item(
         payload.price_per_unit,
         is_preferred=payload.is_preferred,
         notes=payload.notes,
+        pack_level_id=payload.pack_level_id,
     )
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="vendor.price",
