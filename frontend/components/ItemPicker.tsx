@@ -140,23 +140,74 @@ export function QtyInput({
   );
 }
 
-/* Picker tray row uses the shared QtyInput, plus a pack conversion hint so ordering
-   in the base unit is legible ("25 kg ≈ 5 boxes") for items bought in packs. */
+/* Order in whatever size you actually buy.
+   His brief: "in purchasing section he can choose what unit he want, so that i
+   need to autocalculate accordingly... he need only 30 small packets only".
+
+   The quantity is always STORED in the item's base unit, so stock, recipes and
+   costing are untouched — only the typing changes. Pick "packets", type 30, and
+   1500 g is what gets recorded. The line underneath says so, every time, because
+   a conversion you cannot see is a conversion you cannot check. */
 function QtyFields({ item, qty, onQty }: { item: Item; qty: string; onQty: (v: string) => void }) {
-  const size = parseFloat(item.pack_size || "0");
-  const n = parseFloat(qty || "0");
-  const packs = item.pack_unit && size > 0 && n > 0 ? n / size : null;
-  return (
-    <div>
+  const chain = item.pack_levels ?? [];
+  // 0 = the base unit itself. Anything above is a rung of the chain.
+  const [level, setLevel] = useState(0);
+
+  const sizeOf = (lv: number) =>
+    lv === 0 ? 1 : parseFloat(chain[lv - 1]?.base_size ?? "0") || 0;
+
+  const size = sizeOf(level);
+  const stored = parseFloat(qty || "0") || 0;
+  // What to show in the box: the stored base amount, expressed in the chosen
+  // size. Kept tidy so 1500 g as packets reads "30", not "30.000".
+  const shown = size > 0 && stored ? String(Math.round((stored / size) * 1000) / 1000) : "";
+
+  const type = (v: string) => {
+    const n = parseFloat(numeric(v) || "0") || 0;
+    onQty(n ? String(Math.round(n * size * 1000) / 1000) : "");
+  };
+
+  // No chain: the old two-box kg/g input is still the nicest way to type a
+  // weight, so nothing is taken away from items bought loose.
+  if (chain.length === 0) {
+    return (
       <QtyInput
         unit={item.unit}
         value={qty}
         onChange={onQty}
         label={`Quantity of ${item.name} (${item.unit})`}
       />
-      {item.pack_unit && size > 0 && (
+    );
+  }
+
+  return (
+    <div>
+      <span className="flex items-center gap-1.5">
+        <input
+          inputMode="decimal"
+          value={shown}
+          onChange={(e) => type(e.target.value)}
+          placeholder="0"
+          aria-label={`How many, of ${item.name}`}
+          className="w-16 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
+        />
+        <select
+          value={level}
+          onChange={(e) => setLevel(Number(e.target.value))}
+          aria-label={`What size, of ${item.name}`}
+          className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-sm text-fg outline-none focus:border-brand-500"
+        >
+          <option value={0}>{item.unit}</option>
+          {chain.map((lv, i) => (
+            <option key={lv.id} value={i + 1}>
+              {lv.name}
+            </option>
+          ))}
+        </select>
+      </span>
+      {level > 0 && stored > 0 && (
         <p className="mt-0.5 text-[11px] text-indigo-300">
-          📦 {packs ? `≈ ${packs < 10 ? packs.toFixed(1) : Math.round(packs)} ${item.pack_unit}${packs === 1 ? "" : "s"}` : `1 ${item.pack_unit} = ${item.pack_size} ${item.unit}`}
+          = {Math.round(stored * 1000) / 1000} {item.unit}
         </p>
       )}
     </div>
