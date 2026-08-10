@@ -8,7 +8,7 @@ import io
 import re
 from datetime import date as date_type
 from datetime import datetime, time, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
@@ -79,9 +79,21 @@ def _pivot(shifts: list[dict]) -> dict:
 
 
 def _fmt_h(value: Decimal) -> str:
-    """Tidy hours: 3.00 -> '3', 3.50 -> '3.5', 0 -> '0'."""
-    s = f"{value:.2f}".rstrip("0").rstrip(".")
-    return s or "0"
+    """Hours the way a person says them: 3.00 -> '3h', 3.50 -> '3h 30m'.
+
+    It used to print '3.5'. A real instruction from him: "if 5 hr 30 min mean
+    show 5hr 30min instead of 5.50, this will make confusing". Nobody has ever
+    worked half of an hour and called it nought-point-five.
+    """
+    mins = int((value * 60).to_integral_value(rounding=ROUND_HALF_UP))
+    h, m = divmod(max(mins, 0), 60)
+    if not h and not m:
+        return "0"
+    if not m:
+        return f"{h}h"
+    if not h:
+        return f"{m}m"
+    return f"{h}h {m}m"
 
 
 def rota_to_pdf(
@@ -249,7 +261,7 @@ def rota_to_pdf(
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(*_BRAND)
         pdf.set_xy(x, y + rh / 2 - 2.4)
-        pdf.cell(total_w, 5, text=_ps(_fmt_h(e["total"]) + "h"), align="C")
+        pdf.cell(total_w, 5, text=_ps(_fmt_h(e["total"])), align="C")
 
         pdf.set_draw_color(226, 240, 234)
         pdf.set_line_width(0.2)
@@ -272,7 +284,7 @@ def rota_to_pdf(
             pdf.cell(day_w, 6, text=_ps(_fmt_h(daily[d.isoformat()])), align="C")
             x += day_w
         pdf.set_xy(x, y + 2)
-        pdf.cell(total_w, 6, text=_ps(_fmt_h(grand) + "h"), align="C")
+        pdf.cell(total_w, 6, text=_ps(_fmt_h(grand)), align="C")
         y += rh
 
     # The legend earns its line only when the sheet actually uses the marker.

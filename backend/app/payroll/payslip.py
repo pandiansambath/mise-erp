@@ -1,4 +1,6 @@
 """Branded PDF payslip via fpdf2 (currency code, latin-1 safe)."""
+from decimal import Decimal
+
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
@@ -47,7 +49,12 @@ def _draw(pdf: FPDF, payroll, employee, hotel) -> None:
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
     pdf.set_x(14)
-    meta = f"Days present: {payroll.days_present}    Hours: {payroll.total_hours}"
+    # "5.50" on a payslip is the one place a decimal hour is most likely to be
+    # misread as five hours fifty minutes. Spell it out.
+    _th = int((Decimal(str(payroll.total_hours or 0)) * 60).to_integral_value())
+    _hh, _mm = divmod(max(_th, 0), 60)
+    _hours = f"{_hh}h {_mm}m" if _mm else f"{_hh}h"
+    meta = f"Days present: {payroll.days_present}    Hours: {_hours}"
     if employee.ni_number:
         meta += f"    NI: {employee.ni_number}"
     pdf.cell(0, 6, text=_s(meta), new_x=XPos.LMARGIN, new_y=YPos.NEXT)

@@ -103,10 +103,14 @@ export function Workbench({
         {tools && <div className="pb-3">{tools}</div>}
       </div>
 
-      <div className="pt-4">{children}</div>
+      {/* The bottom padding lives HERE, above the tally — never below it.
+          Padding under the tally would push the bench's bottom edge past it,
+          and a sticky element cannot escape its containing block, so the tally
+          would strand itself mid-page again. That was the "hanging card". */}
+      <div className={`pt-4 ${tally ? "pb-24 lg:pb-16" : "pb-8"}`}>{children}</div>
 
       {tally && (
-        <div className="sticky bottom-0 z-20 -mx-4 mt-4 border-t border-glass/10 bg-shell/90 px-4 py-2.5 backdrop-blur-xl lg:-mx-8 lg:px-8 lg:pr-24">
+        <div className="mise-bench-tally sticky z-20 -mx-4 border-t border-glass/10 bg-shell/90 px-4 py-2.5 backdrop-blur-xl lg:-mx-8 lg:px-8 lg:pr-24">
           {tally}
         </div>
       )}

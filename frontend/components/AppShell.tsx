@@ -786,7 +786,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             pb is generous so the floating "Ask DineAI" launcher (bottom-right)
             never covers a page's last action button. */}
-        <main className="flex-1 px-4 pb-28 pt-6 lg:overflow-y-auto lg:px-8 lg:pb-28 lg:pt-8 has-[[data-bench]]:pt-0 has-[[data-bench]]:lg:pt-0">
+        <main className="flex-1 px-4 pb-28 pt-6 lg:overflow-y-auto lg:px-8 lg:pb-28 lg:pt-8 has-[[data-bench]]:pt-0 has-[[data-bench]]:pb-0 has-[[data-bench]]:lg:pt-0 has-[[data-bench]]:lg:pb-0">
           <ImpersonationBanner />
           <AnnouncementBanner />
           {children}

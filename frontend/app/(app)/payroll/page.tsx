@@ -1,5 +1,7 @@
 "use client";
 
+import { fmtHours } from "@/lib/quantity";
+
 import { useCallback, useEffect, useState } from "react";
 import { SubNav } from "@/components/SubNav";
 import { spotlight } from "@/components/fx";
@@ -703,7 +705,7 @@ export default function PayrollPage() {
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.pay_period_type === "WEEKLY" ? "bg-sky-500/15 text-sky-400" : "bg-copper-500/15 text-copper-400"}`}>
                         {r.pay_period_type === "WEEKLY" ? "weekly" : r.pay_period.includes("→") ? "custom" : "monthly"}
                       </span>
-                      <span className="text-fg-faint">{r.days_present}d · {r.total_hours}h</span>
+                      <span className="text-fg-faint">{r.days_present}d · {fmtHours(r.total_hours)}</span>
                       <span className="ml-auto font-mono font-bold text-fg">{format(r.net_pay)}</span>
                       <Badge tone={r.status === "PAID" ? "green" : r.status === "APPROVED" ? "slate" : "amber"}>{r.status.toLowerCase()}</Badge>
                       <button

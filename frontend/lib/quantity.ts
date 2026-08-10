@@ -82,3 +82,29 @@ export function fmtQtyNumber(
   if (!Number.isFinite(n)) return String(quantity ?? "—");
   return String(trimZeros(n, places));
 }
+
+/**
+ * Decimal hours the way a person says them: 6.98 → "6h 59m".
+ *
+ * His words: "6.98 means? bro we need clearly like 6 hr 50 min... it should be
+ * very clear to users. for users only we developing project, not for our sake."
+ * Right — 6.98 is a number for a spreadsheet. Nobody has ever worked
+ * nought-point-nine-eight of an hour.
+ *
+ * This lived inside app/(app)/attendance/page.tsx, where it was correct and
+ * invisible to everyone else — so the history table, My Space and payroll all
+ * printed the raw decimal beside it. Same fault as the quantity formatter: a
+ * good function with no shared home.
+ */
+export function fmtHours(dec: string | number | null | undefined): string {
+  if (dec == null || dec === "") return "—";
+  const n = typeof dec === "number" ? dec : parseFloat(dec);
+  if (!Number.isFinite(n)) return "—";
+  const mins = Math.round(n * 60);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (!h && !m) return "0m";
+  if (!m) return `${h}h`;
+  if (!h) return `${m}m`;
+  return `${h}h ${m}m`;
+}
