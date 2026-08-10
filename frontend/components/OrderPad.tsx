@@ -26,6 +26,8 @@ import { flyToPocket } from "@/components/Pocket";
 import ClickSpark from "@/components/reactbits/ClickSpark";
 import Magnet from "@/components/reactbits/Magnet";
 import { CountUp } from "@/components/reactbits/CountUp";
+import GlareHover from "@/components/reactbits/GlareHover";
+import ElectricBorder from "@/components/reactbits/ElectricBorder";
 
 export type OrderLine = { item_id: string; qty: string };
 
@@ -70,6 +72,9 @@ export function OrderPad({
   lines,
   onChange,
   footer,
+  onAddAllLow,
+  overrides,
+  onOverride,
 }: {
   items: Item[];
   suppliers: Record<string, SupplierOption[]>;
@@ -77,6 +82,12 @@ export function OrderPad({
   onChange: (next: OrderLine[]) => void;
   /** The submit control — owned by the page, since it knows what submitting means. */
   footer?: React.ReactNode;
+  /** Load everything below its minimum, topped up to par. */
+  onAddAllLow?: () => void;
+  /** item id -> a vendor deliberately chosen for this order, overriding the
+   *  usual "chosen supplier, else cheapest" rule. */
+  overrides?: Record<string, string>;
+  onOverride?: (itemId: string, vendorId: string | null) => void;
 }) {
   const { format } = useCurrency();
   const [cat, setCat] = useState<string | null>(null);
@@ -106,6 +117,11 @@ export function OrderPad({
     (id: string): SupplierOption | undefined => {
       const opts = suppliers[id] ?? [];
       if (!opts.length) return undefined;
+      const forced = overrides?.[id];
+      if (forced) {
+        const hit = opts.find((v) => v.vendor_id === forced);
+        if (hit) return hit;
+      }
       return (
         opts.find((v) => v.is_preferred) ??
         [...opts].sort(
@@ -113,7 +129,7 @@ export function OrderPad({
         )[0]
       );
     },
-    [suppliers],
+    [suppliers, overrides],
   );
 
   const add = useCallback(
@@ -181,6 +197,19 @@ export function OrderPad({
 
   const grand = groups.reduce((t, g) => t + g.total, 0);
 
+  // What needs ordering, worked out here rather than asked for.
+  const low = useMemo(
+    () => items.filter((i) => {
+      const l = stockState(i).label;
+      return l === "running low" || l === "out of stock";
+    }),
+    [items],
+  );
+  const out = useMemo(
+    () => items.filter((i) => stockState(i).label === "out of stock").length,
+    [items],
+  );
+
   const shown = cat ? items.filter((i) => groupOf(i) === cat) : [];
   // Tiles shrink to fit rather than scroll. Below the floor it pages.
   const tileMin = shown.length > 24 ? "7rem" : shown.length > 12 ? "8.5rem" : "10rem";
@@ -194,6 +223,35 @@ export function OrderPad({
           are edits and a shower of sparks would be noise. */}
       <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={18} duration={420}>
       <div className="flex min-h-0 flex-col gap-3">
+        {/* NEEDS YOU — the answer before the question.
+            You arrive at this page already knowing you have to order something.
+            It knows what is below its minimum, so it should say so rather than
+            open an empty search box and wait. One tap loads them all at
+            par-topping quantities. */}
+        {low.length > 0 && (
+          <ElectricBorder color="#f59e0b" speed={0.7} chaos={0.4} borderRadius={16}>
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl px-3.5 py-2.5">
+              <span aria-hidden className="text-lg">⚠</span>
+              <span className="min-w-0 flex-1 text-sm text-fg">
+                <b className="text-amber-300">{low.length}</b> item
+                {low.length === 1 ? " is" : "s are"} at or below minimum
+                {out > 0 && (
+                  <span className="text-rose-300"> · {out} out of stock</span>
+                )}
+              </span>
+              {onAddAllLow && (
+                <button
+                  type="button"
+                  onClick={onAddAllLow}
+                  className="mise-press shrink-0 rounded-xl bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/25"
+                >
+                  Add them all
+                </button>
+              )}
+            </div>
+          </ElectricBorder>
+        )}
+
         {/* The pad. Type a name, then a number. */}
         <div className="mise-neo-raised rounded-2xl p-3">
           <div className="flex items-center gap-2.5">
@@ -269,11 +327,26 @@ export function OrderPad({
             {cat === null ? (
               <div className="mise-stagger grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {cats.map(([name, n]) => (
-                  <button
+                  // A light sweeps across as the cursor passes, which makes a
+                  // grid of tiles read as objects you could pick up rather than
+                  // rectangles you click.
+                  <GlareHover
                     key={name}
+                    width="100%"
+                    height="auto"
+                    background="transparent"
+                    borderColor="transparent"
+                    borderRadius="1rem"
+                    glareColor="#ffffff"
+                    glareOpacity={0.16}
+                    glareSize={220}
+                    transitionDuration={650}
+                    className="!block"
+                  >
+                  <button
                     type="button"
                     onClick={() => setCat(name)}
-                    className="mise-neo-raised mise-press flex items-center gap-2.5 rounded-2xl px-3 py-3 text-left transition hover:-translate-y-0.5"
+                    className="mise-neo-raised mise-press flex w-full items-center gap-2.5 rounded-2xl px-3 py-3 text-left transition hover:-translate-y-0.5"
                   >
                     <span aria-hidden className="text-xl">{categoryEmoji(name)}</span>
                     <span className="min-w-0 flex-1">
@@ -281,6 +354,7 @@ export function OrderPad({
                       <span className="block text-[11px] text-fg-faint">{n} items</span>
                     </span>
                   </button>
+                  </GlareHover>
                 ))}
               </div>
             ) : (
@@ -401,6 +475,26 @@ export function OrderPad({
                       <span className="w-10 shrink-0 truncate text-[11px] text-fg-faint">
                         {it.unit}
                       </span>
+                      {/* Whose it is, changeable here.
+                          The rule is chosen-supplier-else-cheapest, and it is
+                          right most of the time — but the chef knows when it is
+                          not, and this is the row where they are looking at it.
+                          Only offered when there is actually a choice. */}
+                      {onOverride && (suppliers[it.id] ?? []).length > 1 && (
+                        <select
+                          value={overrides?.[it.id] ?? ""}
+                          onChange={(e) => onOverride(it.id, e.target.value || null)}
+                          aria-label={`Who supplies ${it.name} on this order`}
+                          className="w-24 shrink-0 rounded-lg border border-line-2 bg-glass/5 px-1.5 py-1 text-[11px] text-fg-soft outline-none focus:border-brand-500"
+                        >
+                          <option value="">auto</option>
+                          {(suppliers[it.id] ?? []).map((v) => (
+                            <option key={v.vendor_id} value={v.vendor_id}>
+                              {v.vendor_name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <button
                         type="button"
                         onClick={() => remove(it.id)}

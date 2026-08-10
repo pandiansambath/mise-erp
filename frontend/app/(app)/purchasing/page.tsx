@@ -894,6 +894,20 @@ export default function PurchasingPage() {
               suppliers={suppliers}
               lines={lines}
               onChange={setLines}
+              // The strip already knows what is low; this is what "Add them
+              // all" does — the same par-topping logic the old button used.
+              onAddAllLow={orderAllLow}
+              // vendorPick already fed the submit payload; it just had no
+              // control left to set it after the old picker went.
+              overrides={vendorPick}
+              onOverride={(itemId, vendorId) =>
+                setVendorPick((prev) => {
+                  const next = { ...prev };
+                  if (vendorId) next[itemId] = vendorId;
+                  else delete next[itemId];
+                  return next;
+                })
+              }
               footer={
                 <div className="flex flex-wrap gap-2">
                   <button
