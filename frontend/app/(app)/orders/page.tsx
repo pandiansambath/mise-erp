@@ -7,6 +7,7 @@
 // READY → OUT_FOR_DELIVERY/COMPLETED) with one tap. Polls every 8s in place.
 // Menu: what the public ordering page sells — quick add, availability
 // switches, and one-click import from priced recipes.
+import { fmtQtyNumber } from "@/lib/quantity";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SubNav } from "@/components/SubNav";
@@ -129,7 +130,7 @@ function OrderCard({ o, onMove, riders, onAssign, forceOpen = false }: {
           <ul className="space-y-1">
             {o.items.map((l, i) => (
               <li key={i} className="flex items-baseline gap-2 text-sm">
-                <span className="font-mono text-fg-soft">{l.quantity}×</span>
+                <span className="font-mono text-fg-soft">{fmtQtyNumber(l.quantity)}×</span>
                 <span className="text-fg">{l.name}</span>
                 <span className="mx-1 flex-1 border-b border-dotted border-line" aria-hidden />
                 <span className="font-mono text-fg-soft">£{l.line_total}</span>

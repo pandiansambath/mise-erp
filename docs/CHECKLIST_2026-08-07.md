@@ -58,6 +58,43 @@ and checked with him before the next one starts.
 - [ ] Rota and leave views need big type that fits the screen even when the
       text is long — a wall screen read from across the room
 
+## The Workbench — done 2026-08-10
+
+He said it plainly: *"i dont like my purchase section, price comparison section,
+inventory section, staff section ui, even vendor section… i want an impressive
+UI… i should not scroll… currently ui is very clumsy and collapsed"*.
+
+Polishing had failed twice because the fault was the SHAPE of the pages, not
+their styling:
+
+- Inventory opened with a 180-line **add-item form** between the header and
+  your stock. Vendors did the same with **add a vendor**.
+- The lists that survived that were then capped — `max-h-[62vh]`,
+  `max-h-[60vh]` — and scrolled INSIDE a page that was already scrolling.
+  Two scrollbars, and the list got the leftovers of the leftovers.
+
+`components/Workbench.tsx` inverts it. The page fills the viewport and never
+scrolls itself: pinned rail, the list taking every remaining pixel, a pinned
+tally along the bottom. `AppShell` hands its padding and its scrollbar over
+whenever a page renders `[data-bench]`, so nothing else is touched.
+
+- [x] **Inventory** — form opens in place; five header buttons become one
+      primary and a ⋯ menu; tally shows items, stock value, low and out
+- [x] **Purchasing** — sub-nav pinned, both `max-h-[60vh]` caps gone; tally
+      shows committed spend, open orders, indents waiting, anything overdue
+- [x] **Price Comparison** — kept the two-stage layout, added the height fix;
+      tally shows the per-unit saving available and across how many items
+- [x] **Vendors** — add-supplier form moved into a sheet; the "how it works"
+      box now shows only when there are no suppliers yet
+- [x] **Staff** — the three-job selector pinned to the rail
+
+Measured, not assumed, in a real browser at 1440×900 and 390×844: the page
+scrolls by **0px**, `main` hands over its padding, the list is the only
+scroller (689px tall on desktop), the tally stays on screen, and the rail
+condenses 20px → 9.6px as the list moves.
+
+---
+
 ## Phase 3 — Price Comparison, rebuilt full-width
 
 - [ ] Two cards side by side is the problem: neither has room. **Kill the
@@ -121,7 +158,7 @@ a grid rather than poured into a table and hoped for.
 
 - [ ] **AI tuning (#15)**: advice instead of refusals; handle PDFs properly
       (starters shipped 2026-08-07)
-- [ ] **Inventory redesign** — he called it "clumsy"
+- [x] **Inventory redesign** — done, see The Workbench above
 - [ ] **Vendor credit / part-payment** (#4)
 - [ ] **Purchasing indent/PO slide-in drawers** (#8.1)
 - [ ] **Mobile pass**: inventory, recipes, money, reports, payroll, orders

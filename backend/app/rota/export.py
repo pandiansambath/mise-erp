@@ -57,11 +57,22 @@ def _pivot(shifts: list[dict]) -> dict:
         )
         d = s["date"]
         iso = d.isoformat() if hasattr(d, "isoformat") else str(d)
-        txt = f'{s["start_time"].strftime("%H:%M")}-{s["end_time"].strftime("%H:%M")}'
         brk = s.get("break_minutes") or 0
+        txt = f'{s["start_time"].strftime("%H:%M")}-{s["end_time"].strftime("%H:%M")}'
         if brk:
             txt += f" -{brk}m"  # unpaid break (already excluded from the hours total)
         e["cells"][iso] = f'{e["cells"][iso]} / {txt}' if iso in e["cells"] else txt
+        # The PDF lays the times out itself, so it needs them apart rather than
+        # already glued into a string. "09:00-17:00 -30m" is about 30mm of text
+        # in a 22mm column, and fpdf's cell() does not wrap — it just runs over
+        # the next column. That overlap IS the clumsiness he kept reporting.
+        e.setdefault("shifts", {}).setdefault(iso, []).append(
+            (
+                s["start_time"].strftime("%H:%M"),
+                s["end_time"].strftime("%H:%M"),
+                int(brk),
+            )
+        )
         e["day_h"][iso] = e["day_h"].get(iso, Decimal("0")) + s["hours"]
         e["total"] += s["hours"]
     return emps
@@ -84,6 +95,10 @@ def rota_to_pdf(
     ordered = sorted(emps.items(), key=lambda kv: kv[1]["name"].lower())
 
     pdf = FPDF(orientation="L")
+    # Page breaks are decided row by row below. Left on, fpdf also breaks
+    # when the footer is written past its own bottom margin, which is where
+    # the stray blank last page came from.
+    pdf.set_auto_page_break(False)
     pdf.add_page()
     pw = pdf.w
     m = 12
@@ -101,70 +116,176 @@ def rota_to_pdf(
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 
-    # Column geometry — names/role on the left, a column per day, total on the right.
+    # Column geometry — names/role on the left, a column per day, total on the
+    # right. The day columns are what everything else gives way to: a rota is
+    # read by looking DOWN a day, so the day gets the room.
     avail = pw - 2 * m
-    name_w, id_w, role_w, total_w = 46, 20, 30, 22
+    name_w, id_w, total_w = 50, 15, 19
     n_day = len(days)
-    day_w = max(16.0, (avail - name_w - id_w - role_w - total_w) / n_day)
+    day_w = max(16.0, (avail - name_w - id_w - total_w) / n_day)
 
-    pdf.set_xy(m, 32)
-    pdf.set_fill_color(*_DARK)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(name_w, 11, text="  Employee", fill=True)
-    pdf.cell(id_w, 11, text="Emp ID", align="C", fill=True)
-    pdf.cell(role_w, 11, text="Role", align="C", fill=True)
-    for d in days:
-        pdf.cell(day_w, 11, text=_ps(d.strftime("%a %d/%m")), align="C", fill=True)
-    pdf.cell(
-        total_w, 11, text="Total h", align="C", fill=True,
-        new_x=XPos.LMARGIN, new_y=YPos.NEXT,
-    )
+    rh = 13.0          # tall enough for two stacked times, or two split shifts
+    head_h = 10.0
+    bottom = pdf.h - 16
 
-    pdf.set_text_color(*_DARK)
-    pdf.set_font("Helvetica", "", 8)
-    rh = 9
+    def header_row(y: float) -> float:
+        pdf.set_xy(m, y)
+        pdf.set_fill_color(*_DARK)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.cell(name_w, head_h, text="  Employee", fill=True)
+        pdf.cell(id_w, head_h, text="ID", align="C", fill=True)
+        for d in days:
+            pdf.cell(day_w, head_h, text=_ps(d.strftime("%a %d/%m")), align="C", fill=True)
+        pdf.cell(
+            total_w, head_h, text="Hours", align="C", fill=True,
+            new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+        )
+        return y + head_h
+
+    def day_cell(x: float, y: float, entries: list, zebra: bool) -> None:
+        """One day for one person.
+
+        The times are STACKED — start above end — instead of written across.
+        "09:00" is a third of the width of "09:00-17:00 -30m", so the column
+        stops overflowing and the grid can be read down a day at a glance. A
+        worked day gets a tinted block so the shape of the week is visible
+        before you read a single number."""
+        if not entries:
+            pdf.set_text_color(210, 218, 226)
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_xy(x, y + rh / 2 - 2.5)
+            pdf.cell(day_w, 5, text="-", align="C")
+            return
+
+        pdf.set_fill_color(*(_ZEBRA if not zebra else (220, 250, 238)))
+        pdf.rect(x + 1.1, y + 1.1, day_w - 2.2, rh - 2.2, style="F", round_corners=True,
+                 corner_radius=1.6)
+
+        split = len(entries) > 1
+        size = 6.2 if split else 8.4
+        line = 3.1 if split else 4.3
+        top = y + (rh - line * 2 * len(entries)) / 2
+
+        for k, (st, en, brk) in enumerate(entries[:2]):
+            pdf.set_text_color(*_DARK)
+            pdf.set_font("Helvetica", "B", size)
+            pdf.set_xy(x, top + k * line * 2)
+            pdf.cell(day_w, line, text=_ps(st), align="C")
+            pdf.set_font("Helvetica", "", size)
+            pdf.set_text_color(*_MUTED)
+            pdf.set_xy(x, top + k * line * 2 + line)
+            pdf.cell(day_w, line, text=_ps(en), align="C")
+            # An unpaid break is marked with a dot in the corner of the
+            # block. Appending it to the time ("17:30.") read as a full
+            # stop, and spelling out "-30m" is what overflowed the column
+            # in the first place.
+            if brk:
+                pdf.set_fill_color(129, 199, 174)
+                pdf.circle(x + day_w - 4.4, y + 3.0, 0.75, style="F")
+
+        if split:
+            pdf.set_draw_color(168, 214, 195)
+            pdf.set_line_width(0.15)
+            mid = top + line * 2
+            pdf.line(x + day_w * 0.28, mid, x + day_w * 0.72, mid)
+
+        if len(entries) > 2:
+            pdf.set_font("Helvetica", "B", 5.4)
+            pdf.set_text_color(*_MUTED)
+            pdf.set_xy(x, y + rh - 3.4)
+            pdf.cell(day_w, 3, text=_ps(f"+{len(entries) - 2}"), align="C")
+
+    y = header_row(32.0)
+
     daily = {d.isoformat(): Decimal("0") for d in days}
     grand = Decimal("0")
+    has_break = False
+
     if not ordered:
-        pdf.set_x(m)
-        pdf.cell(
-            0, rh, text="  No shifts scheduled for this week.",
-            new_x=XPos.LMARGIN, new_y=YPos.NEXT,
-        )
+        pdf.set_xy(m, y)
+        pdf.set_text_color(*_MUTED)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(0, rh, text="  No shifts scheduled for this week.")
+        y += rh
+
     for i, (eid, e) in enumerate(ordered):
+        # Page breaks were never handled: a long team simply ran off the bottom
+        # of the sheet. Carry the header over so page two is still readable.
+        if y + rh > bottom:
+            pdf.add_page()
+            y = header_row(20.0)
+
         code, title = emp_info.get(eid, ("", ""))
-        fill = i % 2 == 1
-        pdf.set_x(m)
-        pdf.set_fill_color(*_ZEBRA)
-        pdf.cell(name_w, rh, text=f"  {_ps(e['name'])}", fill=fill, border="B")
-        pdf.cell(id_w, rh, text=_ps(code or "-"), align="C", fill=fill, border="B")
-        pdf.cell(role_w, rh, text=_ps(title or "-"), align="C", fill=fill, border="B")
+        zebra = i % 2 == 1
+        if zebra:
+            pdf.set_fill_color(248, 252, 250)
+            pdf.rect(m, y, avail, rh, style="F")
+
+        pdf.set_text_color(*_DARK)
+        pdf.set_font("Helvetica", "B", 8.6)
+        pdf.set_xy(m, y + rh / 2 - 4.6)
+        pdf.cell(name_w, 5, text=f"  {_ps(e['name'])}")
+        pdf.set_font("Helvetica", "", 6.6)
+        pdf.set_text_color(*_MUTED)
+        pdf.set_xy(m, y + rh / 2 + 0.2)
+        pdf.cell(name_w, 4, text=f"  {_ps(title or '-')}")
+
+        pdf.set_font("Helvetica", "", 7.4)
+        pdf.set_xy(m + name_w, y + rh / 2 - 2.2)
+        pdf.cell(id_w, 5, text=_ps(code or "-"), align="C")
+
+        x = m + name_w + id_w
         for d in days:
             iso = d.isoformat()
-            cell = _ps(e["cells"].get(iso, "-"))
-            pdf.cell(day_w, rh, text=cell, align="C", fill=fill, border="B")
+            entries = (e.get("shifts") or {}).get(iso, [])
+            if any(b for _, _, b in entries):
+                has_break = True
+            day_cell(x, y, entries, zebra)
             daily[iso] += e["day_h"].get(iso, Decimal("0"))
+            x += day_w
+
         grand += e["total"]
-        pdf.cell(
-            total_w, rh, text=_ps(_fmt_h(e["total"])), align="C", fill=fill, border="B",
-            new_x=XPos.LMARGIN, new_y=YPos.NEXT,
-        )
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*_BRAND)
+        pdf.set_xy(x, y + rh / 2 - 2.4)
+        pdf.cell(total_w, 5, text=_ps(_fmt_h(e["total"]) + "h"), align="C")
+
+        pdf.set_draw_color(226, 240, 234)
+        pdf.set_line_width(0.2)
+        pdf.line(m, y + rh, m + avail, y + rh)
+        y += rh
 
     if ordered:
-        pdf.set_x(m)
-        pdf.set_font("Helvetica", "B", 8)
+        if y + rh > bottom:
+            pdf.add_page()
+            y = header_row(20.0)
         pdf.set_fill_color(*_TOTAL)
+        pdf.rect(m, y, avail, rh - 2, style="F", round_corners=True, corner_radius=1.6)
         pdf.set_text_color(*_DARK)
-        pdf.cell(name_w + id_w + role_w, rh, text="  Daily total (hours)", fill=True)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_xy(m, y + 2)
+        pdf.cell(name_w + id_w, 6, text="  Hours per day")
+        x = m + name_w + id_w
         for d in days:
-            pdf.cell(day_w, rh, text=_ps(_fmt_h(daily[d.isoformat()])), align="C", fill=True)
+            pdf.set_xy(x, y + 2)
+            pdf.cell(day_w, 6, text=_ps(_fmt_h(daily[d.isoformat()])), align="C")
+            x += day_w
+        pdf.set_xy(x, y + 2)
+        pdf.cell(total_w, 6, text=_ps(_fmt_h(grand) + "h"), align="C")
+        y += rh
+
+    # The legend earns its line only when the sheet actually uses the marker.
+    pdf.set_text_color(*_MUTED)
+    pdf.set_font("Helvetica", "", 6.8)
+    if has_break:
+        pdf.set_xy(m, y + 1)
         pdf.cell(
-            total_w, rh, text=_ps(_fmt_h(grand)), align="C", fill=True,
-            new_x=XPos.LMARGIN, new_y=YPos.NEXT,
+            0, 4,
+            text="A dot in the corner of a shift means an unpaid break is already "
+                 "taken out of the hours.",
         )
 
-    pdf.set_text_color(*_MUTED)
     pdf.set_y(pdf.h - 12)
     pdf.set_font("Helvetica", "I", 8)
     pdf.cell(0, 5, text="Generated by DineAI - every plate, every penny", align="C")

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fmtQtyNumber } from "@/lib/quantity";
 import Link from "next/link";
 import {
   api,
@@ -553,7 +554,7 @@ export default function PartyOrderPage() {
                               {q.lines.map((l, li) => (
                                 <tr key={li} className="border-b border-line/60 last:border-0">
                                   <td className="px-3 py-2 font-medium text-fg">{l.name}</td>
-                                  <td className="px-3 py-2 text-right text-fg-soft">{l.qty}</td>
+                                  <td className="px-3 py-2 text-right text-fg-soft">{fmtQtyNumber(l.qty)}</td>
                                   <td className="px-3 py-2 text-right text-fg-soft">
                                     {l.unit_price != null ? money(q.currency, l.unit_price) : "—"}
                                   </td>

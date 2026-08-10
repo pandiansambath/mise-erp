@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fmtQty, fmtQtyNumber } from "@/lib/quantity";
 import {
   api,
   ApiError,
@@ -23,7 +24,7 @@ import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailShee
 import { SubNav } from "@/components/SubNav";
 import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
-import { ItemPicker, categoryEmoji, fmtQty, type PickedLine } from "@/components/ItemPicker";
+import { ItemPicker, categoryEmoji, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -748,7 +749,7 @@ export default function PurchasingPage() {
                 </div>
                 <p className="mt-3 text-[11px] text-fg-faint">
                   In stock now: {fmtQty(it.current_stock, it.unit)}
-                  {it.min_stock_level ? ` · you keep at least ${it.min_stock_level}` : ""}
+                  {it.min_stock_level ? ` · you keep at least ${fmtQtyNumber(it.min_stock_level)}` : ""}
                 </p>
               </>
             )}
@@ -1183,7 +1184,7 @@ export default function PurchasingPage() {
                   <div key={it.po_item_id} className="rounded-lg border border-line px-3 py-2 text-sm">
                     <div className="flex items-center gap-3">
                       <span className="min-w-0 flex-1 truncate text-fg">{it.item_name}</span>
-                      <span className="shrink-0 text-xs text-fg-faint">ordered {it.ordered_qty}</span>
+                      <span className="shrink-0 text-xs text-fg-faint">ordered {fmtQtyNumber(it.ordered_qty)}</span>
                       <input
                         value={val}
                         onChange={(e) => setRecvLines((m) => ({ ...m, [it.po_item_id]: e.target.value }))}
@@ -1292,7 +1293,7 @@ export default function PurchasingPage() {
                                 {it.item_name}
                               </button>
                               <span className="shrink-0 text-right">
-                                <span className="text-fg">{it.required_qty} {it.unit}</span>
+                                <span className="text-fg">{fmtQty(it.required_qty, it.unit)}</span>
                                 {it.vendor_name && <span className="ml-2 text-xs text-brand-300">→ {it.vendor_name}</span>}
                               </span>
                             </li>
@@ -1411,9 +1412,9 @@ export default function PurchasingPage() {
                               <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
                                 <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
                                 <span className="shrink-0 text-fg-faint">
-                                  {it.ordered_qty} × {format(it.unit_price)}
+                                  {fmtQtyNumber(it.ordered_qty)} × {format(it.unit_price)}
                                   {openPoObj.status === "RECEIVED" && it.received_qty !== it.ordered_qty && (
-                                    <span className="ml-2 font-medium text-rose-300">· got {it.received_qty}</span>
+                                    <span className="ml-2 font-medium text-rose-300">· got {fmtQtyNumber(it.received_qty)}</span>
                                   )}
                                   <span className="ml-2 font-medium text-fg">{format(it.line_total)}</span>
                                 </span>
@@ -1510,7 +1511,7 @@ export default function PurchasingPage() {
                     <li key={indent.id} className="flex items-center justify-between gap-3 py-2">
                       <span className="min-w-0">
                         <span className="block text-sm text-fg">
-                          {line.required_qty} {line.unit}
+                          {fmtQty(line.required_qty, line.unit)}
                           {line.vendor_name ? ` · ${line.vendor_name}` : ""}
                         </span>
                         <span className="text-[11px] text-fg-faint">{indent.date}</span>

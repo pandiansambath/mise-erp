@@ -1,5 +1,7 @@
 "use client";
 
+import { fmtQty as fmtQtyBase, weighedParts as weighedPartsBase } from "@/lib/quantity";
+
 // Chef-friendly item picker: no dropdowns. Items are grouped into category
 // tabs (vegetables, meat, spices…), shown as big tappable cards with a live
 // stock pill (🟢 in stock / 🟡 low / 🔴 out). Tapping a card adds it to the
@@ -61,36 +63,18 @@ function groupKey(it: Item): string {
 }
 
 /* Units chefs enter as two boxes (whole + sub-unit): kg→g, litre→ml. Chefs say
-   "200 g" / "200 ml", not "0.2 kg" / "0.2 litre", so we split the field. */
-export function weighedParts(unit: string): { big: string; sub: string } | null {
-  const u = unit.toLowerCase();
-  if (u === "kg") return { big: "kg", sub: "g" };
-  if (u === "litre" || u === "l") return { big: "litre", sub: "ml" };
-  return null;
-}
+   "200 g" / "200 ml", not "0.2 kg" / "0.2 litre", so we split the field.
 
-/** Friendly display of a weighed/poured quantity: "1 kg 500 g" / "500 g",
-    "1 litre 200 ml" / "200 ml"; anything else stays as-is ("3 piece"). Shared so
-    inventory, recipes etc. all read the same way. */
+   Both of these moved to lib/quantity.ts. They lived here, in a picker
+   component, which is why fourteen other places printed "1.5000" raw instead
+   of finding them. Re-exported so existing imports keep working. */
+export const weighedParts = weighedPartsBase;
+
+/** Friendly display of a weighed quantity. The picker and the order sheet keep
+    the two-box reading ("1 kg 500 g"); everywhere else uses the compact form
+    ("1.5 kg") that he asked for. */
 export function fmtQty(quantity: string | number, unit: string): string {
-  const parts = weighedParts(unit);
-  if (!parts) {
-    // Numeric(12,3) comes back as "23.000", and printing it raw gave
-    // "have 23.000 pack" beside a tidy "have 17 kg" — it reads as a bug even
-    // though the number is right. Trim the trailing zeros a decimal column
-    // always carries, and keep any decimals that actually mean something
-    // ("1.5 pack" stays 1.5).
-    const n = typeof quantity === "number" ? quantity : parseFloat(quantity);
-    if (!Number.isFinite(n)) return `${quantity} ${unit}`;
-    return `${Number(n.toFixed(3))} ${unit}`;
-  }
-  const { big, sub } = parts;
-  const q = typeof quantity === "number" ? quantity : parseFloat(quantity) || 0;
-  const whole = Math.floor(q);
-  const small = Math.round((q - whole) * 1000);
-  if (whole && small) return `${whole} ${big} ${small} ${sub}`;
-  if (whole) return `${whole} ${big}`;
-  return `${small} ${sub}`;
+  return fmtQtyBase(quantity, unit, "split");
 }
 
 /** Reusable quantity entry: weighed/poured units (kg→g, litre→ml) get two boxes
