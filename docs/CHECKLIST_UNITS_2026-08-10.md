@@ -250,3 +250,45 @@ action.
       month", which is a number he can act on and verify
 - [ ] Same trap worth checking elsewhere: any other place that adds up
       per-unit figures across different units
+
+---
+
+## Purchases never reached Expenses — 2026-08-10
+
+> after i give receive in to stock i need to see that expense details in expense
+> section ryt... actually this is working feature... are we affected anything?
+
+**Nothing I changed broke it. It was never built.** `git log -S "Expense" --
+backend/app/purchasing/` finds no commit that ever created one, and the
+expenses module has no knowledge of purchase orders at all.
+
+**And the consequence is worse than a missing row in a list:**
+
+    reports.pnl():   cost_of_sales = exp["variable_total"]
+
+Cost of sales is read ENTIRELY from the expenses table. So receiving £1,856 of
+stock moved the stock and updated the weighted-average cost, and put **nothing**
+on the cost side of the P&L. Gross profit came out £1,856 too high and the food
+cost percentage too low — unless somebody separately typed the same spend into
+Expenses by hand. There is even a comment in `pnl()` reading "the cost already
+hit when bought", which is what the code assumed and not what it did.
+
+Now: receiving a PO books an expense to a VARIABLE category, "Stock purchases",
+against that vendor. Two things make that safe rather than reckless:
+
+- **One expense per PO**, found by the new `expenses.purchase_order_id` and
+  UPDATED on a re-receive. Part deliveries — 30 today, 70 on Friday — receive
+  the same PO again, and each of those was otherwise a chance to book it twice.
+- **The amount is what ARRIVED, not what was ordered.** A short delivery must
+  not be paid for on paper.
+
+`hotels.prefs.post_purchases_to_expenses` turns it off for kitchens that key
+their supplier invoices in by hand, where posting both would double their food
+cost. On by default, because the alternative is a P&L that is simply wrong.
+
+- [ ] **Ask him:** has anyone been entering purchase spend into Expenses by
+      hand? If so their historic P&L double-counts from the day this ships,
+      and the pref should go off for that hotel
+- [ ] Expenses page: label rows that came from a PO, and link back to it
+- [ ] Consider back-filling expenses for already-received POs — money, so his
+      call, not mine

@@ -78,6 +78,11 @@ class ExpenseOut(BaseModel):
     recurrence: str | None = None
     auto_added: bool = False
     from_payroll: bool = False
+    #: Set when this was posted automatically on receiving a purchase order.
+    #: The Expenses page uses it to say so, rather than leaving a row nobody
+    #: remembers typing — an expense you cannot account for is worse than one
+    #: you have to enter yourself.
+    purchase_order_id: uuid.UUID | None = None
 
 
 class CategoryTotal(BaseModel):

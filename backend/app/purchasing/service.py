@@ -359,6 +359,20 @@ async def receive_po(
     po.received_at = datetime.now(UTC)
     if note:
         po.receive_note = note
+
+    # Book what arrived as an expense, so it reaches cost of sales.
+    #
+    # reports.pnl() reads cost_of_sales straight from the expenses table, so
+    # until now receiving stock moved the stock and left the P&L believing the
+    # food had been free. `post_for_po` is idempotent on purpose: a part
+    # delivery receives the same PO again, and the expense is updated rather
+    # than duplicated.
+    from app.hotels.models import Hotel
+    from app.purchasing.expense_link import post_for_po
+
+    hotel = await db.get(Hotel, po.hotel_id)
+    await post_for_po(db, po, hotel, created_by=created_by)
+
     await db.commit()
     await db.refresh(po)
     return po
