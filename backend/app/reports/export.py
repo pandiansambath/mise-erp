@@ -102,7 +102,7 @@ def to_pdf(pnl: dict) -> bytes:
     """One-page branded P&L snapshot — what the monthly archive hands back."""
     from fpdf.enums import XPos, YPos
 
-    from app.core.pdf import branded_pdf, footer, ps
+    from app.core.pdf import branded_pdf, footer, money, ps
 
     pdf = branded_pdf("Profit & Loss", f"{pnl['date_from']} to {pnl['date_to']}")
 
@@ -114,12 +114,15 @@ def to_pdf(pnl: dict) -> bytes:
         pdf.cell(120, 7.5, text=ps(label))
         pdf.cell(60, 7.5, text=ps(value), align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
+    # "52100.00" with no currency and no thousands separator, on the one page an
+    # accountant or a bank actually reads. Both fixed.
+    cur = pnl.get("currency") or "GBP"
     for label, key in _PNL_LINES:
-        line(label, str(pnl[key]), bold=key in ("net_sales", "gross_profit", "net_profit"))
+        line(label, money(pnl[key], cur), bold=key in ("net_sales", "gross_profit", "net_profit"))
     for label, key in _PNL_PCTS:
         line(label, f"{pnl[key]}%")
     if pnl.get("waste_total") is not None:
-        line("Logged waste", str(pnl["waste_total"]))
+        line("Logged waste", money(pnl["waste_total"], cur))
 
     if pnl["expense_breakdown"]:
         pdf.set_y(pdf.get_y() + 4)
@@ -132,7 +135,7 @@ def to_pdf(pnl: dict) -> bytes:
             pdf.cell(100, 6.5, text=ps(c["category_name"]))
             pdf.cell(30, 6.5, text=ps(c["kind"].lower()), align="C")
             pdf.cell(
-                50, 6.5, text=ps(str(c["total"])), align="R",
+                50, 6.5, text=ps(money(c["total"], cur)), align="R",
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT,
             )
 
