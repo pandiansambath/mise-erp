@@ -23,6 +23,9 @@ import type { Item, SupplierOption } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { categoryEmoji, fmtQty, stockState } from "@/components/ItemPicker";
 import { flyToPocket } from "@/components/Pocket";
+import ClickSpark from "@/components/reactbits/ClickSpark";
+import Magnet from "@/components/reactbits/Magnet";
+import { CountUp } from "@/components/reactbits/CountUp";
 
 export type OrderLine = { item_id: string; qty: string };
 
@@ -185,6 +188,11 @@ export function OrderPad({
   return (
     <div className="grid min-h-0 gap-4 lg:grid-cols-[1.15fr_1fr]">
       {/* ── picking ─────────────────────────────────────────────── */}
+      {/* Sparks wrap the picking side only. "picking will be a fun" — a spark
+          at the exact point of contact is the cheapest way to make a tap feel
+          like it landed. Deliberately NOT around the order panel, where taps
+          are edits and a shower of sparks would be noise. */}
+      <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={18} duration={420}>
       <div className="flex min-h-0 flex-col gap-3">
         {/* The pad. Type a name, then a number. */}
         <div className="mise-neo-raised rounded-2xl p-3">
@@ -329,6 +337,7 @@ export function OrderPad({
           </div>
         )}
       </div>
+      </ClickSpark>
 
       {/* ── the order, live ─────────────────────────────────────── */}
       <div className="mise-feel flex min-h-0 flex-col rounded-2xl border border-line bg-paper-2/60 p-3">
@@ -411,15 +420,27 @@ export function OrderPad({
         {lines.length > 0 && (
           <div className="mt-2 shrink-0 border-t border-line pt-2.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-display text-2xl font-semibold tabular-nums text-fg">
-                {format(grand.toFixed(2))}
-              </span>
+              {/* The money rolls to its new value as items land. The item
+                  count beside it does not — a rolling "6 items" tells you
+                  nothing that "6" did not. */}
+              <CountUp
+                to={grand}
+                format={(n) => format(n.toFixed(2))}
+                className="font-display text-2xl font-semibold tabular-nums text-fg"
+              />
               <span className="text-[11px] text-fg-faint">
                 {lines.length} item{lines.length === 1 ? "" : "s"} · {groups.length} supplier
                 {groups.length === 1 ? "" : "s"}
               </span>
             </div>
-            {footer && <div className="mt-2.5">{footer}</div>}
+            {/* Exactly one Magnet on the page, on the primary action. It is a
+                way of saying "this is the one" — a second would undo the
+                first. */}
+            {footer && (
+              <Magnet padding={60} magnetStrength={6} className="mt-2.5 block">
+                {footer}
+              </Magnet>
+            )}
           </div>
         )}
       </div>
