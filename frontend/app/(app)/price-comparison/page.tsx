@@ -45,7 +45,8 @@ function Spark({ points, rising }: { points: number[]; rising: boolean }) {
 const SRC_TONE: Record<string, "slate" | "amber" | "green"> = {
   manual: "slate", po: "amber", invoice: "green",
 };
-import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, Card, Spinner } from "@/components/ui";
+import { Workbench } from "@/components/Workbench";
 import { AreaChart } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
@@ -379,11 +380,28 @@ export default function PriceComparisonPage() {
   })();
 
   return (
-    <div>
-      <PageHeader
-        title="Price Comparison"
-        subtitle="Who's cheapest for each item — and how much you'd save by switching."
-      />
+    <Workbench
+      title="Price Comparison"
+      subtitle="Who's cheapest for each item — and how much you'd save by switching."
+      tally={
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-faint">
+          <span>
+            <b className="text-fg-soft">{items.length}</b> item
+            {items.length === 1 ? "" : "s"}
+          </span>
+          {switchSave.count > 0 ? (
+            // The one number this page exists to produce, kept on screen. It
+            // used to require reaching the bottom of the page to see.
+            <span className="text-emerald-300">
+              <b>{format(switchSave.total)}</b> per unit to be saved across{" "}
+              <b>{switchSave.count}</b> item{switchSave.count === 1 ? "" : "s"}
+            </span>
+          ) : (
+            <span>Every item is already on its cheapest supplier.</span>
+          )}
+        </div>
+      }
+    >
 
       {/* Every supplier for one item, opened from its card. The saving is
           pinned in the header because it is the only number that decides
@@ -1024,6 +1042,6 @@ export default function PriceComparisonPage() {
 
         </>
       )}
-    </div>
+    </Workbench>
   );
 }

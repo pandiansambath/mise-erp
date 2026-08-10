@@ -16,7 +16,8 @@ import {
   type SupplierOption,
 } from "@/lib/api";
 import Link from "next/link";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Card, Spinner } from "@/components/ui";
+import { Workbench } from "@/components/Workbench";
 import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
 import { SubNav } from "@/components/SubNav";
@@ -530,8 +531,85 @@ export default function PurchasingPage() {
   const orderable = items.filter((it) => (it.vendor_count ?? 0) > 0);
 
   return (
-    <div>
-      <PageHeader title="Purchasing" subtitle="Kitchen indents → vendor-wise purchase orders." />
+    <Workbench
+      title="Purchasing"
+      subtitle="Kitchen indents → vendor-wise purchase orders."
+      action={
+        canWrite ? (
+          <button
+            type="button"
+            onClick={() => setTab("new")}
+            className="mise-press rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-700"
+          >
+            ＋ New order
+          </button>
+        ) : undefined
+      }
+      tools={
+          <SubNav
+            active={tab}
+            items={[
+              ...(canWrite
+                ? [{ key: "new", label: "New order", icon: "＋", onSelect: () => setTab("new") }]
+                : []),
+              {
+                key: "indents",
+                label: "Indents",
+                icon: "📋",
+                count: indents.filter((i) => i.status === "PENDING").length || indents.length,
+                tone: indents.some((i) => i.status === "PENDING") ? "warn" : "plain",
+                onSelect: () => setTab("indents"),
+              },
+              {
+                key: "orders",
+                label: "Purchase orders",
+                icon: "🚚",
+                count: pos.filter((p) => p.status !== "RECEIVED").length || pos.length,
+                tone: pos.some(
+                  (p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr,
+                )
+                  ? "bad"
+                  : "plain",
+                onSelect: () => setTab("orders"),
+              },
+            ]}
+          />
+      }
+      tally={(() => {
+        // The money committed but not yet received. This app exists to answer
+        // money questions, so that number stays on screen rather than waiting
+        // at the bottom of a scroll.
+        const open = pos.filter((x) => x.status !== "RECEIVED");
+        const overdue = open.filter(
+          (x) => x.expected_delivery && x.expected_delivery < todayStr,
+        ).length;
+        const awaiting = indents.filter((x) => x.status === "PENDING").length;
+        return (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-faint">
+            <span>
+              <b className="text-fg-soft">
+                {format(open.reduce((t, x) => t + (parseFloat(x.total_amount) || 0), 0))}
+              </b>{" "}
+              committed
+            </span>
+            <span>
+              <b className="text-fg-soft">{open.length}</b> open order
+              {open.length === 1 ? "" : "s"}
+            </span>
+            {awaiting > 0 && (
+              <span className="text-amber-300">
+                <b>{awaiting}</b> indent{awaiting === 1 ? "" : "s"} awaiting approval
+              </span>
+            )}
+            {overdue > 0 && (
+              <span className="text-rose-300">
+                <b>{overdue}</b> past its delivery date
+              </span>
+            )}
+          </div>
+        );
+      })()}
+    >
       {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
 
       {/* One item's suppliers, without leaving the order you are building.
@@ -783,34 +861,6 @@ export default function PurchasingPage() {
       {/* The same SubNav every other section uses, so Purchasing stops being
           the odd one out — and the counts now say what needs attention rather
           than just how many exist. */}
-      <SubNav
-        active={tab}
-        items={[
-          ...(canWrite
-            ? [{ key: "new", label: "New order", icon: "＋", onSelect: () => setTab("new") }]
-            : []),
-          {
-            key: "indents",
-            label: "Indents",
-            icon: "📋",
-            count: indents.filter((i) => i.status === "PENDING").length || indents.length,
-            tone: indents.some((i) => i.status === "PENDING") ? "warn" : "plain",
-            onSelect: () => setTab("indents"),
-          },
-          {
-            key: "orders",
-            label: "Purchase orders",
-            icon: "🚚",
-            count: pos.filter((p) => p.status !== "RECEIVED").length || pos.length,
-            tone: pos.some(
-              (p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr,
-            )
-              ? "bad"
-              : "plain",
-            onSelect: () => setTab("orders"),
-          },
-        ]}
-      />
 
       {canWrite && tab === "new" && (
         <Card className="mb-6" id="indent-form">
@@ -928,7 +978,7 @@ export default function PurchasingPage() {
             <h3 className="font-semibold text-fg">Indents</h3>
             <span className="text-xs text-fg-faint">{indents.length} total</span>
           </div>
-          <div className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
+          <div className="space-y-2 p-3">
             {indents.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">No indents yet.</p>
             ) : (
@@ -1000,7 +1050,7 @@ export default function PurchasingPage() {
             <h3 className="font-semibold text-fg">Purchase orders</h3>
             <span className="text-xs text-fg-faint">{pos.length} total</span>
           </div>
-          <div className="max-h-[60vh] space-y-3 overflow-y-auto p-3">
+          <div className="space-y-3 p-3">
             {pos.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">No purchase orders yet.</p>
             ) : (
@@ -1495,6 +1545,6 @@ export default function PurchasingPage() {
           </div>
         )}
       </DetailSheet>
-    </div>
+    </Workbench>
   );
 }
