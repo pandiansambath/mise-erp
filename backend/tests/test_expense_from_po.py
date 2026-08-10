@@ -92,3 +92,40 @@ async def test_the_hotel_can_turn_it_off(db, hotel):
     await service.receive_po(db, po)
 
     assert await _expenses_for(db, po) == []
+
+
+@pytest.mark.asyncio
+async def test_keying_the_same_delivery_in_by_hand_warns(
+    client, make_user, auth_header, db, hotel
+):
+    """His worry, made concrete.
+
+    Receiving posts the cost automatically. Somebody then types the same
+    delivery note in under "Vegetables" — a different category, but just as
+    VARIABLE, so both reach cost of sales and the food is paid for twice.
+    """
+    from app.auth.models import Role
+    from app.expenses import service as exp_service
+
+    po = await _po_for(db, hotel.id, qty="10", price="5.00")  # £50
+    await service.receive_po(db, po)
+
+    user = await make_user("dupe@x.com", Role.SUPER_ADMIN.value)
+    h = auth_header(user)
+    veg = await exp_service.create_category(
+        db, hotel.id, name="Vegetables", kind=ExpenseKind.VARIABLE.value
+    )
+
+    body = {
+        "category_id": str(veg.id),
+        "date": str(po.received_at.date()),
+        "amount": "50.00",
+        "vendor_id": str(po.vendor_id),
+    }
+    warned = await client.post("/expenses", headers=h, json=body)
+    assert warned.status_code == 409
+    assert "twice" in warned.json()["detail"]
+
+    # Warn, never block — the same supplier really can be paid twice in a week.
+    forced = await client.post("/expenses?force=true", headers=h, json=body)
+    assert forced.status_code == 201

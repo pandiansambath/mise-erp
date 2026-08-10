@@ -138,9 +138,11 @@ from the rota either. Nothing in the repo seeds it.
       completed shift with a consistent 10:30-21:30 pattern, which reads like a
       real split-shift closure rather than an accident. **I was wrong earlier
       to call it a bulk write.**
-- [ ] **HIS CALL:** is a standing two-hour unpaid break correct for
-      NIRAI.Reading? If yes, nothing to do. If no, 96 rows need correcting and
-      that affects pay — not something to change on a guess
+- [x] **ANSWERED 2026-08-10 — the two hours are real.** His words: "yes 2hr
+      break is done by team member, fine, no issues, all working in this". So
+      the 96 rows are correct, the hours were always correct, and there is no
+      data to fix. The only defect was that the break was invisible, and that
+      is fixed. **Closed.**
 - [ ] Show the break everywhere hours appear, not only in the history table —
       the staff self-service view (`/my`) still prints bare hours
 - [x] **A typed break is now bounded.** `AttendanceEdit.break_minutes` had
@@ -286,9 +288,19 @@ against that vendor. Two things make that safe rather than reckless:
 their supplier invoices in by hand, where posting both would double their food
 cost. On by default, because the alternative is a P&L that is simply wrong.
 
-- [ ] **Ask him:** has anyone been entering purchase spend into Expenses by
-      hand? If so their historic P&L double-counts from the day this ships,
-      and the pref should go off for that hotel
+- [x] **ANSWERED 2026-08-10.** He reasoned it out: "even in expense section
+      also they can choose like vegetable or some category and do... its not
+      related to purchasing nah, so I guess our purchasing expense is separate
+      part". Right — the automatic ones sit in their own "Stock purchases"
+      category. So the pref stays ON everywhere; no hotel needs it switched off.
+- [x] **But he also asked "any possible way to handle this?"** — because an
+      unknowledgeable person could still key the same delivery in under
+      "Vegetables", which is just as VARIABLE and so lands in cost of sales
+      twice. Adding an expense that matches a PO-posted one (same vendor, a few
+      days either side, the same amount to the penny) now warns with a 409 and
+      an explanation, reusing the warn-then-force pattern the fixed costs
+      already had. **Warn, never block** — the same supplier really can be paid
+      twice in a week, and the person at the keyboard knows whether they were.
 - [ ] Expenses page: label rows that came from a PO, and link back to it
 - [ ] Consider back-filling expenses for already-received POs — money, so his
       call, not mine
