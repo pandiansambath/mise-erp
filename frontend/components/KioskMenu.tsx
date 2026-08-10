@@ -46,6 +46,41 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** A labelled switch.
+ *
+ *  Defined HERE, at module scope, not inside KioskMenu. A component declared
+ *  during render is a new component TYPE on every render, so React unmounts
+ *  and remounts it each time — which throws away the checkbox's focus and any
+ *  state it holds. It is a correctness bug wearing a lint warning's clothes,
+ *  and it is what failed the build.
+ */
+function Toggle({
+  on,
+  label,
+  hint,
+  onChange,
+}: {
+  on: boolean;
+  label: string;
+  hint: string;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 py-1.5">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-brand-500"
+      />
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-fg">{label}</span>
+        <span className="block text-[11px] text-fg-faint">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
 export function KioskMenu({
   open,
   onOpen,
@@ -89,31 +124,6 @@ export function KioskMenu({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
-
-  const Toggle = ({
-    on,
-    label,
-    hint,
-    onChange,
-  }: {
-    on: boolean;
-    label: string;
-    hint: string;
-    onChange: (v: boolean) => void;
-  }) => (
-    <label className="flex cursor-pointer items-start gap-3 py-1.5">
-      <input
-        type="checkbox"
-        checked={on}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-brand-500"
-      />
-      <span className="min-w-0">
-        <span className="block text-[13px] font-medium text-fg">{label}</span>
-        <span className="block text-[11px] text-fg-faint">{hint}</span>
-      </span>
-    </label>
-  );
 
   return (
     <>
