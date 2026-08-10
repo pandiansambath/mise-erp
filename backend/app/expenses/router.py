@@ -110,6 +110,31 @@ async def create_expense(
                 f"£{d0.amount} on {d0.date.strftime('%d %b')}. Logging it again "
                 "would double-count the cost.",
             )
+    # A delivery keyed in by hand that was already posted from its PO.
+    #
+    # His own worry: "maybe some unknowledgeable person can do... even in expense
+    # section also they can choose like vegetable or some category and do". The
+    # automatic ones sit in their own "Stock purchases" category, but a manual
+    # one under "Vegetables" is just as VARIABLE, so both land in cost of sales
+    # and the delivery is paid for twice.
+    if cat_check.kind == "VARIABLE" and not force:
+        dups = await service.delivery_duplicates(
+            db,
+            user.hotel_id,
+            on=payload.date,
+            amount=payload.amount,
+            vendor_id=payload.vendor_id,
+        )
+        if dups:
+            d0 = dups[0]
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"£{d0.amount} was already recorded on {d0.date.strftime('%d %b')} "
+                "when this delivery was received into stock — it is on the "
+                "purchase order. Adding it again would count the same food "
+                "twice. Save anyway if this really is a separate bill.",
+            )
+
     exp = await service.create_expense(
         db, user.hotel_id, created_by=user.id, **payload.model_dump(exclude_none=True)
     )

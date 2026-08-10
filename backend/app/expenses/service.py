@@ -1,6 +1,7 @@
 """Expense service: categories, expense CRUD, and summaries (feeds the P&L)."""
 import uuid
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -275,3 +276,42 @@ async def summary(
         "grand_total": fixed + variable,
         "by_category": sorted(by_cat.values(), key=lambda r: r["total"], reverse=True),
     }
+
+
+async def delivery_duplicates(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    *,
+    on: date_type,
+    amount: Decimal,
+    vendor_id: uuid.UUID | None,
+) -> list[Expense]:
+    """Expenses already posted from a RECEIVED purchase order that look like this one.
+
+    He worked out the risk himself: "maybe some unknowledgeable person can do...
+    even in expense section also they can choose like vegetable or some category
+    and do". Quite right — the automatic ones land in their own "Stock
+    purchases" category, but a hand-typed one under "Vegetables" is just as
+    VARIABLE, so both reach cost of sales and the delivery gets paid for twice.
+
+    Matched on the vendor, a few days either side, and the amount, because that
+    is what a person re-entering the same delivery note would type. Deliberately
+    a WARNING, never a block: a restaurant really can buy from the same supplier
+    twice in a week for the same money, and the person at the keyboard knows
+    whether they did.
+    """
+    lo = on - timedelta(days=3)
+    hi = on + timedelta(days=3)
+    conditions = [
+        Expense.hotel_id == hotel_id,
+        Expense.purchase_order_id.isnot(None),
+        Expense.date >= lo,
+        Expense.date <= hi,
+    ]
+    if vendor_id is not None:
+        conditions.append(Expense.vendor_id == vendor_id)
+
+    rows = await db.execute(select(Expense).where(*conditions))
+    # Within a penny either way — the same delivery keyed twice matches to the
+    # penny; a genuinely different order almost never does.
+    return [e for e in rows.scalars().all() if abs(e.amount - amount) <= Decimal("0.01")]
