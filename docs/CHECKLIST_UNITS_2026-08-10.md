@@ -141,3 +141,56 @@ from the rota either. Nothing in the repo seeds it.
 to CloudWatch yet — that is still the open task in `nirai-cloudwatch-logging`.
 The database was the authoritative source here and it answered the question, but
 this is the second time the missing log pipeline has cost an investigation.
+
+---
+
+## I broke scrolling, and how — 2026-08-10
+
+> i cant able to scroll to reach down (as datas are down)... only buttons are
+> working... pressed button took me here
+> ...here also i cant scroll... what the hell u did??
+
+The first Workbench took the viewport over: AppShell handed `main` its padding
+and its scrollbar and the page rebuilt itself as a flex column with an inner
+scroller. That needs every link to hold — main flex, bench `flex-1 min-h-0`,
+scroller `flex-1 min-h-0`. One link did not hold in the real tree, so content
+overflowed a box carrying `overflow: hidden`.
+
+**An `overflow: hidden` box still scrolls when script moves it and never
+scrolls for a wheel.** So the sub-nav buttons jumped him down the page while the
+wheel did nothing. His data was there and unreachable.
+
+**Why my check missed it.** I built a harness of the shell and measured "the
+page scrolls by 0px", then reported that as proof. It proved the mechanism
+*could* work in a tree I had built myself. It never asked the only question
+that mattered — *does a wheel move this page* — and a page that CANNOT scroll
+measures identically to a page that MUST NOT scroll if you only read
+scrollHeight. The harness now dispatches a real wheel event.
+
+Fixed by removing the height hijacking entirely: `main` keeps its scrollbar and
+the rail/tally are `position: sticky`. Sticky either sticks or it scrolls with
+the page; it cannot produce a page that refuses the wheel.
+
+Second, older bug found on the way: `main` had `overflow-y-auto` at every
+width, but below `lg` the wrapper is only `min-h-screen`, so main has no
+definite height and the DOCUMENT scrolls. main was a scroll container that
+never scrolled — invisible until something inside is `sticky`, because sticky
+resolves against the nearest scroll container and that one never moves. Now
+`lg:overflow-y-auto`, and the rail rests at `--mise-topbar` so it stops parking
+under the top bar on mobile.
+
+### And what he actually meant by "no scroll" — still open
+
+> this means we need to show data in different ui style where no need to
+> scroll (when scrolling the data we get, the same data we get here with no
+> scroll)... but if i want to see i need to scroll
+
+Not "remove the scrollbar". **Make the first screen answer the question**, and
+let scrolling work normally for the rest. That is a density and hierarchy job,
+not a layout-container job, and it is the real remaining work:
+
+- [ ] Inventory: the first screen should answer "what do I need to order" —
+      it currently opens on a donut chart and a filter bar
+- [ ] Purchasing: the four tiles are good; the list under them is not dense
+      enough to show anything useful above the fold
+- [ ] Decide per page what the ONE question is, then fit its answer on screen
