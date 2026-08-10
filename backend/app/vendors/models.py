@@ -71,6 +71,16 @@ class VendorItem(Base):
     item_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # What this price BUYS. NULL = one base unit, which is what every existing
+    # row means, so nothing had to be rewritten. Set = one of that pack level.
+    #
+    # This is the half that makes the chain real: suppliers do not all sell the
+    # same shape. Farm2Land sells the box, SK only sells packets. Without this
+    # the app had to pretend every vendor quoted per base unit, and Price
+    # Comparison was quietly comparing a box price against a packet price.
+    pack_level_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("item_pack_levels.id", ondelete="SET NULL"), nullable=True
+    )
     price_per_unit: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     last_updated: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
     is_preferred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
