@@ -190,18 +190,24 @@ async def item_suppliers(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUI
             Vendor.name,
             VendorItem.price_per_unit,
             VendorItem.is_preferred,
+            VendorItem.pack_level_id,
         )
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
         .where(Vendor.hotel_id == hotel_id, Vendor.is_active.is_(True))
         .order_by(VendorItem.item_id, VendorItem.price_per_unit.asc())
     )
     out: dict[uuid.UUID, list[dict]] = {}
-    for item_id, vendor_id, name, price, pref in rows.all():
+    for item_id, vendor_id, name, price, pref, level_id in rows.all():
         out.setdefault(item_id, []).append(
             {
                 "vendor_id": vendor_id,
                 "vendor_name": name,
                 "price_per_unit": price,
+                # Which size THIS supplier sells in. None = they quote per base
+                # unit. Sent so the order form can offer only the sizes you can
+                # actually buy from them — "we cant say all the vendors will
+                # have this BOX type, some vendor will have small packets too".
+                "pack_level_id": level_id,
                 "is_preferred": pref,
             }
         )

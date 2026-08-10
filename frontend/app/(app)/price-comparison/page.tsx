@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type Item, type ItemSuppliers, type PriceComparison, type PricePoint, type Vendor } from "@/lib/api";
+import { api, ApiError, type Item, type ItemSuppliers, type PriceComparison, type PricePoint, type Vendor,
+  type SupplierOption,
+} from "@/lib/api";
 
 type PriceChange = {
   vendor_name: string; old_price: string | null; new_price: string; source: string; at: string;
@@ -389,7 +391,7 @@ export default function PriceComparisonPage() {
   // item id -> its vendors, cheapest first. Already fetched for the savings
   // banner at the top; the cards can read the same thing for free.
   const supplierMap = (() => {
-    const m: Record<string, { vendor_name: string; price_per_unit: string; is_preferred: boolean }[]> = {};
+    const m: Record<string, SupplierOption[]> = {};
     for (const row of allSuppliers) {
       m[row.item_id] = [...row.vendors].sort(
         (a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
