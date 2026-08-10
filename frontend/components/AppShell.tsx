@@ -732,7 +732,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
+      <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden has-[[data-bench]]:h-dvh has-[[data-bench]]:min-h-0 has-[[data-bench]]:overflow-hidden">
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-glass/10 bg-shell/70 px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-8">
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-brand-400/30 to-transparent" />
@@ -778,7 +778,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* pb is generous so the floating "Ask DineAI" launcher (bottom-right) never
             covers a page's last action button. */}
-        <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8">
+        <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-8 lg:pb-28 lg:pt-8 has-[[data-bench]]:flex has-[[data-bench]]:min-h-0 has-[[data-bench]]:flex-col has-[[data-bench]]:overflow-hidden has-[[data-bench]]:p-0">
           <ImpersonationBanner />
           <AnnouncementBanner />
           {children}

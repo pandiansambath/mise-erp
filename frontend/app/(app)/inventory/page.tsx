@@ -16,7 +16,8 @@ import {
   type ReceiptLine,
   type SupplierOption,
 } from "@/lib/api";
-import { Card, PageHeader, Spinner } from "@/components/ui";
+import { Card, Spinner } from "@/components/ui";
+import { Workbench, BenchMenu } from "@/components/Workbench";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
 import { SubNav } from "@/components/SubNav";
@@ -93,6 +94,10 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Adding used to happen in a 180-line form nailed to the top of the page,
+  // so reaching your own stock meant scrolling past it. Now it opens where
+  // editing already opened: in place, over the list.
+  const [adding, setAdding] = useState(false);
   // item_id -> every vendor that prices it. Drives the form's supplier picker:
   // you can only choose a supplier who actually quotes this item.
   const [itemSuppliers, setItemSuppliers] = useState<Record<string, SupplierOption[]>>({});
@@ -293,6 +298,7 @@ export default function InventoryPage() {
 
   function cancelEdit() {
     setEditingId(null);
+    setAdding(false);
     setFormVendor("");
     setVendorMsg(null);
     setForm(EMPTY);
@@ -696,11 +702,11 @@ export default function InventoryPage() {
   );
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        {seedModal}
-        <PageHeader title="Inventory" subtitle="Items, stock levels, suppliers and weighted-average cost." />
-        <div className="flex gap-2">
+    <Workbench
+      title="Inventory"
+      subtitle="Items, stock levels, suppliers and weighted-average cost."
+      action={
+        <>
           <input
             ref={templateInput}
             type="file"
@@ -710,105 +716,143 @@ export default function InventoryPage() {
           />
           {canWrite && (
             <button
-              onClick={addCommonItems}
-              disabled={seeding}
-              title="One-click: add a ready-made list of common restaurant items (name + unit only) so you don't start empty"
-              className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
+              onClick={() => {
+                cancelEdit();
+                setAdding(true);
+              }}
+              className="mise-press rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-700"
             >
-              {seeding ? "Adding…" : "✨ Add common items"}
+              ＋ Add item
             </button>
           )}
-          <button
-            onClick={() => setTemplateModal(true)}
-            title="Download a blank import template (Excel, CSV or PDF)"
-            className="rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20"
-          >
-            ⬇ Template
-          </button>
-          <button
-            onClick={() => templateInput.current?.click()}
-            disabled={importBusy}
-            title="Upload a filled Excel/CSV template — checked strictly, with exact errors if anything's off"
-            className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            {importBusy ? "Checking…" : "⬆ Import (template)"}
-          </button>
-          <span className="mx-1 hidden w-px self-stretch bg-line sm:block" aria-hidden />
-          <button
-            onClick={() => downloadFile("/inventory/items.xlsx", "mise-stock-valuation.xlsx")}
-            title="Export your current stock valuation (Excel)"
-            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-          >
-            ⬇ Export
-          </button>
-          <button
-            onClick={() => downloadFile("/inventory/items.csv", "mise-stock-valuation.csv")}
-            title="Export your current stock valuation (CSV)"
-            className="rounded-lg border border-line-2 px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-          >
-            CSV
-          </button>
+          <BenchMenu
+            items={[
+              ...(canWrite
+                ? [
+                    {
+                      label: seeding ? "Adding…" : "Add common items",
+                      icon: "✨",
+                      hint: "a ready-made starter list, so you don’t begin empty",
+                      disabled: seeding,
+                      onSelect: addCommonItems,
+                    },
+                  ]
+                : []),
+              {
+                label: "Download template",
+                icon: "⬇",
+                hint: "a blank sheet to fill in",
+                onSelect: () => setTemplateModal(true),
+              },
+              {
+                label: importBusy ? "Checking…" : "Import a filled template",
+                icon: "⬆",
+                hint: "checked strictly, and it tells you the exact fix. No AI.",
+                disabled: importBusy,
+                onSelect: () => templateInput.current?.click(),
+              },
+              { label: "sep", divider: true },
+              {
+                label: "Export stock valuation",
+                icon: "⬇",
+                hint: "Excel",
+                onSelect: () => downloadFile("/inventory/items.xlsx", "mise-stock-valuation.xlsx"),
+              },
+              {
+                label: "Export as CSV",
+                icon: "⬇",
+                onSelect: () => downloadFile("/inventory/items.csv", "mise-stock-valuation.csv"),
+              },
+            ]}
+          />
+        </>
+      }
+      tools={
+        <SubNav
+          items={[
+            {
+              key: "add",
+              label: "Add item",
+              icon: "＋",
+              onSelect: () => {
+                cancelEdit();
+                setAdding(true);
+              },
+            },
+            {
+              key: "search",
+              label: "Find an item",
+              icon: "🔍",
+              onSelect: () => {
+                setStatusFilter("all");
+                setCatFilter("all");
+                setVendorFocus("all");
+                spotlight("inventory-search");
+              },
+            },
+            {
+              key: "low",
+              label: "Running low",
+              icon: "⚠",
+              count: counts.low + counts.out,
+              tone: counts.out > 0 ? "bad" : "warn",
+              onSelect: () => {
+                setStatusFilter(counts.out > 0 ? "out" : "low");
+                spotlight("inventory-search");
+              },
+            },
+            {
+              key: "items",
+              label: "View items",
+              icon: "📋",
+              count: items.length,
+              focus: "inventory-list",
+              onSelect: () => {
+                setStatusFilter("all");
+                setCatMgr(false);
+              },
+            },
+            {
+              key: "categories",
+              label: "Categories",
+              icon: "🗂",
+              onSelect: () => setCatMgr(true),
+            },
+          ]}
+          active={statusFilter === "low" || statusFilter === "out" ? "low" : undefined}
+        />
+      }
+      tally={
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-faint">
+          <span>
+            <b className="text-fg-soft">{filtered.length}</b>
+            {filtered.length === items.length ? " items" : ` of ${items.length} shown`}
+          </span>
+          <span>
+            <b className="text-fg-soft">
+              {format(
+                items.reduce(
+                  (t, i) => t + Number(i.current_stock ?? 0) * Number(i.average_cost ?? 0),
+                  0,
+                ),
+              )}
+            </b>{" "}
+            on hand
+          </span>
+          {counts.low > 0 && (
+            <span className="text-amber-300">
+              <b>{counts.low}</b> running low
+            </span>
+          )}
+          {counts.out > 0 && (
+            <span className="text-rose-300">
+              <b>{counts.out}</b> out of stock
+            </span>
+          )}
         </div>
-      </div>
-
-      {/* What this page can DO, said out loud. Everything below was reachable
-          only by knowing where to look. */}
-      <SubNav
-        items={[
-          {
-            key: "add",
-            label: "Add item",
-            icon: "＋",
-            onSelect: () => {
-              cancelEdit();
-              revealForm(formRef.current, { select: true });
-            },
-          },
-          {
-            key: "search",
-            label: "Find an item",
-            icon: "🔍",
-            onSelect: () => {
-              setStatusFilter("all");
-              setCatFilter("all");
-              setVendorFocus("all");
-              spotlight("inventory-search");
-            },
-          },
-          {
-            key: "low",
-            label: "Running low",
-            icon: "⚠",
-            count: counts.low + counts.out,
-            tone: counts.out > 0 ? "bad" : "warn",
-            onSelect: () => {
-              setStatusFilter(counts.out > 0 ? "out" : "low");
-              spotlight("inventory-search");
-            },
-          },
-          {
-            key: "items",
-            label: "View items",
-            icon: "📋",
-            count: items.length,
-            focus: "inventory-list",
-            // The page's whole reason for existing was the one job missing
-            // from its own list of jobs — so from anywhere else in the app
-            // there was no way to say "just show me the stock".
-            onSelect: () => {
-              setStatusFilter("all");
-              setCatMgr(false);
-            },
-          },
-          {
-            key: "categories",
-            label: "Categories",
-            icon: "🗂",
-            onSelect: () => setCatMgr(true),
-          },
-        ]}
-        active={statusFilter === "low" || statusFilter === "out" ? "low" : undefined}
-      />
+      }
+    >
+      {seedModal}
 
       {notice && (
         <p className="mt-3 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-sm text-brand-200">
@@ -816,13 +860,6 @@ export default function InventoryPage() {
         </p>
       )}
 
-      <p className="mt-3 mb-5 max-w-3xl text-xs leading-relaxed text-fg-faint">
-        Bulk add items the reliable way: tap{" "}
-        <button onClick={() => setTemplateModal(true)} className="font-medium text-brand-400 underline hover:text-brand-300">⬇ Template</button>
-        {" "}to download a blank sheet, fill it in, then{" "}
-        <b className="text-fg-soft">⬆ Import (template)</b> — it&apos;s checked strictly and tells you the exact fix
-        if anything&apos;s off. No AI involved.
-      </p>
 
       {importErrors && (
         <div className="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm">
@@ -922,18 +959,15 @@ export default function InventoryPage() {
       {/* Adding happens at the top of the page (you came here to do it);
           editing opens WHERE YOU CLICKED, because you were deep in the list. */}
       <FormShell
-        editing={!!editingId}
+        editing={!!editingId || adding}
         onClose={cancelEdit}
-        title="Edit item"
-        subtitle={form.name || undefined}
+        title={editingId ? "Edit item" : "Add an item"}
+        subtitle={form.name || (editingId ? undefined : "A name and a unit are enough to start")}
         icon={categoryEmoji(form.category || "")}
         innerRef={formRef}
         flash={flash}
       >
-      <Card className={editingId ? "border-0 bg-transparent p-0 shadow-none" : "mb-6"}>
-        {!editingId && (
-          <p className="mb-3 text-sm font-medium text-fg-soft">Add a new item</p>
-        )}
+      <Card className="border-0 bg-transparent p-0 shadow-none">
         <form onSubmit={submit} className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="flex-1 sm:min-w-[12rem]">
@@ -1110,7 +1144,7 @@ export default function InventoryPage() {
             >
               {saving ? "Saving…" : editingId ? "Save changes" : "Add item"}
             </button>
-            {editingId && (
+            {(editingId || adding) && (
               <button
                 type="button"
                 onClick={cancelEdit}
@@ -1395,7 +1429,13 @@ export default function InventoryPage() {
           </div>
 
           <Card id="inventory-list" className="hidden scroll-mt-24 p-0 lg:block">
-            <div className="max-h-[62vh] overflow-auto">
+            {/* No height cap and no overflow here on purpose. This div used to be
+                max-h-[62vh] overflow-auto, which put a scrollbar inside the page's
+                own scrollbar — the list could only ever show 62% of what was left
+                after the form above it, and the two scrollers fought each other.
+                The page is a Workbench now: it owns the height, the list takes
+                what remains, and the sticky header below sticks against THAT. */}
+            <div>
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-paper">
                   <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-fg-faint">
@@ -1756,6 +1796,6 @@ export default function InventoryPage() {
           </>
         )}
       </DetailSheet>
-    </div>
+    </Workbench>
   );
 }
