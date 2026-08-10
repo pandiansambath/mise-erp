@@ -93,10 +93,26 @@ export default function KioskPage() {
       /* nothing to do */
     }
   };
+  // TWO different things were sharing one localStorage key, and that is what
+  // kept the wall tablet green after the restaurant turned burgundy:
+  //
+  //   mise.kiosk.theme         a CACHE of the hotel's theme, so the PIN gate —
+  //                            which runs before anyone has signed in — knows
+  //                            what the restaurant looks like. Must follow the
+  //                            database.
+  //   mise.kiosk.theme.device  somebody standing at THIS tablet chose a theme
+  //                            from the menu. Must not be overwritten.
+  //
+  // With one key, the cache looked like a deliberate choice and the hotel's own
+  // theme could never win again. His words: "we stored the current theme in
+  // hotel's table, why can't we pick the hotel current theme from db?" — right,
+  // and now it does.
   useEffect(() => {
     try {
-      const local = localStorage.getItem("mise.kiosk.theme") as ThemeKey | null;
-      if (local && local in THEMES) setTheme(local);
+      const device = localStorage.getItem("mise.kiosk.theme.device") as ThemeKey | null;
+      const cached = localStorage.getItem("mise.kiosk.theme") as ThemeKey | null;
+      const first = device && device in THEMES ? device : cached;
+      if (first && first in THEMES) setTheme(first as ThemeKey);
     } catch {
       /* private mode — the hotel's choice still applies */
     }
@@ -105,7 +121,7 @@ export default function KioskPage() {
     setTheme(k);
     setMenuOpen(false);
     try {
-      localStorage.setItem("mise.kiosk.theme", k);
+      localStorage.setItem("mise.kiosk.theme.device", k);
     } catch {
       /* nothing to do */
     }
@@ -117,26 +133,27 @@ export default function KioskPage() {
       .get<{ show_rota?: boolean; show_leave?: boolean; theme?: string }>("/attendance/lock")
       .then((r) => {
         setAllowed({ rota: !!r.show_rota, leave: !!r.show_leave });
-        // Only if this device has not been given one of its own.
-        let local: string | null = null;
-        try {
-          local = localStorage.getItem("mise.kiosk.theme");
-        } catch {
-          /* ignore */
-        }
-        // The server already applies the precedence (kiosk → hotel → dark),
-        // so whatever it says is the answer. Second-guessing it here is how
-        // the two ended up disagreeing.
+        // The server already applies the precedence (kiosk → hotel → dark), so
+        // whatever it says is the answer. Second-guessing it here is how the
+        // two ended up disagreeing.
         const wanted = r.theme && r.theme in THEMES ? r.theme : hotel?.theme;
-        if (!local && wanted && wanted in THEMES) {
-          setTheme(wanted as ThemeKey);
-          // Remember it for the GATE, which runs before anyone is signed in
-          // and so has no other way to learn what this restaurant looks like.
+        if (wanted && wanted in THEMES) {
+          // Refresh the gate's cache every time, so changing the restaurant's
+          // theme reaches the tablet without anyone re-issuing a PIN.
           try {
             localStorage.setItem("mise.kiosk.theme", wanted);
           } catch {
             /* nothing to do */
           }
+          // Somebody choosing a theme AT this tablet still outranks the
+          // restaurant's — that is what the menu is for.
+          let device: string | null = null;
+          try {
+            device = localStorage.getItem("mise.kiosk.theme.device");
+          } catch {
+            /* ignore */
+          }
+          if (!device || !(device in THEMES)) setTheme(wanted as ThemeKey);
         }
       })
       .catch(() => {});

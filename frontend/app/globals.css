@@ -411,6 +411,19 @@ html:has(.mise-app) { background: #04120d; }
 }
 .mise-drawer { animation: mise-drawer-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* The same gesture from the other edge — the kiosk's options drawer. Sliding
+   in from the left would cross the whole screen to arrive on the right. */
+@keyframes mise-drawer-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: none; }
+}
+.mise-drawer-right { animation: mise-drawer-in-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-drawer,
+  .mise-drawer-right { animation: none; }
+}
+
 /* ── Staggered rise for grids of cards (KPIs, quick actions, pickers) ───── */
 @keyframes mise-rise {
   from { opacity: 0; transform: translateY(12px); }

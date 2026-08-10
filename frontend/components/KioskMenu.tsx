@@ -139,13 +139,37 @@ export function KioskMenu({
 
       {open && (
         <>
-          {/* A full-screen catcher, so a tap anywhere closes it. On a wall
-              tablet that is the gesture people try first. */}
-          <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
+          {/* A DRAWER, not a dropdown.
+              It used to be `absolute right-0 top-14`, hanging off a button that
+              sits in the middle of the screen — so opening the options dropped
+              a panel straight over the staff cards, which are the one thing the
+              screen is for and the one thing these options are NOT about.
+              A panel fixed to the edge of the screen has no alignment to get
+              wrong, is reachable with a thumb on a wall tablet, and has room
+              for twelve clock faces and fourteen themes without a cramped
+              inner scroller fighting the page. */}
+          <div
+            className="mise-fade fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px]"
+            onClick={onClose}
+            aria-hidden
+          />
           <div
             ref={panel}
-            className="mise-pop absolute right-0 top-14 z-50 max-h-[78dvh] w-[19rem] overflow-y-auto rounded-2xl border border-line bg-paper shadow-2xl"
+            role="dialog"
+            aria-label="Screen options"
+            className="mise-drawer-right fixed inset-y-0 right-0 z-50 flex w-[min(22rem,88vw)] flex-col overflow-y-auto overscroll-contain border-l border-line bg-paper shadow-2xl"
           >
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <p className="font-display text-base font-semibold text-fg">Screen options</p>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="mise-press grid h-9 w-9 place-items-center rounded-full border border-line-2 text-fg-soft"
+              >
+                ✕
+              </button>
+            </div>
             {(showRota || showLeave) && (
               <Group title="Look at">
                 <div className="flex flex-wrap gap-2">
@@ -178,7 +202,7 @@ export function KioskMenu({
             )}
 
             <Group title="The clock">
-              <div className="mise-noscrollbar grid max-h-56 grid-cols-2 gap-2 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2">
                 {FACES.map((f) => (
                   <button
                     key={f.key}
