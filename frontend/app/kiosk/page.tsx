@@ -26,7 +26,7 @@ import { useAuth } from "@/lib/auth";
 import { AnalogClock, type ClockFace } from "@/components/AnalogClock";
 import { KioskMenu } from "@/components/KioskMenu";
 import { KioskGate } from "@/components/KioskGate";
-import { KioskPanel } from "@/components/KioskPanels";
+import { KioskPanel, KioskWho } from "@/components/KioskPanels";
 import { KioskQuote } from "@/components/KioskQuote";
 import { useHotelTime } from "@/lib/time";
 import { THEMES, themeVars, type ThemeKey } from "@/lib/theme";
@@ -43,6 +43,8 @@ export default function KioskPage() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [clockSize, setClockSize] = useState(236);
+  // Which counter was tapped, if any.
+  const [who, setWho] = useState<"in" | "break" | "done" | null>(null);
   useEffect(() => {
     const fit = () => setClockSize(window.innerWidth < 640 ? 168 : 236);
     fit();
@@ -329,19 +331,51 @@ export default function KioskPage() {
         </div>
       </header>
 
+      {who && (
+        <KioskWho
+          title={who === "in" ? "In now" : who === "break" ? "On break" : "Finished today"}
+          rows={staff
+            .filter((e) => {
+              const r = rows[e.id];
+              if (who === "in") return r?.clock_in && !r?.clock_out && !r?.on_break;
+              if (who === "break") return r?.on_break;
+              return r?.clock_out;
+            })
+            .map((e) => {
+              const r = rows[e.id];
+              return {
+                who: e.full_name,
+                detail:
+                  who === "done"
+                    ? `${fmtTime(r?.clock_in ?? null)}–${fmtTime(r?.clock_out ?? null)}`
+                    : `since ${fmtTime(r?.clock_in ?? null)}`,
+              };
+            })}
+          onClose={() => setWho(null)}
+        />
+      )}
+
       {/* How the shift is going, in one line. */}
       <div className="relative flex flex-wrap items-center gap-2 px-5 pb-2 sm:px-8">
-        {[
-          { n: onCount, label: "in now", cls: "border-brand-400/40 bg-brand-400/10 text-brand-200" },
-          { n: breakCount, label: "on break", cls: "border-amber-400/40 bg-amber-400/10 text-amber-200" },
-          { n: doneCount, label: "finished", cls: "border-line bg-glass/5 text-fg-faint" },
-        ].map((x) => (
-          <span
+        {/* The counters are DOORS. "0 in now" was a label; his law is that
+            every click must have a meaning, and a number on a wall that cannot
+            tell you WHICH three people is doing half its job. Everything needed
+            is already on this page, so it opens instantly. */}
+        {([
+          { key: "in", n: onCount, label: "in now", cls: "border-brand-400/40 bg-brand-400/10 text-brand-200" },
+          { key: "break", n: breakCount, label: "on break", cls: "border-amber-400/40 bg-amber-400/10 text-amber-200" },
+          { key: "done", n: doneCount, label: "finished", cls: "border-line bg-glass/5 text-fg-faint" },
+        ] as const).map((x) => (
+          <button
             key={x.label}
-            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium ${x.cls}`}
+            type="button"
+            onClick={() => setWho(x.key)}
+            disabled={x.n === 0}
+            aria-label={`${x.n} ${x.label} — see who`}
+            className={`mise-press rounded-full border px-3.5 py-1.5 text-sm font-medium transition disabled:opacity-60 ${x.cls}`}
           >
             <b className="tabular-nums">{x.n}</b> {x.label}
-          </span>
+          </button>
         ))}
 
         {/* One ⋮ instead of a growing row of loose buttons.
