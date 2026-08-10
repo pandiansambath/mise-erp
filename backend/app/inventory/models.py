@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -48,6 +49,8 @@ class Item(Base):
     # Lets ordering/receiving buy in packs while stock + recipes stay in the base unit.
     pack_unit: Mapped[str | None] = mapped_column(String(20))
     pack_size: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    # Superseded by ItemPackLevel below, which can nest. Kept and still read as
+    # a one-level chain so no existing item has to be re-entered.
     # Comma-separated allergen codes (Natasha's Law). NULL = not reviewed; "" = none.
     allergens: Mapped[str | None] = mapped_column(String(200))
     current_stock: Mapped[Decimal] = mapped_column(
@@ -131,3 +134,30 @@ class VendorItemAlias(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ItemPackLevel(Base):
+    """One rung of an item's buying chain: 1 of me = `contains` of the rung below.
+
+    Pepper, as he described it:
+
+        position 1   packet     contains 50      -> 50 g          (below = base)
+        position 2   small box  contains 30      -> 1 500 g
+        position 3   box        contains 10      -> 15 000 g
+
+    A level's size in base units is the product of `contains` from position 1
+    up to it. Storing the STEP rather than the total is what lets someone say
+    "a box holds ten small boxes" without doing arithmetic — which is the whole
+    point, because the person entering this is a chef, not a buyer.
+    """
+
+    __tablename__ = "item_pack_levels"
+    __table_args__ = (UniqueConstraint("item_id", "position", name="uq_item_pack_position"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
+    contains: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
