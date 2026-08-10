@@ -14,6 +14,11 @@ DEFAULTS: dict = {
     # regardless; this caps how much precision is ever shown.
     "qty_decimals": 3,
     "money_decimals": 2,
+    # Receiving stock posts its value to Expenses, so it reaches cost of sales
+    # in the P&L. On by default because without it the P&L is simply wrong for
+    # anyone who buys through Purchasing. Off for kitchens that key their
+    # supplier invoices in by hand — posting both would double their food cost.
+    "post_purchases_to_expenses": True,
 }
 
 _ALLOWED = {

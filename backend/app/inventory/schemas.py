@@ -10,6 +10,30 @@ from app.inventory.models import MovementType
 _VALID_MOVEMENTS = {m.value for m in MovementType}
 
 
+class PackLevelIn(BaseModel):
+    """One rung a person typed: "1 small box = 30 packets".
+
+    `position` is 1-based and 1 sits directly on the base unit. `contains`
+    counts the rung BELOW, never the base unit — that is what lets someone say
+    "a box holds ten small boxes" without working out that it is 15 000 g.
+    """
+
+    name: str = Field(min_length=1, max_length=40)
+    contains: Decimal = Field(gt=0)
+
+
+class PackLevelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    position: int
+    name: str
+    contains: Decimal
+    #: How many BASE units one of these is — the product down the chain. Sent
+    #: so no screen has to re-derive it and get it subtly different.
+    base_size: Decimal
+
+
 class ItemCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     unit: str = Field(min_length=1, max_length=20)
@@ -20,6 +44,10 @@ class ItemCreate(BaseModel):
     # Optional purchase pack: 1 pack_unit = pack_size units (e.g. 1 box = 5 kg).
     pack_unit: str | None = Field(default=None, max_length=20)
     pack_size: Decimal | None = Field(default=None, gt=0)
+    #: The whole chain at once, smallest first. Sent as a list because the
+    #: rungs only mean anything in order — patching one in isolation could
+    #: leave "1 box = 10 small boxes" pointing at a rung that no longer exists.
+    pack_levels: list[PackLevelIn] | None = None
 
 
 class ItemUpdate(BaseModel):
@@ -33,6 +61,10 @@ class ItemUpdate(BaseModel):
     allergens: str | None = Field(default=None, max_length=200)  # CSV of codes; "" = reviewed none
     pack_unit: str | None = Field(default=None, max_length=20)
     pack_size: Decimal | None = Field(default=None, ge=0)
+    #: The whole chain at once, smallest first. Sent as a list because the
+    #: rungs only mean anything in order — patching one in isolation could
+    #: leave "1 box = 10 small boxes" pointing at a rung that no longer exists.
+    pack_levels: list[PackLevelIn] | None = None
 
 
 class ItemOut(BaseModel):
@@ -44,6 +76,11 @@ class ItemOut(BaseModel):
     unit: str
     pack_unit: str | None = None
     pack_size: Decimal | None = None
+    #: The buying chain, smallest first. Empty for an item bought loose.
+    #: An item created before the chain existed reports its old
+    #: pack_unit/pack_size here as a single rung, so every screen can read one
+    #: shape and nothing has to be re-entered.
+    pack_levels: list[PackLevelOut] = []
     current_stock: Decimal
     min_stock_level: Decimal | None
     max_stock_level: Decimal | None

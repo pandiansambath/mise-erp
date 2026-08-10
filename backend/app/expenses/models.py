@@ -71,6 +71,13 @@ class Expense(Base):
     # Carry-forward chain: this row was auto-created from that one. The LATEST
     # link in a chain is the one that spawns next month's copy.
     recurred_from: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("expenses.id"))
+    # The purchase order this expense came from, when it was posted automatically
+    # on receiving stock. Also the idempotency key: a part delivery receives the
+    # same PO more than once, and this is how the expense gets UPDATED instead
+    # of a second one appearing.
+    purchase_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), index=True
+    )
     receipt_url: Mapped[str | None] = mapped_column(String(500))
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
