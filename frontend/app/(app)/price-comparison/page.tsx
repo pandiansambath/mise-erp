@@ -186,6 +186,7 @@ export default function PriceComparisonPage() {
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [changeLog, setChangeLog] = useState<PriceChange[]>([]);
   const [allSuppliers, setAllSuppliers] = useState<ItemSuppliers[]>([]);
+  const [saving, setSaving] = useState<{ per_month: string; items: number } | null>(null);
   const [pane, setPane] = useState<"suppliers" | "history" | "changes" | "add">("suppliers");
   // One supplier's line, opened from the list — a sheet over the comparison.
   // Which of the two stages the page is showing.
@@ -235,6 +236,13 @@ export default function PriceComparisonPage() {
 
   useEffect(() => {
     api.get<ItemSuppliers[]>("/purchasing/item-suppliers").then(setAllSuppliers).catch(() => {});
+    // Real money: the per-unit gap times how much you actually buy. Computed
+    // server-side from received purchase orders, because only the database
+    // knows what went through the door.
+    api
+      .get<{ per_month: string; items: number }>("/vendors/savings")
+      .then(setSaving)
+      .catch(() => setSaving(null));
   }, []);
 
   // How many items are on a dearer supplier than they need to be, and which one
@@ -570,14 +578,32 @@ export default function PriceComparisonPage() {
           <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 p-5 sm:p-6">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fg-faint">
-                On a dearer supplier
+                {saving && Number(saving.per_month) > 0
+                  ? "Costing you, a month"
+                  : "On a dearer supplier"}
               </p>
+              {/* Money, only when it IS money — the gap per unit times what you
+                  actually received, from real purchase orders. Where nothing has
+                  been bought yet there is no honest figure, so it says the true
+                  thing it knows instead of inventing one. */}
               <p className="mt-1 font-display text-4xl font-semibold tabular-nums text-brand-300 sm:text-5xl">
-                {switchSave.count}
+                {saving && Number(saving.per_month) > 0
+                  ? format(saving.per_month)
+                  : switchSave.count}
               </p>
               <p className="mt-1 text-sm text-fg-soft">
-                item{switchSave.count === 1 ? " is" : "s are"} costing more than
-                {switchSave.count === 1 ? " it" : " they"} need to
+                {saving && Number(saving.per_month) > 0 ? (
+                  <>
+                    across <b className="text-fg">{switchSave.count}</b> item
+                    {switchSave.count === 1 ? "" : "s"} on a dearer supplier, based
+                    on what you actually bought
+                  </>
+                ) : (
+                  <>
+                    item{switchSave.count === 1 ? " is" : "s are"} costing more than
+                    {switchSave.count === 1 ? " it" : " they"} need to
+                  </>
+                )}
                 {switchSave.best.name && (
                   <>
                     {" "}
