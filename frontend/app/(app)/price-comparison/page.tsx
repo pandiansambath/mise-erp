@@ -235,10 +235,24 @@ export default function PriceComparisonPage() {
     api.get<ItemSuppliers[]>("/purchasing/item-suppliers").then(setAllSuppliers).catch(() => {});
   }, []);
 
-  // If every item switched to its cheapest supplier, per-unit savings add up to:
+  // How many items are on a dearer supplier than they need to be, and which one
+  // is worst.
+  //
+  // This used to ADD UP the per-unit savings and show the sum as a big pound
+  // figure — "£2.33 sitting on the table". He asked what it meant, and the
+  // honest answer is: nothing. It added £/kg to £/piece to £/pack. Those are
+  // not the same unit, so the total is not money, not per-unit, not anything.
+  // You could not spend it, budget with it, or check it.
+  //
+  // Real money needs volume: (what you pay − the cheapest) × how much you
+  // actually buy. The purchase quantities exist (po_items) but there is no
+  // aggregate endpoint yet, so rather than dress a meaningless number up as
+  // money, the page now says the true thing it knows — how many items are on
+  // the wrong supplier, and the biggest single per-unit gap, WITH its unit.
   const switchSave = (() => {
     let total = 0;
     let count = 0;
+    let best = { name: "", per: 0, unit: "" };
     for (const row of allSuppliers) {
       if (row.vendors.length < 2) continue;
       const cheapest = Math.min(...row.vendors.map((v) => parseFloat(v.price_per_unit) || Infinity));
@@ -247,9 +261,14 @@ export default function PriceComparisonPage() {
       if (cur - cheapest > 0.001) {
         total += cur - cheapest;
         count += 1;
+        const gap = cur - cheapest;
+        if (gap > best.per) {
+          const it = items.find((i) => i.id === row.item_id);
+          best = { name: it?.name ?? "", per: gap, unit: it?.unit ?? "" };
+        }
       }
     }
-    return { total, count };
+    return { total, count, best };
   })();
 
   // What each item is costing by being on the wrong supplier.
@@ -393,8 +412,8 @@ export default function PriceComparisonPage() {
             // The one number this page exists to produce, kept on screen. It
             // used to require reaching the bottom of the page to see.
             <span className="text-emerald-300">
-              <b>{format(switchSave.total)}</b> per unit to be saved across{" "}
-              <b>{switchSave.count}</b> item{switchSave.count === 1 ? "" : "s"}
+              <b>{switchSave.count}</b> item{switchSave.count === 1 ? "" : "s"} on a
+              dearer supplier than needed
             </span>
           ) : (
             <span>Every item is already on its cheapest supplier.</span>
@@ -531,15 +550,24 @@ export default function PriceComparisonPage() {
           <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 p-5 sm:p-6">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fg-faint">
-                Sitting on the table
+                On a dearer supplier
               </p>
               <p className="mt-1 font-display text-4xl font-semibold tabular-nums text-brand-300 sm:text-5xl">
-                {format(String(Math.round(switchSave.total * 100) / 100))}
+                {switchSave.count}
               </p>
               <p className="mt-1 text-sm text-fg-soft">
-                per unit, every order — across{" "}
-                <b className="text-fg">{switchSave.count}</b> item
-                {switchSave.count === 1 ? "" : "s"} on the wrong supplier
+                item{switchSave.count === 1 ? " is" : "s are"} costing more than
+                {switchSave.count === 1 ? " it" : " they"} need to
+                {switchSave.best.name && (
+                  <>
+                    {" "}
+                    — worst is <b className="text-fg">{switchSave.best.name}</b> at{" "}
+                    <b className="text-fg">
+                      {format(String(Math.round(switchSave.best.per * 100) / 100))}
+                    </b>{" "}
+                    more per {switchSave.best.unit || "unit"}
+                  </>
+                )}
               </p>
             </div>
             <p className="text-[11px] leading-relaxed text-fg-faint">
