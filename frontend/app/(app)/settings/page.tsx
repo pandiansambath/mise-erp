@@ -78,6 +78,29 @@ export default function SettingsPage() {
       .catch(() => {});
   }, []);
 
+  // hotels.prefs — display taste, merged server-side so saving one key never
+  // wipes the others.
+  const [hotelPrefs, setHotelPrefs] = useState<Record<string, unknown>>({});
+  const [hotelPrefsSaved, setHotelPrefsSaved] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ prefs?: Record<string, unknown> }>("/hotels/me")
+      .then((h) => setHotelPrefs(h.prefs ?? {}))
+      .catch(() => {});
+  }, []);
+
+  async function savePref(key: string, value: unknown) {
+    setHotelPrefs({ ...hotelPrefs, [key]: value });
+    setHotelPrefsSaved(false);
+    try {
+      await api.patch("/hotels/me", { prefs: { [key]: value } });
+      setHotelPrefsSaved(true);
+    } catch {
+      setHotelPrefsSaved(false);
+    }
+  }
+
   async function saveTimezone(next: string) {
     setTz(next);
     setSavingTz(true);
@@ -321,6 +344,111 @@ export default function SettingsPage() {
             .map((c) => `${CURRENCIES[c].symbol}${CURRENCIES[c].rate}`)
             .join("  ·  ")}
         </p>
+      </Card>
+
+      {/* How the paperwork and the numbers read.
+          He asked for each of these rather than accepting mine: "PDFs grouped
+          by category... it can be configurable, so user can get how they
+          wanted", and "the decimals, I can see unwanted decimals, shall we keep
+          configurable?". They live in hotels.prefs so a new one does not cost a
+          migration each time. */}
+      <Card className="mise-feel mb-6" id="s-paperwork">
+        <h3 className="font-semibold text-fg">Paperwork &amp; numbers</h3>
+        <p className="mt-1 text-sm text-fg-faint">
+          How order sheets are laid out, and how much detail a number shows. This
+          is for the whole restaurant, not just this device.
+        </p>
+
+        <div className="mt-4">
+          <p className="text-sm font-medium text-fg-soft">Group order PDFs by</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {[
+              { v: "category", label: "Category", hint: "vegetables together, dairy together" },
+              { v: "none", label: "Just a list", hint: "alphabetical, as it used to be" },
+            ].map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                onClick={() => savePref("pdf_group_by", o.v)}
+                className={`mise-press rounded-xl border px-3.5 py-2 text-left transition ${
+                  hotelPrefs.pdf_group_by === o.v
+                    ? "border-brand-400 bg-brand-400/10"
+                    : "border-line hover:border-line-2"
+                }`}
+              >
+                <span className="block text-sm font-medium text-fg">{o.label}</span>
+                <span className="block text-[11px] text-fg-faint">{o.hint}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-fg-faint">
+            A picker walking the cold room wants every vegetable in one place, not
+            an alphabetical list that sends them back and forth.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {[
+            {
+              key: "qty_decimals" as const,
+              label: "Decimals on a quantity",
+              hint: "trailing zeros are always trimmed — 1.500 shows as 1.5",
+              max: 3,
+            },
+            {
+              key: "money_decimals" as const,
+              label: "Decimals on a price",
+              hint: "2 is normal; 4 helps when an item costs pennies per gram",
+              max: 4,
+            },
+          ].map((f) => (
+            <div key={f.key}>
+              <p className="text-sm font-medium text-fg-soft">{f.label}</p>
+              <div className="mt-2 flex gap-1.5">
+                {Array.from({ length: f.max + 1 }, (_, n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => savePref(f.key, n)}
+                    className={`mise-press h-9 w-9 rounded-lg border text-sm tabular-nums transition ${
+                      hotelPrefs[f.key] === n
+                        ? "border-brand-400 bg-brand-400/10 text-fg"
+                        : "border-line text-fg-soft hover:border-line-2"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-fg-faint">{f.hint}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 border-t border-line pt-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={hotelPrefs.post_purchases_to_expenses !== false}
+              onChange={(e) => savePref("post_purchases_to_expenses", e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-500"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-fg">
+                Receiving stock records the spend as an expense
+              </span>
+              <span className="block text-[11px] leading-relaxed text-fg-faint">
+                Keeps the cost of food in your P&amp;L without typing it twice. Turn
+                it off only if someone enters every supplier invoice by hand —
+                with both, the same delivery would be counted twice.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {hotelPrefsSaved && (
+          <p className="mt-3 text-xs text-brand-300">Saved for the whole restaurant.</p>
+        )}
       </Card>
 
       <Card className="mise-feel mb-6" id="s-alerts">

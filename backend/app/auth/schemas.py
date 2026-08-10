@@ -86,6 +86,10 @@ class HotelOut(BaseModel):
     has_logo: bool = False
     features: dict = Field(default_factory=dict)
     landing: dict = Field(default_factory=dict)  # customizable public-page config
+    #: Display taste — PDF grouping, decimal places, whether receiving posts an
+    #: expense. Sent so Settings can show what is actually saved rather than
+    #: falling back to the defaults every time it loads.
+    prefs: dict = Field(default_factory=dict)
 
 
 class HotelUpdate(BaseModel):
