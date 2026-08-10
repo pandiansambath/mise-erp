@@ -19,12 +19,12 @@ import {
 import Link from "next/link";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
+import { OrderPad } from "@/components/OrderPad";
 import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
 import { SubNav } from "@/components/SubNav";
 import { Bars } from "@/components/charts";
-import { Select } from "@/components/Select";
-import { ItemPicker, categoryEmoji, type PickedLine } from "@/components/ItemPicker";
+import { categoryEmoji, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -284,33 +284,12 @@ export default function PurchasingPage() {
     setMsg(null);
   }
 
-  /** Per-line supplier picker: Auto (★chosen / cheapest) or any vendor that
-      sells this item — the chef stays in control, order by order. */
-  function supplierPicker(line: Line, item: Item) {
-    const options = suppliers[item.id] ?? [];
-    if (options.length === 0) {
-      return <span className="text-xs text-amber-300">no supplier sells this yet</span>;
-    }
-    const auto = options.find((o) => o.is_preferred) ?? options[0]; // cheapest first
-    const autoLabel = `Auto — ${auto.is_preferred ? "★ " : "cheapest: "}${auto.vendor_name} (${format(auto.price_per_unit)})`;
-    return (
-      <label className="flex flex-wrap items-center gap-1.5 text-xs text-fg-faint">
-        Supplier
-        <Select
-          value={vendorPick[item.id] ?? ""}
-          onChange={(v) => setVendorPick({ ...vendorPick, [item.id]: v })}
-          className="w-64"
-          options={[
-            { value: "", label: autoLabel },
-            ...options.map((o) => ({
-              value: o.vendor_id,
-              label: `${o.vendor_name} · ${format(o.price_per_unit)}/${item.unit}${o.is_preferred ? " ★" : ""}`,
-            })),
-          ]}
-        />
-      </label>
-    );
-  }
+  // The per-line supplier override lived here, for the old picker's tray rows.
+  // The pad already shows every line grouped under the supplier it will
+  // actually be sent to, so the override belongs on THAT row when it is built
+  // rather than surviving as a control nothing renders.
+  // TODO(purchasing): re-add as an inline control on the order rows.
+
 
   // Open a PO row and lazy-load its line items the first time (cached after).
   async function togglePo(id: string) {
@@ -900,27 +879,35 @@ export default function PurchasingPage() {
           <form onSubmit={submitIndent} className="space-y-3">
             {/* Submit lives INSIDE the tray. It used to sit under the whole
                 picker, so the more you ordered the further away it got. */}
-            <ItemPicker
-              staged
+            {/* The order pad. See docs/PURCHASING_REDESIGN.md.
+                What this replaces was a catalogue: search, category chips, and
+                sixty rows to scroll and scan — for someone who already knows
+                they need onions. Ordering is not shopping, it is writing a
+                list, and his constraint was that picking must never scroll.
+
+                So: type "onion 25" and it is done, or tap one level into a
+                category whose items fit the panel as tiles. The order builds
+                beside you, grouped by the supplier it will actually be sent
+                to, with the money live. */}
+            <OrderPad
               items={orderable}
+              suppliers={suppliers}
               lines={lines}
               onChange={setLines}
-              lineExtra={supplierPicker}
-              // The prices, on the card. Deciding what to order IS deciding
-              // what it costs, and that number was one click away on the page
-              // whose entire job is spending money.
-              suppliers={suppliers}
-              // Rows, not cards. Sixty items as cards is a wall you scroll
-              // past; the same thing as rows is a list you can actually work
-              // down while building an order.
-              dense
-              onOpenDetail={setPeekItem}
-              trayFooter={
+              footer={
                 <div className="flex flex-wrap gap-2">
-                  <button type="submit" disabled={lines.length === 0} className="mise-press rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40">
-                    Submit indent{lines.length > 0 ? ` · ${lines.length}` : ""}
+                  <button
+                    type="submit"
+                    disabled={lines.length === 0}
+                    className="mise-press flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40"
+                  >
+                    Submit indent · {lines.length}
                   </button>
-                  <button type="button" onClick={resetIndent} className="mise-raised mise-press rounded-lg px-4 py-1.5 text-sm font-medium text-fg-soft">
+                  <button
+                    type="button"
+                    onClick={resetIndent}
+                    className="mise-raised mise-press rounded-xl px-4 py-2.5 text-sm font-medium text-fg-soft"
+                  >
                     Clear
                   </button>
                 </div>
