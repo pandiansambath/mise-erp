@@ -23,7 +23,7 @@ async def test_his_pepper_survives_a_round_trip(client, make_user, auth_header):
     """1 box = 10 small boxes = 300 packets = 15 kg, saved and read back."""
     user = await make_user("packs@x.com", Role.SUPER_ADMIN.value)
     r = await client.post(
-        "/inventory/items",
+        "/api/inventory/items",
         headers=auth_header(user),
         json={"name": "Black Pepper", "unit": "g", "pack_levels": PEPPER},
     )
@@ -46,11 +46,11 @@ async def test_the_chain_comes_back_on_the_list(client, make_user, auth_header):
     user = await make_user("packs2@x.com", Role.SUPER_ADMIN.value)
     h = auth_header(user)
     await client.post(
-        "/inventory/items",
+        "/api/inventory/items",
         headers=h,
         json={"name": "Black Pepper", "unit": "g", "pack_levels": PEPPER},
     )
-    rows = (await client.get("/inventory/items", headers=h)).json()
+    rows = (await client.get("/api/inventory/items", headers=h)).json()
     pepper = next(i for i in rows if i["name"] == "Black Pepper")
     assert len(pepper["pack_levels"]) == 3
 
@@ -61,7 +61,7 @@ async def test_an_old_item_reads_as_a_one_rung_chain(client, make_user, auth_hea
     user = await make_user("packs3@x.com", Role.SUPER_ADMIN.value)
     h = auth_header(user)
     r = await client.post(
-        "/inventory/items",
+        "/api/inventory/items",
         headers=h,
         json={"name": "Rice", "unit": "kg", "pack_unit": "sack", "pack_size": "25"},
     )
@@ -79,14 +79,14 @@ async def test_not_mentioning_the_chain_leaves_it_alone(client, make_user, auth_
     h = auth_header(user)
     created = (
         await client.post(
-            "/inventory/items",
+            "/api/inventory/items",
             headers=h,
             json={"name": "Black Pepper", "unit": "g", "pack_levels": PEPPER},
         )
     ).json()
 
     renamed = await client.patch(
-        f"/inventory/items/{created['id']}", headers=h, json={"name": "Pepper, black"}
+        f"/api/inventory/items/{created['id']}", headers=h, json={"name": "Pepper, black"}
     )
     assert renamed.status_code == 200, renamed.text
     assert len(renamed.json()["pack_levels"]) == 3
@@ -99,14 +99,14 @@ async def test_sending_an_empty_list_clears_it(client, make_user, auth_header):
     h = auth_header(user)
     created = (
         await client.post(
-            "/inventory/items",
+            "/api/inventory/items",
             headers=h,
             json={"name": "Black Pepper", "unit": "g", "pack_levels": PEPPER},
         )
     ).json()
 
     cleared = await client.patch(
-        f"/inventory/items/{created['id']}", headers=h, json={"pack_levels": []}
+        f"/api/inventory/items/{created['id']}", headers=h, json={"pack_levels": []}
     )
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["pack_levels"] == []
@@ -117,7 +117,7 @@ async def test_a_zero_rung_is_refused(client, make_user, auth_header):
     """A rung of zero would silently zero everything above it."""
     user = await make_user("packs6@x.com", Role.SUPER_ADMIN.value)
     r = await client.post(
-        "/inventory/items",
+        "/api/inventory/items",
         headers=auth_header(user),
         json={
             "name": "Broken",
