@@ -304,3 +304,33 @@ cost. On by default, because the alternative is a P&L that is simply wrong.
 - [ ] Expenses page: label rows that came from a PO, and link back to it
 - [ ] Consider back-filling expenses for already-received POs — money, so his
       call, not mine
+
+---
+
+## The deploy can fail because Google is briefly unreachable — 2026-08-10
+
+Deploy `285d8ec` went red with nothing wrong in the code:
+
+    Error while requesting resource        (x4)
+    Module not found: Can't resolve '@vercel/turbopack-next/internal/font/google/font'
+      [next]/internal/font/google/caveat_33da233f.module.css
+
+`next/font/google` downloads font files DURING the Docker build. When
+fonts.googleapis.com is slow or blocked from the build container, the build
+hard-fails. Re-running the same commit succeeded, so it was transient — but it
+will happen again, and it fails a deploy for a reason that has nothing to do
+with the change being deployed.
+
+Seven families are fetched at build time:
+
+    app/layout.tsx            Fraunces, Geist, Geist_Mono
+    components/site/fonts.ts  Bebas_Neue, Caveat, Fraunces, Playfair_Display
+    app/award/page.tsx        Cinzel
+
+- [ ] **Move them to `next/font/local`** with the .woff2 files committed. The
+      build then depends on nothing outside the repo, which is the only real
+      fix — a retry loop just makes the flake quieter
+- [ ] Deliberately NOT started mid-session: it means downloading and committing
+      binaries for seven families and touching the font stack every page uses.
+      Worth doing as its own piece of work with a careful look at the result,
+      not squeezed in beside a UI change
