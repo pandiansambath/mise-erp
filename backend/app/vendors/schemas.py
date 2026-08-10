@@ -80,6 +80,11 @@ class VendorOut(BaseModel):
 class VendorItemUpsert(BaseModel):
     item_id: uuid.UUID
     price_per_unit: Decimal = Field(gt=0)
+    #: WHICH size this price buys, from that item's chain. None = one base unit,
+    #: which is what every price meant before the chain existed. His point:
+    #: "we cant say all the vendors will have this BOX type, some vendor will
+    #: have small packets too, only they will sell".
+    pack_level_id: uuid.UUID | None = None
     # None = leave as-is (a price edit must NOT un-choose the ★ preferred supplier).
     is_preferred: bool | None = None
     notes: str | None = None
@@ -92,6 +97,7 @@ class VendorItemOut(BaseModel):
     vendor_id: uuid.UUID
     item_id: uuid.UUID
     price_per_unit: Decimal
+    pack_level_id: uuid.UUID | None = None
     last_updated: date
     is_preferred: bool
 
@@ -101,6 +107,11 @@ class VendorPriceRow(BaseModel):
     vendor_id: uuid.UUID
     vendor_name: str
     price_per_unit: Decimal
+    #: What that price buys — "box", "packet", or None for one base unit.
+    pack_level_name: str | None = None
+    #: The number the comparison is actually made on. A £120 box and a 45p
+    #: packet are only comparable once both are per gram.
+    price_per_base: Decimal | None = None
     is_preferred: bool
     last_updated: date
 

@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.inventory import pack_service, packs
 from app.inventory.models import Item
 from app.vendors.models import PriceHistory, Vendor, VendorItem
 
@@ -75,6 +76,7 @@ async def upsert_vendor_item(
     *,
     is_preferred: bool | None = None,
     notes: str | None = None,
+    pack_level_id: uuid.UUID | None = None,
     source: str = "manual",
 ) -> VendorItem:
     """Set (or update) a vendor's price for an item.
@@ -96,6 +98,10 @@ async def upsert_vendor_item(
     elif is_preferred is not None:
         vi.is_preferred = is_preferred
     vi.price_per_unit = price_per_unit
+    # Which size this price buys. None leaves it alone, so a plain price
+    # edit does not silently reset a supplier back to selling base units.
+    if pack_level_id is not None:
+        vi.pack_level_id = pack_level_id
     if notes is not None:
         vi.notes = notes
     vi.last_updated = date.today()
@@ -284,25 +290,44 @@ async def compare_vendor_prices(
             Vendor.hotel_id == hotel_id,
             Vendor.is_active.is_(True),
         )
-        .order_by(VendorItem.price_per_unit.asc())
     )
     rows = result.all()
+
+    # Compare on price per BASE unit, not on the number in the price box.
+    #
+    # This was the bug, and it was live: suppliers do not all sell the same
+    # shape. Farm2Land sells a box of pepper for £120 and SK sells a packet for
+    # 45p, and sorting on price_per_unit put the box last and called it the
+    # dear one. Per gram it is £0.0080 against £0.0090 — the box is CHEAPER,
+    # and the page was recommending the opposite.
+    chain_rows = (await pack_service.levels_for(db, [item.id])).get(item.id) or []
+    chain = pack_service.as_levels(chain_rows)
+    by_id = {r.id: r.position for r in chain_rows}
 
     comparisons = [
         {
             "vendor_id": vendor.id,
             "vendor_name": vendor.name,
             "price_per_unit": vi.price_per_unit,
+            #: What that price buys — None means one base unit.
+            "pack_level_name": next(
+                (r.name for r in chain_rows if r.id == vi.pack_level_id), None
+            ),
+            #: The number every comparison on this page is actually made on.
+            "price_per_base": packs.price_per_base(
+                vi.price_per_unit, chain, by_id.get(vi.pack_level_id, 0)
+            ),
             "is_preferred": vi.is_preferred,
             "last_updated": vi.last_updated,
         }
         for vi, vendor in rows
     ]
+    comparisons.sort(key=lambda c: c["price_per_base"])
 
     cheapest = comparisons[0] if comparisons else None
     most_expensive = comparisons[-1] if comparisons else None
     saving = (
-        most_expensive["price_per_unit"] - cheapest["price_per_unit"]
+        most_expensive["price_per_base"] - cheapest["price_per_base"]
         if comparisons
         else Decimal("0")
     )
@@ -315,6 +340,8 @@ async def compare_vendor_prices(
         "comparisons": comparisons,
         "cheapest_vendor": cheapest,
         "most_expensive_vendor": most_expensive,
+        #: Per BASE unit (per g, per ml, per piece) — comparable across
+        #: suppliers who sell different shapes.
         "potential_saving_per_unit": saving,
     }
 
