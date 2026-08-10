@@ -13,9 +13,11 @@ from app.core import template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
-from app.inventory import matching
+from app.inventory import matching, pack_service, packs
 from app.inventory.models import Item
 from app.inventory.service import get_item
+from app.purchasing import service as purchasing_service
+from app.purchasing import volume
 from app.vendors import ledger, service
 from app.vendors.models import VendorPayment
 from app.vendors.schemas import (
@@ -431,3 +433,72 @@ async def teach_item(
     )
     if saved is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to remember.")
+
+@router.get("/savings")
+async def switching_savings(
+    days: int = 90,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> dict:
+    """What moving every item to its cheapest supplier is actually worth, a month.
+
+    The page used to add per-unit savings together and call the total money —
+    £1.00 per kg plus £0.61 per piece — and he asked what it meant. Nothing: you
+    cannot spend it, budget with it or check it.
+
+    This is money. For each item priced by two or more suppliers, the gap
+    between what you pay and the cheapest, per BASE unit, times how much of it
+    you actually received in the last `days`, expressed per month. Items you
+    have never bought contribute nothing, which is correct — a saving on
+    something you do not buy is not a saving.
+    """
+    rate = await volume.monthly_rate(db, user.hotel_id, days=days)
+    by_item = await purchasing_service.item_suppliers(db, user.hotel_id)
+
+    chains = await pack_service.levels_for(db, list(by_item.keys()))
+
+    total = Decimal("0")
+    counted = 0
+    worst: dict | None = None
+
+    for item_id, opts in by_item.items():
+        if len(opts) < 2:
+            continue
+        rows = chains.get(item_id) or []
+        levels = pack_service.as_levels(rows)
+        pos = {r.id: r.position for r in rows}
+
+        per_base = [
+            (
+                packs.price_per_base(
+                    o["price_per_unit"], levels, pos.get(o.get("pack_level_id"), 0)
+                ),
+                o,
+            )
+            for o in opts
+        ]
+        cheapest, _ = min(per_base, key=lambda t: t[0])
+        current = next(
+            (p for p, o in per_base if o.get("is_preferred")),
+            cheapest,
+        )
+        gap = current - cheapest
+        if gap <= 0:
+            continue
+
+        monthly = gap * rate.get(item_id, Decimal("0"))
+        counted += 1
+        total += monthly
+        if worst is None or monthly > worst["per_month"]:
+            worst = {"item_id": str(item_id), "per_month": monthly}
+
+    return {
+        "days": days,
+        "per_month": total.quantize(Decimal("0.01")),
+        "items": counted,
+        "worst": (
+            {**worst, "per_month": worst["per_month"].quantize(Decimal("0.01"))}
+            if worst
+            else None
+        ),
+    }
