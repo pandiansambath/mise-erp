@@ -129,13 +129,36 @@ across five weeks. Eighteen people do not each type "120". Meanwhile the rota's
 own shifts carry believable breaks (0, 10, 20, 2 minutes), so it did not come
 from the rota either. Nothing in the repo seeds it.
 
-- [ ] **Find what wrote 120 to 96 attendance rows** and decide whether that
-      data should be corrected. A two-hour unpaid break is not a plausible
-      default for anybody's shift
+- [x] **Found what wrote the 120s.** Not a script and not the kiosk: they came
+      through the **manual edit path**. `set_attendance` sets `break_start` and
+      `break_end` to NULL, which is exactly the shape of all 96 rows — a punched
+      break always leaves `break_end` filled. Somebody typed "120" into the
+      Break box, shift after shift, in three hotels (NIRAI Madras Kitchen 53,
+      NIRAI.Reading 23, NIRAIReading 20). Inside NIRAI.Reading it is on every
+      completed shift with a consistent 10:30-21:30 pattern, which reads like a
+      real split-shift closure rather than an accident. **I was wrong earlier
+      to call it a bulk write.**
+- [ ] **HIS CALL:** is a standing two-hour unpaid break correct for
+      NIRAI.Reading? If yes, nothing to do. If no, 96 rows need correcting and
+      that affects pay — not something to change on a guess
 - [ ] Show the break everywhere hours appear, not only in the history table —
       the staff self-service view (`/my`) still prints bare hours
-- [ ] Consider a sanity rule: a break over ~90 minutes on a single shift is
-      worth flagging when it is entered, not discovered in a screenshot
+- [x] **A typed break is now bounded.** `AttendanceEdit.break_minutes` had
+      `ge=0` and **no upper bound at all**, while the rota had `le=480` — which
+      is why 120 (or 1200) went in without a murmur. Now capped at 8h AND
+      rejected when it does not fit inside the shift, because `working_hours`
+      clamps a negative result to zero, so a break longer than the shift used
+      to save quietly and read as "here all day, earned nothing".
+- [x] **A forgotten break no longer vanishes.** Worse than anything he asked
+      about: go on break at 15:00, never press "back", clock out at 21:30, and
+      clock-out closes the break with the WHOLE 6.5 hours counted against your
+      pay, silently. The number is deliberately NOT rewritten — nobody's hours
+      get changed by a guess — but the record now carries a note saying what
+      happened so a person can review it.
+- [ ] Surface that note in the attendance UI as a visible flag, not just text
+- [ ] The break allowance (`break_allowance_minutes`) is a PENALTY threshold,
+      not a limit, and it is 0 for every hotel carrying the 120s — so it was
+      never going to catch this. Worth deciding whether it should also warn
 
 **Note on CloudWatch:** he asked me to check the logs. App logs are not shipped
 to CloudWatch yet — that is still the open task in `nirai-cloudwatch-logging`.

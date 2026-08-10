@@ -286,10 +286,27 @@ async def punch(db: AsyncSession, employee: Employee, ptype: str) -> Attendance:
         if not rec or not rec.clock_in:
             raise PunchError("Not clocked in")
         if rec.break_start:
-            # Clocked out while still on break — close the break so it counts.
-            rec.break_minutes += max(0, round((now - rec.break_start).total_seconds() / 60))
+            # Clocked out while still on break — close it so it counts.
+            #
+            # This is the quiet way a shift disappears. Go on break at 15:00,
+            # forget to press "back", clock out at 21:30, and six and a half
+            # hours are recorded as break and taken out of the pay, with
+            # nothing on any screen saying so.
+            #
+            # The number is NOT altered here: nobody's hours get rewritten by a
+            # guess about what they meant. But it stops being silent — the
+            # record says what happened, so it can be reviewed and corrected by
+            # a person who knows.
+            forgotten = max(0, round((now - rec.break_start).total_seconds() / 60))
+            rec.break_minutes += forgotten
             rec.break_end = now
             rec.break_start = None
+            if forgotten > 30:
+                mark = (
+                    f"Break was never ended — {forgotten} min counted as break at "
+                    "clock-out. Check whether that is right."
+                )
+                rec.notes = "\n".join(filter(None, (rec.notes, mark)))
         rec.clock_out = now
         rec.working_hours = working_hours(rec.clock_in, now, rec.break_minutes)
 

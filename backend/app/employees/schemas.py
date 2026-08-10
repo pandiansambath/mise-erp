@@ -4,7 +4,7 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.employees.models import AttendanceStatus, PunchType, SalaryType
 
@@ -131,7 +131,36 @@ class AttendanceEdit(BaseModel):
     date: date_type
     clock_in: str | None = None
     clock_out: str | None = None
-    break_minutes: int = Field(default=0, ge=0)
+    # Capped at eight hours, matching the rota, which has always had `le=480`
+    # while this had no upper bound at all. That gap is how 96 shifts came to
+    # carry a typed 120-minute break with nothing anywhere questioning it.
+    # A break is still allowed to be long — split-shift restaurants really do
+    # close for two hours — it just cannot be absurd, and it cannot swallow the
+    # whole shift (checked against the worked span below).
+    break_minutes: int = Field(default=0, ge=0, le=480)
+
+    @model_validator(mode="after")
+    def break_fits_inside_the_shift(self) -> "AttendanceEdit":
+        """A break longer than the time worked leaves zero hours.
+
+        `working_hours` clamps a negative result to 0, so this used to save
+        quietly and read as "they were here all day and earned nothing". Better
+        to refuse it and say why.
+        """
+        if not self.clock_in or not self.clock_out or not self.break_minutes:
+            return self
+        h1, m1 = (int(x) for x in self.clock_in.split(":"))
+        h2, m2 = (int(x) for x in self.clock_out.split(":"))
+        span = (h2 * 60 + m2) - (h1 * 60 + m1)
+        if span <= 0:
+            span += 24 * 60  # closed past midnight
+        if self.break_minutes >= span:
+            raise ValueError(
+                f"A {self.break_minutes}-minute break does not fit inside a shift of "
+                f"{span} minutes ({self.clock_in}-{self.clock_out}). "
+                "Check the break, or the clock-in and clock-out times."
+            )
+        return self
 
     @field_validator("clock_in", "clock_out")
     @classmethod
