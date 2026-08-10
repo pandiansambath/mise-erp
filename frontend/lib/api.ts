@@ -431,6 +431,8 @@ export interface VendorItem {
   price_per_unit: string;
   last_updated: string;
   is_preferred: boolean;
+  /** Which size this price buys, from the item's chain. null = one base unit. */
+  pack_level_id?: string | null;
 }
 
 export interface VendorPriceRow {
@@ -439,6 +441,11 @@ export interface VendorPriceRow {
   price_per_unit: string;
   is_preferred: boolean;
   last_updated: string;
+  /** What that price buys — "box", "packet", or null for one base unit. */
+  pack_level_name?: string | null;
+  /** The number the comparison is actually made on. A £120 box and a 45p
+   *  packet are only comparable once both are per gram. */
+  price_per_base?: string | null;
 }
 
 export interface PriceComparison {
