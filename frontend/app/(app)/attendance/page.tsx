@@ -41,6 +41,16 @@ type AttHistory = {
   }[];
 };
 
+/** 120 -> "2h", 90 -> "1h 30m", 30 -> "30m". Minutes alone made a two-hour
+    break read as a typo. */
+function fmtBreak(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
+}
+
 const STATUS_TONE: Record<string, string> = {
   PRESENT: "text-emerald-500",
   HALF_DAY: "text-amber-500",
@@ -718,8 +728,26 @@ function AttendanceHistoryCard({ employees, format }: {
                         </td>
                         <td className="px-3 py-2 text-fg-faint">
                           {d.clock_in ? `${d.clock_in.slice(11, 16)}–${d.clock_out ? d.clock_out.slice(11, 16) : "…"}` : "—"}
+                          {/* An unpaid break was being subtracted from the hours
+                              and never shown, so "11:01–20:00 … 6.98h" read as
+                              broken arithmetic. It was right: 8h59m less a
+                              two-hour break. Saying so is the fix. */}
+                          {d.break_minutes > 0 && (
+                            <span className="ml-1.5 whitespace-nowrap text-[11px] text-amber-300/90">
+                              −{fmtBreak(d.break_minutes)} break
+                            </span>
+                          )}
                         </td>
-                        <td className="px-3 py-2 text-right font-mono text-fg">{d.working_hours ?? "0"}h</td>
+                        <td
+                          className="px-3 py-2 text-right font-mono text-fg"
+                          title={
+                            d.break_minutes > 0
+                              ? `${d.clock_in?.slice(11, 16)}–${d.clock_out?.slice(11, 16)} is ${fmtBreak(d.break_minutes)} longer; the unpaid break is not paid time.`
+                              : undefined
+                          }
+                        >
+                          {d.working_hours ?? "0"}h
+                        </td>
                       </tr>
                     ))}
                   </tbody>

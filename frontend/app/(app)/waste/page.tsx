@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtQty } from "@/lib/quantity";
 import {
   api,
   ApiError,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars, Donut, Sparkline } from "@/components/charts";
-import { fmtQty, ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
+import { ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -200,7 +201,7 @@ export default function WastePage() {
             </div>
             {chosen && (
               <p className="text-xs text-fg-faint">
-                {chosen.name}: {chosen.current_stock} {chosen.unit} in stock
+                {chosen.name}: {fmtQty(chosen.current_stock, chosen.unit)} in stock
                 {parseFloat(chosen.average_cost) > 0 && ` · avg cost ${format(chosen.average_cost)}/${chosen.unit}`}
               </p>
             )}

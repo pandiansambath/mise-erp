@@ -6,6 +6,7 @@
 // KPIs + P&L ranges + a 7-day series assembled from per-day P&L calls.
 
 import Link from "next/link";
+import { fmtQtyNumber } from "@/lib/quantity";
 import { useEffect, useMemo, useState } from "react";
 import { api, type DashboardKpis, type PnL, type POSummary } from "@/lib/api";
 import { AreaChart, Bars, CalendarHeat, Donut, Meter, type DonutSegment } from "@/components/charts";
@@ -346,7 +347,7 @@ export default function DashboardPage() {
                               />
                             </svg>
                             <p className="min-w-0 flex-1 truncate text-xs font-medium text-fg">{l.name}</p>
-                            <p className="shrink-0 text-[10px] tabular-nums text-fg-faint">{l.current_stock}/{l.min_stock_level}</p>
+                            <p className="shrink-0 text-[10px] tabular-nums text-fg-faint">{fmtQtyNumber(l.current_stock)}/{fmtQtyNumber(l.min_stock_level)}</p>
                           </div>
                         );
                       })}
@@ -487,7 +488,7 @@ export default function DashboardPage() {
                         <span className="font-medium text-fg-soft group-hover:text-fg">{l.name}</span>
                         <span className="flex items-center gap-2">
                           <Badge tone="red">
-                            {l.current_stock} left (min {l.min_stock_level})
+                            {fmtQtyNumber(l.current_stock)} left (min {fmtQtyNumber(l.min_stock_level)})
                           </Badge>
                           <span className="text-xs font-medium text-brand-300 opacity-0 transition group-hover:opacity-100">
                             🛒 order →

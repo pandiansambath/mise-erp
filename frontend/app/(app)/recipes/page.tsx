@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fmtQty } from "@/lib/quantity";
 import { api, ApiError, postForm, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { Bars, Donut, Treemap } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
 import { ComboBox } from "@/components/ComboBox";
-import { fmtQty, ItemPicker, type PickedLine } from "@/components/ItemPicker";
+import { ItemPicker, type PickedLine } from "@/components/ItemPicker";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -223,7 +224,7 @@ function CostDetail({
             {data.ingredients.map((ing) => (
               <tr key={ing.item_id} className="border-b border-line transition hover:bg-glass/[0.03]">
                 <td className="px-3 py-2 text-fg">{ing.item_name}</td>
-                <td className="px-3 py-2 text-right text-fg-soft" title={`${ing.quantity} ${ing.unit}`}>
+                <td className="px-3 py-2 text-right text-fg-soft" title={fmtQty(ing.quantity, ing.unit)}>
                   {fmtQty(ing.quantity, ing.unit)}
                 </td>
                 <td className="px-3 py-2 text-right text-fg-soft">{format(ing.unit_price)}</td>

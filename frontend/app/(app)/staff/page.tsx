@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Employee, type UserOut } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import Link from "next/link";
+import { Workbench } from "@/components/Workbench";
 import { RoleAttach } from "@/components/RoleAttach";
 import { RoleBuilder } from "@/components/RoleBuilder";
 import { Donut } from "@/components/charts";
@@ -167,41 +169,52 @@ export default function StaffPage() {
   const inputCls = "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none";
 
   return (
-    <div>
-      <PageHeader
-        title="Roles &amp; Access"
-        subtitle="Who can sign in here and what they can access. To create a login or manage someone’s email, password, verification or history, open their card on the Employees page."
-      />
+    <Workbench
+      title="Roles & Access"
+      subtitle="Who can sign in here, and what they can reach."
+      tools={
+          <div className="mise-stagger grid gap-2 sm:grid-cols-3">
+            {([
+              ["people", "🧑‍🍳", "Who can sign in", users.length, "accounts"],
+              ["roles", "🔑", "What roles grant", roleCount, roleCount === 1 ? "role designed" : "roles designed"],
+              ["holders", "🔗", "Who holds one", holderCount, "attached"],
+            ] as const).map(([key, icon, label, n, hint]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setJob(key)}
+                className={`mise-press mise-neo-raised flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition ${
+                  job === key ? "ring-2 ring-brand-400/60" : "hover:-translate-y-px"
+                }`}
+              >
+                <span aria-hidden className="text-xl">{icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold text-fg">{label}</span>
+                  <span className="block text-[11px] text-fg-faint">
+                    <b className="text-fg-soft tabular-nums">{n}</b> {hint}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+      }
+      tally={
+        <p className="text-xs leading-relaxed text-fg-faint">
+          To create a login, or manage someone’s email, password, verification or
+          history, open their card on the{" "}
+          <Link href="/employees" className="font-medium text-brand-400 hover:underline">
+            Employees
+          </Link>{" "}
+          page.
+        </p>
+      }
+    >
 
       {/* The three jobs, said out loud and kept apart.
           This page does three different things — who can sign in, what a role
           grants, and who holds it — and it did all three in one column, so it
           read as one enormous form. They are three separate acts and now they
           look like it. */}
-      <div className="mise-stagger mb-5 grid gap-3 sm:grid-cols-3">
-        {([
-          ["people", "🧑‍🍳", "Who can sign in", users.length, "accounts"],
-          ["roles", "🔑", "What roles grant", roleCount, roleCount === 1 ? "role designed" : "roles designed"],
-          ["holders", "🔗", "Who holds one", holderCount, "attached"],
-        ] as const).map(([key, icon, label, n, hint]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setJob(key)}
-            className={`mise-press mise-neo-raised flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition ${
-              job === key ? "ring-2 ring-brand-400/60" : "hover:-translate-y-px"
-            }`}
-          >
-            <span aria-hidden className="text-xl">{icon}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-semibold text-fg">{label}</span>
-              <span className="block text-[11px] text-fg-faint">
-                <b className="text-fg-soft tabular-nums">{n}</b> {hint}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
 
       {/* Designing what a Manager or a Chef can see.
           This lived in the `denied` branch — rendered ONLY to people without
@@ -448,6 +461,6 @@ export default function StaffPage() {
           </div>
         </Card>
       )}
-    </div>
+    </Workbench>
   );
 }

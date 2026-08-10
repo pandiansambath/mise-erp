@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { fmtQty } from "@/lib/quantity";
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
@@ -517,7 +518,7 @@ export default function ExpensesPage() {
                             stock.map((i) => (
                               <div key={i.id} className="flex justify-between gap-3 border-b border-line/40 py-1 last:border-0">
                                 <span className="text-fg-soft">
-                                  {i.name} <span className="text-fg-faint">· {i.current_stock} {i.unit}</span>
+                                  {i.name} <span className="text-fg-faint">· {fmtQty(i.current_stock, i.unit)}</span>
                                 </span>
                                 <span className="text-fg">
                                   {i.average_cost && Number(i.average_cost) > 0 ? `${format(i.average_cost)}/${i.unit}` : "—"}

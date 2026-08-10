@@ -14,7 +14,9 @@ import {
   type Vendor,
   type VendorItem,
 } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Card, Spinner } from "@/components/ui";
+import { EditModal } from "@/components/EditModal";
+import { Workbench } from "@/components/Workbench";
 import { Bars } from "@/components/charts";
 import { spotlight, useDeepLink } from "@/components/fx";
 import { SubNav } from "@/components/SubNav";
@@ -156,6 +158,11 @@ export default function VendorsPage() {
     setError(null);
   }
 
+  // The add form used to sit permanently above the supplier list, so the
+  // page opened on a form rather than on your suppliers. It opens in place
+  // now, like everything else.
+  const [addingVendor, setAddingVendor] = useState(false);
+
   async function addVendor(e: React.FormEvent) {
     e.preventDefault();
     if (!vName.trim()) {
@@ -173,6 +180,7 @@ export default function VendorsPage() {
       setVName("");
       setVContact("");
       setVMobile("");
+      setAddingVendor(false);
       await load();
       selectVendor(v.id);
     } catch (err) {
@@ -393,58 +401,103 @@ export default function VendorsPage() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Vendors"
-        subtitle="Your suppliers and what each one sells. Set an item's price here so it can be costed and ordered."
-      />
+    <Workbench
+      title="Vendors"
+      subtitle="Your suppliers and what each one sells."
+      action={
+        canWrite ? (
+          <button
+            type="button"
+            onClick={() => {
+              clearVendorForm();
+              setAddingVendor(true);
+            }}
+            className="mise-press rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-700"
+          >
+            ＋ Add supplier
+          </button>
+        ) : undefined
+      }
+      tools={
+          <SubNav
+            items={[
+              {
+                key: "add",
+                label: "Add supplier",
+                icon: "＋",
+                onSelect: () => { clearVendorForm(); setAddingVendor(true); },
+              },
+              {
+                key: "owed",
+                label: "Who I owe",
+                icon: "💷",
+                onSelect: () => {
+                  // Straight into the supplier you spend most with, on the Money
+                  // tab — the question is "who do I owe", not "open a vendor".
+                  const top = [...spend].sort(
+                    (a, b) => (parseFloat(b.total) || 0) - (parseFloat(a.total) || 0),
+                  )[0];
+                  const match = vendors.find((v) => v.name === top?.vendor_name) ?? vendors[0];
+                  if (match) { setSheetTab("money"); selectVendor(match.id); }
+                },
+              },
+              {
+                key: "rises",
+                label: "Price rises",
+                icon: "↗",
+                count: spend.reduce((n, r) => n + (r.price_rises ?? 0), 0),
+                tone: "warn",
+                onSelect: () => spotlight("vendor-spend"),
+              },
+            ]}
+          />
+      }
+      tally={
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-faint">
+          <span>
+            <b className="text-fg-soft">{vendors.length}</b> supplier
+            {vendors.length === 1 ? "" : "s"}
+          </span>
+          <span>
+            <b className="text-fg-soft">
+              {format(spend.reduce((t, r) => t + (parseFloat(r.total) || 0), 0))}
+            </b>{" "}
+            spent with them
+          </span>
+          {spend.reduce((n, r) => n + (r.price_rises ?? 0), 0) > 0 && (
+            <span className="text-amber-300">
+              <b>{spend.reduce((n, r) => n + (r.price_rises ?? 0), 0)}</b> price rise
+              {spend.reduce((n, r) => n + (r.price_rises ?? 0), 0) === 1 ? "" : "s"} to look at
+            </span>
+          )}
+        </div>
+      }
+    >
 
-      <SubNav
-        items={[
-          {
-            key: "add",
-            label: "Add supplier",
-            icon: "＋",
-            onSelect: () => { clearVendorForm(); spotlight("vendor-form"); },
-          },
-          {
-            key: "owed",
-            label: "Who I owe",
-            icon: "💷",
-            onSelect: () => {
-              // Straight into the supplier you spend most with, on the Money
-              // tab — the question is "who do I owe", not "open a vendor".
-              const top = [...spend].sort(
-                (a, b) => (parseFloat(b.total) || 0) - (parseFloat(a.total) || 0),
-              )[0];
-              const match = vendors.find((v) => v.name === top?.vendor_name) ?? vendors[0];
-              if (match) { setSheetTab("money"); selectVendor(match.id); }
-            },
-          },
-          {
-            key: "rises",
-            label: "Price rises",
-            icon: "↗",
-            count: spend.reduce((n, r) => n + (r.price_rises ?? 0), 0),
-            tone: "warn",
-            onSelect: () => spotlight("vendor-spend"),
-          },
-        ]}
-      />
 
+      {vendors.length === 0 && (
       <div className="mb-6 rounded-xl border border-line bg-paper-2 p-4 text-sm text-fg-soft">
         <b>How it works:</b> add a vendor → open them → add the items they supply <i>with a price</i>. Those prices feed{" "}
         <b>Price Comparison</b> and let <b>Purchasing</b> turn an indent into a PO. An item with no
         vendor price can&apos;t be ordered yet.
       </div>
+      )}
 
       <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportFile} />
       {error && <p className="mb-4 text-sm text-rose-400">{error}</p>}
       {notice && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
 
-      {canWrite && (
-        <Card className="mise-feel mb-6" id="vendor-form">
-          <p className="mb-3 text-sm font-medium text-fg-soft">Add a vendor</p>
+      {canWrite && addingVendor && (
+        <EditModal
+          open
+          onClose={() => setAddingVendor(false)}
+          title="Add a supplier"
+          subtitle="A name is enough — prices and items come after"
+          icon="🚚"
+          width="lg"
+        >
+          <div id="vendor-form">
+
           <form onSubmit={addVendor} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-sm font-medium text-fg-soft">Name</label>
@@ -517,7 +570,8 @@ export default function VendorsPage() {
               </button>
             </div>
           </form>
-        </Card>
+          </div>
+        </EditModal>
       )}
 
       {spend.length > 0 && (
@@ -1091,6 +1145,6 @@ export default function VendorsPage() {
         </div>
         )}
       </DetailSheet>
-    </div>
+    </Workbench>
   );
 }

@@ -6,6 +6,7 @@
 // every few seconds — that stream IS the customer's live map.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fmtQtyNumber } from "@/lib/quantity";
 import { API_BASE } from "@/lib/api";
 import { ThemeSwitcher } from "@/components/AppShell";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
@@ -221,7 +222,7 @@ export default function RiderPage() {
             </div>
             <ul className="mt-3 space-y-0.5 text-sm text-fg-soft">
               {job.items.map((i, n) => (
-                <li key={n}>{i.quantity}× {i.name}</li>
+                <li key={n}>{fmtQtyNumber(i.quantity)}× {i.name}</li>
               ))}
             </ul>
             <div className="mt-3 space-y-1.5 border-t border-line pt-3 text-sm">
