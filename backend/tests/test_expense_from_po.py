@@ -122,10 +122,10 @@ async def test_keying_the_same_delivery_in_by_hand_warns(
         "amount": "50.00",
         "vendor_id": str(po.vendor_id),
     }
-    warned = await client.post("/expenses", headers=h, json=body)
+    warned = await client.post("/api/expenses", headers=h, json=body)
     assert warned.status_code == 409
     assert "twice" in warned.json()["detail"]
 
     # Warn, never block — the same supplier really can be paid twice in a week.
-    forced = await client.post("/expenses?force=true", headers=h, json=body)
+    forced = await client.post("/api/expenses?force=true", headers=h, json=body)
     assert forced.status_code == 201
