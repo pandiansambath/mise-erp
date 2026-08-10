@@ -745,36 +745,37 @@ export function ItemPicker({
           out of sight even though it is no longer beside you — and it states
           the count, because "how many have I got" is the only thing you need
           from the tray while you are still choosing. */}
-      {staged && trayStage === "pick" && chosen.length > 0 && (
-        <div className="sticky bottom-3 z-20 mt-3 flex items-center gap-3 rounded-2xl border border-brand-400/40 bg-paper-2/95 px-4 py-3 shadow-lg shadow-black/30 backdrop-blur">
-          <span className="min-w-0 flex-1 text-sm text-fg-soft">
-            {running.total > 0 ? (
+      {/* THE POCKET.
+          Tapping an item already animates it along an arc towards a target
+          called #mise-pocket (see flyToPocket, fired above) — but only Price
+          Comparison ever rendered one, so on Purchasing the item flew towards
+          something that did not exist and landed on a flat grey bar instead.
+          His instruction, twice: "if i select it, it need to come to pocket
+          with smooth animation and store in pocket, and we click pocket and
+          see the things and do whatever we want — pocket opens as popup."
+          Rendering it HERE means every picker in the app gets it at once. */}
+      {staged && trayStage === "pick" && (
+        <Pocket
+          count={chosen.length}
+          label={chosen.length === 1 ? "item in your basket" : "items in your basket"}
+          hint={
+            running.total > 0 ? (
               <>
-                <b className="font-display text-lg tabular-nums text-fg">
-                  {format(running.total.toFixed(2))}
-                </b>{" "}
-                <span className="text-xs">
-                  · {chosen.length} item{chosen.length === 1 ? "" : "s"}
-                  {running.vendors.size > 0 && (
-                    <> across {running.vendors.size} supplier{running.vendors.size === 1 ? "" : "s"}</>
-                  )}
-                </span>
+                <b className="tabular-nums text-fg">{format(running.total.toFixed(2))}</b>
+                {running.vendors.size > 0 && (
+                  <>
+                    {" "}
+                    · {running.vendors.size} supplier
+                    {running.vendors.size === 1 ? "" : "s"}
+                  </>
+                )}
               </>
             ) : (
-              <>
-                <b className="text-fg">{chosen.length}</b> item{chosen.length === 1 ? "" : "s"} —
-                <span className="text-xs"> add quantities to see the total</span>
-              </>
-            )}
-          </span>
-          <button
-            type="button"
-            onClick={() => setTrayStage("tray")}
-            className="mise-press shrink-0 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            Review &amp; submit ›
-          </button>
-        </div>
+              "tap to add quantities"
+            )
+          }
+          onOpen={() => setTrayStage("tray")}
+        />
       )}
     </div>
   );
