@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { setAppTimeZone } from "./date";
 import { useRouter } from "next/navigation";
 import { hotelSite } from "@/lib/site";
 import { forgetAll } from "@/lib/rangeMemory";
@@ -47,6 +48,13 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserOut | null>(null);
   const [hotel, setHotel] = useState<Hotel | null>(null);
+
+  // Every "today" in the app is the RESTAURANT's today. Set here because this
+  // is the one place that knows which restaurant you are signed into — see
+  // lib/date.ts for the bug that made this necessary.
+  useEffect(() => {
+    setAppTimeZone(hotel?.timezone ?? null);
+  }, [hotel]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 

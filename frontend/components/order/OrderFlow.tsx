@@ -46,6 +46,25 @@ function show(n: number): string {
   return String(Math.round(n * 1e6) / 1e6);
 }
 
+/** A colour for a category, so a wall of cards can be read without reading.
+ *  Stable per name — same category, same colour, every time — because a colour
+ *  that moves teaches nothing. */
+function categoryTint(name: string): string {
+  const tints = [
+    "bg-emerald-400/70",
+    "bg-sky-400/70",
+    "bg-amber-400/70",
+    "bg-rose-400/70",
+    "bg-violet-400/70",
+    "bg-teal-400/70",
+    "bg-orange-400/70",
+    "bg-indigo-400/70",
+  ];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return tints[h % tints.length];
+}
+
 const OTHER = "Other";
 const groupOf = (it: Item) => it.category?.trim() || OTHER;
 
@@ -748,6 +767,18 @@ function BasketSheet({
   // price answers "what is making this order expensive", and by category
   // answers "have I done the vegetables yet".
   const [groupBy, setGroupBy] = useState<"vendor" | "category" | "price">("vendor");
+  // "when you group by supplier we need one minimise feature inside that, so
+  // that we can see the next supplier easily and can maximise when we want —
+  // default is maximise." Folded by name, so folding Farm2Land and then
+  // regrouping does not fold something unrelated.
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const toggleFold = (key: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const groups = useMemo(() => {
     const m = new Map<
@@ -809,7 +840,7 @@ function BasketSheet({
       // A basket with two lines had a scrollbar. It grows with what it holds
       // now, up to the same cap every other popup uses — "make the basket popup
       // size bigger, it needs to grow based on the number of items it has."
-      wide={lines.length > 3}
+      wide={lines.length > 2}
       subtitle={`${lines.length} item${lines.length === 1 ? "" : "s"} · ${format(grand.toFixed(2))}`}
       footer={
         <div className="space-y-2.5">
@@ -862,8 +893,26 @@ function BasketSheet({
       <div className="mise-sheet-cascade space-y-3">
         {groups.map((g, gi) => (
           <div key={g.key} style={{ "--i": gi } as React.CSSProperties} className="rounded-2xl border border-line bg-paper-2/60 p-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-sm font-semibold text-fg">{g.name}</span>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => toggleFold(g.key)}
+                aria-expanded={!folded.has(g.key)}
+                className="mise-press flex min-w-0 flex-1 items-center gap-1.5 text-left"
+              >
+                <span
+                  aria-hidden
+                  className={`text-[10px] text-fg-faint transition-transform ${
+                    folded.has(g.key) ? "" : "rotate-90"
+                  }`}
+                >
+                  ▶
+                </span>
+                <span className="truncate text-sm font-semibold text-fg">{g.name}</span>
+                <span className="shrink-0 rounded-full bg-glass/10 px-1.5 text-[10px] tabular-nums text-fg-faint">
+                  {g.rows.length}
+                </span>
+              </button>
               <span className="flex shrink-0 items-baseline gap-2">
                 <span className="font-display text-sm font-semibold tabular-nums text-fg-soft">
                   {format(g.total.toFixed(2))}
@@ -885,95 +934,95 @@ function BasketSheet({
             </div>
             {/* Two across when there is room. A tall thin list of 20 items is
                 the scroll he was complaining about. */}
+            {!folded.has(g.key) && (
             <ul className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
               {g.rows.map(({ it, qty }) => {
                 const sup = supplierFor(it.id);
                 const n = parseFloat(qty) || 0;
+                const had = parseFloat(it.current_stock) || 0;
+                const after = exact(had + n);
+                const min = parseFloat(it.min_stock_level || "0") || 0;
+                const short = min > 0 && after < min;
+                const tint = categoryTint(groupOf(it));
                 return (
-                  <li key={it.id} className="mise-card3d p-2.5">
-                    {/* Wraps instead of scrolling. On a phone the name, the
-                        amount, edit and remove were laid out in one row that
-                        did not fit — "this UI in mobile is not fitting, I can
-                        see a horizontal scroll for this popup". */}
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span aria-hidden>{categoryEmoji(groupOf(it))}</span>
-                      <span className="min-w-0 flex-1 basis-24 truncate text-sm font-medium text-fg">
+                  <li
+                    key={it.id}
+                    /* Every card looked identical at a glance — "all cards are
+                       looking same once I see suddenly, need something to
+                       differentiate each card". A colour down the left edge,
+                       taken from the item's category, so the eye can group them
+                       without reading a word. */
+                    className="mise-card3d group relative overflow-hidden py-2 pl-3 pr-2"
+                  >
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-1 ${tint}`}
+                    />
+
+                    {/* ONE line of identity + money. Fixed columns, so the edit
+                        and remove buttons sit in the SAME place on every card
+                        instead of wherever the name happens to end — "the edit
+                        and x button on each card are here and there". */}
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className="shrink-0 text-base">
+                        {categoryEmoji(groupOf(it))}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight text-fg">
                         {it.name}
                       </span>
-                      <span className="shrink-0 tabular-nums text-sm text-fg-soft">
-                        {tidy(n)} {it.unit}
+                      <span className="shrink-0 text-right">
+                        <span className="block font-display text-sm font-semibold leading-none tabular-nums text-fg">
+                          {format((n * pricePerBase(it, sup)).toFixed(2))}
+                        </span>
+                        <span className="block text-[10px] leading-tight text-fg-faint tabular-nums">
+                          {tidy(n)} {it.unit}
+                        </span>
                       </span>
-                      {/* What this line costs. The basket showed a grand total
-                          and per-unit prices but never the one number you check
-                          a line against. */}
-                      <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg">
-                        {format((n * pricePerBase(it, sup)).toFixed(2))}
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => onEdit(it)}
+                          aria-label={`Change how much ${it.name}`}
+                          title="Change how much"
+                          className="mise-press grid h-7 w-7 place-items-center rounded-lg border border-line text-[11px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onChange(lines.filter((l) => l.item_id !== it.id))}
+                          aria-label={`Remove ${it.name}`}
+                          title="Take it out"
+                          className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint transition hover:text-rose-300"
+                        >
+                          ✕
+                        </button>
                       </span>
-                      {/* "have a button like edit — if i click that edit i need
-                          to see that previous popup here as small popup to edit
-                          things". The same quantity popup, reopened on top. */}
-                      <button
-                        type="button"
-                        onClick={() => onEdit(it)}
-                        aria-label={`Change how much ${it.name}`}
-                        className="mise-press shrink-0 rounded-lg border border-line px-2 py-1 text-[11px] font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
-                      >
-                        edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onChange(lines.filter((l) => l.item_id !== it.id))}
-                        aria-label={`Remove ${it.name}`}
-                        className="mise-press shrink-0 rounded-lg px-1.5 py-1 text-fg-faint hover:text-rose-300"
-                      >
-                        ✕
-                      </button>
                     </div>
-                    {/* "anything useful we can add in that basket other than
-                        the edit feature? Just think, but don't spoil and make
-                        it clumsy." One line, not three: what this order LEAVES
-                        you with. That is the question you actually have while
-                        building an indent — did I order enough — and it cannot
-                        be answered by the price or the quantity alone. */}
-                    {(() => {
-                      const had = parseFloat(it.current_stock) || 0;
-                      const after = had + n;
-                      const min = parseFloat(it.min_stock_level || "0") || 0;
-                      const short = min > 0 && after < min;
-                      // "the sentence is not clear, it's confusing — we need to
-                      // say '1 piece is in stock, if we complete purchase we
-                      // will see this'. Like this we need to say clearly to
-                      // users, as this is not developer usage, this is layman
-                      // usage we are building for."
-                      //
-                      // So: two short sentences of English, not an arrow
-                      // diagram. Arrows are shorthand for people who already
-                      // know what the two numbers mean.
-                      return (
-                        <p className={`mt-1 text-[11px] leading-relaxed ${short ? "text-amber-300" : "text-fg-faint"}`}>
-                          You have {fmtQty(String(had), it.unit)} in stock. Once this order arrives
-                          you will have <b className="font-semibold">{fmtQty(String(after), it.unit)}</b>
-                          {stockInPacks(it, after) ? `, which is ${stockInPacks(it, after)}` : ""}.
-                          {short
-                            ? ` That is still below the ${fmtQty(it.min_stock_level || "0", it.unit)} you asked to keep in stock.`
-                            : ""}
-                        </p>
-                      );
-                    })()}
-                    {sup && (
-                      <p className="mt-1 text-[11px] text-fg-faint">
-                        {priceLines(it, sup)
-                          .map(
-                            (l) =>
-                              `1 ${l.label} ${format(l.price.toFixed(2))}${l.note ? ` (${l.note})` : ""}`,
-                          )
-                          .join("  ·  ")}
-                      </p>
-                    )}
+
+                    {/* The same facts, a third of the height.
+                        "that sentence is too kiddish... instead of 'You have 0
+                        piece in stock' we can have like in-stock = 0 piece" —
+                        so the state is a LABEL and only the consequence is a
+                        sentence, which is the half he said was fine. */}
+                    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[11px] leading-tight">
+                      <span className="text-fg-faint">
+                        in stock <b className="font-semibold text-fg-soft">{fmtQty(String(had), it.unit)}</b>
+                      </span>
+                      <span aria-hidden className="text-fg-faint/50">·</span>
+                      <span className={short ? "text-amber-300" : "text-fg-soft"}>
+                        after this <b className="font-semibold">{fmtQty(String(after), it.unit)}</b>
+                        {stockInPacks(it, after) ? ` (${stockInPacks(it, after)})` : ""}
+                      </span>
+                      {short && (
+                        <span className="text-amber-300">· under your {fmtQty(it.min_stock_level || "0", it.unit)} minimum</span>
+                      )}
+                    </p>
                   </li>
                 );
               })}
             </ul>
+            )}
           </div>
         ))}
       </div>

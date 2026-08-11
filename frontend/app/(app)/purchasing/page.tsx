@@ -638,18 +638,30 @@ export default function PurchasingPage() {
     [matchedIndents, indentFilter],
   );
 
+  /** The bucket a purchase order is in, as a person would name it.
+   *
+   *  NOT its raw status. A PO's status is DRAFT / SENT / RECEIVED, and the chip
+   *  filtered on "ORDERED" — a value that does not exist — so it counted 15 and
+   *  then showed "0 of 45". The count and the filter have to be the same
+   *  function or they will disagree again. */
+  const poBucket = useCallback(
+    (p: POSummary) => {
+      if (p.status === "RECEIVED") return "RECEIVED";
+      if (p.expected_delivery && p.expected_delivery < todayStr) return "LATE";
+      return "WAITING";
+    },
+    [todayStr],
+  );
+
   const matchedPos = useMemo(
     () =>
       applyFilter(pos, poFilter, (p) => ({
         text: `${p.po_number} ${p.vendor_name ?? ""} ${p.status}`,
-        status:
-          p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr
-            ? "OVERDUE"
-            : p.status,
+        status: poBucket(p),
         date: p.expected_delivery ?? p.po_number,
         value: parseFloat(p.total_amount || "0"),
       })),
-    [pos, poFilter, todayStr],
+    [pos, poFilter, poBucket],
   );
   const shownPos = useMemo(() => pageOf(matchedPos, poFilter), [matchedPos, poFilter]);
 
@@ -664,23 +676,16 @@ export default function PurchasingPage() {
   }, [indents]);
 
   const poStatuses = useMemo(() => {
-    const late = pos.filter(
-      (p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr,
-    ).length;
+    const n = (b: string) => pos.filter((p) => poBucket(p) === b).length;
+    // Named for what they mean to a person. "With suppliers" was my phrase and
+    // he was right to ask what it meant — "still to arrive" is the actual
+    // question, and "late" is the one you act on.
     return [
-      { key: "OVERDUE", label: "Overdue", count: late, tone: "bad" as const },
-      {
-        key: "ORDERED",
-        label: "With suppliers",
-        count: pos.filter(
-          (p) =>
-            p.status !== "RECEIVED" &&
-            !(p.expected_delivery && p.expected_delivery < todayStr),
-        ).length,
-      },
-      { key: "RECEIVED", label: "Received", count: pos.filter((p) => p.status === "RECEIVED").length },
+      { key: "LATE", label: "Late", count: n("LATE"), tone: "bad" as const },
+      { key: "WAITING", label: "Still to arrive", count: n("WAITING") },
+      { key: "RECEIVED", label: "Arrived", count: n("RECEIVED") },
     ].filter((x) => x.count > 0);
-  }, [pos, todayStr]);
+  }, [pos, poBucket]);
 
   const poGroups = useMemo(() => {
     const byIndent = new Map<string, POSummary[]>();
@@ -708,17 +713,9 @@ export default function PurchasingPage() {
     <Workbench
       title="Purchasing"
       subtitle="Kitchen indents → vendor-wise purchase orders."
-      action={
-        canWrite ? (
-          <button
-            type="button"
-            onClick={() => setTab("new")}
-            className="mise-press hidden rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-700 sm:block"
-          >
-            ＋ New order
-          </button>
-        ) : undefined
-      }
+      // No page action. "+ New order" top-right did exactly what the first tab
+      // does, one inch away from it — "remove it, it's a dead button".
+      action={undefined}
       tools={
           <SubNav
             active={tab}
@@ -1013,7 +1010,7 @@ export default function PurchasingPage() {
           phone it becomes a 2x2 grid rather than something you drag sideways —
           "this status in mobile is showing horizontal scroll because of no
           space". A status you have to scroll to read is not a status. */}
-      {tab === "new" && (indents.length > 0 || pos.length > 0) && (() => {
+      {(indents.length > 0 || pos.length > 0) && (() => {
         const today = localISODate();
         const openPos = pos.filter((x) => x.status !== "RECEIVED");
         const overdue = openPos.filter(
