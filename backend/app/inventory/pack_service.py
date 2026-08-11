@@ -116,20 +116,27 @@ async def per_base_prices(
     like expense, P&L etc."
     """
     by_item = await levels_for(db, item_ids)
+    # TWO shapes, deliberately. The ORM rows carry the `id` a supplier points
+    # at; `Level` is the plain dataclass the arithmetic works on and has no id
+    # at all — looking one up on the other silently found nothing and every
+    # conversion fell through to "treat it as per base", which is the bug this
+    # function exists to fix. The tests caught it; a careful read had not.
     chains = {iid: as_levels(rows) for iid, rows in by_item.items()}
+    positions = {
+        iid: {row.id: row.position for row in rows} for iid, rows in by_item.items()
+    }
 
     def convert(item_id: uuid.UUID, price, level_id: uuid.UUID | None) -> Decimal:
         if price is None:
             return Decimal("0")
         if level_id is None:
             return Decimal(price)
-        levels = chains.get(item_id, [])
-        position = next((lv.position for lv in levels if lv.id == level_id), None)
+        position = positions.get(item_id, {}).get(level_id)
         if position is None:
             # The supplier points at a rung this item no longer has. Treat the
             # quote as per base rather than inventing a conversion — being
             # honest about not knowing beats being confidently wrong about money.
             return Decimal(price)
-        return packs.price_per_base(price, levels, position)
+        return packs.price_per_base(price, chains.get(item_id, []), position)
 
     return convert
