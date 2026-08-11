@@ -1,11 +1,12 @@
 // Display fonts a hotel can choose for its public site. next/font self-hosts them
 // at build time (no runtime request to Google), so the picker costs nothing at load.
-import { Bebas_Neue, Caveat, Fraunces, Playfair_Display } from "next/font/google";
+// Local — see app/layout.tsx for why the build no longer phones Google.
+import localFont from "next/font/local";
 
-const playfair = Playfair_Display({ subsets: ["latin"], weight: ["600", "800"], display: "swap" });
-const bebas = Bebas_Neue({ subsets: ["latin"], weight: "400", display: "swap" });
-const caveat = Caveat({ subsets: ["latin"], weight: ["600", "700"], display: "swap" });
-const fraunces = Fraunces({ subsets: ["latin"], weight: ["600", "900"], display: "swap" });
+const playfair = localFont({ src: "../../app/fonts/playfair.woff2", weight: "400 900", display: "swap" });
+const bebas = localFont({ src: "../../app/fonts/bebas.woff2", weight: "400", display: "swap" });
+const caveat = localFont({ src: "../../app/fonts/caveat.woff2", weight: "400 700", display: "swap" });
+const fraunces = localFont({ src: "../../app/fonts/fraunces.woff2", weight: "100 900", display: "swap" });
 
 export const SITE_FONTS = [
   { key: "sans", label: "Clean", className: "" },
