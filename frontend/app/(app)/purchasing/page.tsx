@@ -687,6 +687,11 @@ export default function PurchasingPage() {
     ].filter((x) => x.count > 0);
   }, [pos, poBucket]);
 
+  // "also I need one filter like multi vendor / single vendor" — a purchase run
+  // that split across four suppliers is a different kind of thing from one that
+  // went to a single supplier, and you chase them differently.
+  const [runSize, setRunSize] = useState<"all" | "single" | "multi">("all");
+
   const poGroups = useMemo(() => {
     const byIndent = new Map<string, POSummary[]>();
     const order: string[] = [];
@@ -701,8 +706,14 @@ export default function PurchasingPage() {
       const indent = key === "__none__" ? null : indents.find((i) => i.id === key) ?? null;
       const vendorCount = new Set(groupPos.map((p) => p.vendor_id)).size;
       return { key, indentId: key === "__none__" ? null : key, pos: groupPos, total, indent, vendorCount };
-    });
-  }, [shownPos, indents]);
+    }).filter((g) =>
+      runSize === "all"
+        ? true
+        : runSize === "single"
+          ? g.vendorCount <= 1
+          : g.vendorCount > 1,
+    );
+  }, [shownPos, indents, runSize]);
 
   if (loading) return <Spinner />;
 
@@ -1272,6 +1283,27 @@ export default function PurchasingPage() {
             total={pos.length}
             shown={matchedPos.length}
           />
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-3 py-2">
+            <span className="mr-0.5 text-[11px] text-fg-faint">purchase runs</span>
+            {([
+              ["all", "any"],
+              ["single", "one supplier"],
+              ["multi", "split across suppliers"],
+            ] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setRunSize(k)}
+                className={`mise-press rounded-full px-2.5 py-1 text-[11px] transition ${
+                  runSize === k
+                    ? "bg-brand-500 font-semibold text-white"
+                    : "border border-line text-fg-soft hover:border-brand-400/40"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="space-y-3 p-3">
             {matchedPos.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">
@@ -1363,7 +1395,17 @@ export default function PurchasingPage() {
       </div>
 
       {recvPo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div
+          /* z-[150]: this opens FROM the purchase-order sheet, so it has to sit
+             above it. At z-50 it tied with the sheet (DetailSheet is 50 +
+             depth*10) and lost on document order — which is why pressing
+             "Receive into stock" looked like it did nothing and he had to close
+             the sheet to find the dialog waiting underneath. Third time he has
+             reported this shape of bug; the confirm dialog had it too. */
+          className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRecvPo(null)} aria-hidden />
           <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
             <div className="mb-1 flex items-start justify-between">
@@ -1616,9 +1658,15 @@ export default function PurchasingPage() {
         {openPoObj && (
           <div>
                       <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
+                        {/* "what is the use of that date choosing — expected
+                            delivery means? What's the use?" A fair question,
+                            because the field never said. It is the ONLY thing
+                            that makes an order count as late: the dashboard
+                            chases it on the day, and the Late filter on this
+                            page is measured against it. Say so. */}
                         {openPoObj.status !== "RECEIVED" && canApprove && (
                           <label className="flex flex-wrap items-center gap-2 text-xs text-fg-faint">
-                            🚚 Expected delivery
+                            🚚 When did they promise it?
                             <input
                               type="date"
                               value={openPoObj.expected_delivery ?? ""}
@@ -1631,13 +1679,21 @@ export default function PurchasingPage() {
                               }}
                               className="mise-well rounded-lg px-2 py-1 text-xs text-fg outline-none"
                             />
-                            {openPoObj.expected_delivery && <span>the dashboard will chase it on the day</span>}
+                            <span className="text-fg-faint">
+                              {openPoObj.expected_delivery
+                                ? "On this date the dashboard starts chasing it, and it counts as Late after it."
+                                : "Set it and this order can be chased — without a date it can never be flagged late."}
+                            </span>
                           </label>
                         )}
                         {openPoBusy && !openPoDetail ? (
                           <p className="py-1 text-center text-sm text-fg-faint">Loading items…</p>
                         ) : openPoDetail && openPoDetail.items.length > 0 ? (
-                          <ul className="space-y-1.5">
+                          /* Two across on a wide sheet. "here also we are
+                             wasting space, why can't we keep side by side or
+                             something useful" — a one-line order left three
+                             quarters of the panel empty. */
+                          <ul className="grid grid-cols-1 gap-1.5 lg:grid-cols-2">
                             {openPoDetail.items.map((it) => (
                               <li key={it.item_id} className="mise-card3d p-2.5">
                                 {/* "just showing 1 x 30 — its not clear bro, we
@@ -1672,6 +1728,55 @@ export default function PurchasingPage() {
                         ) : (
                           <p className="py-1 text-center text-sm text-fg-faint">No line items.</p>
                         )}
+                        {/* What this order MEANS, in the space the lines were
+                            not using. Not decoration: it is the money question
+                            you ask about a purchase order, and it was only
+                            answerable by opening two other pages. */}
+                        {openPoDetail && openPoDetail.items.length > 0 && (
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            {[
+                              {
+                                label: "Order value",
+                                value: format(openPoObj.total_amount),
+                                hint: `${openPoDetail.items.length} line${openPoDetail.items.length === 1 ? "" : "s"}`,
+                              },
+                              {
+                                label: "Supplier",
+                                value: openPoObj.vendor_name || "—",
+                                hint: "one order per supplier",
+                              },
+                              {
+                                label: "Promised",
+                                value: openPoObj.expected_delivery
+                                  ? relativeDay(openPoObj.expected_delivery)
+                                  : "no date",
+                                hint: openPoObj.expected_delivery ?? "cannot be chased",
+                              },
+                              {
+                                label: "State",
+                                value:
+                                  openPoObj.status === "RECEIVED"
+                                    ? "In your stock"
+                                    : "Still to arrive",
+                                hint:
+                                  openPoObj.status === "RECEIVED"
+                                    ? "stock and costs updated"
+                                    : "stock unchanged until received",
+                              },
+                            ].map((t) => (
+                              <div key={t.label} className="mise-card3d px-3 py-2">
+                                <p className="text-[10px] uppercase tracking-wide text-fg-faint">
+                                  {t.label}
+                                </p>
+                                <p className="truncate font-display text-sm font-semibold text-fg">
+                                  {t.value}
+                                </p>
+                                <p className="truncate text-[10px] text-fg-faint">{t.hint}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf`, `${openPoObj.po_number}.pdf`)}

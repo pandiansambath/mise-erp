@@ -885,7 +885,7 @@ export default function RotaPage() {
 
       {/* ✏️ shift editor — a proper centered modal (nothing clips, nothing hides) */}
       {editId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditId(null)} aria-hidden />
           <div className="mise-pop-lg relative w-full max-w-sm rounded-3xl border border-line bg-paper-2 p-6 shadow-2xl shadow-black/40">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-400">✏️ edit shift</p>
