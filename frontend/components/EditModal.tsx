@@ -170,16 +170,20 @@ export function FormShell({
   width?: "sm" | "md" | "lg";
   children: ReactNode;
 }) {
-  if (editing) {
-    return (
-      <EditModal open onClose={onClose} title={title} subtitle={subtitle} icon={icon} width={width}>
-        {children}
-      </EditModal>
-    );
-  }
+  // A form nobody asked for is not a shortcut, it is a wall. This used to
+  // render its children INLINE whenever you were not editing — so Inventory
+  // opened on a blank "Add an item" form that filled the whole first screen of
+  // a phone, with the stock you came to look at below the fold. His rule:
+  // never make someone scroll to reach what the page is FOR.
+  //
+  // Now it shows nothing until asked. Every caller has a visible "Add" action
+  // already, and that action opens this as a modal, in place.
+  if (!editing) return null;
   return (
-    <div ref={innerRef} className={`scroll-mt-4 ${flash ? "mise-flash" : ""}`}>
-      {children}
-    </div>
+    <EditModal open onClose={onClose} title={title} subtitle={subtitle} icon={icon} width={width}>
+      <div ref={innerRef} className={flash ? "mise-flash" : ""}>
+        {children}
+      </div>
+    </EditModal>
   );
 }
