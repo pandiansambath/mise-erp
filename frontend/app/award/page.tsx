@@ -10,7 +10,8 @@
 // over the top and bottom of it where nothing needs covering, and the way out
 // is a ✕ in the corner.
 
-import { Cinzel } from "next/font/google";
+// Local — see app/layout.tsx.
+import localFont from "next/font/local";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
@@ -18,7 +19,7 @@ import { useState } from "react";
 // Cinzel: cut from Roman inscriptional capitals — the lettering on monuments
 // and coins. He asked for "an ancient feel", and this is literally the shape
 // carved into stone, which is the right voice for an award.
-const ancient = Cinzel({ subsets: ["latin"], weight: ["400", "600", "700"] });
+const ancient = localFont({ src: "../fonts/cinzel.woff2", weight: "400 700", display: "swap" });
 
 // Browser-only: WebGL cannot be server-rendered, and the renderer should not
 // be in anybody's bundle until they ask for this page.
