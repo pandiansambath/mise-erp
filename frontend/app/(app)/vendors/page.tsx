@@ -1,6 +1,6 @@
 "use client";
 
-import { chainSummary, levelName, priceLines, pricePerBase } from "@/lib/packs";
+import { chainSummary, levelName, priceLines, pricePerBase, stockInPacks } from "@/lib/packs";
 
 import { useEffect, useRef, useState } from "react";
 import { Select } from "@/components/Select";
@@ -1135,8 +1135,12 @@ export default function VendorsPage() {
                       // as a bottle can have 30." Stock is counted in the unit you
                       // cook with, which is the only count a kitchen can act on;
                       // what was missing is the sentence that makes it make sense.
-                      value={`${fmtQty(it.current_stock, it.unit)}`}
-                      hint={chainSummary(it)[0] ?? undefined}
+                      value={stockInPacks(it) || fmtQty(it.current_stock, it.unit)}
+                      hint={
+                        stockInPacks(it)
+                          ? `${fmtQty(it.current_stock, it.unit)} · ${chainSummary(it)[0] ?? ""}`
+                          : (chainSummary(it)[0] ?? undefined)
+                      }
                     />
                   )}
                   {best != null && (

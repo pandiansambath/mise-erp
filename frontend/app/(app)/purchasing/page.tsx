@@ -1008,7 +1008,7 @@ export default function PurchasingPage() {
             <h3 className="font-semibold text-fg">Indents</h3>
             <span className="text-xs text-fg-faint">{indents.length} total</span>
           </div>
-          <div className="space-y-2 p-3">
+          <div className="mise-sheet-cascade space-y-2 p-3">
             {indents.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">No indents yet.</p>
             ) : (
@@ -1020,10 +1020,10 @@ export default function PurchasingPage() {
                     type="button"
                     onClick={() => toggleIndent(ind)}
                     aria-expanded={open}
-                    className={`mise-feel mise-press flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5 ${
+                    className={`mise-card3d mise-press flex w-full items-center gap-3 border px-4 py-3 text-left ${
                       ind.status === "PENDING"
-                        ? "border-amber-400/30 bg-amber-400/[0.05]"
-                        : "border-line bg-glass/5 hover:border-line-2"
+                        ? "border-amber-400/30 !bg-amber-400/[0.07]"
+                        : "border-line hover:border-line-2"
                     }`}
                   >
                     {/* A tile rather than a chevron: status is the first thing
@@ -1113,10 +1113,10 @@ export default function PurchasingPage() {
                 const detail = poDetail[po.id];
                 const busy = poBusy === po.id;
                 return (
-                  <div key={po.id} className={`mise-feel overflow-hidden rounded-2xl border transition ${
+                  <div key={po.id} className={`mise-card3d overflow-hidden border transition ${
                     po.status !== "RECEIVED" && po.expected_delivery && po.expected_delivery < todayStr
-                      ? "border-rose-400/30 bg-rose-400/[0.04]"
-                      : "border-line bg-glass/5 hover:border-line-2"
+                      ? "border-rose-400/30 !bg-rose-400/[0.06]"
+                      : "border-line hover:border-line-2"
                   }`}>
                     <button
                       type="button"

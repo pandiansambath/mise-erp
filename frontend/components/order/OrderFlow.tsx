@@ -24,7 +24,7 @@ import type { Item, SupplierOption } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { categoryEmoji, fmtQty, stockState } from "@/components/ItemPicker";
 import { AnimatedNumber } from "@/components/fx";
-import { levelName, orderSizes, priceLines, pricePerBase, tidy } from "@/lib/packs";
+import { levelName, orderSizes, priceLines, pricePerBase, stockInPacks, tidy } from "@/lib/packs";
 import { BASKET_PANEL_ID, burstToBasket } from "@/components/order/burst";
 import ClickSpark from "@/components/reactbits/ClickSpark";
 import GlareHover from "@/components/reactbits/GlareHover";
@@ -145,7 +145,11 @@ function ItemSheet({
       depth={2}
       onClose={onClose}
       title={item.name}
-      subtitle={`${fmtQty(item.current_stock, item.unit)} in stock`}
+      subtitle={
+        stockInPacks(item)
+          ? `${fmtQty(item.current_stock, item.unit)} in stock · ${stockInPacks(item)}`
+          : `${fmtQty(item.current_stock, item.unit)} in stock`
+      }
       footer={
         <Magnet padding={70} magnetStrength={7} className="block">
           <button
