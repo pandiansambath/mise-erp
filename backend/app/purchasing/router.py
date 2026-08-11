@@ -72,13 +72,43 @@ async def create_indent(
     return await _indent_out(db, indent)
 
 
-@router.get("/indents", response_model=list[IndentOut])
+class IndentPage(BaseModel):
+    rows: list[IndentOut]
+    total: int
+    #: status -> how many, over everything the search matched
+    counts: dict[str, int]
+
+
+@router.get("/indents", response_model=IndentPage)
 async def list_indents(
+    q: str | None = None,
+    status_filter: str | None = None,
+    sort: str = "newest",
+    limit: int = 10,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("indent:read")),
-) -> list[IndentOut]:
-    indents = await service.list_indents(db, user.hotel_id)
-    return [await _indent_out(db, i) for i in indents]
+) -> IndentPage:
+    """One page of indents. `limit=0` means everything, for exports.
+
+    Each row costs a second query for its items, so this endpoint used to make
+    one round trip per indent in the hotel before returning anything. Paging
+    turns that from "all of them" into "ten".
+    """
+    page = await service.list_indents_page(
+        db,
+        user.hotel_id,
+        q=q,
+        status=status_filter,
+        sort=sort,
+        limit=limit,
+        offset=offset,
+    )
+    return IndentPage(
+        rows=[await _indent_out(db, i) for i in page["rows"]],
+        total=page["total"],
+        counts=page["counts"],
+    )
 
 
 @router.post("/indents/{indent_id}/approve", response_model=IndentOut)

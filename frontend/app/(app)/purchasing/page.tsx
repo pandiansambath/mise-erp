@@ -21,6 +21,7 @@ import Link from "next/link";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
 import { OrderFlow } from "@/components/order/OrderFlow";
+import type { ListFilter } from "@/components/ListControls";
 import {
   EMPTY_FILTER,
   ListControls,
@@ -98,6 +99,13 @@ export default function PurchasingPage() {
 
   const [items, setItems] = useState<Item[]>([]);
   const [indents, setIndents] = useState<Indent[]>([]);
+  // How many there are in total, and how many per status — computed by the
+  // database over EVERYTHING, not by counting the page in front of us. A chip
+  // that counts only the current page is a chip that lies.
+  const [indentTotal, setIndentTotal] = useState(0);
+  /** Bumped after any action, so the indent page refetches itself. */
+  const [refresh, setRefresh] = useState(0);
+  const [indentCounts, setIndentCounts] = useState<Record<string, number>>({});
   const [pos, setPos] = useState<POSummary[]>([]);
   const [todayStr] = useState(() => new Date().toISOString().slice(0, 10)); // frozen at mount
   const [loading, setLoading] = useState(true);
@@ -267,14 +275,39 @@ export default function PurchasingPage() {
     }
   }
 
+  /** Indents come a page at a time now — the database no longer reads every
+   *  row, and each row costs its own query for its items, so this is the
+   *  difference between 37 round trips and 11. Search and status went with it,
+   *  because filtering here while paging there would only ever search the page
+   *  you are on. */
+  const loadIndents = useCallback(async (f: ListFilter) => {
+    const params = new URLSearchParams({
+      sort: f.sort === "oldest" ? "oldest" : "newest",
+      limit: String(f.size || 0),
+      offset: String(f.size ? (f.page - 1) * f.size : 0),
+    });
+    if (f.q.trim()) params.set("q", f.q.trim());
+    if (f.status !== "all") params.set("status_filter", f.status);
+    const page = await api.get<{ rows: Indent[]; total: number; counts: Record<string, number> }>(
+      `/purchasing/indents?${params.toString()}`,
+    );
+    setIndents(page.rows);
+    setIndentTotal(page.total);
+    setIndentCounts(page.counts ?? {});
+  }, []);
+
+  /** Refresh everything after an action.
+   *
+   *  Indents are refreshed by BUMPING A COUNTER rather than called directly:
+   *  the effect that owns the fetch also owns the current search and page, so
+   *  reloading through it keeps whatever the user had typed. Calling the loader
+   *  here would have to pass a filter this function cannot see, and would
+   *  silently throw the search away. */
   async function load() {
-    const [ind, p] = await Promise.all([
-      api.get<Indent[]>("/purchasing/indents"),
-      api.get<POSummary[]>("/purchasing/purchase-orders"),
-    ]);
-    setIndents(ind);
+    const p = await api.get<POSummary[]>("/purchasing/purchase-orders");
     setPos(p);
     setIndentConsol({}); // POs may have changed → drop cached consolidations
+    setRefresh((n) => n + 1);
   }
 
   async function toggleIndent(ind: Indent) {
@@ -621,7 +654,7 @@ export default function PurchasingPage() {
 
   const matchedIndents = useMemo(
     () =>
-      applyFilter(indents, indentFilter, (i) => ({
+      applyFilter(indents, { ...indentFilter, q: "", status: "all" }, (i) => ({
         // Searchable by date, status AND what is in it — "the one with the
         // lemons" is how people actually remember an order.
         text: `${i.date} ${i.status} ${i.items.map((x) => `${x.item_name} ${x.vendor_name ?? ""}`).join(" ")}`,
@@ -633,10 +666,17 @@ export default function PurchasingPage() {
       })),
     [indents, indentFilter, indentConsol],
   );
-  const shownIndents = useMemo(
-    () => pageOf(matchedIndents, indentFilter),
-    [matchedIndents, indentFilter],
-  );
+  // The server did the filtering, so what came back IS the page.
+  const shownIndents = indents;
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void loadIndents(indentFilter).catch(() => {
+        /* a failed refetch leaves the last good page on screen */
+      });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [indentFilter, refresh, loadIndents]);
 
   /** The bucket a purchase order is in, as a person would name it.
    *
@@ -666,14 +706,14 @@ export default function PurchasingPage() {
   const shownPos = useMemo(() => pageOf(matchedPos, poFilter), [matchedPos, poFilter]);
 
   const indentStatuses = useMemo(() => {
-    const n = (st: string) => indents.filter((i) => i.status === st).length;
+    const n = (st: string) => indentCounts[st] ?? 0;
     return [
       { key: "PENDING", label: "Awaiting approval", count: n("PENDING"), tone: "warn" as const },
       { key: "APPROVED", label: "Approved", count: n("APPROVED") },
       { key: "ORDERED", label: "Ordered", count: n("ORDERED") },
       { key: "REJECTED", label: "Rejected", count: n("REJECTED") },
     ].filter((x) => x.count > 0);
-  }, [indents]);
+  }, [indentCounts]);
 
   const poStatuses = useMemo(() => {
     const n = (b: string) => pos.filter((p) => poBucket(p) === b).length;
@@ -1117,7 +1157,7 @@ export default function PurchasingPage() {
               type="button"
               onClick={orderAllLow}
               title="Pull every low-stock item (topped up to par) into the indent"
-              className="mise-press rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300 transition hover:bg-brand-400/20"
+              className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-brand-300"
             >
               🛒 Order all low-stock
             </button>
@@ -1166,14 +1206,14 @@ export default function PurchasingPage() {
                     // apart as it goes, so you land back on the page having SEEN
                     // the order leave rather than finding the panel gone.
                     onClick={() => { if (lines.length) void burstBasket(); }}
-                    className="mise-press flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40"
+                    className="mise-btn-key mise-press flex-1 px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
                   >
                     Submit indent · {lines.length}
                   </button>
                   <button
                     type="button"
                     onClick={resetIndent}
-                    className="mise-raised mise-press rounded-xl px-4 py-2.5 text-sm font-medium text-fg-soft"
+                    className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
                   >
                     Clear
                   </button>
@@ -1190,20 +1230,20 @@ export default function PurchasingPage() {
         <Card className={`overflow-hidden p-0 ${tab === "indents" ? "" : "hidden"}`}>
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h3 className="font-semibold text-fg">Indents</h3>
-            <span className="text-xs text-fg-faint">{indents.length} total</span>
+            <span className="text-xs text-fg-faint">{indentTotal} total</span>
           </div>
           <ListControls
             value={indentFilter}
             onChange={setIndentFilter}
             statuses={indentStatuses}
             placeholder="Search by date, status or what is in it…"
-            total={indents.length}
-            shown={matchedIndents.length}
+            total={indentTotal}
+            shown={indentTotal}
           />
           <div className="mise-sheet-cascade space-y-2 p-3">
-            {matchedIndents.length === 0 ? (
+            {shownIndents.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">
-                {indents.length === 0 ? "No indents yet." : "Nothing matches that."}
+                {indentTotal === 0 ? "Nothing matches that." : "No indents yet."}
               </p>
             ) : (
               shownIndents.map((ind) => {
@@ -1266,7 +1306,7 @@ export default function PurchasingPage() {
               })
             )}
           </div>
-          <Pager value={indentFilter} onChange={setIndentFilter} matched={matchedIndents.length} />
+          <Pager value={indentFilter} onChange={setIndentFilter} matched={indentTotal} />
         </Card>
 
         {/* Purchase orders — same tap-to-expand; line items load on open, no side-scroll. */}
