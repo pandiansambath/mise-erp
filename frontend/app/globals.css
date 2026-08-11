@@ -1911,3 +1911,26 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .mise-pocket-bump { animation: none; }
 }
+
+/* StarBorder's orbiting sparkle (React Bits).
+   The component ships expecting these two keyframes to exist in the host
+   project's Tailwind config — without them it renders a static gradient and
+   looks broken rather than absent, which is worse. Checked before shipping. */
+@keyframes star-movement-bottom {
+  0%   { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(-100%, 0%); opacity: 0; }
+}
+@keyframes star-movement-top {
+  0%   { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(100%, 0%); opacity: 0; }
+}
+.animate-star-movement-bottom {
+  animation: star-movement-bottom linear infinite alternate;
+}
+.animate-star-movement-top {
+  animation: star-movement-top linear infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-star-movement-bottom,
+  .animate-star-movement-top { animation: none; }
+}

@@ -1,6 +1,8 @@
 // Small presentational primitives used across pages.
 "use client";
 
+import SpotlightCard from "@/components/reactbits/SpotlightCard";
+
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 import { Sparkline } from "@/components/charts";
@@ -63,7 +65,15 @@ export function StatCard({
     rose: "text-rose-400",
     copper: "text-copper-300",
   };
+  // The cursor lights what it is over. A dashboard is scanned, not read, and a
+  // soft follow-light helps the eye settle on the card it is already heading
+  // for without anything shouting. Applied here rather than per-page so every
+  // stat card behaves the same way.
   const body = (
+    <SpotlightCard
+      className="!h-full !rounded-2xl !border-0 !bg-transparent !p-0"
+      spotlightColor="rgba(52, 211, 153, 0.12)"
+    >
     <Card
       className={`mise-feel h-full hover:border-line-2 hover:bg-paper-2/90 ${
         href ? "group cursor-pointer hover:shadow-xl hover:shadow-black/30" : ""
@@ -94,6 +104,7 @@ export function StatCard({
       )}
       {hint && <p className="mt-1 text-xs text-fg-faint">{hint}</p>}
     </Card>
+    </SpotlightCard>
   );
   return href ? <Link href={href} className="block h-full">{body}</Link> : body;
 }
