@@ -46,9 +46,14 @@ export function EditModal({
   // Back closes the overlay rather than leaving the page.
   useBackToClose(open, onClose);
 
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -64,7 +69,13 @@ export function EditModal({
       document.body.style.overflow = prev;
       clearTimeout(t);
     };
-  }, [open, onClose]);
+    // Depends on `open` ALONE. It used to include onClose, which every caller
+    // passes as an inline arrow — a new identity every render — so this whole
+    // effect re-ran on each keystroke and re-focused the first field 60ms
+    // later. The caret jumped out of whatever you were typing in and back to
+    // the top of the form. Same fault as DetailSheet; this is the modal used by
+    // the inventory item form.
+  }, [open]);
 
   if (!open || typeof document === "undefined") return null;
 

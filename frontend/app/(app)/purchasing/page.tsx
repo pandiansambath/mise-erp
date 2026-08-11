@@ -270,8 +270,16 @@ export default function PurchasingPage() {
     }
     try {
       await api.post("/purchasing/indents", payload);
+      const n = payload.items.length;
       setLines([]);
       setVendorPick({});
+      // It said nothing at all before — "i clicked the submit but nothing
+      // happened in UI pov". The indent WAS created; the screen just never
+      // mentioned it, and an action with no acknowledgement reads as a broken
+      // button. Say what happened and where it went.
+      setMsg(
+        `Indent raised with ${n} item${n === 1 ? "" : "s"} — it is waiting for approval under Indents.`,
+      );
       await load();
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not create indent");
@@ -855,6 +863,66 @@ export default function PurchasingPage() {
           the odd one out — and the counts now say what needs attention rather
           than just how many exist. */}
 
+      {/* The pipeline goes FIRST — "keep this one in top, i mean that status
+          thing". It answers "where is everything" before you start adding to
+          the next order, which is the right order to think in.
+          The tiles were flat wells; they are raised now, with a real shadow and
+          a ring, so each one reads as its own card. */}
+      {/* ── The purchasing pipeline — where every order sits, at a glance ── */}
+      {tab === "new" && (indents.length > 0 || pos.length > 0) && (
+        <Card className="mise-feel mb-4">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            {(() => {
+              const stages = [
+                {
+                  icon: "📝",
+                  label: "Indents raised",
+                  main: indents.filter((x) => x.status === "PENDING").length,
+                  sub: "awaiting approval",
+                  tone: "text-amber-300",
+                },
+                {
+                  icon: "✅",
+                  label: "Approved",
+                  main: indents.filter((x) => x.status === "APPROVED").length,
+                  sub: "ready to order",
+                  tone: "text-brand-300",
+                },
+                {
+                  icon: "📦",
+                  label: "POs out",
+                  main: pos.filter((x) => x.status !== "RECEIVED").length,
+                  sub: "with suppliers",
+                  tone: "text-sky-300",
+                },
+                {
+                  icon: "🏠",
+                  label: "Received",
+                  main: pos.filter((x) => x.status === "RECEIVED").length,
+                  sub: "in your stock",
+                  tone: "text-fg",
+                },
+              ];
+              return stages.map((st, i) => (
+                <div key={st.label} className="flex flex-1 items-center gap-2">
+                  <div className="mise-neo-raised flex flex-1 items-center gap-3 rounded-2xl px-3.5 py-3 shadow-lg shadow-black/10 ring-1 ring-glass/10 transition hover:-translate-y-0.5 hover:shadow-xl">
+                    <span aria-hidden className="text-2xl">{st.icon}</span>
+                    <span className="min-w-0">
+                      <span className={`block font-display text-2xl font-semibold leading-tight tabular-nums ${st.tone}`}>{st.main}</span>
+                      <span className="block truncate text-[11px] font-medium text-fg-faint">{st.label}</span>
+                      <span className="block truncate text-[10px] text-fg-faint/80">{st.sub}</span>
+                    </span>
+                  </div>
+                  {i < stages.length - 1 && (
+                    <span aria-hidden className="hidden text-fg-faint sm:block">→</span>
+                  )}
+                </div>
+              ));
+            })()}
+          </div>
+        </Card>
+      )}
+
       {canWrite && tab === "new" && (
         <Card className="mb-6" id="indent-form">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
@@ -924,60 +992,6 @@ export default function PurchasingPage() {
             />
           </form>
           )}
-        </Card>
-      )}
-
-      {/* ── The purchasing pipeline — where every order sits, at a glance ── */}
-      {tab === "new" && (indents.length > 0 || pos.length > 0) && (
-        <Card className="mise-feel mb-6">
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-            {(() => {
-              const stages = [
-                {
-                  icon: "📝",
-                  label: "Indents raised",
-                  main: indents.filter((x) => x.status === "PENDING").length,
-                  sub: "awaiting approval",
-                  tone: "text-amber-300",
-                },
-                {
-                  icon: "✅",
-                  label: "Approved",
-                  main: indents.filter((x) => x.status === "APPROVED").length,
-                  sub: "ready to order",
-                  tone: "text-brand-300",
-                },
-                {
-                  icon: "📦",
-                  label: "POs out",
-                  main: pos.filter((x) => x.status !== "RECEIVED").length,
-                  sub: "with suppliers",
-                  tone: "text-sky-300",
-                },
-                {
-                  icon: "🏠",
-                  label: "Received",
-                  main: pos.filter((x) => x.status === "RECEIVED").length,
-                  sub: "in your stock",
-                  tone: "text-fg",
-                },
-              ];
-              return stages.map((st, i) => (
-                <div key={st.label} className="flex flex-1 items-center gap-2">
-                  <div className="mise-well mise-feel flex flex-1 items-center gap-3 rounded-xl px-3.5 py-2.5">
-                    <span aria-hidden className="text-xl">{st.icon}</span>
-                    <span className="min-w-0">
-                      <span className={`block text-lg font-bold leading-tight ${st.tone}`}>{st.main}</span>
-                      <span className="block truncate text-[11px] text-fg-faint">{st.label} · {st.sub}</span>
-                    </span>
-                  </div>
-                  {i < stages.length - 1 && (
-                    <span aria-hidden className="hidden text-fg-faint sm:block">→</span>
-                  )}
-                </div>
-              ));
-            })()}
-          </div>
         </Card>
       )}
 

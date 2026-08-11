@@ -261,6 +261,60 @@ export function OrderFlow({
   const [basketOpen, setBasketOpen] = useState(false);
   const [bump, setBump] = useState(false);
 
+  // Where the basket has been dragged to, if anywhere. Remembered per browser,
+  // because somewhere that suits your screen is not somewhere we can guess.
+  const basketRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("mise.basket.pos");
+      if (raw) setPos(JSON.parse(raw));
+    } catch {
+      /* a basket in the default corner is fine */
+    }
+  }, []);
+
+  const startDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const el = basketRef.current;
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    const offX = e.clientX - box.left;
+    const offY = e.clientY - box.top;
+    draggedRef.current = false;
+
+    const move = (ev: PointerEvent) => {
+      // A few pixels of slop, so a slightly shaky tap still opens the basket
+      // rather than nudging it across the screen.
+      if (
+        !draggedRef.current &&
+        Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 5
+      )
+        return;
+      draggedRef.current = true;
+      const x = Math.min(Math.max(0, ev.clientX - offX), window.innerWidth - box.width);
+      const y = Math.min(Math.max(0, ev.clientY - offY), window.innerHeight - box.height);
+      setPos({ x, y });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (draggedRef.current) {
+        try {
+          const b = basketRef.current?.getBoundingClientRect();
+          if (b) localStorage.setItem("mise.basket.pos", JSON.stringify({ x: b.left, y: b.top }));
+        } catch {
+          /* not worth failing a drag over */
+        }
+      }
+      // Let the click that follows this pointerup see the flag, then clear it.
+      window.setTimeout(() => (draggedRef.current = false), 0);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const picked = useMemo(() => new Set(lines.map((l) => l.item_id)), [lines]);
 
@@ -313,6 +367,13 @@ export function OrderFlow({
       : [...lines, { item_id: item.id, qty: baseQty }];
     onChange(next);
     setOpenItem(null);
+    // Adding from the basket should not throw a bubble at the basket you are
+    // already looking at — it would fly to something behind the sheet.
+    if (basketOpen) {
+      setBump(true);
+      window.setTimeout(() => setBump(false), 420);
+      return;
+    }
     await burstToBasket(from, "mise-basket", item.name);
     setBump(true);
     window.setTimeout(() => setBump(false), 420);
@@ -442,13 +503,25 @@ export function OrderFlow({
 
       {/* The basket. Always there so the bubble has somewhere to land, and so
           the count has somewhere to appear. */}
+      {/* The basket lives ABOVE the sheets (z-[90]), because it was hiding
+          behind the very popup you add things from — "that basket is behind
+          this popup, make that basket to be viewable by user in this area
+          itself in corner that he can open basket anytime".
+          And it DRAGS: "make that basket draggable like user can drag and
+          place anywhere in screen". Where it sits is remembered. */}
       <button
         id="mise-basket"
         type="button"
-        onClick={() => setBasketOpen(true)}
+        ref={basketRef}
+        onPointerDown={startDrag}
+        onClick={() => {
+          if (draggedRef.current) return; // a drag is not a click
+          setBasketOpen(true);
+        }}
         disabled={lines.length === 0}
         aria-label={`Basket — ${lines.length} items`}
-        className={`mise-press fixed bottom-24 right-4 z-[55] flex items-center gap-2.5 rounded-2xl border border-brand-400/45 bg-paper-2/95 px-3.5 py-2.5 shadow-xl shadow-black/40 backdrop-blur transition-all duration-300 sm:right-6 lg:bottom-8 ${
+        style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
+        className={`mise-press fixed bottom-24 right-4 z-[90] flex touch-none items-center gap-2.5 rounded-2xl border border-brand-400/45 bg-paper-2/95 px-3.5 py-2.5 shadow-xl shadow-black/40 backdrop-blur transition-[opacity,transform] duration-300 sm:right-6 lg:bottom-8 ${
           lines.length === 0
             ? "pointer-events-none translate-y-3 scale-90 opacity-0"
             : "translate-y-0 scale-100 opacity-100"
@@ -479,6 +552,9 @@ export function OrderFlow({
           supplierFor={supplierFor}
           onChange={onChange}
           onClose={() => setBasketOpen(false)}
+          // Editing opens the quantity popup ON TOP of the basket, so you come
+          // back to the basket when you are done rather than to the page.
+          onEdit={(it) => setOpenItem(it)}
           footer={footer}
         />
       )}
@@ -495,6 +571,7 @@ function BasketSheet({
   supplierFor,
   onChange,
   onClose,
+  onEdit,
   footer,
 }: {
   lines: OrderLine[];
@@ -502,6 +579,8 @@ function BasketSheet({
   supplierFor: (id: string) => SupplierOption | undefined;
   onChange: (next: OrderLine[]) => void;
   onClose: () => void;
+  /** Reopen the quantity popup for this line. */
+  onEdit: (it: Item) => void;
   footer?: React.ReactNode;
 }) {
   const { format } = useCurrency();
@@ -565,6 +644,17 @@ function BasketSheet({
                       <span className="shrink-0 tabular-nums text-sm text-fg-soft">
                         {tidy(n)} {it.unit}
                       </span>
+                      {/* "have a button like edit — if i click that edit i need
+                          to see that previous popup here as small popup to edit
+                          things". The same quantity popup, reopened on top. */}
+                      <button
+                        type="button"
+                        onClick={() => onEdit(it)}
+                        aria-label={`Change how much ${it.name}`}
+                        className="mise-press shrink-0 rounded-lg border border-line px-2 py-1 text-[11px] font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                      >
+                        edit
+                      </button>
                       <button
                         type="button"
                         onClick={() => onChange(lines.filter((l) => l.item_id !== it.id))}
