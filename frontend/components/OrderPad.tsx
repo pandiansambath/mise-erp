@@ -23,6 +23,7 @@ import type { Item, SupplierOption } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { categoryEmoji, fmtQty, stockState } from "@/components/ItemPicker";
 import { flyToPocket } from "@/components/Pocket";
+import { levelName, orderSizes, pricePerBase, priceSummary, tidy } from "@/lib/packs";
 import ClickSpark from "@/components/reactbits/ClickSpark";
 import Magnet from "@/components/reactbits/Magnet";
 import { CountUp } from "@/components/reactbits/CountUp";
@@ -63,6 +64,67 @@ export function matchItems(items: Item[], query: string, limit = 6): Item[] {
     else if (n.includes(q)) has.push(it);
   }
   return [...starts, ...has].slice(0, limit);
+}
+
+
+/** A quantity, typed in whatever size you buy in.
+ *
+ *  Defined at MODULE scope on purpose. A component declared inside another
+ *  component's body is a new type on every render, so React remounts it and the
+ *  caret jumps out of the box after each keystroke — I shipped exactly that bug
+ *  in KioskMenu earlier this session.
+ */
+function QtyCell({
+  item,
+  qty,
+  onQty,
+}: {
+  item: Item;
+  qty: string;
+  onQty: (v: string) => void;
+}) {
+  const sizes = orderSizes(item);
+  const [levelId, setLevelId] = useState<string | null>(null);
+  const size = sizes.find((s) => s.id === levelId)?.base ?? 1;
+  const stored = parseFloat(qty || "0") || 0;
+  const shown = size > 0 && stored ? tidy(stored / size) : "";
+
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <input
+        value={shown}
+        onChange={(e) => {
+          const n = parseFloat(e.target.value.replace(/[^\d.]/g, "") || "0") || 0;
+          onQty(n ? tidy(n * size) : "");
+        }}
+        inputMode="decimal"
+        placeholder="0"
+        aria-label={`How much ${item.name}`}
+        className="w-14 rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-center text-sm tabular-nums outline-none focus:border-brand-500"
+      />
+      {sizes.length > 1 ? (
+        <select
+          value={levelId ?? ""}
+          onChange={(e) => setLevelId(e.target.value || null)}
+          aria-label={`What size, of ${item.name}`}
+          className="w-20 rounded-lg border border-line-2 bg-glass/5 px-1 py-1 text-[11px] text-fg-soft outline-none focus:border-brand-500"
+        >
+          {sizes.map((s) => (
+            <option key={s.id ?? "base"} value={s.id ?? ""}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="w-14 shrink-0 truncate text-[11px] text-fg-faint">{item.unit}</span>
+      )}
+      {levelId && stored > 0 && (
+        <span className="shrink-0 text-[10px] text-indigo-300">
+          = {tidy(stored)} {item.unit}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function OrderPad({
@@ -308,8 +370,23 @@ export function OrderPad({
                           {parsed.qty} {parsed.unit || it.unit}
                         </span>
                       )}
-                      <span className="shrink-0 text-[11px] text-fg-faint">
-                        {sup ? `${sup.vendor_name} ${format(sup.price_per_unit)}` : "no supplier"}
+                      {/* The supplier's quote AND what one base unit of it
+                          costs. "Farm2Land £30.00" alone reads as £30 a piece
+                          when £30 buys a bottle of thirty. */}
+                      <span className="shrink-0 text-right text-[11px] text-fg-faint">
+                        {sup ? (
+                          <>
+                            <span className="block">{sup.vendor_name}</span>
+                            <span className="block">
+                              {format(pricePerBase(it, sup).toFixed(2))}/{it.unit}
+                              {sup.pack_level_id && (
+                                <> · {format(sup.price_per_unit)}/{levelName(it, sup.pack_level_id)}</>
+                              )}
+                            </span>
+                          </>
+                        ) : (
+                          "no supplier"
+                        )}
                       </span>
                     </button>
                   </li>
@@ -397,6 +474,12 @@ export function OrderPad({
                         <span className={`text-[11px] ${st.cls}`}>
                           {fmtQty(it.current_stock, it.unit)}
                         </span>
+                        {/* What one costs, on the tile you are deciding from. */}
+                        {supplierFor(it.id) && (
+                          <span className="text-[10px] text-fg-faint">
+                            {format(pricePerBase(it, supplierFor(it.id)).toFixed(2))}/{it.unit}
+                          </span>
+                        )}
                         {on && (
                           <span
                             aria-hidden
@@ -456,28 +539,32 @@ export function OrderPad({
                   {g.rows.map(({ it, qty }) => (
                     <li key={it.id} className="flex items-center gap-2">
                       <span aria-hidden className="text-sm">{categoryEmoji(groupOf(it))}</span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-fg-soft">
-                        {it.name}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] text-fg-soft">
+                          {it.name}
+                        </span>
+                        {/* What it costs, in every size it comes in. £30 buys a
+                            BOTTLE; a piece is £1. Printing "£30 per piece" is
+                            not a rounding difference, it is wrong by thirty. */}
+                        <span className="block truncate text-[10px] text-fg-faint">
+                          {priceSummary(it, supplierFor(it.id), format)}
+                        </span>
                       </span>
-                      <input
-                        value={qty}
-                        onChange={(e) =>
+                      {/* Order in whatever size you buy in.
+                          "in purchasing page noticed something like i can only
+                          order in piece why.. user can order in piece or bottle
+                          as per wish, based on that we need to calculate."
+                          Quite right. The quantity is STORED in base units, so
+                          stock and costing never change — only the typing. */}
+                      <QtyCell
+                        item={it}
+                        qty={qty}
+                        onQty={(v) =>
                           onChange(
-                            lines.map((l) =>
-                              l.item_id === it.id
-                                ? { ...l, qty: e.target.value.replace(/[^\d.]/g, "") }
-                                : l,
-                            ),
+                            lines.map((l) => (l.item_id === it.id ? { ...l, qty: v } : l)),
                           )
                         }
-                        inputMode="decimal"
-                        placeholder="0"
-                        aria-label={`How much ${it.name}`}
-                        className="w-16 rounded-lg border border-line-2 bg-glass/5 px-2 py-1 text-center text-sm tabular-nums outline-none focus:border-brand-500"
                       />
-                      <span className="w-10 shrink-0 truncate text-[11px] text-fg-faint">
-                        {it.unit}
-                      </span>
                       {/* Whose it is, changeable here.
                           The rule is chosen-supplier-else-cheapest, and it is
                           right most of the time — but the chef knows when it is

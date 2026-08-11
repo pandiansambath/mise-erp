@@ -1,5 +1,7 @@
 "use client";
 
+import { levelName, pricePerBase } from "@/lib/packs";
+
 import { useEffect, useRef, useState } from "react";
 import { Select } from "@/components/Select";
 import { DetailSheet, DetailRow, SheetRing } from "@/components/DetailSheet";
@@ -13,6 +15,7 @@ import {
   type ExpenseCategory,
   type Vendor,
   type VendorItem,
+  type SupplierOption,
 } from "@/lib/api";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { EditModal } from "@/components/EditModal";
@@ -844,15 +847,33 @@ export default function VendorsPage() {
                               : undefined
                           }
                         >
-                          {format(vi.price_per_unit)}
                           {(() => {
                             const it = items.find((i) => i.id === vi.item_id);
-                            const size = parseFloat(it?.pack_size || "0");
-                            return it?.pack_unit && size > 0 ? (
-                              <span className="ml-1 whitespace-nowrap text-xs text-indigo-300">
-                                ({format((parseFloat(vi.price_per_unit) * size).toFixed(2))}/{it.pack_unit})
+                            if (!it) return format(vi.price_per_unit);
+                            const sup = {
+                              price_per_unit: vi.price_per_unit,
+                              pack_level_id: vi.pack_level_id,
+                            } as SupplierOption;
+                            // The quote, and every size it works out to. A £30
+                            // bottle of thirty is £1 a piece, and the old line
+                            // multiplied UP from a price it assumed was already
+                            // per-unit — so a pack price came out thirty times
+                            // too big.
+                            return (
+                              <span className="block text-right">
+                                <span className="block whitespace-nowrap">
+                                  {format(vi.price_per_unit)}
+                                  <span className="ml-1 text-[11px] font-normal text-fg-faint">
+                                    /{levelName(it, vi.pack_level_id)}
+                                  </span>
+                                </span>
+                                {vi.pack_level_id && (
+                                  <span className="block whitespace-nowrap text-[11px] text-indigo-300">
+                                    {format(pricePerBase(it, sup).toFixed(2))}/{it.unit}
+                                  </span>
+                                )}
                               </span>
-                            ) : null;
+                            );
                           })()}
                         </td>
                         <td className="px-4 py-2 text-right">
