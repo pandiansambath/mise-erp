@@ -72,7 +72,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {children}
       {opts && (
         <div
-          className="mise-app fixed inset-0 z-50 flex items-center justify-center p-4"
+          // z-[200]: a confirmation is by definition the topmost thing on screen —
+          // it exists to interrupt. At z-50 it opened UNDERNEATH the detail
+          // sheet that asked for it, so pressing Approve appeared to do
+          // nothing and you had to close the sheet to find the question.
+          // He hit this twice: approving an indent, and receiving an order.
+          className="mise-app fixed inset-0 z-[200] flex items-center justify-center p-4"
           data-mode={light ? "light" : "dark"}
           style={{ ...themeVars(theme), colorScheme: light ? "light" : "dark" }}
           role="dialog"

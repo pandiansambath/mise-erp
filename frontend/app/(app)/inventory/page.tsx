@@ -588,6 +588,24 @@ export default function InventoryPage() {
     router.push(`/purchasing?item=${item.id}`);
   }
 
+  // Arriving from somewhere else, pointed at one item.
+  //
+  // "once I clicked done it needs to take me to the inventory page, exactly at
+  // that item" — receiving stock is the moment you want to see what it did to
+  // that item, and a page that lands you at the top of a list of 64 has made
+  // you do the finding.
+  useEffect(() => {
+    if (loading || !items.length) return;
+    const want = new URLSearchParams(window.location.search).get("item");
+    if (!want) return;
+    const found = items.find((i) => i.id === want);
+    if (!found) return;
+    void toggleBreakdown(found);
+    // Take it out of the address bar so a refresh does not reopen it forever.
+    window.history.replaceState({}, "", "/inventory");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, items.length]);
+
   async function toggleBreakdown(item: Item) {
     setOpenReceipt(null);
     if (expanded === item.id) {

@@ -113,6 +113,11 @@ def legacy_levels(pack_unit: str | None, pack_size) -> list[Level]:
     return [Level(position=1, name=pack_unit.strip(), contains=_dec(pack_size))]
 
 
+def tidy(value: Decimal) -> str:
+    """Public: other modules need this to print a size in a sentence."""
+    return _tidy(value)
+
+
 def _tidy(value: Decimal) -> str:
     """1500.000 -> "1500", 1.500 -> "1.5". Trailing zeros read as a bug.
 

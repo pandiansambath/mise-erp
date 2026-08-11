@@ -662,6 +662,10 @@ export interface POItemOut {
   po_item_id: string;
   item_id: string;
   item_name: string;
+  /** The unit this is counted in — a line cannot explain itself without it. */
+  unit?: string;
+  /** "a bottle holds 30 piece", when the item comes in packs. */
+  pack_note?: string | null;
   ordered_qty: string;
   received_qty: string;
   unit_price: string;
