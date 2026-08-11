@@ -1,5 +1,7 @@
 "use client";
 
+import { CountUp } from "@/components/reactbits/CountUp";
+
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type Item, type ItemSuppliers, type PriceComparison, type PricePoint, type Vendor,
   type SupplierOption,
@@ -487,7 +489,7 @@ export default function PriceComparisonPage() {
               return (
                 <li
                   key={v.vendor_id}
-                  className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition ${
+                  className={`relative flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition ${
                     v.is_preferred
                       ? "border-brand-400/40 bg-brand-400/[0.08]"
                       : cheapest
@@ -586,10 +588,19 @@ export default function PriceComparisonPage() {
                   actually received, from real purchase orders. Where nothing has
                   been bought yet there is no honest figure, so it says the true
                   thing it knows instead of inventing one. */}
+              {/* The one number this page exists to produce, rolling to its
+                  value. It is real money now — the per-unit gap times what was
+                  actually bought — so it earns the motion. */}
               <p className="mt-1 font-display text-4xl font-semibold tabular-nums text-brand-300 sm:text-5xl">
-                {saving && Number(saving.per_month) > 0
-                  ? format(saving.per_month)
-                  : switchSave.count}
+                {saving && Number(saving.per_month) > 0 ? (
+                  <CountUp
+                    to={Number(saving.per_month)}
+                    duration={900}
+                    format={(n) => format(n.toFixed(2))}
+                  />
+                ) : (
+                  switchSave.count
+                )}
               </p>
               <p className="mt-1 text-sm text-fg-soft">
                 {saving && Number(saving.per_month) > 0 ? (

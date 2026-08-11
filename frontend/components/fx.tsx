@@ -127,7 +127,22 @@ export function spotlight(id: string, attempt = 0) {
 
 /* ─────────────────────────── components ────────────────────────── */
 
-/** Numbers never pop in — they count. Formats en-GB, supports decimals. */
+/** Numbers never pop in — they count. Formats en-GB, supports decimals.
+ *
+ *  Two jobs, one component. A KPI arriving on screen should count up from
+ *  nothing; a running total that changes while you watch should travel from
+ *  what it WAS to what it now is — starting from zero every time an item lands
+ *  in an order would be a lie about what happened.
+ *
+ *    from="zero"      (default) counts 0 → value when scrolled into view
+ *    from="previous"  counts the last value → the new one, whenever it changes
+ *
+ *  `format` takes precedence over prefix/suffix/decimals, so a currency
+ *  formatter can be handed straight in.
+ *
+ *  This absorbed a second implementation I had written for the order total.
+ *  Two functions doing the same arithmetic in one codebase is how they drift.
+ */
 export function AnimatedNumber({
   value,
   prefix = "",
@@ -135,6 +150,8 @@ export function AnimatedNumber({
   decimals = 0,
   duration = 1200,
   className = "",
+  from = "zero",
+  format,
 }: {
   value: number;
   prefix?: string;
@@ -142,13 +159,22 @@ export function AnimatedNumber({
   decimals?: number;
   duration?: number;
   className?: string;
+  from?: "zero" | "previous";
+  format?: (n: number) => string;
 }) {
   const { ref, inView } = useInView<HTMLSpanElement>(0.4);
   const reduced = usePrefersReducedMotion();
-  const [n, setN] = useState(0);
+  const live = from === "previous";
+  const [n, setN] = useState(live ? value : 0);
+  const prev = useRef(live ? value : 0);
+
   useEffect(() => {
-    if (!inView) return;
-    if (reduced) {
+    // A live total should move the moment it changes, whether or not it happens
+    // to be scrolled into view — you are looking at it, that is why it changed.
+    if (!live && !inView) return;
+    const start = live ? prev.current : 0;
+    if (reduced || start === value) {
+      prev.current = value;
       setN(value);
       return;
     }
@@ -156,17 +182,30 @@ export function AnimatedNumber({
     const t0 = performance.now();
     const tick = (t: number) => {
       const p = Math.min(1, (t - t0) / duration);
-      setN(value * (1 - Math.pow(1 - p, 3)));
+      setN(start + (value - start) * (1 - Math.pow(1 - p, 3)));
       if (p < 1) raf = requestAnimationFrame(tick);
+      else prev.current = value;
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [inView, value, duration, reduced]);
+    return () => {
+      cancelAnimationFrame(raf);
+      prev.current = value;
+    };
+  }, [inView, value, duration, reduced, live]);
   return (
-    <span ref={ref} className={className}>
-      {prefix}
-      {n.toLocaleString("en-GB", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
-      {suffix}
+    <span ref={ref} className={className} aria-live={live ? "polite" : undefined}>
+      {format ? (
+        format(n)
+      ) : (
+        <>
+          {prefix}
+          {n.toLocaleString("en-GB", {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          })}
+          {suffix}
+        </>
+      )}
     </span>
   );
 }
