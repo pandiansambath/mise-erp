@@ -581,7 +581,7 @@ export default function PurchasingPage() {
             active={tab}
             items={[
               ...(canWrite
-                ? [{ key: "new", label: "New order", icon: "＋", onSelect: () => setTab("new") }]
+                ? [{ key: "new", label: "New order", shortLabel: "New", icon: "＋", onSelect: () => setTab("new") }]
                 : []),
               {
                 key: "indents",

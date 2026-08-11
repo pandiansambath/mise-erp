@@ -26,6 +26,9 @@ import { spotlight } from "./fx";
 export type SubNavItem = {
   key: string;
   label: string;
+  /** Optional shorter label for narrow screens, so a row of tabs can fit
+   *  instead of scrolling. Falls back to `label`. */
+  shortLabel?: string;
   icon?: ReactNode;
   /** Shown after the label when it is worth knowing (e.g. how many are low). */
   count?: number;
@@ -122,7 +125,16 @@ export function SubNav({
             }`}
           >
             {item.icon && <span aria-hidden>{item.icon}</span>}
-            <span className="whitespace-nowrap">{item.label}</span>
+            <span className="whitespace-nowrap">
+              {item.shortLabel ? (
+                <>
+                  <span className="sm:hidden">{item.shortLabel}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </>
+              ) : (
+                item.label
+              )}
+            </span>
             {item.count !== undefined && item.count > 0 && (
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
