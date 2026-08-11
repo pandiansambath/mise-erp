@@ -25,7 +25,7 @@ import { useCurrency } from "@/lib/currency";
 import { categoryEmoji, fmtQty, stockState } from "@/components/ItemPicker";
 import { AnimatedNumber } from "@/components/fx";
 import { levelName, orderSizes, priceLines, pricePerBase, tidy } from "@/lib/packs";
-import { burstToBasket } from "@/components/order/burst";
+import { BASKET_PANEL_ID, burstToBasket } from "@/components/order/burst";
 import ClickSpark from "@/components/reactbits/ClickSpark";
 import GlareHover from "@/components/reactbits/GlareHover";
 import SpotlightCard from "@/components/reactbits/SpotlightCard";
@@ -43,6 +43,7 @@ function Sheet({
   title,
   subtitle,
   depth = 1,
+  panelId,
   children,
   footer,
 }: {
@@ -51,6 +52,8 @@ function Sheet({
   subtitle?: string;
   /** 1 = over the page, 2 = over another sheet. Only the depth changes. */
   depth?: 1 | 2;
+  /** So anything on the page can find this panel and animate it. */
+  panelId?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
@@ -66,10 +69,14 @@ function Sheet({
   }, [onClose]);
 
   const z = depth === 1 ? "z-[70]" : "z-[80]";
+  // Centred, both axes, at every size. It used to be pinned to the top with
+  // side insets, so it sat high and off-centre — "this popup is not centred".
+  // No -translate-x-1/2 here: .mise-pop-centre carries the centring inside its
+  // keyframes, because an animation's transform replaces the class's.
   const box =
     depth === 1
-      ? "inset-x-2 bottom-2 top-14 sm:inset-x-8 sm:top-16 lg:inset-x-28 lg:top-20"
-      : "inset-x-4 top-1/2 -translate-y-1/2 sm:inset-x-auto sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2";
+      ? "left-1/2 top-1/2 w-[min(64rem,94vw)]"
+      : "left-1/2 top-1/2 w-[min(26rem,92vw)]";
 
   return (
     <>
@@ -79,11 +86,12 @@ function Sheet({
         aria-hidden
       />
       <div
+        id={panelId}
         role="dialog"
         aria-label={title}
-        className={`mise-pop-lg fixed ${box} ${z} flex max-h-[86dvh] flex-col overflow-hidden rounded-3xl border border-line bg-paper shadow-2xl`}
+        className={`mise-pop-centre mise-sheet-sheen fixed ${box} ${z} flex max-h-[86dvh] flex-col overflow-hidden rounded-3xl border border-line bg-paper shadow-2xl`}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-4 py-3">
+        <div className="relative flex shrink-0 items-start justify-between gap-3 border-b border-line bg-gradient-to-b from-brand-500/10 to-transparent px-4 py-3">
           <div className="min-w-0">
             <p className="truncate font-display text-lg font-semibold text-fg">{title}</p>
             {subtitle && <p className="truncate text-xs text-fg-faint">{subtitle}</p>}
@@ -422,7 +430,7 @@ export function OrderFlow({
               <button
                 type="button"
                 onClick={() => setCat(name)}
-                className="mise-neo-raised mise-press flex w-full items-center gap-3 rounded-2xl px-3.5 py-4 text-left transition hover:-translate-y-0.5"
+                className="mise-card3d mise-press flex w-full items-center gap-3 px-3.5 py-4 text-left"
               >
                 <span aria-hidden className="text-2xl">{categoryEmoji(name)}</span>
                 <span className="min-w-0 flex-1">
@@ -441,38 +449,68 @@ export function OrderFlow({
       {cat && (
         <Sheet onClose={() => setCat(null)} title={cat} subtitle={`${shown.length} items`}>
           <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-              {shown.map((it) => {
+            <div className="mise-sheet-cascade grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+              {shown.map((it, i) => {
                 const sup = supplierFor(it.id);
                 const on = picked.has(it.id);
                 const st = stockState(it);
                 return (
                   <SpotlightCard
                     key={it.id}
+                    // The ramp caps so the fortieth card is not still waiting a
+                    // second later — a cascade that outlasts your patience is
+                    // just a slow screen.
+                    style={{ "--i": Math.min(i, 14) } as React.CSSProperties}
                     className="!rounded-2xl !border-0 !bg-transparent !p-0"
                     spotlightColor="rgba(52, 211, 153, 0.14)"
                   >
                     <button
                       type="button"
                       onClick={() => setOpenItem(it)}
-                      className={`mise-press relative flex w-full flex-col items-start gap-1 rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 ${
-                        on
-                          ? "border-brand-500 bg-brand-400/15"
-                          : "mise-neo-raised border-transparent"
+                      className={`mise-card3d mise-press relative flex w-full flex-col items-start gap-1 p-3 text-left ${
+                        on ? "!bg-brand-400/15 ring-2 ring-brand-500" : ""
                       }`}
                     >
-                      <span aria-hidden className="text-2xl">{categoryEmoji(groupOf(it))}</span>
+                      <span className="flex w-full items-start justify-between gap-2">
+                        <span aria-hidden className="text-2xl">{categoryEmoji(groupOf(it))}</span>
+                        {/* Stock as a dot + word, top right, so the card is
+                            scannable before it is read. */}
+                        <span className={`flex items-center gap-1 text-[10px] ${st.cls}`}>
+                          {st.dot}
+                          {st.label}
+                        </span>
+                      </span>
                       <span className="line-clamp-2 text-sm font-semibold leading-snug text-fg">
                         {it.name}
                       </span>
-                      <span className={`text-[11px] ${st.cls}`}>
-                        {fmtQty(it.current_stock, it.unit)}
-                      </span>
-                      {sup && (
-                        <span className="text-[10px] text-fg-faint">
-                          {format(pricePerBase(it, sup).toFixed(2))}/{it.unit}
+                      {/* The dead space in the middle of these cards was doing
+                          nothing — "every place is information, every click is
+                          a feature". It now carries what you need to decide
+                          WITHOUT opening it: what you have, what one costs, and
+                          what a pack costs when it comes in packs. */}
+                      <span className="mt-auto w-full space-y-0.5 pt-1.5 text-[11px]">
+                        <span className="flex justify-between gap-2 text-fg-soft">
+                          <span className="text-fg-faint">have</span>
+                          <span className="tabular-nums">{fmtQty(it.current_stock, it.unit)}</span>
                         </span>
-                      )}
+                        {sup ? (
+                          priceLines(it, sup).map((l) => (
+                            <span key={l.label} className="flex justify-between gap-2 text-fg-soft">
+                              <span className="truncate text-fg-faint">1 {l.label}</span>
+                              <span className="shrink-0 tabular-nums">
+                                {format(l.price.toFixed(2))}
+                              </span>
+                            </span>
+                          ))
+                        ) : (
+                          <span className="block text-amber-300">no supplier yet</span>
+                        )}
+                        {sup && (
+                          <span className="block truncate pt-0.5 text-[10px] text-fg-faint">
+                            {sup.vendor_name}
+                          </span>
+                        )}
+                      </span>
                       {on && (
                         <span
                           aria-hidden
@@ -585,6 +623,19 @@ function BasketSheet({
 }) {
   const { format } = useCurrency();
 
+  // "once user clicks submit indent button, burst that popup — entire popup you
+  // need to burst like a yell — and back to original screen." The page fires
+  // the burst; when it has finished it says so, and the basket steps aside.
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  useEffect(() => {
+    const go = () => closeRef.current();
+    window.addEventListener("mise:close-basket", go);
+    return () => window.removeEventListener("mise:close-basket", go);
+  }, []);
+
   const groups = useMemo(() => {
     const m = new Map<string, { name: string; rows: { it: Item; qty: string }[]; total: number }>();
     for (const l of lines) {
@@ -606,6 +657,7 @@ function BasketSheet({
     <Sheet
       onClose={onClose}
       title="Your basket"
+      panelId={BASKET_PANEL_ID}
       subtitle={`${lines.length} item${lines.length === 1 ? "" : "s"} · ${groups.length} supplier${
         groups.length === 1 ? "" : "s"
       }`}
@@ -623,9 +675,9 @@ function BasketSheet({
         </div>
       }
     >
-      <div className="space-y-3">
-        {groups.map((g) => (
-          <div key={g.name} className="rounded-2xl border border-line bg-paper-2/60 p-3">
+      <div className="mise-sheet-cascade space-y-3">
+        {groups.map((g, gi) => (
+          <div key={g.name} style={{ "--i": gi } as React.CSSProperties} className="rounded-2xl border border-line bg-paper-2/60 p-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-sm font-semibold text-fg">{g.name}</span>
               <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg-soft">

@@ -20,6 +20,7 @@ import Link from "next/link";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
 import { OrderFlow } from "@/components/order/OrderFlow";
+import { burstBasket } from "@/components/order/burst";
 import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
 import { SubNav } from "@/components/SubNav";
@@ -870,13 +871,13 @@ export default function PurchasingPage() {
           a ring, so each one reads as its own card. */}
       {/* ── The purchasing pipeline — where every order sits, at a glance ── */}
       {tab === "new" && (indents.length > 0 || pos.length > 0) && (
-        <Card className="mise-feel mb-4">
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        <div className="mb-3">
+          <div className="flex items-stretch gap-1.5 overflow-x-auto pb-0.5">
             {(() => {
               const stages = [
                 {
                   icon: "📝",
-                  label: "Indents raised",
+                  label: "raised, awaiting approval",
                   main: indents.filter((x) => x.status === "PENDING").length,
                   sub: "awaiting approval",
                   tone: "text-amber-300",
@@ -904,23 +905,24 @@ export default function PurchasingPage() {
                 },
               ];
               return stages.map((st, i) => (
-                <div key={st.label} className="flex flex-1 items-center gap-2">
-                  <div className="mise-neo-raised flex flex-1 items-center gap-3 rounded-2xl px-3.5 py-3 shadow-lg shadow-black/10 ring-1 ring-glass/10 transition hover:-translate-y-0.5 hover:shadow-xl">
-                    <span aria-hidden className="text-2xl">{st.icon}</span>
-                    <span className="min-w-0">
-                      <span className={`block font-display text-2xl font-semibold leading-tight tabular-nums ${st.tone}`}>{st.main}</span>
-                      <span className="block truncate text-[11px] font-medium text-fg-faint">{st.label}</span>
-                      <span className="block truncate text-[10px] text-fg-faint/80">{st.sub}</span>
+                <div key={st.label} className="flex min-w-[9rem] flex-1 items-center gap-1.5">
+                  <div className="mise-card3d flex flex-1 items-center gap-2 px-3 py-2">
+                    <span aria-hidden className="text-base">{st.icon}</span>
+                    <span className={`font-display text-lg font-semibold leading-none tabular-nums ${st.tone}`}>
+                      {st.main}
+                    </span>
+                    <span className="min-w-0 truncate text-[11px] leading-tight text-fg-faint">
+                      {st.label}
                     </span>
                   </div>
                   {i < stages.length - 1 && (
-                    <span aria-hidden className="hidden text-fg-faint sm:block">→</span>
+                    <span aria-hidden className="hidden shrink-0 text-xs text-fg-faint sm:block">→</span>
                   )}
                 </div>
               ));
             })()}
           </div>
-        </Card>
+        </div>
       )}
 
       {canWrite && tab === "new" && (
@@ -976,6 +978,10 @@ export default function PurchasingPage() {
                   <button
                     type="submit"
                     disabled={lines.length === 0}
+                    // The form still submits; this only makes the basket come
+                    // apart as it goes, so you land back on the page having SEEN
+                    // the order leave rather than finding the panel gone.
+                    onClick={() => { if (lines.length) void burstBasket(); }}
                     className="mise-press flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40"
                   >
                     Submit indent · {lines.length}

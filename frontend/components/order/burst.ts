@@ -157,3 +157,89 @@ export function burstToBasket(
     }, BURST_MS + 400);
   });
 }
+
+/**
+ * Blow a whole panel apart where it stands.
+ *
+ * "once user clicks submit indent button, burst that popup — entire popup you
+ * need to burst like a yell — and back to original screen."
+ *
+ * Not a flight this time: nothing is going anywhere, the order has left. The
+ * panel snaps taut, then detonates outward in shards while the panel itself
+ * scales up and fades — a thing completing rather than a thing moving.
+ */
+export function burstAway(from: HTMLElement | null): Promise<void> {
+  return new Promise((done) => {
+    if (typeof window === "undefined" || !from) return done();
+    const a = from.getBoundingClientRect();
+    if (!a.width) return done();
+
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (still) return done();
+
+    const cx = a.left + a.width / 2;
+    const cy = a.top + a.height / 2;
+
+    // Shards fly from the panel's EDGES, not its middle, so it reads as the
+    // panel coming apart rather than something erupting through it.
+    for (let i = 0; i < 22; i++) {
+      const t = (Math.PI * 2 * i) / 22;
+      const sx = cx + Math.cos(t) * (a.width / 2) * 0.9;
+      const sy = cy + Math.sin(t) * (a.height / 2) * 0.9;
+      const shard = document.createElement("div");
+      shard.setAttribute("aria-hidden", "true");
+      shard.className = "pointer-events-none fixed z-[96] rounded-md bg-brand-400";
+      const w = 6 + Math.random() * 14;
+      shard.style.left = `${sx}px`;
+      shard.style.top = `${sy}px`;
+      shard.style.width = `${w}px`;
+      shard.style.height = `${4 + Math.random() * 8}px`;
+      document.body.appendChild(shard);
+      const dist = 140 + Math.random() * 220;
+      shard
+        .animate(
+          [
+            { transform: "translate(0,0) rotate(0deg) scale(1)", opacity: 1 },
+            {
+              transform: `translate(${Math.cos(t) * dist}px, ${Math.sin(t) * dist + 60}px) rotate(${
+                (Math.random() - 0.5) * 540
+              }deg) scale(0.3)`,
+              opacity: 0,
+            },
+          ],
+          { duration: 560 + Math.random() * 260, easing: "cubic-bezier(.15,.7,.3,1)" },
+        )
+        .addEventListener("finish", () => shard.remove());
+    }
+
+    from
+      .animate(
+        [
+          { transform: "scale(1)", opacity: 1, offset: 0 },
+          { transform: "scale(0.96)", opacity: 1, offset: 0.18 },
+          { transform: "scale(1.12)", opacity: 0, offset: 1 },
+        ],
+        { duration: 420, easing: "cubic-bezier(.2,.8,.3,1)", fill: "forwards" },
+      )
+      .addEventListener("finish", () => done());
+
+    window.setTimeout(done, 600);
+  });
+}
+
+/** The id the basket panel carries, so anything can blow it apart by name. */
+export const BASKET_PANEL_ID = "mise-basket-panel";
+
+/**
+ * Blow the basket apart and tell it to close.
+ *
+ * By id and by event rather than by a ref passed downward: the submit button
+ * lives on the page and the panel lives inside the basket, and threading a ref
+ * up through a render prop means calling a function during render with a ref
+ * inside it — which React's own lint rule objects to, correctly.
+ */
+export async function burstBasket(): Promise<void> {
+  if (typeof window === "undefined") return;
+  await burstAway(document.getElementById(BASKET_PANEL_ID));
+  window.dispatchEvent(new CustomEvent("mise:close-basket"));
+}
