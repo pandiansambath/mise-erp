@@ -57,6 +57,7 @@ function Sheet({
   subtitle,
   depth = 1,
   panelId,
+  wide = false,
   children,
   footer,
 }: {
@@ -67,6 +68,9 @@ function Sheet({
   depth?: 1 | 2;
   /** So anything on the page can find this panel and animate it. */
   panelId?: string;
+  /** A depth-2 sheet that has outgrown a single column — the basket, once it
+   *  holds more than a few lines. */
+  wide?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
@@ -95,7 +99,9 @@ function Sheet({
   const box =
     depth === 1
       ? "left-1/2 top-1/2 w-fit min-w-[min(24rem,92vw)] max-w-[min(64rem,94vw)]"
-      : "left-1/2 top-1/2 w-[min(28rem,94vw)]";
+      : wide
+        ? "left-1/2 top-1/2 w-[min(52rem,94vw)]"
+        : "left-1/2 top-1/2 w-[min(28rem,94vw)]";
 
   return (
     <>
@@ -736,31 +742,75 @@ function BasketSheet({
     return () => window.removeEventListener("mise:close-basket", go);
   }, []);
 
+  // How the basket is arranged. Grouping by supplier is what it does now and it
+  // IS the useful default — "we are grouping and showing item based on vendor,
+  // which is a great useful one" — but it is not the only question. Sorting by
+  // price answers "what is making this order expensive", and by category
+  // answers "have I done the vegetables yet".
+  const [groupBy, setGroupBy] = useState<"vendor" | "category" | "price">("vendor");
+
   const groups = useMemo(() => {
-    const m = new Map<string, { name: string; rows: { it: Item; qty: string }[]; total: number }>();
+    const m = new Map<
+      string,
+      { key: string; name: string; rows: { it: Item; qty: string }[]; total: number }
+    >();
     for (const l of lines) {
       const it = byId.get(l.item_id);
       if (!it) continue;
       const sup = supplierFor(l.item_id);
-      const key = sup?.vendor_id ?? "none";
-      const g = m.get(key) ?? { name: sup?.vendor_name ?? "No supplier yet", rows: [], total: 0 };
+      const money = exact((parseFloat(l.qty) || 0) * pricePerBase(it, sup));
+
+      let key: string;
+      let name: string;
+      if (groupBy === "category") {
+        key = groupOf(it);
+        name = `${categoryEmoji(groupOf(it))} ${groupOf(it)}`;
+      } else if (groupBy === "price") {
+        // One bucket, sorted by what each line costs — the expensive lines are
+        // the ones worth a second look before you send it.
+        key = "__all__";
+        name = "Dearest first";
+      } else {
+        key = sup?.vendor_id ?? "none";
+        name = sup?.vendor_name ?? "No supplier yet";
+      }
+
+      const g = m.get(key) ?? { key, name, rows: [], total: 0 };
       g.rows.push({ it, qty: l.qty });
-      g.total = exact(g.total + (parseFloat(l.qty) || 0) * pricePerBase(it, sup));
+      g.total = exact(g.total + money);
       m.set(key, g);
     }
-    return [...m.values()];
-  }, [lines, byId, supplierFor]);
+    const out = [...m.values()];
+    if (groupBy === "price") {
+      for (const g of out) {
+        g.rows.sort((a, b) => {
+          const cost = (r: { it: Item; qty: string }) =>
+            (parseFloat(r.qty) || 0) * pricePerBase(r.it, supplierFor(r.it.id));
+          return cost(b) - cost(a);
+        });
+      }
+    }
+    return out;
+  }, [lines, byId, supplierFor, groupBy]);
 
   const grand = exact(groups.reduce((t, g) => t + g.total, 0));
+
+  /** Take a whole group out at once. */
+  const dropGroup = (g: { rows: { it: Item }[] }) => {
+    const ids = new Set(g.rows.map((r) => r.it.id));
+    onChange(lines.filter((l) => !ids.has(l.item_id)));
+  };
 
   return (
     <Sheet
       onClose={onClose}
       title="Your basket"
       panelId={BASKET_PANEL_ID}
-      subtitle={`${lines.length} item${lines.length === 1 ? "" : "s"} · ${groups.length} supplier${
-        groups.length === 1 ? "" : "s"
-      }`}
+      // A basket with two lines had a scrollbar. It grows with what it holds
+      // now, up to the same cap every other popup uses — "make the basket popup
+      // size bigger, it needs to grow based on the number of items it has."
+      wide={lines.length > 3}
+      subtitle={`${lines.length} item${lines.length === 1 ? "" : "s"} · ${format(grand.toFixed(2))}`}
       footer={
         <div className="space-y-2.5">
           <div className="flex items-baseline justify-between gap-3">
@@ -775,16 +825,67 @@ function BasketSheet({
         </div>
       }
     >
+      {/* Arrange it, and empty it. Both were missing: the basket could only be
+          read one way, and the only way to remove anything was one ✕ at a time.
+          Kept to one line so it does not become the thing you scroll past. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <span className="mr-0.5 text-[11px] text-fg-faint">group by</span>
+          {([
+            ["vendor", "supplier"],
+            ["category", "kind"],
+            ["price", "price"],
+          ] as const).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setGroupBy(k)}
+              className={`mise-press rounded-lg px-2.5 py-1 text-[11px] transition ${
+                groupBy === k
+                  ? "bg-brand-500 font-semibold text-white"
+                  : "border border-line text-fg-soft hover:border-brand-400/40"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="mise-press rounded-lg border border-line px-2.5 py-1 text-[11px] text-fg-soft transition hover:border-rose-400/50 hover:text-rose-300"
+        >
+          Empty the basket
+        </button>
+      </div>
+
       <div className="mise-sheet-cascade space-y-3">
         {groups.map((g, gi) => (
-          <div key={g.name} style={{ "--i": gi } as React.CSSProperties} className="rounded-2xl border border-line bg-paper-2/60 p-3">
+          <div key={g.key} style={{ "--i": gi } as React.CSSProperties} className="rounded-2xl border border-line bg-paper-2/60 p-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-sm font-semibold text-fg">{g.name}</span>
-              <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg-soft">
-                {format(g.total.toFixed(2))}
+              <span className="flex shrink-0 items-baseline gap-2">
+                <span className="font-display text-sm font-semibold tabular-nums text-fg-soft">
+                  {format(g.total.toFixed(2))}
+                </span>
+                {/* Cancel a whole supplier, or a whole category — "we need a
+                    cancel all button with flexibility, cancel all or cancel
+                    particular vendor or particular category". */}
+                {groups.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => dropGroup(g)}
+                    title={`Remove everything from ${g.name}`}
+                    className="mise-press rounded-lg px-1.5 py-0.5 text-[11px] text-fg-faint transition hover:text-rose-300"
+                  >
+                    remove all
+                  </button>
+                )}
               </span>
             </div>
-            <ul className="mt-2 space-y-2">
+            {/* Two across when there is room. A tall thin list of 20 items is
+                the scroll he was complaining about. */}
+            <ul className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
               {g.rows.map(({ it, qty }) => {
                 const sup = supplierFor(it.id);
                 const n = parseFloat(qty) || 0;
@@ -839,12 +940,23 @@ function BasketSheet({
                       const after = had + n;
                       const min = parseFloat(it.min_stock_level || "0") || 0;
                       const short = min > 0 && after < min;
+                      // "the sentence is not clear, it's confusing — we need to
+                      // say '1 piece is in stock, if we complete purchase we
+                      // will see this'. Like this we need to say clearly to
+                      // users, as this is not developer usage, this is layman
+                      // usage we are building for."
+                      //
+                      // So: two short sentences of English, not an arrow
+                      // diagram. Arrows are shorthand for people who already
+                      // know what the two numbers mean.
                       return (
-                        <p className={`mt-1 text-[11px] ${short ? "text-amber-300" : "text-fg-faint"}`}>
-                          {fmtQty(String(had), it.unit)} now →{" "}
-                          <b className="font-semibold">{fmtQty(String(after), it.unit)}</b> after this
-                          {stockInPacks(it, after) ? ` (${stockInPacks(it, after)})` : ""}
-                          {short ? ` · still under your ${fmtQty(it.min_stock_level || "0", it.unit)} minimum` : ""}
+                        <p className={`mt-1 text-[11px] leading-relaxed ${short ? "text-amber-300" : "text-fg-faint"}`}>
+                          You have {fmtQty(String(had), it.unit)} in stock. Once this order arrives
+                          you will have <b className="font-semibold">{fmtQty(String(after), it.unit)}</b>
+                          {stockInPacks(it, after) ? `, which is ${stockInPacks(it, after)}` : ""}.
+                          {short
+                            ? ` That is still below the ${fmtQty(it.min_stock_level || "0", it.unit)} you asked to keep in stock.`
+                            : ""}
                         </p>
                       );
                     })()}
