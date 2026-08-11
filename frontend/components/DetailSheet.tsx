@@ -125,7 +125,9 @@ export function DetailSheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0" style={{ zIndex: 40 + depth * 10 }} role="dialog" aria-modal="true">
+    <div className="fixed inset-0" // Above the app header (z-40), which had to be raised so its own
+      // menus could escape it.
+      style={{ zIndex: 50 + depth * 10 }} role="dialog" aria-modal="true">
       <div
         // A second full-strength backdrop over the first turns the parent
         // sheet to mud; a lighter one keeps it legible behind, which is what

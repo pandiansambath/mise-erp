@@ -34,6 +34,18 @@ import { overlayOpened } from "@/lib/overlay";
 
 export type OrderLine = { item_id: string; qty: string };
 
+/** Kill floating-point dust: 0.30000000000000004 is not a quantity anyone
+ *  typed, and it becomes a penny somewhere downstream. */
+function exact(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+/** A number as a person would write it — no trailing zeros, no 1E+3. */
+function show(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  return String(Math.round(n * 1e6) / 1e6);
+}
+
 const OTHER = "Other";
 const groupOf = (it: Item) => it.category?.trim() || OTHER;
 
@@ -83,11 +95,12 @@ function Sheet({
   const box =
     depth === 1
       ? "left-1/2 top-1/2 w-fit min-w-[min(24rem,92vw)] max-w-[min(64rem,94vw)]"
-      : "left-1/2 top-1/2 w-[min(26rem,92vw)]";
+      : "left-1/2 top-1/2 w-[min(28rem,94vw)]";
 
   return (
     <>
       <div
+        data-sheet-backdrop
         className={`mise-fade fixed inset-0 ${z} bg-black/50 backdrop-blur-sm`}
         onClick={onClose}
         aria-hidden
@@ -135,17 +148,70 @@ function ItemSheet({
 }) {
   const { format } = useCurrency();
   const sizes = orderSizes(item);
-  // Default to the size the supplier actually sells in — that is how you think
-  // about buying it, and it is one fewer decision.
-  const [sizeId, setSizeId] = useState<string | null>(supplier?.pack_level_id ?? null);
+
+  // ── HOW MUCH is held in BASE UNITS, always. ──────────────────────────────
+  //
+  // It used to be held as "a number, in whatever size is selected", and that
+  // quietly lost money. Editing 1 piece of a £30 bottle of thirty opened in
+  // BOTTLES, wrote 1/30 into the box, rounded it to 0.033 for display, and then
+  // multiplied that back — so one piece became 0.99 of a piece and £1.00 became
+  // £0.99. His words, and he is right that it is the dangerous kind of bug:
+  // "if we not looking at this confusion then it will pile and at the end will
+  // be a big money issue."
+  //
+  // So the quantity is the truth and the number in the box is a VIEW of it.
+  // Rounding a view cannot change what you ordered.
+  const startQty = existing ? parseFloat(existing) || 0 : 0;
+
+  // Open in the size the amount is actually a whole number of — "what we have
+  // in cart is piece so auto select should be piece". Largest first, so 60
+  // pieces opens as 2 bottles rather than 60. Nothing to edit yet? Then the
+  // size the supplier sells in, which is how you think about buying it.
+  const [sizeId, setSizeId] = useState<string | null>(() => {
+    if (startQty > 0) {
+      const fits = [...sizes]
+        .sort((a, b) => b.base - a.base)
+        .find((s) => s.base > 0 && Math.abs(startQty / s.base - Math.round(startQty / s.base)) < 1e-9);
+      if (fits) return fits.id;
+    }
+    return supplier?.pack_level_id ?? null;
+  });
   const size = sizes.find((s) => s.id === sizeId)?.base ?? 1;
-  const [n, setN] = useState(existing ? tidy((parseFloat(existing) || 0) / size) : "1");
+
+  const [qty, setQty] = useState(startQty || size);
+  // What is typed, kept separately so a half-finished "1." survives a keystroke.
+  const [text, setText] = useState(() => show((startQty || size) / (size || 1)));
   const card = useRef<HTMLDivElement>(null);
 
-  const count = parseFloat(n || "0") || 0;
-  const baseQty = count * size;
+  /** Type a count → the amount is that many of the CHOSEN size. */
+  function typed(v: string) {
+    const clean = v.replace(/[^\d.]/g, "");
+    setText(clean);
+    const c = parseFloat(clean);
+    if (Number.isFinite(c)) setQty(exact(c * size));
+  }
+
+  /** Step by one of the chosen size. */
+  function step(by: number) {
+    const next = Math.max(0, exact(qty + by * size));
+    setQty(next);
+    setText(show(next / (size || 1)));
+  }
+
+  /** Change the size. The AMOUNT does not move — only how it is expressed.
+   *  "when i click piece again it's showing 0.033 pounds, actually it needs to
+   *  change as 1 pound right" — quite so: switching the unit is a change of
+   *  wording, not a change of order. */
+  function chooseSize(id: string | null) {
+    const nextSize = sizes.find((x) => x.id === id)?.base ?? 1;
+    setSizeId(id);
+    setText(show(qty / (nextSize || 1)));
+  }
+
+  const count = qty / (size || 1);
+  const baseQty = qty;
   const each = pricePerBase(item, supplier);
-  const total = baseQty * each;
+  const total = exact(baseQty * each);
 
   return (
     <Sheet
@@ -162,7 +228,7 @@ function ItemSheet({
           <button
             type="button"
             disabled={count <= 0}
-            onClick={() => onAdd(tidy(baseQty), card.current)}
+            onClick={() => onAdd(String(baseQty), card.current)}
             className="mise-press w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 transition hover:bg-brand-700 disabled:opacity-40"
           >
             Add to basket{total > 0 ? ` · ${format(total.toFixed(2))}` : ""}
@@ -177,22 +243,22 @@ function ItemSheet({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setN(tidy(Math.max(0, count - 1)))}
+            onClick={() => step(-1)}
             aria-label="One fewer"
             className="mise-press grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-line-2 text-xl text-fg-soft"
           >
             −
           </button>
           <input
-            value={n}
-            onChange={(e) => setN(e.target.value.replace(/[^\d.]/g, ""))}
+            value={text}
+            onChange={(e) => typed(e.target.value)}
             inputMode="decimal"
             aria-label={`How many, of ${item.name}`}
             className="min-w-0 flex-1 rounded-2xl border border-line-2 bg-glass/5 px-3 py-3 text-center font-display text-2xl tabular-nums text-fg outline-none focus:border-brand-500"
           />
           <button
             type="button"
-            onClick={() => setN(tidy(count + 1))}
+            onClick={() => step(1)}
             aria-label="One more"
             className="mise-press grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-line-2 text-xl text-fg-soft"
           >
@@ -206,7 +272,7 @@ function ItemSheet({
               <button
                 key={s.id ?? "base"}
                 type="button"
-                onClick={() => setSizeId(s.id)}
+                onClick={() => chooseSize(s.id)}
                 className={`mise-press rounded-xl px-3 py-2 text-sm transition ${
                   (s.id ?? null) === sizeId
                     ? "bg-brand-500 font-semibold text-white"
@@ -221,7 +287,7 @@ function ItemSheet({
 
         {sizeId && (
           <p className="text-xs text-indigo-300">
-            {tidy(count)} {levelName(item, sizeId)} = {tidy(baseQty)} {item.unit}
+            {show(count)} {levelName(item, sizeId)} = {show(baseQty)} {item.unit}
           </p>
         )}
 
@@ -277,6 +343,17 @@ export function OrderFlow({
   const { format } = useCurrency();
   const [cat, setCat] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<Item | null>(null);
+
+  // Submitting clears the whole stack, not just the basket. He watched the
+  // order leave and the category popup was still sitting there behind it.
+  useEffect(() => {
+    const clear = () => {
+      setCat(null);
+      setOpenItem(null);
+    };
+    window.addEventListener("mise:close-basket", clear);
+    return () => window.removeEventListener("mise:close-basket", clear);
+  }, []);
   const [basketOpen, setBasketOpen] = useState(false);
   const [bump, setBump] = useState(false);
 
@@ -370,11 +447,13 @@ export function OrderFlow({
 
   const total = useMemo(
     () =>
-      lines.reduce((t, l) => {
-        const it = byId.get(l.item_id);
-        if (!it) return t;
-        return t + (parseFloat(l.qty) || 0) * pricePerBase(it, supplierFor(l.item_id));
-      }, 0),
+      exact(
+        lines.reduce((t, l) => {
+          const it = byId.get(l.item_id);
+          if (!it) return t;
+          return t + (parseFloat(l.qty) || 0) * pricePerBase(it, supplierFor(l.item_id));
+        }, 0),
+      ),
     [lines, byId, supplierFor],
   );
 
@@ -666,13 +745,13 @@ function BasketSheet({
       const key = sup?.vendor_id ?? "none";
       const g = m.get(key) ?? { name: sup?.vendor_name ?? "No supplier yet", rows: [], total: 0 };
       g.rows.push({ it, qty: l.qty });
-      g.total += (parseFloat(l.qty) || 0) * pricePerBase(it, sup);
+      g.total = exact(g.total + (parseFloat(l.qty) || 0) * pricePerBase(it, sup));
       m.set(key, g);
     }
     return [...m.values()];
   }, [lines, byId, supplierFor]);
 
-  const grand = groups.reduce((t, g) => t + g.total, 0);
+  const grand = exact(groups.reduce((t, g) => t + g.total, 0));
 
   return (
     <Sheet
@@ -710,12 +789,24 @@ function BasketSheet({
                 const sup = supplierFor(it.id);
                 const n = parseFloat(qty) || 0;
                 return (
-                  <li key={it.id} className="rounded-xl border border-line bg-paper/70 p-2.5">
-                    <div className="flex items-center gap-2">
+                  <li key={it.id} className="mise-card3d p-2.5">
+                    {/* Wraps instead of scrolling. On a phone the name, the
+                        amount, edit and remove were laid out in one row that
+                        did not fit — "this UI in mobile is not fitting, I can
+                        see a horizontal scroll for this popup". */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span aria-hidden>{categoryEmoji(groupOf(it))}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-fg">{it.name}</span>
+                      <span className="min-w-0 flex-1 basis-24 truncate text-sm font-medium text-fg">
+                        {it.name}
+                      </span>
                       <span className="shrink-0 tabular-nums text-sm text-fg-soft">
                         {tidy(n)} {it.unit}
+                      </span>
+                      {/* What this line costs. The basket showed a grand total
+                          and per-unit prices but never the one number you check
+                          a line against. */}
+                      <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg">
+                        {format((n * pricePerBase(it, sup)).toFixed(2))}
                       </span>
                       {/* "have a button like edit — if i click that edit i need
                           to see that previous popup here as small popup to edit
@@ -737,6 +828,26 @@ function BasketSheet({
                         ✕
                       </button>
                     </div>
+                    {/* "anything useful we can add in that basket other than
+                        the edit feature? Just think, but don't spoil and make
+                        it clumsy." One line, not three: what this order LEAVES
+                        you with. That is the question you actually have while
+                        building an indent — did I order enough — and it cannot
+                        be answered by the price or the quantity alone. */}
+                    {(() => {
+                      const had = parseFloat(it.current_stock) || 0;
+                      const after = had + n;
+                      const min = parseFloat(it.min_stock_level || "0") || 0;
+                      const short = min > 0 && after < min;
+                      return (
+                        <p className={`mt-1 text-[11px] ${short ? "text-amber-300" : "text-fg-faint"}`}>
+                          {fmtQty(String(had), it.unit)} now →{" "}
+                          <b className="font-semibold">{fmtQty(String(after), it.unit)}</b> after this
+                          {stockInPacks(it, after) ? ` (${stockInPacks(it, after)})` : ""}
+                          {short ? ` · still under your ${fmtQty(it.min_stock_level || "0", it.unit)} minimum` : ""}
+                        </p>
+                      );
+                    })()}
                     {sup && (
                       <p className="mt-1 text-[11px] text-fg-faint">
                         {priceLines(it, sup)

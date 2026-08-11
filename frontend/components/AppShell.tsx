@@ -180,7 +180,7 @@ function UserMenu() {
         {initial}
       </button>
       {open && (
-        <div className="mise-pop absolute right-0 z-40 mt-2 w-60 overflow-hidden rounded-xl border border-glass/10 bg-paper-2/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl">
+        <div className="mise-pop absolute right-0 z-[120] mt-2 w-60 overflow-hidden rounded-xl border border-glass/10 bg-paper-2/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl">
           <div className="border-b border-glass/10 px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-fg">{hotel?.name ?? "DineAI"}</p>
             <p className="mt-0.5 truncate text-xs text-fg-soft">{user?.email}</p>
@@ -734,7 +734,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="relative flex min-h-screen flex-col lg:h-screen lg:min-h-0 lg:overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-glass/10 bg-shell/70 px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-8">
+        {/* z-40, not z-30. A sticky element with a z-index creates a STACKING
+            CONTEXT, so the account menu inside it could never paint above the
+            page's own sticky rail — same z-index, later in the document, so the
+            rail won and covered the top of the dropdown. Raising the header
+            raises everything it contains with it. Sheets start at z-50, so they
+            still cover this. */}
+        <header className="sticky top-0 z-40 flex items-center gap-2 border-b border-glass/10 bg-shell/70 px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-8">
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-brand-400/30 to-transparent" />
           <button
             type="button"

@@ -15,7 +15,7 @@ import { numeric } from "@/lib/sanitize";
 import { Pocket, flyToPocket } from "@/components/Pocket";
 // A supplier who quotes per bottle must not have that number printed as if it
 // were per piece — it is wrong by the size of the bottle.
-import { pricePerBase } from "@/lib/packs";
+import { priceLines, pricePerBase, stockInPacks } from "@/lib/packs";
 
 export type PickedLine = { item_id: string; qty: string };
 
@@ -650,6 +650,9 @@ export function ItemPicker({
               </span>
               <span className="mt-0.5 block text-xs text-fg-faint">
                 have {fmtQty(it.current_stock, it.unit)}
+                {stockInPacks(it) && (
+                  <span className="ml-1 text-[10px]">({stockInPacks(it)})</span>
+                )}
               </span>
 
               {/* What it costs, and from whom. Deciding what to order IS
@@ -1208,16 +1211,45 @@ export function ItemPickerSingle({
                 if (!rows) {
                   // No supplier data supplied by the caller: fall back to the
                   // single best vendor the item itself carries.
-                  return it.best_vendor ? (
-                    <span
-                      className={`mt-1 block truncate text-xs ${it.best_vendor_chosen ? "text-brand-300" : "text-amber-300"}`}
-                    >
-                      {it.best_vendor_chosen ? "★ " : ""}
-                      {it.best_vendor}
-                      {it.best_vendor_price ? ` · ${format(it.best_vendor_price)}` : ""}
+                  if (!it.best_vendor) {
+                    return <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>;
+                  }
+                  // "£3.00" on its own is the thing he keeps catching: for a
+                  // piece of lemon, or for a bottle of thirty? If it comes in
+                  // packs, say EVERY size, the way the purchasing popup does —
+                  // that one he called correct, so this one should match it.
+                  //
+                  // best_vendor_price is already per base unit, so the chain
+                  // multiplies up from a number that is right.
+                  const chain = (it.pack_levels ?? []).length > 0 && it.best_vendor_price;
+                  return (
+                    <span className="mt-1 block">
+                      {chain &&
+                        priceLines(it, {
+                          price_per_unit: it.best_vendor_price,
+                          pack_level_id: null,
+                        } as SupplierOption).map((l) => (
+                          <span
+                            key={l.label}
+                            className="flex justify-between gap-2 text-[11px] leading-relaxed"
+                          >
+                            <span className="truncate text-fg-faint">
+                              1 {l.label}
+                              {l.note && <span className="ml-1">({l.note})</span>}
+                            </span>
+                            <span className="shrink-0 tabular-nums text-fg-soft">
+                              {format(l.price.toFixed(2))}
+                            </span>
+                          </span>
+                        ))}
+                      <span
+                        className={`block truncate text-xs ${it.best_vendor_chosen ? "text-brand-300" : "text-amber-300"}`}
+                      >
+                        {it.best_vendor_chosen ? "★ " : ""}
+                        {it.best_vendor}
+                        {!chain && it.best_vendor_price ? ` · ${format(it.best_vendor_price)}` : ""}
+                      </span>
                     </span>
-                  ) : (
-                    <span className="mt-1 block text-xs text-amber-300">no supplier yet</span>
                   );
                 }
                 if (rows.length === 0) {
