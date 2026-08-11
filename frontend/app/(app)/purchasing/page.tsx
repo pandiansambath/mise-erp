@@ -103,6 +103,8 @@ export default function PurchasingPage() {
   // database over EVERYTHING, not by counting the page in front of us. A chip
   // that counts only the current page is a chip that lies.
   const [indentTotal, setIndentTotal] = useState(0);
+  /** Everything there is, filter or no filter — "showing 4 of 36". */
+  const [indentGrand, setIndentGrand] = useState(0);
   /** Bumped after any action, so the indent page refetches itself. */
   const [refresh, setRefresh] = useState(0);
   const [indentCounts, setIndentCounts] = useState<Record<string, number>>({});
@@ -288,11 +290,17 @@ export default function PurchasingPage() {
     });
     if (f.q.trim()) params.set("q", f.q.trim());
     if (f.status !== "all") params.set("status_filter", f.status);
-    const page = await api.get<{ rows: Indent[]; total: number; counts: Record<string, number> }>(
+    const page = await api.get<{
+      rows: Indent[];
+      total: number;
+      grand_total: number;
+      counts: Record<string, number>;
+    }>(
       `/purchasing/indents?${params.toString()}`,
     );
     setIndents(page.rows);
     setIndentTotal(page.total);
+    setIndentGrand(page.grand_total ?? page.total);
     setIndentCounts(page.counts ?? {});
   }, []);
 
@@ -1230,14 +1238,14 @@ export default function PurchasingPage() {
         <Card className={`overflow-hidden p-0 ${tab === "indents" ? "" : "hidden"}`}>
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h3 className="font-semibold text-fg">Indents</h3>
-            <span className="text-xs text-fg-faint">{indentTotal} total</span>
+            <span className="text-xs text-fg-faint">{indentGrand} total</span>
           </div>
           <ListControls
             value={indentFilter}
             onChange={setIndentFilter}
             statuses={indentStatuses}
             placeholder="Search by date, status or what is in it…"
-            total={indentTotal}
+            total={indentGrand}
             shown={indentTotal}
           />
           <div className="mise-sheet-cascade space-y-2 p-3">

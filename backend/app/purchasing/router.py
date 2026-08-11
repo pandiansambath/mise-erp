@@ -74,7 +74,10 @@ async def create_indent(
 
 class IndentPage(BaseModel):
     rows: list[IndentOut]
+    #: how many matched the filter
     total: int
+    #: how many exist at all, so the page can say "4 of 36"
+    grand_total: int
     #: status -> how many, over everything the search matched
     counts: dict[str, int]
 
@@ -107,6 +110,7 @@ async def list_indents(
     return IndentPage(
         rows=[await _indent_out(db, i) for i in page["rows"]],
         total=page["total"],
+        grand_total=page["grand_total"],
         counts=page["counts"],
     )
 
