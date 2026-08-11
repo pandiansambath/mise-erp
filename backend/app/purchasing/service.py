@@ -170,7 +170,22 @@ async def list_indents_page(
         for st, n in (await db.execute(count_base.group_by(Indent.status))).all()
     }
 
-    return {"rows": list(rows), "total": total, "counts": counts}
+    # How many there are ALTOGETHER, ignoring the filter — so the page can say
+    # "showing 4 of 36" rather than "showing 4 of 4", which tells you nothing.
+    grand = (
+        await db.execute(
+            select(func.count()).select_from(
+                select(Indent.id).where(Indent.hotel_id == hotel_id).subquery()
+            )
+        )
+    ).scalar_one()
+
+    return {
+        "rows": list(rows),
+        "total": total,
+        "grand_total": grand,
+        "counts": counts,
+    }
 
 
 async def set_indent_status(db: AsyncSession, indent: Indent, status: str) -> Indent:
