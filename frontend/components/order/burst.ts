@@ -198,7 +198,7 @@ export function burstAway(from: HTMLElement | null): Promise<void> {
           { opacity: 0.55, transform: "scale(1.02)", offset: 0.25 },
           { opacity: 0, transform: "scale(1.14)" },
         ],
-        { duration: 460, easing: "cubic-bezier(.2,.8,.3,1)" },
+        { duration: 620, delay: 200, easing: "cubic-bezier(.2,.8,.3,1)" },
       )
       .addEventListener("finish", () => flash.remove());
 
@@ -218,7 +218,7 @@ export function burstAway(from: HTMLElement | null): Promise<void> {
           { transform: "scale(0.94)", opacity: 0.95 },
           { transform: "scale(1.35)", opacity: 0 },
         ],
-        { duration: 620, easing: "cubic-bezier(.2,.8,.3,1)" },
+        { duration: 820, delay: 240, easing: "cubic-bezier(.2,.8,.3,1)" },
       )
       .addEventListener("finish", () => ring.remove());
 
@@ -249,23 +249,33 @@ export function burstAway(from: HTMLElement | null): Promise<void> {
               opacity: 0,
             },
           ],
-          { duration: 760 + Math.random() * 340, easing: "cubic-bezier(.15,.7,.3,1)" },
+          {
+            duration: 820 + Math.random() * 380,
+            delay: 240, // after the panel has tensed, not during
+            easing: "cubic-bezier(.15,.7,.3,1)",
+          },
         )
         .addEventListener("finish", () => shard.remove());
     }
 
+    // The panel takes a breath, swells, and only then lets go. The old curve
+    // spent its whole life shrinking, which is why it read as a flicker rather
+    // than an event: "the burst and closing is not smooth, it's like a quick
+    // thing that I can't realise whether it's submitted or not."
     from
       .animate(
         [
           { transform: "scale(1)", opacity: 1, offset: 0 },
-          { transform: "scale(0.96)", opacity: 1, offset: 0.18 },
-          { transform: "scale(1.12)", opacity: 0, offset: 1 },
+          // hold — the pause is what makes the release land
+          { transform: "scale(0.975)", opacity: 1, offset: 0.28 },
+          { transform: "scale(1.04)", opacity: 1, offset: 0.52 },
+          { transform: "scale(1.16)", opacity: 0, offset: 1 },
         ],
-        { duration: 560, easing: "cubic-bezier(.2,.8,.3,1)", fill: "forwards" },
+        { duration: 900, easing: "cubic-bezier(.3,.9,.25,1)", fill: "forwards" },
       )
       .addEventListener("finish", () => done());
 
-    window.setTimeout(done, 780);
+    window.setTimeout(done, 1150);
   });
 }
 
