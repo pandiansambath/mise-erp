@@ -1,6 +1,6 @@
 "use client";
 
-import { levelName, pricePerBase } from "@/lib/packs";
+import { chainSummary, levelName, priceLines, pricePerBase } from "@/lib/packs";
 
 import { useEffect, useRef, useState } from "react";
 import { Select } from "@/components/Select";
@@ -30,6 +30,7 @@ import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { numeric } from "@/lib/sanitize";
+import { fmtQty } from "@/lib/quantity";
 
 const CATEGORIES = ["FOOD", "BEVERAGE", "BAR", "UTILITY", "SERVICE", "PROPERTY"];
 const TYPE_EMOJI: Record<string, string> = {
@@ -1100,15 +1101,42 @@ export default function VendorsPage() {
               const it = items.find((i) => i.id === priceRow.item_id);
               const mine = parseFloat(priceRow.price_per_unit) || 0;
               const best = cheapest[priceRow.item_id];
-              const size = parseFloat(it?.pack_size || "0");
+              const sup = {
+                price_per_unit: priceRow.price_per_unit,
+                pack_level_id: priceRow.pack_level_id,
+              } as SupplierOption;
+              // "see that lemon 2 — it's confusing right? what's £3 for, 1 piece
+              // of lemon or 1 bottle?" It never said. The hint asserted "per
+              // {unit}" whatever the supplier had actually quoted, and the row
+              // below it multiplied UP from that assumption — so a bottle price
+              // came out thirty times too big. Now every size is listed, priced
+              // off the ONE quote, with the size they actually sell it in named.
               return (
                 <>
-                  <DetailRow label="Their price" value={format(priceRow.price_per_unit)} hint={it?.unit ? `per ${it.unit}` : undefined} />
-                  {it?.pack_unit && size > 0 && (
+                  <DetailRow
+                    label="They quote"
+                    value={format(priceRow.price_per_unit)}
+                    hint={it ? `for 1 ${levelName(it, priceRow.pack_level_id)}` : undefined}
+                  />
+                  {it &&
+                    priceLines(it, sup).map((l) => (
+                      <DetailRow
+                        key={l.label}
+                        label={`1 ${l.label}`}
+                        value={format(l.price.toFixed(2))}
+                        hint={l.note ? `a ${l.label} holds ${l.note}` : "the unit you cook with"}
+                      />
+                    ))}
+                  {it && (
                     <DetailRow
-                      label={`Per ${it.pack_unit}`}
-                      value={format((mine * size).toFixed(2))}
-                      hint={`${size} ${it.unit} in a ${it.pack_unit}`}
+                      label="You have"
+                      // "we show stock like we have 1 piece of lemon — so even if
+                      // we buy 1 bottle we show 30 pieces. Instead show 1 piece,
+                      // as a bottle can have 30." Stock is counted in the unit you
+                      // cook with, which is the only count a kitchen can act on;
+                      // what was missing is the sentence that makes it make sense.
+                      value={`${fmtQty(it.current_stock, it.unit)}`}
+                      hint={chainSummary(it)[0] ?? undefined}
                     />
                   )}
                   {best != null && (
