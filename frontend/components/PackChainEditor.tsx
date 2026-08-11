@@ -85,8 +85,8 @@ export function PackChainEditor({
             How do you buy it?
           </p>
           <p className="mt-0.5 text-xs text-fg-faint">
-            Only if it comes in packs. Stock and recipes still count in{" "}
-            <b className="text-fg-soft">{unit}</b>.
+            Only if it comes in packs. Add the smallest size first. Stock and
+            recipes still count in <b className="text-fg-soft">{unit}</b>.
           </p>
         </div>
         <button
@@ -167,9 +167,44 @@ export function PackChainEditor({
       )}
 
       {levels.length === 0 && (
-        <p className="mt-3 text-xs text-fg-faint">
-          Bought loose, by the {unit}? Then there is nothing to add here.
-        </p>
+        <div className="mt-3 space-y-2.5">
+          <p className="text-xs text-fg-faint">
+            Bought loose, by the {unit}? Then there is nothing to add here.
+          </p>
+          {/* An empty box teaches nobody. This is his own example, and it is
+              the hard case on purpose — a pack inside a pack inside a pack:
+              "1 box of pepper will have 10 small box, each box will have 30
+              packets of 50g". Seeing it built is worth more than any label,
+              and one tap fills it in so the shape can be copied rather than
+              worked out. */}
+          <div className="rounded-xl border border-line bg-paper px-3.5 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+              For example — pepper
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-fg-soft">
+              A box holds 10 small boxes. A small box holds 30 packets. A packet
+              is 50 g. You add the smallest first and work up, and each row just
+              says how many of the row below it holds.
+            </p>
+            <p className="mt-1.5 text-sm tabular-nums text-fg">
+              1 box = 10 small boxes = 300 packets = 15,000 g
+            </p>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() =>
+                onChange([
+                  { name: "packet", contains: "50" },
+                  { name: "small box", contains: "30" },
+                  { name: "box", contains: "10" },
+                ])
+              }
+              className="mise-press mt-2.5 rounded-lg border border-line px-2.5 py-1.5 text-[11px] font-medium text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+            >
+              Start from this and edit it
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

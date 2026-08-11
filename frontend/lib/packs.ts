@@ -114,3 +114,45 @@ export function orderSizes(item: Item): { id: string | null; name: string; base:
     })),
   ];
 }
+
+/**
+ * What you have, said in the sizes you buy it in.
+ *
+ *   "we show stock like we have 1 piece of lemon — so even if we buy 1 bottle
+ *    we also show 30 pieces of lemon. Instead shall we show like 1 piece, as a
+ *    bottle can have 30..."
+ *
+ * Stock is counted in the base unit and has to stay that way — recipes take
+ * grams, not fractions of a box, and a kitchen cannot cook with "0.6 cases".
+ * What was missing is the translation. 45 pieces is a bottle and 15 spare, and
+ * that is the sentence someone standing in a store room actually thinks in.
+ *
+ * Returns "" when there is nothing to add — no chain, or less than one pack.
+ */
+export function stockInPacks(item: Item, qty?: string | number): string {
+  const levels = item.pack_levels ?? [];
+  if (!levels.length) return "";
+  let left = typeof qty === "number" ? qty : parseFloat(String(qty ?? item.current_stock)) || 0;
+  if (left <= 0) return "";
+
+  // Biggest size first, so it reads "1 box 2 packets" rather than "302 packets".
+  const big = [...levels].sort(
+    (a, b) => (parseFloat(b.base_size) || 0) - (parseFloat(a.base_size) || 0),
+  );
+  const parts: string[] = [];
+  for (const lv of big) {
+    const size = parseFloat(lv.base_size) || 0;
+    if (size <= 0) continue;
+    const n = Math.floor(left / size);
+    if (n >= 1) {
+      parts.push(`${n} ${lv.name}${n === 1 ? "" : "s"}`);
+      left -= n * size;
+    }
+  }
+  if (!parts.length) return "";
+  // Round the remainder the way the rest of the app does, so "0.9999 piece"
+  // never appears from floating-point drift.
+  const rest = Math.round(left * 1000) / 1000;
+  if (rest > 0) parts.push(`${tidy(rest)} ${item.unit}`);
+  return parts.join(" + ");
+}

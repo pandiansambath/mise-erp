@@ -19,7 +19,7 @@ import {
 import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
 import { PackChainEditor, type PackLevel } from "@/components/PackChainEditor";
-import { chainSummary } from "@/lib/packs";
+import { chainSummary, stockInPacks } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
 import { SubNav } from "@/components/SubNav";
@@ -1420,6 +1420,9 @@ export default function InventoryPage() {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="font-mono text-sm font-semibold text-fg">{fmtQty(item.current_stock, item.unit)}</p>
+                        {stockInPacks(item) && (
+                          <p className="text-[10px] text-fg-faint">{stockInPacks(item)}</p>
+                        )}
                         <p className="text-[10px] text-fg-faint">{format(item.average_cost)} avg</p>
                       </div>
                     </div>
@@ -1663,7 +1666,14 @@ export default function InventoryPage() {
         stats={
           openItem
             ? [
-                { label: "On hand", value: fmtQty(openItem.current_stock, openItem.unit) },
+                {
+                  label: "On hand",
+                  value: fmtQty(openItem.current_stock, openItem.unit),
+                  // Counted in the unit recipes take, said in the sizes you buy
+                  // it in — "45 g" and "1 packet + 15 g" are the same fact, but
+                  // only one of them means anything in a store room.
+                  hint: stockInPacks(openItem) || undefined,
+                },
                 {
                   label: "Stock value",
                   value: format(
