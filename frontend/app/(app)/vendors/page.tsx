@@ -820,7 +820,11 @@ export default function VendorsPage() {
                   <thead className="sticky top-0 bg-paper">
                     <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                       <th className="px-4 py-2 font-medium">Item</th>
-                      <th className="px-4 py-2 text-right font-medium">Price / unit</th>
+                      {/* "Price / unit" is the phrase that started all of this — it never
+                          said WHICH unit, so £3 could have been a lemon or a bottle of
+                          thirty. Every cell now names its own size, and the header says
+                          what the column is rather than implying a unit it does not know. */}
+                      <th className="px-4 py-2 text-right font-medium">What it costs</th>
                       <th className="px-4 py-2"></th>
                     </tr>
                   </thead>
@@ -1094,7 +1098,14 @@ export default function VendorsPage() {
             onClose={() => setPriceRow(null)}
             icon="🏷"
             title={priceRow ? itemName(priceRow.item_id) : ""}
-            subtitle={`${selectedVendor.name} · price per unit`}
+            subtitle={(() => {
+              // "price per unit" is the phrase that caused the confusion in the
+              // first place — it never said WHICH unit. Name the size.
+              const it = priceRow ? items.find((i) => i.id === priceRow.item_id) : null;
+              return it && priceRow
+                ? `${selectedVendor.name} · priced per ${levelName(it, priceRow.pack_level_id)}`
+                : selectedVendor.name;
+            })()}
             badge={priceRow?.is_preferred ? <Badge tone="amber">★ chosen</Badge> : undefined}
           >
             {priceRow && (() => {
@@ -1113,11 +1124,16 @@ export default function VendorsPage() {
               // off the ONE quote, with the size they actually sell it in named.
               return (
                 <>
-                  <DetailRow
-                    label="They quote"
-                    value={format(priceRow.price_per_unit)}
-                    hint={it ? `for 1 ${levelName(it, priceRow.pack_level_id)}` : undefined}
-                  />
+                  {/* Only worth saying separately when the quote is for a PACK.
+                      Bought loose, "they quote £0.76" and "1 kg £0.76" are the
+                      same row printed twice. */}
+                  {(!it || priceRow.pack_level_id) && (
+                    <DetailRow
+                      label="They quote"
+                      value={format(priceRow.price_per_unit)}
+                      hint={it ? `for 1 ${levelName(it, priceRow.pack_level_id)}` : undefined}
+                    />
+                  )}
                   {it &&
                     priceLines(it, sup).map((l) => (
                       <DetailRow
