@@ -13,7 +13,7 @@ import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
-import { spotlight, useDeepLink } from "@/components/fx";
+import { useDeepLink } from "@/components/fx";
 import { FormShell } from "@/components/EditModal";
 import { SubNav } from "@/components/SubNav";
 
@@ -386,8 +386,8 @@ export default function RecipesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
-  // ⌘K "Create a recipe" lands here with ?new=1 → open + spotlight the form
-  useDeepLink({ new: () => { setShowForm(true); spotlight("recipe-form"); } }, !loading);
+  // ⌘K "Create a recipe" lands here with ?new=1 → open the form
+  useDeepLink({ new: () => setShowForm(true) }, !loading);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [servings, setServings] = useState("1");
@@ -759,7 +759,7 @@ export default function RecipesPage() {
                 key: "new",
                 label: "New recipe",
                 icon: "＋",
-                onSelect: () => { resetForm(); setShowForm(true); spotlight("recipe-form"); },
+                onSelect: () => { resetForm(); setShowForm(true); },
               }]
             : []),
           {
@@ -803,14 +803,15 @@ export default function RecipesPage() {
             </button>
           ) : (
             <FormShell
-              editing={!!editId}
+              // Creating opens the same modal as editing — without this the
+              // form would render nothing at all when there is no id yet.
+              editing={!!editId || showForm}
               onClose={resetForm}
-              title="Edit recipe"
+              title={editId ? "Edit recipe" : "New recipe"}
               subtitle={name || undefined}
               icon={dishEmoji(category)}
             >
-            <Card id="recipe-form" className={editId ? "border-0 bg-transparent p-0 shadow-none" : ""}>
-              {!editId && <p className="mb-3 text-sm font-medium text-fg-soft">New recipe</p>}
+            <Card id="recipe-form" className="border-0 bg-transparent p-0 shadow-none">
               <form onSubmit={createRecipe} className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                   <div className="sm:col-span-2">

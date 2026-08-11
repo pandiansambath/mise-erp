@@ -47,10 +47,13 @@ export default function EmployeesPage() {
   const [form, setForm] = useState(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // "Add someone" used to only SCROLL to a form that was always sitting there.
+  // The form is a modal now, so the action has to open it.
+  const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // ⌘K "Add an employee" (?new=1) → spotlight the add form
-  useDeepLink({ new: () => spotlight("employee-form") }, !loading);
+  useDeepLink({ new: () => { reset(); setAdding(true); } }, !loading);
 
   function load() {
     return Promise.all([
@@ -88,6 +91,7 @@ export default function EmployeesPage() {
 
   function reset() {
     setEditingId(null);
+    setAdding(false);
     setForm(EMPTY);
     setError(null);
   }
@@ -138,7 +142,10 @@ export default function EmployeesPage() {
                 key: "add",
                 label: editingId ? "Editing…" : "Add someone",
                 icon: "＋",
-                onSelect: () => spotlight("employee-form"),
+                onSelect: () => {
+                  reset();
+                  setAdding(true);
+                },
               }]
             : []),
           {
@@ -207,19 +214,13 @@ export default function EmployeesPage() {
 
       {canWrite && (
         <FormShell
-          editing={!!editingId}
+          editing={!!editingId || adding}
           onClose={reset}
-          title="Edit employee"
+          title={editingId ? "Edit employee" : "Add someone"}
           subtitle={form.full_name || undefined}
           icon="🧑‍🍳"
         >
-        <Card
-          className={editingId ? "border-0 bg-transparent p-0 shadow-none" : "mb-6 scroll-mt-24"}
-          id="employee-form"
-        >
-          {!editingId && (
-            <p className="mb-3 text-sm font-medium text-fg-soft">Add employee</p>
-          )}
+        <Card className="border-0 bg-transparent p-0 shadow-none" id="employee-form">
           <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-sm font-medium text-fg-soft">Full name</label>
