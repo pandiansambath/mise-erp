@@ -75,7 +75,7 @@ function Sheet({
   // keyframes, because an animation's transform replaces the class's.
   const box =
     depth === 1
-      ? "left-1/2 top-1/2 w-[min(64rem,94vw)]"
+      ? "left-1/2 top-1/2 w-fit min-w-[min(24rem,92vw)] max-w-[min(64rem,94vw)]"
       : "left-1/2 top-1/2 w-[min(26rem,92vw)]";
 
   return (
@@ -453,7 +453,15 @@ export function OrderFlow({
       {cat && (
         <Sheet onClose={() => setCat(null)} title={cat} subtitle={`${shown.length} items`}>
           <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
-            <div className="mise-sheet-cascade grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+            <div
+              className="mise-sheet-cascade grid gap-2.5"
+              style={{
+                gridTemplateColumns: `repeat(${Math.min(
+                  Math.max(shown.length, 1),
+                  4,
+                )}, minmax(min(11rem, 40vw), 1fr))`,
+              }}
+            >
               {shown.map((it, i) => {
                 const sup = supplierFor(it.id);
                 const on = picked.has(it.id);

@@ -14,7 +14,11 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 15_000 },
   use: {
-    baseURL: "http://localhost:3000",
+    // Point the suite at a deployed box with BASE_URL=https://... — the local
+    // server needs a backend and a database, which this machine does not have,
+    // so "check it on the thing that is actually serving it" is the only
+    // honest verification available here.
+    baseURL: process.env.BASE_URL || "http://localhost:3000",
     trace: "retain-on-failure",
   },
   projects: [
@@ -22,10 +26,15 @@ export default defineConfig({
     { name: "tablet", use: { viewport: { width: 768, height: 1024 } } },
     { name: "desktop", use: { viewport: { width: 1280, height: 800 } } },
   ],
-  webServer: {
-    command: "npm run start",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // Only boot a local server when we are testing a local server.
+  ...(process.env.BASE_URL
+    ? {}
+    : {
+        webServer: {
+          command: "npm run start",
+          url: "http://localhost:3000",
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      }),
 });
