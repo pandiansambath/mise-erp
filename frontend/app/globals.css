@@ -2042,3 +2042,14 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   }
   .mise-pop-centre { transform: translate(-50%, -50%); opacity: 1; }
 }
+
+/* The floating Copilot launcher stands down while anything covers the page.
+   Found on a phone: it sits bottom-left at z-50, and a sheet's Save button
+   lands in exactly that spot — so the bubble covered the button you had opened
+   the sheet to press. Raising the sheet instead would only move the collision,
+   since the launcher is draggable and floats over everything by design. */
+body[data-overlay] .mise-launcher-in {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.9);
+}

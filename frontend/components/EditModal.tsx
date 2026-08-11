@@ -20,6 +20,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { useBackToClose } from "./useBackToClose";
 import { createPortal } from "react-dom";
+import { overlayOpened } from "@/lib/overlay";
 
 export function EditModal({
   open,
@@ -55,8 +56,9 @@ export function EditModal({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // Also tells the floating launcher to stand down, so it stops covering
+    // this modal's own buttons on a phone.
+    const release = overlayOpened();
     // Focus the first real field, not the panel, so you can start typing.
     const t = setTimeout(() => {
       const first = panel.current?.querySelector<HTMLElement>(
@@ -66,7 +68,7 @@ export function EditModal({
     }, 60);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      release();
       clearTimeout(t);
     };
     // Depends on `open` ALONE. It used to include onClose, which every caller

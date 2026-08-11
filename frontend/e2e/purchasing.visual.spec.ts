@@ -6,6 +6,9 @@ import { test, expect, type Page } from "@playwright/test";
 const EMAIL = "owner@nirai.com";
 const PASSWORD = "StrongPass123!";
 const SHOTS = "e2e/__screens__";
+// Tag every shot with the width it was taken at — otherwise a mobile run
+// silently overwrites the desktop evidence and you compare the wrong picture.
+const tag = (page: Page) => `${page.viewportSize()?.width ?? 0}`;
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -22,23 +25,33 @@ async function login(page: Page) {
   // and reload, which is the same thing a returning user has.
   await page.evaluate(() => localStorage.setItem("mise.tour.done", "1"));
   await page.reload();
-  await page.waitForSelector("nav, [data-bench]", { timeout: 30_000 });
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForTimeout(2500);
 }
 
 test("purchasing: the popup is centred and the cards carry detail", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
   await page.goto("/purchasing");
   await page.waitForTimeout(6000);
-  await page.screenshot({ path: `${SHOTS}/pur-1-page.png` });
+  await page.screenshot({ path: `${SHOTS}/pur-1-page-${tag(page)}.png` });
 
   // Layer one: a category tile.
   const cat = page.locator("button").filter({ hasText: /^\S.*\d+ items$/ }).first();
   await cat.scrollIntoViewIfNeeded();
   await cat.click();
   await page.waitForTimeout(900);
-  await page.screenshot({ path: `${SHOTS}/pur-2-category-popup.png` });
+  await page.screenshot({ path: `${SHOTS}/pur-2-category-popup-${tag(page)}.png` });
+
+  // The floating launcher must stand down while a popup is up. On a phone it
+  // sat bottom-left, directly on top of a sheet's own Save button.
+  const launcher = page.locator(".mise-launcher-in").first();
+  if (await launcher.count()) {
+    const hidden = await launcher.evaluate(
+      (el) => getComputedStyle(el).opacity === "0" || getComputedStyle(el).pointerEvents === "none",
+    );
+    expect(hidden, "the Copilot launcher should stand down under a popup").toBe(true);
+  }
 
   // CENTRED? Measure it rather than believe it. This is the exact class of
   // claim that a class name can satisfy while the screen does not.
@@ -67,7 +80,7 @@ test("purchasing: the popup is centred and the cards carry detail", async ({ pag
   if (await item.count()) {
     await item.click();
     await page.waitForTimeout(900);
-    await page.screenshot({ path: `${SHOTS}/pur-3-item-popup.png` });
+    await page.screenshot({ path: `${SHOTS}/pur-3-item-popup-${tag(page)}.png` });
     const inner = await page.locator("[role=dialog]").last().boundingBox();
     const dx2 = Math.abs(inner!.x + inner!.width / 2 - (vp.left + vp.width / 2));
     console.log(`item popup off-centre x=${Math.round(dx2)}px`);
@@ -77,11 +90,10 @@ test("purchasing: the popup is centred and the cards carry detail", async ({ pag
 
 test("vendors: a price says what it buys", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
   await page.goto("/vendors");
   await page.waitForTimeout(4000);
-  await page.screenshot({ path: `${SHOTS}/ven-1-page.png`, fullPage: true });
+  await page.screenshot({ path: `${SHOTS}/ven-1-page-${tag(page)}.png`, fullPage: true });
 
   // Into a vendor, to its Supplies, and onto a price — which is the row he was
   // looking at when he asked what the £3 was for.
@@ -94,13 +106,13 @@ test("vendors: a price says what it buys", async ({ page }) => {
       await supplies.click();
       await page.waitForTimeout(1200);
     }
-    await page.screenshot({ path: `${SHOTS}/ven-2-supplies.png` });
+    await page.screenshot({ path: `${SHOTS}/ven-2-supplies-${tag(page)}.png` });
 
     const priceRow = page.locator("tbody tr").first();
     if (await priceRow.count()) {
       await priceRow.click();
       await page.waitForTimeout(1200);
-      await page.screenshot({ path: `${SHOTS}/ven-3-price-detail.png` });
+      await page.screenshot({ path: `${SHOTS}/ven-3-price-detail-${tag(page)}.png` });
     }
   }
 });
