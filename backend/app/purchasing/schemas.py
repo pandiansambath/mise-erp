@@ -40,6 +40,12 @@ class POItemOut(BaseModel):
     po_item_id: uuid.UUID
     item_id: uuid.UUID
     item_name: str
+    # The unit was already being loaded and then dropped here, which is why a
+    # purchase-order line could only ever say "1 x 30.00" — a number times a
+    # number, of nothing. "we need explain clearly to layman what it is."
+    unit: str = ""
+    #: "a bottle holds 30 piece" — only when the item comes in packs.
+    pack_note: str | None = None
     ordered_qty: Decimal
     received_qty: Decimal
     unit_price: Decimal

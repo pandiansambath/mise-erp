@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { fmtQty, fmtQtyNumber } from "@/lib/quantity";
 import {
   api,
@@ -20,6 +21,14 @@ import Link from "next/link";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
 import { OrderFlow } from "@/components/order/OrderFlow";
+import {
+  EMPTY_FILTER,
+  ListControls,
+  Pager,
+  applyFilter,
+  pageOf,
+  useListFilter,
+} from "@/components/ListControls";
 import { burstBasket } from "@/components/order/burst";
 import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
@@ -76,6 +85,7 @@ function relativeDay(iso: string): string {
 
 export default function PurchasingPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const { format } = useCurrency();
   const confirm = useConfirm();
   const canWrite = can(user?.role, "indent:write");
@@ -378,6 +388,20 @@ export default function PurchasingPage() {
         setMsg(`No supplier sells: ${res.skipped_items.join(", ")} — add a vendor price on the Vendors page, then generate POs again.`);
       }
       await load();
+      // Carry them to what they just made.
+      //
+      // "once I clicked that approve button it needs to take me to the next
+      // area, which is purchase orders — instead of staying here itself like a
+      // dead site. We need to be playful with users bro, we should not be
+      // idle." Approving an indent HAS a next step, and it is one tap away in
+      // a tab nobody was looking at, so nothing appeared to happen.
+      setOpenIndent(null);
+      setTab("orders");
+      // Show the orders that were just born, not whatever filter was left over.
+      setPoFilter(EMPTY_FILTER);
+      if (!res.skipped_items?.length) {
+        setMsg("Approved — here are the purchase orders it created, one per supplier.");
+      }
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not generate POs");
     }
@@ -453,6 +477,9 @@ export default function PurchasingPage() {
         update_prices: recvUpdatePrices,
       });
       const poId = recvPo.id;
+      // Which item to land on. One is enough — he said so: "if so many
+      // purchase means any 1 item you can choose to show".
+      const landOn = recvPo.items[0]?.item_id ?? null;
       setRecvPo(null);
       setPoDetail((p) => {
         const next = { ...p };
@@ -460,6 +487,14 @@ export default function PurchasingPage() {
         return next;
       });
       await load();
+      // Receiving stock is the moment you want to see what it did to the item.
+      // Standing still on the order you just closed is the "dead site" feeling
+      // he described.
+      if (landOn) {
+        setOpenPo(null);
+        router.push(`/inventory?item=${landOn}`);
+        return;
+      }
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not receive PO");
     } finally {
@@ -539,10 +574,81 @@ export default function PurchasingPage() {
   const openPoDetail = openPo ? poDetail[openPo] : undefined;
   const openPoBusy = poBusy === openPo;
 
+  // ── Finding one row without scrolling for it ────────────────────────────
+  // "here I need to scroll to see any particular indent — please have a sort,
+  // search, filter" and then "not only indent but also the partner purchase
+  // order too". One control serves both, so the two lists cannot behave
+  // differently.
+  const [indentFilter, setIndentFilter] = useListFilter("indents");
+  const [poFilter, setPoFilter] = useListFilter("pos");
+
+  const matchedIndents = useMemo(
+    () =>
+      applyFilter(indents, indentFilter, (i) => ({
+        // Searchable by date, status AND what is in it — "the one with the
+        // lemons" is how people actually remember an order.
+        text: `${i.date} ${i.status} ${i.items.map((x) => `${x.item_name} ${x.vendor_name ?? ""}`).join(" ")}`,
+        status: i.status,
+        date: i.date,
+        value: indentConsol[i.id]?.grand_total
+          ? parseFloat(indentConsol[i.id].grand_total)
+          : 0,
+      })),
+    [indents, indentFilter, indentConsol],
+  );
+  const shownIndents = useMemo(
+    () => pageOf(matchedIndents, indentFilter),
+    [matchedIndents, indentFilter],
+  );
+
+  const matchedPos = useMemo(
+    () =>
+      applyFilter(pos, poFilter, (p) => ({
+        text: `${p.po_number} ${p.vendor_name ?? ""} ${p.status}`,
+        status:
+          p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr
+            ? "OVERDUE"
+            : p.status,
+        date: p.expected_delivery ?? p.po_number,
+        value: parseFloat(p.total_amount || "0"),
+      })),
+    [pos, poFilter, todayStr],
+  );
+  const shownPos = useMemo(() => pageOf(matchedPos, poFilter), [matchedPos, poFilter]);
+
+  const indentStatuses = useMemo(() => {
+    const n = (st: string) => indents.filter((i) => i.status === st).length;
+    return [
+      { key: "PENDING", label: "Awaiting approval", count: n("PENDING"), tone: "warn" as const },
+      { key: "APPROVED", label: "Approved", count: n("APPROVED") },
+      { key: "ORDERED", label: "Ordered", count: n("ORDERED") },
+      { key: "REJECTED", label: "Rejected", count: n("REJECTED") },
+    ].filter((x) => x.count > 0);
+  }, [indents]);
+
+  const poStatuses = useMemo(() => {
+    const late = pos.filter(
+      (p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr,
+    ).length;
+    return [
+      { key: "OVERDUE", label: "Overdue", count: late, tone: "bad" as const },
+      {
+        key: "ORDERED",
+        label: "With suppliers",
+        count: pos.filter(
+          (p) =>
+            p.status !== "RECEIVED" &&
+            !(p.expected_delivery && p.expected_delivery < todayStr),
+        ).length,
+      },
+      { key: "RECEIVED", label: "Received", count: pos.filter((p) => p.status === "RECEIVED").length },
+    ].filter((x) => x.count > 0);
+  }, [pos, todayStr]);
+
   const poGroups = useMemo(() => {
     const byIndent = new Map<string, POSummary[]>();
     const order: string[] = [];
-    for (const po of pos) {
+    for (const po of shownPos) {
       const key = po.indent_id ?? "__none__";
       if (!byIndent.has(key)) { byIndent.set(key, []); order.push(key); }
       byIndent.get(key)!.push(po);
@@ -554,7 +660,7 @@ export default function PurchasingPage() {
       const vendorCount = new Set(groupPos.map((p) => p.vendor_id)).size;
       return { key, indentId: key === "__none__" ? null : key, pos: groupPos, total, indent, vendorCount };
     });
-  }, [pos, indents]);
+  }, [shownPos, indents]);
 
   if (loading) return <Spinner />;
 
@@ -1041,11 +1147,21 @@ export default function PurchasingPage() {
             <h3 className="font-semibold text-fg">Indents</h3>
             <span className="text-xs text-fg-faint">{indents.length} total</span>
           </div>
+          <ListControls
+            value={indentFilter}
+            onChange={setIndentFilter}
+            statuses={indentStatuses}
+            placeholder="Search by date, status or what is in it…"
+            total={indents.length}
+            shown={matchedIndents.length}
+          />
           <div className="mise-sheet-cascade space-y-2 p-3">
-            {indents.length === 0 ? (
-              <p className="py-10 text-center text-sm text-fg-faint">No indents yet.</p>
+            {matchedIndents.length === 0 ? (
+              <p className="py-10 text-center text-sm text-fg-faint">
+                {indents.length === 0 ? "No indents yet." : "Nothing matches that."}
+              </p>
             ) : (
-              indents.map((ind) => {
+              shownIndents.map((ind) => {
                 const open = openIndent === ind.id;
                 return (
                   <button
@@ -1105,6 +1221,7 @@ export default function PurchasingPage() {
               })
             )}
           </div>
+          <Pager value={indentFilter} onChange={setIndentFilter} matched={matchedIndents.length} />
         </Card>
 
         {/* Purchase orders — same tap-to-expand; line items load on open, no side-scroll. */}
@@ -1113,9 +1230,19 @@ export default function PurchasingPage() {
             <h3 className="font-semibold text-fg">Purchase orders</h3>
             <span className="text-xs text-fg-faint">{pos.length} total</span>
           </div>
+          <ListControls
+            value={poFilter}
+            onChange={setPoFilter}
+            statuses={poStatuses}
+            placeholder="Search by PO number, supplier or status…"
+            total={pos.length}
+            shown={matchedPos.length}
+          />
           <div className="space-y-3 p-3">
-            {pos.length === 0 ? (
-              <p className="py-10 text-center text-sm text-fg-faint">No purchase orders yet.</p>
+            {matchedPos.length === 0 ? (
+              <p className="py-10 text-center text-sm text-fg-faint">
+                {pos.length === 0 ? "No purchase orders yet." : "Nothing matches that."}
+              </p>
             ) : (
               poGroups.map((g) => (
               <div key={g.key} className="rounded-2xl border border-line/70 bg-glass/[0.02] p-2.5">
@@ -1197,6 +1324,7 @@ export default function PurchasingPage() {
               ))
             )}
           </div>
+          <Pager value={poFilter} onChange={setPoFilter} matched={matchedPos.length} />
         </Card>
       </div>
 
@@ -1228,10 +1356,16 @@ export default function PurchasingPage() {
                   />
                 </label>
               </div>
+              {/* "the information is unclear — who does the bill scan?" Named,
+                  and named ACCURATELY: this is Amazon Textract's expense
+                  reader, not the Claude assistant that answers questions
+                  elsewhere in the app. Telling someone the wrong machine did
+                  their bookkeeping is worse than telling them nothing. */}
               <p className="mt-1 text-[11px] leading-relaxed text-fg-faint">
-                DineAI reads the bill and matches its lines to <b className="text-fg-soft">this order</b> — filling in the
-                received qty + the <b className="text-fg-soft">actual price</b> per item. Nothing changes until you press
-                Receive; old prices are kept in each item&apos;s <b className="text-fg-soft">price history</b>.
+                Read by <b className="text-fg-soft">Amazon Textract</b>, which is built for invoices — it finds each line
+                on the bill and matches it to <b className="text-fg-soft">this order</b>, filling in what arrived and the{" "}
+                <b className="text-fg-soft">price actually charged</b>. It only suggests: nothing changes until you press
+                Receive, and the old prices stay in each item&apos;s <b className="text-fg-soft">price history</b>.
               </p>
               {recvScanMsg && <p className="mt-1.5 text-xs text-fg-soft">{recvScanMsg}</p>}
             </div>
@@ -1471,15 +1605,33 @@ export default function PurchasingPage() {
                         ) : openPoDetail && openPoDetail.items.length > 0 ? (
                           <ul className="space-y-1.5">
                             {openPoDetail.items.map((it) => (
-                              <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
-                                <span className="min-w-0 truncate text-fg-soft">{it.item_name}</span>
-                                <span className="shrink-0 text-fg-faint">
-                                  {fmtQtyNumber(it.ordered_qty)} × {format(it.unit_price)}
-                                  {openPoObj.status === "RECEIVED" && it.received_qty !== it.ordered_qty && (
-                                    <span className="ml-2 font-medium text-rose-300">· got {fmtQtyNumber(it.received_qty)}</span>
-                                  )}
-                                  <span className="ml-2 font-medium text-fg">{format(it.line_total)}</span>
-                                </span>
+                              <li key={it.item_id} className="mise-card3d p-2.5">
+                                {/* "just showing 1 x 30 — its not clear bro, we
+                                    need to explain clearly to layman what it is,
+                                    what we are doing." So the line says it as a
+                                    sentence: how much, of what, at what each,
+                                    coming to what. */}
+                                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                  <span className="min-w-0 flex-1 basis-32 truncate font-medium text-fg">
+                                    {it.item_name}
+                                  </span>
+                                  <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg">
+                                    {format(it.line_total)}
+                                  </span>
+                                </div>
+                                <p className="mt-0.5 text-xs text-fg-soft">
+                                  {fmtQtyNumber(it.ordered_qty)} {it.unit || ""} at{" "}
+                                  {format(it.unit_price)} each
+                                  {it.unit ? ` per ${it.unit}` : ""}
+                                </p>
+                                {it.pack_note && (
+                                  <p className="text-[11px] text-fg-faint">{it.pack_note}</p>
+                                )}
+                                {openPoObj.status === "RECEIVED" && it.received_qty !== it.ordered_qty && (
+                                  <p className="mt-0.5 text-xs font-medium text-rose-300">
+                                    only {fmtQtyNumber(it.received_qty)} {it.unit || ""} actually arrived
+                                  </p>
+                                )}
                               </li>
                             ))}
                           </ul>

@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.inventory import pack_service as packs_svc
+from app.inventory import packs
 from app.inventory import service as inventory_service
 from app.inventory.models import Item
 from app.purchasing.models import (
@@ -315,6 +316,20 @@ async def po_items(db: AsyncSession, po_id: uuid.UUID) -> list[dict]:
         # them back and forth across the store.
         .order_by(Item.category.nulls_last(), Item.name)
     )
+    pairs = rows.all()
+
+    # "a bottle holds 30 piece", per item, so a line can explain its own price
+    # without the reader having to know the chain.
+    chains = await packs_svc.levels_for(db, [it.id for _, it in pairs])
+
+    def note(item: Item) -> str | None:
+        levels = packs_svc.as_levels(chains.get(item.id, []))
+        if not levels:
+            return None
+        top = levels[-1]
+        size = packs.base_size(levels, top.position)
+        return f"a {top.name} holds {packs.tidy(size)} {item.unit}"
+
     return [
         {
             "po_item_id": pi.id,
@@ -322,12 +337,13 @@ async def po_items(db: AsyncSession, po_id: uuid.UUID) -> list[dict]:
             "item_name": it.name,
             "category": (it.category or "").strip() or "Other",
             "unit": it.unit,
+            "pack_note": note(it),
             "ordered_qty": pi.ordered_qty,
             "received_qty": pi.received_qty,
             "unit_price": pi.unit_price,
             "line_total": pi.line_total,
         }
-        for pi, it in rows.all()
+        for pi, it in pairs
     ]
 
 
