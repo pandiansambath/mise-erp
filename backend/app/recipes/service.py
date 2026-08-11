@@ -11,6 +11,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.inventory import pack_service as packs_svc
 from app.inventory.models import Item
 from app.recipes.models import Recipe, RecipeIngredient
 from app.vendors.models import Vendor, VendorItem
@@ -124,7 +125,7 @@ async def _best_price(
     active vendor. Returns (price, vendor_name, source) where source is
     'preferred' | 'cheapest' | None."""
     base = (
-        select(VendorItem.price_per_unit, Vendor.name)
+        select(VendorItem.price_per_unit, Vendor.name, VendorItem.pack_level_id)
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
         .where(
             VendorItem.item_id == item_id,
@@ -132,13 +133,26 @@ async def _best_price(
             Vendor.is_active.is_(True),
         )
     )
+
+    # A recipe takes 2 LEMONS, not 2 bottles of thirty — so the quote has to
+    # come down to the base unit before it is multiplied by an ingredient
+    # quantity, or every margin on the page is wrong by the size of the pack.
+    convert = await packs_svc.per_base_prices(db, [item_id])
+
+    def per_base(price: Decimal, level_id) -> Decimal:
+        return convert(item_id, price, level_id)
+
     pref = await db.execute(base.where(VendorItem.is_preferred.is_(True)).limit(1))
     row = pref.first()
     if row:
-        return (row[0], row[1], "preferred")
-    cheapest = await db.execute(base.order_by(VendorItem.price_per_unit.asc()).limit(1))
-    row = cheapest.first()
-    return (row[0], row[1], "cheapest") if row else (None, None, None)
+        return (per_base(row[0], row[2]), row[1], "preferred")
+
+    # Cheapest per base unit, not cheapest quote.
+    rows = (await db.execute(base)).all()
+    if not rows:
+        return (None, None, None)
+    best = min(rows, key=lambda r: per_base(r[0], r[2]))
+    return (per_base(best[0], best[2]), best[1], "cheapest")
 
 
 # ── The costing engine ───────────────────────────────────────────────────────
