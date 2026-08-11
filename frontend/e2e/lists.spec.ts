@@ -39,8 +39,12 @@ test("a status chip shows what it claims", async ({ page }) => {
     await chips.first().click();
     await page.waitForTimeout(2500);
 
-    const shown = await page.locator("text=/showing \d+ of \d+/").first().innerText();
-    const got = parseInt(shown.match(/showing\s+(\d+)/)?.[1] ?? "-1", 10);
+    // The count sits in a <p> whose number is wrapped in <b>, so match the
+    // PARAGRAPH and read its text rather than hunting a single text node.
+    await page.screenshot({ path: `e2e/__screens__/list-${tab}.png` });
+    const line = page.locator("p", { hasText: /showing/ }).first();
+    const shown = (await line.count()) ? await line.innerText() : "(no showing line)";
+    const got = parseInt(shown.match(/showing\s*(\d+)/)?.[1] ?? "-1", 10);
     console.log(`${tab}: chip "${label}" -> ${shown.trim()}`);
     expect(got, `${tab}: the chip says ${claimed}, the list must not disagree`).toBeGreaterThan(0);
 
