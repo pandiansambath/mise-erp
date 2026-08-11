@@ -254,7 +254,7 @@ function ItemSheet({
             type="button"
             disabled={count <= 0}
             onClick={() => onAdd(String(baseQty), card.current)}
-            className="mise-press w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 transition hover:bg-brand-700 disabled:opacity-40"
+            className="mise-btn-key mise-press w-full px-4 py-3 text-sm font-semibold disabled:opacity-40"
           >
             Add to basket{total > 0 ? ` · ${format(total.toFixed(2))}` : ""}
           </button>

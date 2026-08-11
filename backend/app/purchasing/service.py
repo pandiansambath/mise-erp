@@ -8,7 +8,7 @@ all are skipped.
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import String, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.inventory import pack_service as packs_svc
@@ -88,6 +88,89 @@ async def list_indents(db: AsyncSession, hotel_id: uuid.UUID) -> list[Indent]:
         select(Indent).where(Indent.hotel_id == hotel_id).order_by(Indent.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def list_indents_page(
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    *,
+    q: str | None = None,
+    status: str | None = None,
+    sort: str = "newest",
+    limit: int = 10,
+    offset: int = 0,
+) -> dict:
+    """One page of indents, plus the counts the filter chips need.
+
+    His idea, and a good one: "instead of showing all and making the user scroll
+    so deep, shall we have a pagination... this will also reduce the reading all
+    datas at once from db issue."
+
+    The database saving here is bigger than it looks. The list endpoint builds
+    each row by fetching that indent's ITEMS — one query per indent — so thirty
+    six indents cost thirty seven round trips before a single pixel is drawn.
+    Ten per page costs eleven.
+
+    Search and paging had to move together. Filtering in the browser while
+    paging on the server means you are only ever searching the page you happen
+    to be on, which is worse than not paging at all — so the WHERE clause lives
+    here now, and the counts are computed over everything so the chips do not
+    start lying about how much there is.
+    """
+    base = select(Indent).where(Indent.hotel_id == hotel_id)
+
+    if status:
+        base = base.where(Indent.status == status)
+
+    if q and q.strip():
+        needle = f"%{q.strip().lower()}%"
+        # Searchable by what is IN it, not only by its date — "the one with the
+        # lemons" is how people remember an order.
+        with_item = (
+            select(IndentItem.indent_id)
+            .join(Item, IndentItem.item_id == Item.id)
+            .where(func.lower(Item.name).like(needle))
+        )
+        base = base.where(
+            func.lower(func.cast(Indent.date, String)).like(needle)
+            | func.lower(Indent.status).like(needle)
+            | Indent.id.in_(with_item)
+        )
+
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+
+    order = {
+        "oldest": Indent.created_at.asc(),
+        "newest": Indent.created_at.desc(),
+    }.get(sort, Indent.created_at.desc())
+
+    rows = (
+        await db.execute(base.order_by(order).limit(limit or 1000).offset(offset))
+    ).scalars().all()
+
+    # Counts over the WHOLE set (ignoring the status filter, so the chips can
+    # still show you what switching to them would give).
+    count_base = select(Indent.status, func.count()).where(Indent.hotel_id == hotel_id)
+    if q and q.strip():
+        needle = f"%{q.strip().lower()}%"
+        with_item = (
+            select(IndentItem.indent_id)
+            .join(Item, IndentItem.item_id == Item.id)
+            .where(func.lower(Item.name).like(needle))
+        )
+        count_base = count_base.where(
+            func.lower(func.cast(Indent.date, String)).like(needle)
+            | func.lower(Indent.status).like(needle)
+            | Indent.id.in_(with_item)
+        )
+    counts = {
+        st: n
+        for st, n in (await db.execute(count_base.group_by(Indent.status))).all()
+    }
+
+    return {"rows": list(rows), "total": total, "counts": counts}
 
 
 async def set_indent_status(db: AsyncSession, indent: Indent, status: str) -> Indent:
