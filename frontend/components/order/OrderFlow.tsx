@@ -158,7 +158,7 @@ function ItemSheet({
           : `${fmtQty(item.current_stock, item.unit)} in stock`
       }
       footer={
-        <Magnet padding={70} magnetStrength={7} className="block">
+        <Magnet padding={70} magnetStrength={7} style={{ display: "block" }}>
           <button
             type="button"
             disabled={count <= 0}
@@ -440,6 +440,7 @@ export function OrderFlow({
             >
               <button
                 type="button"
+                data-testid="category-tile"
                 onClick={() => setCat(name)}
                 className="mise-card3d mise-press flex w-full items-center gap-3 px-3.5 py-4 text-left"
               >
@@ -485,6 +486,7 @@ export function OrderFlow({
                   >
                     <button
                       type="button"
+                      data-testid="item-tile"
                       onClick={() => setOpenItem(it)}
                       className={`mise-card3d mise-press relative flex w-full flex-col items-start gap-1 p-3 text-left ${
                         on ? "!bg-brand-400/15 ring-2 ring-brand-500" : ""

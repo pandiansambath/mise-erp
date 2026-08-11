@@ -37,7 +37,7 @@ test("purchasing: the popup is centred and the cards carry detail", async ({ pag
   await page.screenshot({ path: `${SHOTS}/pur-1-page-${tag(page)}.png` });
 
   // Layer one: a category tile.
-  const cat = page.locator("button").filter({ hasText: /^\S.*\d+ items$/ }).first();
+  const cat = page.getByTestId("category-tile").first();
   await cat.scrollIntoViewIfNeeded();
   await cat.click();
   await page.waitForTimeout(900);
@@ -76,7 +76,7 @@ test("purchasing: the popup is centred and the cards carry detail", async ({ pag
   expect(dyCentre, "vertically centred").toBeLessThan(4);
 
   // Layer two: an item, which is where the price detail has to be legible.
-  const item = page.locator("[role=dialog] button").filter({ hasText: /have/ }).first();
+  const item = page.getByTestId("item-tile").first();
   if (await item.count()) {
     await item.click();
     await page.waitForTimeout(900);

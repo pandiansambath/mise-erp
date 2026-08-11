@@ -25,6 +25,7 @@ const Magnet: React.FC<MagnetProps> = ({
   inactiveTransition = 'transform 0.5s ease-in-out',
   wrapperClassName = '',
   innerClassName = '',
+  style,
   ...props
 }) => {
   const [isActive, setIsActive] = useState<boolean>(false);
@@ -70,7 +71,11 @@ const Magnet: React.FC<MagnetProps> = ({
     <div
       ref={magnetRef}
       className={wrapperClassName}
-      style={{ position: 'relative', display: 'inline-block' }}
+      // Local change: MERGE the caller's style instead of hardcoding the
+      // display. `display: inline-block` beat every class a caller passed, so a
+      // w-full button inside a Magnet shrank to its text — which is how "Add to
+      // basket" ended up half the width of the popup it was the point of.
+      style={{ position: 'relative', display: 'inline-block', ...style }}
       {...props}
     >
       <div
