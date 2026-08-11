@@ -825,7 +825,13 @@ export function Copilot() {
             });
           }}
           style={drag.style}
-          className={`mise-launcher-in group fixed bottom-20 left-4 z-50 lg:bottom-6 lg:left-6 flex touch-none items-center gap-2 border border-glass/10 bg-brand-600 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition-all duration-300 hover:bg-brand-500 hover:shadow-xl [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] ${miniBubble ? "mise-curl rounded-full p-3" : "rounded-2xl px-3.5 py-3"} ${
+          // bottom-36 on a phone, not bottom-20.
+          //
+          // The tab bar is 4.75rem and the pinned tally sits directly on top of
+          // it, wrapping to two lines on a narrow screen — which is exactly
+          // where this was floating. It covered the committed total and the
+          // count of indents waiting, on every page that has a tally.
+          className={`mise-launcher-in group fixed bottom-36 left-4 z-50 lg:bottom-6 lg:left-6 flex touch-none items-center gap-2 border border-glass/10 bg-brand-600 text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition-all duration-300 hover:bg-brand-500 hover:shadow-xl [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] ${miniBubble ? "mise-curl rounded-full p-3" : "rounded-2xl px-3.5 py-3"} ${
             drag.dragging
               ? "scale-110 cursor-grabbing opacity-90 shadow-2xl"
               : "cursor-grab transition active:scale-95"
