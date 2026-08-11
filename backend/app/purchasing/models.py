@@ -102,7 +102,10 @@ class POItem(Base):
     received_qty: Mapped[Decimal] = mapped_column(
         Numeric(12, 3), nullable=False, default=Decimal("0")
     )
-    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # Four decimals: this is a price per BASE unit now, and £120 for a 15 000 g
+    # box is £0.008 a gram. Two decimals would round that up to a penny — a
+    # quarter more than it costs, on every gram.
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     line_total: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=Decimal("0")
     )

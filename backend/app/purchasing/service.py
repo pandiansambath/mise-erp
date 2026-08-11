@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.inventory import pack_service as packs_svc
 from app.inventory import service as inventory_service
 from app.inventory.models import Item
 from app.purchasing.models import (
@@ -161,7 +162,7 @@ async def _resolve_supplier(
     None only when no active vendor prices the item at all.
     """
     base = (
-        select(VendorItem.vendor_id, VendorItem.price_per_unit)
+        select(VendorItem.vendor_id, VendorItem.price_per_unit, VendorItem.pack_level_id)
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
         .where(
             VendorItem.item_id == item_id,
@@ -169,15 +170,30 @@ async def _resolve_supplier(
             Vendor.is_active.is_(True),
         )
     )
+
+    # A quote is for whatever size the supplier sells; an indent line is in
+    # BASE units. See pack_service.per_base_prices for what went wrong when
+    # those two were multiplied together.
+    convert = await packs_svc.per_base_prices(db, [item_id])
+
+    def per_base(price: Decimal, level_id: uuid.UUID | None) -> Decimal:
+        return convert(item_id, price, level_id)
+
     if override_vendor_id is not None:
         row = (await db.execute(base.where(Vendor.id == override_vendor_id).limit(1))).first()
         if row:
-            return (row[0], row[1])
+            return (row[0], per_base(row[1], row[2]))
     row = (await db.execute(base.where(VendorItem.is_preferred.is_(True)).limit(1))).first()
     if row:
-        return (row[0], row[1])
-    row = (await db.execute(base.order_by(VendorItem.price_per_unit.asc()).limit(1))).first()
-    return (row[0], row[1]) if row else None
+        return (row[0], per_base(row[1], row[2]))
+
+    # "Cheapest" has to be compared per base unit too, or a £30 bottle of
+    # thirty (£1 each) loses to a £3 single piece.
+    rows = (await db.execute(base)).all()
+    if not rows:
+        return None
+    best = min(rows, key=lambda r: per_base(r[1], r[2]))
+    return (best[0], per_base(best[1], best[2]))
 
 
 async def item_suppliers(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID, list[dict]]:

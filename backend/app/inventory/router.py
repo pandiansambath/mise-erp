@@ -556,9 +556,17 @@ async def import_template_commit(
         if await vendor_service.set_preferred_vendor(db, user.hotel_id, item.id, vendor.id):
             linked.append(name)
             vis = await vendor_service.list_vendor_items(db, vendor.id)
-            price = next((vi.price_per_unit for vi in vis if vi.item_id == item.id), None)
-            if price is not None and not item.average_cost:
-                await service.update_item(db, item, average_cost=price)  # value opening stock
+            vi = next((v for v in vis if v.item_id == item.id), None)
+            if vi is not None and vi.price_per_unit is not None and not item.average_cost:
+                # Per BASE unit. average_cost multiplies against stock, which is
+                # counted in base units — seeding it with a pack quote values
+                # opening stock at the price of a whole box per gram.
+                convert = await pack_service.per_base_prices(db, [item.id])
+                await service.update_item(
+                    db,
+                    item,
+                    average_cost=convert(item.id, vi.price_per_unit, vi.pack_level_id),
+                )
         else:
             notes.append(
                 f"{name}: {vendor.name} doesn’t list this item yet — set its price on Vendors."
