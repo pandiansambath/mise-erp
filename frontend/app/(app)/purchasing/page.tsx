@@ -19,7 +19,7 @@ import {
 import Link from "next/link";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
-import { OrderPad } from "@/components/OrderPad";
+import { OrderFlow } from "@/components/order/OrderFlow";
 import { localISODate } from "@/lib/date";
 import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailSheet";
 import { SubNav } from "@/components/SubNav";
@@ -889,25 +889,20 @@ export default function PurchasingPage() {
                 category whose items fit the panel as tiles. The order builds
                 beside you, grouped by the supplier it will actually be sent
                 to, with the money live. */}
-            <OrderPad
+            {/* The flow he described, layer by layer:
+                  categories -> a category's items as a POPUP
+                             -> an item as a POPUP ON TOP
+                                -> how many, and in which size
+                                   -> "Add to basket" BURSTS it into a bubble
+                                      that shrinks across into the basket
+                  and the basket opens on tap with the full detail.
+                See docs/PURCHASING_REDESIGN.md. */}
+            <OrderFlow
               items={orderable}
               suppliers={suppliers}
               lines={lines}
               onChange={setLines}
-              // The strip already knows what is low; this is what "Add them
-              // all" does — the same par-topping logic the old button used.
               onAddAllLow={orderAllLow}
-              // vendorPick already fed the submit payload; it just had no
-              // control left to set it after the old picker went.
-              overrides={vendorPick}
-              onOverride={(itemId, vendorId) =>
-                setVendorPick((prev) => {
-                  const next = { ...prev };
-                  if (vendorId) next[itemId] = vendorId;
-                  else delete next[itemId];
-                  return next;
-                })
-              }
               footer={
                 <div className="flex flex-wrap gap-2">
                   <button
