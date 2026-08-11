@@ -84,9 +84,30 @@ export function DetailSheet({
   // Back closes the overlay rather than leaving the page.
   useBackToClose(open, onClose);
 
+  // THE CARET BUG. This effect used to depend on [open, onClose], and every
+  // caller passes an inline arrow for onClose — `onClose={() => setSelected("")}`
+  // — which is a NEW function identity on every render. So the effect tore down
+  // and re-ran on EVERY render of the parent, and each run scheduled
+  // `panel.focus()` 40ms later.
+  //
+  // Type one character into any field inside a sheet: the parent re-renders,
+  // the effect re-runs, and 40ms afterwards the caret is yanked out of the box
+  // and onto the panel. Type one more, same again. He reported it twice —
+  // "i can only click and type 1 number, for next number i need to click the
+  // input field again" — and it was every sheet in the app, which is why it
+  // showed up on vendors and purchasing alike.
+  //
+  // The handler goes in a ref so the listener always calls the CURRENT onClose,
+  // and the effect depends only on `open` — which is what "focus the sheet when
+  // it opens" actually means.
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -97,7 +118,7 @@ export function DetailSheet({
       document.body.style.overflow = prev;
       clearTimeout(t);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

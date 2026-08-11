@@ -12,10 +12,17 @@
 // One object, one continuous movement — which is what makes it read as "that
 // went in there" rather than "a panel closed and a number changed".
 //
-// Fast on purpose: "dont be very slow in motion, i need to be fast, if slow
-// means it will be awkward to look". 520ms end to end.
 
-export const BURST_MS = 520;
+// 820ms, up from 520.
+//
+// "i can see the bubble movement but not burst, and also its so so so fast that
+// i can even realise its happening." Both true. The old timing was tuned to his
+// earlier "don't be slow" note and overshot — a movement you cannot perceive is
+// not fast, it is missing. This is still brisk, but you can follow it.
+export const BURST_MS = 820;
+
+/** The shards thrown outward at the moment the panel pops. */
+const SHARDS = 10;
 
 /**
  * Fly a shrinking copy of `from` into the element with id `basketId`.
@@ -62,20 +69,74 @@ export function burstToBasket(
     if (label) bubble.textContent = label;
     document.body.appendChild(bubble);
 
+    // THE BURST ITSELF, which was missing — the old version only shrank and
+    // slid, so it read as "a thing moved" rather than "the panel popped and
+    // what was inside it flew away". A ring pushes outward from the panel's
+    // centre and a handful of shards scatter, both fading fast, while the
+    // bubble carries on to the basket.
+    const cx = a.left + a.width / 2;
+    const cy = a.top + a.height / 2;
+
+    const ring = document.createElement("div");
+    ring.setAttribute("aria-hidden", "true");
+    ring.className = "pointer-events-none fixed z-[94] rounded-full border-2 border-brand-400";
+    ring.style.left = `${cx - size / 2}px`;
+    ring.style.top = `${cy - size / 2}px`;
+    ring.style.width = `${size}px`;
+    ring.style.height = `${size}px`;
+    document.body.appendChild(ring);
+    ring
+      .animate(
+        [
+          { transform: "scale(0.4)", opacity: 0.9 },
+          { transform: "scale(1.5)", opacity: 0 },
+        ],
+        { duration: 420, easing: "cubic-bezier(.2,.8,.3,1)" },
+      )
+      .addEventListener("finish", () => ring.remove());
+
+    for (let i = 0; i < SHARDS; i++) {
+      const angle = (Math.PI * 2 * i) / SHARDS + Math.random() * 0.4;
+      const dist = 60 + Math.random() * 70;
+      const shard = document.createElement("div");
+      shard.setAttribute("aria-hidden", "true");
+      shard.className = "pointer-events-none fixed z-[94] rounded-full bg-brand-400";
+      const r = 5 + Math.random() * 5;
+      shard.style.left = `${cx - r / 2}px`;
+      shard.style.top = `${cy - r / 2}px`;
+      shard.style.width = `${r}px`;
+      shard.style.height = `${r}px`;
+      document.body.appendChild(shard);
+      shard
+        .animate(
+          [
+            { transform: "translate(0,0) scale(1)", opacity: 1 },
+            {
+              transform: `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px) scale(0.2)`,
+              opacity: 0,
+            },
+          ],
+          { duration: 380 + Math.random() * 220, easing: "cubic-bezier(.2,.7,.3,1)" },
+        )
+        .addEventListener("finish", () => shard.remove());
+    }
+
     const dx = b.left + b.width / 2 - (a.left + a.width / 2);
     const dy = b.top + b.height / 2 - (a.top + a.height / 2);
 
     const anim = bubble.animate(
       [
-        // squash out of the panel
-        { transform: "translate(0,0) scale(1.06)", opacity: 0.95, offset: 0 },
-        { transform: "translate(0,0) scale(0.72)", opacity: 1, offset: 0.18 },
+        // pop first — swell, then ball up — so the burst is SEEN before the
+        // travel starts. It used to begin moving immediately, which is why the
+        // burst never read as one.
+        { transform: "translate(0,0) scale(1.18)", opacity: 0.95, offset: 0 },
+        { transform: "translate(0,0) scale(0.62)", opacity: 1, offset: 0.26 },
         // arc across — lifted above the straight line so it travels like a
         // throw rather than sliding along a ruler
         {
           transform: `translate(${dx * 0.55}px, ${dy * 0.55 - Math.abs(dx) * 0.14 - 30}px) scale(0.34)`,
           opacity: 1,
-          offset: 0.62,
+          offset: 0.68,
         },
         { transform: `translate(${dx}px, ${dy}px) scale(0.08)`, opacity: 0.35, offset: 1 },
       ],

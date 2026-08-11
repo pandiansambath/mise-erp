@@ -136,10 +136,16 @@ async def best_vendors(
     supplier ONLY. We deliberately do NOT auto-pick the cheapest as a provisional
     anymore (the user must pick a supplier per item) — items with no chosen supplier
     are simply absent here, so the UI prompts the user to choose one."""
+    from app.inventory import pack_service, packs
     from app.vendors.models import Vendor, VendorItem  # local import avoids cycle
 
     stmt = (
-        select(VendorItem.item_id, Vendor.name, VendorItem.price_per_unit)
+        select(
+            VendorItem.item_id,
+            Vendor.name,
+            VendorItem.price_per_unit,
+            VendorItem.pack_level_id,
+        )
         .join(Vendor, Vendor.id == VendorItem.vendor_id)
         .where(
             Vendor.hotel_id == hotel_id,
@@ -147,10 +153,23 @@ async def best_vendors(
             VendorItem.is_preferred.is_(True),
         )
     )
+    rows = (await db.execute(stmt)).all()
+
+    # The price is normalised to ONE BASE UNIT before it leaves here.
+    #
+    # A supplier quoting £30 for a bottle of thirty was being handed to the UI
+    # as the item's price, and every screen printed it beside the base unit —
+    # "leomon3 · £30.00" against an item counted in pieces. Wrong by the size of
+    # the bottle, on the number a buyer reads.
+    chains = await pack_service.levels_for(db, [r[0] for r in rows])
     best: dict[uuid.UUID, tuple[str, bool, Decimal]] = {}
-    for item_id, name, price in (await db.execute(stmt)).all():
-        if item_id not in best:
-            best[item_id] = (name, True, price)
+    for item_id, name, price, level_id in rows:
+        if item_id in best:
+            continue
+        level_rows = chains.get(item_id) or []
+        position = next((r.position for r in level_rows if r.id == level_id), 0)
+        per_base = packs.price_per_base(price, pack_service.as_levels(level_rows), position)
+        best[item_id] = (name, True, per_base)
     return best
 
 
