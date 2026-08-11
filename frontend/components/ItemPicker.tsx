@@ -13,6 +13,9 @@ import type { Item, SupplierOption } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { numeric } from "@/lib/sanitize";
 import { Pocket, flyToPocket } from "@/components/Pocket";
+// A supplier who quotes per bottle must not have that number printed as if it
+// were per piece — it is wrong by the size of the bottle.
+import { pricePerBase } from "@/lib/packs";
 
 export type PickedLine = { item_id: string; qty: string };
 
@@ -546,7 +549,7 @@ export function ItemPicker({
                             <span
                               className={`font-mono ${vi === 0 ? "text-emerald-300" : "text-fg-faint"}`}
                             >
-                              {format(v.price_per_unit)}
+                              {format(pricePerBase(it, v).toFixed(2))}
                             </span>
                           </span>
                         ))}
@@ -688,7 +691,7 @@ export function ItemPicker({
                               vi === 0 ? "text-emerald-300" : "text-fg-faint"
                             }`}
                           >
-                            {format(v.price_per_unit)}
+                            {format(pricePerBase(it, v).toFixed(2))}
                           </span>
                           {extra > 0.001 && (
                             <span className="shrink-0 text-[9px] text-rose-300/80">
@@ -1093,7 +1096,7 @@ export function ItemPickerSingle({
                           <span
                             className={`font-mono ${vi === 0 ? "text-emerald-300" : "text-fg-faint"}`}
                           >
-                            {format(v.price_per_unit)}
+                            {format(pricePerBase(it, v).toFixed(2))}
                           </span>
                         </span>
                       ))}
@@ -1243,7 +1246,7 @@ export function ItemPickerSingle({
                               vi === 0 ? "text-emerald-300" : "text-fg-faint"
                             }`}
                           >
-                            {format(v.price_per_unit)}
+                            {format(pricePerBase(it, v).toFixed(2))}
                           </span>
                           {extra > 0.001 && (
                             <span className="shrink-0 text-[9px] text-rose-300/80">
