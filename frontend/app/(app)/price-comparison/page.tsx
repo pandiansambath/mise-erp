@@ -1,5 +1,7 @@
 "use client";
 
+import StarBorder from "@/components/reactbits/StarBorder";
+
 import { CountUp } from "@/components/reactbits/CountUp";
 
 import { useEffect, useRef, useState } from "react";
@@ -526,10 +528,19 @@ export default function PriceComparisonPage() {
                       </span>
                     )}
                   </span>
+                  {/* The one answer this page exists to give, so it is the one
+                      thing that sparkles. Exactly one row per item wears it. */}
                   {cheapest && !v.is_preferred && (
-                    <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                      cheapest
-                    </span>
+                    <StarBorder
+                      as="span"
+                      color="#34d399"
+                      speed="5s"
+                      className="!inline-block !rounded-full"
+                    >
+                      <span className="block rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                        cheapest
+                      </span>
+                    </StarBorder>
                   )}
                   {/* The point of opening this is to DECIDE. Listing prices and
                       making you close the sheet to act on them was half a
