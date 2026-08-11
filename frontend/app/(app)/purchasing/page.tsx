@@ -570,7 +570,7 @@ export default function PurchasingPage() {
           <button
             type="button"
             onClick={() => setTab("new")}
-            className="mise-press rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-700"
+            className="mise-press hidden rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-700 sm:block"
           >
             ＋ New order
           </button>
@@ -593,7 +593,7 @@ export default function PurchasingPage() {
               },
               {
                 key: "orders",
-                label: "Purchase orders",
+                label: "Orders",
                 icon: "🚚",
                 count: pos.filter((p) => p.status !== "RECEIVED").length || pos.length,
                 tone: pos.some(

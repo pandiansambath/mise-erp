@@ -33,7 +33,10 @@ test("purchasing: the popup is centred and the cards carry detail", async ({ pag
   test.setTimeout(180_000);
   await login(page);
   await page.goto("/purchasing");
-  await page.waitForTimeout(6000);
+  // Wait for the page to have DATA, not just to exist — the first shot was
+  // catching a spinner and I nearly read it as the redesign.
+  await page.getByTestId("category-tile").first().waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(1200);
   await page.screenshot({ path: `${SHOTS}/pur-1-page-${tag(page)}.png` });
 
   // Layer one: a category tile.
