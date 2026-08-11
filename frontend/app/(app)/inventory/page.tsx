@@ -19,6 +19,7 @@ import {
 import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
 import { PackChainEditor, type PackLevel } from "@/components/PackChainEditor";
+import { chainSummary } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
 import { SubNav } from "@/components/SubNav";
@@ -1669,7 +1670,18 @@ export default function InventoryPage() {
                     String((parseFloat(openItem.current_stock) || 0) * (parseFloat(openItem.average_cost) || 0)),
                   ),
                 },
-                { label: "Avg cost", value: format(openItem.average_cost), hint: `per ${openItem.unit}` },
+                {
+                  label: "Avg cost",
+                  value: format(openItem.average_cost),
+                  // What that works out to per pack, when the item comes in
+                  // packs. "£1.00 per piece" is true but a buyer thinks in
+                  // bottles, and doing the multiplication in their head is how
+                  // an order comes out thirty times wrong.
+                  hint:
+                    (openItem.pack_levels ?? []).length > 0
+                      ? `per ${openItem.unit} · ${chainSummary(openItem)[0]}`
+                      : `per ${openItem.unit}`,
+                },
               ]
             : undefined
         }
