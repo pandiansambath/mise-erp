@@ -27,7 +27,6 @@ import ClickSpark from "@/components/reactbits/ClickSpark";
 import Magnet from "@/components/reactbits/Magnet";
 import { CountUp } from "@/components/reactbits/CountUp";
 import GlareHover from "@/components/reactbits/GlareHover";
-import ElectricBorder from "@/components/reactbits/ElectricBorder";
 
 export type OrderLine = { item_id: string; qty: string };
 
@@ -228,9 +227,14 @@ export function OrderPad({
             It knows what is below its minimum, so it should say so rather than
             open an empty search box and wait. One tap loads them all at
             par-topping quantities. */}
+        {/* A quiet amber panel, not a lightning border.
+            The ElectricBorder that was here crackled continuously, and he was
+            blunt: "i dont like this lighting.. its irritating me". He is right
+            — this sits above the thing you came to the page to do, so it has to
+            be readable at a glance and then get out of the way. Continuous
+            motion beside a form you are typing into is the opposite of that. */}
         {low.length > 0 && (
-          <ElectricBorder color="#f59e0b" speed={0.7} chaos={0.4} borderRadius={16}>
-            <div className="flex flex-wrap items-center gap-3 rounded-2xl px-3.5 py-2.5">
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-400/35 bg-amber-400/[0.07] px-3.5 py-2.5">
               <span aria-hidden className="text-lg">⚠</span>
               <span className="min-w-0 flex-1 text-sm text-fg">
                 <b className="text-amber-300">{low.length}</b> item
@@ -249,7 +253,6 @@ export function OrderPad({
                 </button>
               )}
             </div>
-          </ElectricBorder>
         )}
 
         {/* The pad. Type a name, then a number. */}
