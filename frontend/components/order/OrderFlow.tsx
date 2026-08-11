@@ -30,6 +30,7 @@ import ClickSpark from "@/components/reactbits/ClickSpark";
 import GlareHover from "@/components/reactbits/GlareHover";
 import SpotlightCard from "@/components/reactbits/SpotlightCard";
 import Magnet from "@/components/reactbits/Magnet";
+import { overlayOpened } from "@/lib/overlay";
 
 export type OrderLine = { item_id: string; qty: string };
 
@@ -65,7 +66,13 @@ function Sheet({
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // The page behind must not scroll under a popup, and the floating launcher
+    // must not sit on top of one.
+    const release = overlayOpened();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      release();
+    };
   }, [onClose]);
 
   const z = depth === 1 ? "z-[70]" : "z-[80]";

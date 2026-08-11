@@ -19,6 +19,7 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 
 import { useBackToClose } from "./useBackToClose";
+import { overlayOpened } from "@/lib/overlay";
 
 // ── Sheets on top of sheets ───────────────────────────────────────────────
 // "Popup inside popup" is the whole point: from a vendor you open one of its
@@ -109,13 +110,14 @@ export function DetailSheet({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // Locks the page AND tells the floating launcher to stand down — it used
+    // to sit on top of this sheet's own buttons on a phone.
+    const release = overlayOpened();
     // move focus into the sheet so keyboard + screen readers follow the click
     const t = setTimeout(() => panel.current?.focus(), 40);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      release();
       clearTimeout(t);
     };
   }, [open]);
