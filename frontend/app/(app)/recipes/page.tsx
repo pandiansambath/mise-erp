@@ -719,7 +719,7 @@ export default function RecipesPage() {
   return (
     <div>
       {stage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`${stage.name} costing`}>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`${stage.name} costing`}>
           <div className="mise-fade absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={() => setStage(null)} aria-hidden />
           <div className="mise-pop-lg relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-glass/10 bg-paper shadow-2xl shadow-black/60">
             <div className="flex items-center gap-3 border-b border-line bg-gradient-to-r from-brand-500/10 via-transparent to-transparent px-5 py-4">
@@ -987,7 +987,7 @@ export default function RecipesPage() {
 
       {/* Handwritten-note OCR preview — review/fix each line, then add to ingredients. */}
       {notePreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setNotePreview(null)} aria-hidden />
           <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
             <div className="mb-1 flex items-start justify-between">

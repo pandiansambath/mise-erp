@@ -416,7 +416,7 @@ export default function InventoryPage() {
   }
 
   const seedModal = seedRows && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSeedRows(null)} aria-hidden />
       <div className="mise-pop-lg relative flex max-h-[86dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-glass/10 bg-paper-2/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
         <div className="border-b border-line px-5 py-4">
@@ -944,7 +944,7 @@ export default function InventoryPage() {
 
       {importRows && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/50 p-4"
           onClick={() => !importBusy && setImportRows(null)}
         >
           <div
@@ -1624,7 +1624,7 @@ export default function InventoryPage() {
       )}
 
       {templateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setTemplateModal(false)} aria-hidden />
           <div className="mise-pop-lg relative w-full max-w-sm rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
             <div className="flex items-start justify-between gap-3">
