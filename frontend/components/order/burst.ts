@@ -180,10 +180,52 @@ export function burstAway(from: HTMLElement | null): Promise<void> {
     const cx = a.left + a.width / 2;
     const cy = a.top + a.height / 2;
 
+    // A flash of light at the moment it goes. Without it the shards read as
+    // confetti appearing rather than a thing breaking — "I don't even realise
+    // it is happening".
+    const flash = document.createElement("div");
+    flash.setAttribute("aria-hidden", "true");
+    flash.className = "pointer-events-none fixed z-[97] rounded-3xl bg-white";
+    flash.style.left = `${a.left}px`;
+    flash.style.top = `${a.top}px`;
+    flash.style.width = `${a.width}px`;
+    flash.style.height = `${a.height}px`;
+    document.body.appendChild(flash);
+    flash
+      .animate(
+        [
+          { opacity: 0, transform: "scale(1)" },
+          { opacity: 0.55, transform: "scale(1.02)", offset: 0.25 },
+          { opacity: 0, transform: "scale(1.14)" },
+        ],
+        { duration: 460, easing: "cubic-bezier(.2,.8,.3,1)" },
+      )
+      .addEventListener("finish", () => flash.remove());
+
+    // A ring pushing out past the panel's edge, so the eye is given the SIZE
+    // of what just went.
+    const ring = document.createElement("div");
+    ring.setAttribute("aria-hidden", "true");
+    ring.className = "pointer-events-none fixed z-[96] rounded-3xl border-2 border-brand-400";
+    ring.style.left = `${a.left}px`;
+    ring.style.top = `${a.top}px`;
+    ring.style.width = `${a.width}px`;
+    ring.style.height = `${a.height}px`;
+    document.body.appendChild(ring);
+    ring
+      .animate(
+        [
+          { transform: "scale(0.94)", opacity: 0.95 },
+          { transform: "scale(1.35)", opacity: 0 },
+        ],
+        { duration: 620, easing: "cubic-bezier(.2,.8,.3,1)" },
+      )
+      .addEventListener("finish", () => ring.remove());
+
     // Shards fly from the panel's EDGES, not its middle, so it reads as the
     // panel coming apart rather than something erupting through it.
-    for (let i = 0; i < 22; i++) {
-      const t = (Math.PI * 2 * i) / 22;
+    for (let i = 0; i < 34; i++) {
+      const t = (Math.PI * 2 * i) / 34;
       const sx = cx + Math.cos(t) * (a.width / 2) * 0.9;
       const sy = cy + Math.sin(t) * (a.height / 2) * 0.9;
       const shard = document.createElement("div");
@@ -207,7 +249,7 @@ export function burstAway(from: HTMLElement | null): Promise<void> {
               opacity: 0,
             },
           ],
-          { duration: 560 + Math.random() * 260, easing: "cubic-bezier(.15,.7,.3,1)" },
+          { duration: 760 + Math.random() * 340, easing: "cubic-bezier(.15,.7,.3,1)" },
         )
         .addEventListener("finish", () => shard.remove());
     }
@@ -219,11 +261,11 @@ export function burstAway(from: HTMLElement | null): Promise<void> {
           { transform: "scale(0.96)", opacity: 1, offset: 0.18 },
           { transform: "scale(1.12)", opacity: 0, offset: 1 },
         ],
-        { duration: 420, easing: "cubic-bezier(.2,.8,.3,1)", fill: "forwards" },
+        { duration: 560, easing: "cubic-bezier(.2,.8,.3,1)", fill: "forwards" },
       )
       .addEventListener("finish", () => done());
 
-    window.setTimeout(done, 600);
+    window.setTimeout(done, 780);
   });
 }
 
@@ -240,6 +282,22 @@ export const BASKET_PANEL_ID = "mise-basket-panel";
  */
 export async function burstBasket(): Promise<void> {
   if (typeof window === "undefined") return;
-  await burstAway(document.getElementById(BASKET_PANEL_ID));
+
+  // EVERY panel that is up, not just the basket. "I said once I click submit
+  // in basket it needs to burst all the opened popups and show the original
+  // page... also I can still see 1 popup open — this also needs to be closed."
+  // Quite right: the category popup was still sitting there behind it, so you
+  // did not land back on the page at all.
+  const panels = Array.from(document.querySelectorAll<HTMLElement>("[role=dialog]"));
+  const basket = document.getElementById(BASKET_PANEL_ID);
+  if (basket && !panels.includes(basket)) panels.push(basket);
+
+  // The backdrops go with them, or the screen stays dark over a page with
+  // nothing on it.
+  for (const b of Array.from(document.querySelectorAll<HTMLElement>("[data-sheet-backdrop]"))) {
+    b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, fill: "forwards" });
+  }
+
+  await Promise.all(panels.map((el) => burstAway(el)));
   window.dispatchEvent(new CustomEvent("mise:close-basket"));
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmtQty, fmtQtyNumber } from "@/lib/quantity";
 import {
   api,
@@ -86,7 +86,49 @@ export default function PurchasingPage() {
   const [pos, setPos] = useState<POSummary[]>([]);
   const [todayStr] = useState(() => new Date().toISOString().slice(0, 10)); // frozen at mount
   const [loading, setLoading] = useState(true);
-  const [lines, setLines] = useState<Line[]>([]);
+  // ── The basket survives a reload ─────────────────────────────────────────
+  //
+  // "please please persist that basket even after loading — once we added to
+  // basket it needs to be persistent permanently until next action."
+  //
+  // Anyone picking an order gets interrupted; losing a half-built indent to a
+  // refresh is losing real work. Kept per user, so two people on one machine
+  // never inherit each other's basket, and cleared the moment it is submitted.
+  const [lines, setLinesRaw] = useState<Line[]>([]);
+  const basketKey = user ? `mise.basket.${user.id}` : null;
+  const basketLoaded = useRef(false);
+
+  useEffect(() => {
+    if (!basketKey || basketLoaded.current) return;
+    basketLoaded.current = true;
+    try {
+      const saved = localStorage.getItem(basketKey);
+      if (saved) {
+        const parsed: unknown = JSON.parse(saved);
+        if (Array.isArray(parsed)) setLinesRaw(parsed as Line[]);
+      }
+    } catch {
+      /* a corrupt basket is not worth a crash */
+    }
+  }, [basketKey]);
+
+  const setLines = useCallback(
+    (next: Line[] | ((prev: Line[]) => Line[])) => {
+      setLinesRaw((prev) => {
+        const value = typeof next === "function" ? next(prev) : next;
+        if (basketKey) {
+          try {
+            if (value.length) localStorage.setItem(basketKey, JSON.stringify(value));
+            else localStorage.removeItem(basketKey);
+          } catch {
+            /* private mode, quota — the basket still works for this session */
+          }
+        }
+        return value;
+      });
+    },
+    [basketKey],
+  );
   // item_id -> every vendor pricing it (cheapest first), for the line picker
   const [suppliers, setSuppliers] = useState<Record<string, SupplierOption[]>>({});
   // item_id -> the vendor PICKED for this order ("" / missing = automatic)
@@ -797,66 +839,6 @@ export default function PurchasingPage() {
           clicked something. These four are the questions this page exists to
           answer - is anything waiting on me, is anything late, and how much
           money is committed - and each one jumps to the rows behind it. */}
-      {(indents.length > 0 || pos.length > 0) && (() => {
-        const today = localISODate();
-        const openPos = pos.filter((x) => x.status !== "RECEIVED");
-        const awaiting = indents.filter((x) => x.status === "PENDING").length;
-        // Late = promised before today and still not received. Compared as ISO
-        // strings on purpose: both sides are already local calendar dates, so
-        // parsing them into Dates would only reintroduce a timezone to get wrong.
-        const overdue = openPos.filter(
-          (x) => x.expected_delivery && x.expected_delivery < today,
-        ).length;
-        const committed = openPos.reduce((sum, x) => sum + (parseFloat(x.total_amount) || 0), 0);
-        const tiles: {
-          label: string; value: string | number; hint: string;
-          tone: "plain" | "warn" | "bad"; go: "new" | "indents" | "orders";
-        }[] = [
-          { label: "Awaiting approval", value: awaiting, hint: awaiting === 1 ? "indent" : "indents",
-            tone: awaiting > 0 ? "warn" : "plain", go: "indents" },
-          { label: "Overdue", value: overdue, hint: "past the promised date",
-            tone: overdue > 0 ? "bad" : "plain", go: "orders" },
-          { label: "In flight", value: openPos.length, hint: "not yet received",
-            tone: "plain", go: "orders" },
-          { label: "Committed", value: format(String(committed)), hint: "on open orders",
-            tone: "plain", go: "orders" },
-        ];
-        // One compact row, not four cards.
-        //
-        // These four numbers are the questions the page answers — is anything
-        // waiting on me, is anything late, how much is committed — so they keep
-        // their place and they still jump to the rows behind them. But as
-        // 2xl-type cards they took a fifth of the screen ABOVE the order form,
-        // and the same four numbers are already on the pinned tally at the
-        // bottom, in view the whole time.
-        //
-        // Compact keeps the click and gives the height back to the work. Only
-        // what needs attention is coloured, so a glance still finds it.
-        return (
-          <div className="mise-stagger mb-3 flex flex-wrap items-center gap-1.5">
-            {tiles.map((t) => (
-              <button
-                key={t.label}
-                type="button"
-                onClick={() => setTab(t.go)}
-                title={`${t.label} — ${t.hint}`}
-                className={`mise-press inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
-                  t.tone === "bad"
-                    ? "border-rose-400/40 bg-rose-400/10 text-rose-200"
-                    : t.tone === "warn"
-                      ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
-                      : "border-line text-fg-soft hover:border-brand-400/40"
-                }`}
-              >
-                <span className="font-display text-sm font-semibold tabular-nums">
-                  {t.value}
-                </span>
-                <span className="truncate">{t.label.toLowerCase()}</span>
-              </button>
-            ))}
-          </div>
-        );
-      })()}
 
       {/* One job on screen at a time. Everything is one tap away; nothing is
           reachable only by scrolling. */}
@@ -870,60 +852,111 @@ export default function PurchasingPage() {
           The tiles were flat wells; they are raised now, with a real shadow and
           a ring, so each one reads as its own card. */}
       {/* ── The purchasing pipeline — where every order sits, at a glance ── */}
-      {tab === "new" && (indents.length > 0 || pos.length > 0) && (
-        <div className="mb-3">
-          <div className="flex items-stretch gap-1.5 overflow-x-auto pb-0.5">
-            {(() => {
-              const stages = [
-                {
-                  icon: "📝",
-                  label: "raised, awaiting approval",
-                  main: indents.filter((x) => x.status === "PENDING").length,
-                  sub: "awaiting approval",
-                  tone: "text-amber-300",
-                },
-                {
-                  icon: "✅",
-                  label: "Approved",
-                  main: indents.filter((x) => x.status === "APPROVED").length,
-                  sub: "ready to order",
-                  tone: "text-brand-300",
-                },
-                {
-                  icon: "📦",
-                  label: "POs out",
-                  main: pos.filter((x) => x.status !== "RECEIVED").length,
-                  sub: "with suppliers",
-                  tone: "text-sky-300",
-                },
-                {
-                  icon: "🏠",
-                  label: "Received",
-                  main: pos.filter((x) => x.status === "RECEIVED").length,
-                  sub: "in your stock",
-                  tone: "text-fg",
-                },
-              ];
-              return stages.map((st, i) => (
-                <div key={st.label} className="flex min-w-[9rem] flex-1 items-center gap-1.5">
-                  <div className="mise-card3d flex flex-1 items-center gap-2 px-3 py-2">
-                    <span aria-hidden className="text-base">{st.icon}</span>
-                    <span className={`font-display text-lg font-semibold leading-none tabular-nums ${st.tone}`}>
-                      {st.main}
+      {/* ── Where everything is, in one bar ──────────────────────────────
+          "this top portion needs complete redesigning... that status tracking
+          also not good to see. Previously we had, it is nice, but that took a
+          lot of space so we made it like this. Just think in different
+          perspectives."
+
+          The different perspective: there were TWO rows saying the same thing —
+          a chip row (6 awaiting · 0 overdue · 13 in flight · £1,856 committed)
+          and a pipeline (6 raised → 2 approved → 13 out → 26 received). Four
+          numbers each, three of them shared. So it was not too big, it was said
+          twice.
+
+          One bar now, and it is not a readout — it is the WAY THROUGH the page.
+          Every stage is the filter for that stage, so the status and the
+          navigation are the same object and neither costs extra height. On a
+          phone it becomes a 2x2 grid rather than something you drag sideways —
+          "this status in mobile is showing horizontal scroll because of no
+          space". A status you have to scroll to read is not a status. */}
+      {tab === "new" && (indents.length > 0 || pos.length > 0) && (() => {
+        const today = localISODate();
+        const openPos = pos.filter((x) => x.status !== "RECEIVED");
+        const overdue = openPos.filter(
+          (x) => x.expected_delivery && x.expected_delivery < today,
+        ).length;
+        const committed = openPos.reduce((sum, x) => sum + (parseFloat(x.total_amount) || 0), 0);
+        const stages: {
+          icon: string; n: number; label: string; tone: string;
+          go: "indents" | "orders"; alert?: string;
+        }[] = [
+          {
+            icon: "📝",
+            n: indents.filter((x) => x.status === "PENDING").length,
+            label: "awaiting you",
+            tone: "text-amber-300",
+            go: "indents",
+          },
+          {
+            icon: "✅",
+            n: indents.filter((x) => x.status === "APPROVED").length,
+            label: "ready to order",
+            tone: "text-brand-300",
+            go: "indents",
+          },
+          {
+            icon: "🚚",
+            n: openPos.length,
+            label: "with suppliers",
+            tone: "text-sky-300",
+            go: "orders",
+            alert: overdue > 0 ? `${overdue} late` : undefined,
+          },
+          {
+            icon: "🏠",
+            n: pos.filter((x) => x.status === "RECEIVED").length,
+            label: "in your stock",
+            tone: "text-emerald-300",
+            go: "orders",
+          },
+        ];
+        return (
+          <div className="mise-card3d mb-4 p-2.5">
+            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-stretch sm:gap-0">
+              {stages.map((st, i) => (
+                <div key={st.label} className="flex min-w-0 flex-1 items-center">
+                  <button
+                    type="button"
+                    onClick={() => setTab(st.go)}
+                    title={`Go to ${st.go}`}
+                    className="mise-press group min-w-0 flex-1 rounded-xl px-2.5 py-2 text-left transition hover:bg-glass/[0.06]"
+                  >
+                    <span className="flex items-baseline gap-1.5">
+                      <span aria-hidden className="text-sm">{st.icon}</span>
+                      <span className={`font-display text-xl font-semibold leading-none tabular-nums ${st.tone}`}>
+                        {st.n}
+                      </span>
+                      {st.alert && (
+                        <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">
+                          {st.alert}
+                        </span>
+                      )}
                     </span>
-                    <span className="min-w-0 truncate text-[11px] leading-tight text-fg-faint">
+                    <span className="mt-0.5 block truncate text-[11px] text-fg-faint">
                       {st.label}
                     </span>
-                  </div>
+                  </button>
+                  {/* The flow, drawn — it is a pipeline, so it should look like
+                      one. Hidden on the phone grid, where the arrows would
+                      point at the wrong neighbours. */}
                   {i < stages.length - 1 && (
-                    <span aria-hidden className="hidden shrink-0 text-xs text-fg-faint sm:block">→</span>
+                    <span aria-hidden className="hidden shrink-0 px-1 text-fg-faint/50 sm:block">
+                      →
+                    </span>
                   )}
                 </div>
-              ));
-            })()}
+              ))}
+              <div className="col-span-2 mt-1 flex items-center justify-between gap-2 border-t border-line/60 px-2.5 pt-2 sm:col-auto sm:mt-0 sm:flex-col sm:items-end sm:justify-center sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+                <span className="text-[11px] text-fg-faint">committed</span>
+                <span className="font-display text-lg font-semibold tabular-nums text-fg">
+                  {format(String(committed))}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {canWrite && tab === "new" && (
         <Card className="mb-6" id="indent-form">
