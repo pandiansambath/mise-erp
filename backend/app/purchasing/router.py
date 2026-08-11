@@ -4,6 +4,7 @@ from decimal import Decimal
 from difflib import SequenceMatcher
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,7 @@ from app.hotels.models import Hotel
 from app.inventory.service import get_item
 from app.purchasing import pdf as pdf_gen
 from app.purchasing import service
-from app.purchasing.models import IndentStatus, POStatus
+from app.purchasing.models import Basket, IndentStatus, POStatus
 from app.purchasing.schemas import (
     GenerateResult,
     IndentCreate,
@@ -442,3 +443,59 @@ async def po_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{po.po_number}{suffix}.pdf"'},
     )
+
+
+# ── The basket: a half-built order, kept where the person is ─────────────────
+class BasketLine(BaseModel):
+    item_id: uuid.UUID
+    qty: Decimal = Field(ge=0)
+    vendor_id: uuid.UUID | None = None
+
+
+class BasketOut(BaseModel):
+    lines: list[BasketLine]
+
+
+@router.get("/basket", response_model=BasketOut)
+async def get_basket(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:write")),
+) -> BasketOut:
+    """Whatever this person had picked, from any browser on any device."""
+    row = (
+        await db.execute(select(Basket).where(Basket.user_id == user.id))
+    ).scalar_one_or_none()
+    return BasketOut(lines=[BasketLine(**ln) for ln in (row.lines if row else [])])
+
+
+@router.put("/basket", response_model=BasketOut)
+async def put_basket(
+    payload: BasketOut,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("indent:write")),
+) -> BasketOut:
+    """Replace the basket wholesale.
+
+    Wholesale rather than per line because that is what a basket IS — the
+    current contents. Patching lines individually would need conflict handling
+    for a draft nobody else can see.
+    """
+    lines = [
+        {
+            "item_id": str(ln.item_id),
+            "qty": str(ln.qty),
+            "vendor_id": str(ln.vendor_id) if ln.vendor_id else None,
+        }
+        for ln in payload.lines
+        if ln.qty > 0
+    ]
+    row = (
+        await db.execute(select(Basket).where(Basket.user_id == user.id))
+    ).scalar_one_or_none()
+    if row is None:
+        row = Basket(hotel_id=user.hotel_id, user_id=user.id, lines=lines)
+        db.add(row)
+    else:
+        row.lines = lines
+    await db.commit()
+    return BasketOut(lines=[BasketLine(**ln) for ln in lines])

@@ -44,6 +44,11 @@ import { spotlight, useDeepLink } from "@/components/fx";
 
 type Line = PickedLine;
 
+/** `next` is either the new list or a function of the old one. */
+function value0(next: Line[], _prev: Line[]): Line[] {
+  return next;
+}
+
 type ConsolidatedItem = {
   item_name: string; ordered_qty: string; received_qty: string;
   unit_price: string; line_total: string; po_number: string;
@@ -96,53 +101,85 @@ export default function PurchasingPage() {
   const [pos, setPos] = useState<POSummary[]>([]);
   const [todayStr] = useState(() => new Date().toISOString().slice(0, 10)); // frozen at mount
   const [loading, setLoading] = useState(true);
-  // ── The basket survives a reload ─────────────────────────────────────────
-  //
-  // "please please persist that basket even after loading — once we added to
-  // basket it needs to be persistent permanently until next action."
-  //
-  // Anyone picking an order gets interrupted; losing a half-built indent to a
-  // refresh is losing real work. Kept per user, so two people on one machine
-  // never inherit each other's basket, and cleared the moment it is submitted.
-  const [lines, setLinesRaw] = useState<Line[]>([]);
-  const basketKey = user ? `mise.basket.${user.id}` : null;
-  const basketLoaded = useRef(false);
 
-  useEffect(() => {
-    if (!basketKey || basketLoaded.current) return;
-    basketLoaded.current = true;
-    try {
-      const saved = localStorage.getItem(basketKey);
-      if (saved) {
-        const parsed: unknown = JSON.parse(saved);
-        if (Array.isArray(parsed)) setLinesRaw(parsed as Line[]);
-      }
-    } catch {
-      /* a corrupt basket is not worth a crash */
-    }
-  }, [basketKey]);
-
-  const setLines = useCallback(
-    (next: Line[] | ((prev: Line[]) => Line[])) => {
-      setLinesRaw((prev) => {
-        const value = typeof next === "function" ? next(prev) : next;
-        if (basketKey) {
-          try {
-            if (value.length) localStorage.setItem(basketKey, JSON.stringify(value));
-            else localStorage.removeItem(basketKey);
-          } catch {
-            /* private mode, quota — the basket still works for this session */
-          }
-        }
-        return value;
-      });
-    },
-    [basketKey],
-  );
   // item_id -> every vendor pricing it (cheapest first), for the line picker
   const [suppliers, setSuppliers] = useState<Record<string, SupplierOption[]>>({});
   // item_id -> the vendor PICKED for this order ("" / missing = automatic)
   const [vendorPick, setVendorPick] = useState<Record<string, string>>({});
+
+  // Read inside a debounced timer, so the saver always sees the CURRENT picks
+  // without re-creating itself (and cancelling its own pending save) every time
+  // a supplier changes.
+  const pickRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    pickRef.current = vendorPick;
+  }, [vendorPick]);
+
+  // ── The basket lives on the server ───────────────────────────────────────
+  //
+  // It was in localStorage, which is per BROWSER and per profile — so a basket
+  // built on the kitchen tablet was invisible on a phone, and a private window
+  // showed an empty one. He found that in about a minute:
+  //
+  //   "if i go to incognito and login same account, see basket is not there...
+  //    i guess u not storing in db — please store in db"
+  //
+  // Saved on a short debounce rather than on every keystroke: typing a quantity
+  // fires a change per character, and one request per character is a lot of
+  // requests for a draft nobody else can see.
+  const [lines, setLinesRaw] = useState<Line[]>([]);
+  const basketLoaded = useRef(false);
+  const saveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (basketLoaded.current) return;
+    basketLoaded.current = true;
+    void (async () => {
+      try {
+        const saved = await api.get<{ lines: { item_id: string; qty: string; vendor_id: string | null }[] }>(
+          "/purchasing/basket",
+        );
+        if (saved.lines?.length) {
+          setLinesRaw(saved.lines.map((l) => ({ item_id: l.item_id, qty: l.qty })));
+          const picks: Record<string, string> = {};
+          for (const l of saved.lines) if (l.vendor_id) picks[l.item_id] = l.vendor_id;
+          if (Object.keys(picks).length) setVendorPick((v) => ({ ...picks, ...v }));
+        }
+      } catch {
+        /* an unreachable basket must not stop the page loading */
+      }
+    })();
+  }, []);
+
+  const setLines = useCallback(
+    (next: Line[] | ((prev: Line[]) => Line[])) => {
+      setLinesRaw((prev) => {
+        const value = typeof next === "function" ? next(prev) : value0(next, prev);
+        if (saveTimer.current) window.clearTimeout(saveTimer.current);
+        saveTimer.current = window.setTimeout(() => {
+          void api
+            .put("/purchasing/basket", {
+              lines: value
+                .filter((l) => l.item_id && parseFloat(l.qty) > 0)
+                // The chosen supplier travels with the line — picking a vendor
+                // is part of building the order, so losing it on a device swap
+                // would lose half the work.
+                .map((l) => ({
+                  item_id: l.item_id,
+                  qty: l.qty,
+                  vendor_id: pickRef.current[l.item_id] || null,
+                })),
+            })
+            .catch(() => {
+              /* offline — the basket is still right on screen */
+            });
+        }, 600);
+        return value;
+      });
+    },
+    [],
+  );
+
   const [msg, setMsg] = useState<string | null>(null);
   // Deep link from Inventory: show THIS item's own purchasing history in place.
   const [historyItem, setHistoryItem] = useState<string | null>(null);
@@ -324,7 +361,7 @@ export default function PurchasingPage() {
     try {
       await api.post("/purchasing/indents", payload);
       const n = payload.items.length;
-      setLines([]);
+      setLines([]); // this writes the empty basket back to the server too
       setVendorPick({});
       // It said nothing at all before — "i clicked the submit but nothing
       // happened in UI pov". The indent WAS created; the screen just never

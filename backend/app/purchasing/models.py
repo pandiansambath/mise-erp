@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     Date,
     DateTime,
     ForeignKey,
@@ -108,4 +109,38 @@ class POItem(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     line_total: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=Decimal("0")
+    )
+
+
+class Basket(Base):
+    """A half-built order, kept on the server so it follows the person.
+
+    It used to live in the browser's localStorage, which is per BROWSER — so a
+    basket built on the tablet in the kitchen was invisible on the phone, and a
+    private window showed nothing at all. He caught it immediately:
+
+        "if i go to incognito and login same account, see basket is not there...
+         i guess u not storing in db — please store in db"
+
+    One row per person, holding the lines as JSON. A basket is a draft, not a
+    ledger: it has no history worth querying, it is rewritten wholesale on every
+    change, and it disappears the moment it becomes an indent. A table of line
+    rows would buy nothing and cost a join.
+    """
+
+    __tablename__ = "baskets"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    # One basket each. Two people picking for the same kitchen are doing two
+    # different jobs, and merging their baskets would lose one of them.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False, unique=True, index=True
+    )
+    #: [{"item_id": "...", "qty": "2.5", "vendor_id": "..."|null}, ...]
+    lines: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
