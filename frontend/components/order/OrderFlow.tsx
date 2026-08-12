@@ -61,28 +61,35 @@ function show(n: number): string {
  *  used: fresh, chilled, dry store, or not food at all. Anything unrecognised
  *  gets the neutral tone rather than a colour invented for it.
  */
-const CATEGORY_KIND: { test: RegExp; tint: string; kind: string }[] = [
-  // ORDER MATTERS and so do word boundaries. The first version had /ice/ in
-  // the frozen rule, which matches R·ICE and SP·ICES — so Rice, Spices,
-  // Grains & Rice and Rice & Flour were all labelled "frozen". He said the
-  // colours looked random and he was right: they were wrong.
-  //
-  // Dry store is tested BEFORE frozen now, and every pattern is anchored to
-  // word starts, so a substring can never masquerade as a category.
-  // FROZEN FIRST — it is the most specific signal there is. "Frozen peas" is
-  // frozen, not produce; "ice cream" is frozen, not dairy. Whatever else a
-  // name says, if it says frozen that is where it goes.
-  { test: /(frozen|freezer|ice[ -]?cream)/i, tint: "bg-cyan-300", kind: "frozen" },
-  { test: /(veg|vegetable|fruit|herb|salad|greens|produce)/i, tint: "bg-emerald-400", kind: "fresh produce" },
-  { test: /(meat|poultry|fish|seafood|chicken|mutton|lamb|beef|pork|prawn)/i, tint: "bg-rose-400", kind: "fresh, raw" },
-  { test: /(dairy|milk|cheese|butter|yog|cream|egg|paneer|curd)/i, tint: "bg-sky-300", kind: "chilled" },
-  { test: /(rice|grain|flour|pulse|lentil|dal|spice|masala|oil|sugar|salt|dry|staple|condiment|sauce|pickle)/i, tint: "bg-amber-400", kind: "dry store" },
-  { test: /(drink|bever|juice|water|soda|tea|coffee|squash)/i, tint: "bg-violet-400", kind: "drinks" },
-  { test: /(clean|chemical|hygiene|packag|disposab|paper|equip|cutlery|utensil|stationery)/i, tint: "bg-slate-400", kind: "not food" },
+// WORDS, NOT REGEXES.
+//
+// The regex version shipped broken and every category on his screen read
+// "other". The cause was invisible: this file held a real BACKSPACE byte
+// (U+0008) where a word-boundary escape was intended, so every pattern
+// demanded a control character before the word and matched nothing. It
+// survived review because a backspace renders as nothing — the line looked
+// exactly right in the editor, in grep, and in a diff.
+//
+// Plain token matching cannot carry that bug: there is no escape sequence to
+// get wrong, and the rules read as what they are, the words a kitchen uses.
+//
+// ORDER MATTERS. Frozen is checked first because it is the most specific
+// signal there is (frozen peas are frozen, not produce; ice cream is frozen,
+// not dairy), and dry store is checked before anything that could read the
+// "ice" inside "rice".
+const CATEGORY_KIND: { words: string[]; tint: string; kind: string }[] = [
+  { words: ["frozen", "freezer", "ice cream", "ice-cream"], tint: "bg-cyan-300", kind: "frozen" },
+  { words: ["veg", "fruit", "herb", "salad", "greens", "produce"], tint: "bg-emerald-400", kind: "fresh produce" },
+  { words: ["meat", "poultry", "fish", "seafood", "chicken", "mutton", "lamb", "beef", "pork", "prawn"], tint: "bg-rose-400", kind: "fresh, raw" },
+  { words: ["dairy", "milk", "cheese", "butter", "yog", "cream", "egg", "paneer", "curd"], tint: "bg-sky-300", kind: "chilled" },
+  { words: ["rice", "grain", "flour", "pulse", "lentil", "dal", "spice", "masala", "oil", "sugar", "salt", "dry", "staple", "condiment", "sauce", "pickle"], tint: "bg-amber-400", kind: "dry store" },
+  { words: ["drink", "bever", "juice", "water", "soda", "tea", "coffee", "squash"], tint: "bg-violet-400", kind: "drinks" },
+  { words: ["clean", "chemical", "hygiene", "packag", "disposab", "paper", "equip", "cutlery", "utensil", "stationery"], tint: "bg-slate-400", kind: "not food" },
 ];
 
 function categoryKind(name: string): { tint: string; kind: string } {
-  const hit = CATEGORY_KIND.find((k) => k.test.test(name));
+  const hay = name.toLowerCase();
+  const hit = CATEGORY_KIND.find((k) => k.words.some((w) => hay.includes(w)));
   return hit ? { tint: hit.tint, kind: hit.kind } : { tint: "bg-fg-faint/40", kind: "other" };
 }
 
@@ -556,18 +563,21 @@ export function OrderFlow({
   return (
     <div className="min-w-0">
       {low.length > 0 && (
-        <div className="mise-card3d relative mb-3 flex flex-wrap items-center gap-3 overflow-hidden px-3.5 py-2.5">
+        <div className="mise-card3d relative mb-3 flex items-center gap-2.5 overflow-hidden py-2 pl-3.5 pr-2">
           <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
-          <span aria-hidden className="text-lg">⚠</span>
-          <span className="min-w-0 flex-1 text-sm text-fg">
+          <span aria-hidden className="shrink-0 text-base leading-none">⚠</span>
+          {/* One line that fits. It used to wrap and hang out of its own box —
+              "this section also handing like it's not fitting in that place". */}
+          <span className="min-w-0 flex-1 truncate text-sm text-fg">
             <b className="text-amber-300">{low.length}</b> item
-            {low.length === 1 ? " is" : "s are"} at or below minimum
+            {low.length === 1 ? " is" : "s are"} low
           </span>
           {onAddAllLow && (
             <button
               type="button"
               onClick={onAddAllLow}
-              className="mise-btn mise-press shrink-0 px-3 py-1.5 text-xs font-semibold text-amber-300"
+              title="Pull every low-stock item into this order, topped up to its minimum"
+              className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-semibold text-amber-300"
             >
               Add them all
             </button>
@@ -886,7 +896,6 @@ function BasketSheet({
     };
     // Once per opening, not once per change — re-running it whenever a quantity
     // changed would spin the cards under his hands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const toggleFold = (key: string) =>
     setFolded((prev) => {
