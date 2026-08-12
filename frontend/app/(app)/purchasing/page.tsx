@@ -42,7 +42,7 @@ import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { spotlight, useDeepLink } from "@/components/fx";
-import { pricePerBase } from "@/lib/packs";
+import { pricePerBase, stockInPacks } from "@/lib/packs";
 
 type Line = PickedLine;
 
@@ -729,6 +729,8 @@ export default function PurchasingPage() {
         label: "Stuck · no supplier",
         count: n("APPROVED"),
         tone: "bad" as const,
+        hint:
+          "Approved, but no purchase order could be raised because no active vendor prices those items. Rare on purpose — it only happens if you approve an indent for something nobody sells you.",
       },
       { key: "ORDERED", label: "Ordered", count: n("ORDERED") },
       { key: "REJECTED", label: "Rejected", count: n("REJECTED") },
@@ -2200,7 +2202,7 @@ export default function PurchasingPage() {
                 setHistoryItem(null);
                 spotlight("indent-form");
               }}
-              className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
+              className="mise-btn-key mise-press px-3 py-1.5 text-sm font-semibold"
             >
               🛒 Order this
             </button>
@@ -2211,11 +2213,57 @@ export default function PurchasingPage() {
           <div>
             <DetailStats
               stats={[
-                { label: "Times requested", value: itemStory.rows.length },
-                { label: "Total asked for", value: `${itemStory.ordered} ${itemStory.item.unit}` },
-                { label: "Purchase orders", value: itemStory.orders.length },
+                {
+                  label: "In stock now",
+                  value: fmtQty(itemStory.item.current_stock, itemStory.item.unit),
+                  hint: stockInPacks(itemStory.item) || "what you have today",
+                },
+                {
+                  label: "Ordered so far",
+                  value: `${itemStory.ordered} ${itemStory.item.unit}`,
+                  hint: `across ${itemStory.rows.length} request${itemStory.rows.length === 1 ? "" : "s"}`,
+                },
+                {
+                  label: "What it costs",
+                  value: (() => {
+                    const sup = suppliers[itemStory.item.id]?.[0];
+                    return sup ? format(pricePerBase(itemStory.item, sup).toFixed(2)) : "—";
+                  })(),
+                  hint: (() => {
+                    const sup = suppliers[itemStory.item.id]?.[0];
+                    return sup
+                      ? `per ${itemStory.item.unit} · ${sup.vendor_name}`
+                      : "no supplier prices this";
+                  })(),
+                },
               ]}
             />
+
+            {/* Said in a sentence, because three numbers in boxes is a report
+                and this screen is meant to be readable by whoever is standing
+                in the store room. */}
+            <p className="px-1 pb-1 text-sm leading-relaxed text-fg-soft">
+              You have asked for <b className="text-fg">{itemStory.item.name}</b>{" "}
+              {itemStory.rows.length === 0 ? (
+                <>never yet.</>
+              ) : (
+                <>
+                  <b className="text-fg">{itemStory.rows.length}</b> time
+                  {itemStory.rows.length === 1 ? "" : "s"}, {itemStory.ordered}{" "}
+                  {itemStory.item.unit} in all, which turned into{" "}
+                  <b className="text-fg">{itemStory.orders.length}</b> purchase order
+                  {itemStory.orders.length === 1 ? "" : "s"}
+                  {itemStory.orders.filter((o) => o.status === "RECEIVED").length > 0 && (
+                    <>
+                      {" "}
+                      — {itemStory.orders.filter((o) => o.status === "RECEIVED").length} of them
+                      already arrived
+                    </>
+                  )}
+                  .
+                </>
+              )}
+            </p>
 
             <DetailSection title={`Indents (${itemStory.rows.length})`}>
               {itemStory.rows.length === 0 ? (
@@ -2251,8 +2299,15 @@ export default function PurchasingPage() {
                         <span className="block truncate text-sm text-fg">{po.vendor_name}</span>
                         <span className="text-[11px] text-fg-faint">{po.po_number}</span>
                       </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="text-sm font-semibold text-fg">{format(po.total_amount)}</span>
+                      <span className="flex shrink-0 items-center gap-2 text-right">
+                        <span>
+                          <span className="block text-sm font-semibold text-fg">
+                            {format(po.total_amount)}
+                          </span>
+                          <span className="block text-[10px] text-fg-faint">
+                            whole order, all items
+                          </span>
+                        </span>
                         <Badge tone={poTone[po.status] ?? "slate"}>{po.status}</Badge>
                       </span>
                     </li>
