@@ -95,7 +95,12 @@ export function Workbench({
               {title}
             </h1>
             {subtitle && (
-              <p className="mise-bench-sub truncate text-sm text-fg-faint">{subtitle}</p>
+              /* The wrapper is the collapsing grid row; the <p> inside is what
+                 gets squeezed. A grid-rows collapse needs a child that will
+                 accept being squashed, which means overflow:hidden on it. */
+              <div className="mise-bench-sub">
+                <p className="truncate text-sm text-fg-faint">{subtitle}</p>
+              </div>
             )}
           </div>
           {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
