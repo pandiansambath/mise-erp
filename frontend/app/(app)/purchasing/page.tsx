@@ -1514,7 +1514,14 @@ export default function PurchasingPage() {
                       </span>
                     </span>
                   </span>
-                  <span className="flex items-center gap-2">
+                  {/* Money, then a gap, then the actions — and the actions are
+                      ICONS with a tooltip rather than two labels fighting for
+                      the same inch. "See everything, consolidated button, price,
+                      all are very nearby which is making the UI clumsy and
+                      giving an awkward feel." The price is the headline here;
+                      the buttons are things you might do to it, so they get to
+                      be quieter and to stand apart. */}
+                  <span className="flex items-center gap-3">
                     <span className="text-right">
                       <span className="block font-display text-lg font-semibold leading-none tabular-nums text-fg">
                         {format(String(g.total.toFixed(2)))}
@@ -1522,6 +1529,7 @@ export default function PurchasingPage() {
                       <span className="block text-[10px] text-fg-faint">the whole purchase</span>
                     </span>
                     {g.indentId && (
+                      <span className="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1529,21 +1537,22 @@ export default function PurchasingPage() {
                           void openRunSheet(g.indentId as string);
                         }}
                         title="Every supplier and every line on this purchase, in one list"
-                        className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-medium text-fg-soft"
+                        aria-label="See every line on this purchase"
+                        className="mise-btn mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-fg-soft"
                       >
-                        All
+                        ☰
                       </button>
-                    )}
-                    {g.indentId && (
                       <button
                         type="button"
                         onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.indent?.date ?? "po"}.pdf`)}
                         title="One PDF for this whole purchase — every supplier, every item"
+                        aria-label="Download one PDF for this whole purchase"
                         onClickCapture={(e) => e.stopPropagation()}
-                        className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-medium text-brand-300"
+                        className="mise-btn mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-brand-300"
                       >
-                        🧾 Consolidated PDF
+                        ⤓
                       </button>
+                      </span>
                     )}
                   </span>
                 </div>

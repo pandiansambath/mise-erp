@@ -2474,3 +2474,56 @@ body[data-overlay] .mise-launcher-in {
     opacity: 0;
   }
 }
+
+/* ── Two rows at the top, one row once you scroll ────────────────────────────
+   "I want the buttons also to shrink in size and go one step up by shrinking,
+    so that when we scroll down and look at that top portion there will be only
+    one row which has all buttons and that Purchasing word too. Then scroll up
+    again it grows, smoothly."
+
+   The grid's AREAS change, so the tools genuinely move up beside the title
+   rather than merely looking smaller — which is what actually gives the height
+   back to the list. Everything else that moves is a transform. */
+.mise-bench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "head"
+    "tools";
+  align-items: center;
+  column-gap: 1rem;
+}
+
+.mise-bench-head {
+  grid-area: head;
+}
+
+.mise-bench-tools {
+  grid-area: tools;
+  transform-origin: right center;
+  transition: transform 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
+}
+
+.mise-bench-rail[data-condensed="true"] .mise-bench-grid {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "head tools";
+}
+
+/* The buttons shrink as they rise. 0.88 is enough to read as "smaller" without
+   making the labels hard to hit. */
+.mise-bench-rail[data-condensed="true"] .mise-bench-tools {
+  transform: scale(0.88);
+  padding-bottom: 0;
+}
+
+/* The sub-nav's own bottom margin is what keeps a gap under a row that no
+   longer has anything below it. */
+.mise-bench-rail[data-condensed="true"] .mise-bench-tools > nav {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-bench-tools {
+    transition: none;
+  }
+}

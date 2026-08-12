@@ -74,7 +74,7 @@ export function ListControls({
             value={value.q}
             onChange={(e) => set({ q: e.target.value })}
             placeholder={placeholder}
-            className="w-full rounded-xl border border-line bg-paper-2 py-2 pl-9 pr-8 text-sm text-fg outline-none transition focus:border-brand-400/60"
+            className="mise-well w-full rounded-xl py-2.5 pl-9 pr-8 text-sm text-fg outline-none transition focus:ring-2 focus:ring-brand-500/30"
           />
           {value.q && (
             <button
@@ -92,7 +92,7 @@ export function ListControls({
           value={value.sort}
           onChange={(e) => set({ sort: e.target.value as SortDir })}
           aria-label="Sort"
-          className="rounded-xl border border-line bg-paper-2 px-2.5 py-2 text-sm text-fg-soft outline-none focus:border-brand-400/60"
+          className="mise-btn mise-press cursor-pointer appearance-none rounded-xl py-2 pl-3 pr-8 text-sm font-medium text-fg-soft outline-none"
         >
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
@@ -110,14 +110,14 @@ export function ListControls({
                 key={s.key}
                 type="button"
                 onClick={() => set({ status: on ? "all" : s.key })}
-                className={`mise-press inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
+                className={`mise-press inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition ${
                   on
-                    ? "border-brand-500 bg-brand-500 font-semibold text-white"
+                    ? "mise-btn-key font-semibold"
                     : s.tone === "bad"
                       ? "border-rose-400/40 text-rose-300 hover:bg-rose-400/10"
                       : s.tone === "warn"
                         ? "border-amber-400/40 text-amber-300 hover:bg-amber-400/10"
-                        : "border-line text-fg-soft hover:border-brand-400/40"
+                        : "mise-btn text-fg-soft"
                 }`}
               >
                 {s.label}
@@ -153,8 +153,8 @@ export function ListControls({
               onClick={() => set({ size: n })}
               className={`mise-press rounded-lg px-2 py-1 text-[11px] tabular-nums transition ${
                 value.size === n
-                  ? "bg-brand-500 font-semibold text-white"
-                  : "border border-line text-fg-soft hover:border-brand-400/40"
+                  ? "mise-btn-key font-semibold"
+                  : "mise-btn text-fg-soft"
               }`}
             >
               {n === 0 ? "all" : n}
@@ -198,7 +198,7 @@ export function Pager({
           type="button"
           disabled={page <= 1}
           onClick={() => onChange({ ...value, page: page - 1 })}
-          className="mise-press rounded-lg border border-line px-2.5 py-1 text-xs text-fg-soft disabled:opacity-35"
+          className="mise-btn mise-press px-2.5 py-1.5 text-xs font-medium text-fg-soft disabled:opacity-35"
         >
           ‹ Back
         </button>
