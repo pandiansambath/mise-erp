@@ -1814,28 +1814,29 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    updated on every scroll frame re-renders the tree sixty times a second, and
    that is what made the dev page shake. Transitions run on the compositor. */
 /* ── The rail that condenses as you scroll ───────────────────────────────────
-   "I can feel a slight lag while scrolling this page... when I scroll the top
-    portion is growing and shrinking but the area also feels stuck."
+   His idea, and a good one: "when we start to scroll, slowly and smoothly
+   start to shrink that top area to be small, and grow as we go up — which will
+   give space for the indent list and indirectly reduce the scrolling effort."
 
-   He was feeling the truth. This used to transition padding, font-size,
-   line-height, gap AND max-height — every one of which forces the browser to
-   re-lay-out the page, on every frame, for 220ms, WHILE the scroll is running.
-   Sixty times a second the whole card grid was being measured again.
+   That is exactly what this does, and the reason it used to feel laggy is that
+   it transitioned padding, font-size, line-height, gap AND max-height — every
+   one of which re-lays-out the page, sixty times a second, WHILE the scroll is
+   running.
 
-   Now only two things animate, and neither touches layout:
-     · the title SCALES (transform — the compositor's job, not the layout's)
-     · the subtitle FADES and slides (opacity + transform)
-
-   The rail's height is reserved for both states, so nothing below it moves at
-   all, and `contain` stops any work inside it escaping into the page.         */
+   Only two things animate now and neither touches layout: the title SCALES and
+   the subtitle FADES. What is new is that the rail also GIVES ITS HEIGHT BACK —
+   the subtitle's row collapses via a grid-rows trick, which is animatable and
+   contained, so the list below genuinely gains the space rather than the top
+   merely looking smaller.                                                    */
 .mise-bench-rail {
   padding-top: 1.25rem;
-  /* Layout work inside the rail cannot force the page to re-measure. */
   contain: layout paint style;
+  transition: padding-top 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
 }
 
 .mise-bench-head {
   padding-bottom: 0.75rem;
+  transition: padding-bottom 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
 }
 
 .mise-bench-title {
@@ -1843,35 +1844,51 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   line-height: 1.15;
   letter-spacing: -0.02em;
   transform-origin: left center;
-  transition: transform 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  transition: transform 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
   will-change: transform;
 }
 
+/* The subtitle's ROW, not the subtitle. A grid whose single row goes 1fr -> 0fr
+   collapses smoothly and, unlike max-height, needs no magic number. The child
+   must have overflow:hidden or its content refuses to be squeezed. */
 .mise-bench-sub {
-  /* The height is HELD. Fading it without holding its box is what made
-     everything below jump, and jumping is what a reflow looks like. */
-  height: 1.25rem;
+  display: grid;
+  grid-template-rows: 1fr;
   opacity: 0.85;
-  transform-origin: left top;
   transition:
-    opacity 160ms linear,
-    transform 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
-  will-change: transform, opacity;
+    grid-template-rows 260ms cubic-bezier(0.4, 0.02, 0.2, 1),
+    opacity 160ms linear;
+  will-change: grid-template-rows, opacity;
 }
 
-/* 1.05/1.5 = 0.7 — the same size it used to animate to, reached by scaling
-   rather than by re-measuring a font. */
+.mise-bench-sub > * {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.mise-bench-rail[data-condensed="true"] {
+  padding-top: 0.55rem;
+}
+
+.mise-bench-rail[data-condensed="true"] .mise-bench-head {
+  padding-bottom: 0.45rem;
+}
+
+/* 1.05/1.5 = 0.7 — the size it used to animate to, reached by scaling rather
+   than by re-measuring a font. */
 .mise-bench-rail[data-condensed="true"] .mise-bench-title {
   transform: scale(0.7);
 }
 
 .mise-bench-rail[data-condensed="true"] .mise-bench-sub {
+  grid-template-rows: 0fr;
   opacity: 0;
-  transform: translateY(-6px) scaleY(0.6);
   pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mise-bench-rail,
+  .mise-bench-head,
   .mise-bench-title,
   .mise-bench-sub {
     transition: none;

@@ -354,9 +354,10 @@ function ItemSheet({
           </p>
         )}
 
-        {/* What it costs, in every size it comes in. */}
-        <div className="rounded-2xl border border-line bg-paper-2/60 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+        {/* Price list AND total in one block, so the number you came for is
+            never below the fold. */}
+        <div className="rounded-2xl border border-line bg-paper-2/60 p-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
             {supplier ? supplier.vendor_name : "No supplier yet"}
           </p>
           {supplier ? (
@@ -376,31 +377,28 @@ function ItemSheet({
               Nobody prices this yet — add one on Vendors and it becomes orderable.
             </p>
           )}
-        </div>
 
-        {/* The number this popup exists to produce. It COUNTS to its new value
-            when you change the amount, instead of silently swapping — money
-            that moves is money you notice, and noticing is the whole point of
-            showing it before you commit. */}
-        {total > 0 && (
-          <div className="relative overflow-hidden rounded-2xl px-3 py-2 text-center">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 bg-gradient-to-b from-brand-500/[0.10] to-transparent"
-            />
-            <AnimatedNumber
-              value={total}
-              from="previous"
-              duration={420}
-              format={(x) => format(x.toFixed(2))}
-              className="relative block font-display text-3xl font-semibold tabular-nums text-fg"
-            />
-            <span className="relative block text-[11px] text-fg-faint">
-              {tidy(count)} {levelName(item, sizeId)}
-              {count === 1 ? "" : "s"} · {tidy(baseQty)} {item.unit}
-            </span>
-          </div>
-        )}
+          {/* The number this popup exists to produce, on the last line of the
+              same block. It COUNTS to its new value rather than swapping —
+              money that moves is money you notice, and noticing before you
+              commit is the entire point of showing it. */}
+          {total > 0 && (
+            <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-line/70 pt-2">
+              <span className="text-[11px] leading-tight text-fg-faint">
+                {tidy(count)} {levelName(item, sizeId)}
+                {count === 1 ? "" : "s"}
+                <span className="block">{tidy(baseQty)} {item.unit}</span>
+              </span>
+              <AnimatedNumber
+                value={total}
+                from="previous"
+                duration={420}
+                format={(x) => format(x.toFixed(2))}
+                className="font-display text-2xl font-semibold tabular-nums text-fg"
+              />
+            </div>
+          )}
+        </div>
       </div>
     </Sheet>
   );
@@ -635,11 +633,14 @@ export function OrderFlow({
           <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
             <div
               className="mise-sheet-cascade grid gap-2.5"
+              /* auto-fit, not a fixed count. Four columns of 11rem cannot fit a
+                 390px screen, so the popup scrolled SIDEWAYS — "in mobile it's
+                 showing sideways, we need to scroll horizontal to see the
+                 items; please have a vertical way". Now the row holds as many
+                 as fit and wraps down, which is the direction a phone scrolls. */
               style={{
-                gridTemplateColumns: `repeat(${Math.min(
-                  Math.max(shown.length, 1),
-                  4,
-                )}, minmax(min(11rem, 40vw), 1fr))`,
+                gridTemplateColumns: `repeat(auto-fit, minmax(min(9.5rem, 100%), 1fr))`,
+                maxWidth: shown.length < 4 ? `${shown.length * 12}rem` : undefined,
               }}
             >
               {shown.map((it, i) => {
@@ -1232,7 +1233,6 @@ function BasketSheet({
                             </dd>
                           </div>
                         </dl>
-                        <p className="mt-1 text-[10px] text-fg-faint">tap to turn back</p>
                       </div>
                     </div>
                   </li>

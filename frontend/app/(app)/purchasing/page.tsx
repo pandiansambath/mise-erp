@@ -1409,12 +1409,22 @@ export default function PurchasingPage() {
                     happened to be split by supplier, so it is headed like one
                     thing — what it cost, how far along it is, one PDF for all
                     of it — and the per-supplier orders fold away underneath. */}
-                <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleRun(g.key)}
-                    className="mise-press flex min-w-0 flex-1 items-center gap-2 text-left"
-                  >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleRun(g.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleRun(g.key);
+                    }
+                  }}
+                  /* The WHOLE header opens the run. It used to be only the
+                     arrow and the title, so most of the row looked clickable
+                     and was not. */
+                  className="mise-press mb-2 flex cursor-pointer flex-wrap items-end justify-between gap-2"
+                >
+                  <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
                     <span
                       aria-hidden
                       className={`text-[10px] text-fg-faint transition-transform ${
@@ -1424,8 +1434,19 @@ export default function PurchasingPage() {
                       ▶
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate font-display text-base font-semibold leading-tight text-fg">
-                        {g.indent ? `Purchase · ${g.indent.date}` : "Other orders"}
+                      {/* The DATE is what identifies a run, so it must never be
+                          the part that gets cut. On a phone "Purchase · 2026-08-11"
+                          truncated to "Purchase…", which named nothing. The word
+                          wraps away instead; the date stays whole. */}
+                      <span className="block font-display text-base font-semibold leading-tight text-fg">
+                        {g.indent ? (
+                          <>
+                            <span className="hidden sm:inline">Purchase · </span>
+                            <span className="tabular-nums">{g.indent.date}</span>
+                          </>
+                        ) : (
+                          "Other orders"
+                        )}
                       </span>
                       <span className="block text-[11px] text-fg-faint">
                         {g.pos.length} order{g.pos.length === 1 ? "" : "s"} ·{" "}
@@ -1438,7 +1459,7 @@ export default function PurchasingPage() {
                         })()}
                       </span>
                     </span>
-                  </button>
+                  </span>
                   <span className="flex items-center gap-2">
                     <span className="text-right">
                       <span className="block font-display text-lg font-semibold leading-none tabular-nums text-fg">
@@ -1451,9 +1472,10 @@ export default function PurchasingPage() {
                         type="button"
                         onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.indent?.date ?? "po"}.pdf`)}
                         title="One PDF for this whole purchase — every supplier, every item"
+                        onClickCapture={(e) => e.stopPropagation()}
                         className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-medium text-brand-300"
                       >
-                        🧾 One PDF
+                        🧾 Consolidated PDF
                       </button>
                     )}
                   </span>
