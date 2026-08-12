@@ -541,6 +541,48 @@ export default function PurchasingPage() {
   const recvChanged = (po: POOut) =>
     po.items.some((it) => (recvLines[it.po_item_id] ?? it.ordered_qty) !== it.ordered_qty);
 
+  /** Receive every order in one purchase run, as ordered. */
+  async function receiveWholeRun(g: { pos: POSummary[] }) {
+    const open = g.pos.filter((p) => p.status !== "RECEIVED");
+    if (!open.length) return;
+    const ok = await confirm({
+      title: `Mark all ${open.length} order${open.length === 1 ? "" : "s"} as arrived?`,
+      message:
+        "Every line goes into stock at the quantity it was ordered. If something came up short " +
+        "or the price changed, open that supplier's order instead and enter what actually arrived.",
+      confirmText: "Yes, it all arrived",
+    });
+    if (!ok) return;
+
+    setMsg(null);
+    let done = 0;
+    for (const po of open) {
+      try {
+        // The lines are needed to receive them, and the row only carries a
+        // summary — so fetch each order's detail first.
+        const full = poDetail[po.id] ?? (await api.get<POOut>(`/purchasing/purchase-orders/${po.id}`));
+        await api.post(`/purchasing/purchase-orders/${po.id}/receive`, {
+          lines: full.items.map((it) => ({
+            po_item_id: it.po_item_id,
+            received_qty: it.ordered_qty,
+            unit_price: null,
+          })),
+          note: "Received with the whole purchase",
+          update_prices: false,
+        });
+        done += 1;
+      } catch {
+        /* keep going — one bad order should not strand the rest */
+      }
+    }
+    await load();
+    setMsg(
+      done === open.length
+        ? `All ${done} order${done === 1 ? "" : "s"} received — stock and costs are updated.`
+        : `${done} of ${open.length} received. Open the rest individually to see what went wrong.`,
+    );
+  }
+
   async function submitReceive() {
     if (!recvPo) return;
     setRecvBusy(true);
@@ -1554,6 +1596,22 @@ export default function PurchasingPage() {
                       >
                         ⤓
                       </button>
+                      {/* One press for a delivery day. The paperwork is one
+                          order per supplier; the van is not. */}
+                      {canApprove && g.pos.some((p) => p.status !== "RECEIVED") && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void receiveWholeRun(g);
+                          }}
+                          title="Mark every order in this purchase as arrived"
+                          aria-label="Receive this whole purchase into stock"
+                          className="mise-btn mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-emerald-300"
+                        >
+                          ✓
+                        </button>
+                      )}
                       </span>
                     )}
                   </span>
