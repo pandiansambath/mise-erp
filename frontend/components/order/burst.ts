@@ -180,102 +180,79 @@ export function burstAway(from: HTMLElement | null): Promise<void> {
     const cx = a.left + a.width / 2;
     const cy = a.top + a.height / 2;
 
-    // A flash of light at the moment it goes. Without it the shards read as
-    // confetti appearing rather than a thing breaking — "I don't even realise
-    // it is happening".
-    const flash = document.createElement("div");
-    flash.setAttribute("aria-hidden", "true");
-    flash.className = "pointer-events-none fixed z-[97] rounded-3xl bg-white";
-    flash.style.left = `${a.left}px`;
-    flash.style.top = `${a.top}px`;
-    flash.style.width = `${a.width}px`;
-    flash.style.height = `${a.height}px`;
-    document.body.appendChild(flash);
-    flash
-      .animate(
-        [
-          { opacity: 0, transform: "scale(1)" },
-          { opacity: 0.55, transform: "scale(1.02)", offset: 0.25 },
-          { opacity: 0, transform: "scale(1.14)" },
-        ],
-        { duration: 620, delay: 200, easing: "cubic-bezier(.2,.8,.3,1)" },
-      )
-      .addEventListener("finish", () => flash.remove());
+    // ── The panel FOLDS AWAY, it does not explode. ────────────────────────
+    //
+    // "after submit from basket the burst effect is not nice, it's like here
+    //  and there — please make it fun and smooth."
+    //
+    // He is describing scatter, and scatter was the design: shards thrown at
+    // random angles. Random is busy, not playful. What actually happened is
+    // that the order LEFT — one thing, going one way — so the panel now
+    // collapses along its own vertical axis and lifts, the way a docket is
+    // whisked off a rail, while a single band of light sweeps through it.
+    // One direction, one idea, and it reads at a glance.
 
-    // A ring pushing out past the panel's edge, so the eye is given the SIZE
-    // of what just went.
-    const ring = document.createElement("div");
-    ring.setAttribute("aria-hidden", "true");
-    ring.className = "pointer-events-none fixed z-[96] rounded-3xl border-2 border-brand-400";
-    ring.style.left = `${a.left}px`;
-    ring.style.top = `${a.top}px`;
-    ring.style.width = `${a.width}px`;
-    ring.style.height = `${a.height}px`;
-    document.body.appendChild(ring);
-    ring
+    const sheet = document.createElement("div");
+    sheet.setAttribute("aria-hidden", "true");
+    sheet.className = "pointer-events-none fixed z-[97] overflow-hidden rounded-3xl";
+    sheet.style.left = `${a.left}px`;
+    sheet.style.top = `${a.top}px`;
+    sheet.style.width = `${a.width}px`;
+    sheet.style.height = `${a.height}px`;
+    sheet.style.background =
+      "linear-gradient(100deg, transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%)";
+    sheet.style.transform = "translateX(-100%)";
+    document.body.appendChild(sheet);
+    sheet
       .animate(
-        [
-          { transform: "scale(0.94)", opacity: 0.95 },
-          { transform: "scale(1.35)", opacity: 0 },
-        ],
-        { duration: 820, delay: 240, easing: "cubic-bezier(.2,.8,.3,1)" },
+        [{ transform: "translateX(-100%)" }, { transform: "translateX(100%)" }],
+        { duration: 520, easing: "cubic-bezier(.4,0,.2,1)" },
       )
-      .addEventListener("finish", () => ring.remove());
+      .addEventListener("finish", () => sheet.remove());
 
-    // Shards fly from the panel's EDGES, not its middle, so it reads as the
-    // panel coming apart rather than something erupting through it.
-    for (let i = 0; i < 34; i++) {
-      const t = (Math.PI * 2 * i) / 34;
-      const sx = cx + Math.cos(t) * (a.width / 2) * 0.9;
-      const sy = cy + Math.sin(t) * (a.height / 2) * 0.9;
-      const shard = document.createElement("div");
-      shard.setAttribute("aria-hidden", "true");
-      shard.className = "pointer-events-none fixed z-[96] rounded-md bg-brand-400";
-      const w = 6 + Math.random() * 14;
-      shard.style.left = `${sx}px`;
-      shard.style.top = `${sy}px`;
-      shard.style.width = `${w}px`;
-      shard.style.height = `${4 + Math.random() * 8}px`;
-      document.body.appendChild(shard);
-      const dist = 140 + Math.random() * 220;
-      shard
+    // A few motes lifting off the top edge — smoke off something taken away,
+    // not debris thrown outward. They all travel the SAME way, which is what
+    // makes it read as one event.
+    for (let i = 0; i < 9; i++) {
+      const mote = document.createElement("div");
+      mote.setAttribute("aria-hidden", "true");
+      mote.className = "pointer-events-none fixed z-[96] rounded-full bg-brand-400";
+      const r = 4 + Math.random() * 5;
+      mote.style.left = `${a.left + Math.random() * a.width}px`;
+      mote.style.top = `${cy}px`;
+      mote.style.width = `${r}px`;
+      mote.style.height = `${r}px`;
+      document.body.appendChild(mote);
+      mote
         .animate(
           [
-            { transform: "translate(0,0) rotate(0deg) scale(1)", opacity: 1 },
+            { transform: "translateY(0) scale(1)", opacity: 0.9 },
             {
-              transform: `translate(${Math.cos(t) * dist}px, ${Math.sin(t) * dist + 60}px) rotate(${
-                (Math.random() - 0.5) * 540
-              }deg) scale(0.3)`,
+              transform: `translate(${(Math.random() - 0.5) * 40}px, ${-70 - Math.random() * 70}px) scale(0.2)`,
               opacity: 0,
             },
           ],
-          {
-            duration: 820 + Math.random() * 380,
-            delay: 240, // after the panel has tensed, not during
-            easing: "cubic-bezier(.15,.7,.3,1)",
-          },
+          { duration: 620 + Math.random() * 260, delay: 120 + i * 22, easing: "cubic-bezier(.2,.7,.3,1)" },
         )
-        .addEventListener("finish", () => shard.remove());
+        .addEventListener("finish", () => mote.remove());
     }
 
-    // The panel takes a breath, swells, and only then lets go. The old curve
-    // spent its whole life shrinking, which is why it read as a flicker rather
-    // than an event: "the burst and closing is not smooth, it's like a quick
-    // thing that I can't realise whether it's submitted or not."
+    // The panel itself: a breath, then it folds shut along its middle and
+    // lifts away. `scaleY` collapsing to nothing is the fold; the small rise
+    // is what stops it feeling like a door slamming.
     from
       .animate(
         [
-          { transform: "scale(1)", opacity: 1, offset: 0 },
-          // hold — the pause is what makes the release land
-          { transform: "scale(0.975)", opacity: 1, offset: 0.28 },
-          { transform: "scale(1.04)", opacity: 1, offset: 0.52 },
-          { transform: "scale(1.16)", opacity: 0, offset: 1 },
+          { transform: "translateY(0) scaleY(1)", opacity: 1, offset: 0 },
+          { transform: "translateY(2px) scaleY(1.02)", opacity: 1, offset: 0.22 },
+          { transform: "translateY(-14px) scaleY(0.55)", opacity: 0.85, offset: 0.62 },
+          { transform: "translateY(-46px) scaleY(0.02)", opacity: 0, offset: 1 },
         ],
-        { duration: 900, easing: "cubic-bezier(.3,.9,.25,1)", fill: "forwards" },
+        { duration: 760, easing: "cubic-bezier(.5,0,.2,1)", fill: "forwards" },
       )
       .addEventListener("finish", () => done());
 
-    window.setTimeout(done, 1150);
+    window.setTimeout(done, 900);
   });
 }
 
