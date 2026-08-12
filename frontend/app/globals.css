@@ -2162,6 +2162,8 @@ body[data-overlay] .mise-launcher-in {
 .mise-btn-key {
   --btn-bg: var(--color-brand-600, #9f1239);
   position: relative;
+  /* Clips the sheen sweep to the button's own shape. */
+  overflow: hidden;
   border-radius: 0.85rem;
   color: #fff;
   background: linear-gradient(
@@ -2321,4 +2323,79 @@ body[data-overlay] .mise-launcher-in {
   .mise-flip-inner { transition: none; }
   .mise-info-glow { animation: none; }
   .mise-shine[data-shine="true"]::before { animation: none; }
+}
+
+/* ── The one action a screen is for ──────────────────────────────────────────
+   "the buttons are looking normal... even approve, submit etc, all very
+    normal."
+
+   True. They were coloured rectangles with a label — the rectangle every
+   framework ships. The cards beside them have a stripe, layered depth, a
+   display face and tabular figures, so the buttons looked borrowed from
+   somewhere else.
+
+   What makes this one belong: a light that RUNS THE EDGE once on hover. A
+   conic gradient behind an opaque button is invisible, so the ring is cut out
+   with a mask — paint the gradient over the whole box, then punch the middle
+   away, leaving only the rim. Nothing loops; a working screen must never have
+   anything blinking on it.                                                   */
+.mise-btn-key {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  letter-spacing: 0.01em;
+}
+
+.mise-btn-key::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--edge-angle, 0deg),
+    transparent 0deg,
+    color-mix(in srgb, #fff 85%, transparent) 40deg,
+    transparent 110deg,
+    transparent 360deg
+  );
+  /* Keep the 1.5px frame, throw the middle away. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.mise-btn-key:hover::before {
+  opacity: 1;
+  animation: mise-edge-run 1500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* An angle is not animatable unless it is a registered property — without
+   this the gradient jumps instead of turning. */
+@property --edge-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes mise-edge-run {
+  from { --edge-angle: 0deg; }
+  to   { --edge-angle: 360deg; }
+}
+
+.mise-btn {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-btn-key:hover::before {
+    animation: none;
+    opacity: 0;
+  }
 }

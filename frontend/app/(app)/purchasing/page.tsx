@@ -1693,7 +1693,7 @@ export default function PurchasingPage() {
                             </div>
                             <button
                               onClick={() => downloadFile(`/purchasing/indents/${openIndentObj.id}/consolidated.pdf`, `consolidated-${openIndentObj.date}.pdf`)}
-                              className="mt-2.5 w-full rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2 text-sm font-semibold text-brand-300 transition hover:bg-brand-500/20"
+                              className="mise-btn mise-press mt-2.5 w-full px-3 py-2 text-sm font-semibold text-brand-300"
                             >
                               🧾 Download consolidated PDF (all vendors)
                             </button>
@@ -1860,7 +1860,7 @@ export default function PurchasingPage() {
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf`, `${openPoObj.po_number}.pdf`)}
-                            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
+                            className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-brand-300"
                           >
                             ⬇ {openPoObj.status === "RECEIVED" ? "PO (ordered)" : "PDF"}
                           </button>
@@ -1868,7 +1868,7 @@ export default function PurchasingPage() {
                             <button
                               onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf?received=1`, `${openPoObj.po_number}-received.pdf`)}
                               title="What actually arrived (ordered vs received + the note)"
-                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-brand-300"
+                              className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-brand-300"
                             >
                               ⬇ Received note
                             </button>
@@ -1877,7 +1877,7 @@ export default function PurchasingPage() {
                             <button
                               onClick={() => openPoDetail && openReceive(openPoDetail)}
                               disabled={!openPoDetail}
-                              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft disabled:opacity-50"
+                              className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-fg-soft disabled:opacity-50"
                             >
                               ✓ Receive into stock
                             </button>
