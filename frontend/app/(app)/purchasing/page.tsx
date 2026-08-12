@@ -1831,163 +1831,133 @@ export default function PurchasingPage() {
         subtitle={openPoObj ? `${openPoObj.vendor_name} · ${openPoObj.status.toLowerCase()}` : ""}
       >
         {openPoObj && (
-          <div>
-                      <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
-                        {/* "what is the use of that date choosing — expected
-                            delivery means? What's the use?" A fair question,
-                            because the field never said. It is the ONLY thing
-                            that makes an order count as late: the dashboard
-                            chases it on the day, and the Late filter on this
-                            page is measured against it. Say so. */}
-                        {openPoObj.status !== "RECEIVED" && canApprove && (
-                          <label className="flex flex-wrap items-center gap-2 text-xs text-fg-faint">
-                            🚚 When did they promise it?
-                            <input
-                              type="date"
-                              value={openPoObj.expected_delivery ?? ""}
-                              onChange={async (e) => {
-                                const v = e.target.value || null;
-                                try {
-                                  await api.patch(`/purchasing/purchase-orders/${openPoObj.id}`, { expected_delivery: v });
-                                  setPos((list) => list.map((x) => (x.id === openPoObj.id ? { ...x, expected_delivery: v } : x)));
-                                } catch { /* leave as-was */ }
-                              }}
-                              className="mise-well rounded-lg px-2 py-1 text-xs text-fg outline-none"
-                            />
-                            <span className="text-fg-faint">
-                              {openPoObj.expected_delivery
-                                ? "On this date the dashboard starts chasing it, and it counts as Late after it."
-                                : "Set it and this order can be chased — without a date it can never be flagged late."}
-                            </span>
-                          </label>
-                        )}
-                        {openPoBusy && !openPoDetail ? (
-                          <p className="py-1 text-center text-sm text-fg-faint">Loading items…</p>
-                        ) : openPoDetail && openPoDetail.items.length > 0 ? (
-                          /* Two across on a wide sheet. "here also we are
-                             wasting space, why can't we keep side by side or
-                             something useful" — a one-line order left three
-                             quarters of the panel empty. */
-                          <ul className="grid grid-cols-1 gap-1.5 lg:grid-cols-2">
-                            {openPoDetail.items.map((it) => (
-                              <li key={it.item_id} className="mise-card3d p-2.5">
-                                {/* "just showing 1 x 30 — its not clear bro, we
-                                    need to explain clearly to layman what it is,
-                                    what we are doing." So the line says it as a
-                                    sentence: how much, of what, at what each,
-                                    coming to what. */}
-                                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                                  <span className="min-w-0 flex-1 basis-32 truncate font-medium text-fg">
-                                    {it.item_name}
-                                  </span>
-                                  <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg">
-                                    {format(it.line_total)}
-                                  </span>
-                                </div>
-                                <p className="mt-0.5 text-xs text-fg-soft">
-                                  {fmtQtyNumber(it.ordered_qty)} {it.unit || ""} at{" "}
-                                  {format(it.unit_price)} each
-                                  {it.unit ? ` per ${it.unit}` : ""}
-                                </p>
-                                {it.pack_note && (
-                                  <p className="text-[11px] text-fg-faint">{it.pack_note}</p>
-                                )}
-                                {openPoObj.status === "RECEIVED" && it.received_qty !== it.ordered_qty && (
-                                  <p className="mt-0.5 text-xs font-medium text-rose-300">
-                                    only {fmtQtyNumber(it.received_qty)} {it.unit || ""} actually arrived
-                                  </p>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="py-1 text-center text-sm text-fg-faint">No line items.</p>
-                        )}
-                        {/* What this order MEANS, in the space the lines were
-                            not using. Not decoration: it is the money question
-                            you ask about a purchase order, and it was only
-                            answerable by opening two other pages. */}
-                        {openPoDetail && openPoDetail.items.length > 0 && (
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                            {[
-                              {
-                                label: "Order value",
-                                value: format(openPoObj.total_amount),
-                                hint: `${openPoDetail.items.length} line${openPoDetail.items.length === 1 ? "" : "s"}`,
-                              },
-                              {
-                                label: "Supplier",
-                                value: openPoObj.vendor_name || "—",
-                                hint: "one order per supplier",
-                              },
-                              {
-                                label: "Promised",
-                                value: openPoObj.expected_delivery
-                                  ? relativeDay(openPoObj.expected_delivery)
-                                  : "no date",
-                                hint: openPoObj.expected_delivery ?? "cannot be chased",
-                              },
-                              {
-                                label: "State",
-                                value:
-                                  openPoObj.status === "RECEIVED"
-                                    ? "In your stock"
-                                    : "Still to arrive",
-                                hint:
-                                  openPoObj.status === "RECEIVED"
-                                    ? "stock and costs updated"
-                                    : "stock unchanged until received",
-                              },
-                            ].map((t) => (
-                              <div key={t.label} className="mise-card3d px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-wide text-fg-faint">
-                                  {t.label}
-                                </p>
-                                <p className="truncate font-display text-sm font-semibold text-fg">
-                                  {t.value}
-                                </p>
-                                <p className="truncate text-[10px] text-fg-faint">{t.hint}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+          <div className="space-y-4 px-4 py-3">
+            {/* ── The heading of a document, not four tiles in a row ──────
+                What it is worth and who it is with, once, at the size that
+                says which is the headline. */}
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-line pb-3">
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wide text-fg-faint">
+                  {openPoObj.status === "RECEIVED" ? "Received from" : "Ordered from"}
+                </p>
+                <p className="truncate font-display text-lg font-semibold text-fg">
+                  {openPoObj.vendor_name || "—"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] uppercase tracking-wide text-fg-faint">
+                  {openPoDetail ? `${openPoDetail.items.length} line${openPoDetail.items.length === 1 ? "" : "s"}` : "value"}
+                </p>
+                <p className="font-display text-2xl font-semibold leading-none tabular-nums text-fg">
+                  {format(openPoObj.total_amount)}
+                </p>
+              </div>
+            </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf`, `${openPoObj.po_number}.pdf`)}
-                            className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-brand-300"
-                          >
-                            ⬇ {openPoObj.status === "RECEIVED" ? "PO (ordered)" : "PDF"}
-                          </button>
-                          {openPoObj.status === "RECEIVED" && (
-                            <button
-                              onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf?received=1`, `${openPoObj.po_number}-received.pdf`)}
-                              title="What actually arrived (ordered vs received + the note)"
-                              className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-brand-300"
-                            >
-                              ⬇ Received note
-                            </button>
-                          )}
-                          {canApprove && openPoObj.status !== "RECEIVED" && (
-                            <button
-                              onClick={() => openPoDetail && openReceive(openPoDetail)}
-                              disabled={!openPoDetail}
-                              className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-fg-soft disabled:opacity-50"
-                            >
-                              ✓ Receive into stock
-                            </button>
-                          )}
-                          {canApprove && openPoObj.status !== "RECEIVED" && (
-                            <button
-                              onClick={() => revertPo(openPoObj)}
-                              title="Send this PO back to its indent (re-opens it to edit/regenerate)"
-                              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-faint transition hover:bg-amber-400/10 hover:text-amber-300"
-                            >
-                              ↩ Revert to indent
-                            </button>
-                          )}
-                        </div>
-                      </div>
+            {/* ── What is on it ─────────────────────────────────────────── */}
+            {openPoBusy && !openPoDetail ? (
+              <p className="py-6 text-center text-sm text-fg-faint">Loading the lines…</p>
+            ) : openPoDetail && openPoDetail.items.length > 0 ? (
+              <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                {openPoDetail.items.map((it) => (
+                  <li key={it.item_id} className="mise-card3d p-2.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 flex-1 truncate font-medium text-fg">
+                        {it.item_name}
+                      </span>
+                      <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg">
+                        {format(it.line_total)}
+                      </span>
+                    </div>
+                    {/* "just showing 1 x 30 is not clear — we need to explain
+                        clearly to a layman." So the line reads as a sentence. */}
+                    <p className="mt-0.5 text-[11px] text-fg-faint">
+                      {fmtQty(it.ordered_qty, it.unit ?? "")} at {format(it.unit_price)} each
+                      {it.pack_note ? ` · ${it.pack_note}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="py-6 text-center text-sm text-fg-faint">No lines on this order.</p>
+            )}
+
+            {/* ── When it is due ────────────────────────────────────────────
+                "what is this 'when did they promise it', what's the use of
+                this feature, explain me with example." Now it does, with one. */}
+            {openPoObj.status !== "RECEIVED" && canApprove && (
+              <div className="rounded-2xl border border-line bg-paper-2/50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="po-promised"
+                    className="text-sm font-medium text-fg"
+                  >
+                    When did the supplier promise it?
+                  </label>
+                  <input
+                    id="po-promised"
+                    type="date"
+                    value={openPoObj.expected_delivery ?? ""}
+                    onChange={async (e) => {
+                      const v = e.target.value || null;
+                      try {
+                        await api.patch(`/purchasing/purchase-orders/${openPoObj.id}`, { expected_delivery: v });
+                        setPos((list) => list.map((x) => (x.id === openPoObj.id ? { ...x, expected_delivery: v } : x)));
+                      } catch { /* leave as-was */ }
+                    }}
+                    className="mise-well rounded-xl px-2.5 py-1.5 text-sm text-fg outline-none"
+                  />
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-fg-soft">
+                  {openPoObj.expected_delivery ? (
+                    <>
+                      They said <b className="text-fg">{openPoObj.expected_delivery}</b>. From the
+                      morning after that, this order is counted <b className="text-rose-300">Late</b> —
+                      it moves into the Late filter on this page and the dashboard starts asking about
+                      it, so nobody has to remember to chase.
+                    </>
+                  ) : (
+                    <>
+                      For example: today you order 20kg of onions and the supplier says Friday. Put
+                      Friday here. If Friday passes and nothing has arrived, this order turns up under{" "}
+                      <b className="text-fg">Late</b> by itself. Leave it empty and the order can never
+                      be flagged — nothing will remind you it is missing.
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* ── What you can do about it ──────────────────────────────────
+                One row, equal weights, primary action first. */}
+            <div className="flex flex-wrap gap-2 border-t border-line pt-3">
+              {openPoObj.status !== "RECEIVED" && canApprove && openPoDetail && (
+                <button
+                  type="button"
+                  onClick={() => openReceive(openPoDetail)}
+                  className="mise-btn-key mise-press flex-1 px-4 py-2.5 text-sm font-semibold"
+                >
+                  Receive into stock
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf`, `${openPoObj.po_number}.pdf`)}
+                className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
+              >
+                Download PDF
+              </button>
+              {openPoObj.status !== "RECEIVED" && canApprove && (
+                <button
+                  type="button"
+                  onClick={() => revertPo(openPoObj)}
+                  title="Cancel this order and put its items back on the indent"
+                  className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
+                >
+                  Back to indent
+                </button>
+              )}
+            </div>
           </div>
         )}
       </DetailSheet>
