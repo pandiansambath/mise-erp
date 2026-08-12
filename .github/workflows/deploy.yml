@@ -190,8 +190,8 @@ jobs:
             "# nothing serving.",
             "#",
             "# So the rollout is not finished until the box can answer for itself.",
-            "for i in $(seq 1 24); do curl -fsS -m 5 http://localhost/api/health >/dev/null 2>&1 && break; echo \"health not up yet ($i/24)\"; docker compose up -d >/dev/null 2>&1 || true; sleep 5; done",
-            "curl -fsS -m 10 http://localhost/api/health || (echo \"STILL DOWN after rollout\"; docker compose ps; docker compose logs --tail 40 caddy; exit 1)",
+            "for i in $(seq 1 24); do curl -fsSL -k -m 8 http://localhost/api/health >/dev/null 2>&1 && break; echo \"health not up yet ($i/24)\"; docker compose up -d >/dev/null 2>&1 || true; sleep 5; done",
+            "curl -fsSL -k -m 12 http://localhost/api/health || (echo \"STILL DOWN after rollout\"; docker compose ps; docker compose logs --tail 40 caddy; exit 1)",
             "docker compose ps"
           ]}' > rollout.json
           CMD=$(aws ssm send-command --instance-ids "$IID" \
