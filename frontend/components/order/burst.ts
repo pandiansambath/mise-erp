@@ -308,6 +308,21 @@ export async function burstBasket(): Promise<void> {
     b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, fill: "forwards" });
   }
 
-  await Promise.all(panels.map((el) => burstAway(el)));
+  // Deepest first, one after another. Blowing all of them at the same instant
+  // is three explosions in the same place — loud, and impossible to follow.
+  // Unbuilding the stack in order reads as a sequence of things finishing,
+  // which is what actually happened.
+  const ordered = panels.sort((a, b) => {
+    const z = (el: HTMLElement) => parseInt(getComputedStyle(el).zIndex || "0", 10) || 0;
+    return z(b) - z(a);
+  });
+
+  for (let i = 0; i < ordered.length; i++) {
+    // Not awaited: each panel starts while the one before is still going, so
+    // they overlap like a run of applause rather than queueing politely.
+    void burstAway(ordered[i]);
+    await new Promise((r) => window.setTimeout(r, 190));
+  }
+  await new Promise((r) => window.setTimeout(r, 420));
   window.dispatchEvent(new CustomEvent("mise:close-basket"));
 }

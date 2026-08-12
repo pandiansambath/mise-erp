@@ -751,6 +751,17 @@ export default function PurchasingPage() {
   // went to a single supplier, and you chase them differently.
   const [runSize, setRunSize] = useState<"all" | "single" | "multi">("all");
 
+  /** Which purchase runs are opened out into their per-supplier orders. The
+   *  consolidated line is the default view; the split is on request. */
+  const [openRuns, setOpenRuns] = useState<Set<string>>(new Set());
+  const toggleRun = (key: string) =>
+    setOpenRuns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   const poGroups = useMemo(() => {
     const byIndent = new Map<string, POSummary[]>();
     const order: string[] = [];
@@ -1392,28 +1403,76 @@ export default function PurchasingPage() {
               </p>
             ) : (
               poGroups.map((g) => (
-              <div key={g.key} className="rounded-2xl border border-line/70 bg-glass/[0.02] p-2.5">
-                {/* Purchase-run header: per-vendor orders below + one consolidated PDF */}
-                <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-fg">
-                      {g.indent ? `🛒 Purchase · ${g.indent.date}` : "Other orders"}
-                    </span>
-                    <span className="block text-[11px] text-fg-faint">
-                      {g.pos.length} order{g.pos.length === 1 ? "" : "s"} · {g.vendorCount} vendor{g.vendorCount === 1 ? "" : "s"} · <b className="text-fg-soft">{format(String(g.total.toFixed(2)))}</b>
-                    </span>
-                  </span>
-                  {g.indentId && (
-                    <button
-                      type="button"
-                      onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.indent?.date ?? "po"}.pdf`)}
-                      title="One PDF for this whole purchase (all vendors + items)"
-                      className="shrink-0 rounded-lg border border-brand-500/40 bg-brand-500/10 px-2.5 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20"
+              <div key={g.key} className="mise-card3d relative overflow-hidden p-3 pl-4">
+                {(() => {
+                  const late = g.pos.filter(
+                    (p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr,
+                  ).length;
+                  const arrived = g.pos.filter((p) => p.status === "RECEIVED").length;
+                  const done = arrived === g.pos.length;
+                  return (
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-1 ${
+                        late > 0 ? "bg-rose-400" : done ? "bg-emerald-400" : "bg-sky-400"
+                      }`}
+                    />
+                  );
+                })()}
+                {/* THE CONSOLIDATED VIEW. A purchase run is one purchase that
+                    happened to be split by supplier, so it is headed like one
+                    thing — what it cost, how far along it is, one PDF for all
+                    of it — and the per-supplier orders fold away underneath. */}
+                <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleRun(g.key)}
+                    className="mise-press flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span
+                      aria-hidden
+                      className={`text-[10px] text-fg-faint transition-transform ${
+                        openRuns.has(g.key) ? "rotate-90" : ""
+                      }`}
                     >
-                      🧾 Consolidated PDF
-                    </button>
-                  )}
+                      ▶
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-display text-base font-semibold leading-tight text-fg">
+                        {g.indent ? `Purchase · ${g.indent.date}` : "Other orders"}
+                      </span>
+                      <span className="block text-[11px] text-fg-faint">
+                        {g.pos.length} order{g.pos.length === 1 ? "" : "s"} ·{" "}
+                        {g.vendorCount} supplier{g.vendorCount === 1 ? "" : "s"} ·{" "}
+                        {(() => {
+                          const arrived = g.pos.filter((p) => p.status === "RECEIVED").length;
+                          return arrived === g.pos.length
+                            ? "all arrived"
+                            : `${arrived} of ${g.pos.length} arrived`;
+                        })()}
+                      </span>
+                    </span>
+                  </button>
+                  <span className="flex items-center gap-2">
+                    <span className="text-right">
+                      <span className="block font-display text-lg font-semibold leading-none tabular-nums text-fg">
+                        {format(String(g.total.toFixed(2)))}
+                      </span>
+                      <span className="block text-[10px] text-fg-faint">the whole purchase</span>
+                    </span>
+                    {g.indentId && (
+                      <button
+                        type="button"
+                        onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.indent?.date ?? "po"}.pdf`)}
+                        title="One PDF for this whole purchase — every supplier, every item"
+                        className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-medium text-brand-300"
+                      >
+                        🧾 One PDF
+                      </button>
+                    )}
+                  </span>
                 </div>
+                {openRuns.has(g.key) && (
                 <div className="space-y-2">
               {g.pos.map((po) => {
                 const open = openPo === po.id;
@@ -1467,6 +1526,7 @@ export default function PurchasingPage() {
                 );
               })}
                 </div>
+                )}
               </div>
               ))
             )}
