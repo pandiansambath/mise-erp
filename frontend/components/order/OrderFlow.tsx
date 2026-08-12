@@ -384,10 +384,17 @@ function ItemSheet({
               commit is the entire point of showing it. */}
           {total > 0 && (
             <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-line/70 pt-2">
+              {/* The second line only when it SAYS something. For an item with
+                  no pack chain both lines are identical — "1 pack / 1 pack" —
+                  which reads as a mistake rather than as detail. */}
               <span className="text-[11px] leading-tight text-fg-faint">
                 {tidy(count)} {levelName(item, sizeId)}
                 {count === 1 ? "" : "s"}
-                <span className="block">{tidy(baseQty)} {item.unit}</span>
+                {sizeId && (
+                  <span className="block">
+                    {tidy(baseQty)} {item.unit}
+                  </span>
+                )}
               </span>
               <AnimatedNumber
                 value={total}
