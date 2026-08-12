@@ -2254,17 +2254,35 @@ body[data-overlay] .mise-launcher-in {
   transform: rotateY(180deg);
 }
 
+/* Which face you see is controlled by OPACITY, swapped at the halfway point of
+   the turn — not by backface-visibility.
+   
+   backface-visibility is the textbook answer and it did not work here: probing
+   the live page showed preserve-3d applied, both faces rotated correctly, the
+   back at full opacity and the right size — and nothing painted at all. Rather
+   than keep guessing at which ancestor was flattening the context, this does
+   not depend on the 3D context being perfect. The rotation still supplies the
+   motion; the swap decides what you look at. */
 .mise-flip-face {
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
+  transition: opacity 1ms linear 310ms;
 }
 
-/* The back is laid on top of the front and pre-rotated, so both faces occupy
-   the same box and the card never changes size when it turns. */
+.mise-flip[data-flipped="true"] .mise-flip-face:not(.mise-flip-back) {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .mise-flip-back {
   position: absolute;
   inset: 0;
   transform: rotateY(180deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mise-flip[data-flipped="true"] .mise-flip-back {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ── Telling the user the back exists ────────────────────────────────────────

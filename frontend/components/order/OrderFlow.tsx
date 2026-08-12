@@ -998,9 +998,7 @@ function BasketSheet({
                     <div className="mise-flip-inner">
                       {/* FRONT — only what you need to recognise it at a glance. */}
                       <div
-                        className={`mise-card3d mise-flip-face mise-shine relative overflow-hidden py-2 pl-3 pr-2 ${
-                          flipped ? "pointer-events-none" : ""
-                        }`}
+                        className="mise-card3d mise-flip-face mise-shine relative overflow-hidden py-2 pl-3 pr-2"
                         data-shine={shine ? "true" : "false"}
                       >
                         <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
@@ -1074,9 +1072,7 @@ function BasketSheet({
                           stock 13 piece (1 bottle + 3 piece)". All of it, on a
                           face that costs the card no height at all. */}
                       <div
-                        className={`mise-card3d mise-flip-face mise-flip-back overflow-hidden py-2 pl-3 pr-2 ${
-                          flipped ? "" : "pointer-events-none"
-                        }`}
+                        className="mise-card3d mise-flip-face mise-flip-back overflow-hidden py-2 pl-3 pr-2"
                       >
                         <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
                         <div className="flex items-center gap-2">
