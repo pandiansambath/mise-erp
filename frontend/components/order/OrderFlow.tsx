@@ -62,13 +62,23 @@ function show(n: number): string {
  *  gets the neutral tone rather than a colour invented for it.
  */
 const CATEGORY_KIND: { test: RegExp; tint: string; kind: string }[] = [
-  { test: /veg|fruit|herb|salad|fresh|produce/i, tint: "bg-emerald-400", kind: "fresh produce" },
-  { test: /meat|poultry|fish|seafood|chicken|lamb|beef/i, tint: "bg-rose-400", kind: "fresh, raw" },
-  { test: /dairy|milk|cheese|butter|yog|cream|egg/i, tint: "bg-sky-300", kind: "chilled" },
-  { test: /frozen|ice/i, tint: "bg-cyan-300", kind: "frozen" },
-  { test: /rice|grain|flour|pulse|spice|oil|dry|masala|sugar|salt|lentil/i, tint: "bg-amber-400", kind: "dry store" },
-  { test: /drink|bever|juice|water|soda|tea|coffee/i, tint: "bg-violet-400", kind: "drinks" },
-  { test: /clean|chemical|hygiene|packag|disposab|paper|paper|equip/i, tint: "bg-slate-400", kind: "not food" },
+  // ORDER MATTERS and so do word boundaries. The first version had /ice/ in
+  // the frozen rule, which matches R·ICE and SP·ICES — so Rice, Spices,
+  // Grains & Rice and Rice & Flour were all labelled "frozen". He said the
+  // colours looked random and he was right: they were wrong.
+  //
+  // Dry store is tested BEFORE frozen now, and every pattern is anchored to
+  // word starts, so a substring can never masquerade as a category.
+  // FROZEN FIRST — it is the most specific signal there is. "Frozen peas" is
+  // frozen, not produce; "ice cream" is frozen, not dairy. Whatever else a
+  // name says, if it says frozen that is where it goes.
+  { test: /(frozen|freezer|ice[ -]?cream)/i, tint: "bg-cyan-300", kind: "frozen" },
+  { test: /(veg|vegetable|fruit|herb|salad|greens|produce)/i, tint: "bg-emerald-400", kind: "fresh produce" },
+  { test: /(meat|poultry|fish|seafood|chicken|mutton|lamb|beef|pork|prawn)/i, tint: "bg-rose-400", kind: "fresh, raw" },
+  { test: /(dairy|milk|cheese|butter|yog|cream|egg|paneer|curd)/i, tint: "bg-sky-300", kind: "chilled" },
+  { test: /(rice|grain|flour|pulse|lentil|dal|spice|masala|oil|sugar|salt|dry|staple|condiment|sauce|pickle)/i, tint: "bg-amber-400", kind: "dry store" },
+  { test: /(drink|bever|juice|water|soda|tea|coffee|squash)/i, tint: "bg-violet-400", kind: "drinks" },
+  { test: /(clean|chemical|hygiene|packag|disposab|paper|equip|cutlery|utensil|stationery)/i, tint: "bg-slate-400", kind: "not food" },
 ];
 
 function categoryKind(name: string): { tint: string; kind: string } {
