@@ -68,11 +68,15 @@ test("the open list, checked against the live page", async ({ page }) => {
   // content is a fair test; 783px is not.
   await page.getByRole("button", { name: "all", exact: true }).first().click().catch(() => {});
   await page.waitForTimeout(2500);
+  // Scroll whichever thing actually scrolls. At lg it is <main>; below lg the
+  // DOCUMENT scrolls, because AppShell only turns main into a scroller at lg.
+  // Driving the wrong one is why this reported OPEN on the phone while working.
   await page.evaluate(() => {
     const m = document.querySelector("main");
-    if (m) m.scrollTop = 1500;
+    if (m && m.scrollHeight > m.clientHeight + 40) m.scrollTop = 1500;
+    else window.scrollTo(0, 1500);
   });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(1000);
   const condensed = await page.evaluate(
     () => document.querySelector(".mise-bench-rail")?.getAttribute("data-condensed"),
   );
@@ -85,6 +89,7 @@ test("the open list, checked against the live page", async ({ page }) => {
   await page.evaluate(() => {
     const m = document.querySelector("main");
     if (m) m.scrollTop = 0;
+    window.scrollTo(0, 0);
   });
   await page.waitForTimeout(700);
 
