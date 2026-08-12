@@ -190,7 +190,16 @@ jobs:
             "# nothing serving.",
             "#",
             "# So the rollout is not finished until the box can answer for itself.",
-            "for i in $(seq 1 24); do curl -fsSL -k -m 8 http://localhost/api/health >/dev/null 2>&1 && break; echo \"health not up yet ($i/24)\"; docker compose up -d >/dev/null 2>&1 || true; sleep 5; done",
+            "# Five minutes, and only NUDGE compose every so often. The first",
+            "# version waited two minutes and re-ran `up -d` every five seconds:",
+            "# too impatient for a cold Next.js boot on a 916MB box, and the",
+            "# hammering competed for the very memory the containers needed to",
+            "# start. It failed the deploy while the site came up moments later.",
+            "for i in $(seq 1 60); do",
+            "  curl -fsSL -k -m 8 http://localhost/api/health >/dev/null 2>&1 && break",
+            "  if [ $((i % 6)) -eq 0 ]; then docker compose up -d >/dev/null 2>&1 || true; fi",
+            "  echo \"waiting for the site ($i/60)\"; sleep 5",
+            "done",
             "curl -fsSL -k -m 12 http://localhost/api/health || (echo \"STILL DOWN after rollout\"; docker compose ps; docker compose logs --tail 40 caddy; exit 1)",
             "docker compose ps"
           ]}' > rollout.json
