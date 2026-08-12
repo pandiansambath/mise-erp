@@ -67,11 +67,17 @@ RUN pip install --no-cache-dir -q -r requirements-dev.txt
 COPY backend/ .
 DOCKERFILE
 
-# A FRESH schema every run. conftest builds its own tables, so a database that
+# A FRESH schema every run. conftest does drop_all + create_all itself, so a
+# database still holding the last run's tables fails with `relation "users"
+# already exists`. Invisible in CI, which gets a new container each time.
+# (And note there is no `alembic upgrade head` below: migrating first creates
+#  tables conftest cannot drop. CI migrates because CI is also testing that the
+#  migrations apply — a different job, still covered on every push.)
+# OLD NOTE: conftest builds its own tables, so a database that
 # still has last run's schema fails with `relation "users" already exists` —
 # which is invisible in CI because CI gets a brand new container each time and
 # this reuses one. Dropping the schema is the whole difference.
 docker exec "$DB" psql -U mise -d mise_test -q   -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;' >/dev/null 2>&1 || true
 
 echo "running the suite…"
-docker run --rm --network "$NET"   -e DATABASE_URL="postgresql+asyncpg://mise:mise@${DB}:5432/mise_test"   -e SECRET_KEY=ci-secret   "$IMG" bash -lc 'alembic upgrade head >/dev/null && exec pytest -q "$@" --cov=app --cov-fail-under=70' bash "$@"
+docker run --rm --network "$NET"   -e DATABASE_URL="postgresql+asyncpg://mise:mise@${DB}:5432/mise_test"   -e SECRET_KEY=ci-secret   "$IMG" bash -lc 'exec pytest -q "$@" --cov=app --cov-fail-under=70' bash "$@"

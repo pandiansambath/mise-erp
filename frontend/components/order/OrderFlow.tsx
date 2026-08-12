@@ -306,17 +306,19 @@ function ItemSheet({
           </button>
         </div>
 
+        {/* A segmented control, not loose pills: these are alternatives to one
+            another, and a shared track is what says so. */}
         {sizes.length > 1 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="mise-well flex flex-wrap gap-1 rounded-2xl p-1">
             {sizes.map((s) => (
               <button
                 key={s.id ?? "base"}
                 type="button"
                 onClick={() => chooseSize(s.id)}
-                className={`mise-press rounded-xl px-3 py-2 text-sm transition ${
+                className={`mise-press flex-1 rounded-xl px-3 py-2 text-sm transition ${
                   (s.id ?? null) === sizeId
-                    ? "bg-brand-500 font-semibold text-white"
-                    : "border border-line text-fg-soft hover:border-brand-400/50"
+                    ? "mise-btn-key font-semibold"
+                    : "text-fg-soft hover:bg-glass/[0.06]"
                 }`}
               >
                 {s.name}
@@ -355,10 +357,28 @@ function ItemSheet({
           )}
         </div>
 
+        {/* The number this popup exists to produce. It COUNTS to its new value
+            when you change the amount, instead of silently swapping — money
+            that moves is money you notice, and noticing is the whole point of
+            showing it before you commit. */}
         {total > 0 && (
-          <p className="text-center font-display text-3xl font-semibold tabular-nums text-fg">
-            {format(total.toFixed(2))}
-          </p>
+          <div className="relative overflow-hidden rounded-2xl px-3 py-2 text-center">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-gradient-to-b from-brand-500/[0.10] to-transparent"
+            />
+            <AnimatedNumber
+              value={total}
+              from="previous"
+              duration={420}
+              format={(x) => format(x.toFixed(2))}
+              className="relative block font-display text-3xl font-semibold tabular-nums text-fg"
+            />
+            <span className="relative block text-[11px] text-fg-faint">
+              {tidy(count)} {levelName(item, sizeId)}
+              {count === 1 ? "" : "s"} · {tidy(baseQty)} {item.unit}
+            </span>
+          </div>
         )}
       </div>
     </Sheet>
