@@ -753,6 +753,24 @@ export default function PurchasingPage() {
 
   /** Which purchase runs are opened out into their per-supplier orders. The
    *  consolidated line is the default view; the split is on request. */
+  /** The indent whose whole purchase is being read as one document. */
+  const [runSheet, setRunSheet] = useState<string | null>(null);
+  const [runSort, setRunSort] = useState<"vendor" | "price" | "name">("vendor");
+  const [runQ, setRunQ] = useState("");
+
+  async function openRunSheet(indentId: string) {
+    setRunSheet(indentId);
+    setRunQ("");
+    if (!indentConsol[indentId]) {
+      try {
+        const c = await api.get<Consolidated>(`/purchasing/indents/${indentId}/consolidated`);
+        setIndentConsol((m) => ({ ...m, [indentId]: c }));
+      } catch {
+        /* the sheet says so rather than showing a lie */
+      }
+    }
+  }
+
   const [openRuns, setOpenRuns] = useState<Set<string>>(new Set());
   const toggleRun = (key: string) =>
     setOpenRuns((prev) => {
@@ -1470,6 +1488,19 @@ export default function PurchasingPage() {
                     {g.indentId && (
                       <button
                         type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void openRunSheet(g.indentId as string);
+                        }}
+                        title="Every supplier and every line on this purchase, in one list"
+                        className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-medium text-fg-soft"
+                      >
+                        See everything
+                      </button>
+                    )}
+                    {g.indentId && (
+                      <button
+                        type="button"
                         onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.indent?.date ?? "po"}.pdf`)}
                         title="One PDF for this whole purchase — every supplier, every item"
                         onClickCapture={(e) => e.stopPropagation()}
@@ -1823,6 +1854,112 @@ export default function PurchasingPage() {
       </DetailSheet>
 
       {/* Purchase-order detail — opens in place */}
+      {/* ── The whole purchase, as one document ─────────────────────────
+          Split across suppliers is how it must be ORDERED; it is not how you
+          want to READ it. Here every line from every supplier is one list you
+          can search and sort — which is the only way to answer "what did this
+          purchase actually buy, and where is the money going". */}
+      <DetailSheet
+        open={!!runSheet}
+        onClose={() => setRunSheet(null)}
+        width="lg"
+        icon="🧾"
+        title="The whole purchase"
+        subtitle={
+          runSheet && indentConsol[runSheet]
+            ? `${indentConsol[runSheet].vendor_count} supplier${indentConsol[runSheet].vendor_count === 1 ? "" : "s"} · ${indentConsol[runSheet].item_count} line${indentConsol[runSheet].item_count === 1 ? "" : "s"} · ${format(indentConsol[runSheet].grand_total)}`
+            : "loading…"
+        }
+      >
+        {runSheet && !indentConsol[runSheet] ? (
+          <p className="px-4 py-8 text-center text-sm text-fg-faint">Loading the lines…</p>
+        ) : runSheet && indentConsol[runSheet] ? (
+          (() => {
+            const c = indentConsol[runSheet];
+            const lines = c.vendors.flatMap((v) =>
+              v.items.map((it) => ({ ...it, vendor: v.vendor_name, po: v.po_number })),
+            );
+            const q = runQ.trim().toLowerCase();
+            const shown = lines
+              .filter((l) => !q || l.item_name.toLowerCase().includes(q) || l.vendor.toLowerCase().includes(q))
+              .sort((a, b) =>
+                runSort === "price"
+                  ? (parseFloat(b.line_total) || 0) - (parseFloat(a.line_total) || 0)
+                  : runSort === "name"
+                    ? a.item_name.localeCompare(b.item_name)
+                    : a.vendor.localeCompare(b.vendor) || a.item_name.localeCompare(b.item_name),
+              );
+            return (
+              <div className="space-y-3 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={runQ}
+                    onChange={(e) => setRunQ(e.target.value)}
+                    placeholder="Find an item or a supplier…"
+                    className="mise-well min-w-0 flex-1 rounded-xl px-3 py-2 text-sm text-fg outline-none"
+                  />
+                  <span className="mise-well flex shrink-0 gap-1 rounded-xl p-1">
+                    {([
+                      ["vendor", "by supplier"],
+                      ["price", "dearest"],
+                      ["name", "A–Z"],
+                    ] as const).map(([k, label]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setRunSort(k)}
+                        className={`mise-press rounded-lg px-2.5 py-1 text-[11px] transition ${
+                          runSort === k ? "mise-btn-key font-semibold" : "text-fg-soft"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-fg-faint">
+                  showing <b className="text-fg-soft">{shown.length}</b> of {lines.length} lines
+                </p>
+
+                <ul className="space-y-1.5">
+                  {shown.map((l, i) => (
+                    <li key={`${l.po}-${l.item_name}-${i}`} className="mise-card3d flex items-center gap-3 px-3 py-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-fg">{l.item_name}</span>
+                        <span className="block truncate text-[11px] text-fg-faint">
+                          {l.vendor} · {l.po} · {fmtQty(l.ordered_qty, "")} at {format(l.unit_price)} each
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-display text-sm font-semibold tabular-nums text-fg">
+                        {format(l.line_total)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3">
+                  <span className="text-xs text-fg-faint">
+                    every supplier, every line on this purchase
+                  </span>
+                  <span className="font-display text-xl font-semibold tabular-nums text-fg">
+                    {format(c.grand_total)}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => downloadFile(`/purchasing/indents/${runSheet}/consolidated.pdf`, `consolidated-${runSheet}.pdf`)}
+                  className="mise-btn-key mise-press w-full px-4 py-2.5 text-sm font-semibold"
+                >
+                  Download all of it as one PDF
+                </button>
+              </div>
+            );
+          })()
+        ) : null}
+      </DetailSheet>
+
       <DetailSheet
         open={!!openPoObj}
         onClose={() => setOpenPo(null)}
