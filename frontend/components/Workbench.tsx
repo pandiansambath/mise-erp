@@ -89,6 +89,15 @@ export function Workbench({
         data-condensed="false"
         className="mise-bench-rail sticky z-30 -mx-4 border-b border-glass/10 bg-shell/90 px-4 backdrop-blur-xl lg:-mx-8 lg:px-8"
       >
+        {/* Title and tools share a GRID, not two stacked blocks.
+            "I want that the buttons also need to shrink in size and go one step
+             up by shrinking, so that when we scroll down and look at the top
+             portion there will be only one row which has all buttons and that
+             Purchasing word too."
+            Two rows when you are at the top, ONE row once you scroll — the
+            grid's areas change, so the tools genuinely move up beside the
+            title rather than merely looking smaller. */}
+        <div className="mise-bench-grid">
         <div className="mise-bench-head flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="mise-bench-title truncate font-display font-semibold text-fg">
@@ -105,7 +114,8 @@ export function Workbench({
           </div>
           {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
         </div>
-        {tools && <div className="pb-3">{tools}</div>}
+        {tools && <div className="mise-bench-tools pb-3">{tools}</div>}
+        </div>
       </div>
 
       {/* The bottom padding lives HERE, above the tally — never below it.
