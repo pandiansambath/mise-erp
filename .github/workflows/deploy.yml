@@ -179,7 +179,20 @@ jobs:
             ("aws ecr get-login-password --region " + $region + " | docker login --username AWS --password-stdin " + $reg),
             "docker compose pull",
             "docker compose up -d",
-            "docker image prune -f || true"
+            "docker image prune -f || true",
+            "#",
+            "# SELF-HEAL. `docker compose up` has crashed mid-recreate on this box",
+            "# (fatal error: concurrent map writes, a compose bug, not ours) — and",
+            "# when it does, the container it had already stopped stays stopped.",
+            "# `restart: always` does NOT bring back something that was stopped",
+            "# deliberately, so the site sat dark until a person noticed. It took",
+            "# the front door with it once: caddy Exited(137), app containers fine,",
+            "# nothing serving.",
+            "#",
+            "# So the rollout is not finished until the box can answer for itself.",
+            "for i in $(seq 1 24); do curl -fsS -m 5 http://localhost/api/health >/dev/null 2>&1 && break; echo \"health not up yet ($i/24)\"; docker compose up -d >/dev/null 2>&1 || true; sleep 5; done",
+            "curl -fsS -m 10 http://localhost/api/health || (echo \"STILL DOWN after rollout\"; docker compose ps; docker compose logs --tail 40 caddy; exit 1)",
+            "docker compose ps"
           ]}' > rollout.json
           CMD=$(aws ssm send-command --instance-ids "$IID" \
             --document-name AWS-RunShellScript --parameters file://rollout.json \
