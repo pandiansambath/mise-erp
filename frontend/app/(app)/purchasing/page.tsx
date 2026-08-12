@@ -1202,21 +1202,7 @@ export default function PurchasingPage() {
       })()}
 
       {canWrite && tab === "new" && (
-        <Card className="mb-6" id="indent-form">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-fg-soft">New kitchen indent</p>
-            <button
-              type="button"
-              onClick={orderAllLow}
-              title="Pull every low-stock item (topped up to par) into the indent"
-              className="mise-btn mise-press px-3 py-1.5 text-sm font-medium text-brand-300"
-            >
-              🛒 Order all low-stock
-            </button>
-          </div>
-          <p className="mb-3 text-xs text-fg-faint">
-            Only items a vendor supplies appear here. New item? Add it in <b>Inventory</b>, then set its price on the <b>Vendors</b> page.
-          </p>
+        <Card className="mb-4 p-3 sm:p-4" id="indent-form">
           {orderable.length === 0 ? (
             <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">
               No orderable items yet — add a vendor price for at least one item on the <b>Vendors</b> page.

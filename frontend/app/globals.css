@@ -1985,10 +1985,24 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   box-shadow:
     /* the SIDE — hard, unblurred: this is the object's thickness */
     0 var(--tile-depth) 0 0 var(--tile-side),
+    /* THE RIGHT CHEEK. His idea, and it works: "is it possible to have a
+       shadow in each card top area too, so we have shadow in right corner +
+       top corner, which gives a simulation 3D look like that card is turned
+       left facing."
+       A hard band on the right as well as the bottom is exactly how you draw
+       a box seen from slightly left of centre — you see its face, its underside
+       and its right cheek. Two visible faces is the difference between a
+       rectangle and a solid. */
+    var(--tile-depth) 0 0 0 color-mix(in srgb, var(--tile-side) 72%, transparent),
+    /* the corner where those two meet, or the object looks cut */
+    var(--tile-depth) var(--tile-depth) 0 0 color-mix(in srgb, var(--tile-side) 60%, transparent),
     /* where it meets the surface */
-    0 calc(var(--tile-depth) + 5px) 12px -4px color-mix(in srgb, #000 34%, transparent),
-    /* the lit top edge, and the shade under the face */
+    calc(var(--tile-depth) / 2) calc(var(--tile-depth) + 5px) 12px -4px
+      color-mix(in srgb, #000 34%, transparent),
+    /* lit along the top AND the left — the light is up-left, so those are the
+       two edges it catches */
     inset 0 1px 0 var(--tile-lip),
+    inset 1px 0 0 color-mix(in srgb, var(--tile-lip) 70%, transparent),
     inset 0 -1px 0 color-mix(in srgb, #000 8%, transparent);
   transition:
     transform 150ms cubic-bezier(0.2, 0.8, 0.3, 1),
@@ -2004,7 +2018,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    tile is momentarily flush with the page, exactly like a key bottoming out. */
 .mise-card3d:active {
   --tile-depth: 0px;
-  transform: translateY(4px);
+  transform: translate(4px, 4px);
   box-shadow:
     0 0 0 0 var(--tile-side),
     0 1px 3px 0 color-mix(in srgb, #000 30%, transparent),
