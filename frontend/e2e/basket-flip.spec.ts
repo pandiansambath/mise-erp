@@ -53,6 +53,13 @@ test("the basket card turns over and carries the detail", async ({ page }) => {
   const seen = await back.evaluate((el) => getComputedStyle(el).opacity);
   console.log("back opacity:", seen);
   expect(Number(seen), "the back must be VISIBLE, not merely present").toBeGreaterThan(0.9);
+  const m = await back.evaluate((el) => getComputedStyle(el).transform);
+  console.log("back transform:", m);
+  // A mirrored face has a negative horizontal scale in its matrix. Readable
+  // text needs the back's own half-turn to survive hover.
+  const firstCell = Number(m.replace(/^matrix3?d?\(/, "").split(",")[0]);
+  expect(firstCell, "the back must not render mirrored").toBeLessThan(0);
+
   const txt = await back.innerText();
   console.log("back of the card:", txt.replace(/\s+/g, " ").slice(0, 160));
   expect(txt).toMatch(/in stock/);

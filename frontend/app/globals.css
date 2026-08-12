@@ -2275,7 +2275,6 @@ body[data-overlay] .mise-launcher-in {
 .mise-flip-back {
   position: absolute;
   inset: 0;
-  transform: rotateY(180deg);
   opacity: 0;
   pointer-events: none;
 }
@@ -2283,6 +2282,26 @@ body[data-overlay] .mise-launcher-in {
 .mise-flip[data-flipped="true"] .mise-flip-back {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* The back is UN-mirrored by its own half-turn, and that rotation has to beat
+   .mise-card3d:hover — which sets `transform: translateY(-3px)` and, being a
+   transform, REPLACES the rotation rather than adding to it. The card you have
+   just clicked is the card the pointer is on, so the hover always won and the
+   back rendered as a mirror image: readable text, backwards.
+
+   Inside a flip card the lift is meaningless anyway — the turn is the feedback
+   — so both faces keep their own transform through every state. */
+.mise-flip .mise-flip-back,
+.mise-flip .mise-flip-back:hover,
+.mise-flip .mise-flip-back:active {
+  transform: rotateY(180deg);
+}
+
+.mise-flip .mise-flip-face:not(.mise-flip-back),
+.mise-flip .mise-flip-face:not(.mise-flip-back):hover,
+.mise-flip .mise-flip-face:not(.mise-flip-back):active {
+  transform: none;
 }
 
 /* ── Telling the user the back exists ────────────────────────────────────────
