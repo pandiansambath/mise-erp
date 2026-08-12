@@ -2245,9 +2245,17 @@ body[data-overlay] .mise-launcher-in {
 }
 
 .mise-flip-inner {
-  position: relative;
+  /* Both faces occupy the SAME grid cell, so the card is as tall as the taller
+     of the two and neither gets clipped. Absolutely positioning the back left
+     the card sized by the front alone, and the back holds more rows — the last
+     lines were being cut off. */
+  display: grid;
   transform-style: preserve-3d;
   transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mise-flip-inner > .mise-flip-face {
+  grid-area: 1 / 1;
 }
 
 .mise-flip[data-flipped="true"] .mise-flip-inner {
@@ -2273,8 +2281,6 @@ body[data-overlay] .mise-launcher-in {
 }
 
 .mise-flip-back {
-  position: absolute;
-  inset: 0;
   opacity: 0;
   pointer-events: none;
 }

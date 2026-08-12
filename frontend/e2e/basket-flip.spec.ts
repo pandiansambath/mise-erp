@@ -67,6 +67,16 @@ test("the basket card turns over and carries the detail", async ({ page }) => {
 
   // Both faces share one box, so the grid cannot go ragged.
   const box = await flip.boundingBox();
-  console.log(`card box: ${Math.round(box!.width)}x${Math.round(box!.height)}`);
-  expect(box!.height, "the card must not grow when it turns").toBeLessThan(190);
+  const backBox = await back.boundingBox();
+  console.log(
+    `card ${Math.round(box!.width)}x${Math.round(box!.height)}, ` +
+      `back ${Math.round(backBox!.width)}x${Math.round(backBox!.height)}`,
+  );
+  expect(box!.height, "the card must not grow into a page").toBeLessThan(220);
+  // Everything on the back has to FIT — it was rendering with its last rows cut off.
+  const overflow = await back.evaluate(
+    (el) => el.scrollHeight - el.clientHeight,
+  );
+  console.log("back clipped by:", overflow, "px");
+  expect(overflow, "the back must not be clipped").toBeLessThanOrEqual(1);
 });
