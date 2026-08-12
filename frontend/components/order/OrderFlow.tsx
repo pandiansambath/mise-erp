@@ -31,6 +31,7 @@ import GlareHover from "@/components/reactbits/GlareHover";
 import SpotlightCard from "@/components/reactbits/SpotlightCard";
 import Magnet from "@/components/reactbits/Magnet";
 import { overlayOpened } from "@/lib/overlay";
+import { useConfirm } from "@/components/confirm";
 
 export type OrderLine = { item_id: string; qty: string };
 
@@ -46,23 +47,37 @@ function show(n: number): string {
   return String(Math.round(n * 1e6) / 1e6);
 }
 
-/** A colour for a category, so a wall of cards can be read without reading.
- *  Stable per name — same category, same colour, every time — because a colour
- *  that moves teaches nothing. */
+/** The stripe MEANS something.
+ *
+ *  "also the colour in corner of cards, you randomly gave I guess — please have
+ *   a meaning for that, don't give colour randomly."
+ *
+ *  Correct, and a fair thing to catch: it was a hash of the category name, so
+ *  the colours were stable but arbitrary, and a colour that carries no
+ *  information is just noise pretending to be design.
+ *
+ *  Now it says what KIND of thing this is — the distinction a kitchen actually
+ *  makes, because it decides where a delivery goes and how fast it has to be
+ *  used: fresh, chilled, dry store, or not food at all. Anything unrecognised
+ *  gets the neutral tone rather than a colour invented for it.
+ */
+const CATEGORY_KIND: { test: RegExp; tint: string; kind: string }[] = [
+  { test: /veg|fruit|herb|salad|fresh|produce/i, tint: "bg-emerald-400", kind: "fresh produce" },
+  { test: /meat|poultry|fish|seafood|chicken|lamb|beef/i, tint: "bg-rose-400", kind: "fresh, raw" },
+  { test: /dairy|milk|cheese|butter|yog|cream|egg/i, tint: "bg-sky-300", kind: "chilled" },
+  { test: /frozen|ice/i, tint: "bg-cyan-300", kind: "frozen" },
+  { test: /rice|grain|flour|pulse|spice|oil|dry|masala|sugar|salt|lentil/i, tint: "bg-amber-400", kind: "dry store" },
+  { test: /drink|bever|juice|water|soda|tea|coffee/i, tint: "bg-violet-400", kind: "drinks" },
+  { test: /clean|chemical|hygiene|packag|disposab|paper|paper|equip/i, tint: "bg-slate-400", kind: "not food" },
+];
+
+function categoryKind(name: string): { tint: string; kind: string } {
+  const hit = CATEGORY_KIND.find((k) => k.test.test(name));
+  return hit ? { tint: hit.tint, kind: hit.kind } : { tint: "bg-fg-faint/40", kind: "other" };
+}
+
 function categoryTint(name: string): string {
-  const tints = [
-    "bg-emerald-400/70",
-    "bg-sky-400/70",
-    "bg-amber-400/70",
-    "bg-rose-400/70",
-    "bg-violet-400/70",
-    "bg-teal-400/70",
-    "bg-orange-400/70",
-    "bg-indigo-400/70",
-  ];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return tints[h % tints.length];
+  return categoryKind(name).tint;
 }
 
 const OTHER = "Other";
@@ -558,7 +573,11 @@ export function OrderFlow({
                   <span className="block truncate font-display text-sm font-semibold text-fg">
                     {name}
                   </span>
-                  <span className="block text-[11px] text-fg-faint">{n} items</span>
+                  {/* The stripe's meaning, in words, once — so the colour stops
+                      being decoration the moment you read it. */}
+                  <span className="block truncate text-[11px] text-fg-faint">
+                    {n} items · {categoryKind(name).kind}
+                  </span>
                 </span>
               </button>
             </GlareHover>
@@ -645,10 +664,21 @@ export function OrderFlow({
                           </span>
                         )}
                       </span>
+                      {/* "that tick mark is hiding the details." It was — a
+                          disc dropped on top of the corner where the stock
+                          label lives. It sits in the corner of the card now,
+                          clipped by the rounded edge, so it marks the card
+                          without landing on anything. */}
                       {on && (
                         <span
                           aria-hidden
-                          className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-brand-500 text-[11px] leading-none text-white"
+                          className="absolute -right-5 -top-5 h-10 w-10 rotate-45 bg-brand-500"
+                        />
+                      )}
+                      {on && (
+                        <span
+                          aria-hidden
+                          className="absolute right-0.5 top-0.5 text-[10px] font-bold leading-none text-white"
                         >
                           ✓
                         </span>
@@ -756,6 +786,7 @@ function BasketSheet({
   footer?: React.ReactNode;
 }) {
   const { format } = useCurrency();
+  const confirm = useConfirm();
 
   // "once user clicks submit indent button, burst that popup — entire popup you
   // need to burst like a yell — and back to original screen." The page fires
@@ -792,10 +823,15 @@ function BasketSheet({
       return next;
     });
 
-  // THE REVEAL, exactly as he described it: on opening the basket the little i
-  // glows, and every card turns over once, wearing a wave of light, then turns
-  // back. Two seconds that teach the whole feature without a word of copy.
-  const [hint, setHint] = useState(false);
+  // THE REVEAL, in sequence.
+  //
+  // "the flipping and i button glowing happening at the same time makes things
+  //  worse... first make the flip smooth. Once user enters basket, flip the
+  //  card for a sec to realise, then flip back to normal."
+  //
+  // So: a beat to let the basket settle, turn, hold long enough to register,
+  // turn back. One idea at a time. The i button is gone entirely — the turn is
+  // the teacher, and a control that needs its own explanation is not one.
   const [shine, setShine] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -803,20 +839,19 @@ function BasketSheet({
     const ids = lines.map((l) => l.item_id);
     if (!ids.length) return;
 
-    setHint(true);
-    setShine(true);
-    const t1 = window.setTimeout(() => setTurned(new Set(ids)), 420);
-    const t2 = window.setTimeout(() => setTurned(new Set()), 1700);
-    const t3 = window.setTimeout(() => setShine(false), 1800);
-    const t4 = window.setTimeout(() => setHint(false), 2900);
+    const t1 = window.setTimeout(() => {
+      setShine(true);
+      setTurned(new Set(ids));
+    }, 520);
+    const t2 = window.setTimeout(() => setShine(false), 1900);
+    const t3 = window.setTimeout(() => setTurned(new Set()), 2200);
     return () => {
-      [t1, t2, t3, t4].forEach(window.clearTimeout);
+      [t1, t2, t3].forEach(window.clearTimeout);
       setTurned(new Set());
-      setHint(false);
       setShine(false);
     };
-    // Once per opening of the basket, not once per change to it — re-running
-    // this every time a quantity changed would spin the cards under your hands.
+    // Once per opening, not once per change — re-running it whenever a quantity
+    // changed would spin the cards under his hands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const toggleFold = (key: string) =>
@@ -930,7 +965,21 @@ function BasketSheet({
         </div>
         <button
           type="button"
-          onClick={() => onChange([])}
+          onClick={async () => {
+            // "the empty basket feature -> need to ask for confirmation before
+            // empty. Same for the remove all feature in the supplier card."
+            // Quite right — a basket is ten minutes of work and there is no undo.
+            if (
+              await confirm({
+                title: "Empty the whole basket?",
+                message: `${lines.length} item${lines.length === 1 ? "" : "s"} will be taken out. This cannot be undone.`,
+                confirmText: "Empty it",
+                tone: "danger",
+              })
+            ) {
+              onChange([]);
+            }
+          }}
           className="mise-press rounded-lg border border-line px-2.5 py-1 text-[11px] text-fg-soft transition hover:border-rose-400/50 hover:text-rose-300"
         >
           Empty the basket
@@ -970,7 +1019,18 @@ function BasketSheet({
                 {groups.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => dropGroup(g)}
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: `Remove everything from ${g.name}?`,
+                          message: `${g.rows.length} item${g.rows.length === 1 ? "" : "s"} will be taken out of the basket.`,
+                          confirmText: "Remove them",
+                          tone: "danger",
+                        })
+                      ) {
+                        dropGroup(g);
+                      }
+                    }}
                     title={`Remove everything from ${g.name}`}
                     className="mise-press rounded-lg px-1.5 py-0.5 text-[11px] text-fg-faint transition hover:text-rose-300"
                   >
@@ -993,135 +1053,140 @@ function BasketSheet({
                 const tint = categoryTint(groupOf(it));
                 const flipped = turned.has(it.id);
                 const sizes = sup ? priceLines(it, sup) : [];
+                const money = n * pricePerBase(it, sup);
                 return (
                   <li key={it.id} className="mise-flip" data-flipped={flipped ? "true" : "false"}>
-                    <div className="mise-flip-inner">
-                      {/* FRONT — only what you need to recognise it at a glance. */}
-                      <div
-                        className="mise-card3d mise-flip-face mise-shine relative overflow-hidden py-2 pl-3 pr-2"
-                        data-shine={shine ? "true" : "false"}
-                      >
+                    {/* The whole card turns. Not a corner of it — all of it. */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${it.name} — tap for the full detail`}
+                      onClick={() => turn(it.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          turn(it.id);
+                        }
+                      }}
+                      className="mise-flip-inner cursor-pointer"
+                    >
+                      {/* ── FRONT ─────────────────────────────────────────── */}
+                      <div className="mise-card3d mise-flip-face mise-shine relative overflow-hidden p-2.5 pl-3.5">
                         <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
-                        <div className="flex items-center gap-2">
-                          <span aria-hidden className="shrink-0 text-base">
-                            {categoryEmoji(groupOf(it))}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight text-fg">
-                            {it.name}
-                          </span>
-                          <span className="shrink-0 text-right">
-                            <span className="block font-display text-sm font-semibold leading-none tabular-nums text-fg">
-                              {format((n * pricePerBase(it, sup)).toFixed(2))}
+
+                        {/* Name and money on one baseline, the money in the
+                            display face so the eye lands on it first. */}
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span aria-hidden className="shrink-0 text-base leading-none">
+                              {categoryEmoji(groupOf(it))}
                             </span>
-                            <span className="block text-[10px] leading-tight tabular-nums text-fg-faint">
-                              {tidy(n)} {it.unit}
+                            <span className="min-w-0 truncate text-sm font-semibold leading-tight text-fg">
+                              {it.name}
                             </span>
                           </span>
-                          <span className="flex shrink-0 items-center gap-0.5">
-                            {/* The handle for the other side. It glows for a few
-                                seconds when the basket opens — a feature nobody
-                                can see is a feature nobody has. */}
+                          <span className="shrink-0 font-display text-base font-semibold leading-none tabular-nums text-fg">
+                            {format(money.toFixed(2))}
+                          </span>
+                        </div>
+
+                        {/* How much, and from whom — the two things that tell
+                            you WHICH line this is. */}
+                        <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px]">
+                          <span className="min-w-0 truncate text-fg-faint">
+                            {sup?.vendor_name ?? "no supplier"}
+                          </span>
+                          <span className="shrink-0 font-medium tabular-nums text-fg-soft">
+                            {tidy(n)} {it.unit}
+                          </span>
+                        </div>
+
+                        {/* The bottom of the card was empty — "only the card's
+                            top area is filled". This is the line worth putting
+                            there: what you have, and what you will have. */}
+                        <div className="mt-2 flex items-end justify-between gap-2 border-t border-line/50 pt-1.5">
+                          <span className="min-w-0 text-[11px] leading-tight">
+                            <span className="block text-fg-faint">
+                              have <b className="font-semibold text-fg-soft tabular-nums">
+                                {fmtQty(String(had), it.unit)}
+                              </b>
+                            </span>
+                            <span className={`block ${short ? "text-amber-300" : "text-fg-faint"}`}>
+                              then <b className="font-semibold tabular-nums">
+                                {fmtQty(String(after), it.unit)}
+                              </b>
+                              {short ? " · under minimum" : ""}
+                            </span>
+                          </span>
+                          {/* Small, quiet, and they never flip the card. */}
+                          <span className="flex shrink-0 items-center gap-1">
                             <button
                               type="button"
-                              onClick={() => turn(it.id)}
-                              aria-label={`What ${it.name} costs, in every size`}
-                              title="The full detail"
-                              className={`mise-press grid h-7 w-7 place-items-center rounded-full border border-brand-400/40 font-display text-[12px] font-semibold text-brand-300 transition hover:bg-brand-400/15 ${
-                                hint ? "mise-info-glow" : ""
-                              }`}
-                            >
-                              i
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onEdit(it)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit(it);
+                              }}
                               aria-label={`Change how much ${it.name}`}
                               title="Change how much"
-                              className="mise-press grid h-7 w-7 place-items-center rounded-lg border border-line text-[11px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                              className="mise-press grid h-6 w-6 place-items-center rounded-md border border-line text-[10px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
                             >
                               &#9998;
                             </button>
                             <button
                               type="button"
-                              onClick={() => onChange(lines.filter((l) => l.item_id !== it.id))}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onChange(lines.filter((l) => l.item_id !== it.id));
+                              }}
                               aria-label={`Remove ${it.name}`}
                               title="Take it out"
-                              className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint transition hover:text-rose-300"
+                              className="mise-press grid h-6 w-6 place-items-center rounded-md text-[10px] text-fg-faint transition hover:text-rose-300"
                             >
                               &#10005;
                             </button>
                           </span>
                         </div>
-                        <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[11px] leading-tight">
-                          <span className="text-fg-faint">
-                            in stock{" "}
-                            <b className="font-semibold text-fg-soft">
-                              {fmtQty(String(had), it.unit)}
-                            </b>
-                          </span>
-                          <span aria-hidden className="text-fg-faint/50">&#183;</span>
-                          <span className={short ? "text-amber-300" : "text-fg-soft"}>
-                            after this <b className="font-semibold">{fmtQty(String(after), it.unit)}</b>
-                          </span>
-                          {short && <span className="text-amber-300">&#183; under minimum</span>}
-                        </p>
                       </div>
 
-                      {/* BACK — everything that used to crowd the front.
-                          "1 bottle = 30 piece, 1 piece is this much money, in
-                          stock 13 piece (1 bottle + 3 piece)". All of it, on a
-                          face that costs the card no height at all. */}
-                      <div
-                        className="mise-card3d mise-flip-face mise-flip-back overflow-hidden py-2 pl-3 pr-2"
-                      >
+                      {/* ── BACK — every size, priced, and the pack maths ──
+                          No close button: the card itself turns back, and a
+                          second ✕ next to the remove ✕ only asks "which one
+                          takes it out of my basket?" */}
+                      <div className="mise-card3d mise-flip-face mise-flip-back relative overflow-hidden p-2.5 pl-3.5">
                         <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
-                        <div className="flex items-center gap-2">
-                          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-brand-300">
-                            {it.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => turn(it.id)}
-                            aria-label="Back to the front"
-                            className="mise-press grid h-6 w-6 place-items-center rounded-full border border-line text-[10px] text-fg-soft transition hover:border-brand-400/50"
-                          >
-                            &#10005;
-                          </button>
-                        </div>
-                        <ul className="mt-0.5 space-y-0.5 text-[11px] leading-tight">
+                        <p className="truncate font-display text-[13px] font-semibold leading-tight text-brand-300">
+                          {it.name}
+                        </p>
+                        <dl className="mt-1 space-y-0.5 text-[11px] leading-tight">
                           {sizes.map((l) => (
-                            <li key={l.label} className="flex justify-between gap-2">
-                              <span className="truncate text-fg-faint">
+                            <div key={l.label} className="flex items-baseline justify-between gap-2">
+                              <dt className="min-w-0 truncate text-fg-faint">
                                 1 {l.label}
                                 {l.note ? ` = ${l.note}` : ""}
-                              </span>
-                              <span className="shrink-0 tabular-nums text-fg">
+                              </dt>
+                              <dd className="shrink-0 font-medium tabular-nums text-fg">
                                 {format(l.price.toFixed(2))}
-                              </span>
-                            </li>
+                              </dd>
+                            </div>
                           ))}
-                          <li className="flex justify-between gap-2 border-t border-line/60 pt-0.5">
-                            <span className="text-fg-faint">in stock</span>
-                            <span className="tabular-nums text-fg-soft">
+                          <div className="flex items-baseline justify-between gap-2 border-t border-line/50 pt-1">
+                            <dt className="text-fg-faint">in stock</dt>
+                            <dd className="shrink-0 tabular-nums text-fg-soft">
                               {fmtQty(String(had), it.unit)}
                               {stockInPacks(it, had) ? ` (${stockInPacks(it, had)})` : ""}
-                            </span>
-                          </li>
-                          <li className="flex justify-between gap-2">
-                            <span className="text-fg-faint">after this</span>
-                            <span
-                              className={`tabular-nums ${short ? "text-amber-300" : "text-fg-soft"}`}
+                            </dd>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <dt className="text-fg-faint">after this</dt>
+                            <dd
+                              className={`shrink-0 tabular-nums ${short ? "text-amber-300" : "text-fg-soft"}`}
                             >
                               {fmtQty(String(after), it.unit)}
                               {stockInPacks(it, after) ? ` (${stockInPacks(it, after)})` : ""}
-                            </span>
-                          </li>
-                          {sup && (
-                            <li className="truncate pt-0.5 text-[10px] text-fg-faint">
-                              from {sup.vendor_name}
-                            </li>
-                          )}
-                        </ul>
+                            </dd>
+                          </div>
+                        </dl>
+                        <p className="mt-1 text-[10px] text-fg-faint">tap to turn back</p>
                       </div>
                     </div>
                   </li>

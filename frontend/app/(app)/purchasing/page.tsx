@@ -717,16 +717,17 @@ export default function PurchasingPage() {
     const n = (st: string) => indentCounts[st] ?? 0;
     return [
       { key: "PENDING", label: "Awaiting approval", count: n("PENDING"), tone: "warn" as const },
-      // "What's the use of that Approved? We have awaiting approval and
-      // ordered — ordered means approved right?" It does. APPROVED on its own
-      // means the one thing that is NOT obvious: signed off, but no purchase
-      // order could be raised — nobody active prices those items. Naming it
-      // that turns a mystery chip into a job to do.
+      // He asked what this was twice, and the second time was my answer's
+      // fault: "approved · nothing ordered" reads like a THIRD step between
+      // awaiting and ordered. It is not a step at all — it is a failure. The
+      // indent was signed off and no purchase order could be raised because no
+      // active vendor prices those items. So it is named for the problem, and
+      // coloured like one.
       {
         key: "APPROVED",
-        label: "Approved · nothing ordered",
+        label: "Stuck · no supplier",
         count: n("APPROVED"),
-        tone: "warn" as const,
+        tone: "bad" as const,
       },
       { key: "ORDERED", label: "Ordered", count: n("ORDERED") },
       { key: "REJECTED", label: "Rejected", count: n("REJECTED") },
@@ -1633,6 +1634,32 @@ export default function PurchasingPage() {
         {openIndentObj && (
           <div>
                       <div className="mise-pop space-y-3 border-t border-line px-4 py-3">
+                        {/* A stuck indent has to say WHY it is stuck and offer
+                            the way out, or the status is just a word. */}
+                        {openIndentObj.status === "APPROVED" && (
+                          <div className="mise-card3d relative overflow-hidden p-3 pl-4">
+                            <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-rose-400" />
+                            <p className="text-sm font-semibold text-fg">
+                              Approved, but nothing could be ordered
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-fg-soft">
+                              A purchase order can only be raised for an item some active
+                              vendor prices. Nobody prices these yet, so this indent is
+                              signed off and waiting. Set a price on{" "}
+                              <b className="text-brand-300">Vendors</b>, then try again —
+                              nothing is lost in the meantime.
+                            </p>
+                            {canApprove && (
+                              <button
+                                type="button"
+                                onClick={() => generate(openIndentObj.id)}
+                                className="mise-btn-key mise-press mt-2.5 px-3 py-1.5 text-xs font-semibold"
+                              >
+                                Try creating the purchase orders again
+                              </button>
+                            )}
+                          </div>
+                        )}
                         <ul className="space-y-1.5">
                           {openIndentObj.items.map((it) => (
                             <li key={it.item_id} className="flex items-baseline justify-between gap-3 text-sm">
