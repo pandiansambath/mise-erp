@@ -50,6 +50,9 @@ test("the basket card turns over and carries the detail", async ({ page }) => {
   expect(rotated, "a turned card must actually be rotated, not just marked").not.toBe("none");
 
   const back = page.locator(".mise-flip-back").first();
+  const seen = await back.evaluate((el) => getComputedStyle(el).opacity);
+  console.log("back opacity:", seen);
+  expect(Number(seen), "the back must be VISIBLE, not merely present").toBeGreaterThan(0.9);
   const txt = await back.innerText();
   console.log("back of the card:", txt.replace(/\s+/g, " ").slice(0, 160));
   expect(txt).toMatch(/in stock/);
