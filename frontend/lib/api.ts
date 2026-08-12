@@ -158,6 +158,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const res = await fetch(`${API_BASE}/api${path}`, { ...options, headers });
 
+  // A session that is being USED should not end. The server hands back a fresh
+  // token once the current one is past halfway, and we swap it in silently —
+  // otherwise leaving the app open across a shift ends in "could not load", and
+  // a refresh signs you out. See app/auth/deps.py::_maybe_renew.
+  const renewed = res.headers.get("X-Renewed-Token");
+  if (renewed) setToken(renewed);
+
   if (res.status === 204) return undefined as T;
 
   let body: unknown = null;

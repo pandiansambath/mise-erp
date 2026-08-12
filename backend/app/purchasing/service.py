@@ -389,7 +389,19 @@ async def generate_pos(db: AsyncSession, indent: Indent) -> dict:
         po.total_amount = total.quantize(_Q2)
         created.append(po)
 
-    indent.status = IndentStatus.ORDERED.value
+    # ORDERED means "purchase orders exist". If every line was skipped — nobody
+    # active prices any of them — then nothing was ordered, and saying otherwise
+    # loses the order silently: it leaves the awaiting list, no PO appears, and
+    # nothing tells you why.
+    #
+    # This is what makes APPROVED a real state rather than a mystery. He asked
+    # exactly the right question: "what's the use of that Approved? We have
+    # awaiting approval and ordered — ordered means approved right?" It does,
+    # and APPROVED on its own now means precisely one thing: signed off, but no
+    # purchase order could be raised.
+    indent.status = (
+        IndentStatus.ORDERED.value if created else IndentStatus.APPROVED.value
+    )
     await db.commit()
     for po in created:
         await db.refresh(po)

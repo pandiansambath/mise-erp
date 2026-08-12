@@ -1,17 +1,19 @@
 """FastAPI dependencies: current-user resolution and permission guards."""
 from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
 from app.auth.service import get_user_by_id
 from app.core import logging_setup, monitoring
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rbac import has_permission
-from app.core.security import decode_token
+from app.core.security import create_access_token, decode_token
 from app.hotels import access
 from app.hotels.models import Hotel
 
@@ -25,6 +27,7 @@ _CREDENTIALS_EXC = HTTPException(
 
 
 async def get_current_user(
+    response: Response,
     creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -42,7 +45,46 @@ async def get_current_user(
     # cost a query on every authenticated call; require() upgrades it below.
     logging_setup.bind(hotel=str(user.hotel_id), user=user.email)
     monitoring.note_hotel(user.hotel_id)
+    _maybe_renew(response, payload, user)
     return user
+
+
+def _maybe_renew(response: Response, payload: dict, user: User) -> None:
+    """Keep a session alive while it is being used.
+
+    A token lasted eight hours and was never renewed, so anyone who left the app
+    open across a shift came back to "could not load purchasing data", and a
+    refresh signed them out — his report, exactly:
+
+        "I move from this page to any other page and after sometime if I come
+         back... 'could not load purchasing data'. Then if I refresh, site
+         logged out and I login again."
+
+    Nobody should be signed out while they are working. So once a token is past
+    the halfway point of its life, a fresh one rides back on the response and
+    the browser swaps it in. Someone using the app all day is never logged out;
+    someone who walks away still expires on schedule.
+
+    Deliberately NOT renewed: impersonation tokens. An operator viewing a hotel
+    gets the window they were given and no more.
+    """
+    if payload.get("imp"):
+        return
+    exp = payload.get("exp")
+    if not exp:
+        return
+    try:
+        remaining = datetime.fromtimestamp(float(exp), UTC) - datetime.now(UTC)
+    except (TypeError, ValueError, OSError):
+        return
+    half = timedelta(minutes=settings.access_token_expire_minutes) / 2
+    if remaining > half:
+        return
+    response.headers["X-Renewed-Token"] = create_access_token(str(user.id), user.role)
+    # So a browser can actually read it — a cross-origin response hides every
+    # header that is not explicitly exposed, and this one is served from a
+    # different origin than the page in every deployment we have.
+    response.headers["Access-Control-Expose-Headers"] = "X-Renewed-Token"
 
 
 async def effective_permissions(db: AsyncSession, user: User) -> list[str] | None:
