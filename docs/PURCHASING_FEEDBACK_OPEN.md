@@ -41,7 +41,7 @@ Tick as they ship; do not delete.
 
 ## Surfaces still untouched
 
-- [ ] **2.** The tab row (New order / Indents / Orders) is still plain.
+- [x] **2.** The tab row (New order / Indents / Orders) is still plain.
 - [x] **6b.** The **indent** search + filter + pager strip.
 - [x] **7.1** The **orders** search + filter + pager strip.
 - [x] **7.2** The sort dropdown ("Newest first") — "very poor and plain UI".
@@ -87,7 +87,5 @@ past and the rail correctly stayed open. Measuring a shrink-on-scroll needs a
 page with something to scroll: the check runs against the indent list at 4200px.
 
 ### Still open
-- **2.** The tab row (New order / Indents / Orders) still wants a treatment of
-  its own.
 - Animated category art — parked, awaiting his idea.
 - Textract removal — last, as agreed.

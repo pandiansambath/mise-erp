@@ -105,7 +105,7 @@ export function SubNav({
       aria-label="Section actions"
       // Scrolls sideways on a phone rather than wrapping into three rows and
       // pushing the page's real content below the fold.
-      className={`mise-stagger -mx-1 mb-5 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]{display:none} ${className}`}
+      className={`mise-well mise-stagger mb-5 flex w-fit max-w-full gap-1 overflow-x-auto rounded-2xl p-1 [scrollbar-width:none] [&::-webkit-scrollbar]{display:none} ${className}`}
     >
       {items.map((item) => {
         const on = active === item.key;
@@ -118,10 +118,10 @@ export function SubNav({
               if (item.focus) window.setTimeout(() => spotlight(item.focus!), 60);
             }}
             aria-current={on ? "true" : undefined}
-            className={`mise-press flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+            className={`mise-press flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
               on
-                ? "border-transparent bg-brand-600 text-white shadow-sm"
-                : "border-line text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
+                ? "mise-btn-key"
+                : "text-fg-soft hover:bg-glass/[0.06] hover:text-brand-300"
             }`}
           >
             {item.icon && <span aria-hidden>{item.icon}</span>}
