@@ -285,21 +285,93 @@ export async function burstBasket(): Promise<void> {
     b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, fill: "forwards" });
   }
 
-  // Deepest first, one after another. Blowing all of them at the same instant
-  // is three explosions in the same place — loud, and impossible to follow.
-  // Unbuilding the stack in order reads as a sequence of things finishing,
-  // which is what actually happened.
-  const ordered = panels.sort((a, b) => {
-    const z = (el: HTMLElement) => parseInt(getComputedStyle(el).zIndex || "0", 10) || 0;
-    return z(b) - z(a);
-  });
-
-  for (let i = 0; i < ordered.length; i++) {
-    // Not awaited: each panel starts while the one before is still going, so
-    // they overlap like a run of applause rather than queueing politely.
-    void burstAway(ordered[i]);
-    await new Promise((r) => window.setTimeout(r, 190));
-  }
-  await new Promise((r) => window.setTimeout(r, 420));
+  // ALL AT ONCE. My last version went deepest-first, 190ms apart, and he saw
+  // exactly that: "I can literally see 1st popup burst, then right side 2nd
+  // popup burst, then left some other is disappearing." A sequence of three
+  // events is three events; he wants ONE.
+  //
+  // So every panel goes on the same frame, and a single shower of colour paper
+  // is thrown over the whole screen rather than each panel making its own.
+  confetti();
+  await Promise.all(panels.map((el) => burstAway(el)));
   window.dispatchEvent(new CustomEvent("mise:close-basket"));
+}
+
+
+/**
+ * Colour paper thrown across the screen. Once, on submit.
+ *
+ * "with colour papers throwing kinda UI, should need to be realistic."
+ *
+ * Realistic here means the physics, not the rendering: each piece gets its own
+ * launch angle and speed, gravity pulls it down, drag slows it, and it flutters
+ * about its own axis at its own rate — which is why real confetti never looks
+ * like a fountain of identical dots. All of it on transform and opacity, so it
+ * costs the compositor and not the layout.
+ */
+function confetti(): void {
+  if (typeof window === "undefined") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+  const host = document.createElement("div");
+  host.setAttribute("aria-hidden", "true");
+  host.className = "pointer-events-none fixed inset-0 z-[98] overflow-hidden";
+  document.body.appendChild(host);
+
+  const colours = ["#e11d48", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#f472b6", "#facc15"];
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const N = Math.min(90, Math.round(w / 14));
+
+  for (let i = 0; i < N; i++) {
+    const bit = document.createElement("div");
+    // Thrown from two lower corners, the way a party popper actually works —
+    // a single central fountain reads as a loading spinner.
+    const fromLeft = i % 2 === 0;
+    const x0 = fromLeft ? w * 0.12 : w * 0.88;
+    const y0 = h * 0.86;
+
+    const spread = (Math.random() - 0.5) * 1.1;
+    const angle = (fromLeft ? -1 : 1) * (0.55 + Math.random() * 0.5) + spread;
+    const speed = h * (0.62 + Math.random() * 0.5);
+
+    const dx = Math.sin(angle) * speed;
+    const rise = -Math.cos(angle * 0.55) * speed;
+    const fall = h * (0.9 + Math.random() * 0.5);
+
+    const size = 6 + Math.random() * 8;
+    bit.style.cssText = `position:absolute;left:${x0}px;top:${y0}px;width:${size}px;height:${size * (0.4 + Math.random() * 0.5)}px;background:${colours[i % colours.length]};border-radius:1px;will-change:transform,opacity;`;
+    host.appendChild(bit);
+
+    const spinA = (Math.random() - 0.5) * 900;
+    const spinB = (Math.random() - 0.5) * 1400;
+
+    bit.animate(
+      [
+        { transform: "translate(0,0) rotate3d(1,1,0,0deg)", opacity: 1, offset: 0 },
+        {
+          // apex — up and out, still fast
+          transform: `translate(${dx * 0.55}px, ${rise * 0.75}px) rotate3d(1,1,0,${spinA}deg)`,
+          opacity: 1,
+          offset: 0.42,
+        },
+        {
+          // and down, drifting sideways as drag takes the horizontal speed
+          transform: `translate(${dx * 0.92}px, ${fall}px) rotate3d(1,1,0,${spinB}deg)`,
+          opacity: 0,
+          offset: 1,
+        },
+      ],
+      {
+        duration: 1500 + Math.random() * 900,
+        delay: Math.random() * 90,
+        // Fast off the mark, slowing at the top, then away — one curve doing
+        // the work of a physics engine.
+        easing: "cubic-bezier(.16,.62,.36,1)",
+        fill: "forwards",
+      },
+    );
+  }
+
+  window.setTimeout(() => host.remove(), 2700);
 }

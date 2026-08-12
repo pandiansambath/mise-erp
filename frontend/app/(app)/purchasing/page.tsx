@@ -42,6 +42,7 @@ import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { spotlight, useDeepLink } from "@/components/fx";
+import { pricePerBase } from "@/lib/packs";
 
 type Line = PickedLine;
 
@@ -803,6 +804,12 @@ export default function PurchasingPage() {
     );
   }, [shownPos, indents, runSize]);
 
+  /** Items by id, so a sheet can price a line without searching the array. */
+  const itemById = useMemo(
+    () => Object.fromEntries(items.map((i) => [i.id, i])) as Record<string, Item>,
+    [items],
+  );
+
   if (loading) return <Spinner />;
 
   // Only items a vendor actually prices can be ordered — keeps the chain honest.
@@ -1401,10 +1408,39 @@ export default function PurchasingPage() {
             ))}
           </div>
           <div className="space-y-3 p-3">
-            {matchedPos.length === 0 ? (
-              <p className="py-10 text-center text-sm text-fg-faint">
-                {pos.length === 0 ? "No purchase orders yet." : "Nothing matches that."}
-              </p>
+            {matchedPos.length === 0 || poGroups.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-sm text-fg-faint">
+                  {pos.length === 0
+                    ? "No purchase orders yet."
+                    : "Nothing here matches the filters."}
+                </p>
+                {/* An order that leaves the visible list because of a filter
+                    reads as an order that was DELETED. "I gave date as
+                    yesterday and suddenly that PO disappeared, can't find it
+                    anywhere." It was under Late all along. Say so, and give
+                    him the way back in one press. */}
+                {pos.length > 0 && (
+                  <>
+                    <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-fg-faint">
+                      {pos.length} order{pos.length === 1 ? "" : "s"} exist — the filters above are
+                      hiding {pos.length - matchedPos.length} of them. Setting a delivery date in the
+                      past moves an order into <b className="text-rose-300">Late</b>, which is a
+                      different filter from <b className="text-fg-soft">Still to arrive</b>.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPoFilter(EMPTY_FILTER);
+                        setRunSize("all");
+                      }}
+                      className="mise-btn mise-press mt-3 px-3 py-1.5 text-xs font-semibold text-brand-300"
+                    >
+                      Show me every order
+                    </button>
+                  </>
+                )}
+              </div>
             ) : (
               poGroups.map((g) => (
               <div key={g.key} className="mise-card3d relative overflow-hidden p-3 pl-4">
@@ -1495,7 +1531,7 @@ export default function PurchasingPage() {
                         title="Every supplier and every line on this purchase, in one list"
                         className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-medium text-fg-soft"
                       >
-                        See everything
+                        All
                       </button>
                     )}
                     {g.indentId && (
@@ -1708,25 +1744,54 @@ export default function PurchasingPage() {
         badge={openIndentObj ? <Badge tone={indentTone[openIndentObj.status] ?? "slate"}>{openIndentObj.status}</Badge> : undefined}
         stats={
           openIndentObj
-            ? [
-                {
-                  label: "Value",
-                  // Only real once POs exist. Showing 0 for a pending indent would
-                  // read as "this costs nothing", which is not what we know.
-                  value: indentConsol[openIndentObj.id]?.po_count
-                    ? format(indentConsol[openIndentObj.id].grand_total)
-                    : "—",
-                  hint: indentConsol[openIndentObj.id]?.po_count ? "ordered" : "not ordered yet",
-                },
-                { label: "Items", value: openIndentObj.items.length },
-                {
-                  label: "Vendors",
-                  value:
-                    indentConsol[openIndentObj.id]?.vendor_count ??
-                    new Set(openIndentObj.items.map((i) => i.vendor_name).filter(Boolean)).size,
-                  hint: "supplying this",
-                },
-              ]
+            ? (() => {
+                const ordered = indentConsol[openIndentObj.id]?.po_count;
+                // A PENDING indent has no purchase orders, so it has no ordered
+                // value — but it is not unknowable. Price it from the same
+                // supplier prices the order form used, and say it is an
+                // estimate. "What will this cost me" is the entire question you
+                // open a pending indent to answer.
+                const estimate = openIndentObj.items.reduce((t, it) => {
+                  const item = itemById[it.item_id];
+                  const sup = suppliers[it.item_id]?.[0];
+                  if (!item || !sup) return t;
+                  return t + (parseFloat(it.required_qty) || 0) * pricePerBase(item, sup);
+                }, 0);
+                const wouldSupply = new Set(
+                  openIndentObj.items
+                    .map((it) => it.vendor_name || suppliers[it.item_id]?.[0]?.vendor_name)
+                    .filter(Boolean),
+                ).size;
+                const noPrice = openIndentObj.items.filter(
+                  (it) => !suppliers[it.item_id]?.length,
+                ).length;
+                return [
+                  {
+                    label: ordered ? "Value" : "About",
+                    value: ordered
+                      ? format(indentConsol[openIndentObj.id].grand_total)
+                      : estimate > 0
+                        ? format(estimate.toFixed(2))
+                        : "—",
+                    hint: ordered
+                      ? "ordered"
+                      : estimate > 0
+                        ? "estimate at today's prices"
+                        : "no supplier prices these",
+                  },
+                  {
+                    label: "Items",
+                    value: openIndentObj.items.length,
+                    hint: noPrice > 0 ? `${noPrice} with no supplier` : "on this request",
+                    tone: noPrice > 0 ? ("warn" as const) : undefined,
+                  },
+                  {
+                    label: "Suppliers",
+                    value: indentConsol[openIndentObj.id]?.vendor_count ?? wouldSupply,
+                    hint: ordered ? "supplying this" : "would supply it",
+                  },
+                ];
+              })()
             : undefined
         }
       >
@@ -2040,6 +2105,14 @@ export default function PurchasingPage() {
                       try {
                         await api.patch(`/purchasing/purchase-orders/${openPoObj.id}`, { expected_delivery: v });
                         setPos((list) => list.map((x) => (x.id === openPoObj.id ? { ...x, expected_delivery: v } : x)));
+                        // Tell him where it just went. A date in the past moves
+                        // the order into Late, and silently leaving the list he
+                        // was looking at is indistinguishable from being deleted.
+                        if (v && v < todayStr) {
+                          setMsg(
+                            `${openPoObj.po_number} is now counted as Late — that date has already passed. Find it under the Late filter on this page.`,
+                          );
+                        }
                       } catch { /* leave as-was */ }
                     }}
                     className="mise-well rounded-xl px-2.5 py-1.5 text-sm text-fg outline-none"
