@@ -994,7 +994,7 @@ function BasketSheet({
                 const flipped = turned.has(it.id);
                 const sizes = sup ? priceLines(it, sup) : [];
                 return (
-                  <li key={it.id} className="mise-flip">
+                  <li key={it.id} className="mise-flip" data-flipped={flipped ? "true" : "false"}>
                     <div className="mise-flip-inner">
                       {/* FRONT — only what you need to recognise it at a glance. */}
                       <div
