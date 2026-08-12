@@ -77,20 +77,33 @@ function show(n: number): string {
 // signal there is (frozen peas are frozen, not produce; ice cream is frozen,
 // not dairy), and dry store is checked before anything that could read the
 // "ice" inside "rice".
+/** One neutral edge for every card.
+ *
+ *  "the colour you gave for each card is not nice — actually I loved the
+ *   previous version we had, only grey kinda colour for all category cards,
+ *   which resembles shadow."
+ *
+ *  Fair, and it does not cost the meaning: the KIND is written on the tile in
+ *  words, which is the part that can be read and checked. A colour per category
+ *  was a second, weaker way of saying the same thing, and it turned a calm grid
+ *  into a paint chart.
+ */
+const NEUTRAL = "bg-fg-faint/35";
+
 const CATEGORY_KIND: { words: string[]; tint: string; kind: string }[] = [
-  { words: ["frozen", "freezer", "ice cream", "ice-cream"], tint: "bg-cyan-300", kind: "frozen" },
-  { words: ["veg", "fruit", "herb", "salad", "greens", "produce"], tint: "bg-emerald-400", kind: "fresh produce" },
-  { words: ["meat", "poultry", "fish", "seafood", "chicken", "mutton", "lamb", "beef", "pork", "prawn"], tint: "bg-rose-400", kind: "fresh, raw" },
-  { words: ["dairy", "milk", "cheese", "butter", "yog", "cream", "egg", "paneer", "curd"], tint: "bg-sky-300", kind: "chilled" },
-  { words: ["rice", "grain", "flour", "pulse", "lentil", "dal", "spice", "masala", "oil", "sugar", "salt", "dry", "staple", "condiment", "sauce", "pickle"], tint: "bg-amber-400", kind: "dry store" },
-  { words: ["drink", "bever", "juice", "water", "soda", "tea", "coffee", "squash"], tint: "bg-violet-400", kind: "drinks" },
-  { words: ["clean", "chemical", "hygiene", "packag", "disposab", "paper", "equip", "cutlery", "utensil", "stationery"], tint: "bg-slate-400", kind: "not food" },
+  { words: ["frozen", "freezer", "ice cream", "ice-cream"], tint: NEUTRAL, kind: "frozen" },
+  { words: ["veg", "fruit", "herb", "salad", "greens", "produce"], tint: NEUTRAL, kind: "fresh produce" },
+  { words: ["meat", "poultry", "fish", "seafood", "chicken", "mutton", "lamb", "beef", "pork", "prawn"], tint: NEUTRAL, kind: "fresh, raw" },
+  { words: ["dairy", "milk", "cheese", "butter", "yog", "cream", "egg", "paneer", "curd"], tint: NEUTRAL, kind: "chilled" },
+  { words: ["rice", "grain", "flour", "pulse", "lentil", "dal", "spice", "masala", "oil", "sugar", "salt", "dry", "staple", "condiment", "sauce", "pickle"], tint: NEUTRAL, kind: "dry store" },
+  { words: ["drink", "bever", "juice", "water", "soda", "tea", "coffee", "squash"], tint: NEUTRAL, kind: "drinks" },
+  { words: ["clean", "chemical", "hygiene", "packag", "disposab", "paper", "equip", "cutlery", "utensil", "stationery"], tint: NEUTRAL, kind: "not food" },
 ];
 
 function categoryKind(name: string): { tint: string; kind: string } {
   const hay = name.toLowerCase();
   const hit = CATEGORY_KIND.find((k) => k.words.some((w) => hay.includes(w)));
-  return hit ? { tint: hit.tint, kind: hit.kind } : { tint: "bg-fg-faint/40", kind: "other" };
+  return hit ? { tint: hit.tint, kind: hit.kind } : { tint: NEUTRAL, kind: "other" };
 }
 
 function categoryTint(name: string): string {
