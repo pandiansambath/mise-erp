@@ -401,7 +401,16 @@ export function DetailSection({ title, children }: { title: ReactNode; children:
 /** Big numbers at the top of a sheet. */
 export function DetailStats({
   stats,
-}: { stats: { label: string; value: ReactNode; tone?: "good" | "bad" | "plain" }[] }) {
+}: {
+  stats: {
+    label: string;
+    value: ReactNode;
+    tone?: "good" | "bad" | "plain";
+    /** A line under the number saying what it is FROM — a figure without its
+     *  provenance is a figure nobody can check. */
+    hint?: ReactNode;
+  }[];
+}) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {stats.map((s) => (
@@ -414,6 +423,9 @@ export function DetailStats({
           >
             {s.value}
           </p>
+          {s.hint && (
+            <p className="mt-0.5 truncate text-[10px] leading-tight text-fg-faint">{s.hint}</p>
+          )}
         </div>
       ))}
     </div>

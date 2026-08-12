@@ -49,7 +49,15 @@ export function ListControls({
 }: {
   value: ListFilter;
   onChange: (next: ListFilter) => void;
-  statuses: { key: string; label: string; count: number; tone?: "warn" | "bad" | "good" }[];
+  statuses: {
+    key: string;
+    label: string;
+    count: number;
+    tone?: "warn" | "bad" | "good";
+    /** What this bucket MEANS, on hover. A chip whose name a user cannot
+     *  decode has to be able to explain itself where they are standing. */
+    hint?: string;
+  }[];
   placeholder: string;
   total: number;
   shown: number;
@@ -110,13 +118,14 @@ export function ListControls({
                 key={s.key}
                 type="button"
                 onClick={() => set({ status: on ? "all" : s.key })}
+                title={s.hint ?? `Show only: ${s.label}`}
                 className={`mise-press inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition ${
                   on
                     ? "mise-btn-key font-semibold"
                     : s.tone === "bad"
-                      ? "border-rose-400/40 text-rose-300 hover:bg-rose-400/10"
+                      ? "mise-btn text-rose-300"
                       : s.tone === "warn"
-                        ? "border-amber-400/40 text-amber-300 hover:bg-amber-400/10"
+                        ? "mise-btn text-amber-300"
                         : "mise-btn text-fg-soft"
                 }`}
               >
