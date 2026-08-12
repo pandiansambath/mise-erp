@@ -507,7 +507,8 @@ export function OrderFlow({
   return (
     <div className="min-w-0">
       {low.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-400/35 bg-amber-400/[0.07] px-3.5 py-2.5">
+        <div className="mise-card3d relative mb-3 flex flex-wrap items-center gap-3 overflow-hidden px-3.5 py-2.5">
+          <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
           <span aria-hidden className="text-lg">⚠</span>
           <span className="min-w-0 flex-1 text-sm text-fg">
             <b className="text-amber-300">{low.length}</b> item
@@ -517,7 +518,7 @@ export function OrderFlow({
             <button
               type="button"
               onClick={onAddAllLow}
-              className="mise-press shrink-0 rounded-xl bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/25"
+              className="mise-btn mise-press shrink-0 px-3 py-1.5 text-xs font-semibold text-amber-300"
             >
               Add them all
             </button>
@@ -546,8 +547,12 @@ export function OrderFlow({
                 type="button"
                 data-testid="category-tile"
                 onClick={() => setCat(name)}
-                className="mise-card3d mise-press flex w-full items-center gap-3 px-3.5 py-4 text-left"
+                /* The stripe is what he said made the basket cards readable at
+                   a glance — "all cards are looking same once I see suddenly".
+                   Same idiom here, so the page is one design rather than three. */
+                className="mise-card3d mise-press relative flex w-full items-center gap-3 overflow-hidden px-3.5 py-4 pl-4 text-left"
               >
+                <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${categoryTint(name)}`} />
                 <span aria-hidden className="text-2xl">{categoryEmoji(name)}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-display text-sm font-semibold text-fg">
@@ -592,10 +597,14 @@ export function OrderFlow({
                       type="button"
                       data-testid="item-tile"
                       onClick={() => setOpenItem(it)}
-                      className={`mise-card3d mise-press relative flex w-full flex-col items-start gap-1 p-3 text-left ${
+                      className={`mise-card3d mise-press relative flex w-full flex-col items-start gap-1 overflow-hidden p-3 pl-3.5 text-left ${
                         on ? "!bg-brand-400/15 ring-2 ring-brand-500" : ""
                       }`}
                     >
+                      <span
+                        aria-hidden
+                        className={`absolute inset-y-0 left-0 w-1 ${categoryTint(groupOf(it))}`}
+                      />
                       <span className="flex w-full items-start justify-between gap-2">
                         <span aria-hidden className="text-2xl">{categoryEmoji(groupOf(it))}</span>
                         {/* Stock as a dot + word, top right, so the card is
@@ -772,6 +781,44 @@ function BasketSheet({
   // default is maximise." Folded by name, so folding Farm2Land and then
   // regrouping does not fold something unrelated.
   const [folded, setFolded] = useState<Set<string>>(new Set());
+
+  /** Which cards are showing their back. */
+  const [turned, setTurned] = useState<Set<string>>(new Set());
+  const turn = (id: string) =>
+    setTurned((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // THE REVEAL, exactly as he described it: on opening the basket the little i
+  // glows, and every card turns over once, wearing a wave of light, then turns
+  // back. Two seconds that teach the whole feature without a word of copy.
+  const [hint, setHint] = useState(false);
+  const [shine, setShine] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const ids = lines.map((l) => l.item_id);
+    if (!ids.length) return;
+
+    setHint(true);
+    setShine(true);
+    const t1 = window.setTimeout(() => setTurned(new Set(ids)), 420);
+    const t2 = window.setTimeout(() => setTurned(new Set()), 1700);
+    const t3 = window.setTimeout(() => setShine(false), 1800);
+    const t4 = window.setTimeout(() => setHint(false), 2900);
+    return () => {
+      [t1, t2, t3, t4].forEach(window.clearTimeout);
+      setTurned(new Set());
+      setHint(false);
+      setShine(false);
+    };
+    // Once per opening of the basket, not once per change to it — re-running
+    // this every time a quantity changed would spin the cards under your hands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const toggleFold = (key: string) =>
     setFolded((prev) => {
       const next = new Set(prev);
@@ -944,80 +991,143 @@ function BasketSheet({
                 const min = parseFloat(it.min_stock_level || "0") || 0;
                 const short = min > 0 && after < min;
                 const tint = categoryTint(groupOf(it));
+                const flipped = turned.has(it.id);
+                const sizes = sup ? priceLines(it, sup) : [];
                 return (
-                  <li
-                    key={it.id}
-                    /* Every card looked identical at a glance — "all cards are
-                       looking same once I see suddenly, need something to
-                       differentiate each card". A colour down the left edge,
-                       taken from the item's category, so the eye can group them
-                       without reading a word. */
-                    className="mise-card3d group relative overflow-hidden py-2 pl-3 pr-2"
-                  >
-                    <span
-                      aria-hidden
-                      className={`absolute inset-y-0 left-0 w-1 ${tint}`}
-                    />
+                  <li key={it.id} className="mise-flip">
+                    <div className="mise-flip-inner">
+                      {/* FRONT — only what you need to recognise it at a glance. */}
+                      <div
+                        className={`mise-card3d mise-flip-face mise-shine relative overflow-hidden py-2 pl-3 pr-2 ${
+                          flipped ? "pointer-events-none" : ""
+                        }`}
+                        data-shine={shine ? "true" : "false"}
+                      >
+                        <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
+                        <div className="flex items-center gap-2">
+                          <span aria-hidden className="shrink-0 text-base">
+                            {categoryEmoji(groupOf(it))}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight text-fg">
+                            {it.name}
+                          </span>
+                          <span className="shrink-0 text-right">
+                            <span className="block font-display text-sm font-semibold leading-none tabular-nums text-fg">
+                              {format((n * pricePerBase(it, sup)).toFixed(2))}
+                            </span>
+                            <span className="block text-[10px] leading-tight tabular-nums text-fg-faint">
+                              {tidy(n)} {it.unit}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-0.5">
+                            {/* The handle for the other side. It glows for a few
+                                seconds when the basket opens — a feature nobody
+                                can see is a feature nobody has. */}
+                            <button
+                              type="button"
+                              onClick={() => turn(it.id)}
+                              aria-label={`What ${it.name} costs, in every size`}
+                              title="The full detail"
+                              className={`mise-press grid h-7 w-7 place-items-center rounded-full border border-brand-400/40 font-display text-[12px] font-semibold text-brand-300 transition hover:bg-brand-400/15 ${
+                                hint ? "mise-info-glow" : ""
+                              }`}
+                            >
+                              i
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onEdit(it)}
+                              aria-label={`Change how much ${it.name}`}
+                              title="Change how much"
+                              className="mise-press grid h-7 w-7 place-items-center rounded-lg border border-line text-[11px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                            >
+                              &#9998;
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onChange(lines.filter((l) => l.item_id !== it.id))}
+                              aria-label={`Remove ${it.name}`}
+                              title="Take it out"
+                              className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint transition hover:text-rose-300"
+                            >
+                              &#10005;
+                            </button>
+                          </span>
+                        </div>
+                        <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[11px] leading-tight">
+                          <span className="text-fg-faint">
+                            in stock{" "}
+                            <b className="font-semibold text-fg-soft">
+                              {fmtQty(String(had), it.unit)}
+                            </b>
+                          </span>
+                          <span aria-hidden className="text-fg-faint/50">&#183;</span>
+                          <span className={short ? "text-amber-300" : "text-fg-soft"}>
+                            after this <b className="font-semibold">{fmtQty(String(after), it.unit)}</b>
+                          </span>
+                          {short && <span className="text-amber-300">&#183; under minimum</span>}
+                        </p>
+                      </div>
 
-                    {/* ONE line of identity + money. Fixed columns, so the edit
-                        and remove buttons sit in the SAME place on every card
-                        instead of wherever the name happens to end — "the edit
-                        and x button on each card are here and there". */}
-                    <div className="flex items-center gap-2">
-                      <span aria-hidden className="shrink-0 text-base">
-                        {categoryEmoji(groupOf(it))}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight text-fg">
-                        {it.name}
-                      </span>
-                      <span className="shrink-0 text-right">
-                        <span className="block font-display text-sm font-semibold leading-none tabular-nums text-fg">
-                          {format((n * pricePerBase(it, sup)).toFixed(2))}
-                        </span>
-                        <span className="block text-[10px] leading-tight text-fg-faint tabular-nums">
-                          {tidy(n)} {it.unit}
-                        </span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(it)}
-                          aria-label={`Change how much ${it.name}`}
-                          title="Change how much"
-                          className="mise-press grid h-7 w-7 place-items-center rounded-lg border border-line text-[11px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onChange(lines.filter((l) => l.item_id !== it.id))}
-                          aria-label={`Remove ${it.name}`}
-                          title="Take it out"
-                          className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint transition hover:text-rose-300"
-                        >
-                          ✕
-                        </button>
-                      </span>
+                      {/* BACK — everything that used to crowd the front.
+                          "1 bottle = 30 piece, 1 piece is this much money, in
+                          stock 13 piece (1 bottle + 3 piece)". All of it, on a
+                          face that costs the card no height at all. */}
+                      <div
+                        className={`mise-card3d mise-flip-face mise-flip-back overflow-hidden py-2 pl-3 pr-2 ${
+                          flipped ? "" : "pointer-events-none"
+                        }`}
+                      >
+                        <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-brand-300">
+                            {it.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => turn(it.id)}
+                            aria-label="Back to the front"
+                            className="mise-press grid h-6 w-6 place-items-center rounded-full border border-line text-[10px] text-fg-soft transition hover:border-brand-400/50"
+                          >
+                            &#10005;
+                          </button>
+                        </div>
+                        <ul className="mt-0.5 space-y-0.5 text-[11px] leading-tight">
+                          {sizes.map((l) => (
+                            <li key={l.label} className="flex justify-between gap-2">
+                              <span className="truncate text-fg-faint">
+                                1 {l.label}
+                                {l.note ? ` = ${l.note}` : ""}
+                              </span>
+                              <span className="shrink-0 tabular-nums text-fg">
+                                {format(l.price.toFixed(2))}
+                              </span>
+                            </li>
+                          ))}
+                          <li className="flex justify-between gap-2 border-t border-line/60 pt-0.5">
+                            <span className="text-fg-faint">in stock</span>
+                            <span className="tabular-nums text-fg-soft">
+                              {fmtQty(String(had), it.unit)}
+                              {stockInPacks(it, had) ? ` (${stockInPacks(it, had)})` : ""}
+                            </span>
+                          </li>
+                          <li className="flex justify-between gap-2">
+                            <span className="text-fg-faint">after this</span>
+                            <span
+                              className={`tabular-nums ${short ? "text-amber-300" : "text-fg-soft"}`}
+                            >
+                              {fmtQty(String(after), it.unit)}
+                              {stockInPacks(it, after) ? ` (${stockInPacks(it, after)})` : ""}
+                            </span>
+                          </li>
+                          {sup && (
+                            <li className="truncate pt-0.5 text-[10px] text-fg-faint">
+                              from {sup.vendor_name}
+                            </li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
-
-                    {/* The same facts, a third of the height.
-                        "that sentence is too kiddish... instead of 'You have 0
-                        piece in stock' we can have like in-stock = 0 piece" —
-                        so the state is a LABEL and only the consequence is a
-                        sentence, which is the half he said was fine. */}
-                    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[11px] leading-tight">
-                      <span className="text-fg-faint">
-                        in stock <b className="font-semibold text-fg-soft">{fmtQty(String(had), it.unit)}</b>
-                      </span>
-                      <span aria-hidden className="text-fg-faint/50">·</span>
-                      <span className={short ? "text-amber-300" : "text-fg-soft"}>
-                        after this <b className="font-semibold">{fmtQty(String(after), it.unit)}</b>
-                        {stockInPacks(it, after) ? ` (${stockInPacks(it, after)})` : ""}
-                      </span>
-                      {short && (
-                        <span className="text-amber-300">· under your {fmtQty(it.min_stock_level || "0", it.unit)} minimum</span>
-                      )}
-                    </p>
                   </li>
                 );
               })}

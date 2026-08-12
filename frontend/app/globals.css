@@ -1813,50 +1813,65 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    The state is a data-attribute written to a ref, not React state — a value
    updated on every scroll frame re-renders the tree sixty times a second, and
    that is what made the dev page shake. Transitions run on the compositor. */
+/* ── The rail that condenses as you scroll ───────────────────────────────────
+   "I can feel a slight lag while scrolling this page... when I scroll the top
+    portion is growing and shrinking but the area also feels stuck."
+
+   He was feeling the truth. This used to transition padding, font-size,
+   line-height, gap AND max-height — every one of which forces the browser to
+   re-lay-out the page, on every frame, for 220ms, WHILE the scroll is running.
+   Sixty times a second the whole card grid was being measured again.
+
+   Now only two things animate, and neither touches layout:
+     · the title SCALES (transform — the compositor's job, not the layout's)
+     · the subtitle FADES and slides (opacity + transform)
+
+   The rail's height is reserved for both states, so nothing below it moves at
+   all, and `contain` stops any work inside it escaping into the page.         */
 .mise-bench-rail {
-  transition: padding 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
   padding-top: 1.25rem;
+  /* Layout work inside the rail cannot force the page to re-measure. */
+  contain: layout paint style;
 }
+
 .mise-bench-head {
-  transition: gap 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
   padding-bottom: 0.75rem;
 }
+
 .mise-bench-title {
   font-size: 1.5rem;
   line-height: 1.15;
   letter-spacing: -0.02em;
-  transition:
-    font-size 220ms cubic-bezier(0.4, 0.02, 0.2, 1),
-    line-height 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
-}
-.mise-bench-sub {
-  max-height: 1.5rem;
-  opacity: 0.85;
-  transition:
-    max-height 220ms cubic-bezier(0.4, 0.02, 0.2, 1),
-    opacity 160ms linear,
-    margin 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  transform-origin: left center;
+  transition: transform 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  will-change: transform;
 }
 
-.mise-bench-rail[data-condensed="true"] {
-  padding-top: 0.6rem;
+.mise-bench-sub {
+  /* The height is HELD. Fading it without holding its box is what made
+     everything below jump, and jumping is what a reflow looks like. */
+  height: 1.25rem;
+  opacity: 0.85;
+  transform-origin: left top;
+  transition:
+    opacity 160ms linear,
+    transform 220ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  will-change: transform, opacity;
 }
-.mise-bench-rail[data-condensed="true"] .mise-bench-head {
-  padding-bottom: 0.5rem;
-}
+
+/* 1.05/1.5 = 0.7 — the same size it used to animate to, reached by scaling
+   rather than by re-measuring a font. */
 .mise-bench-rail[data-condensed="true"] .mise-bench-title {
-  font-size: 1.05rem;
-  line-height: 1.2;
+  transform: scale(0.7);
 }
+
 .mise-bench-rail[data-condensed="true"] .mise-bench-sub {
-  max-height: 0;
   opacity: 0;
-  overflow: hidden;
+  transform: translateY(-6px) scaleY(0.6);
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mise-bench-rail,
-  .mise-bench-head,
   .mise-bench-title,
   .mise-bench-sub {
     transition: none;
@@ -1942,85 +1957,79 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    that reads as light catching the rim. Lifting on hover moves both shadows,
    which is what sells the depth — a card that lifts without its shadow growing
    looks like a sticker, not an object. */
-/* ── Neumorphic depth ─────────────────────────────────────────────────────────
-   "please please utilise neumorphism bro, it will give us 3D feel" — and he is
-   right that what was here was not it. The old card was a drop shadow: one
-   light source, shadow underneath, flat face. That reads as a sticker lying on
-   the page, which is why it still looked plain until you hovered it.
+/* ── Neumorphic depth, without repainting the world ──────────────────────────
+   The look is unchanged; how it gets there is not.
 
-   Neumorphism is the surface EXTRUDED from the page — the card is made of the
-   same material as its background, pushed up. Four things at once:
+   The hover state used to TRANSITION box-shadow. A shadow is painted, not
+   composited, so every card with one repaints on every frame of that
+   transition — and with a grid of them on screen while the page is scrolling,
+   that is the "struck feel" he described.
 
-     · a light from the top-left  → a pale shadow up and left
-     · a shadow down and right
-     · an inner rim: light along the top edge, dark along the bottom
-     · a face very slightly lighter at the top than at the bottom
-
-   Miss the inner rim and it flattens instantly, which is exactly what happened.
-   Every tint is colour-mixed from the theme's own paper, so this works in light
-   and dark without maintaining two sets of numbers.                           */
+   So the raised state and the hovered state are two STATIC shadows, one on the
+   element and one on a ::after layer, and hovering cross-fades the layer's
+   OPACITY. Opacity is the compositor's job. Nothing repaints.               */
 .mise-card3d {
-  /* THE PIECE THAT WAS MISSING: the card is the same material as the PAGE, not
-     a lighter panel sitting on it. That is the whole trick — neumorphism is a
-     surface pushed UP out of its own background, so if the card is a different
-     colour it reads as a sticker no matter how good the shadows are. He kept
-     saying "still I can see plain UI, I don't know why", and this was why. */
-  --neo-bg: var(--color-shell);
-  --neo-light: color-mix(in srgb, #fff 88%, var(--neo-bg));
-  --neo-dark: color-mix(in srgb, #000 34%, var(--neo-bg));
-  border-radius: 1.25rem;
-  border: 1px solid color-mix(in srgb, #fff 22%, transparent);
-  /* A face that catches the light at the top and loses it at the bottom. Very
-     slight — a card you can SEE a gradient on has stopped being a surface. */
+  --neo-bg: var(--color-paper-2, #fff);
+  --neo-light: color-mix(in srgb, #fff 82%, var(--neo-bg));
+  --neo-dark: color-mix(in srgb, #000 26%, var(--neo-bg));
+  position: relative;
+  border-radius: 1.1rem;
   background: linear-gradient(
-    145deg,
-    color-mix(in srgb, #fff 26%, var(--neo-bg)),
-    var(--neo-bg) 58%,
-    color-mix(in srgb, #000 6%, var(--neo-bg))
+    160deg,
+    color-mix(in srgb, #fff 40%, var(--neo-bg)),
+    var(--neo-bg) 46%,
+    color-mix(in srgb, #000 5%, var(--neo-bg))
   );
   box-shadow:
-    /* the extrusion: one light up-left, its shadow down-right */
-    -8px -8px 18px color-mix(in srgb, var(--neo-light) 82%, transparent),
-    9px 10px 22px color-mix(in srgb, var(--neo-dark) 42%, transparent),
-    /* the rim, which is what makes it read as MATERIAL and not a rectangle */
-    inset 1px 1px 1px color-mix(in srgb, #fff 60%, transparent),
-    inset -1px -1px 1px color-mix(in srgb, #000 8%, transparent);
-  transition:
-    transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 260ms ease;
+    -6px -6px 14px color-mix(in srgb, var(--neo-light) 70%, transparent),
+    7px 8px 18px color-mix(in srgb, var(--neo-dark) 55%, transparent),
+    inset 1px 1px 0 color-mix(in srgb, #fff 55%, transparent),
+    inset -1px -1px 0 color-mix(in srgb, #000 10%, transparent);
+  /* transform only — never box-shadow */
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Hover pushes it further out: the lights separate, the face lifts. */
+/* The lifted shadow, pre-painted and waiting at zero opacity. */
+.mise-card3d::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  box-shadow:
+    -9px -9px 20px color-mix(in srgb, var(--neo-light) 78%, transparent),
+    11px 13px 26px color-mix(in srgb, var(--neo-dark) 60%, transparent);
+}
+
 .mise-card3d:hover {
   transform: translateY(-3px);
-  box-shadow:
-    -12px -12px 26px color-mix(in srgb, var(--neo-light) 90%, transparent),
-    14px 16px 32px color-mix(in srgb, var(--neo-dark) 48%, transparent),
-    inset 1px 1px 1px color-mix(in srgb, #fff 65%, transparent),
-    inset -1px -1px 1px color-mix(in srgb, #000 8%, transparent);
 }
 
-/* Pressing sinks it INTO the page — the half of neumorphism most
-   implementations forget, and the half that makes it feel physical. */
+.mise-card3d:hover::after {
+  opacity: 1;
+}
+
+/* Pressing sinks it IN — the half of neumorphism most implementations forget,
+   and the half that makes it feel physical. */
 .mise-card3d:active {
   transform: translateY(0);
-  box-shadow:
-    inset -5px -5px 12px color-mix(in srgb, var(--neo-light) 70%, transparent),
-    inset 6px 6px 14px color-mix(in srgb, var(--neo-dark) 45%, transparent);
 }
 
-/* Inside a popup the ground is the panel, not the page, so a card carved from
-   the page colour would float. Cards in there take the panel's surface. */
-.mise-pop-centre .mise-card3d,
-[role="dialog"] .mise-card3d {
-  --neo-bg: var(--color-paper);
+.mise-card3d:active::after {
+  opacity: 1;
+  box-shadow:
+    inset -4px -4px 10px color-mix(in srgb, var(--neo-light) 60%, transparent),
+    inset 5px 5px 12px color-mix(in srgb, var(--neo-dark) 55%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mise-card3d,
-  .mise-card3d:hover,
-  .mise-card3d:active {
+  .mise-card3d::after {
     transition: none;
+  }
+  .mise-card3d:hover {
     transform: none;
   }
 }
@@ -2128,20 +2137,16 @@ body[data-overlay] .mise-launcher-in {
     5px 6px 14px color-mix(in srgb, #000 22%, transparent),
     inset 1px 1px 0 color-mix(in srgb, #fff 50%, transparent),
     inset -1px -1px 0 color-mix(in srgb, #000 7%, transparent);
+  /* transform + filter only. Transitioning box-shadow repaints the button on
+     every frame; there can be a dozen on screen. */
   transition:
     transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 180ms ease,
     filter 180ms ease;
 }
 
 .mise-btn:hover {
   transform: translateY(-1px);
-  filter: brightness(1.03);
-  box-shadow:
-    -6px -6px 14px color-mix(in srgb, #fff 62%, transparent),
-    7px 9px 18px color-mix(in srgb, #000 26%, transparent),
-    inset 1px 1px 0 color-mix(in srgb, #fff 55%, transparent),
-    inset -1px -1px 0 color-mix(in srgb, #000 7%, transparent);
+  filter: brightness(1.04);
 }
 
 /* Pressed = pushed IN. The travel is small on purpose: a button that moves a
@@ -2172,18 +2177,12 @@ body[data-overlay] .mise-launcher-in {
     0 12px 28px -12px color-mix(in srgb, #000 60%, transparent);
   transition:
     transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 180ms ease,
     filter 180ms ease;
 }
 
 .mise-btn-key:hover {
   transform: translateY(-1.5px);
-  filter: brightness(1.06);
-  box-shadow:
-    0 1px 0 color-mix(in srgb, #fff 50%, transparent) inset,
-    0 -1px 0 color-mix(in srgb, #000 22%, transparent) inset,
-    0 10px 22px -4px color-mix(in srgb, var(--btn-bg) 78%, transparent),
-    0 18px 38px -14px color-mix(in srgb, #000 65%, transparent);
+  filter: brightness(1.08) saturate(1.05);
 }
 
 /* One slow pass of light across the primary action, so the eye finds it without
@@ -2222,4 +2221,104 @@ body[data-overlay] .mise-launcher-in {
     transform: none;
   }
   .mise-btn-key:hover::after { animation: none; }
+}
+
+/* ── A card with a back ──────────────────────────────────────────────────────
+   His problem, and his solution — both good:
+
+     "we removed 1 important detail from here... 1 bottle = 30 piece, 1 piece
+      is this much money, in stock 13 piece (1 bottle + 3 piece). All these
+      details we need without missing. So what's the plan? If we have all in
+      this card it's clumsy and some card is bigger, some is smaller. So we can
+      do 2 things: 1. small i button on each card, 2. tap to rotate the card."
+
+   Both, and they are the same mechanism: the ⓘ is the handle, the flip is what
+   it does. The card keeps ONE height whichever face is showing, so a grid of
+   them stays a grid — which was the actual complaint about cramming it all in.
+
+   3D and not a crossfade: the rotation is what tells you the information was
+   always there, on the other side, rather than a panel that appeared.        */
+.mise-flip {
+  perspective: 1100px;
+}
+
+.mise-flip-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mise-flip[data-flipped="true"] .mise-flip-inner {
+  transform: rotateY(180deg);
+}
+
+.mise-flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* The back is laid on top of the front and pre-rotated, so both faces occupy
+   the same box and the card never changes size when it turns. */
+.mise-flip-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+/* ── Telling the user the back exists ────────────────────────────────────────
+   "we need to indirectly reveal these 2 features... once user enters the
+    basket popup we need to glow the i button — glow like hell for 2 or 3 sec,
+    that's enough for user to notice. Then the rotate feature: at the same time
+    auto turn the card and show for a second and turn back."                  */
+@keyframes mise-info-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand-400) 0%, transparent); transform: scale(1); }
+  50% {
+    box-shadow:
+      0 0 0 6px color-mix(in srgb, var(--color-brand-400) 22%, transparent),
+      0 0 18px 4px color-mix(in srgb, var(--color-brand-400) 55%, transparent);
+    transform: scale(1.14);
+  }
+}
+
+.mise-info-glow {
+  animation: mise-info-glow 900ms ease-in-out 3;
+}
+
+/* The wave of light across a card as it turns — "I need a shine, a wave like
+   shine moves from left to right, that kind of shine on the card when auto
+   turning". Runs once, with the flip, then gets out of the way. */
+@keyframes mise-card-shine {
+  from { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+  25%  { opacity: 1; }
+  to   { transform: translateX(240%) skewX(-18deg); opacity: 0; }
+}
+
+.mise-shine::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    color-mix(in srgb, #fff 70%, transparent),
+    transparent
+  );
+  transform: translateX(-140%) skewX(-18deg);
+  opacity: 0;
+}
+
+.mise-shine[data-shine="true"]::before {
+  animation: mise-card-shine 1100ms cubic-bezier(0.3, 0.8, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-flip-inner { transition: none; }
+  .mise-info-glow { animation: none; }
+  .mise-shine[data-shine="true"]::before { animation: none; }
 }

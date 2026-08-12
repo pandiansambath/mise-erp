@@ -717,7 +717,17 @@ export default function PurchasingPage() {
     const n = (st: string) => indentCounts[st] ?? 0;
     return [
       { key: "PENDING", label: "Awaiting approval", count: n("PENDING"), tone: "warn" as const },
-      { key: "APPROVED", label: "Approved", count: n("APPROVED") },
+      // "What's the use of that Approved? We have awaiting approval and
+      // ordered — ordered means approved right?" It does. APPROVED on its own
+      // means the one thing that is NOT obvious: signed off, but no purchase
+      // order could be raised — nobody active prices those items. Naming it
+      // that turns a mystery chip into a job to do.
+      {
+        key: "APPROVED",
+        label: "Approved · nothing ordered",
+        count: n("APPROVED"),
+        tone: "warn" as const,
+      },
       { key: "ORDERED", label: "Ordered", count: n("ORDERED") },
       { key: "REJECTED", label: "Rejected", count: n("REJECTED") },
     ].filter((x) => x.count > 0);
@@ -840,7 +850,29 @@ export default function PurchasingPage() {
         );
       })()}
     >
-      {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
+      {/* "that (Approved — here are the purchase orders it created) is also not
+          nice to see, it's very plain text UI." It was a tinted paragraph.
+          Something just HAPPENED — the message should arrive like it. */}
+      {msg && (
+        <div className="mise-card3d mise-shine relative mb-4 flex items-start gap-3 overflow-hidden px-4 py-3" data-shine="true">
+          <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400" />
+          <span
+            aria-hidden
+            className="mise-pocket-bump grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-500/15 text-base"
+          >
+            ✓
+          </span>
+          <p className="min-w-0 flex-1 pt-1 text-sm font-medium text-fg">{msg}</p>
+          <button
+            type="button"
+            onClick={() => setMsg(null)}
+            aria-label="Dismiss"
+            className="mise-press -mr-1 shrink-0 rounded-lg px-1.5 py-1 text-fg-faint transition hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* One item's suppliers, without leaving the order you are building.
           Arriving from Inventory's "add supplier" lands straight here, so the
