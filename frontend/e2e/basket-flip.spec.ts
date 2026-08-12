@@ -35,9 +35,14 @@ test("the basket card turns over and carries the detail", async ({ page }) => {
   const flip = page.locator(".mise-flip").first();
   await expect(flip, "a basket line should be a flip card").toHaveCount(1);
   expect(await flip.getAttribute("data-flipped"), "should rest on the front").not.toBe("true");
+  await expect(
+    page.getByRole("button", { name: /costs, in every size/ }),
+    "the i button should be gone — the card itself is the control",
+  ).toHaveCount(0);
 
   // Turn it with the i.
-  await page.getByRole("button", { name: /costs, in every size/ }).first().click();
+  // The whole card turns; there is no i button any more.
+  await flip.click();
   await page.waitForTimeout(900);
   await page.screenshot({ path: "e2e/__screens__/basket-back.png" });
 

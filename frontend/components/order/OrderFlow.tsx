@@ -1062,7 +1062,10 @@ function BasketSheet({
             {/* Two across when there is room. A tall thin list of 20 items is
                 the scroll he was complaining about. */}
             {!folded.has(g.key) && (
-            <ul className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+            <ul
+              className="mt-2 grid gap-2"
+              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(15rem, 100%), 1fr))" }}
+            >
               {g.rows.map(({ it, qty }) => {
                 const sup = supplierFor(it.id);
                 const n = parseFloat(qty) || 0;
