@@ -101,7 +101,7 @@ function Sheet({
   subtitle,
   depth = 1,
   panelId,
-  wide = false,
+  columns = 1,
   children,
   footer,
 }: {
@@ -114,7 +114,9 @@ function Sheet({
   panelId?: string;
   /** A depth-2 sheet that has outgrown a single column — the basket, once it
    *  holds more than a few lines. */
-  wide?: boolean;
+  /** How many card columns this sheet should be able to hold. The panel is
+   *  sized to fit them; more items means a wider panel, not a longer scroll. */
+  columns?: 1 | 2 | 3;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
@@ -143,9 +145,11 @@ function Sheet({
   const box =
     depth === 1
       ? "left-1/2 top-1/2 w-fit min-w-[min(24rem,92vw)] max-w-[min(64rem,94vw)]"
-      : wide
-        ? "left-1/2 top-1/2 w-[min(52rem,94vw)]"
-        : "left-1/2 top-1/2 w-[min(28rem,94vw)]";
+      : columns >= 3
+        ? "left-1/2 top-1/2 w-[min(66rem,95vw)]"
+        : columns === 2
+          ? "left-1/2 top-1/2 w-[min(46rem,94vw)]"
+          : "left-1/2 top-1/2 w-[min(28rem,94vw)]";
 
   return (
     <>
@@ -952,7 +956,7 @@ function BasketSheet({
       // A basket with two lines had a scrollbar. It grows with what it holds
       // now, up to the same cap every other popup uses — "make the basket popup
       // size bigger, it needs to grow based on the number of items it has."
-      wide={lines.length > 2}
+      columns={lines.length >= 5 ? 3 : lines.length >= 2 ? 2 : 1}
       subtitle={`${lines.length} item${lines.length === 1 ? "" : "s"} · ${format(grand.toFixed(2))}`}
       footer={
         <div className="space-y-2.5">
@@ -1074,7 +1078,7 @@ function BasketSheet({
             {!folded.has(g.key) && (
             <ul
               className="mt-2 grid gap-2"
-              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(15rem, 100%), 1fr))" }}
+              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(13.5rem, 100%), 1fr))" }}
             >
               {g.rows.map(({ it, qty }) => {
                 const sup = supplierFor(it.id);
