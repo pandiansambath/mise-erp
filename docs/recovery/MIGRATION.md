@@ -14,7 +14,7 @@ This file is the migration-specific plan + running checklist.
 **Verified dump used:** `mise-db-20260722-122837.sql.gz` (43 tables / 4862 rows).
 
 - ✅ Phase 1–2: new account bootstrapped, repo pointers flipped, `SITE_DOMAIN` deleted (HTTP build).
-- ✅ Phase 3: full stack built by the Deploy workflow (VPC/EC2/RDS/S3/ECR/EIP/IAM incl. Textract). Box healthy.
+- ✅ Phase 3: full stack built by the Deploy workflow (VPC/EC2/RDS/S3/ECR/EIP/IAM). Box healthy.
 - ✅ Phase 4: DB restored (drop-schema + load; backend then `alembic upgrade head` → `75bcb684ebd8`; counts match: hotels 18 / users 37 / items 714 / vendor_items 973). S3 assets synced (55 objects, byte-identical; leaked old `caddy-data` certs removed).
 - ✅ Phase 5: `dineai.cloud` DNS (A `@`/`www`/`*` → EIP) live; **HTTPS** on apex + www (managed) + `*.dineai.cloud` (on-demand per-host certs).
 - ✅ Phase 6: **email** cut to a NEW Resend account, sender `accounts@dineai.cloud` (verified); `RESEND_API_KEY` secret + `email_from` swapped.
@@ -38,7 +38,7 @@ Cutover order: **stand up → restore → verify (temp) → DNS → HTTPS → em
 The new account is pay-as-you-go, but the stack is deliberately near-$0:
 - **EC2 `t3.micro`** + **RDS `db.t4g.micro`** + 20GB each → all **free tier** (750h/mo + 20GB, 12 months, fresh on the new account).
 - **No NAT gateway, no load balancer, single Elastic IP** (free while attached). These are the usual silent cost killers — we have none.
-- **S3** ~0.1 MB of assets → pennies. **Textract** is the only pay-per-use service (the reason for the account).
+- **S3** ~0.1 MB of assets → pennies. **Bedrock** is the only pay-per-use service — it reads bills and answers questions.
 - **RDS automated-backup retention kept at 0** for now — we already run our own `pg_dump` backups frequently (see [BACKUP.md](BACKUP.md)), so we're covered. 7-day PITR is *free* at our DB size and can be switched on any time after reviewing the first month's bill.
 - Decision rule (user): watch this month's bill → low = add niceties, high = optimise.
 
@@ -49,7 +49,7 @@ The new account is pay-as-you-go, but the stack is deliberately near-$0:
 | Thing | Old | New | How it changes |
 |---|---|---|---|
 | AWS account | `765607524925` | *(new)* | new IAM deploy keys |
-| Region | `eu-west-2` | `eu-west-2` (recommended — UK data residency + Textract available) | keep unless decided otherwise |
+| Region | `eu-west-2` | `eu-west-2` (recommended — UK data residency + Bedrock available) | keep unless decided otherwise |
 | tfstate bucket | `mise-tfstate-765607524925` | `mise-tfstate-<newacct>` | edit `infra/versions.tf` + workflow env + scripts |
 | Uploads bucket | `mise-uploads-765607524925` | `mise-uploads-<newacct>` | auto (name embeds acct id); **must copy objects over** |
 | ECR repos | mise-backend/frontend | same names, new acct | workflow auto-creates |
@@ -90,7 +90,7 @@ App code (domain-baked strings):
 - [ ] New account id: `__________`  Region: `eu-west-2` (or `__________`).
 
 ## Phase 1 — New account bootstrap
-- [ ] In the new account create an IAM user `mise-deployer` (programmatic) with admin (or VPC/EC2/RDS/S3/IAM/ECR/SSM/Textract). Generate access keys.
+- [ ] In the new account create an IAM user `mise-deployer` (programmatic) with admin (or VPC/EC2/RDS/S3/IAM/ECR/SSM/Bedrock). Generate access keys.
 - [ ] Put keys in **two** places (never in chat/git):
   - GitHub → repo → Settings → Secrets → Actions: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
   - Locally for me to drive terraform/restore: `docs/secrets/aws_creds_new.txt` (gitignored) **or** `aws configure --profile mise-new`.
@@ -105,7 +105,7 @@ App code (domain-baked strings):
 
 ## Phase 3 — Stand up infra (new account)
 - [ ] `cd infra && terraform init -reconfigure` (new backend bucket) `&& terraform apply`.
-- [ ] Creates: VPC, EC2 + EIP, RDS (empty), S3 uploads, ECR, IAM (**Textract policy included**).
+- [ ] Creates: VPC, EC2 + EIP, RDS (empty), S3 uploads, ECR, IAM.
 - [ ] Record new EIP: `__________`.
 
 ## Phase 4 — Restore data
@@ -128,7 +128,7 @@ App code (domain-baked strings):
 ## Phase 7 — Full verification (before retiring old)
 - [ ] Login, dashboard shows restored data.
 - [ ] Email verification link resolves on `dineai.cloud` (strict-email flow).
-- [ ] A document/bill scan works (**Textract** on the new account — the whole reason for the move).
+- [ ] A document/bill scan works (read by the assistant on Bedrock).
 - [ ] Customer ordering link + rider link resolve on the new domain.
 - [ ] Copilot `/api/assistant/status` → configured.
 

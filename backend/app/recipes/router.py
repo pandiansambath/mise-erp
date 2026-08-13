@@ -6,10 +6,11 @@ from difflib import SequenceMatcher
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
+from app.assistant import bedrock
 from app.auth.deps import require
 from app.auth.models import User
-from app.core import textract as textract_svc
 from app.core.database import get_db
 from app.hotels.models import Hotel
 from app.inventory import service as inv_service
@@ -88,18 +89,44 @@ async def scan_note(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("recipes:write")),
 ) -> dict:
-    """Read a HANDWRITTEN recipe note (Textract OCR) and turn each line into a
-    suggested ingredient (item name + qty), matched to your inventory. Returns an
-    editable preview — nothing is added until the user confirms."""
+    """Read a HANDWRITTEN recipe note and turn each line into a suggested
+    ingredient (item name + qty), matched to your inventory. Returns an editable
+    preview — nothing is added until the user confirms.
+
+    Read by the assistant model rather than a separate document service: it
+    handles handwriting better, it can be given this kitchen's actual item names
+    so the matching is not a guess, and it is one dependency instead of two.
+    """
     data = await file.read()
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
-    try:
-        lines = textract_svc.detect_lines(data)
-    except textract_svc.TextractError as exc:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
     items = await inv_service.list_items(db, user.hotel_id)
+    try:
+        read = await run_in_threadpool(
+            bedrock.understand_document,
+            data,
+            file.content_type or "image/jpeg",
+            kind="recipe",
+            known_items=[
+                {"id": str(i.id), "name": i.name, "unit": i.unit or ""} for i in items
+            ],
+        )
+    except Exception as exc:  # noqa: BLE001 — shown to the operator as-is
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Could not read the note: {exc}"
+        ) from exc
+
+    # The model returns structured ingredients; keep the same shape the rest of
+    # this endpoint already produced so the UI does not change.
+    lines = [
+        " ".join(
+            str(x)
+            for x in [ing.get("qty"), ing.get("unit"), ing.get("name")]
+            if x not in (None, "")
+        )
+        for ing in (read.get("ingredients") or [])
+    ]
     out: list[dict] = []
     for ln in lines:
         name, qty, unit = _parse_note_line(ln)

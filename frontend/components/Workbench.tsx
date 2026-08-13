@@ -70,9 +70,25 @@ export function Workbench({
   useEffect(() => {
     const el = sentinel.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
+
+    // HYSTERESIS, or the page shakes.
+    //
+    // "if you scroll down very slowly the page started to shake like hell, like
+    // an earthquake came." Exactly what a single threshold does: condensing
+    // REMOVES height, which scrolls the sentinel back into view, which expands
+    // the rail, which puts the height back — and round it goes, many times a
+    // second, for as long as you hover near the line.
+    //
+    // Two different lines break the loop. It condenses once you are 64px past
+    // the top and only opens again when you are within 8px of it, so the state
+    // that caused the flip can never immediately undo it.
     const io = new IntersectionObserver(
-      ([entry]) => apply(!entry.isIntersecting),
-      { threshold: 0 },
+      ([entry]) => {
+        const y = entry.boundingClientRect.top;
+        if (!entry.isIntersecting && y < 0) apply(true);
+        else if (y > -8) apply(false);
+      },
+      { threshold: 0, rootMargin: "-64px 0px 0px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();

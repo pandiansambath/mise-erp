@@ -1869,7 +1869,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 }
 
 .mise-bench-rail[data-condensed="true"] {
-  padding-top: 0.55rem;
+  padding-top: 0.75rem;
 }
 
 .mise-bench-rail[data-condensed="true"] .mise-bench-head {
@@ -1879,7 +1879,9 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 /* 1.05/1.5 = 0.7 — the size it used to animate to, reached by scaling rather
    than by re-measuring a font. */
 .mise-bench-rail[data-condensed="true"] .mise-bench-title {
-  transform: scale(0.7);
+  /* 0.82, not 0.7. "The top portion is very tiny like an ant" — it was, and a
+     title you cannot read is not a header. */
+  transform: scale(0.82);
 }
 
 .mise-bench-rail[data-condensed="true"] .mise-bench-sub {
@@ -2525,7 +2527,7 @@ body[data-overlay] .mise-launcher-in {
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools {
   grid-template-rows: 0fr;
   padding-bottom: 0;
-  transform: translate(clamp(0px, 42vw, 22rem), -2.9rem) scale(0.86);
+  transform: translate(clamp(0px, 40vw, 21rem), -2.6rem) scale(0.92);
 }
 
 /* The tools must stay visible while their row has zero height. */
@@ -2544,19 +2546,36 @@ body[data-overlay] .mise-launcher-in {
 }
 
 /* ── A confirmation that asks to be dismissed ────────────────────────────────
-   "Until user clicks the close icon here, glow that card — glow start from left
-    side of card and move to right side. And here the close icon is there,
-    revolve that ✕ icon heavily, then again the loop needs to continue. I need
-    this as a smooth UI."
+   "not working out correctly — I can't even realise it's glowing, also can't
+    even realise that it's moving to x and rotating that x to notify us like
+    click here. I can't realise dude."
 
-   Exactly that: one band of light crosses the banner, the ✕ turns with it, both
-   rest for a beat, and it repeats until he closes it. Transform and opacity
-   only, so a banner sitting on screen for a minute costs nothing.             */
+   Both were too polite to notice. The sweep was a 42% white band over a pale
+   card — invisible on this theme — and the ✕ turned once every 2.6 seconds with
+   a long rest, which reads as nothing happening.
+
+   Now the whole card breathes a coloured glow, the sweep is a bright brand band
+   that crosses in under a second, and the ✕ has its own ring that pulses with
+   it. Loud enough to be seen from the other side of a kitchen, and it stops the
+   moment he closes it.                                                       */
+@keyframes mise-say-halo {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand-500) 0%, transparent); }
+  50% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--color-brand-500) 26%, transparent),
+      0 0 26px 6px color-mix(in srgb, var(--color-brand-500) 40%, transparent);
+  }
+}
+
 @keyframes mise-say-sweep {
-  0%   { transform: translateX(-120%); opacity: 0; }
-  12%  { opacity: 1; }
-  55%  { transform: translateX(120%); opacity: 0; }
-  100% { transform: translateX(120%); opacity: 0; }
+  0%   { transform: translateX(-130%); opacity: 0; }
+  8%   { opacity: 1; }
+  60%  { transform: translateX(130%); opacity: 0; }
+  100% { transform: translateX(130%); opacity: 0; }
+}
+
+.mise-say {
+  animation: mise-say-halo 1800ms ease-in-out infinite;
 }
 
 .mise-say::after {
@@ -2567,60 +2586,41 @@ body[data-overlay] .mise-launcher-in {
   border-radius: inherit;
   background: linear-gradient(
     100deg,
-    transparent 34%,
-    color-mix(in srgb, var(--color-brand-400, #f472b6) 42%, transparent) 50%,
-    transparent 66%
+    transparent 30%,
+    color-mix(in srgb, var(--color-brand-500) 55%, transparent) 48%,
+    color-mix(in srgb, #fff 70%, transparent) 52%,
+    transparent 70%
   );
-  animation: mise-say-sweep 2600ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: mise-say-sweep 1800ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* The ✕ turns with the sweep and rests between passes — a control spinning
-   without pause reads as a loading state, which is the opposite of "press me". */
+/* The ✕ turns continuously but slowly, inside a ring that pulses — a spin on
+   its own reads as "loading", a ring that pulses reads as "press me". */
 @keyframes mise-say-turn {
-  0%   { transform: rotate(0deg); }
-  40%  { transform: rotate(360deg); }
-  100% { transform: rotate(360deg); }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes mise-say-ring {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand-500) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-brand-500) 0%, transparent); }
 }
 
 .mise-say-x {
-  animation: mise-say-turn 2600ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  animation:
+    mise-say-turn 2400ms linear infinite,
+    mise-say-ring 1800ms ease-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mise-say,
   .mise-say::after,
   .mise-say-x {
-    animation: none;
-  }
-}
-
-/* ── Live food, at the cost of an image ──────────────────────────────────────
-   The 3D was rendered offline into a horizontal strip of 24 frames. This walks
-   the strip with steps(), which is the browser's own frame-by-frame animation:
-   no JavaScript, no WebGL, no decode per frame. See components/FoodSprite.tsx.
-
-   Only elements the observer has marked `is-live` animate, so a grid of tiles
-   scrolled past the viewport costs nothing at all.                           */
-.mise-food {
-  display: inline-block;
-  background-repeat: no-repeat;
-  background-position: 0% 0%;
-  /* Never smooth a sprite step: interpolating between frames of a strip blurs
-     two objects together. */
-  image-rendering: auto;
-  will-change: background-position;
-}
-
-.mise-food.is-live {
-  animation: mise-food-run 2s steps(23) infinite;
-}
-
-@keyframes mise-food-run {
-  from { background-position: 0% 0%; }
-  to   { background-position: 100% 0%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mise-food.is-live {
     animation: none;
   }
 }

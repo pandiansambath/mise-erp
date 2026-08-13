@@ -285,22 +285,27 @@ export async function burstBasket(): Promise<void> {
     b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, fill: "forwards" });
   }
 
-  // ALL AT ONCE, BEHIND SMOKE.
+  // ALL AT ONCE, AND THE PAPER IS THE POINT.
   //
-  // "I should not feel that the popups are closing one by one. Just do a smoke
-  // effect and make them all disappear all of a sudden, and throw colour
-  // papers. I don't even see any colour papers — before I realise, all done."
+  // My last version put SMOKE over the stack, and he described exactly what
+  // that felt like: "it made a blind for a sec, it feels like clouds closed the
+  // entire page... and no colour paper I can see." Sixteen white puffs the size
+  // of the panel is a white-out, and it hid the one thing he had asked for.
   //
-  // Three fixes in one. The smoke goes up FIRST and covers the whole stack, so
-  // the panels vanish underneath it rather than each performing its own exit —
-  // you cannot watch things close one by one if you never see them close. The
-  // confetti is thrown at the same moment and lasts long enough to register.
-  // And the panels are killed instantly, together, while they are hidden.
-  smoke(panels);
+  // No smoke. The panels go in one quick clean beat — together, so there is no
+  // one-by-one to watch — and the screen fills with colour paper that stays
+  // long enough to be enjoyed.
   confetti();
-  await new Promise((r) => window.setTimeout(r, 210));
-  for (const el of panels) el.style.visibility = "hidden";
-  await new Promise((r) => window.setTimeout(r, 520));
+  for (const el of panels) {
+    el.animate(
+      [
+        { transform: "scale(1)", opacity: 1 },
+        { transform: "scale(1.05)", opacity: 0 },
+      ],
+      { duration: 240, easing: "cubic-bezier(.3,0,.7,1)", fill: "forwards" },
+    );
+  }
+  await new Promise((r) => window.setTimeout(r, 260));
   window.dispatchEvent(new CustomEvent("mise:close-basket"));
 }
 
@@ -330,23 +335,25 @@ function confetti(): void {
   const h = window.innerHeight;
   // More of it, bigger, and in front of everything — it was landing behind the
   // smoke and the backdrop, which is why "I don't even see any colour papers".
-  const N = Math.min(150, Math.round(w / 9));
+  // Across the whole screen, not from one spot. "Spread those colour papers
+  // across the screen... like those are spread across the page, cards spilled
+  // all over the areas."
+  const N = Math.min(220, Math.round(w / 6));
 
   for (let i = 0; i < N; i++) {
     const bit = document.createElement("div");
     // Thrown from two lower corners, the way a party popper actually works —
     // a single central fountain reads as a loading spinner.
-    const fromLeft = i % 2 === 0;
-    const x0 = fromLeft ? w * 0.12 : w * 0.88;
-    const y0 = h * 0.86;
+    // Launched from across the top of the screen rather than two corners, so
+    // the paper lands everywhere instead of in two piles.
+    const x0 = (i / N) * w + (Math.random() - 0.5) * (w / N) * 3;
+    const y0 = -40 - Math.random() * h * 0.4;
+    const fromLeft = x0 < w / 2;
 
-    const spread = (Math.random() - 0.5) * 1.1;
-    const angle = (fromLeft ? -1 : 1) * (0.55 + Math.random() * 0.5) + spread;
-    const speed = h * (0.62 + Math.random() * 0.5);
-
-    const dx = Math.sin(angle) * speed;
-    const rise = -Math.cos(angle * 0.55) * speed;
-    const fall = h * (0.9 + Math.random() * 0.5);
+    // Falling, drifting, and settling — with a little sideways wander so it
+    // does not rain in straight lines.
+    const drift = (fromLeft ? 1 : -1) * w * (0.04 + Math.random() * 0.12);
+    const fall = h * (0.9 + Math.random() * 0.55) - y0;
 
     const size = 9 + Math.random() * 11;
     bit.style.cssText = `position:absolute;left:${x0}px;top:${y0}px;width:${size}px;height:${size * (0.4 + Math.random() * 0.5)}px;background:${colours[i % colours.length]};border-radius:1px;will-change:transform,opacity;`;
@@ -359,93 +366,35 @@ function confetti(): void {
       [
         { transform: "translate(0,0) rotate3d(1,1,0,0deg)", opacity: 1, offset: 0 },
         {
-          // apex — up and out, still fast
-          transform: `translate(${dx * 0.55}px, ${rise * 0.75}px) rotate3d(1,1,0,${spinA}deg)`,
+          transform: `translate(${drift * 0.5}px, ${fall * 0.45}px) rotate3d(1,1,0,${spinA}deg)`,
           opacity: 1,
-          offset: 0.42,
+          offset: 0.45,
         },
         {
-          // and down, drifting sideways as drag takes the horizontal speed
-          transform: `translate(${dx * 0.92}px, ${fall}px) rotate3d(1,1,0,${spinB}deg)`,
+          // Lands and STAYS — it fades only right at the end, so the screen is
+          // covered in paper for three seconds rather than a flash of it.
+          transform: `translate(${drift}px, ${fall}px) rotate3d(1,1,0,${spinB}deg)`,
+          opacity: 1,
+          offset: 0.82,
+        },
+        {
+          transform: `translate(${drift}px, ${fall}px) rotate3d(1,1,0,${spinB}deg)`,
           opacity: 0,
           offset: 1,
         },
       ],
       {
-        duration: 2100 + Math.random() * 1100,
-        delay: Math.random() * 90,
+        duration: 3400 + Math.random() * 900,
+        delay: Math.random() * 260,
         // Fast off the mark, slowing at the top, then away — one curve doing
         // the work of a physics engine.
-        easing: "cubic-bezier(.16,.62,.36,1)",
+        easing: "cubic-bezier(.25,.6,.4,1)",
         fill: "forwards",
       },
     );
   }
 
-  window.setTimeout(() => host.remove(), 3600);
+  window.setTimeout(() => host.remove(), 4600);
 }
 
 
-/**
- * One puff that swallows the whole stack.
- *
- * Covering the panels is the point: it hides the moment they disappear, which
- * is the moment that was reading as "one by one". Billowing blobs rather than a
- * flat fade, because smoke has volume and a fade has none.
- */
-function smoke(panels: HTMLElement[]): void {
-  if (typeof window === "undefined") return;
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-  if (!panels.length) return;
-
-  // The box that contains everything about to go.
-  let l = Infinity;
-  let t = Infinity;
-  let r = -Infinity;
-  let b = -Infinity;
-  for (const el of panels) {
-    const q = el.getBoundingClientRect();
-    l = Math.min(l, q.left);
-    t = Math.min(t, q.top);
-    r = Math.max(r, q.right);
-    b = Math.max(b, q.bottom);
-  }
-  const cx = (l + r) / 2;
-  const cy = (t + b) / 2;
-  const w = r - l;
-  const h = b - t;
-
-  const host = document.createElement("div");
-  host.setAttribute("aria-hidden", "true");
-  host.className = "pointer-events-none fixed inset-0 z-[99]";
-  document.body.appendChild(host);
-
-  for (let i = 0; i < 16; i++) {
-    const puff = document.createElement("div");
-    const size = Math.max(w, h) * (0.42 + Math.random() * 0.45);
-    const ox = (Math.random() - 0.5) * w * 0.95;
-    const oy = (Math.random() - 0.5) * h * 0.95;
-    puff.style.cssText =
-      `position:absolute;left:${cx + ox - size / 2}px;top:${cy + oy - size / 2}px;` +
-      `width:${size}px;height:${size}px;border-radius:9999px;` +
-      `background:radial-gradient(circle at 40% 40%, rgba(255,255,255,.92), rgba(228,224,228,.55) 55%, rgba(210,205,210,0) 72%);` +
-      `filter:blur(${6 + Math.random() * 10}px);will-change:transform,opacity;`;
-    host.appendChild(puff);
-
-    puff.animate(
-      [
-        { transform: "translate(0,0) scale(0.25)", opacity: 0 },
-        { transform: `translate(${ox * 0.12}px, ${-12 - Math.random() * 20}px) scale(1)`, opacity: 0.95, offset: 0.35 },
-        { transform: `translate(${ox * 0.3}px, ${-70 - Math.random() * 60}px) scale(1.5)`, opacity: 0 },
-      ],
-      {
-        duration: 900 + Math.random() * 400,
-        delay: Math.random() * 90,
-        easing: "cubic-bezier(.22,.7,.3,1)",
-        fill: "forwards",
-      },
-    );
-  }
-
-  window.setTimeout(() => host.remove(), 1500);
-}

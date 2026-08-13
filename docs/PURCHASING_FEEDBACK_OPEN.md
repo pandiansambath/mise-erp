@@ -88,4 +88,4 @@ page with something to scroll: the check runs against the indent list at 4200px.
 
 ### Still open
 - Animated category art — parked, awaiting his idea.
-- Textract removal — last, as agreed.
+- ~~Textract removal~~ **DONE** — the assistant reads bills and handwritten notes now; the code, the IAM policy and every mention are gone.

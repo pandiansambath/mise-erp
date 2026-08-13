@@ -32,7 +32,6 @@ import SpotlightCard from "@/components/reactbits/SpotlightCard";
 import Magnet from "@/components/reactbits/Magnet";
 import { overlayOpened } from "@/lib/overlay";
 import { useConfirm } from "@/components/confirm";
-import { FoodSprite, spriteFor } from "@/components/FoodSprite";
 
 export type OrderLine = { item_id: string; qty: string };
 
@@ -641,11 +640,7 @@ export function OrderFlow({
                 className="mise-card3d mise-press relative flex w-full items-center gap-3 overflow-hidden px-3.5 py-4 pl-4 text-left"
               >
                 <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${categoryTint(name)}`} />
-                {spriteFor(name) ? (
-                  <FoodSprite name={name} size={40} className="shrink-0" />
-                ) : (
-                  <span aria-hidden className="text-2xl">{categoryEmoji(name)}</span>
-                )}
+                <span aria-hidden className="text-2xl">{categoryEmoji(name)}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-display text-sm font-semibold text-fg">
                     {name}
@@ -1192,47 +1187,67 @@ function BasketSheet({
                           {sup?.vendor_name ?? "no supplier"}
                         </p>
 
-                        <div className="mt-1.5 flex items-end justify-between gap-1 border-t border-line/50 pt-1.5">
-                          <span className="min-w-0 text-[10px] leading-tight">
-                            <span className="block text-fg-faint">
-                              have <b className="font-semibold text-fg-soft tabular-nums">
-                                {fmtQty(String(had), it.unit)}
-                              </b>
-                            </span>
-                            <span className={`block ${short ? "text-amber-300" : "text-fg-faint"}`}>
-                              then <b className="font-semibold tabular-nums">
-                                {fmtQty(String(after), it.unit)}
-                              </b>
-                              {short ? " · low" : ""}
-                            </span>
-                          </span>
-                          {/* Small, quiet, and they never flip the card. */}
-                          <span className="flex shrink-0 items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEdit(it);
-                              }}
-                              aria-label={`Change how much ${it.name}`}
-                              title="Change how much"
-                              className="mise-press grid h-6 w-6 place-items-center rounded-md border border-line text-[10px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                        {/* FIXED SLOTS — the same four rows on every card,
+                            whether or not there is something to put in them.
+                            That is what makes a grid of cards a grid rather
+                            than a staircase, and it costs no information: an
+                            item with no pack chain shows a dash where the pack
+                            price would be. */}
+                        <dl className="mt-1.5 space-y-0.5 border-t border-line/50 pt-1.5 text-[10px] leading-tight">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <dt className="text-sky-300/80">in stock</dt>
+                            <dd className="shrink-0 tabular-nums text-sky-200">
+                              {fmtQty(String(had), it.unit)}
+                            </dd>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <dt className={short ? "text-amber-300/90" : "text-emerald-300/80"}>
+                              after this
+                            </dt>
+                            <dd
+                              className={`shrink-0 font-semibold tabular-nums ${
+                                short ? "text-amber-200" : "text-emerald-200"
+                              }`}
                             >
-                              &#9998;
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onChange(lines.filter((l) => l.item_id !== it.id));
-                              }}
-                              aria-label={`Remove ${it.name}`}
-                              title="Take it out"
-                              className="mise-press grid h-6 w-6 place-items-center rounded-md text-[10px] text-fg-faint transition hover:text-rose-300"
-                            >
-                              &#10005;
-                            </button>
-                          </span>
+                              {fmtQty(String(after), it.unit)}
+                            </dd>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <dt className="truncate text-fg-faint">
+                              {sizes[1] ? `1 ${sizes[1].label}` : "one pack"}
+                            </dt>
+                            <dd className="shrink-0 tabular-nums text-fg-soft">
+                              {sizes[1] ? format(sizes[1].price.toFixed(2)) : "—"}
+                            </dd>
+                          </div>
+                        </dl>
+
+                        {/* Small, quiet, and they never flip the card. */}
+                        <div className="mt-1.5 flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEdit(it);
+                            }}
+                            aria-label={`Change how much ${it.name}`}
+                            title="Change how much"
+                            className="mise-press grid h-6 w-6 place-items-center rounded-md border border-line text-[10px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                          >
+                            &#9998;
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onChange(lines.filter((l) => l.item_id !== it.id));
+                            }}
+                            aria-label={`Remove ${it.name}`}
+                            title="Take it out"
+                            className="mise-press grid h-6 w-6 place-items-center rounded-md text-[10px] text-fg-faint transition hover:text-rose-300"
+                          >
+                            &#10005;
+                          </button>
                         </div>
                       </div>
 

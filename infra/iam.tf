@@ -26,39 +26,6 @@ resource "aws_iam_instance_profile" "ec2" {
   role = aws_iam_role.ec2.name
 }
 
-# Read invoices + handwritten notes with Textract (vendor-bill price capture +
-# recipe OCR). These sync APIs don't support resource-level scoping → Resource "*".
-resource "aws_iam_role_policy" "textract" {
-  name = "${var.project}-textract"
-  role = aws_iam_role.ec2.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["textract:AnalyzeExpense", "textract:DetectDocumentText", "textract:AnalyzeDocument"]
-      Resource = "*"
-    }]
-  })
-}
-
-# Mise Copilot's brain: Claude on Bedrock (bill + handwritten-recipe understanding,
-# and the in-app assistant). Inference is region-scoped; model access itself is
-# granted once in the Bedrock console. Resource "*" because the model id is
-# configurable (BEDROCK_MODEL_ID) and cross-region inference profiles resolve to
-# several underlying model ARNs.
-resource "aws_iam_role_policy" "bedrock" {
-  name = "${var.project}-bedrock"
-  role = aws_iam_role.ec2.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-      Resource = "*"
-    }]
-  })
-}
-
 # Read/write app uploads in the private S3 bucket (document storage).
 resource "aws_iam_role_policy" "s3_uploads" {
   name = "${var.project}-s3-uploads"

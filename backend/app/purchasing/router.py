@@ -2,17 +2,17 @@
 import uuid
 from datetime import date as date_type
 from decimal import Decimal
-from difflib import SequenceMatcher
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
+from app.assistant import bedrock
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
-from app.core import textract as textract_svc
 from app.core.database import get_db
 from app.core.events import publish
 from app.hotels.models import Hotel
@@ -386,55 +386,89 @@ async def scan_bill(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("indent:approve")),
 ) -> dict:
-    """Read a vendor bill (Textract AnalyzeExpense) and match its lines to THIS PO's
-    items — returning a reconcile preview (received qty + new unit price per line) the
-    operator confirms before receiving. We already know the vendor + expected items, so
-    matching is against a handful of lines, not the whole catalogue."""
+    """Read a supplier's bill against THIS order, and return a preview to confirm.
+
+    The reading is done by the assistant model — the same one the rest of the app
+    uses — rather than a second paid document service. It is handed the order's
+    own lines, so it matches them itself instead of us fuzzy-matching whatever
+    generic rows came back; that guess was a real source of wrong lines.
+
+    Nothing here writes anything. The operator confirms every quantity and price
+    before it becomes stock, which matters more with a model than it did before:
+    a model can invent a number where a parser could only fail to find one.
+    """
     po = await service.get_po(db, po_id, user.hotel_id)
     if po is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Purchase order not found")
     data = await file.read()
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
-    try:
-        parsed = textract_svc.analyze_expense(data)
-    except textract_svc.TextractError as exc:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
     po_lines = await service.po_items(db, po.id)
-    bill_lines = parsed["line_items"]
-    used: set[int] = set()
+    media = file.content_type or "image/jpeg"
+    if media == "application/pdf":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Please upload a photo of the bill (JPG or PNG) rather than a PDF.",
+        )
+
+    try:
+        read = await run_in_threadpool(
+            bedrock.understand_document,
+            data,
+            media,
+            kind="bill",
+            # Only THIS order's lines, so the match is against a handful of
+            # things it should contain rather than the whole catalogue.
+            known_items=[
+                {"id": str(pl["item_id"]), "name": pl["item_name"], "unit": pl.get("unit") or ""}
+                for pl in po_lines
+            ],
+            known_vendors=[await service.vendor_name(db, po.vendor_id)],
+        )
+    except Exception as exc:  # noqa: BLE001 — surfaced to the operator as-is
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Could not read the bill: {exc}",
+        ) from exc
+
+    seen: set[str] = set()
     out_lines: list[dict] = []
     for pl in po_lines:
-        best_i, best_score = -1, 0.0
-        for i, bl in enumerate(bill_lines):
-            if i in used or not bl.get("description"):
-                continue
-            score = SequenceMatcher(
-                None, pl["item_name"].lower(), bl["description"].lower()
-            ).ratio()
-            if score > best_score:
-                best_i, best_score = i, score
-        matched = best_score >= 0.4
-        bl = bill_lines[best_i] if matched else None
-        if matched:
-            used.add(best_i)
-        out_lines.append({
-            "po_item_id": str(pl["po_item_id"]),
-            "item_name": pl["item_name"],
-            "ordered_qty": str(pl["ordered_qty"]),
-            "old_price": str(pl["unit_price"]),
-            "matched_text": bl["description"] if bl else None,
-            "received_qty": (bl.get("qty") if bl and bl.get("qty") else str(pl["ordered_qty"])),
-            "unit_price": (bl.get("unit_price") if bl else None) or str(pl["unit_price"]),
-            "confidence": round(best_score, 2),
-        })
-    unmatched = [bl["description"] for i, bl in enumerate(bill_lines) if i not in used]
+        hit = None
+        for ln in read.get("lines") or []:
+            mid = str(ln.get("matched_item_id") or "")
+            if mid and mid == str(pl["item_id"]) and mid not in seen:
+                hit = ln
+                seen.add(mid)
+                break
+        out_lines.append(
+            {
+                "po_item_id": str(pl["po_item_id"]),
+                "item_name": pl["item_name"],
+                "ordered_qty": str(pl["ordered_qty"]),
+                "unit_price": str(pl["unit_price"]),
+                "bill_qty": str(hit.get("qty")) if hit and hit.get("qty") is not None else None,
+                "bill_unit_price": (
+                    str(hit.get("unit_price"))
+                    if hit and hit.get("unit_price") is not None
+                    else None
+                ),
+                "matched": bool(hit),
+            }
+        )
+
+    unmatched = [
+        ln.get("name")
+        for ln in (read.get("lines") or [])
+        if not ln.get("matched_item_id") and ln.get("name")
+    ]
     return {
-        "vendor": parsed["vendor"],
-        "total": parsed["total"],
+        "vendor": read.get("vendor_name"),
+        "total": read.get("total"),
         "lines": out_lines,
         "unmatched": unmatched,
+        "read_by": "DineAI assistant",
     }
 
 

@@ -397,7 +397,7 @@ export default function RecipesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Handwritten-note OCR (Textract): upload → editable preview → add to ingredients.
+  // Handwritten-note reading: upload → editable preview → add to ingredients.
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteMsg, setNoteMsg] = useState<string | null>(null);
   const [notePreview, setNotePreview] = useState<NotePreviewLine[] | null>(null);
