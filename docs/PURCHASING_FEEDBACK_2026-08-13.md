@@ -24,7 +24,7 @@ of the same screens live in `frontend/e2e/__screens__/audit/` and
 Rice / Meat & Poultry / Oils / Packaging / Pulses / Rice / Rice & Flour /
 Spices / Vegetables / Other — all flat.*
 
-- [ ] The category tiles must carry the same extrusion the item cards do, and
+- [x] The category tiles must carry the same extrusion the item cards do, and
       the top shadow needs to be **bigger** than it currently is to read at that
       tile size.
 
@@ -35,8 +35,8 @@ Spices / Vegetables / Other — all flat.*
 > smooth, because while shrinking, buttons are moving to sideway — that is also
 > not a smooth transition."
 
-- [ ] The rail's collapse must ease, not jump.
-- [ ] The buttons sliding from the second row up beside the title must animate,
+- [x] The rail's collapse must ease, not jump.
+- [x] The buttons sliding from the second row up beside the title must animate,
       not teleport. (`grid-template-areas` switching is instant — that is the
       cause.)
 
@@ -50,7 +50,7 @@ Spices / Vegetables / Other — all flat.*
 *His image: the Dairy popup, 9 items, showing 6 with a scrollbar, while the page
 either side of it is empty.*
 
-- [ ] Popup width scales with item count, up to a sane cap; small categories
+- [x] Popup width scales with item count, up to a sane cap; small categories
       stay compact/square.
 
 ## 4. The BASKET — raised last prompt, NOT done
@@ -73,9 +73,9 @@ either side of it is empty.*
 *His images: basket with 3 items (Farm2Land leomon2 / leomon3) — one card fills
 the width, second card half cut off.*
 
-- [ ] Basket panel grows with item count.
-- [ ] Cards become compact / near-square.
-- [ ] Four visible at once, not one.
+- [x] Basket panel grows with item count.
+- [x] Cards become compact / near-square.
+- [x] Four visible at once, not one.
 
 ## 5. The submit burst — still wrong
 > "Irritating. Still I can see multiple popups are closing thing. Bro I should
@@ -83,8 +83,8 @@ the width, second card half cut off.*
 > make them all disappear **all of a sudden**, and throw colour papers. I don't
 > even see any colour papers — before I realise, all done. I need to realise bro."
 
-- [ ] One smoke puff, everything gone at the same instant.
-- [ ] The confetti must actually be SEEN (it is currently thrown behind /
+- [x] One smoke puff, everything gone at the same instant.
+- [x] The confetti must actually be SEEN (it is currently thrown behind /
       too briefly to register).
 
 ### 5b. Take the user TO the confirmation
@@ -94,7 +94,7 @@ the width, second card half cut off.*
 > notification is not the right way — we need to move the UI to this area, then
 > only user will realise it exists."
 
-- [ ] After submit, scroll the confirmation into view.
+- [x] After submit, scroll the confirmation into view.
 
 ### 5c. The confirmation must ask to be dismissed
 > "Until user clicks the close icon here, glow that card — glowing in the sense:
@@ -102,16 +102,16 @@ the width, second card half cut off.*
 > icon is there — revolve that ✕ icon heavily, then again the loop needs to
 > continue. I need this as a smooth UI."
 
-- [ ] A light sweeps the banner left→right, on a loop.
-- [ ] The ✕ spins, on the same loop.
-- [ ] Both stop only when he closes it.
+- [x] A light sweeps the banner left→right, on a loop.
+- [x] The ✕ spins, on the same loop.
+- [x] Both stop only when he closes it.
 
 ## 6. Animated category art — my move now
 > "That idea it will take time, so you implement your idea, let's see if it's
 > better than mine. You can use **Lottie emoji site** bro, there are lot of free
 > live emojis in SVG too. Or your research also fine."
 
-- [ ] Ship something live and moving, within the speed budget he set
+- [x] Ship something live and moving, within the speed budget he set
       (*"our site should not get slow"*). Renderer already built:
       `scripts/render_food_sprites.py` (~30KB per object, 24 frames).
 
@@ -173,3 +173,33 @@ the width, second card half cut off.*
 - [x] **My regression.** Moving indents to server-side paging meant only ten
       were loaded, so a run whose indent was not on that page had no name. The
       order row carries `indent_date` now and can always name itself.
+
+
+---
+
+## Verified live on his tenant (2026-08-13)
+
+`BASE_URL=https://nirai1.dineai.cloud npx playwright test e2e/batch13.spec.ts e2e/food.spec.ts`
+
+```
+DONE  1  tiles have a top shadow        0px -6px, unblurred
+DONE  3  popup grows for many items     1152px for a big category
+DONE  10 runs are named                 6 named vs 0 "Other orders"
+DONE  7.1 the icon buttons OPEN things
+DONE  7  late is also still-to-arrive
+DONE  9  the sort control is ours       native select at opacity 0
+```
+
+**The live food, measured rather than hoped:**
+```
+sprites on the page: 13, animating: 13
+downloaded: 11 files, 213 KB   (only the categories present)
+page load: 225 ms
+animation: mise-food-run
+```
+23 objects exist at ~22KB each; a page pulls only the ones it shows, nothing
+animates off-screen, and nothing animates under prefers-reduced-motion.
+
+### Still open
+- One sweep for any control still in the old style (item 9, second half).
+- Textract removal — last, as agreed.
