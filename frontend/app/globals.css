@@ -1831,12 +1831,14 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 .mise-bench-rail {
   padding-top: 1.25rem;
   contain: layout paint style;
-  transition: padding-top 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  /* One curve for everything that moves here, so the rail reads as a single
+     object settling rather than four things easing at their own rates. */
+  transition: padding-top 320ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .mise-bench-head {
   padding-bottom: 0.75rem;
-  transition: padding-bottom 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  transition: padding-bottom 320ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .mise-bench-title {
@@ -1844,7 +1846,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   line-height: 1.15;
   letter-spacing: -0.02em;
   transform-origin: left center;
-  transition: transform 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
 }
 
@@ -1856,8 +1858,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   grid-template-rows: 1fr;
   opacity: 0.85;
   transition:
-    grid-template-rows 260ms cubic-bezier(0.4, 0.02, 0.2, 1),
-    opacity 160ms linear;
+    grid-template-rows 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms linear;
   will-change: grid-template-rows, opacity;
 }
 
@@ -1988,48 +1990,47 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
                                                                               */
 .mise-card3d {
   --tile-bg: var(--color-paper-2, #fff);
-  --tile-side: color-mix(in srgb, #000 22%, var(--tile-bg));
-  --tile-lip: color-mix(in srgb, #fff 70%, var(--tile-bg));
-  --tile-depth: 4px;
+  --tile-side: color-mix(in srgb, #000 26%, var(--tile-bg));
+  --tile-lip: color-mix(in srgb, #fff 78%, var(--tile-bg));
+  --tile-depth: 6px;
 
   position: relative;
   border-radius: 0.9rem;
+  /* The face is lit from the LOWER RIGHT, so it brightens that way. A flat
+     fill is what made these read as paper no matter how good the shadow was. */
   background: linear-gradient(
-    170deg,
-    color-mix(in srgb, #fff 34%, var(--tile-bg)),
-    var(--tile-bg) 52%
+    200deg,
+    color-mix(in srgb, #000 7%, var(--tile-bg)),
+    var(--tile-bg) 45%,
+    color-mix(in srgb, #fff 42%, var(--tile-bg))
   );
   box-shadow:
-    /* the SIDE — hard, unblurred: this is the object's thickness */
-    0 var(--tile-depth) 0 0 var(--tile-side),
-    /* THE LEFT CHEEK, and a shadow above. His refinement, and it is the right
-       one: "have shadow in top edge of item card, so top + left edge will have
-       shadow, and slightly move right side as card facing — which gives a 3D
-       feel like a real card turned right side face."
-       Turned to face RIGHT means you see its face, its left cheek and its
-       underside, with the light now coming from the lower right. */
-    calc(var(--tile-depth) * -1) 0 0 0 color-mix(in srgb, var(--tile-side) 72%, transparent),
-    /* the shadow ABOVE the card — the half nobody draws, and the half that
-       stops it looking like it is lying flat on the page */
-    0 calc(var(--tile-depth) * -1) 0 0 color-mix(in srgb, var(--tile-side) 45%, transparent),
-    /* the corner where those two meet, or the object looks cut */
-    calc(var(--tile-depth) * -1) calc(var(--tile-depth) * -1) 0 0
-      color-mix(in srgb, var(--tile-side) 38%, transparent),
-    /* where it meets the surface */
-    calc(var(--tile-depth) / -2) calc(var(--tile-depth) + 5px) 12px -4px
-      color-mix(in srgb, #000 34%, transparent),
-    /* lit along the bottom and the right, because the light is now low-right */
+    /* THE TOP SHADOW, and it is the big one — his instruction: "have a top
+       shadow bit big, that will help you to simulate the 3D feel". A card
+       turned to face right shows its top and left cheeks, and at tile size the
+       top is the one your eye reads as thickness. */
+    0 calc(var(--tile-depth) * -1) 0 0 var(--tile-side),
+    /* the left cheek */
+    calc(var(--tile-depth) * -0.7) 0 0 0 color-mix(in srgb, var(--tile-side) 78%, transparent),
+    /* the corner they share, or the solid looks cut open */
+    calc(var(--tile-depth) * -0.7) calc(var(--tile-depth) * -1) 0 0
+      color-mix(in srgb, var(--tile-side) 62%, transparent),
+    /* a soft cast up and left, away from the light */
+    calc(var(--tile-depth) * -1) calc(var(--tile-depth) * -1) 14px -2px
+      color-mix(in srgb, #000 26%, transparent),
+    /* and the contact shadow it sits in */
+    0 3px 10px -3px color-mix(in srgb, #000 30%, transparent),
+    /* lit rims on the two edges the light actually reaches */
     inset 0 -1px 0 var(--tile-lip),
-    inset -1px 0 0 color-mix(in srgb, var(--tile-lip) 70%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #000 8%, transparent);
+    inset -1px 0 0 color-mix(in srgb, var(--tile-lip) 80%, transparent);
   transition:
-    transform 150ms cubic-bezier(0.2, 0.8, 0.3, 1),
-    box-shadow 150ms cubic-bezier(0.2, 0.8, 0.3, 1);
+    transform 200ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    box-shadow 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
 .mise-card3d:hover {
-  --tile-depth: 6px;
-  transform: translateY(-2px);
+  --tile-depth: 9px;
+  transform: translate(2px, -2px);
 }
 
 /* Pressed: the face travels down BY the thickness and the side vanishes. The
@@ -2476,48 +2477,62 @@ body[data-overlay] .mise-launcher-in {
 }
 
 /* ── Two rows at the top, one row once you scroll ────────────────────────────
-   "I want the buttons also to shrink in size and go one step up by shrinking,
-    so that when we scroll down and look at that top portion there will be only
-    one row which has all buttons and that Purchasing word too. Then scroll up
-    again it grows, smoothly."
+   "That scroll to shrink and grow thing — working, but not smooth bro, it's
+    very rude... also that shrinked button placement mainly needs to be smooth,
+    because while shrinking, buttons are moving to sideway, and that is also not
+    a smooth transition."
 
-   The grid's AREAS change, so the tools genuinely move up beside the title
-   rather than merely looking smaller — which is what actually gives the height
-   back to the list. Everything else that moves is a transform. */
+   Both true, and the cause was the mechanism: switching `grid-template-areas`
+   moves the tools from row two to column two INSTANTLY — there is no in-between
+   state for a browser to animate, so they teleport.
+
+   So the grid stays one column and the tools TRAVEL. They are lifted by a
+   transform (their own height, up) and slid right by the width the title no
+   longer needs — both transforms, both interpolated, both on the compositor.
+   The row they leave behind collapses with a grid-rows trick on the same curve,
+   which is what actually gives the height back. */
 .mise-bench-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas:
-    "head"
-    "tools";
-  align-items: center;
-  column-gap: 1rem;
+  align-items: end;
 }
 
 .mise-bench-head {
-  grid-area: head;
+  min-width: 0;
 }
 
 .mise-bench-tools {
-  grid-area: tools;
-  transform-origin: right center;
-  transition: transform 260ms cubic-bezier(0.4, 0.02, 0.2, 1);
+  /* The row that will collapse. Holding the tools in a grid row means their
+     height can be animated away without them jumping out of flow. */
+  display: grid;
+  grid-template-rows: 1fr;
+  padding-bottom: 0.75rem;
+  transform-origin: left center;
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding-bottom 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform, grid-template-rows;
 }
 
-.mise-bench-rail[data-condensed="true"] .mise-bench-grid {
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas: "head tools";
+.mise-bench-tools > * {
+  min-height: 0;
 }
 
-/* The buttons shrink as they rise. 0.88 is enough to read as "smaller" without
-   making the labels hard to hit. */
+/* Condensed: the row collapses to nothing and the tools ride up into the space
+   the title is no longer using, scaled down as they go. --bench-rise is the
+   distance travelled; it matches the row height they left. */
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools {
-  transform: scale(0.88);
+  grid-template-rows: 0fr;
   padding-bottom: 0;
+  transform: translate(clamp(0px, 42vw, 22rem), -2.9rem) scale(0.86);
 }
 
-/* The sub-nav's own bottom margin is what keeps a gap under a row that no
-   longer has anything below it. */
+/* The tools must stay visible while their row has zero height. */
+.mise-bench-rail[data-condensed="true"] .mise-bench-tools > * {
+  overflow: visible;
+}
+
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools > nav {
   margin-bottom: 0;
 }
