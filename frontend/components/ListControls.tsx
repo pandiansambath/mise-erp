@@ -108,12 +108,12 @@ export function ListControls({
         <span className="mise-btn mise-press relative inline-flex shrink-0 items-center gap-2 rounded-xl py-2 pl-3 pr-2.5 text-sm font-medium text-fg-soft">
           <span className="whitespace-nowrap">
             {value.sort === "oldest"
-              ? "Oldest first"
+              ? "Oldest date first"
               : value.sort === "high"
                 ? "Biggest value"
                 : value.sort === "low"
                   ? "Smallest value"
-                  : "Newest first"}
+                  : "Newest date first"}
           </span>
           <span aria-hidden className="text-[10px] opacity-60">
             ▼
@@ -124,8 +124,8 @@ export function ListControls({
             aria-label="Sort"
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
+            <option value="newest">Newest date first</option>
+            <option value="oldest">Oldest date first</option>
             <option value="high">Biggest value</option>
             <option value="low">Smallest value</option>
           </select>

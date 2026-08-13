@@ -765,7 +765,27 @@ export default function PurchasingPage() {
         // "LATE" is offered as a filter, but an order in it is ALSO still to
         // arrive — so it answers to both rather than disappearing from one.
         status: poFilter.status === "LATE" ? (isLate(p) ? "LATE" : "_") : poBucket(p),
-        date: p.expected_delivery ?? p.po_number,
+        // Sort by WHEN THE ORDER WAS RAISED, not by when it is due.
+        //
+        // This was `expected_delivery ?? po_number`, which caused both of the
+        // things he reported. The dates looked scrambled because some orders
+        // sorted by a delivery date and others by a PO number. And setting a
+        // promise date physically MOVED an order to a different position —
+        // "now I'm going to give promise as 12, yesterday... now see, that PO
+        // itself gone." It had not gone anywhere; it had been re-sorted to
+        // somewhere he was not looking.
+        //
+        // PO numbers are sequential (PO-2026-061), so they ARE the order of
+        // creation, and changing a delivery date can no longer move a row.
+        // SORT BY THE DATE THE ROW SHOWS. He said it plainly: "it's confusing
+        // even me, then think about laymen." An order sorted by a date that is
+        // not on screen can only look random, whichever field it is.
+        //
+        // The run header shows the purchase date, so that is what orders by.
+        // What you see is what it is sorted by, and nothing can move a row
+        // except the thing printed on it. (Falling back to the PO number, which
+        // is sequential, when an order has no indent behind it.)
+        date: p.indent_date ?? p.po_number,
         value: parseFloat(p.total_amount || "0"),
       })),
     [pos, poFilter, poBucket, isLate],
@@ -1738,7 +1758,7 @@ export default function PurchasingPage() {
               the ordered PO and this received note both stay downloadable.
             </p>
 
-            {/* Scan the vendor bill → auto-fill received qty + new prices (Textract). */}
+            {/* Scan the vendor bill → auto-fill received qty + new prices. */}
             <div className="mb-4 rounded-xl border border-brand-500/30 bg-brand-500/[0.05] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium text-fg">📷 Scan the vendor bill <span className="text-fg-faint">(optional)</span></span>
@@ -1746,23 +1766,23 @@ export default function PurchasingPage() {
                   {recvScanBusy ? "Reading…" : "Upload bill"}
                   <input
                     type="file"
-                    accept="image/*,application/pdf"
+                    accept="image/*"
                     className="hidden"
                     disabled={recvScanBusy}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) scanBill(f); e.currentTarget.value = ""; }}
                   />
                 </label>
               </div>
-              {/* "the information is unclear — who does the bill scan?" Named,
-                  and named ACCURATELY: this is Amazon Textract's expense
-                  reader, not the Claude assistant that answers questions
-                  elsewhere in the app. Telling someone the wrong machine did
-                  their bookkeeping is worse than telling them nothing. */}
+              {/* "who does the bill scan?" — named, and named accurately. It
+                  is the same assistant that answers questions elsewhere in the
+                  app; there is no second document service any more. */}
               <p className="mt-1 text-[11px] leading-relaxed text-fg-faint">
-                Read by <b className="text-fg-soft">Amazon Textract</b>, which is built for invoices — it finds each line
-                on the bill and matches it to <b className="text-fg-soft">this order</b>, filling in what arrived and the{" "}
-                <b className="text-fg-soft">price actually charged</b>. It only suggests: nothing changes until you press
-                Receive, and the old prices stay in each item&apos;s <b className="text-fg-soft">price history</b>.
+                Read by the <b className="text-fg-soft">DineAI assistant</b>. It is given{" "}
+                <b className="text-fg-soft">this order&apos;s own lines</b>, so it matches what is on the bill to what
+                you actually ordered, and fills in what arrived and the{" "}
+                <b className="text-fg-soft">price actually charged</b>. It only suggests: nothing changes until you
+                press Receive, and the old prices stay in each item&apos;s{" "}
+                <b className="text-fg-soft">price history</b>.
               </p>
               {recvScanMsg && <p className="mt-1.5 text-xs text-fg-soft">{recvScanMsg}</p>}
             </div>

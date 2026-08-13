@@ -16,7 +16,7 @@ provider/account (Ravishankar's help) · 🏗️ = big build
 and menu engineering run on estimates. Add the *fastest possible* dish-count entry:
 - End-of-day "what did you sell?" grid (recipes as big tap-tiles, +/- steppers, remembers
   yesterday's counts as the starting point) — 90 seconds a night.
-- Or CSV/photo import of a POS end-of-day report via the Copilot (Textract is already wired).
+- Or CSV/photo import of a POS end-of-day report via the Copilot (the assistant reads photos).
 - Unlocks: real menu-engineering matrix (stars/dogs/puzzles/plow-horses — the endpoint
   already exists), true theoretical-vs-actual food cost, dish-level profit trends.
 
@@ -28,7 +28,7 @@ expected-delivery dates. Combine them:
 - One tap → POs. This is the single biggest daily time-saver a kitchen can get.
 
 ### 3. Invoice → GRN 3-way match 💰
-Scan the delivery invoice (Textract AnalyzeExpense is live), match lines to the PO:
+Scan the delivery invoice (the assistant reads it), match lines to the PO:
 - price crept? → price-history row + alert (already have the tables)
 - short delivery? → auto receive-note
 - new item on the bill? → one-tap add.

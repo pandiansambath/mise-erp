@@ -202,4 +202,4 @@ animates off-screen, and nothing animates under prefers-reduced-motion.
 
 ### Still open
 - One sweep for any control still in the old style (item 9, second half).
-- Textract removal — last, as agreed.
+- ~~Textract removal~~ **DONE** — the assistant reads bills and handwritten notes now; the code, the IAM policy and every mention are gone.
