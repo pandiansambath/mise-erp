@@ -285,15 +285,22 @@ export async function burstBasket(): Promise<void> {
     b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, fill: "forwards" });
   }
 
-  // ALL AT ONCE. My last version went deepest-first, 190ms apart, and he saw
-  // exactly that: "I can literally see 1st popup burst, then right side 2nd
-  // popup burst, then left some other is disappearing." A sequence of three
-  // events is three events; he wants ONE.
+  // ALL AT ONCE, BEHIND SMOKE.
   //
-  // So every panel goes on the same frame, and a single shower of colour paper
-  // is thrown over the whole screen rather than each panel making its own.
+  // "I should not feel that the popups are closing one by one. Just do a smoke
+  // effect and make them all disappear all of a sudden, and throw colour
+  // papers. I don't even see any colour papers — before I realise, all done."
+  //
+  // Three fixes in one. The smoke goes up FIRST and covers the whole stack, so
+  // the panels vanish underneath it rather than each performing its own exit —
+  // you cannot watch things close one by one if you never see them close. The
+  // confetti is thrown at the same moment and lasts long enough to register.
+  // And the panels are killed instantly, together, while they are hidden.
+  smoke(panels);
   confetti();
-  await Promise.all(panels.map((el) => burstAway(el)));
+  await new Promise((r) => window.setTimeout(r, 210));
+  for (const el of panels) el.style.visibility = "hidden";
+  await new Promise((r) => window.setTimeout(r, 520));
   window.dispatchEvent(new CustomEvent("mise:close-basket"));
 }
 
@@ -315,13 +322,15 @@ function confetti(): void {
 
   const host = document.createElement("div");
   host.setAttribute("aria-hidden", "true");
-  host.className = "pointer-events-none fixed inset-0 z-[98] overflow-hidden";
+  host.className = "pointer-events-none fixed inset-0 z-[200] overflow-hidden";
   document.body.appendChild(host);
 
   const colours = ["#e11d48", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#f472b6", "#facc15"];
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const N = Math.min(90, Math.round(w / 14));
+  // More of it, bigger, and in front of everything — it was landing behind the
+  // smoke and the backdrop, which is why "I don't even see any colour papers".
+  const N = Math.min(150, Math.round(w / 9));
 
   for (let i = 0; i < N; i++) {
     const bit = document.createElement("div");
@@ -339,7 +348,7 @@ function confetti(): void {
     const rise = -Math.cos(angle * 0.55) * speed;
     const fall = h * (0.9 + Math.random() * 0.5);
 
-    const size = 6 + Math.random() * 8;
+    const size = 9 + Math.random() * 11;
     bit.style.cssText = `position:absolute;left:${x0}px;top:${y0}px;width:${size}px;height:${size * (0.4 + Math.random() * 0.5)}px;background:${colours[i % colours.length]};border-radius:1px;will-change:transform,opacity;`;
     host.appendChild(bit);
 
@@ -363,7 +372,7 @@ function confetti(): void {
         },
       ],
       {
-        duration: 1500 + Math.random() * 900,
+        duration: 2100 + Math.random() * 1100,
         delay: Math.random() * 90,
         // Fast off the mark, slowing at the top, then away — one curve doing
         // the work of a physics engine.
@@ -373,5 +382,70 @@ function confetti(): void {
     );
   }
 
-  window.setTimeout(() => host.remove(), 2700);
+  window.setTimeout(() => host.remove(), 3600);
+}
+
+
+/**
+ * One puff that swallows the whole stack.
+ *
+ * Covering the panels is the point: it hides the moment they disappear, which
+ * is the moment that was reading as "one by one". Billowing blobs rather than a
+ * flat fade, because smoke has volume and a fade has none.
+ */
+function smoke(panels: HTMLElement[]): void {
+  if (typeof window === "undefined") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  if (!panels.length) return;
+
+  // The box that contains everything about to go.
+  let l = Infinity;
+  let t = Infinity;
+  let r = -Infinity;
+  let b = -Infinity;
+  for (const el of panels) {
+    const q = el.getBoundingClientRect();
+    l = Math.min(l, q.left);
+    t = Math.min(t, q.top);
+    r = Math.max(r, q.right);
+    b = Math.max(b, q.bottom);
+  }
+  const cx = (l + r) / 2;
+  const cy = (t + b) / 2;
+  const w = r - l;
+  const h = b - t;
+
+  const host = document.createElement("div");
+  host.setAttribute("aria-hidden", "true");
+  host.className = "pointer-events-none fixed inset-0 z-[99]";
+  document.body.appendChild(host);
+
+  for (let i = 0; i < 16; i++) {
+    const puff = document.createElement("div");
+    const size = Math.max(w, h) * (0.42 + Math.random() * 0.45);
+    const ox = (Math.random() - 0.5) * w * 0.95;
+    const oy = (Math.random() - 0.5) * h * 0.95;
+    puff.style.cssText =
+      `position:absolute;left:${cx + ox - size / 2}px;top:${cy + oy - size / 2}px;` +
+      `width:${size}px;height:${size}px;border-radius:9999px;` +
+      `background:radial-gradient(circle at 40% 40%, rgba(255,255,255,.92), rgba(228,224,228,.55) 55%, rgba(210,205,210,0) 72%);` +
+      `filter:blur(${6 + Math.random() * 10}px);will-change:transform,opacity;`;
+    host.appendChild(puff);
+
+    puff.animate(
+      [
+        { transform: "translate(0,0) scale(0.25)", opacity: 0 },
+        { transform: `translate(${ox * 0.12}px, ${-12 - Math.random() * 20}px) scale(1)`, opacity: 0.95, offset: 0.35 },
+        { transform: `translate(${ox * 0.3}px, ${-70 - Math.random() * 60}px) scale(1.5)`, opacity: 0 },
+      ],
+      {
+        duration: 900 + Math.random() * 400,
+        delay: Math.random() * 90,
+        easing: "cubic-bezier(.22,.7,.3,1)",
+        fill: "forwards",
+      },
+    );
+  }
+
+  window.setTimeout(() => host.remove(), 1500);
 }
