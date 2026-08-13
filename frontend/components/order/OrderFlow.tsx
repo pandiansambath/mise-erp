@@ -136,7 +136,7 @@ function Sheet({
    *  holds more than a few lines. */
   /** How many card columns this sheet should be able to hold. The panel is
    *  sized to fit them; more items means a wider panel, not a longer scroll. */
-  columns?: 1 | 2 | 3;
+  columns?: 1 | 2 | 3 | 4;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
@@ -162,14 +162,24 @@ function Sheet({
   // side insets, so it sat high and off-centre — "this popup is not centred".
   // No -translate-x-1/2 here: .mise-pop-centre carries the centring inside its
   // keyframes, because an animation's transform replaces the class's.
+  // Width follows the CONTENT, at both depths. A popup that stays one size while
+  // its list grows is a popup you scroll instead of read.
   const box =
     depth === 1
-      ? "left-1/2 top-1/2 w-fit min-w-[min(24rem,92vw)] max-w-[min(64rem,94vw)]"
-      : columns >= 3
-        ? "left-1/2 top-1/2 w-[min(66rem,95vw)]"
-        : columns === 2
-          ? "left-1/2 top-1/2 w-[min(46rem,94vw)]"
-          : "left-1/2 top-1/2 w-[min(28rem,94vw)]";
+      ? columns >= 4
+        ? "left-1/2 top-1/2 w-[min(72rem,95vw)]"
+        : columns === 3
+          ? "left-1/2 top-1/2 w-[min(56rem,94vw)]"
+          : columns === 2
+            ? "left-1/2 top-1/2 w-[min(40rem,94vw)]"
+            : "left-1/2 top-1/2 w-fit min-w-[min(22rem,92vw)] max-w-[min(30rem,94vw)]"
+      : columns >= 4
+        ? "left-1/2 top-1/2 w-[min(72rem,95vw)]"
+        : columns === 3
+          ? "left-1/2 top-1/2 w-[min(58rem,94vw)]"
+          : columns === 2
+            ? "left-1/2 top-1/2 w-[min(42rem,94vw)]"
+            : "left-1/2 top-1/2 w-[min(26rem,94vw)]";
 
   return (
     <>
@@ -649,7 +659,13 @@ export function OrderFlow({
 
       {/* Layer two: that category's items. */}
       {cat && (
-        <Sheet onClose={() => setCat(null)} title={cat} subtitle={`${shown.length} items`}>
+        <Sheet
+          onClose={() => setCat(null)}
+          title={cat}
+          subtitle={`${shown.length} items`}
+          // Two items stay square; nine spread out rather than scrolling.
+          columns={shown.length >= 9 ? 4 : shown.length >= 5 ? 3 : shown.length >= 3 ? 2 : 1}
+        >
           <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
             <div
               className="mise-sheet-cascade grid gap-2.5"
@@ -986,7 +1002,10 @@ function BasketSheet({
       // A basket with two lines had a scrollbar. It grows with what it holds
       // now, up to the same cap every other popup uses — "make the basket popup
       // size bigger, it needs to grow based on the number of items it has."
-      columns={lines.length >= 5 ? 3 : lines.length >= 2 ? 2 : 1}
+      // "Grow the size of basket popup if we have more items in it... now only
+      // 1 item I can see clearly, to see next item I need to scroll down. This
+      // is worst UI." Four across once there are enough to warrant it.
+      columns={lines.length >= 7 ? 4 : lines.length >= 4 ? 3 : lines.length >= 2 ? 2 : 1}
       subtitle={`${lines.length} item${lines.length === 1 ? "" : "s"} · ${format(grand.toFixed(2))}`}
       footer={
         <div className="space-y-2.5">
@@ -1108,7 +1127,7 @@ function BasketSheet({
             {!folded.has(g.key) && (
             <ul
               className="mt-2 grid gap-2"
-              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(13.5rem, 100%), 1fr))" }}
+              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(10.5rem, 100%), 1fr))" }}
             >
               {g.rows.map(({ it, qty }) => {
                 const sup = supplierFor(it.id);
@@ -1143,36 +1162,33 @@ function BasketSheet({
 
                         {/* Name and money on one baseline, the money in the
                             display face so the eye lands on it first. */}
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span aria-hidden className="shrink-0 text-base leading-none">
-                              {categoryEmoji(groupOf(it))}
-                            </span>
-                            <span className="min-w-0 truncate text-sm font-semibold leading-tight text-fg">
-                              {it.name}
-                            </span>
+                        {/* Stacked, not spread. On a narrow card the eye reads
+                            top to bottom, and the money is the line it should
+                            land on. */}
+                        <div className="flex items-start gap-1.5">
+                          <span aria-hidden className="shrink-0 text-base leading-none">
+                            {categoryEmoji(groupOf(it))}
                           </span>
-                          <span className="shrink-0 font-display text-base font-semibold leading-none tabular-nums text-fg">
-                            {format(money.toFixed(2))}
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-fg">
+                            {it.name}
                           </span>
                         </div>
 
-                        {/* How much, and from whom — the two things that tell
-                            you WHICH line this is. */}
-                        <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px]">
-                          <span className="min-w-0 truncate text-fg-faint">
-                            {sup?.vendor_name ?? "no supplier"}
+                        <div className="mt-1 flex items-baseline justify-between gap-2">
+                          <span className="font-display text-base font-semibold leading-none tabular-nums text-fg">
+                            {format(money.toFixed(2))}
                           </span>
-                          <span className="shrink-0 font-medium tabular-nums text-fg-soft">
+                          <span className="shrink-0 text-[11px] font-medium tabular-nums text-fg-soft">
                             {tidy(n)} {it.unit}
                           </span>
                         </div>
 
-                        {/* The bottom of the card was empty — "only the card's
-                            top area is filled". This is the line worth putting
-                            there: what you have, and what you will have. */}
-                        <div className="mt-2 flex items-end justify-between gap-2 border-t border-line/50 pt-1.5">
-                          <span className="min-w-0 text-[11px] leading-tight">
+                        <p className="mt-0.5 truncate text-[10px] text-fg-faint">
+                          {sup?.vendor_name ?? "no supplier"}
+                        </p>
+
+                        <div className="mt-1.5 flex items-end justify-between gap-1 border-t border-line/50 pt-1.5">
+                          <span className="min-w-0 text-[10px] leading-tight">
                             <span className="block text-fg-faint">
                               have <b className="font-semibold text-fg-soft tabular-nums">
                                 {fmtQty(String(had), it.unit)}
@@ -1182,7 +1198,7 @@ function BasketSheet({
                               then <b className="font-semibold tabular-nums">
                                 {fmtQty(String(after), it.unit)}
                               </b>
-                              {short ? " · under minimum" : ""}
+                              {short ? " · low" : ""}
                             </span>
                           </span>
                           {/* Small, quiet, and they never flip the card. */}
