@@ -412,6 +412,14 @@ export default function PurchasingPage() {
       setMsg(
         `Indent raised with ${n} item${n === 1 ? "" : "s"} — it is waiting for approval under Indents.`,
       );
+      // Take him TO the confirmation rather than leaving it somewhere above.
+      // A message you have to go looking for has not been delivered. Waits for
+      // the burst so the scroll is not competing with the smoke.
+      window.setTimeout(() => {
+        document
+          .getElementById("mise-indent-said")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 900);
       await load();
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : "Could not create indent");
@@ -935,7 +943,7 @@ export default function PurchasingPage() {
           nice to see, it's very plain text UI." It was a tinted paragraph.
           Something just HAPPENED — the message should arrive like it. */}
       {msg && (
-        <div className="mise-card3d mise-shine relative mb-4 flex items-start gap-3 overflow-hidden px-4 py-3" data-shine="true">
+        <div className="mise-card3d mise-say relative mb-4 flex items-start gap-3 overflow-hidden px-4 py-3" id="mise-indent-said">
           <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400" />
           <span
             aria-hidden
@@ -950,7 +958,7 @@ export default function PurchasingPage() {
             aria-label="Dismiss"
             className="mise-press -mr-1 shrink-0 rounded-lg px-1.5 py-1 text-fg-faint transition hover:text-fg"
           >
-            ✕
+            <span className="mise-say-x block">✕</span>
           </button>
         </div>
       )}
