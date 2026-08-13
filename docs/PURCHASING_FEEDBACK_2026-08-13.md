@@ -123,3 +123,53 @@ the width, second card half cut off.*
 - [docs/PURCHASING_FEEDBACK_OPEN.md](PURCHASING_FEEDBACK_OPEN.md) — the previous
   batch, 9/9 verified live.
 - **Page by page.** Purchasing is not finished until he says it is.
+
+
+---
+
+# Second batch, same day (11:40)
+
+## 7. A late order LEAVES the list instead of being flagged
+> "Here I can see a Late filter, if I click it's showing late — but bro, why are
+> you removing card from current purchase order and moving to late section? Here
+> also we need to show with **red colour indication**, else it's like the
+> purchase order is missing, complete kind of feel will get."
+
+- [x] Late is a FLAG, not a bucket. A late order is *still to arrive* AND late,
+      so it answers to both; the chip explains that on hover.
+
+## 7.1 The three icon buttons did nothing
+> "These buttons are not working, I clicked so many times but it's not opening
+> anything — that download, hamburger, tick 3 icons."
+
+- [x] They were `<button>`s inside a `role="button"` div. Invalid markup: the
+      outer handler ran instead, so every press just folded the run. The toggle
+      is its own control now.
+
+## 8. The statuses mean nothing to a reader
+> "I want to know the difference and reason for these status: ordered, approved,
+> pending. Also this status I can't understand — awaiting ok it's showing pending
+> indent 6, ready to order showing 1, which means... then with supplier, receive
+> stock means? Very confusing."
+
+- [x] Every pipeline stage renamed to a phrase and carries a sentence saying
+      what it is and what happens next.
+
+## 9. The dropdown STILL unstyled, and the buttons are inconsistent
+> "Still this dropdown is showing without styling. Also I don't like this button
+> style both in indent and PO — it's like some are having this style, some don't
+> have this style; this redundancy is making the stuff worse and clumsy to look."
+
+- [x] A native `<select>` keeps the OS chrome whatever class it is given. It is
+      invisible and stretched over a button we control; the menu is still the
+      real native one.
+- [ ] Sweep every remaining control on both lists so nothing is left in the old
+      style. **Still open.**
+
+## 10. "Other orders" everywhere
+> "I seriously don't know why these are showing as Other orders — only 1st 2 POs
+> showing as purchase with date."
+
+- [x] **My regression.** Moving indents to server-side paging meant only ten
+      were loaded, so a run whose indent was not on that page had no name. The
+      order row carries `indent_date` now and can always name itself.
