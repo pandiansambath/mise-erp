@@ -746,9 +746,15 @@ export default function PurchasingPage() {
   const poBucket = useCallback(
     (p: POSummary) => {
       if (p.status === "RECEIVED") return "RECEIVED";
-      if (p.expected_delivery && p.expected_delivery < todayStr) return "LATE";
       return "WAITING";
     },
+    [todayStr],
+  );
+
+  /** Late is a FLAG on an order, not a place it goes. */
+  const isLate = useCallback(
+    (p: POSummary) =>
+      p.status !== "RECEIVED" && !!p.expected_delivery && p.expected_delivery < todayStr,
     [todayStr],
   );
 
@@ -756,11 +762,13 @@ export default function PurchasingPage() {
     () =>
       applyFilter(pos, poFilter, (p) => ({
         text: `${p.po_number} ${p.vendor_name ?? ""} ${p.status}`,
-        status: poBucket(p),
+        // "LATE" is offered as a filter, but an order in it is ALSO still to
+        // arrive — so it answers to both rather than disappearing from one.
+        status: poFilter.status === "LATE" ? (isLate(p) ? "LATE" : "_") : poBucket(p),
         date: p.expected_delivery ?? p.po_number,
         value: parseFloat(p.total_amount || "0"),
       })),
-    [pos, poFilter, poBucket],
+    [pos, poFilter, poBucket, isLate],
   );
   const shownPos = useMemo(() => pageOf(matchedPos, poFilter), [matchedPos, poFilter]);
 
@@ -793,11 +801,27 @@ export default function PurchasingPage() {
     // he was right to ask what it meant — "still to arrive" is the actual
     // question, and "late" is the one you act on.
     return [
-      { key: "LATE", label: "Late", count: n("LATE"), tone: "bad" as const },
-      { key: "WAITING", label: "Still to arrive", count: n("WAITING") },
-      { key: "RECEIVED", label: "Arrived", count: n("RECEIVED") },
+      {
+        key: "LATE",
+        label: "Late",
+        count: pos.filter(isLate).length,
+        tone: "bad" as const,
+        hint: "Past the date the supplier promised. These are still under 'Still to arrive' too — late is a warning on an order, not a different place it lives.",
+      },
+      {
+        key: "WAITING",
+        label: "Still to arrive",
+        count: n("WAITING"),
+        hint: "Ordered and not yet received, including anything that is late.",
+      },
+      {
+        key: "RECEIVED",
+        label: "Arrived",
+        count: n("RECEIVED"),
+        hint: "Received into stock. Costs and stock levels are updated.",
+      },
     ].filter((x) => x.count > 0);
-  }, [pos, poBucket]);
+  }, [pos, poBucket, isLate]);
 
   // "also I need one filter like multi vendor / single vendor" — a purchase run
   // that split across four suppliers is a different kind of thing from one that
@@ -845,8 +869,11 @@ export default function PurchasingPage() {
       const groupPos = byIndent.get(key)!;
       const total = groupPos.reduce((s, p) => s + parseFloat(p.total_amount || "0"), 0);
       const indent = key === "__none__" ? null : indents.find((i) => i.id === key) ?? null;
+      // The date comes off the ORDER when the indent is not on the current
+      // page — which, with ten rows to a page, is almost always.
+      const runDate = indent?.date ?? groupPos.find((p) => p.indent_date)?.indent_date ?? null;
       const vendorCount = new Set(groupPos.map((p) => p.vendor_id)).size;
-      return { key, indentId: key === "__none__" ? null : key, pos: groupPos, total, indent, vendorCount };
+      return { key, indentId: key === "__none__" ? null : key, pos: groupPos, total, indent, runDate, vendorCount };
     }).filter((g) =>
       runSize === "all"
         ? true
@@ -1199,36 +1226,40 @@ export default function PurchasingPage() {
         const committed = openPos.reduce((sum, x) => sum + (parseFloat(x.total_amount) || 0), 0);
         const stages: {
           icon: string; n: number; label: string; tone: string;
-          go: "indents" | "orders"; alert?: string;
+          go: "indents" | "orders"; alert?: string; why: string;
         }[] = [
           {
             icon: "📝",
             n: indents.filter((x) => x.status === "PENDING").length,
-            label: "awaiting you",
+            label: "waiting for you to approve",
             tone: "text-amber-300",
             go: "indents",
+            why: "Someone in the kitchen asked for these. Nothing has been ordered yet — they are waiting for you to say yes.",
           },
           {
             icon: "✅",
             n: indents.filter((x) => x.status === "APPROVED").length,
-            label: "ready to order",
-            tone: "text-brand-300",
+            label: "approved, nothing ordered",
+            tone: "text-rose-300",
             go: "indents",
+            why: "You approved these, but no purchase order could be raised — no active vendor prices those items. Set a price on Vendors and try again. Normally this is zero.",
           },
           {
             icon: "🚚",
             n: openPos.length,
-            label: "with suppliers",
+            label: "ordered, not arrived",
             tone: "text-sky-300",
             go: "orders",
             alert: overdue > 0 ? `${overdue} late` : undefined,
+            why: "Purchase orders are with your suppliers and the goods have not come in yet. 'Late' means the date they promised has passed.",
           },
           {
             icon: "🏠",
             n: pos.filter((x) => x.status === "RECEIVED").length,
-            label: "in your stock",
+            label: "arrived, in your stock",
             tone: "text-emerald-300",
             go: "orders",
+            why: "Received. Stock levels and average costs have been updated from these.",
           },
         ];
         return (
@@ -1239,7 +1270,7 @@ export default function PurchasingPage() {
                   <button
                     type="button"
                     onClick={() => setTab(st.go)}
-                    title={`Go to ${st.go}`}
+                    title={st.why}
                     className="mise-press group min-w-0 flex-1 rounded-xl px-2.5 py-2 text-left transition hover:bg-glass/[0.06]"
                   >
                     <span className="flex items-baseline gap-1.5">
@@ -1515,22 +1546,19 @@ export default function PurchasingPage() {
                     happened to be split by supplier, so it is headed like one
                     thing — what it cost, how far along it is, one PDF for all
                     of it — and the per-supplier orders fold away underneath. */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleRun(g.key)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggleRun(g.key);
-                    }
-                  }}
-                  /* The WHOLE header opens the run. It used to be only the
-                     arrow and the title, so most of the row looked clickable
-                     and was not. */
-                  className="mise-press mb-2 flex cursor-pointer flex-wrap items-end justify-between gap-2"
-                >
-                  <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                {/* NOT a button wrapping buttons. It was role="button" with
+                    three <button>s inside it — invalid markup, and the browser
+                    ran the outer handler instead of the inner ones, so his
+                    download / list / receive icons did nothing at all however
+                    many times he pressed them. The toggle is its own control
+                    now and the actions are simply buttons. */}
+                <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleRun(g.key)}
+                    aria-expanded={openRuns.has(g.key)}
+                    className="mise-press flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
                     <span
                       aria-hidden
                       className={`text-[10px] text-fg-faint transition-transform ${
@@ -1545,13 +1573,13 @@ export default function PurchasingPage() {
                           truncated to "Purchase…", which named nothing. The word
                           wraps away instead; the date stays whole. */}
                       <span className="block font-display text-base font-semibold leading-tight text-fg">
-                        {g.indent ? (
+                        {g.runDate ? (
                           <>
                             <span className="hidden sm:inline">Purchase · </span>
-                            <span className="tabular-nums">{g.indent.date}</span>
+                            <span className="tabular-nums">{g.runDate}</span>
                           </>
                         ) : (
-                          "Other orders"
+                          "Orders with no indent"
                         )}
                       </span>
                       <span className="block text-[11px] text-fg-faint">
@@ -1565,7 +1593,7 @@ export default function PurchasingPage() {
                         })()}
                       </span>
                     </span>
-                  </span>
+                  </button>
                   {/* Money, then a gap, then the actions — and the actions are
                       ICONS with a tooltip rather than two labels fighting for
                       the same inch. "See everything, consolidated button, price,
@@ -1596,7 +1624,7 @@ export default function PurchasingPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.indent?.date ?? "po"}.pdf`)}
+                        onClick={() => downloadFile(`/purchasing/indents/${g.indentId}/consolidated.pdf`, `consolidated-${g.runDate ?? "po"}.pdf`)}
                         title="One PDF for this whole purchase — every supplier, every item"
                         aria-label="Download one PDF for this whole purchase"
                         onClickCapture={(e) => e.stopPropagation()}

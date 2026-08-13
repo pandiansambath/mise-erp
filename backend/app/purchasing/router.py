@@ -1,5 +1,6 @@
 """Indent & purchase-order endpoints. Hotel-scoped."""
 import uuid
+from datetime import date as date_type
 from decimal import Decimal
 from difflib import SequenceMatcher
 
@@ -18,7 +19,7 @@ from app.hotels.models import Hotel
 from app.inventory.service import get_item
 from app.purchasing import pdf as pdf_gen
 from app.purchasing import service
-from app.purchasing.models import Basket, IndentStatus, POStatus
+from app.purchasing.models import Basket, Indent, IndentStatus, POStatus
 from app.purchasing.schemas import (
     GenerateResult,
     IndentCreate,
@@ -204,10 +205,22 @@ async def list_pos(
             select(Vendor).where(Vendor.hotel_id == user.hotel_id)
         )).scalars().all()
     }
+    # The date of every indent these came from, in one query rather than one
+    # per row — and so the UI never has to hope the indent is on the page it
+    # happens to be showing.
+    indent_ids = {p.indent_id for p in pos if p.indent_id}
+    dates: dict[uuid.UUID, date_type] = {}
+    if indent_ids:
+        rows = await db.execute(
+            select(Indent.id, Indent.date).where(Indent.id.in_(indent_ids))
+        )
+        dates = {i: d for i, d in rows.all()}
+
     out = []
     for p in pos:
         row = POSummary.model_validate(p)
         row.vendor_name = names.get(p.vendor_id, "")
+        row.indent_date = dates.get(p.indent_id) if p.indent_id else None
         out.append(row)
     return out
 

@@ -98,6 +98,11 @@ class POSummary(BaseModel):
     total_amount: Decimal
     expected_delivery: date_type | None = None
     indent_id: uuid.UUID | None = None  # groups POs by the purchase run they came from
+    #: The date of the indent this came from. Carried HERE because the indent
+    #: list is paged — the page holds ten, and a run whose indent was not on it
+    #: had nothing to name itself with, so almost every purchase read "Other
+    #: orders". A row must carry what it needs to identify itself.
+    indent_date: date_type | None = None
 
 
 class GenerateResult(BaseModel):

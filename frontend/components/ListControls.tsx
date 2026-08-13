@@ -96,17 +96,40 @@ export function ListControls({
           )}
         </label>
 
-        <select
-          value={value.sort}
-          onChange={(e) => set({ sort: e.target.value as SortDir })}
-          aria-label="Sort"
-          className="mise-btn mise-press cursor-pointer appearance-none rounded-xl py-2 pl-3 pr-8 text-sm font-medium text-fg-soft outline-none"
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="high">Biggest value</option>
-          <option value="low">Smallest value</option>
-        </select>
+        {/* A native <select> takes the class and then ignores most of it — the
+            control keeps the operating system's own chrome, which is why it
+            still looked plain next to everything else however it was styled.
+            "Still this dropdown is showing without styling."
+
+            So the select is made INVISIBLE and stretched over a button we do
+            control. The menu is still the real, native, accessible one — it
+            opens on click, works with a keyboard, and behaves the way a phone
+            expects — but nothing of its appearance survives. */}
+        <span className="mise-btn mise-press relative inline-flex shrink-0 items-center gap-2 rounded-xl py-2 pl-3 pr-2.5 text-sm font-medium text-fg-soft">
+          <span className="whitespace-nowrap">
+            {value.sort === "oldest"
+              ? "Oldest first"
+              : value.sort === "high"
+                ? "Biggest value"
+                : value.sort === "low"
+                  ? "Smallest value"
+                  : "Newest first"}
+          </span>
+          <span aria-hidden className="text-[10px] opacity-60">
+            ▼
+          </span>
+          <select
+            value={value.sort}
+            onChange={(e) => set({ sort: e.target.value as SortDir })}
+            aria-label="Sort"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="high">Biggest value</option>
+            <option value="low">Smallest value</option>
+          </select>
+        </span>
       </div>
 
       {statuses.length > 1 && (

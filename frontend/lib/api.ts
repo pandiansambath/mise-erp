@@ -662,7 +662,10 @@ export interface POSummary {
   status: string;
   total_amount: string;
   expected_delivery?: string | null; // when the vendor said it lands
-  indent_id?: string | null; // the purchase run this PO belongs to
+  indent_id?: string | null;
+  /** The date of the purchase this order came from. Carried on the ROW because
+   *  the indent list is paged and the run has to be able to name itself. */
+  indent_date?: string | null; // the purchase run this PO belongs to
 }
 
 export interface POItemOut {
