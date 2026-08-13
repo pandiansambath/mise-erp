@@ -32,6 +32,7 @@ import SpotlightCard from "@/components/reactbits/SpotlightCard";
 import Magnet from "@/components/reactbits/Magnet";
 import { overlayOpened } from "@/lib/overlay";
 import { useConfirm } from "@/components/confirm";
+import { FoodSprite, spriteFor } from "@/components/FoodSprite";
 
 export type OrderLine = { item_id: string; qty: string };
 
@@ -640,7 +641,11 @@ export function OrderFlow({
                 className="mise-card3d mise-press relative flex w-full items-center gap-3 overflow-hidden px-3.5 py-4 pl-4 text-left"
               >
                 <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${categoryTint(name)}`} />
-                <span aria-hidden className="text-2xl">{categoryEmoji(name)}</span>
+                {spriteFor(name) ? (
+                  <FoodSprite name={name} size={40} className="shrink-0" />
+                ) : (
+                  <span aria-hidden className="text-2xl">{categoryEmoji(name)}</span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-display text-sm font-semibold text-fg">
                     {name}

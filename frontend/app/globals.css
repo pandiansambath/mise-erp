@@ -2592,3 +2592,35 @@ body[data-overlay] .mise-launcher-in {
     animation: none;
   }
 }
+
+/* ── Live food, at the cost of an image ──────────────────────────────────────
+   The 3D was rendered offline into a horizontal strip of 24 frames. This walks
+   the strip with steps(), which is the browser's own frame-by-frame animation:
+   no JavaScript, no WebGL, no decode per frame. See components/FoodSprite.tsx.
+
+   Only elements the observer has marked `is-live` animate, so a grid of tiles
+   scrolled past the viewport costs nothing at all.                           */
+.mise-food {
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-position: 0% 0%;
+  /* Never smooth a sprite step: interpolating between frames of a strip blurs
+     two objects together. */
+  image-rendering: auto;
+  will-change: background-position;
+}
+
+.mise-food.is-live {
+  animation: mise-food-run 2s steps(23) infinite;
+}
+
+@keyframes mise-food-run {
+  from { background-position: 0% 0%; }
+  to   { background-position: 100% 0%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-food.is-live {
+    animation: none;
+  }
+}
