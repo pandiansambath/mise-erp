@@ -1,0 +1,29 @@
+{
+ "size": 96,
+ "frames": 24,
+ "foods": [
+  "apple",
+  "basket",
+  "cheese",
+  "chicken",
+  "cleaning",
+  "drink",
+  "egg",
+  "fish",
+  "flour",
+  "frozen",
+  "greens",
+  "lemon",
+  "meat",
+  "milk",
+  "oil",
+  "onion",
+  "orange",
+  "packaging",
+  "potato",
+  "pulse",
+  "rice",
+  "spice",
+  "tomato"
+ ]
+}

@@ -108,7 +108,7 @@ def _shade(
     return (r, g, b, 255)
 
 
-def _ellipsoid(
+def _body(
     img: Image.Image,
     cx: float,
     cy: float,
@@ -116,16 +116,65 @@ def _ellipsoid(
     ry: float,
     base: tuple[int, int, int],
     spin: float,
-    bumpiness: float = 0.0,
+    bumpiness: float,
+    profile,
 ) -> None:
+    """Light a solid of revolution.
+
+    The normal is taken from the PROFILE, so a bottle's shoulder catches the
+    light the way a bottle's shoulder does. The same lamp, the same specular,
+    the same rim as the sphere — only the outline changes.
+    """
     px = img.load()
     x0, x1 = int(cx - rx) - 1, int(cx + rx) + 2
     y0, y1 = int(cy - ry) - 1, int(cy + ry) + 2
     for y in range(max(0, y0), min(img.height, y1)):
+        v = (y - (cy - ry)) / (2 * ry)
+        if not (0.0 <= v <= 1.0):
+            continue
+        half = profile(v) * rx
+        if half <= 0.5:
+            continue
         for x in range(max(0, x0), min(img.width, x1)):
-            c = _shade(x, y, cx, cy, rx, ry, base, spin, bumpiness=bumpiness)
-            if c:
-                px[x, y] = c
+            u = (x - cx) / half
+            if abs(u) > 1.0:
+                continue
+            # Surface normal across the body; the vertical component comes from
+            # how fast the profile is changing, which is what rounds the ends.
+            nx = u
+            nz = math.sqrt(max(0.0, 1.0 - u * u))
+            dv = 0.004
+            slope = (profile(min(1.0, v + dv)) - profile(max(0.0, v - dv))) / (2 * dv)
+            ny = -slope * 0.34
+            n = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+            nx, ny, nz = nx / n, ny / n, nz / n
+
+            lx, ly, lz = -0.45, -0.62, 0.64
+            lam = max(0.0, nx * lx + ny * ly + nz * lz)
+            if bumpiness:
+                a = math.atan2(nx, nz) + spin
+                lam += bumpiness * 0.30 * (
+                    math.sin(a * 5.0 + v * 3.0) * math.sin(v * 7.0)
+                    + 0.4 * math.sin(a * 11.0 - v * 5.0)
+                )
+                lam = max(0.0, min(1.4, lam))
+
+            shade = 0.30 + 0.85 * lam
+            r = min(255, int(base[0] * shade))
+            g = min(255, int(base[1] * shade))
+            b = min(255, int(base[2] * shade))
+
+            hx = math.sin(spin) * 0.42 - 0.34
+            spec = math.exp(-((nx - hx) ** 2 + (v - 0.32) ** 2 * 4.0) * 14.0)
+            r = min(255, int(r + 205 * spec))
+            g = min(255, int(g + 205 * spec))
+            b = min(255, int(b + 190 * spec))
+
+            rim = max(0.0, 1.0 - nz) ** 3
+            r = min(255, int(r + 70 * rim))
+            g = min(255, int(g + 70 * rim))
+            b = min(255, int(b + 78 * rim))
+            px[x, y] = (r, g, b, 255)
 
 
 def _ground_shadow(img: Image.Image, cx: float, cy: float, rx: float, bob: float) -> None:
@@ -142,33 +191,196 @@ def _ground_shadow(img: Image.Image, cx: float, cy: float, rx: float, bob: float
     img.alpha_composite(sh)
 
 
+
+
+# ── Silhouettes ──────────────────────────────────────────────────────────────
+# `profile(v)` returns the body's half-width at height v, where v runs 0 (top)
+# to 1 (bottom). This is what makes a bottle a bottle: the shading was never the
+# problem, the OUTLINE was. A category has to be recognisable at 40px and at
+# 40px you are reading the silhouette, nothing else.
+import math as _m
+
+
+def _sphere(v: float) -> float:
+    return _m.sin(_m.pi * v) ** 0.62
+
+
+def _bottle(v: float) -> float:
+    # narrow neck, shoulder, straight body — milk, oil, a drink
+    if v < 0.22:
+        return 0.30
+    if v < 0.38:
+        return 0.30 + (v - 0.22) / 0.16 * 0.62
+    return 0.92
+
+
+def _sack(v: float) -> float:
+    # gathered at the top, heavy at the base — rice, flour, pulses
+    if v < 0.16:
+        return 0.34 + v / 0.16 * 0.30
+    return 0.64 + _m.sin((v - 0.16) / 0.84 * _m.pi * 0.55) * 0.36
+
+
+def _fish(v: float) -> float:
+    # a body that tapers to a tail, seen side-on
+    if v < 0.14:
+        return 0.10 + v / 0.14 * 0.55          # nose
+    if v < 0.62:
+        return 0.65 + _m.sin((v - 0.14) / 0.48 * _m.pi) * 0.35
+    if v < 0.82:
+        return 0.65 - (v - 0.62) / 0.20 * 0.52  # waist before the tail
+    return 0.13 + (v - 0.82) / 0.18 * 0.80      # tail fans out
+
+
+def _leaf(v: float) -> float:
+    return _m.sin(_m.pi * v) ** 1.35
+
+
+def _box(v: float) -> float:
+    return 1.0 if 0.06 < v < 0.94 else 0.86
+
+
+def _drum(v: float) -> float:
+    # a tub or a tin — cheese, butter, cleaning
+    return 0.95 if 0.10 < v < 0.90 else 0.80
+
+
+PROFILES = {
+    "sphere": _sphere,
+    "bottle": _bottle,
+    "sack": _sack,
+    "fish": _fish,
+    "leaf": _leaf,
+    "box": _box,
+    "drum": _drum,
+}
+
+
+
+# ── Flat things ──────────────────────────────────────────────────────────────
+# Outlines, as points on a unit square (0..1 across, 0..1 down). Anything can be
+# drawn this way; the renderer works out the shading from the shape itself.
+OUTLINES: dict[str, list[tuple[float, float]]] = {
+    # nose, back, dorsal fin, tail, belly — read left to right
+    "fish": [
+        (0.03, 0.50), (0.18, 0.34), (0.38, 0.27), (0.50, 0.16), (0.56, 0.28),
+        (0.72, 0.31), (0.84, 0.40), (0.84, 0.60), (0.72, 0.69), (0.56, 0.72),
+        (0.50, 0.84), (0.38, 0.73), (0.18, 0.66),
+    ],
+    # a leaf with a point and a shoulder
+    "leaf": [
+        (0.50, 0.04), (0.66, 0.20), (0.78, 0.42), (0.74, 0.68), (0.56, 0.90),
+        (0.50, 0.96), (0.44, 0.90), (0.26, 0.68), (0.22, 0.42), (0.34, 0.20),
+    ],
+    # a chilli: fat shoulder tapering to a tip, with a stalk
+    "chilli": [
+        (0.44, 0.06), (0.60, 0.14), (0.70, 0.32), (0.72, 0.56), (0.62, 0.80),
+        (0.48, 0.94), (0.40, 0.80), (0.38, 0.56), (0.34, 0.34), (0.34, 0.14),
+    ],
+}
+
+
+def _flat_body(
+    img: Image.Image,
+    cx: float,
+    cy: float,
+    rx: float,
+    ry: float,
+    base: tuple[int, int, int],
+    spin: float,
+    outline: list[tuple[float, float]],
+) -> None:
+    """Light a flat object with a slight dome.
+
+    Height comes from DISTANCE TO THE EDGE — the middle of the shape stands
+    proudest, the rim falls away — and the normal is the gradient of that
+    height. It is the cheapest way to light an arbitrary silhouette and it is
+    what makes a fish read as a fish rather than as a coloured shape.
+    """
+    w = int(rx * 2)
+    h = int(ry * 2)
+    if w < 4 or h < 4:
+        return
+
+    # The silhouette, and a blurred copy of it as the height field.
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).polygon(
+        [(px * w, py * h) for px, py in outline], fill=255
+    )
+    height = mask.filter(ImageFilter.GaussianBlur(radius=max(2.0, w * 0.055)))
+
+    m = mask.load()
+    hh = height.load()
+    px_out = img.load()
+    ox = int(cx - rx)
+    oy = int(cy - ry)
+
+    # A yaw rather than a tumble: the light sweeps across the body as it turns
+    # toward and away from you, which is what a swimming thing looks like.
+    yaw = math.sin(spin)
+
+    for y in range(h):
+        for x in range(w):
+            if m[x, y] < 40:
+                continue
+            # gradient of the height field = surface normal
+            hx = (hh[min(w - 1, x + 1), y] - hh[max(0, x - 1), y]) / 255.0
+            hy = (hh[x, min(h - 1, y + 1)] - hh[x, max(0, y - 1)]) / 255.0
+            nx = -hx * 26.0
+            ny = -hy * 26.0
+            nz = 1.0
+            n = math.sqrt(nx * nx + ny * ny + nz * nz)
+            nx, ny, nz = nx / n, ny / n, nz / n
+
+            lx, ly, lz = -0.42 + yaw * 0.45, -0.58, 0.70
+            lam = max(0.0, nx * lx + ny * ly + nz * lz)
+            dome = hh[x, y] / 255.0
+
+            shade = 0.30 + min(0.92, 0.86 * lam) + 0.26 * dome
+            r = min(255, int(base[0] * shade))
+            g = min(255, int(base[1] * shade))
+            b = min(255, int(base[2] * shade))
+
+            spec = min(1.0, max(0.0, lam)) ** 16
+            r = min(255, int(r + 120 * spec))
+            g = min(255, int(g + 120 * spec))
+            b = min(255, int(b + 114 * spec))
+
+            # A soft edge, so it does not look cut out with scissors.
+            a = 255 if m[x, y] > 200 else int(m[x, y] * 1.2)
+            if 0 <= ox + x < img.width and 0 <= oy + y < img.height:
+                px_out[ox + x, oy + y] = (r, g, b, min(255, a))
+
+
 # ── the objects ──────────────────────────────────────────────────────────────
 # Each is a body colour and a shape. Deliberately simple: at 48px what sells
 # the illusion is the SHADING and the motion, not the modelling.
 FOODS: dict[str, dict] = {
-    "lemon":     {"color": (247, 205, 42),  "ry": 0.80, "bump": 0.25, "stalk": "leaf"},
-    "tomato":    {"color": (222, 58, 44),   "ry": 0.92, "bump": 0.10, "stalk": "leaf"},
-    "onion":     {"color": (206, 142, 84),  "ry": 0.94, "bump": 0.30, "stalk": "tuft"},
-    "potato":    {"color": (186, 146, 96),  "ry": 0.74, "bump": 0.42},
-    "apple":     {"color": (206, 44, 52),   "ry": 0.95, "bump": 0.12, "stalk": "stem"},
-    "orange":    {"color": (238, 138, 30),  "ry": 0.95, "bump": 0.38},
-    "egg":       {"color": (240, 226, 202), "ry": 1.18, "bump": 0.05},
-    "milk":      {"color": (238, 240, 244), "ry": 1.05, "bump": 0.04},
-    "rice":      {"color": (232, 220, 190), "ry": 0.70, "bump": 0.55},
-    "flour":     {"color": (236, 228, 210), "ry": 0.72, "bump": 0.45},
-    "oil":       {"color": (214, 176, 44),  "ry": 1.12, "bump": 0.06},
-    "fish":      {"color": (126, 170, 196), "ry": 0.58, "bump": 0.30},
-    "meat":      {"color": (176, 66, 66),   "ry": 0.66, "bump": 0.28},
-    "chicken":   {"color": (214, 168, 112), "ry": 0.72, "bump": 0.22},
-    "cheese":    {"color": (240, 200, 92),  "ry": 0.72, "bump": 0.18},
-    "spice":     {"color": (188, 78, 36),   "ry": 0.64, "bump": 0.50},
-    "pulse":     {"color": (176, 142, 76),  "ry": 0.66, "bump": 0.52},
-    "greens":    {"color": (86, 158, 74),   "ry": 0.86, "bump": 0.34},
-    "cleaning":  {"color": (96, 168, 208),  "ry": 0.80, "bump": 0.14},
-    "packaging": {"color": (176, 140, 96),  "ry": 0.78, "bump": 0.10},
-    "drink":     {"color": (148, 96, 196),  "ry": 1.10, "bump": 0.08},
-    "frozen":    {"color": (146, 206, 224), "ry": 0.86, "bump": 0.20},
-    "basket":    {"color": (192, 148, 92),  "ry": 0.74, "bump": 0.26},
+    # colour, how tall relative to its width, how textured, and — the part that
+    # actually makes it recognisable at 40px — its SILHOUETTE.
+    "lemon":     {"color": (247, 205, 42),  "ry": 0.80, "bump": 0.25, "shape": "sphere", "stalk": "leaf"},
+    "tomato":    {"color": (222, 58, 44),   "ry": 0.92, "bump": 0.10, "shape": "sphere", "stalk": "leaf"},
+    "onion":     {"color": (206, 142, 84),  "ry": 0.94, "bump": 0.20, "shape": "sphere", "stalk": "tuft"},
+    "potato":    {"color": (186, 146, 96),  "ry": 0.74, "bump": 0.24, "shape": "sphere"},
+    "apple":     {"color": (206, 44, 52),   "ry": 0.95, "bump": 0.12, "shape": "sphere", "stalk": "stem"},
+    "orange":    {"color": (238, 138, 30),  "ry": 0.95, "bump": 0.22, "shape": "sphere"},
+    "egg":       {"color": (240, 226, 202), "ry": 1.18, "bump": 0.05, "shape": "sphere"},
+    "milk":      {"color": (238, 240, 244), "ry": 1.25, "bump": 0.04, "shape": "bottle"},
+    "rice":      {"color": (232, 220, 190), "ry": 1.05, "bump": 0.26, "shape": "sack"},
+    "flour":     {"color": (236, 228, 210), "ry": 1.05, "bump": 0.20, "shape": "sack"},
+    "oil":       {"color": (214, 176, 44),  "ry": 1.25, "bump": 0.06, "shape": "bottle"},
+    "fish":      {"color": (132, 176, 202), "ry": 0.62, "bump": 0.00, "shape": "fish"},
+    "meat":      {"color": (176, 66, 66),   "ry": 0.70, "bump": 0.28, "shape": "drum"},
+    "chicken":   {"color": (214, 168, 112), "ry": 0.86, "bump": 0.22, "shape": "sphere"},
+    "cheese":    {"color": (240, 200, 92),  "ry": 0.72, "bump": 0.18, "shape": "drum"},
+    "spice":     {"color": (198, 62, 40),   "ry": 1.15, "bump": 0.00, "shape": "chilli"},
+    "pulse":     {"color": (176, 142, 76),  "ry": 1.00, "bump": 0.28, "shape": "sack"},
+    "greens":    {"color": (92, 166, 78),   "ry": 1.15, "bump": 0.00, "shape": "leaf"},
+    "cleaning":  {"color": (96, 168, 208),  "ry": 1.22, "bump": 0.14, "shape": "bottle"},
+    "packaging": {"color": (176, 140, 96),  "ry": 0.88, "bump": 0.10, "shape": "box"},
+    "drink":     {"color": (148, 96, 196),  "ry": 1.25, "bump": 0.08, "shape": "bottle"},
+    "frozen":    {"color": (146, 206, 224), "ry": 0.90, "bump": 0.20, "shape": "box"},
+    "basket":    {"color": (192, 148, 92),  "ry": 0.78, "bump": 0.26, "shape": "drum"},
 }
 
 
@@ -189,7 +401,14 @@ def render(name: str, spec: dict) -> str:
 
         img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
         _ground_shadow(img, cx, s * 0.86, rx, bob)
-        _ellipsoid(img, cx, cy, rx, ry, spec["color"], spin, spec.get("bump", 0.0))
+        shape = spec.get("shape", "sphere")
+        if shape in OUTLINES:
+            _flat_body(img, cx, cy, rx, ry, spec["color"], spin, OUTLINES[shape])
+        else:
+            _body(
+                img, cx, cy, rx, ry, spec["color"], spin,
+                spec.get("bump", 0.0), PROFILES[shape],
+            )
 
         # A stalk or leaf, drawn AFTER the body so it sits in front, and swung
         # with the spin so it belongs to the object rather than to the frame.
