@@ -126,9 +126,25 @@ async def per_base_prices(
         iid: {row.id: row.position for row in rows} for iid, rows in by_item.items()
     }
 
-    def convert(item_id: uuid.UUID, price, level_id: uuid.UUID | None) -> Decimal:
+    def convert(
+        item_id: uuid.UUID,
+        price,
+        level_id: uuid.UUID | None,
+        size_override=None,
+    ) -> Decimal:
+        """What one BASE unit costs from this quote.
+
+        `size_override` is the supplier's OWN pack size, for when their bottle
+        is not the same as everybody else's — "some vendor will have 1 bottle =
+        30 piece, some vendor will have 1 bottle = 20 piece". It wins over the
+        item's chain, because the person opening the delivery is opening THIS
+        supplier's bottle.
+        """
         if price is None:
             return Decimal("0")
+        if size_override is not None:
+            size = Decimal(size_override)
+            return (Decimal(price) / size) if size > 0 else Decimal(price)
         if level_id is None:
             return Decimal(price)
         position = positions.get(item_id, {}).get(level_id)

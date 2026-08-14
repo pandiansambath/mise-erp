@@ -440,6 +440,10 @@ export interface VendorItem {
   is_preferred: boolean;
   /** Which size this price buys, from the item's chain. null = one base unit. */
   pack_level_id?: string | null;
+  /** THIS supplier's own pack size, when their bottle is not the same as
+   *  everyone else's. Overrides the item's chain for anything priced or
+   *  received from them. */
+  pack_size_override?: string | null;
 }
 
 export interface VendorPriceRow {
@@ -638,6 +642,11 @@ export interface SupplierOption {
   price_per_unit: string;
   /** Which size this supplier sells in. null = they quote per base unit. */
   pack_level_id?: string | null;
+  /** THIS supplier's own pack size, when their bottle is not the same size as
+   *  everyone else's — "some vendor will have 1 bottle = 30 piece, some vendor
+   *  will have 1 bottle = 20 piece". Wins over the item's chain for anything
+   *  priced, ordered or received from them. */
+  pack_size_override?: string | null;
   is_preferred: boolean;
 }
 
