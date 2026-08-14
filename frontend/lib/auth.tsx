@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { setGrantedPermissions } from "./permissions";
 import { setAppTimeZone } from "./date";
 import { useRouter } from "next/navigation";
 import { hotelSite } from "@/lib/site";
@@ -69,6 +70,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((me) => {
         setUser(me.user);
         setHotel(me.hotel);
+      setGrantedPermissions(me.permissions);
+        setGrantedPermissions(me.permissions);
       })
       .catch(() => clearToken())
       .finally(() => setLoading(false));
@@ -91,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(res.access_token);
       setUser(res.user);
       setHotel(res.hotel);
+      setGrantedPermissions(res.permissions);
       // Operators go straight to the standalone Control Room; everyone else to the app.
       await sweepThenGo(res.user.is_platform_owner ? "/control-room" : "/dashboard");
     },
@@ -146,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     forgetAll();
     setUser(null);
     setHotel(null);
+    setGrantedPermissions(null);
     router.push("/login");
   }, [router]);
 

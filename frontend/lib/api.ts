@@ -351,6 +351,9 @@ export function featureOn(hotel: Hotel | null | undefined, key: string): boolean
 }
 
 export interface TokenResponse {
+  /** What this person may do, sent at sign-in so the first screen is already
+   *  right rather than waiting for /me to answer. */
+  permissions?: string[];
   access_token: string;
   token_type: string;
   user: UserOut;
@@ -358,6 +361,9 @@ export interface TokenResponse {
 }
 
 export interface MeResponse {
+  /** What this person may actually do — custom role included. The client's own
+   *  table is only a fallback; this is the truth. */
+  permissions?: string[];
   user: UserOut;
   hotel: Hotel;
 }

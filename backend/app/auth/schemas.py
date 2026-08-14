@@ -117,11 +117,26 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserOut
     hotel: HotelOut
+    #: What this person may do, sent at sign-in so the very first screen is
+    #: already correct rather than waiting for /me.
+    permissions: list[str] = []
 
 
 class MeResponse(BaseModel):
     user: UserOut
     hotel: HotelOut
+    #: What this person can ACTUALLY do, custom role and all.
+    #:
+    #: The client used to keep its own hardcoded copy of the permission matrix,
+    #: keyed on the base role name — so it knew nothing about a custom role, and
+    #: it had already drifted from the server (a MANAGER could write expenses on
+    #: the backend while the client's list did not mention expenses at all). The
+    #: result is the bug he hit: he granted expenses to a role, assigned it, and
+    #: the section never appeared, because the only thing deciding what to show
+    #: was a stale copy that had never heard of his role.
+    #:
+    #: Now the server says. One source of truth, and it cannot drift.
+    permissions: list[str] = []
 
 
 class UserCreate(BaseModel):
