@@ -1195,28 +1195,28 @@ function BasketSheet({
                             price would be. */}
                         <dl className="mt-1.5 space-y-0.5 border-t border-line/50 pt-1.5 text-[10px] leading-tight">
                           <div className="flex items-baseline justify-between gap-2">
-                            <dt className="text-sky-300/80">in stock</dt>
-                            <dd className="shrink-0 tabular-nums text-sky-200">
+                            <dt className="mise-tone-info">in stock</dt>
+                            <dd className="mise-tone-info shrink-0 font-semibold tabular-nums">
                               {fmtQty(String(had), it.unit)}
                             </dd>
                           </div>
                           <div className="flex items-baseline justify-between gap-2">
-                            <dt className={short ? "text-amber-300/90" : "text-emerald-300/80"}>
+                            <dt className={short ? "mise-tone-warn" : "mise-tone-good"}>
                               after this
                             </dt>
                             <dd
                               className={`shrink-0 font-semibold tabular-nums ${
-                                short ? "text-amber-200" : "text-emerald-200"
+                                short ? "mise-tone-warn" : "mise-tone-good"
                               }`}
                             >
                               {fmtQty(String(after), it.unit)}
                             </dd>
                           </div>
                           <div className="flex items-baseline justify-between gap-2">
-                            <dt className="truncate text-fg-faint">
+                            <dt className="truncate text-fg-soft">
                               {sizes[1] ? `1 ${sizes[1].label}` : "one pack"}
                             </dt>
-                            <dd className="shrink-0 tabular-nums text-fg-soft">
+                            <dd className="shrink-0 font-semibold tabular-nums text-fg">
                               {sizes[1] ? format(sizes[1].price.toFixed(2)) : "—"}
                             </dd>
                           </div>

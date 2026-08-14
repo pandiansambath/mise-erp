@@ -203,3 +203,59 @@ animates off-screen, and nothing animates under prefers-reduced-motion.
 ### Still open
 - One sweep for any control still in the old style (item 9, second half).
 - ~~Textract removal~~ **DONE** — the assistant reads bills and handwritten notes now; the code, the IAM policy and every mention are gone.
+
+---
+
+## 2026-08-14 — his next batch
+
+### 1. "that button... its not even visible bro" (condensed rail)
+The grow/shrink came back, but the New order / Indents / Orders row was being
+**clipped**. The rail carried `contain: layout paint style`, and paint
+containment cuts off anything drawn outside the element's box — the condensed
+row is *lifted by a transform*, straight past the top edge. Dropped `paint`
+(layout and style still do the useful work), lifted it less (2.15rem, not
+2.6rem) so it lands ON the title's line rather than climbing over it, and
+scaled it to 0.95. **DONE**
+
+### 2. "the text colors are so light that i cant even read" (basket card)
+The rows said "in stock" in `sky-300` and "after this" in `emerald-300` — those
+are **dark-theme shades**, pale ink meant to glow on a near-black card, and the
+basket sheet is light.
+
+There is a light-legibility block in `globals.css` that re-points accent text to
+darker shades, but it could never have caught these: `text-sky-300/80` compiles
+to a class literally named `text-sky-300\/80`, which `.text-sky-300` does not
+match. **Any opacity modifier escapes that fix silently.**
+
+So the tones are variables now — `--tone-info`, `--tone-good`, `--tone-warn`,
+one name per *meaning*, re-pointed per theme. Nothing depends on remembering to
+add a colour to a list. Sky and emerald were also added to the legibility block
+for everywhere else that uses them plainly. **DONE**
+
+### 3. Pack size belongs to the VENDOR, not the item
+> "1 bottle 30 piece which is 5 pound, vendor 2 same item but 1 bottle = 10
+> piece, price of bottle 4 pound... we can clearly see these are from vendor
+> side, so in vendor section only we need to do this things and all... and
+> inventory need to gather information and need to show it in detailed way."
+
+He is right, and it is the correct instinct: **how something is sold is a fact
+about the seller.** What shipped:
+
+- **Vendors** — the price sheet now states it as a sentence: *"They sell it by
+  the ⟨bottle⟩, and 1 bottle holds ⟨30⟩ piece, for ⟨£5.00⟩."* Blank means "use
+  the item's own size", so nothing has to be re-entered.
+- **Inventory, new item** — the pack chain is **paused**, exactly like the
+  supplier field above it, with a note pointing at Vendors. There is no supplier
+  yet, so any number typed here is a guess about somebody who does not exist.
+- **Inventory, editing** — the chain shows, and under it *"How each supplier
+  sells it"*: every supplier, their size, and an amber **"their own size"** chip
+  where they differ from the chain. Links out to Vendors to change it.
+
+### A bug found while building it
+`upsert_vendor_item` assigned `pack_size_override` unconditionally, while every
+other field on that row (`is_preferred`, `notes`, `pack_level_id`) guards
+against a partial save. So **editing just the price erased the supplier's pack
+size** — and the next delivery would credit the wrong number of pieces into
+stock. Fixed with a `KEEP` sentinel: three states, not two — *not mentioned*
+leaves it alone, *explicitly null* still clears it. Pinned by
+`test_price_edit_keeps_the_suppliers_own_pack_size`.

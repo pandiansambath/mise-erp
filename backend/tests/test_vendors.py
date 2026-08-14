@@ -199,3 +199,30 @@ async def test_price_list_strict_import(client, make_user, auth_header):
         files={"file": ("p.csv", bad, "text/csv")},
     )
     assert res.status_code == 422 and res.json()["detail"]["errors"]
+
+
+@pytest.mark.asyncio
+async def test_price_edit_keeps_the_suppliers_own_pack_size(db, hotel):
+    """Editing only the price must not wipe how big THIS supplier's bottle is.
+
+    His case: one vendor's bottle holds 30 pieces, another's holds 10. That size
+    is stored per vendor. Every other field on this row already survives a
+    partial save; the override did not, so a plain price change silently reset
+    the bottle back to the item's own size — and the next delivery credited the
+    wrong number of pieces into stock.
+    """
+    lemon = await inv_service.create_item(db, hotel.id, name="Lemon", unit="piece")
+    sk = await vendor_service.create_vendor(db, hotel.id, name="SK")
+
+    await vendor_service.upsert_vendor_item(
+        db, sk.id, lemon.id, Decimal("5.00"), pack_size_override=Decimal("30")
+    )
+    # A plain price edit — the form sends no pack size at all.
+    vi = await vendor_service.upsert_vendor_item(db, sk.id, lemon.id, Decimal("5.50"))
+    assert vi.pack_size_override == Decimal("30"), "a price edit erased the pack size"
+
+    # ...but clearing it explicitly still works, or a typo would be permanent.
+    vi = await vendor_service.upsert_vendor_item(
+        db, sk.id, lemon.id, Decimal("5.50"), pack_size_override=None
+    )
+    assert vi.pack_size_override is None
