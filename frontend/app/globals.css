@@ -2546,6 +2546,15 @@ body[data-overlay] .mise-launcher-in {
      height can be animated away without them jumping out of flow. */
   display: grid;
   grid-template-rows: 1fr;
+  /* The tools keep their own height instead of stretching to fill the row.
+     This is what made the buttons unreadable when condensed: the row goes to
+     0fr, and a stretched child is squashed INTO that zero — the button went
+     from 36px to 15px. `overflow: visible` below only lets the ink escape the
+     box; it cannot un-squash the box itself. Starting them instead means the
+     row still collapses (the rail is the same 60px either way, so all the
+     space is still reclaimed) while the buttons stay full size and simply
+     overhang, which is exactly what the lift below is for. */
+  align-items: start;
   padding-bottom: 0.75rem;
   transform-origin: left center;
   transition:
@@ -2565,7 +2574,9 @@ body[data-overlay] .mise-launcher-in {
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools {
   grid-template-rows: 0fr;
   padding-bottom: 0;
-  transform: translate(clamp(0px, 40vw, 21rem), -2.15rem) scale(0.95);
+  /* Measured, not guessed: at this lift the row's centre sits 1.5px off the
+     title's centre, and the whole thing stays inside the rail. */
+  transform: translate(clamp(0px, 40vw, 21rem), -2.6rem) scale(0.95);
 }
 
 /* The tools must stay visible while their row has zero height. */
