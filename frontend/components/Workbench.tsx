@@ -71,24 +71,35 @@ export function Workbench({
     const el = sentinel.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
 
-    // HYSTERESIS, or the page shakes.
+    // A LOCK, not a margin.
     //
-    // "if you scroll down very slowly the page started to shake like hell, like
-    // an earthquake came." Exactly what a single threshold does: condensing
-    // REMOVES height, which scrolls the sentinel back into view, which expands
-    // the rail, which puts the height back — and round it goes, many times a
-    // second, for as long as you hover near the line.
+    // The shake was real: condensing REMOVES height, which scrolls the sentinel
+    // back into view, which expands the rail, which puts the height back — a
+    // loop, many times a second, for as long as you hover near the line.
     //
-    // Two different lines break the loop. It condenses once you are 64px past
-    // the top and only opens again when you are within 8px of it, so the state
-    // that caused the flip can never immediately undo it.
+    // My fix for it broke the feature outright. `rootMargin: -64px` shrinks the
+    // root, and the sentinel sits at ~63px — just under the app header — so it
+    // was ALREADY outside at rest. An IntersectionObserver only fires when
+    // something CROSSES its boundary; a thing that starts outside and stays
+    // outside never fires again, so the rail simply stopped condensing. He
+    // noticed immediately: "previously working scroll down to shrink... it's
+    // completely gone now."
+    //
+    // So the margin goes back to zero — the crossing is real again — and the
+    // oscillation is stopped in time instead of in space. After a flip the
+    // state is held for 350ms, which is longer than the reflow it causes, so
+    // the reflow cannot flip it back.
+    let lockedUntil = 0;
     const io = new IntersectionObserver(
       ([entry]) => {
-        const y = entry.boundingClientRect.top;
-        if (!entry.isIntersecting && y < 0) apply(true);
-        else if (y > -8) apply(false);
+        const now = performance.now();
+        if (now < lockedUntil) return;
+        const next = !entry.isIntersecting;
+        if (next === condensed.current) return;
+        lockedUntil = now + 350;
+        apply(next);
       },
-      { threshold: 0, rootMargin: "-64px 0px 0px 0px" },
+      { threshold: 0 },
     );
     io.observe(el);
     return () => io.disconnect();

@@ -29,6 +29,21 @@ export function baseSizeOf(item: Item, levelId?: string | null): number {
   return lv ? parseFloat(lv.base_size) || 1 : 1;
 }
 
+/** How big THIS supplier's pack is.
+ *
+ *  "Some vendor will have 1 bottle = 30 piece, some vendor will have 1 bottle =
+ *   20 piece — how are we gonna handle this confusion?"
+ *
+ *  By letting the supplier say so. Their own size wins, because the person
+ *  opening the delivery is opening their bottle, not the item's idea of one.
+ */
+export function supplierPackSize(item: Item, sup?: SupplierOption | null): number {
+  if (!sup) return 1;
+  const own = parseFloat(sup.pack_size_override ?? "");
+  if (Number.isFinite(own) && own > 0) return own;
+  return baseSizeOf(item, sup.pack_level_id);
+}
+
 /** What a supplier's price buys, named: "bottle", or the base unit. */
 export function levelName(item: Item, levelId?: string | null): string {
   if (!levelId) return item.unit;
@@ -39,7 +54,7 @@ export function levelName(item: Item, levelId?: string | null): string {
 export function pricePerBase(item: Item, sup?: SupplierOption | null): number {
   if (!sup) return 0;
   const price = parseFloat(sup.price_per_unit) || 0;
-  const size = baseSizeOf(item, sup.pack_level_id);
+  const size = supplierPackSize(item, sup);
   return size > 0 ? price / size : 0;
 }
 
@@ -59,13 +74,21 @@ export type PriceLine = { label: string; price: number; note?: string };
 export function priceLines(item: Item, sup?: SupplierOption | null): PriceLine[] {
   const perBase = pricePerBase(item, sup);
   const out: PriceLine[] = [{ label: item.unit, price: perBase }];
+  const own = parseFloat(sup?.pack_size_override ?? "");
+  const hasOwn = Number.isFinite(own) && own > 0;
+
   for (const lv of item.pack_levels ?? []) {
-    const size = parseFloat(lv.base_size) || 0;
+    // When this supplier has said their own pack size, the level they SELL in
+    // takes it. Otherwise two suppliers both saying "bottle" would print the
+    // same size while meaning different things — which is the confusion he
+    // spotted, and it is worth ten pieces a delivery.
+    const isTheirs = hasOwn && lv.id === sup?.pack_level_id;
+    const size = isTheirs ? own : parseFloat(lv.base_size) || 0;
     if (size <= 0) continue;
     out.push({
       label: lv.name,
       price: perBase * size,
-      note: `${tidy(size)} ${item.unit}`,
+      note: `${tidy(size)} ${item.unit}${isTheirs ? " at this supplier" : ""}`,
     });
   }
   return out;

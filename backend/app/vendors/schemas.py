@@ -85,6 +85,9 @@ class VendorItemUpsert(BaseModel):
     #: "we cant say all the vendors will have this BOX type, some vendor will
     #: have small packets too, only they will sell".
     pack_level_id: uuid.UUID | None = None
+    #: This supplier's own pack size, when their bottle holds a different number
+    #: than everybody else's. None = use the item's chain.
+    pack_size_override: Decimal | None = None
     # None = leave as-is (a price edit must NOT un-choose the ★ preferred supplier).
     is_preferred: bool | None = None
     notes: str | None = None
@@ -98,6 +101,9 @@ class VendorItemOut(BaseModel):
     item_id: uuid.UUID
     price_per_unit: Decimal
     pack_level_id: uuid.UUID | None = None
+    #: This supplier's own pack size, when their bottle holds a different number
+    #: than everybody else's. None = use the item's chain.
+    pack_size_override: Decimal | None = None
     last_updated: date
     is_preferred: bool
 

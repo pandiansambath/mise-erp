@@ -86,6 +86,14 @@ class VendorItem(Base):
     is_preferred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[str | None] = mapped_column(Text)
 
+    #: How many BASE units THIS vendor's pack holds, when it differs from the
+    #: item's own chain. "Some vendor will have 1 bottle = 30 piece, some vendor
+    #: will have 1 bottle = 20 piece" — and the chain belongs to the item, so
+    #: without this the model could not say it. NULL = use the item's size.
+    pack_size_override: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 3), nullable=True
+    )
+
 
 class PriceHistory(Base):
     """Append-only trail of EVERY vendor-price change (item × vendor over time).

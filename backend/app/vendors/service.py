@@ -77,6 +77,7 @@ async def upsert_vendor_item(
     is_preferred: bool | None = None,
     notes: str | None = None,
     pack_level_id: uuid.UUID | None = None,
+    pack_size_override: Decimal | None = None,
     source: str = "manual",
 ) -> VendorItem:
     """Set (or update) a vendor's price for an item.
@@ -102,6 +103,9 @@ async def upsert_vendor_item(
     # edit does not silently reset a supplier back to selling base units.
     if pack_level_id is not None:
         vi.pack_level_id = pack_level_id
+    # Explicitly settable to None: clearing it means "use the item's own size
+    # again", which has to be expressible or a mistake becomes permanent.
+    vi.pack_size_override = pack_size_override
     if notes is not None:
         vi.notes = notes
     vi.last_updated = date.today()
@@ -313,9 +317,28 @@ async def compare_vendor_prices(
             "pack_level_name": next(
                 (r.name for r in chain_rows if r.id == vi.pack_level_id), None
             ),
-            #: The number every comparison on this page is actually made on.
-            "price_per_base": packs.price_per_base(
-                vi.price_per_unit, chain, by_id.get(vi.pack_level_id, 0)
+            #: The number every comparison on this page is actually made on —
+            #: and it has to respect THIS supplier's pack size. Two suppliers
+            #: both selling "a bottle" may not be selling the same amount, and
+            #: comparing them as if they were is the exact mistake this page
+            #: exists to prevent.
+            "price_per_base": (
+                (vi.price_per_unit / vi.pack_size_override)
+                if vi.pack_size_override and vi.pack_size_override > 0
+                else packs.price_per_base(
+                    vi.price_per_unit, chain, by_id.get(vi.pack_level_id, 0)
+                )
+            ),
+            #: So the row can say "1 bottle (20 piece)" rather than implying
+            #: everyone's bottle is the same.
+            "pack_size": (
+                vi.pack_size_override
+                if vi.pack_size_override
+                else (
+                    packs.base_size(chain, by_id.get(vi.pack_level_id, 0))
+                    if vi.pack_level_id
+                    else None
+                )
             ),
             "is_preferred": vi.is_preferred,
             "last_updated": vi.last_updated,

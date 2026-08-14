@@ -1992,9 +1992,13 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
                                                                               */
 .mise-card3d {
   --tile-bg: var(--color-paper-2, #fff);
-  --tile-side: color-mix(in srgb, #000 26%, var(--tile-bg));
-  --tile-lip: color-mix(in srgb, #fff 78%, var(--tile-bg));
-  --tile-depth: 6px;
+  --tile-side: color-mix(in srgb, #000 30%, var(--tile-bg));
+  --tile-lip: color-mix(in srgb, #fff 82%, var(--tile-bg));
+  /* 8px, and the same on every surface. The banner he pointed at looked more
+     three-dimensional than the tiles for one reason: it is bigger, so an equal
+     depth reads as more. Raising it everywhere makes the smaller cards carry
+     the same weight rather than looking like a different material. */
+  --tile-depth: 8px;
 
   position: relative;
   border-radius: 0.9rem;
@@ -2018,8 +2022,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     calc(var(--tile-depth) * -0.7) calc(var(--tile-depth) * -1) 0 0
       color-mix(in srgb, var(--tile-side) 62%, transparent),
     /* a soft cast up and left, away from the light */
-    calc(var(--tile-depth) * -1) calc(var(--tile-depth) * -1) 14px -2px
-      color-mix(in srgb, #000 26%, transparent),
+    calc(var(--tile-depth) * -1) calc(var(--tile-depth) * -1) 18px -2px
+      color-mix(in srgb, #000 30%, transparent),
     /* and the contact shadow it sits in */
     0 3px 10px -3px color-mix(in srgb, #000 30%, transparent),
     /* lit rims on the two edges the light actually reaches */
@@ -2596,31 +2600,53 @@ body[data-overlay] .mise-launcher-in {
 
 /* The ✕ turns continuously but slowly, inside a ring that pulses — a spin on
    its own reads as "loading", a ring that pulses reads as "press me". */
-@keyframes mise-say-turn {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-@keyframes mise-say-ring {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand-500) 55%, transparent); }
-  50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-brand-500) 0%, transparent); }
+/* The GLYPH holds still and the light travels around it. A rotating ✕ reads as
+   a spinner, and a spinner means "wait"; a still ✕ with light circling it means
+   "press this". */
+@keyframes mise-say-orbit {
+  to { transform: rotate(360deg); }
 }
 
 .mise-say-x {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.6rem;
+  height: 1.6rem;
   border-radius: 9999px;
-  animation:
-    mise-say-turn 2400ms linear infinite,
-    mise-say-ring 1800ms ease-out infinite;
+}
+
+/* A bright arc that runs the rim, cut to a ring by a mask so only the edge
+   lights up rather than the whole disc. */
+.mise-say-x::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--color-brand-500) 85%, #fff) 40deg,
+    transparent 120deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  padding: 2px;
+  animation: mise-say-orbit 1800ms linear infinite;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mise-say,
   .mise-say::after,
-  .mise-say-x {
+  .mise-say-x::before {
     animation: none;
   }
 }

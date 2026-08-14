@@ -261,7 +261,12 @@ async def _resolve_supplier(
     None only when no active vendor prices the item at all.
     """
     base = (
-        select(VendorItem.vendor_id, VendorItem.price_per_unit, VendorItem.pack_level_id)
+        select(
+            VendorItem.vendor_id,
+            VendorItem.price_per_unit,
+            VendorItem.pack_level_id,
+            VendorItem.pack_size_override,
+        )
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
         .where(
             VendorItem.item_id == item_id,
@@ -275,24 +280,24 @@ async def _resolve_supplier(
     # those two were multiplied together.
     convert = await packs_svc.per_base_prices(db, [item_id])
 
-    def per_base(price: Decimal, level_id: uuid.UUID | None) -> Decimal:
-        return convert(item_id, price, level_id)
+    def per_base(price: Decimal, level_id: uuid.UUID | None, size=None) -> Decimal:
+        return convert(item_id, price, level_id, size)
 
     if override_vendor_id is not None:
         row = (await db.execute(base.where(Vendor.id == override_vendor_id).limit(1))).first()
         if row:
-            return (row[0], per_base(row[1], row[2]))
+            return (row[0], per_base(row[1], row[2], row[3]))
     row = (await db.execute(base.where(VendorItem.is_preferred.is_(True)).limit(1))).first()
     if row:
-        return (row[0], per_base(row[1], row[2]))
+        return (row[0], per_base(row[1], row[2], row[3]))
 
     # "Cheapest" has to be compared per base unit too, or a £30 bottle of
     # thirty (£1 each) loses to a £3 single piece.
     rows = (await db.execute(base)).all()
     if not rows:
         return None
-    best = min(rows, key=lambda r: per_base(r[1], r[2]))
-    return (best[0], per_base(best[1], best[2]))
+    best = min(rows, key=lambda r: per_base(r[1], r[2], r[3]))
+    return (best[0], per_base(best[1], best[2], best[3]))
 
 
 async def item_suppliers(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUID, list[dict]]:
@@ -306,13 +311,14 @@ async def item_suppliers(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUI
             VendorItem.price_per_unit,
             VendorItem.is_preferred,
             VendorItem.pack_level_id,
+            VendorItem.pack_size_override,
         )
         .join(Vendor, VendorItem.vendor_id == Vendor.id)
         .where(Vendor.hotel_id == hotel_id, Vendor.is_active.is_(True))
         .order_by(VendorItem.item_id, VendorItem.price_per_unit.asc())
     )
     out: dict[uuid.UUID, list[dict]] = {}
-    for item_id, vendor_id, name, price, pref, level_id in rows.all():
+    for item_id, vendor_id, name, price, pref, level_id, size_override in rows.all():
         out.setdefault(item_id, []).append(
             {
                 "vendor_id": vendor_id,
@@ -323,6 +329,10 @@ async def item_suppliers(db: AsyncSession, hotel_id: uuid.UUID) -> dict[uuid.UUI
                 # actually buy from them — "we cant say all the vendors will
                 # have this BOX type, some vendor will have small packets too".
                 "pack_level_id": level_id,
+                # THIS supplier's own pack size, when their bottle differs from
+                # everyone else's. The screen has to say so, or two suppliers
+                # both saying "bottle" mean two different things silently.
+                "pack_size_override": size_override,
                 "is_preferred": pref,
             }
         )
