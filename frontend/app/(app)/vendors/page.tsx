@@ -101,6 +101,10 @@ export default function VendorsPage() {
   const [edBusy, setEdBusy] = useState(false);
   // One supplied item, opened from the list: a sheet on top of a sheet.
   const [priceRow, setPriceRow] = useState<VendorItem | null>(null);
+  // Which size the open sheet is quoting. Held in state rather than read off
+  // the form, because the "1 bottle holds ___" line has to appear and vanish
+  // as the size changes — a pack has a size, loose does not.
+  const [sheetLevel, setSheetLevel] = useState("");
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [piPrice, setPiPrice] = useState("");
   // WHICH size this supplier's price buys. 0 = one base unit, which is what
@@ -836,7 +840,10 @@ export default function VendorsPage() {
                         key={vi.id}
                         // Click anything, do anything: the row opens the price
                         // itself rather than making you find the form for it.
-                        onClick={() => setPriceRow(vi)}
+                        onClick={() => {
+                          setPriceRow(vi);
+                          setSheetLevel(vi.pack_level_id ?? "");
+                        }}
                         className="cursor-pointer border-b border-line transition hover:bg-glass/[0.03]"
                       >
                         <td className="px-4 py-2 font-medium text-fg">{itemName(vi.item_id)}</td>
@@ -1174,38 +1181,100 @@ export default function VendorsPage() {
                   {canWrite && (
                     <>
                       <p className="mt-5 text-xs font-medium uppercase tracking-wide text-fg-faint">
-                        Change the price
+                        How they sell it
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-fg-soft">
+                        Written as a sentence, because that is how it gets quoted on the phone —
+                        and because &ldquo;1 bottle&rdquo; is a different number of{" "}
+                        {it?.unit ?? "units"} at different suppliers.
                       </p>
                       <form
-                        className="mt-2 flex flex-wrap items-end gap-2"
+                        className="mt-2 space-y-2"
                         onSubmit={async (e) => {
                           e.preventDefault();
-                          const val = new FormData(e.currentTarget).get("np");
+                          const fd = new FormData(e.currentTarget);
+                          const val = fd.get("np");
                           if (!val) return;
+                          const lvl = String(fd.get("lvl") ?? "");
+                          const held = String(fd.get("held") ?? "").trim();
                           try {
                             await api.post(`/vendors/${selected}/items`, {
                               item_id: priceRow.item_id,
                               price_per_unit: String(val),
+                              pack_level_id: lvl || null,
+                              // Blank means "whatever size the item says" — this
+                              // supplier has not claimed one of their own.
+                              pack_size_override: lvl && held ? held : null,
                             });
                             setPriceRow(null);
                             selectVendor(selected);
-                            setNotice("Price updated.");
+                            setNotice("Saved how they sell it.");
                           } catch (err) {
                             setError(err instanceof ApiError ? err.message : "Could not save the price.");
                           }
                         }}
                       >
-                        <input
-                          name="np"
-                          inputMode="decimal"
-                          defaultValue={priceRow.price_per_unit}
-                          onChange={(e) => { e.target.value = numeric(e.target.value); }}
-                          className={`${inputCls} w-32`}
-                          aria-label="New price per unit"
-                        />
-                        <button className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
-                          Save
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-fg-soft">
+                          <span>They sell it by the</span>
+                          <select
+                            name="lvl"
+                            value={sheetLevel}
+                            onChange={(e) => setSheetLevel(e.target.value)}
+                            className={`${inputCls} w-auto`}
+                            aria-label="The size they sell in"
+                          >
+                            <option value="">{it?.unit ?? "unit"} (loose)</option>
+                            {(it?.pack_levels ?? []).map((lv) => (
+                              <option key={lv.id} value={lv.id}>
+                                {lv.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Only worth asking when they sell a PACK — bought
+                            loose there is nothing to hold anything. */}
+                        {it && sheetLevel && (
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-fg-soft">
+                            <span>and 1 {levelName(it, sheetLevel)} holds</span>
+                            <input
+                              name="held"
+                              inputMode="decimal"
+                              defaultValue={priceRow.pack_size_override ?? ""}
+                              placeholder={String(
+                                (it.pack_levels ?? []).find((l) => l.id === sheetLevel)?.base_size ?? "",
+                              )}
+                              onChange={(e) => { e.target.value = numeric(e.target.value); }}
+                              className={`${inputCls} w-24`}
+                              aria-label={`How many ${it.unit} in one of their packs`}
+                            />
+                            <span>{it.unit}</span>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-fg-soft">
+                          <span>for</span>
+                          <input
+                            name="np"
+                            inputMode="decimal"
+                            defaultValue={priceRow.price_per_unit}
+                            onChange={(e) => { e.target.value = numeric(e.target.value); }}
+                            className={`${inputCls} w-32`}
+                            aria-label="What they charge"
+                          />
+                          <button className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
+                            Save
+                          </button>
+                        </div>
+
+                        {it && sheetLevel && (
+                          <p className="text-[11px] leading-relaxed text-fg-faint">
+                            Leave the middle box empty to use the item&apos;s own size. Fill it in
+                            only when THIS supplier&apos;s {levelName(it, sheetLevel)} is a
+                            different size to everyone else&apos;s — that is what keeps stock
+                            honest when the delivery is opened.
+                          </p>
+                        )}
                       </form>
 
                       <div className="mt-4 flex flex-wrap gap-2">

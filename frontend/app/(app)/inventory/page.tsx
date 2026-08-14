@@ -174,6 +174,9 @@ export default function InventoryPage() {
 
   // The suppliers for whatever the form is currently editing, cheapest first.
   const formSuppliers = editingId ? itemSuppliers[editingId] ?? [] : [];
+  // The saved item behind the form — its chain has the ids and base sizes that
+  // the in-progress draft does not.
+  const editingItem = editingId ? items.find((i) => i.id === editingId) ?? null : null;
   const pickedSupplier = formSuppliers.find((v) => v.vendor_id === formVendor) ?? null;
 
   async function chooseSupplier(vendorId: string) {
@@ -1065,11 +1068,87 @@ export default function InventoryPage() {
               actually buys, and so ordering could only ever offer the one
               shape somebody picked when the item was created. */}
           <div className="mt-3">
-            <PackChainEditor
-              baseUnit={form.unit}
-              levels={packLevels}
-              onChange={setPackLevels}
-            />
+            {editingId ? (
+              <>
+                <PackChainEditor
+                  baseUnit={form.unit}
+                  levels={packLevels}
+                  onChange={setPackLevels}
+                />
+
+                {/* What each supplier ACTUALLY sells, shown where the chain is
+                    edited — because the chain is only the default. "We can
+                    clearly see these are from vendor side, so in vendor
+                    section only we need to do this — and inventory need to
+                    gather information and show it in detail." */}
+                {formSuppliers.length > 0 && (
+                  <div className="mt-2 rounded-xl border border-line bg-paper-2/60 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                      How each supplier sells it
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {formSuppliers.map((sv) => {
+                        const own = parseFloat(sv.pack_size_override ?? "");
+                        const differs = Number.isFinite(own) && own > 0;
+                        // The SAVED chain, not the draft being edited: only the
+                        // saved one carries ids and a computed base_size, and a
+                        // supplier's quote points at a saved level.
+                        const lvl = sv.pack_level_id
+                          ? (editingItem?.pack_levels ?? []).find((l) => l.id === sv.pack_level_id)
+                          : null;
+                        return (
+                          <li
+                            key={sv.vendor_id}
+                            className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs"
+                          >
+                            <span className="font-medium text-fg">
+                              {sv.vendor_name}
+                              {sv.is_preferred && <span className="ml-1 text-amber-300">★</span>}
+                            </span>
+                            <span className="text-fg-soft">
+                              {lvl
+                                ? `1 ${lvl.name} = ${
+                                    differs ? own : lvl.base_size
+                                  } ${form.unit}`
+                                : `sold loose, per ${form.unit}`}
+                              {differs && (
+                                <span className="ml-1.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">
+                                  their own size
+                                </span>
+                              )}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
+                      Sizes are set with the supplier who quoted them —{" "}
+                      <Link href="/vendors" className="font-medium text-brand-400 hover:underline">
+                        change them on Vendors
+                      </Link>
+                      . A supplier marked &ldquo;their own size&rdquo; overrides the chain above
+                      for anything ordered or received from them.
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Paused on a NEW item, exactly like the supplier field above it.
+                 How something is bought — box, bottle, pack, and how much is
+                 inside — is a fact about the SUPPLIER, and there is no supplier
+                 yet. Asking here invites a number that later turns out to be
+                 only one supplier's version of a bottle. */
+              <div className="rounded-xl border border-line bg-paper-2/60 p-3 text-xs text-fg-faint">
+                📦 <span className="font-medium text-fg-soft">How it is bought comes later.</span>{" "}
+                Box, bottle, pack — and how many {form.unit || "units"} are inside — is set per
+                supplier, because 1 bottle is not the same size at every supplier. Add the item
+                first, then say how each one sells it on the{" "}
+                <Link href="/vendors" className="font-medium text-brand-400 hover:underline">
+                  Vendors
+                </Link>{" "}
+                page.
+              </div>
+            )}
           </div>
 
           {/* Supplier + price. You can only pick a vendor who actually quotes

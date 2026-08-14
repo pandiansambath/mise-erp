@@ -68,6 +68,15 @@ async def update_vendor(db: AsyncSession, vendor: Vendor, **fields) -> Vendor:
 
 
 # ── Vendor item pricing ──────────────────────────────────────────────────────
+class _Keep:
+    """'The caller did not mention this field' — distinct from an explicit None."""
+
+    __slots__ = ()
+
+
+KEEP = _Keep()
+
+
 async def upsert_vendor_item(
     db: AsyncSession,
     vendor_id: uuid.UUID,
@@ -77,7 +86,7 @@ async def upsert_vendor_item(
     is_preferred: bool | None = None,
     notes: str | None = None,
     pack_level_id: uuid.UUID | None = None,
-    pack_size_override: Decimal | None = None,
+    pack_size_override: Decimal | None | _Keep = KEEP,
     source: str = "manual",
 ) -> VendorItem:
     """Set (or update) a vendor's price for an item.
@@ -103,9 +112,12 @@ async def upsert_vendor_item(
     # edit does not silently reset a supplier back to selling base units.
     if pack_level_id is not None:
         vi.pack_level_id = pack_level_id
-    # Explicitly settable to None: clearing it means "use the item's own size
-    # again", which has to be expressible or a mistake becomes permanent.
-    vi.pack_size_override = pack_size_override
+    # Three states, not two. KEEP (the default) means the caller never
+    # mentioned it — a plain price edit must not wipe a supplier's bottle size.
+    # An explicit None still clears it back to the item's own size, because
+    # undoing a mistake has to be expressible.
+    if pack_size_override is not KEEP:
+        vi.pack_size_override = pack_size_override
     if notes is not None:
         vi.notes = notes
     vi.last_updated = date.today()
