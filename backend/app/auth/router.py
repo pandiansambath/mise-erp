@@ -133,6 +133,7 @@ async def login(
         access_token=token,
         user=UserOut.model_validate(user),
         hotel=HotelOut.model_validate(hotel),
+        permissions=await _effective_for(db, user),
     )
 
 
@@ -199,6 +200,7 @@ async def login_otp(payload: OtpRequest, db: AsyncSession = Depends(get_db)) -> 
         access_token=token,
         user=UserOut.model_validate(user),
         hotel=HotelOut.model_validate(hotel),
+        permissions=await _effective_for(db, user),
     )
 
 
@@ -280,12 +282,31 @@ async def register_hotel(
     }
 
 
+async def _effective_for(db: AsyncSession, user: User) -> list[str]:
+    """Everything this person may do, custom role included.
+
+    Falls back to the base archetype when they hold no custom role, which is
+    the common path and costs no extra query.
+    """
+    from app.auth.deps import effective_permissions
+    from app.core.rbac import PERMISSIONS
+
+    custom = await effective_permissions(db, user)
+    if custom is not None:
+        return custom
+    return list(PERMISSIONS.get(user.role, []))
+
+
 @router.get("/me", response_model=MeResponse)
 async def me(
     current: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> MeResponse:
     hotel = await _hotel_or_404(db, current.hotel_id)
-    return MeResponse(user=UserOut.model_validate(current), hotel=HotelOut.model_validate(hotel))
+    return MeResponse(
+        user=UserOut.model_validate(current),
+        hotel=HotelOut.model_validate(hotel),
+        permissions=await _effective_for(db, current),
+    )
 
 
 @router.patch("/me", response_model=MeResponse)
@@ -299,7 +320,11 @@ async def update_me(
     await db.commit()
     await db.refresh(current)
     hotel = await _hotel_or_404(db, current.hotel_id)
-    return MeResponse(user=UserOut.model_validate(current), hotel=HotelOut.model_validate(hotel))
+    return MeResponse(
+        user=UserOut.model_validate(current),
+        hotel=HotelOut.model_validate(hotel),
+        permissions=await _effective_for(db, current),
+    )
 
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -467,7 +492,10 @@ async def verify_email(payload: VerifyRequest, db: AsyncSession = Depends(get_db
     hotel = await _hotel_or_404(db, user.hotel_id)
     token = create_access_token(subject=str(user.id), role=user.role)
     return TokenResponse(
-        access_token=token, user=UserOut.model_validate(user), hotel=HotelOut.model_validate(hotel)
+        access_token=token,
+        user=UserOut.model_validate(user),
+        hotel=HotelOut.model_validate(hotel),
+        permissions=await _effective_for(db, user),
     )
 
 

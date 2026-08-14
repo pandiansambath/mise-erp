@@ -43,7 +43,36 @@ const PERMISSIONS: Record<string, string[]> = {
   STAFF: ["attendance:self", "payroll:self"],
 };
 
+/** What the SERVER says this person may do, once it has told us.
+ *
+ *  The hardcoded table below is a fallback for the moment before /me answers.
+ *  It must never be the thing that decides, because it knows nothing about a
+ *  custom role and it drifts: the backend let a MANAGER write expenses while
+ *  this file's MANAGER list did not mention expenses at all. That is the bug he
+ *  hit — he granted expenses to a role, attached it, signed in, and the section
+ *  never appeared, because the only thing deciding what to show was a stale
+ *  copy that had never heard of his role.
+ */
+let granted: string[] | null = null;
+
+export function setGrantedPermissions(perms: string[] | null | undefined): void {
+  granted = perms && perms.length ? perms : null;
+}
+
+export function getGrantedPermissions(): string[] | null {
+  return granted;
+}
+
 export function can(role: string | undefined | null, permission: string): boolean {
+  // The server's answer wins whenever we have it.
+  if (granted) {
+    if (granted.includes("*") || granted.includes(permission)) return true;
+    if (permission.endsWith(":read")) {
+      const moduleName = permission.split(":")[0];
+      if (granted.includes(`${moduleName}:write`)) return true;
+    }
+    return false;
+  }
   if (!role) return false;
   const perms = PERMISSIONS[role] ?? [];
   if (perms.includes("*") || perms.includes(permission)) return true;
