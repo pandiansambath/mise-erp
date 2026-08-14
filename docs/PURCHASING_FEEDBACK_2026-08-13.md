@@ -212,10 +212,18 @@ animates off-screen, and nothing animates under prefers-reduced-motion.
 The grow/shrink came back, but the New order / Indents / Orders row was being
 **clipped**. The rail carried `contain: layout paint style`, and paint
 containment cuts off anything drawn outside the element's box — the condensed
-row is *lifted by a transform*, straight past the top edge. Dropped `paint`
-(layout and style still do the useful work), lifted it less (2.15rem, not
-2.6rem) so it lands ON the title's line rather than climbing over it, and
-scaled it to 0.95. **DONE**
+row is *lifted by a transform*, straight past the top edge.
+
+Fixing that alone was not enough, and a live measurement caught it: the button
+was still only **15px tall against 36 expanded**. Second cause — the tools sit
+in a grid row that collapses to `0fr`, and a *stretched* child gets squashed
+into that zero. `overflow: visible` lets the ink escape the box; it cannot
+un-squash the box. `align-items: start` lets them keep their own height while
+the row still collapses, so the rail is the same 60px either way and no space
+is lost.
+
+Measured after both fixes: button **34.2px**, sitting **1.5px** off the title's
+centre line, fully inside the rail. **DONE**
 
 ### 2. "the text colors are so light that i cant even read" (basket card)
 The rows said "in stock" in `sky-300` and "after this" in `emerald-300` — those
