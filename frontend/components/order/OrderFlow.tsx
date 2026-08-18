@@ -441,6 +441,8 @@ export function OrderFlow({
   onChange,
   onAddAllLow,
   footer,
+  vendorPick,
+  onVendorPick,
 }: {
   items: Item[];
   suppliers: Record<string, SupplierOption[]>;
@@ -448,6 +450,12 @@ export function OrderFlow({
   onChange: (next: OrderLine[]) => void;
   onAddAllLow?: () => void;
   footer?: React.ReactNode;
+  /** item_id -> the vendor picked for THIS order only. */
+  vendorPick?: Record<string, string>;
+  /** Choose a supplier for one purchase. Never touches the ★ chosen supplier:
+   *  "this is not overwrite default vendor, just for that 1 purchase I can
+   *   choose." Passing "" puts the line back on the default. */
+  onVendorPick?: (itemId: string, vendorId: string) => void;
 }) {
   const { format } = useCurrency();
   const [cat, setCat] = useState<string | null>(null);
@@ -527,14 +535,27 @@ export function OrderFlow({
     (id: string): SupplierOption | undefined => {
       const opts = suppliers[id] ?? [];
       if (!opts.length) return undefined;
+      // 1. Whoever was PICKED for this order. Same precedence the server uses
+      //    when it splits the indent into purchase orders, so what the basket
+      //    prices is what the purchase order will say.
+      const picked = vendorPick?.[id];
+      if (picked) {
+        const mine = opts.find((v) => v.vendor_id === picked);
+        if (mine) return mine;
+      }
+      // 2. The ★ chosen supplier. 3. Otherwise the genuinely cheapest — per
+      //    BASE unit, not per quote: a £20 box of 10 kg is not cheaper than a
+      //    £50 box of 50 kg.
+      const it = byId.get(id);
       return (
         opts.find((v) => v.is_preferred) ??
-        [...opts].sort(
-          (a, b) => (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0),
-        )[0]
+        [...opts].sort((a, b) => {
+          if (!it) return (parseFloat(a.price_per_unit) || 0) - (parseFloat(b.price_per_unit) || 0);
+          return (pricePerBase(it, a) || Infinity) - (pricePerBase(it, b) || Infinity);
+        })[0]
       );
     },
-    [suppliers],
+    [suppliers, vendorPick, byId],
   );
 
   const cats = useMemo(() => {
@@ -839,6 +860,9 @@ export function OrderFlow({
           // back to the basket when you are done rather than to the page.
           onEdit={(it) => setOpenItem(it)}
           footer={footer}
+          suppliers={suppliers}
+          vendorPick={vendorPick}
+          onVendorPick={onVendorPick}
         />
       )}
     </div>
@@ -856,6 +880,9 @@ function BasketSheet({
   onClose,
   onEdit,
   footer,
+  suppliers,
+  vendorPick,
+  onVendorPick,
 }: {
   lines: OrderLine[];
   byId: Map<string, Item>;
@@ -865,6 +892,9 @@ function BasketSheet({
   /** Reopen the quantity popup for this line. */
   onEdit: (it: Item) => void;
   footer?: React.ReactNode;
+  suppliers: Record<string, SupplierOption[]>;
+  vendorPick?: Record<string, string>;
+  onVendorPick?: (itemId: string, vendorId: string) => void;
 }) {
   const { format } = useCurrency();
   const confirm = useConfirm();
@@ -1183,9 +1213,52 @@ function BasketSheet({
                           </span>
                         </div>
 
-                        <p className="mt-0.5 truncate text-[10px] text-fg-faint">
-                          {sup?.vendor_name ?? "no supplier"}
-                        </p>
+                        {/* WHO THIS ONE IS COMING FROM — changeable here, for
+                            this purchase only. "I need flexibility to choose my
+                            vendor as per my wish... currently I need to go to
+                            price comparison page to change default vendor and
+                            use this for all purchase. This is not overwrite
+                            default vendor, just for that 1 purchase."
+
+                            The ★ chosen supplier is untouched; the server's
+                            precedence is picked > chosen > cheapest, which is
+                            exactly what supplierFor does above, so the basket
+                            prices what the purchase order will say. */}
+                        {(() => {
+                          const opts = suppliers[it.id] ?? [];
+                          if (!onVendorPick || opts.length < 2) {
+                            return (
+                              <p className="mt-0.5 truncate text-[10px] text-fg-faint">
+                                {sup?.vendor_name ?? "no supplier"}
+                              </p>
+                            );
+                          }
+                          const chosen = vendorPick?.[it.id] ?? "";
+                          return (
+                            <label
+                              className="mt-0.5 block"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span className="sr-only">Supplier for {it.name}, this order only</span>
+                              <select
+                                value={chosen}
+                                onChange={(e) => onVendorPick(it.id, e.target.value)}
+                                className={`w-full truncate rounded border-0 bg-transparent px-0 py-0 text-[10px] outline-none ${
+                                  chosen ? "mise-tone-warn font-medium" : "text-fg-faint"
+                                }`}
+                              >
+                                <option value="">
+                                  {sup ? `${sup.vendor_name}${sup.is_preferred ? " ★" : " (cheapest)"}` : "no supplier"}
+                                </option>
+                                {opts.map((v) => (
+                                  <option key={v.vendor_id} value={v.vendor_id}>
+                                    {v.vendor_name} · {format(pricePerBase(it, v).toFixed(2))}/{it.unit}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          );
+                        })()}
 
                         {/* FIXED SLOTS — the same four rows on every card,
                             whether or not there is something to put in them.
