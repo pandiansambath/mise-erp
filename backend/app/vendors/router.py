@@ -196,6 +196,29 @@ async def upsert_vendor_item(
     item = await get_item(db, payload.item_id, user.hotel_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    # The supplier may simply NAME the pack they sell in — "1 bottle holds 20
+    # kg" — instead of picking a rung somebody had to create in Inventory
+    # first. An unfamiliar name joins the item's chain; a familiar one is
+    # reused, and the size they quoted lands on their own row, which is what
+    # makes two suppliers able to disagree about how big a bottle is.
+    level_id = (
+        payload.pack_level_id if "pack_level_id" in payload.model_fields_set else service.KEEP
+    )
+    size_override = (
+        payload.pack_size_override
+        if "pack_size_override" in payload.model_fields_set
+        else service.KEEP
+    )
+    if payload.pack_name and payload.pack_size and payload.pack_size > 0:
+        level = await pack_service.ensure_level(db, item, payload.pack_name, payload.pack_size)
+        if level is not None:
+            level_id = level.id
+            size_override = payload.pack_size
+    elif payload.pack_name is not None and not payload.pack_name.strip():
+        # Cleared back to "sold loose" — they quote the base unit again.
+        level_id = None
+        size_override = None
+
     vi = await service.upsert_vendor_item(
         db,
         vendor_id,
@@ -203,14 +226,10 @@ async def upsert_vendor_item(
         payload.price_per_unit,
         is_preferred=payload.is_preferred,
         notes=payload.notes,
-        pack_level_id=payload.pack_level_id,
+        pack_level_id=level_id,
         # Only forward it when the client actually sent the field, so the
         # "change the price" form does not clear the supplier's pack size.
-        pack_size_override=(
-            payload.pack_size_override
-            if "pack_size_override" in payload.model_fields_set
-            else service.KEEP
-        ),
+        pack_size_override=size_override,
     )
     await audit.record(
         db, hotel_id=user.hotel_id, user=user, action="vendor.price",

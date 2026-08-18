@@ -88,6 +88,14 @@ class VendorItemUpsert(BaseModel):
     #: This supplier's own pack size, when their bottle holds a different number
     #: than everybody else's. None = use the item's chain.
     pack_size_override: Decimal | None = None
+    #: The supplier NAMES the pack they sell in — "bottle", "box", "packet" —
+    #: instead of picking from a list somebody had to build in Inventory first.
+    #: "that size need to be auto-picked like price bro, auto pick from vendor
+    #: and show in inventory." An unknown name is added to the item's chain;
+    #: a known one is reused, and `pack_size` lands on THIS supplier's row.
+    pack_name: str | None = None
+    #: How many base units their pack holds. Paired with `pack_name`.
+    pack_size: Decimal | None = None
     # None = leave as-is (a price edit must NOT un-choose the ★ preferred supplier).
     is_preferred: bool | None = None
     notes: str | None = None

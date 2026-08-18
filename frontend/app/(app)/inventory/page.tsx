@@ -18,7 +18,6 @@ import {
 } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
-import { PackChainEditor, type PackLevel } from "@/components/PackChainEditor";
 import { chainSummary, stockInPacks } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
@@ -102,7 +101,6 @@ export default function InventoryPage() {
   const [adding, setAdding] = useState(false);
   // The buying chain, smallest first. Held apart from `form` because it is a
   // list of rows rather than a field, and it is saved as a whole.
-  const [packLevels, setPackLevels] = useState<PackLevel[]>([]);
   // The money bento starts closed so the stock list is the first thing on
   // the page, which is what the page is for.
   const [showMoney, setShowMoney] = useState(false);
@@ -301,14 +299,6 @@ export default function InventoryPage() {
       packUnit: item.pack_unit ?? "",
       packSize: item.pack_size ?? "",
     });
-    // Items from before the chain existed report their old pack_unit/pack_size
-    // as a single rung, so this is the same shape either way.
-    setPackLevels(
-      (item.pack_levels ?? []).map((lv) => ({
-        name: lv.name,
-        contains: String(lv.contains),
-      })),
-    );
     setAllergensTouched(false);
     setError(null);
     // No scrolling: the form opens over the row you clicked. The modal focuses
@@ -318,7 +308,6 @@ export default function InventoryPage() {
   function cancelEdit() {
     setEditingId(null);
     setAdding(false);
-    setPackLevels([]);
     setFormVendor("");
     setVendorMsg(null);
     setForm(EMPTY);
@@ -343,14 +332,14 @@ export default function InventoryPage() {
       unit: form.unit,
       category: form.category || null,
       min_stock_level: form.min || null,
-      // Pack is optional: 1 packUnit = packSize units. Blank pack_size clears it.
-      pack_unit: form.packUnit.trim() || null,
-      pack_size: form.packUnit.trim() && form.packSize ? form.packSize : null,
-      // Sent whole. Each rung counts the one below it, so a half-written chain
-      // would leave "1 box = 10 small boxes" pointing at nothing.
-      pack_levels: packLevels
-        .filter((l) => l.name.trim() && parseFloat(l.contains) > 0)
-        .map((l) => ({ name: l.name.trim(), contains: l.contains })),
+      // NOTE: no pack_unit / pack_size / pack_levels. This page no longer owns
+      // how a thing is bought — suppliers do. Sending the chain from here would
+      // be actively destructive now that they can add to it: `set_levels`
+      // REPLACES the chain, and `vendor_items.pack_level_id` is ON DELETE SET
+      // NULL, so one save from a stale form would silently un-set the pack
+      // every supplier had chosen. Omitting the field leaves the chain alone —
+      // the API treats "not mentioned" and "sent empty" differently for exactly
+      // this reason.
     };
     // Write allergens whenever the user touched the picker (works for add + edit).
     // Left untouched → stays "not reviewed" so the Allergens sheet still prompts.
@@ -1070,67 +1059,91 @@ export default function InventoryPage() {
           <div className="mt-3">
             {editingId ? (
               <>
-                <PackChainEditor
-                  baseUnit={form.unit}
-                  levels={packLevels}
-                  onChange={setPackLevels}
-                />
+                {/* The size editor is GONE from here, on his instruction:
+                    "still you have that add-size feature in inventory itself —
+                     that size needs to be auto-picked like price bro, auto pick
+                     from vendor and show in inventory."
+                    Which is right, and consistent with how price already works:
+                    nothing about how a thing is BOUGHT is typed on this page,
+                    because none of it is a fact about the ingredient. It is a
+                    fact about whoever sells it. So this reads the suppliers
+                    back instead of asking.
 
-                {/* What each supplier ACTUALLY sells, shown where the chain is
-                    edited — because the chain is only the default. "We can
+                    What each supplier ACTUALLY sells. "We can
                     clearly see these are from vendor side, so in vendor
                     section only we need to do this — and inventory need to
                     gather information and show it in detail." */}
-                {formSuppliers.length > 0 && (
-                  <div className="mt-2 rounded-xl border border-line bg-paper-2/60 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                      How each supplier sells it
-                    </p>
-                    <ul className="mt-2 space-y-1.5">
-                      {formSuppliers.map((sv) => {
-                        const own = parseFloat(sv.pack_size_override ?? "");
-                        const differs = Number.isFinite(own) && own > 0;
-                        // The SAVED chain, not the draft being edited: only the
-                        // saved one carries ids and a computed base_size, and a
-                        // supplier's quote points at a saved level.
-                        const lvl = sv.pack_level_id
-                          ? (editingItem?.pack_levels ?? []).find((l) => l.id === sv.pack_level_id)
-                          : null;
-                        return (
-                          <li
-                            key={sv.vendor_id}
-                            className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs"
-                          >
-                            <span className="font-medium text-fg">
-                              {sv.vendor_name}
-                              {sv.is_preferred && <span className="ml-1 text-amber-300">★</span>}
-                            </span>
-                            <span className="text-fg-soft">
-                              {lvl
-                                ? `1 ${lvl.name} = ${
-                                    differs ? own : lvl.base_size
-                                  } ${form.unit}`
-                                : `sold loose, per ${form.unit}`}
-                              {differs && (
-                                <span className="ml-1.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">
-                                  their own size
-                                </span>
-                              )}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
-                      Sizes are set with the supplier who quoted them —{" "}
+                <div className="rounded-xl border border-line bg-paper-2/60 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                    How each supplier sells it
+                  </p>
+                  {formSuppliers.length === 0 ? (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-fg-faint">
+                      Nobody prices this yet. Say who sells it, in what — bottle, box, packet —
+                      and for how much on the{" "}
                       <Link href="/vendors" className="font-medium text-brand-400 hover:underline">
-                        change them on Vendors
-                      </Link>
-                      . A supplier marked &ldquo;their own size&rdquo; overrides the chain above
-                      for anything ordered or received from them.
+                        Vendors
+                      </Link>{" "}
+                      page, and it appears here.
                     </p>
-                  </div>
-                )}
+                  ) : (
+                    <>
+                      <ul className="mt-2 space-y-1">
+                        {formSuppliers.map((sv) => {
+                          const own = parseFloat(sv.pack_size_override ?? "");
+                          const differs = Number.isFinite(own) && own > 0;
+                          // The SAVED chain — only it carries ids and a computed
+                          // base_size, and a supplier's quote points at a saved rung.
+                          const lvl = sv.pack_level_id
+                            ? (editingItem?.pack_levels ?? []).find((l) => l.id === sv.pack_level_id)
+                            : null;
+                          const size = differs ? own : parseFloat(lvl?.base_size ?? "0") || 0;
+                          const price = parseFloat(sv.price_per_unit) || 0;
+                          return (
+                            <li key={sv.vendor_id}>
+                              {/* The whole row goes to that supplier's prices —
+                                  "click anything, do anything". The old version
+                                  only had a link in the paragraph underneath,
+                                  which is what he clicked and nothing happened. */}
+                              <Link
+                                href={`/vendors?vendor=${sv.vendor_id}`}
+                                className="mise-press flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-lg px-2 py-1.5 text-xs transition hover:bg-paper-3"
+                              >
+                                <span className="font-medium text-fg">
+                                  {sv.vendor_name}
+                                  {sv.is_preferred && <span className="ml-1 text-amber-300">★</span>}
+                                </span>
+                                <span className="text-fg-soft">
+                                  {lvl && size > 0 ? (
+                                    <>
+                                      1 {lvl.name} = <b className="text-fg">{size}</b> {form.unit}
+                                      {price > 0 && ` · ${format(price.toFixed(2))}`}
+                                      {differs && (
+                                        <span className="mise-tone-warn ml-1.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-medium">
+                                          their own size
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      sold loose, per {form.unit}
+                                      {price > 0 && ` · ${format(price.toFixed(2))}`}
+                                    </>
+                                  )}
+                                </span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
+                        Read from whoever quoted it, the same way the price is — tap a supplier to
+                        change what they sell it in. Two suppliers can both say
+                        &ldquo;bottle&rdquo; and mean different sizes, and both stay right.
+                      </p>
+                    </>
+                  )}
+                </div>
               </>
             ) : (
               /* Paused on a NEW item, exactly like the supplier field above it.

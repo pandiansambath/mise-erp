@@ -990,7 +990,7 @@ export default function PurchasingPage() {
           nice to see, it's very plain text UI." It was a tinted paragraph.
           Something just HAPPENED — the message should arrive like it. */}
       {msg && (
-        <div className="mise-card3d mise-say relative mb-4 flex items-start gap-3 overflow-hidden px-4 py-3" id="mise-indent-said">
+        <div className="mise-card3d mise-card3d-wide mise-say relative mb-4 flex items-start gap-3 overflow-hidden px-4 py-3" id="mise-indent-said">
           <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400" />
           <span
             aria-hidden
@@ -1283,7 +1283,7 @@ export default function PurchasingPage() {
           },
         ];
         return (
-          <div className="mise-card3d mb-4 p-2.5">
+          <div className="mise-card3d mise-card3d-wide mb-4 p-2.5">
             <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-stretch sm:gap-0">
               {stages.map((st, i) => (
                 <div key={st.label} className="flex min-w-0 flex-1 items-center">

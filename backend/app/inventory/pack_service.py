@@ -156,3 +156,53 @@ async def per_base_prices(
         return packs.price_per_base(price, chains.get(item_id, []), position)
 
     return convert
+
+
+async def ensure_level(
+    db: AsyncSession, item: Item, name: str, wanted_base: Decimal
+) -> ItemPackLevel | None:
+    """Find the rung a supplier means by `name`, creating it if it is new.
+
+    His correction, and it is the right shape:
+
+        "we need to add these and all in each vendor page right? ... but still
+         you have that add-size feature in inventory itself — that size needs to
+         be auto-picked like price bro, auto pick from vendor and show in
+         inventory."
+
+    So the SUPPLIER names the pack, the way they already name the price, and
+    inventory reads it back rather than asking for it. A name that already
+    exists is reused as-is: how big THIS supplier's version is belongs on their
+    own row (`pack_size_override`), because that is exactly the case where two
+    suppliers say "bottle" and mean different numbers.
+
+    Appending only, never rewriting. `vendor_items.pack_level_id` is
+    ON DELETE SET NULL, so replacing the chain would silently un-set the pack
+    every other supplier had chosen.
+    """
+    clean = (name or "").strip()
+    if not clean or wanted_base is None or wanted_base <= 0:
+        return None
+
+    rows = (await levels_for(db, [item.id])).get(item.id) or []
+    for r in rows:
+        if r.name.strip().lower() == clean.lower():
+            return r
+
+    # A new rung on the end. The chain stores the STEP up from the rung below,
+    # so the step is whatever turns that rung's size into the one asked for.
+    levels = as_levels(rows)
+    below = base_size(levels, rows[-1].position) if rows else Decimal(1)
+    step = Decimal(str(wanted_base)) / (below or Decimal(1))
+    if step <= 0:
+        return None
+
+    row = ItemPackLevel(
+        item_id=item.id,
+        position=(rows[-1].position + 1) if rows else 1,
+        name=clean[:40],
+        contains=step,
+    )
+    db.add(row)
+    await db.flush()
+    return row

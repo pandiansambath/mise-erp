@@ -267,3 +267,70 @@ size** — and the next delivery would credit the wrong number of pieces into
 stock. Fixed with a `KEEP` sentinel: three states, not two — *not mentioned*
 leaves it alone, *explicitly null* still clears it. Pinned by
 `test_price_edit_keeps_the_suppliers_own_pack_size`.
+
+---
+
+## 2026-08-14 (later) — pack sizes belong to the vendor, properly this time
+
+> "creatd a new item called kari... then went to vendor page (did u added that
+> feature?) i cant see that feature in vedor page... what the hell is this, this
+> is same as before we had... but still u have that add-size featreu in
+> inventory itseld... that size need to be autopicked like price bro, auto pick
+> from vednor and show in inevntory."
+
+He was right on every count. The first attempt let a vendor override a size, but
+only by *picking a rung Inventory had already created* — so for a brand-new item
+there was nothing to pick, and the size still had to be authored in Inventory
+first. That is the same shape as before, with an extra step.
+
+**The model now matches what he described.**
+
+- **Vendors owns it.** Beside the price, in the same form: *"for one ⟨bottle⟩
+  holding ⟨20⟩ kg"*. The name is **typed**, not picked — existing names are
+  offered as suggestions. A name nobody has used joins the item's chain
+  server-side (`pack_service.ensure_level`); a familiar one is reused, and the
+  size lands on **that supplier's** row. Empty name = sold loose.
+  *"where we having price input field there itself we have this too, so that all
+  at once even layman can do."*
+- **Inventory no longer asks.** The size editor is gone from both the new-item
+  and edit forms. Editing shows **"How each supplier sells it"** — each supplier,
+  their pack, their size, their price, an amber chip where they differ, and the
+  whole row is a link to that supplier. Auto-picked, exactly like price.
+
+### Two traps found on the way
+1. **The item form was still POSTing `pack_levels`.** `set_levels` *replaces* the
+   chain, and `vendor_items.pack_level_id` is `ON DELETE SET NULL` — so one save
+   from a stale form would have silently un-set the pack every supplier had
+   chosen. The form no longer sends the field at all.
+2. **`pack_level_id` could never be cleared.** The service ignored `None`
+   ("leave it alone"), so a supplier who actually sells loose could not be
+   corrected. Now three-state like its neighbours: KEEP vs explicit null.
+
+## Mobile: the ORDERS button was off-screen
+> "in mobile view that ORDER button is fully went and hidden in right corner."
+
+Measured at 390px: the condensed tools ran from x=172 to **x=503** — 113px past
+the right edge. The tuck slides the row `40vw` right into space the title stops
+using, and on a phone the title never stops using it (the row is 327px wide in a
+390px screen). Under 768px the row now stays put and just shrinks: 16 → 343,
+fully on screen. The rail reclaims less there, which is the right trade against
+a button you cannot reach.
+
+## Shadows: same number, unequal weight
+> "the first 2 compartments we showing too much shadow, the category card a bit
+> less — why this inconsistency? dont be too much, it need to be beautiful at
+> the same time 3D feel too."
+
+They were already identical — both 8px. Depth is a hard band along the top edge,
+so the ink it puts on screen scales with **width**: 8px along a full-width strip
+is ~4× the dark of 8px along a tile. Equal numbers, unequal weight. Wide
+surfaces now take `.mise-card3d-wide` (5px, tighter cast); the lit rims and the
+lower-right light are untouched, so they stay solid without shouting.
+
+## The burst
+Paper now settles **on the cards** — landing heights spread across the viewport
+and biased mid-screen, where the cards are, instead of heaping at the bottom —
+lies flat when it lands (rotateZ, not a frozen tumble) and holds for ~3s.
+Smoke is back, but small: a bottom-third strip, never above 0.2 opacity, gone in
+a second. The version he killed was a full-screen veil — *"it made a blind for a
+sec, clouds closed the entire page"* — and the page stays visible throughout now.

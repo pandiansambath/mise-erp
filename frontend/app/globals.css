@@ -2068,6 +2068,24 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     box-shadow 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
+/* ── Wide panels carry less depth, to LOOK like the same depth ───────────────
+   "see the first 2 compartments — we're showing too much shadow. The category
+    card, we're showing a bit less. Why this inconsistency? Don't be too much;
+    it needs to be beautiful to look at, at the same time 3D feel too."
+
+   They were already identical: both 8px. The inconsistency is in the eye, not
+   the CSS. Depth is a hard band along the top edge, so the ink it puts on the
+   screen scales with WIDTH — the same 8px along a full-width strip is roughly
+   four times the dark of 8px along a tile. Equal numbers, unequal weight.
+
+   So the wide surfaces get a shallower band and a tighter cast, which is what
+   makes them read as the same slab of material as the tiles rather than as
+   something heavier. The lit rims and the lower-right light are untouched, so
+   they are still solid — just not shouting. */
+.mise-card3d-wide {
+  --tile-depth: 5px;
+}
+
 .mise-card3d:hover {
   --tile-depth: 9px;
   transform: translate(2px, -2px);
@@ -2582,6 +2600,26 @@ body[data-overlay] .mise-launcher-in {
 /* The tools must stay visible while their row has zero height. */
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools > * {
   overflow: visible;
+}
+
+/* ── Narrow screens: nowhere to tuck ─────────────────────────────────────────
+   "in mobile view that ORDER button is fully gone and hidden in the right
+    corner."
+
+   Measured at 390px: the tools ran from x=172 to x=503 — 113px of the row was
+   past the right edge. The tuck works by sliding the row 40vw to the right into
+   the space the title stops using, and on a phone the title never stops using
+   it: the row is 327px wide inside a 390px screen, so there is no beside.
+
+   So on a phone the row simply stays where it is, a little smaller. The rail
+   still condenses — the title shrinks and the subtitle collapses — it just
+   reclaims less, which is the right trade against a button you cannot reach. */
+@media (max-width: 767px) {
+  .mise-bench-rail[data-condensed="true"] .mise-bench-tools {
+    grid-template-rows: 1fr;
+    transform: translate(0, -0.35rem) scale(0.94);
+    padding-bottom: 0.3rem;
+  }
 }
 
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools > nav {
