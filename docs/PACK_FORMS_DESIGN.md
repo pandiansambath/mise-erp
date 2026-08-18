@@ -139,7 +139,13 @@ and it is also the honest version of the `1 box = 50 kg` line we removed.
    supplier, rounding a case seller UP to whole cases (they cannot sell half a
    case) and flagging how much would be left over. The per-kg winner and the
    winner for this amount are often different people, and only this says which.
-6. ~~Inventory: list every way to buy it, cheapest first~~ — done. The item
+6. **Inventory: list every way to buy it — SHIPPED BUT NOT WORKING.** The code
+   is deployed (`3bb8f1c`) and the section does not render: checked live on
+   Dragon fruit, which has both suppliers and purchase history, and
+   "Every way you can buy it" is absent from the sheet. Either the block it sits
+   in is not reached, or `itemSuppliers[openItem.id]` is empty at that point and
+   the guard returns null. **Diagnose before doing anything else on this file.**
+   The intent: the item
    sheet carries **"Every way you can buy it"**: each supplier x form, the real
    per-base cost leading and the quoted price beside it, cheapest first, with a
    line saying why a big case price can still win.
