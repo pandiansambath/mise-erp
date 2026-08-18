@@ -127,9 +127,13 @@ and it is also the honest version of the `1 box = 50 kg` line we removed.
    The basket card's supplier line is now a picker listing every supplier at
    their real per-unit cost. `is_preferred` is never written, so the ★ chosen
    supplier is untouched. Picking one tints the line amber.
-   **Still to do here:** pick the FORM (box vs loose) per line, and show the
-   non-default choice plainly in inventory afterwards — his "pile up confusion"
-   warning.
+   The one-off is now called out in Inventory too — a delivery from anyone but
+   the ★ chosen supplier says *"one-off · your usual is X"*, which is his
+   "pile up confusion" warning answered.
+   **Still to do here:** picking the FORM (box vs loose) per line. Only the
+   supplier is recorded on an indent line today, and the server takes that
+   supplier's cheapest form; choosing the dearer form deliberately would need a
+   `pack_level_id` on `indent_items`.
 5. ~~Price Comparison: the "cheapest for the 2 kg I actually want" answer~~ —
    done. A quantity box on the Suppliers tab prices THAT amount against every
    supplier, rounding a case seller UP to whole cases (they cannot sell half a
