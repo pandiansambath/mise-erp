@@ -116,6 +116,15 @@ class SupplierOption(BaseModel):
     price_per_unit: Decimal
     #: Which size this supplier's price buys. None = one base unit.
     pack_level_id: uuid.UUID | None = None
+    #: How many base units THEIR pack holds, when it differs from the item's.
+    #:
+    #: This was missing, and a missing field here is invisible in a way a wrong
+    #: one is not: the query selected it and the service put it in the dict, but
+    #: `response_model` drops whatever the schema does not declare. So every
+    #: screen fed by /purchasing/item-suppliers — inventory, the order form —
+    #: saw None and quietly fell back to the item's own size. A supplier whose
+    #: box holds 500 kg was drawn as 50, with nothing anywhere reading as broken.
+    pack_size_override: Decimal | None = None
     is_preferred: bool
 
 

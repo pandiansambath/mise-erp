@@ -226,3 +226,37 @@ async def test_price_edit_keeps_the_suppliers_own_pack_size(db, hotel):
         db, sk.id, lemon.id, Decimal("5.50"), pack_size_override=None
     )
     assert vi.pack_size_override is None
+
+
+@pytest.mark.asyncio
+async def test_item_suppliers_reports_each_vendors_own_pack_size(client, make_user, auth_header):
+    """The per-item supplier list must carry pack_size_override.
+
+    It selected the column and the service put it in the dict, but the response
+    schema did not declare it — and `response_model` drops what it does not
+    know. So every screen fed by this endpoint saw None and fell back to the
+    item's own size: a supplier whose box holds 500 kg was drawn as 50, with
+    nothing anywhere looking broken.
+    """
+    user = await make_user(Role.MANAGER)
+    h = auth_header(user)
+
+    r = await client.post("/api/inventory/items", json={"name": "Guava", "unit": "kg"}, headers=h)
+    item_id = r.json()["id"]
+    v = await client.post("/api/vendors", json={"name": "Big Box Co"}, headers=h)
+    vendor_id = v.json()["id"]
+
+    r = await client.post(
+        f"/api/vendors/{vendor_id}/items",
+        json={"item_id": item_id, "price_per_unit": "500.00", "pack_name": "box", "pack_size": "500"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    assert str(r.json()["pack_size_override"]).startswith("500")
+
+    rows = (await client.get("/api/purchasing/item-suppliers", headers=h)).json()
+    mine = [x for x in rows if x["item_id"] == item_id]
+    assert mine, "the item is not listed at all"
+    opt = mine[0]["vendors"][0]
+    assert opt["pack_size_override"] is not None, "the endpoint dropped the pack size"
+    assert str(opt["pack_size_override"]).startswith("500")
