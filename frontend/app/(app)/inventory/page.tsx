@@ -1905,6 +1905,28 @@ export default function InventoryPage() {
                                                   it the quantities above look
                                                   like they disagree for no
                                                   reason. */}
+                                              {/* A ONE-OFF, called out. He asked
+                                                  for the per-purchase supplier
+                                                  choice and warned about it in
+                                                  the same breath: "we need to
+                                                  note and show this clearly in
+                                                  inventory or else it will be a
+                                                  pile up confusion in future."
+                                                  So when a delivery came from
+                                                  anyone but the ★ chosen
+                                                  supplier, the row says so. */}
+                                              {(() => {
+                                                const opts = itemSuppliers[openItem.id] ?? [];
+                                                const star = opts.find((x) => x.is_preferred);
+                                                if (!star || !r.vendor_id || star.vendor_id === r.vendor_id) {
+                                                  return null;
+                                                }
+                                                return (
+                                                  <p className="mise-tone-warn mt-0.5 text-[11px]">
+                                                    one-off · your usual is {star.vendor_name}
+                                                  </p>
+                                                );
+                                              })()}
                                               {(() => {
                                                 const sv = (itemSuppliers[openItem.id] ?? []).find(
                                                   (s) => s.vendor_id === r.vendor_id,
