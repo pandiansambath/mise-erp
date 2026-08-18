@@ -109,13 +109,20 @@ and it is also the honest version of the `1 box = 50 kg` line we removed.
 ---
 
 ## Order of work
-1. ~~Stop the per-kg lie on Price Comparison~~ — done: the big number is the
-   per-base price, ranking uses per-base, and the price box moved to Vendors.
-2. Schema + upsert keyed on the triple, with a migration.
-3. Vendors: author multiple forms per item; the "same rate as the box" action.
-4. Purchasing: pick the form (and the vendor) per basket line.
-5. Price Comparison: the "for this quantity" answer.
-6. Inventory: list the ways to buy, cheapest first.
+1. ~~Stop the per-kg lie on Price Comparison~~ — done.
+2. ~~Schema + upsert keyed on the triple~~ — done, migration `40c6a64f0525`.
+   Two PARTIAL unique indexes, because NULL means loose and Postgres treats
+   NULLs as distinct. **Proved on his live data**: Farm2Land dragon fruit now
+   carries a £50 box (50 kg) and a £1.40 loose kilo side by side.
+3. ~~Vendors: author multiple forms; the "same rate" action~~ — done. Rows name
+   their form ("by the box (50 kg)" / "loose, per kg"); "+ They also sell it
+   loose" seeds a real row at the case rate. The cheapest highlight ranks on
+   per-base cost.
+4. **NEXT — Purchasing: pick the form AND the vendor per basket line.** This is
+   also where his separate request lands: choose a supplier for ONE purchase
+   without touching the ★ default, and show it plainly in inventory afterwards.
+5. Price Comparison: the "cheapest for the 2 kg I actually want" answer.
+6. Inventory: list every way to buy it, cheapest first.
 
 **Nothing here changes what stock IS.** A kilo is a kilo whoever delivered it
 and however it was boxed. What changes is that the app stops inventing prices

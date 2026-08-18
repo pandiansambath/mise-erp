@@ -931,6 +931,16 @@ export default function PriceComparisonPage() {
                                     <span className="ml-1 text-[11px] font-normal text-fg-faint">
                                       /{data.unit}
                                     </span>
+                                    {/* Which WAY they sell it. The same supplier
+                                        can appear twice now — a case and a
+                                        loose price — and two cards reading
+                                        "Farm2Land" with different numbers and
+                                        no label is the confusion, not the fix. */}
+                                    {!row.pack_level_name && (
+                                      <span className="mt-0.5 block text-[11px] font-normal text-fg-soft">
+                                        loose, per {data.unit}
+                                      </span>
+                                    )}
                                     {row.pack_level_name && (
                                       <span className="mt-0.5 block text-[11px] font-normal text-fg-soft">
                                         {format(row.price_per_unit)} per {row.pack_level_name}
