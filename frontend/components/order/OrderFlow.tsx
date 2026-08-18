@@ -1250,11 +1250,29 @@ function BasketSheet({
                                 <option value="">
                                   {sup ? `${sup.vendor_name}${sup.is_preferred ? " ★" : " (cheapest)"}` : "no supplier"}
                                 </option>
-                                {opts.map((v) => (
-                                  <option key={v.vendor_id} value={v.vendor_id}>
-                                    {v.vendor_name} · {format(pricePerBase(it, v).toFixed(2))}/{it.unit}
-                                  </option>
-                                ))}
+                                {/* ONE ENTRY PER SUPPLIER, at their best rate.
+                                    A supplier can quote several forms now, so
+                                    the raw list showed the same name two or
+                                    three times with different numbers — and
+                                    since only the supplier is recorded on the
+                                    line, picking either did the same thing.
+                                    The server also takes their cheapest form,
+                                    so this is the number the order will use. */}
+                                {[...new Map(opts.map((v) => [v.vendor_id, v])).values()]
+                                  .map((v) => {
+                                    const mine = opts.filter((o) => o.vendor_id === v.vendor_id);
+                                    const best = Math.min(
+                                      ...mine.map((o) => pricePerBase(it, o) || Infinity),
+                                    );
+                                    return { v, best, forms: mine.length };
+                                  })
+                                  .sort((a, b) => a.best - b.best)
+                                  .map(({ v, best, forms }) => (
+                                    <option key={v.vendor_id} value={v.vendor_id}>
+                                      {v.vendor_name} · {format(best.toFixed(2))}/{it.unit}
+                                      {forms > 1 ? ` · ${forms} ways` : ""}
+                                    </option>
+                                  ))}
                               </select>
                             </label>
                           );

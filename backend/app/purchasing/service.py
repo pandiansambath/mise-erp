@@ -283,11 +283,19 @@ async def _resolve_supplier(
     def per_base(price: Decimal, level_id: uuid.UUID | None, size=None) -> Decimal:
         return convert(item_id, price, level_id, size)
 
+    # A supplier may now quote SEVERAL forms — a case and a loose kilo, at rates
+    # that are not multiples of each other. `.limit(1)` picked whichever row the
+    # database happened to hand back first, so an order could silently be costed
+    # at the loose rate when the case was meant. Within one supplier, take the
+    # form that genuinely costs least per base unit.
+    def cheapest_of(rows):
+        return min(rows, key=lambda r: per_base(r[1], r[2], r[3])) if rows else None
+
     if override_vendor_id is not None:
-        row = (await db.execute(base.where(Vendor.id == override_vendor_id).limit(1))).first()
+        row = cheapest_of((await db.execute(base.where(Vendor.id == override_vendor_id))).all())
         if row:
             return (row[0], per_base(row[1], row[2], row[3]))
-    row = (await db.execute(base.where(VendorItem.is_preferred.is_(True)).limit(1))).first()
+    row = cheapest_of((await db.execute(base.where(VendorItem.is_preferred.is_(True)))).all())
     if row:
         return (row[0], per_base(row[1], row[2], row[3]))
 
