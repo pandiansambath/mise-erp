@@ -1,0 +1,122 @@
+# One item, several ways to buy it
+
+> "why we have made a split means... vendor1 giving 1 box of dragon fruit for
+> 10 pound, which has 10 kg, so price will be 1 pound per kg. If we buy 5 kg of
+> dragon fruit means it cost 10 pound so 1 kg dragon fruit is 2 pound...
+> some shop may have a compulsion to buy just 2 kg only, they don't wish to buy
+> one box, means we need to show based on that. That's why if we split and store
+> that 1 item, it will be useful nah."
+
+He is right, and this is the last false assumption left in the pricing model.
+
+---
+
+## The assumption we are making today, and why it is wrong
+
+A vendor row stores **one** price and **one** pack size. Every other size is
+worked out by dividing:
+
+```
+Farm2Land: £50 for a box of 50 kg   →  we assert £1.00/kg
+```
+
+That division is a claim we have no evidence for. **It is also the opposite of
+how the trade prices things.** A box is cheap *because* it is a box — the whole
+point of the case price is to push you to buy the case. Buying 2 kg loose from
+the same supplier is very often dearer per kg, sometimes much dearer.
+
+So the app currently:
+- **understates** the cost of buying loose (it bills the case rate), and
+- **cannot express** a supplier who sells only in cases, or only loose.
+
+His own example: a shop that must buy 2 kg, not a box. Today we would cost that
+at the box rate and be wrong on every plate that uses it.
+
+---
+
+## The model: a price is per (vendor × item × form)
+
+`vendor_items` becomes **one row per form**, not one row per item.
+
+| vendor | item | form | price | holds |
+|---|---|---|---|---|
+| Farm2Land | Dragon fruit | box | £50.00 | 50 kg |
+| Farm2Land | Dragon fruit | kg (loose) | £1.40 | — |
+| Exotic | Dragon fruit | box | £20.00 | 10 kg |
+
+Still **one item**. Dragon fruit is dragon fruit — one stock pool, one average
+cost, one recipe ingredient. What multiplies is the **way you can buy it**, and
+that is a property of the vendor, exactly like the pack size was.
+
+His words for it: *"1 item is a group; this group will have box which is 1 item
+different price, or loose kg which is 1 item has different price"*. The group is
+the item; the members are the forms.
+
+### Schema
+- Drop the unique constraint on `(vendor_id, item_id)`.
+- Add unique on `(vendor_id, item_id, pack_level_id)` — `NULL` = sold loose, so
+  every vendor gets at most one loose price and at most one price per pack.
+- `upsert_vendor_item` keys on the triple instead of the pair.
+- Nothing else about the row changes; `pack_size_override` still says how big
+  *their* box is.
+
+### The "same rate" button
+> "suppose user feels that box and per kg will be same means, then we need to
+> have 1 button which will auto calculate the box price with per kg price"
+
+A **"same rate as the box"** action next to the loose price that fills in
+`box price ÷ box size`. It **writes a real row** rather than leaving it derived,
+because the moment it is derived we are back to asserting something nobody said.
+Filled once, editable after — and visibly marked as *worked out from the box*
+until someone confirms it.
+
+---
+
+## What each screen shows
+
+### Vendors — where the forms are authored
+The item's row expands into its forms:
+
+```
+Dragon fruit
+  1 box (50 kg)      £50.00       £1.00/kg
+  1 kg loose         £1.40                    ← dearer, as it should be
+  + add another way they sell it
+```
+"Add a price" gains the same shape: name the form, say how much is inside, give
+the price. Already half-built — the sentence form landed on 2026-08-14.
+
+### Price Comparison — compare like with like
+Two things are being asked and they have different answers:
+- **"Who is cheapest per kg?"** — rank on the per-base price of each form; the
+  winner names its form: *"Farm2Land £1.00/kg, buying a 50 kg box"*.
+- **"Who is cheapest for the 2 kg I actually want?"** — a quantity box. Enter 2
+  kg and it prices *that* against every form, including "you would have to take
+  a whole box". This is the question his 2 kg shop is really asking.
+
+### Purchasing — pick the form when you add to the basket
+The size picker already exists; it currently offers sizes derived from the
+chain. It offers the **forms this supplier actually sells** instead, each with
+its own price. Ties in with the per-purchase vendor picker he asked for
+separately, which is the same control from the other direction.
+
+### Inventory — read it back, never assert
+Stock stays pooled in the base unit — that part is right and does not change.
+The item sheet lists **every way it can be bought, from whom, at what real
+per-unit cost**, sorted cheapest first. That is the "show clearly" he asked for,
+and it is also the honest version of the `1 box = 50 kg` line we removed.
+
+---
+
+## Order of work
+1. ~~Stop the per-kg lie on Price Comparison~~ — done: the big number is the
+   per-base price, ranking uses per-base, and the price box moved to Vendors.
+2. Schema + upsert keyed on the triple, with a migration.
+3. Vendors: author multiple forms per item; the "same rate as the box" action.
+4. Purchasing: pick the form (and the vendor) per basket line.
+5. Price Comparison: the "for this quantity" answer.
+6. Inventory: list the ways to buy, cheapest first.
+
+**Nothing here changes what stock IS.** A kilo is a kilo whoever delivered it
+and however it was boxed. What changes is that the app stops inventing prices
+for ways of buying that nobody quoted.

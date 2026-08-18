@@ -391,3 +391,47 @@ preferred-else-cheapest with no way to override for a single line.
 4. Inventory must show plainly that this delivery came from a non-default
    supplier, and why the price differs — his "pile up confusion" warning is
    about exactly this.
+
+
+---
+
+## 2026-08-18 (evening) — the box/loose price problem
+
+> "here I added dragon fruits as 1 box 50kg 50 pound... it's not that much clear
+> details like how much is one box, how much is 1 kg... comparing one and 2,
+> which is cheapest? ... 50 pound is cheaper than 20 pound, which is a redundant
+> thing."
+
+### DONE — Price Comparison was printing the box price as a per-kg price
+The API was right all along (`price_per_base` 1.00 vs 2.00). The big card
+rendered `price_per_unit` with a `/kg` suffix, so a **£50 box read as £50 a
+kilo** and sat next to a £20 box wearing a "Cheapest" badge. The comparable
+number — the price of one base unit — is now the large one, with what they
+actually sell underneath it: *"£1.00/kg · £50.00 per box · holds 50 kg"*.
+
+The **savings and ranking maths** had the same fault in two more places: it took
+`Math.min` over the raw quotes, so a £20 box of 10 kg beat a £50 box of 50 kg.
+Both now rank on the per-base price.
+
+### DONE — price editing removed from Price Comparison
+> "also just now I noticed here we have price changing feature (why?) — price
+> change need to be done only in that vendor page."
+
+Right, and for a sharper reason than tidiness: that field sent a price and
+**nothing about what it buys**, so typing 20 silently kept whatever pack the
+supplier was last on. It is a link to the supplier's page now, where price and
+pack size are entered as one sentence.
+
+### THE BIG ONE — one item, several ways to buy it
+> "some vendor the 1 box price will be cheap... but if we buy them in kg or g
+> then price will be a bit vary — it's a marketing thing so that everyone will
+> focus on buying box. But how are we gonna handle this situation? For now we
+> auto calculate the kg value based on box total price."
+
+He has found the last false assumption in the pricing model: we DIVIDE the box
+price to get a loose price, and the trade does the opposite. Full design in
+**[PACK_FORMS_DESIGN.md](PACK_FORMS_DESIGN.md)** — one price per
+(vendor x item x form), his "same rate as the box" button, and what Vendors,
+Purchasing, Price Comparison and Inventory each show.
+
+**Not started beyond step 1.** Steps 2-6 are listed in that file.
