@@ -920,10 +920,19 @@ export function ItemPickerSingle({
   onCreate,
   onOpenDetail,
   onGather,
+  ownQuote,
+  ownVendorName,
 }: {
   items: Item[];
   value: string;
   onChange: (id: string) => void;
+  /** On a supplier's own page: THEIR quote for an item, or null if they do not
+   *  price it. Given this, a card shows that supplier's numbers instead of the
+   *  item's globally chosen supplier — which otherwise reads as though every
+   *  vendor charged whatever the chosen one charges. */
+  ownQuote?: (itemId: string) => SupplierOption | null;
+  /** The supplier whose page this is. Presence switches the card to their POV. */
+  ownVendorName?: string;
   /** Column classes for the card grid. A picker sitting in half a page needs
    *  fewer, wider columns than one spanning the whole width. */
   gridCls?: string;
@@ -1207,6 +1216,46 @@ export function ItemPickerSingle({
                   to answer, on the card rather than one click away. Cheapest
                   first, four at most; the rest sit behind "compare". */}
               {(() => {
+                // ── Whose page am I on? ──────────────────────────────────
+                // "each vendor is different, so each vendor need to have its
+                //  own items and price — why is the selected vendor impacting
+                //  each other vendor in their own vendor page?"
+                // It was showing the item's globally CHOSEN supplier, so
+                // Rudra's £8/kg appeared on Farm2Land's page as if it were
+                // Farm2Land's. On a supplier's own page there is only one
+                // right answer: theirs, or an honest blank.
+                if (ownVendorName) {
+                  const own = ownQuote?.(it.id) ?? null;
+                  if (!own) {
+                    return (
+                      <span className="mt-1 block text-xs text-amber-300">
+                        not priced with {ownVendorName} yet
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="mt-1 block">
+                      {priceLines(it, own).map((l) => (
+                        <span
+                          key={l.label}
+                          className="flex justify-between gap-2 text-[11px] leading-relaxed"
+                        >
+                          <span className="truncate text-fg-faint">
+                            1 {l.label}
+                            {l.note && <span className="ml-1">({l.note})</span>}
+                          </span>
+                          <span className="shrink-0 tabular-nums text-fg-soft">
+                            {format(l.price.toFixed(2))}
+                          </span>
+                        </span>
+                      ))}
+                      <span className="mt-0.5 block truncate text-[11px] text-fg-faint">
+                        {ownVendorName}&apos;s price
+                      </span>
+                    </span>
+                  );
+                }
+
                 const rows = suppliers?.[it.id];
                 if (!rows) {
                   // No supplier data supplied by the caller: fall back to the
