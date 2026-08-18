@@ -118,9 +118,18 @@ and it is also the honest version of the `1 box = 50 kg` line we removed.
    their form ("by the box (50 kg)" / "loose, per kg"); "+ They also sell it
    loose" seeds a real row at the case rate. The cheapest highlight ranks on
    per-base cost.
-4. **NEXT — Purchasing: pick the form AND the vendor per basket line.** This is
-   also where his separate request lands: choose a supplier for ONE purchase
-   without touching the ★ default, and show it plainly in inventory afterwards.
+4. ~~Purchasing: pick the supplier per basket line~~ — done. **The backend was
+   already complete**: `IndentItem.vendor_id` existed, `IndentItemIn` accepted
+   it, `_resolve_supplier` honoured it (picked > chosen > cheapest) and PO
+   generation passed it. Even the page held a `vendorPick` map and SENT it —
+   `setVendorPick` was simply never called. It had no control, which is exactly
+   why he had to go to Price Comparison and change the default for everything.
+   The basket card's supplier line is now a picker listing every supplier at
+   their real per-unit cost. `is_preferred` is never written, so the ★ chosen
+   supplier is untouched. Picking one tints the line amber.
+   **Still to do here:** pick the FORM (box vs loose) per line, and show the
+   non-default choice plainly in inventory afterwards — his "pile up confusion"
+   warning.
 5. Price Comparison: the "cheapest for the 2 kg I actually want" answer.
 6. Inventory: list every way to buy it, cheapest first.
 

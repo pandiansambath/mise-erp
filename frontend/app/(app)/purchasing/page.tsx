@@ -1363,6 +1363,19 @@ export default function PurchasingPage() {
               lines={lines}
               onChange={setLines}
               onAddAllLow={orderAllLow}
+              vendorPick={vendorPick}
+              // For THIS order only — `is_preferred` is never written, so the
+              // ★ chosen supplier survives untouched. The server applies the
+              // same precedence when it splits the indent: picked, then chosen,
+              // then cheapest.
+              onVendorPick={(itemId, vendorId) =>
+                setVendorPick((p) => {
+                  const next = { ...p };
+                  if (vendorId) next[itemId] = vendorId;
+                  else delete next[itemId];
+                  return next;
+                })
+              }
               footer={
                 <div className="flex flex-wrap gap-2">
                   <button
