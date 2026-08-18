@@ -334,3 +334,60 @@ lies flat when it lands (rotateZ, not a frozen tumble) and holds for ~3s.
 Smoke is back, but small: a bottom-third strip, never above 0.2 opacity, gone in
 a second. The version he killed was a full-screen veil — *"it made a blind for a
 sec, clouds closed the entire page"* — and the page stays visible throughout now.
+
+---
+
+## 2026-08-18 — "how are you confidently showing 1 box = 50 kg?"
+
+> "if 3 vendor have different box — 1. 1box 100kg 2. 1box 5kg 3. 1box 20kg —
+> all are same items but different vendor... now we purchase from all the 3
+> vendors. now in inventory that popup, how will we show this? avg price we can
+> show, but that box — how are you confidently showing 1box=50kg? here we need
+> to think and show in UI right"
+
+He is right, and it is the same mistake as the old "price per unit" one level up.
+`stockInPacks()` and `chainSummary()` took only the ITEM, so they printed the
+size stored on the chain — which is just whoever created the rung first — as
+though it were a fact. With three suppliers at 100 / 20 / 5 kg there IS no
+single box, and "7 boxes · 1 box = 50 kg" is a number nobody quoted.
+
+**The rule now: a derived unit is only printed when it is well defined.**
+
+- `packSizes(item, suppliers)` reports what each rung means per supplier, and
+  whether they agree.
+- `stockInPacks(item, qty, suppliers)` leaves out any rung the suppliers
+  disagree about — no invented box count — and uses the agreed supplier size
+  over the item's stored one when they do agree.
+- `packDisagreement(item, suppliers)` says it in words: *"a box is 100 kg from
+  Rudra · 20 kg from Exotic · 5 kg from Farm2Land"*.
+- Inventory's Avg cost hint says **"packs differ by supplier"** instead of
+  asserting one, and the sheet carries an amber note naming the sizes.
+- On a VENDOR's page there is no ambiguity, so that page keeps showing their
+  own box — the answer there is never in doubt.
+
+Stock stays pooled in the base unit, and the weighted-average cost stays, because
+a kg is a kg whoever delivered it. It is the *box* that is not interchangeable.
+
+---
+
+## REQUESTED, NOT YET BUILT — pick a supplier for ONE purchase
+
+> "while I'm in purchase page while adding that item into basket, here I need
+> flexibility to choose my vendor as per my wish... currently I need to go to
+> price comparison page to change default vendor and use this for all purchase.
+> This is fine — I need one feature on purchase page too, here I can choose
+> vendor for that particular time (**this is not overwrite default vendor**),
+> just for that 1 purchase I can choose. And we need to note and show this
+> clearly in inventory or else it will be a pile up confusion in future, so be
+> careful."
+
+Today `supplierFor(itemId)` in `components/order/OrderFlow.tsx` resolves to
+preferred-else-cheapest with no way to override for a single line.
+
+**Shape agreed from his words:**
+1. A per-basket-line supplier choice, defaulting to today's answer.
+2. It must NOT touch `is_preferred` — the ★ chosen supplier is unchanged.
+3. The indent/PO split must follow the per-line choice.
+4. Inventory must show plainly that this delivery came from a non-default
+   supplier, and why the price differs — his "pile up confusion" warning is
+   about exactly this.
