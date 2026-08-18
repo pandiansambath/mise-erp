@@ -59,8 +59,8 @@ export default function VendorsPage() {
   const [spend, setSpend] = useState<
     { vendor_name: string; total: string; orders?: number; price_rises?: number }[]
   >([]);
-  // item_id -> the cheapest price ANY vendor quotes (for the emerald cell)
-  const [cheapest, setCheapest] = useState<Record<string, number>>({});
+  // Every vendor pricing every item, as the API gave it.
+  const [allSuppliers, setAllSuppliers] = useState<ItemSuppliers[]>([]);
   useEffect(() => {
     api
       .get<ExpenseCategory[]>("/expenses/categories")
@@ -116,20 +116,30 @@ export default function VendorsPage() {
   const [piPackName, setPiPackName] = useState("");
   const [piPackSize, setPiPackSize] = useState("");
 
+  // item_id -> the cheapest cost of ONE BASE UNIT across every supplier and
+  // every form they sell it in. This is the only figure two quotes can be
+  // ranked on once a box and a loose kilo are both on the table.
+  const cheapest: Record<string, number> = {};
+  for (const row of allSuppliers) {
+    const it0 = items.find((i) => i.id === row.item_id);
+    if (!it0 || row.vendors.length < 2) continue;
+    const per = row.vendors
+      .map((v) => pricePerBase(it0, v))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (per.length > 1) cheapest[row.item_id] = Math.min(...per);
+  }
+
   function load() {
     return Promise.all([
       api.get<Vendor[]>("/vendors").then(setVendors),
       api.get<Item[]>("/inventory/items").then(setItems),
+      // Kept raw and ranked later, once the items are in hand: the cheapest
+      // quote is the cheapest PER BASE UNIT, and working that out needs the
+      // item's chain. Comparing the sticker prices said a £20 box of 10 kg beat
+      // a £50 box of 50 kg.
       api
         .get<ItemSuppliers[]>("/purchasing/item-suppliers")
-        .then((rows) => {
-          const map: Record<string, number> = {};
-          for (const r of rows) {
-            const prices = r.vendors.map((v) => parseFloat(v.price_per_unit) || Infinity);
-            if (prices.length > 1) map[r.item_id] = Math.min(...prices);
-          }
-          setCheapest(map);
-        })
+        .then(setAllSuppliers)
         .catch(() => {}),
     ]);
   }
@@ -865,10 +875,35 @@ export default function VendorsPage() {
                         }}
                         className="cursor-pointer border-b border-line transition hover:bg-glass/[0.03]"
                       >
-                        <td className="px-4 py-2 font-medium text-fg">{itemName(vi.item_id)}</td>
+                        <td className="px-4 py-2 font-medium text-fg">
+                          {itemName(vi.item_id)}
+                          {/* WHICH WAY they sell it. A supplier may now quote a
+                              box AND a loose kilo, so the same item appears
+                              twice — without naming the form the two rows read
+                              as a duplicate with two different prices. */}
+                          {(() => {
+                            const it0 = items.find((i) => i.id === vi.item_id);
+                            if (!it0) return null;
+                            const size = supplierPackSize(it0, vi as unknown as SupplierOption);
+                            return (
+                              <span className="mt-0.5 block text-[11px] font-normal text-fg-faint">
+                                {vi.pack_level_id
+                                  ? `by the ${levelName(it0, vi.pack_level_id)}${size > 0 ? ` (${size} ${it0.unit})` : ""}`
+                                  : `loose, per ${it0.unit}`}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td
                           className={`px-4 py-2 text-right ${
-                            cheapest[vi.item_id] != null && (parseFloat(vi.price_per_unit) || 0) <= cheapest[vi.item_id]
+                            (() => {
+                              // Cheapest by what a BASE unit costs, never the
+                              // sticker: a £20 box of 10 kg is not cheaper than
+                              // a £50 box of 50 kg.
+                              const it0 = items.find((i) => i.id === vi.item_id);
+                              const mine = it0 ? pricePerBase(it0, vi as unknown as SupplierOption) : 0;
+                              return cheapest[vi.item_id] != null && mine > 0 && mine <= cheapest[vi.item_id] + 1e-9;
+                            })()
                               ? "bg-emerald-500/10 font-medium text-emerald-300"
                               : "text-fg-soft"
                           }`}
@@ -1381,6 +1416,47 @@ export default function VendorsPage() {
                             className="mise-press rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-200"
                           >
                             ★ Make them the chosen supplier
+                          </button>
+                        )}
+                        {/* ── Also sold loose? ──────────────────────────────
+                            "suppose user feels that box and per kg will be same
+                             means, then we need to have 1 button which will auto
+                             calculate the box price with per kg price."
+
+                            It WRITES a real row rather than deriving one. The
+                            moment a loose price is derived we are back to
+                            asserting a rate nobody quoted — which is the bug
+                            this whole change exists to remove. Filled in at the
+                            case rate as a starting point, then edited to what
+                            they actually charge, which is usually more. */}
+                        {it && priceRow.pack_level_id && !vendorItems.some(
+                          (r) => r.item_id === priceRow.item_id && r.pack_level_id === null,
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const size = supplierPackSize(it, sup);
+                              const per = size > 0 ? (parseFloat(priceRow.price_per_unit) || 0) / size : 0;
+                              if (per <= 0) return;
+                              try {
+                                await api.post(`/vendors/${selected}/items`, {
+                                  item_id: priceRow.item_id,
+                                  price_per_unit: per.toFixed(4),
+                                  pack_name: "",
+                                });
+                                setPriceRow(null);
+                                selectVendor(selected);
+                                setNotice(
+                                  `Added a loose price at the ${levelName(it, priceRow.pack_level_id)} rate. ` +
+                                    "Change it if they charge more for small amounts — they usually do.",
+                                );
+                              } catch (err) {
+                                setError(err instanceof ApiError ? err.message : "Could not add the loose price.");
+                              }
+                            }}
+                            className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm text-brand-300"
+                          >
+                            + They also sell it loose
                           </button>
                         )}
                         <button
