@@ -13,7 +13,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
     Uuid,
     func,
 )
@@ -62,7 +61,13 @@ class VendorItem(Base):
     """A vendor's current price for an item — the data the comparison engine reads."""
 
     __tablename__ = "vendor_items"
-    __table_args__ = (UniqueConstraint("vendor_id", "item_id", name="uq_vendor_item"),)
+    # One row per vendor+item+FORM. A supplier may quote a box AND a loose
+    # kilo at rates that are not multiples of each other — the case is cheap
+    # because it is a case. Enforced by two PARTIAL unique indexes (migration
+    # 40c6a64f0525) rather than a constraint here, because NULL pack_level_id
+    # means "loose" and Postgres treats NULLs as distinct: a plain constraint
+    # over the triple would allow any number of loose prices per vendor.
+    __table_args__ = ()
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     vendor_id: Mapped[uuid.UUID] = mapped_column(
