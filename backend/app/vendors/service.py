@@ -95,15 +95,37 @@ async def upsert_vendor_item(
     price edit never silently un-chooses the ★ preferred supplier or wipes its notes.
     (New rows default to not-preferred.) Every genuine price change also appends a
     PriceHistory row (source: manual | po | invoice) so no old price is ever lost."""
-    result = await db.execute(
-        select(VendorItem).where(
-            VendorItem.vendor_id == vendor_id, VendorItem.item_id == item_id
-        )
+    # WHICH ROW this is. A supplier may quote a box and a loose kilo at rates
+    # that are not multiples of each other, so the form is part of the identity:
+    # saving a loose price must not overwrite their box price. When the caller
+    # says nothing about the form (KEEP — a plain price edit) we fall back to
+    # matching on vendor+item, so editing a supplier who sells exactly one way
+    # still finds their row rather than creating a second one.
+    q = select(VendorItem).where(
+        VendorItem.vendor_id == vendor_id, VendorItem.item_id == item_id
     )
-    vi = result.scalar_one_or_none()
+    if pack_level_id is not KEEP:
+        q = q.where(
+            VendorItem.pack_level_id.is_(None)
+            if pack_level_id is None
+            else VendorItem.pack_level_id == pack_level_id
+        )
+    rows = (await db.execute(q)).scalars().all()
+    # More than one only when the form was not stated and they sell several
+    # ways. Their loose row is the sensible default for a bare price edit.
+    vi = None
+    if rows:
+        vi = next((r for r in rows if r.pack_level_id is None), rows[0])
     old_price = vi.price_per_unit if vi is not None else None
     if vi is None:
-        vi = VendorItem(vendor_id=vendor_id, item_id=item_id, is_preferred=bool(is_preferred))
+        vi = VendorItem(
+            vendor_id=vendor_id,
+            item_id=item_id,
+            is_preferred=bool(is_preferred),
+            # A brand-new row must be created IN the form asked for, or the
+            # partial unique index would see two loose prices.
+            pack_level_id=None if pack_level_id is KEEP else pack_level_id,
+        )
         db.add(vi)
     elif is_preferred is not None:
         vi.is_preferred = is_preferred

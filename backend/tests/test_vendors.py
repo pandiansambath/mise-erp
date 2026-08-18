@@ -260,3 +260,54 @@ async def test_item_suppliers_reports_each_vendors_own_pack_size(client, make_us
     opt = mine[0]["vendors"][0]
     assert opt["pack_size_override"] is not None, "the endpoint dropped the pack size"
     assert str(opt["pack_size_override"]).startswith("500")
+
+
+@pytest.mark.asyncio
+async def test_one_supplier_can_quote_a_box_and_a_loose_kilo(client, make_user, auth_header):
+    """A case price and a loose price, side by side, at rates that disagree.
+
+    His point, and it is how the trade actually works:
+
+        "some vendor the 1 box price will be cheap... if we buy them in kg or g
+         then price will be a bit vary. It's a marketing thing so that everyone
+         will focus on buying box... some shop may have a compulsion to buy just
+         2kg only, they don't wish to buy 1 box."
+
+    We used to DIVIDE the box price to get a per-kilo price, which invents a
+    rate nobody quoted and understates every loose purchase. A price now belongs
+    to (vendor, item, form), so both can be stated and neither overwrites the
+    other.
+    """
+    user = await make_user("forms@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(user)
+
+    item_id = (
+        await client.post("/api/inventory/items", json={"name": "Dragon fruit", "unit": "kg"}, headers=h)
+    ).json()["id"]
+    vendor_id = (await client.post("/api/vendors", json={"name": "Caseco"}, headers=h)).json()["id"]
+
+    # The case: £50 buys a 50 kg box, so £1.00 a kilo.
+    box = await client.post(
+        f"/api/vendors/{vendor_id}/items",
+        json={"item_id": item_id, "price_per_unit": "50.00", "pack_name": "box", "pack_size": "50"},
+        headers=h,
+    )
+    assert box.status_code == 201, box.text
+
+    # Loose off the same supplier is DEARER per kilo — the whole point.
+    loose = await client.post(
+        f"/api/vendors/{vendor_id}/items",
+        json={"item_id": item_id, "price_per_unit": "1.40", "pack_name": ""},
+        headers=h,
+    )
+    assert loose.status_code == 201, loose.text
+
+    rows = (await client.get(f"/api/vendors/{vendor_id}/items", headers=h)).json()
+    mine = [r for r in rows if r["item_id"] == item_id]
+    assert len(mine) == 2, f"expected a box row and a loose row, got {mine}"
+
+    by_form = {("loose" if r["pack_level_id"] is None else "pack"): r for r in mine}
+    assert str(by_form["pack"]["price_per_unit"]).startswith("50")
+    assert str(by_form["loose"]["price_per_unit"]).startswith("1.4")
+    # And the box price survived being quoted a second way.
+    assert str(by_form["pack"]["pack_size_override"]).startswith("50")
