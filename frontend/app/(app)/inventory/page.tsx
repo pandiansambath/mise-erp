@@ -1517,25 +1517,39 @@ export default function InventoryPage() {
                 const st = stockState(item);
                 return (
                   <Card key={item.id} className="mise-feel p-3.5">
-                    <div className="flex items-center gap-3">
+                    {/* On a phone this card did NOTHING when tapped — the whole
+                        detail sheet, purchases by supplier and all, existed on
+                        desktop only, because the click lived on the table row.
+                        "if i click item nothing happening in mobile." It opens
+                        the same sheet now. No button sits inside this region,
+                        so nothing is nested where it should not be. */}
+                    <button
+                      type="button"
+                      onClick={() => toggleBreakdown(item)}
+                      aria-expanded={expanded === item.id}
+                      className="mise-press flex w-full items-center gap-3 text-left"
+                    >
                       <span aria-hidden className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg">
                         {categoryEmoji(item.category?.trim() || "Other")}
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-fg">{item.name}</p>
-                        <p className="flex items-center gap-1.5 text-xs text-fg-faint">
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1">
+                          <span className="truncate font-medium text-fg">{item.name}</span>
+                          <span aria-hidden className="shrink-0 text-fg-faint">›</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-xs text-fg-faint">
                           <span className={`inline-flex items-center gap-1 font-medium ${st.cls}`}>{st.dot} {st.label}</span>
                           · {item.category || "Uncategorised"}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="font-mono text-sm font-semibold text-fg">{fmtQty(item.current_stock, item.unit)}</p>
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block font-mono text-sm font-semibold text-fg">{fmtQty(item.current_stock, item.unit)}</span>
                         {stockInPacks(item) && (
-                          <p className="text-[10px] text-fg-faint">{stockInPacks(item)}</p>
+                          <span className="block text-[10px] text-fg-faint">{stockInPacks(item)}</span>
                         )}
-                        <p className="text-[10px] text-fg-faint">{format(item.average_cost)} avg</p>
-                      </div>
-                    </div>
+                        <span className="block text-[10px] text-fg-faint">{format(item.average_cost)} avg</span>
+                      </span>
+                    </button>
                     <StockBar item={item} />
                     <div className="mt-2.5 flex items-center gap-2">
                       {item.best_vendor ? (
@@ -1872,6 +1886,37 @@ export default function InventoryPage() {
                                               <p className="text-xs text-fg-faint">
                                                 {new Date(r.received_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                                               </p>
+                                              {/* HOW BIG THEIR PACK IS, on the
+                                                  delivery it arrived on. "we
+                                                  need to show clearly that this
+                                                  vendor box has 50kg, other
+                                                  vendor 1 box 100kg." Without
+                                                  it the quantities above look
+                                                  like they disagree for no
+                                                  reason. */}
+                                              {(() => {
+                                                const sv = (itemSuppliers[openItem.id] ?? []).find(
+                                                  (s) => s.vendor_id === r.vendor_id,
+                                                );
+                                                if (!sv?.pack_level_id) return null;
+                                                const lvl = (openItem.pack_levels ?? []).find(
+                                                  (l) => l.id === sv.pack_level_id,
+                                                );
+                                                if (!lvl) return null;
+                                                const own = parseFloat(sv.pack_size_override ?? "");
+                                                const differs = Number.isFinite(own) && own > 0;
+                                                const size = differs ? own : parseFloat(lvl.base_size) || 0;
+                                                if (size <= 0) return null;
+                                                return (
+                                                  <p className="mt-0.5 text-[11px] text-fg-soft">
+                                                    their 1 {lvl.name} ={" "}
+                                                    <b className="text-fg">{size} {openItem.unit}</b>
+                                                    {differs && (
+                                                      <span className="mise-tone-warn ml-1">· their own size</span>
+                                                    )}
+                                                  </p>
+                                                );
+                                              })()}
                                             </div>
                                           </div>
                                           <div className="shrink-0 pl-2 text-right">

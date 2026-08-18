@@ -884,6 +884,12 @@ export default function VendorsPage() {
                             const sup = {
                               price_per_unit: vi.price_per_unit,
                               pack_level_id: vi.pack_level_id,
+                              // THIS supplier's own pack size. Leaving it out is
+                              // what made "1 box = 100 kg" display as 50: the
+                              // maths fell back to the item's size every time,
+                              // and the `as SupplierOption` cast below hid the
+                              // missing field from the compiler.
+                              pack_size_override: vi.pack_size_override,
                             } as SupplierOption;
                             // The quote, and every size it works out to. A £30
                             // bottle of thirty is £1 a piece, and the old line
@@ -948,6 +954,20 @@ export default function VendorsPage() {
                       // used to mean leaving for Inventory and finding your way
                       // back — by which time the price you came to enter is gone.
                       onCreate={(name) => setNewItem({ name, unit: "kg" })}
+                      // This supplier's own numbers on this supplier's page.
+                      ownVendorName={selectedVendor?.name}
+                      ownQuote={(id) => {
+                        const row = vendorItems.find((r) => r.item_id === id);
+                        if (!row) return null;
+                        return {
+                          vendor_id: row.vendor_id,
+                          vendor_name: selectedVendor?.name ?? "",
+                          price_per_unit: row.price_per_unit,
+                          pack_level_id: row.pack_level_id,
+                          pack_size_override: row.pack_size_override,
+                          is_preferred: row.is_preferred,
+                        };
+                      }}
                     />
                     {newItem && (
                       <div className="mise-pop mt-2 rounded-xl border border-brand-400/40 bg-brand-400/[0.06] p-3">
@@ -1169,6 +1189,8 @@ export default function VendorsPage() {
               const sup = {
                 price_per_unit: priceRow.price_per_unit,
                 pack_level_id: priceRow.pack_level_id,
+                // Their own size, or every line below is the item's guess.
+                pack_size_override: priceRow.pack_size_override,
               } as SupplierOption;
               // "see that lemon 2 — it's confusing right? what's £3 for, 1 piece
               // of lemon or 1 bottle?" It never said. The hint asserted "per
