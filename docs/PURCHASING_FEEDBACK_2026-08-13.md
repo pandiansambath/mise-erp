@@ -435,3 +435,42 @@ price to get a loose price, and the trade does the opposite. Full design in
 Purchasing, Price Comparison and Inventory each show.
 
 **Not started beyond step 1.** Steps 2-6 are listed in that file.
+
+---
+
+## 2026-08-18 (late) — two more
+
+### 1. The submit burst's smoke — SHIPPED, but he cannot see it
+It went in with `33c64bf`: `smoke()` in `components/order/burst.ts`, called from
+`confetti()`. It is deliberately *small* — a bottom-third strip, never above
+0.2 opacity, gone in ~1s — because the version he killed was a full-screen veil
+(*"it made a blind for a sec, clouds closed the entire page"*).
+
+He cannot see it, which means it is now too subtle to register. **OPEN:** make it
+read as a real puff without going back to a veil — more puffs, rising from where
+the basket sits rather than across the whole strip, and a longer tail so the eye
+catches it. The constraint that matters: the page must stay readable throughout.
+
+### 2. Recipes are written in GRAMS — real hotel feedback
+> "when they try to add recipes in recipe section, mostly they using grams but
+> our app now allowing to use... even if it shows, it's showing as 0.2 g 0.3 g
+> instead of 200 g. Mostly in recipe we use grams only. (I know our items we
+> chose kg — we need to optimise **without affecting that item's real unit**.)"
+
+**Cause found.** `QtyInput` already gives a loose kg item two boxes (kg + g), so
+a chef types 200 in the g box. But an item **with a pack chain** never reached
+that control: `QtyFields` rendered a single box plus a size dropdown offering
+the base unit and the rungs — **and nothing smaller**. So 200 g had to be typed
+as `0.2`.
+
+**Fixed:** the size dropdown now offers the sub-unit first — `g` before `kg`
+before `box`, smallest first, the way a recipe is written. Pick `g`, type 200,
+and 0.2 kg is what gets stored. **The item's unit is untouched**, exactly as he
+asked: this only changes what you type, never what is recorded. Same for
+litre → ml.
+
+### Still open from this batch
+- **Coriander and bunches.** *"corriander and all small bunch, don't know how to
+  handle this."* A bunch is a FORM, so the pack-forms work covers it: the
+  supplier says "1 bunch = 0.1 kg for 40p". Worth checking on a real bunch item
+  once step 4 lands.

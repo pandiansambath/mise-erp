@@ -177,17 +177,32 @@ function QtyFields({
               full.findIndex((x) => x.id === supplier.pack_level_id),
         )
       : full;
-  // 0 = the base unit itself. Anything above is a rung of the chain.
+  // GRAMS. Real feedback from a hotel: "mostly they using grams, but our app
+  // now allowing to use in gram — even if it shows, it's showing as 0.2 g, 0.3 g
+  // instead of 200 g. Mostly in recipe we use in grams only."
+  //
+  // The two-box kg/g control below handles this for a loose item, but an item
+  // with a pack chain never reached it: the dropdown offered the base unit and
+  // the rungs and nothing smaller, so 200 g had to be typed as 0.2. A recipe is
+  // written in grams, so grams has to be one of the choices.
+  //
+  // -1 = the sub-unit (g, ml). 0 = the base unit. Above that, the chain.
+  const parts = weighedParts(item.unit);
   const [level, setLevel] = useState(0);
 
   const sizeOf = (lv: number) =>
-    lv === 0 ? 1 : parseFloat(chain[lv - 1]?.base_size ?? "0") || 0;
+    lv === -1
+      ? 1 / (parts?.per ?? 1000)
+      : lv === 0
+        ? 1
+        : parseFloat(chain[lv - 1]?.base_size ?? "0") || 0;
 
   const size = sizeOf(level);
   const stored = parseFloat(qty || "0") || 0;
   // What to show in the box: the stored base amount, expressed in the chosen
   // size. Kept tidy so 1500 g as packets reads "30", not "30.000".
   const shown = size > 0 && stored ? String(Math.round((stored / size) * 1000) / 1000) : "";
+  const subLabel = parts?.sub;
 
   const type = (v: string) => {
     const n = parseFloat(numeric(v) || "0") || 0;
@@ -224,6 +239,8 @@ function QtyFields({
           aria-label={`What size, of ${item.name}`}
           className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-sm text-fg outline-none focus:border-brand-500"
         >
+          {/* Smallest first, the way a recipe is written. */}
+          {subLabel && <option value={-1}>{subLabel}</option>}
           <option value={0}>{item.unit}</option>
           {chain.map((lv, i) => (
             <option key={lv.id} value={i + 1}>
