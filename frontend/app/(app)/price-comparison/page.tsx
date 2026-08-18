@@ -51,6 +51,7 @@ function Spark({ points, rising }: { points: number[]; rising: boolean }) {
 const SRC_TONE: Record<string, "slate" | "amber" | "green"> = {
   manual: "slate", po: "amber", invoice: "green",
 };
+import { pricePerBase } from "@/lib/packs";
 import { Badge, Button, Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
 import { AreaChart } from "@/components/charts";
@@ -234,8 +235,6 @@ export default function PriceComparisonPage() {
   };
 
   const [openRow, setOpenRow] = useState<string | null>(null);
-  const [rowPrice, setRowPrice] = useState("");
-  const [rowBusy, setRowBusy] = useState(false);
   const { format } = useCurrency();
 
   useEffect(() => {
@@ -269,9 +268,15 @@ export default function PriceComparisonPage() {
     let best = { name: "", per: 0, unit: "" };
     for (const row of allSuppliers) {
       if (row.vendors.length < 2) continue;
-      const cheapest = Math.min(...row.vendors.map((v) => parseFloat(v.price_per_unit) || Infinity));
+      // Per BASE unit, never the raw quote. Comparing a £50 box against a £20
+      // box says the £20 one is cheaper, when the first holds 50 kg and the
+      // second 10 — it is £1/kg against £2/kg, the other way round.
+      const it0 = items.find((i) => i.id === row.item_id);
+      const per = (v: SupplierOption) =>
+        it0 ? pricePerBase(it0, v) || Infinity : parseFloat(v.price_per_unit) || Infinity;
+      const cheapest = Math.min(...row.vendors.map(per));
       const current = row.vendors.find((v) => v.is_preferred);
-      const cur = current ? parseFloat(current.price_per_unit) : cheapest;
+      const cur = current ? per(current) : cheapest;
       if (cur - cheapest > 0.001) {
         total += cur - cheapest;
         count += 1;
@@ -293,9 +298,13 @@ export default function PriceComparisonPage() {
   const savingByItem: Record<string, number> = {};
   for (const row of allSuppliers) {
     if (row.vendors.length < 2) continue;
-    const cheapest = Math.min(...row.vendors.map((v) => parseFloat(v.price_per_unit) || Infinity));
+    // Same rule: rank on what one base unit costs, not on the sticker.
+    const it0 = items.find((i) => i.id === row.item_id);
+    const per = (v: SupplierOption) =>
+      it0 ? pricePerBase(it0, v) || Infinity : parseFloat(v.price_per_unit) || Infinity;
+    const cheapest = Math.min(...row.vendors.map(per));
     const chosen = row.vendors.find((v) => v.is_preferred);
-    const cur = chosen ? parseFloat(chosen.price_per_unit) : cheapest;
+    const cur = chosen ? per(chosen) : cheapest;
     if (cur - cheapest > 0.001) savingByItem[row.item_id] = cur - cheapest;
   }
   // Biggest saving first, then everything else as it was.
@@ -887,7 +896,6 @@ export default function PriceComparisonPage() {
                                 // behind it, so nothing needs another screen.
                                 onClick={() => {
                                   setOpenRow(row.vendor_id);
-                                  setRowPrice(row.price_per_unit);
                                 }}
                                 className={`mise-feel mise-neo-raised cursor-pointer rounded-2xl border p-4 transition hover:-translate-y-px hover:border-brand-400/50 ${
                                   row.is_preferred
@@ -904,15 +912,36 @@ export default function PriceComparisonPage() {
                                   {row.vendor_name}
                                 </p>
                                 <div className="mt-1 flex items-end justify-between gap-2">
+                                  {/* THE BIG NUMBER IS THE COMPARABLE ONE.
+                                      It used to print the quoted price with a
+                                      "/kg" suffix, so a £50 BOX read as £50 a
+                                      kilo and sat next to a £20 box wearing a
+                                      "Cheapest" badge — "50 pound is cheaper
+                                      than 20 pound, which is a redundant
+                                      thing". The only figure two suppliers can
+                                      be ranked on is the price of one base
+                                      unit, so that is what is large; what they
+                                      actually sell is underneath it. */}
                                   <p
                                     className={`font-display text-2xl font-semibold tabular-nums ${
                                       idx === 0 ? "text-emerald-300" : "text-fg"
                                     }`}
                                   >
-                                    {format(row.price_per_unit)}
+                                    {format(row.price_per_base ?? row.price_per_unit)}
                                     <span className="ml-1 text-[11px] font-normal text-fg-faint">
                                       /{data.unit}
                                     </span>
+                                    {row.pack_level_name && (
+                                      <span className="mt-0.5 block text-[11px] font-normal text-fg-soft">
+                                        {format(row.price_per_unit)} per {row.pack_level_name}
+                                        {(() => {
+                                          const per = parseFloat(row.price_per_base ?? "0");
+                                          const whole = parseFloat(row.price_per_unit) || 0;
+                                          const size = per > 0 ? Math.round((whole / per) * 1000) / 1000 : 0;
+                                          return size > 0 ? ` · holds ${size} ${data.unit}` : "";
+                                        })()}
+                                      </span>
+                                    )}
                                   </p>
                                   {(() => {
                                     // This vendor's own line, oldest first.
@@ -1004,40 +1033,34 @@ export default function PriceComparisonPage() {
 
                               {canWrite && (
                                 <>
-                                  <p className="mt-5 text-xs font-medium uppercase tracking-wide text-fg-faint">
-                                    Change what they charge
-                                  </p>
-                                  <div className="mt-2 flex flex-wrap items-end gap-2">
-                                    <input
-                                      inputMode="decimal"
-                                      value={rowPrice}
-                                      onChange={(e) => setRowPrice(e.target.value)}
-                                      className="mise-well w-32 rounded-lg px-3 py-2 text-sm outline-none"
-                                      aria-label={`New price from ${row.vendor_name}`}
-                                    />
-                                    <button
-                                      type="button"
-                                      disabled={rowBusy || !rowPrice}
-                                      onClick={async () => {
-                                        setRowBusy(true);
-                                        try {
-                                          await api.post(`/vendors/${row.vendor_id}/items`, {
-                                            item_id: selected,
-                                            price_per_unit: rowPrice,
-                                          });
-                                          setOpenRow(null);
-                                          reloadCompare();
-                                        } catch {
-                                          /* the sheet stays open with what was typed */
-                                        } finally {
-                                          setRowBusy(false);
-                                        }
-                                      }}
-                                      className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-                                    >
-                                      {rowBusy ? "Saving…" : "Save"}
-                                    </button>
-                                  </div>
+                                  {/* The price box that used to live here is
+                                      gone, on his instruction: "why we have
+                                      price changing feature here? price change
+                                      need to be done only in that vendor page."
+
+                                      He is right, and the reason is sharper
+                                      than tidiness: this field sent a price and
+                                      NOTHING about what it buys, so typing 20
+                                      here silently kept whatever pack the
+                                      supplier was last on. A price is only
+                                      meaningful beside the size it pays for,
+                                      and that sentence lives on the supplier's
+                                      own page. One place to change it, one
+                                      place it can be wrong. */}
+                                  <Link
+                                    href={`/vendors?vendor=${row.vendor_id}`}
+                                    className="mise-press mt-5 flex items-center justify-between gap-2 rounded-xl border border-line bg-paper-2/60 px-3.5 py-2.5 text-sm transition hover:border-brand-400/50"
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block font-medium text-fg">
+                                        Change what {row.vendor_name} charges
+                                      </span>
+                                      <span className="block text-[11px] text-fg-faint">
+                                        Price and pack size together, on their page
+                                      </span>
+                                    </span>
+                                    <span aria-hidden className="shrink-0 text-brand-300">→</span>
+                                  </Link>
 
                                   <div className="mt-4 flex flex-wrap gap-2">
                                     {row.is_preferred ? (
