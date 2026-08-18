@@ -235,6 +235,8 @@ export default function PriceComparisonPage() {
   };
 
   const [openRow, setOpenRow] = useState<string | null>(null);
+  // How much he actually wants, for the "cheapest for THIS amount" answer.
+  const [wantQty, setWantQty] = useState("");
   const { format } = useCurrency();
 
   useEffect(() => {
@@ -1009,6 +1011,94 @@ export default function PriceComparisonPage() {
                             );
                           })}
                         </ul>
+                        {/* ── "CHEAPEST FOR THE 2 KG I ACTUALLY WANT" ───────
+                            A different question from "cheapest per kg", and the
+                            one his 2 kg shop is really asking:
+
+                              "some shop may have a compulsion to buy just 2kg
+                               only, they don't wish to buy 1 box."
+
+                            Buying 2 kg from a supplier who only sells a 50 kg
+                            case means buying the case. The per-kg winner and
+                            the winner for THIS amount are often different
+                            people, and only this says which. */}
+                        {data && data.comparisons.length > 0 && (
+                          <div className="mt-4 rounded-xl border border-line bg-paper-2/50 p-3">
+                            <label className="flex flex-wrap items-center gap-2 text-xs text-fg-soft">
+                              <span className="font-medium">I only need</span>
+                              <input
+                                inputMode="decimal"
+                                value={wantQty}
+                                onChange={(e) => setWantQty(e.target.value.replace(/[^\d.]/g, ""))}
+                                placeholder="2"
+                                aria-label={`How much ${data.unit} you actually need`}
+                                className="mise-well w-20 rounded-lg px-2 py-1.5 text-center text-sm outline-none"
+                              />
+                              <span>{data.unit} — who is cheapest for that?</span>
+                            </label>
+                            {(() => {
+                              const want = parseFloat(wantQty) || 0;
+                              if (want <= 0) {
+                                return (
+                                  <p className="mt-2 text-[11px] text-fg-faint">
+                                    Type an amount to see what each supplier would actually charge —
+                                    including having to take a whole case.
+                                  </p>
+                                );
+                              }
+                              const rows = data.comparisons
+                                .map((c) => {
+                                  const per = parseFloat(c.price_per_base ?? c.price_per_unit) || 0;
+                                  const whole = parseFloat(c.price_per_unit) || 0;
+                                  const size = per > 0 ? whole / per : 0;
+                                  // A case supplier cannot sell you half a case.
+                                  const packs = c.pack_level_name && size > 0
+                                    ? Math.ceil(want / size)
+                                    : 0;
+                                  const cost = packs > 0 ? packs * whole : per * want;
+                                  const over = packs > 0 ? packs * size - want : 0;
+                                  return { c, cost, packs, size, over };
+                                })
+                                .filter((r) => r.cost > 0)
+                                .sort((a, b) => a.cost - b.cost);
+                              if (rows.length === 0) return null;
+                              return (
+                                <ul className="mt-2 space-y-1">
+                                  {rows.map((r, i) => (
+                                    <li
+                                      key={`${r.c.vendor_id}-${r.c.pack_level_name ?? "loose"}`}
+                                      className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs"
+                                    >
+                                      <span className="min-w-0 truncate">
+                                        <span className="font-medium text-fg">{r.c.vendor_name}</span>
+                                        <span className="ml-1.5 text-fg-faint">
+                                          {r.packs > 0
+                                            ? `${r.packs} ${r.c.pack_level_name}${r.packs === 1 ? "" : "es"}`
+                                            : `${want} ${data.unit} loose`}
+                                        </span>
+                                      </span>
+                                      <span className="shrink-0 text-right">
+                                        <span
+                                          className={`tabular-nums ${
+                                            i === 0 ? "mise-tone-good font-semibold" : "text-fg-soft"
+                                          }`}
+                                        >
+                                          {format(r.cost.toFixed(2))}
+                                        </span>
+                                        {r.over > 0.0001 && (
+                                          <span className="mise-tone-warn ml-1.5 text-[10px]">
+                                            +{Math.round(r.over * 1000) / 1000} {data.unit} spare
+                                          </span>
+                                        )}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              );
+                            })()}
+                          </div>
+                        )}
+
                         <p className="mt-3 text-[11px] leading-relaxed text-fg-faint">
                           <b>How ordering picks a supplier:</b> the vendor on the order itself wins;
                           otherwise your ★ chosen supplier; otherwise the cheapest. Recipe costing

@@ -130,7 +130,11 @@ and it is also the honest version of the `1 box = 50 kg` line we removed.
    **Still to do here:** pick the FORM (box vs loose) per line, and show the
    non-default choice plainly in inventory afterwards — his "pile up confusion"
    warning.
-5. Price Comparison: the "cheapest for the 2 kg I actually want" answer.
+5. ~~Price Comparison: the "cheapest for the 2 kg I actually want" answer~~ —
+   done. A quantity box on the Suppliers tab prices THAT amount against every
+   supplier, rounding a case seller UP to whole cases (they cannot sell half a
+   case) and flagging how much would be left over. The per-kg winner and the
+   winner for this amount are often different people, and only this says which.
 6. ~~Inventory: list every way to buy it, cheapest first~~ — done. The item
    sheet carries **"Every way you can buy it"**: each supplier x form, the real
    per-base cost leading and the quoted price beside it, cheapest first, with a
