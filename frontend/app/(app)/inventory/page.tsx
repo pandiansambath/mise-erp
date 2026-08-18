@@ -18,7 +18,7 @@ import {
 } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
-import { chainSummary, stockInPacks } from "@/lib/packs";
+import { chainSummary, packDisagreement, packSizes, stockInPacks } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
 import { SubNav } from "@/components/SubNav";
@@ -1544,8 +1544,10 @@ export default function InventoryPage() {
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block font-mono text-sm font-semibold text-fg">{fmtQty(item.current_stock, item.unit)}</span>
-                        {stockInPacks(item) && (
-                          <span className="block text-[10px] text-fg-faint">{stockInPacks(item)}</span>
+                        {stockInPacks(item, undefined, itemSuppliers[item.id]) && (
+                          <span className="block text-[10px] text-fg-faint">
+                            {stockInPacks(item, undefined, itemSuppliers[item.id])}
+                          </span>
                         )}
                         <span className="block text-[10px] text-fg-faint">{format(item.average_cost)} avg</span>
                       </span>
@@ -1796,7 +1798,7 @@ export default function InventoryPage() {
                   // Counted in the unit recipes take, said in the sizes you buy
                   // it in — "45 g" and "1 packet + 15 g" are the same fact, but
                   // only one of them means anything in a store room.
-                  hint: stockInPacks(openItem) || undefined,
+                  hint: stockInPacks(openItem, undefined, itemSuppliers[openItem.id]) || undefined,
                 },
                 {
                   label: "Stock value",
@@ -1811,10 +1813,19 @@ export default function InventoryPage() {
                   // packs. "£1.00 per piece" is true but a buyer thinks in
                   // bottles, and doing the multiplication in their head is how
                   // an order comes out thirty times wrong.
-                  hint:
-                    (openItem.pack_levels ?? []).length > 0
-                      ? `per ${openItem.unit} · ${chainSummary(openItem)[0]}`
-                      : `per ${openItem.unit}`,
+                  // ...but ONLY when there is one answer. With three suppliers
+                  // whose box holds 100, 20 and 5 kg, "1 box = 50 kg" is not a
+                  // simplification, it is a number nobody quoted. Inventory has
+                  // no single supplier in view, so when they disagree it says so
+                  // and names them instead of picking one.
+                  hint: (() => {
+                    const levels = openItem.pack_levels ?? [];
+                    if (levels.length === 0) return `per ${openItem.unit}`;
+                    const sizes = packSizes(openItem, itemSuppliers[openItem.id]);
+                    const split = sizes.some((p) => p.agreed === null);
+                    if (split) return `per ${openItem.unit} · packs differ by supplier`;
+                    return `per ${openItem.unit} · ${chainSummary(openItem)[0]}`;
+                  })(),
                 },
               ]
             : undefined
@@ -1978,6 +1989,21 @@ export default function InventoryPage() {
                                     <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
                                       Stock from different suppliers mixes into one pool — so DineAI values your {fmtQty(openItem.current_stock, openItem.unit)} on hand at the weighted-average {format(openItem.average_cost)}/{openItem.unit} rather than guessing whose stock is left.
                                     </p>
+
+                                    {/* When suppliers disagree about how big a
+                                        pack is, SAY SO. Averaging the cost is
+                                        fair because a kg is a kg whoever sent
+                                        it — but a box is not a box, so there is
+                                        no honest single box count to print. */}
+                                    {packDisagreement(openItem, itemSuppliers[openItem.id]) && (
+                                      <p className="mise-tone-warn mt-2 rounded-lg bg-amber-400/10 px-2.5 py-2 text-[11px] leading-relaxed">
+                                        <b>Packs are not the same size here.</b>{" "}
+                                        {packDisagreement(openItem, itemSuppliers[openItem.id])}. Your{" "}
+                                        {fmtQty(openItem.current_stock, openItem.unit)} is counted in{" "}
+                                        {openItem.unit} for that reason — there is no one box to count
+                                        it in.
+                                      </p>
+                                    )}
                                     <div className="mt-3">
                                       <Link
                                         href={`/purchasing?openItem=${openItem.id}`}

@@ -152,19 +152,125 @@ export function orderSizes(item: Item): { id: string | null; name: string; base:
  *
  * Returns "" when there is nothing to add — no chain, or less than one pack.
  */
-export function stockInPacks(item: Item, qty?: string | number): string {
+export type PackSizes = {
+  /** The rung, e.g. "box". */
+  name: string;
+  /** The one size everybody who sells this rung agrees on, or null if they don't. */
+  agreed: number | null;
+  /** Every distinct size, biggest first, with who quotes it. */
+  spread: { size: number; vendors: string[] }[];
+};
+
+/**
+ * What "1 box" actually means, once you ask everybody who sells one.
+ *
+ * His question, and there is no honest way around it:
+ *
+ *   "if 3 vendors have different box — 1 box 100 kg, 1 box 5 kg, 1 box 20 kg —
+ *    all the same item but different vendor... now in inventory, how are you
+ *    confidently showing 1 box = 50 kg? here we need to think and show in UI."
+ *
+ * We were showing the ITEM's stored size as though it were the truth. It is
+ * only the size whoever created the rung happened to use. Once suppliers
+ * disagree there IS no single box, and printing one is the same mistake as the
+ * old per-unit price: a confident number that nobody can act on.
+ *
+ * So this reports the disagreement instead of hiding it, and the screens decide
+ * what to say. Pass the suppliers who price the item; pass one supplier on that
+ * supplier's own page, where the answer is never ambiguous.
+ */
+export function packSizes(item: Item, suppliers?: SupplierOption[] | null): PackSizes[] {
   const levels = item.pack_levels ?? [];
+  if (!levels.length) return [];
+  const rows = suppliers ?? [];
+
+  return levels.map((lv) => {
+    const bySize = new Map<number, string[]>();
+    for (const s of rows) {
+      if (s.pack_level_id !== lv.id) continue;
+      const own = parseFloat(s.pack_size_override ?? "");
+      const size = Number.isFinite(own) && own > 0 ? own : parseFloat(lv.base_size) || 0;
+      if (size <= 0) continue;
+      bySize.set(size, [...(bySize.get(size) ?? []), s.vendor_name]);
+    }
+    // Nobody prices this rung: the item's own size is all we have, and it is
+    // not contradicted by anyone.
+    if (bySize.size === 0) {
+      const own = parseFloat(lv.base_size) || 0;
+      return { name: lv.name, agreed: own > 0 ? own : null, spread: [] };
+    }
+    const spread = [...bySize.entries()]
+      .map(([size, vendors]) => ({ size, vendors }))
+      .sort((a, b) => b.size - a.size);
+    return {
+      name: lv.name,
+      agreed: spread.length === 1 ? spread[0].size : null,
+      spread,
+    };
+  });
+}
+
+/**
+ * "a box is 100 kg from Rudra, 20 kg from Exotic, 5 kg from Farm2Land"
+ *
+ * Returns "" when everybody agrees — there is nothing to warn about, and a
+ * notice that fires when nothing is wrong is a notice people stop reading.
+ */
+export function packDisagreement(
+  item: Item,
+  suppliers?: SupplierOption[] | null,
+): string {
+  const parts: string[] = [];
+  for (const p of packSizes(item, suppliers)) {
+    if (p.agreed !== null || p.spread.length < 2) continue;
+    const each = p.spread.map((s) => `${tidy(s.size)} ${item.unit} from ${s.vendors.join(", ")}`);
+    parts.push(`a ${p.name} is ${each.join(" · ")}`);
+  }
+  return parts.join(" — ");
+}
+
+export function stockInPacks(
+  item: Item,
+  qty?: string | number,
+  // When given, a rung whose size the suppliers DISAGREE about is left out of
+  // the count entirely. "7 boxes" is not a rounding error when a box could be
+  // 100 kg or 5 kg — it is a made-up number.
+  suppliers?: SupplierOption[] | null,
+): string {
+  const ambiguous = new Set(
+    suppliers ? packSizes(item, suppliers).filter((p) => p.agreed === null).map((p) => p.name) : [],
+  );
+  const sized = new Map(
+    suppliers
+      ? packSizes(item, suppliers)
+          .filter((p) => p.agreed !== null)
+          .map((p) => [p.name, p.agreed as number])
+      : [],
+  );
+  const levels = (item.pack_levels ?? []).filter((lv) => !ambiguous.has(lv.name));
+  return stockInPacksFrom(item, levels, qty, sized);
+}
+
+function stockInPacksFrom(
+  item: Item,
+  levels: NonNullable<Item["pack_levels"]>,
+  qty?: string | number,
+  sized?: Map<string, number>,
+): string {
   if (!levels.length) return "";
   let left = typeof qty === "number" ? qty : parseFloat(String(qty ?? item.current_stock)) || 0;
   if (left <= 0) return "";
 
+  // The size the SUPPLIERS agree on wins over the item's stored one — they are
+  // the ones filling the box.
+  const sizeOf = (lv: { name: string; base_size: string }) =>
+    sized?.get(lv.name) ?? parseFloat(lv.base_size) ?? 0;
+
   // Biggest size first, so it reads "1 box 2 packets" rather than "302 packets".
-  const big = [...levels].sort(
-    (a, b) => (parseFloat(b.base_size) || 0) - (parseFloat(a.base_size) || 0),
-  );
+  const big = [...levels].sort((a, b) => (sizeOf(b) || 0) - (sizeOf(a) || 0));
   const parts: string[] = [];
   for (const lv of big) {
-    const size = parseFloat(lv.base_size) || 0;
+    const size = sizeOf(lv) || 0;
     if (size <= 0) continue;
     const n = Math.floor(left / size);
     if (n >= 1) {
