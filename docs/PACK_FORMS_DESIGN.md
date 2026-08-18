@@ -131,7 +131,16 @@ and it is also the honest version of the `1 box = 50 kg` line we removed.
    non-default choice plainly in inventory afterwards — his "pile up confusion"
    warning.
 5. Price Comparison: the "cheapest for the 2 kg I actually want" answer.
-6. Inventory: list every way to buy it, cheapest first.
+6. ~~Inventory: list every way to buy it, cheapest first~~ — done. The item
+   sheet carries **"Every way you can buy it"**: each supplier x form, the real
+   per-base cost leading and the quoted price beside it, cheapest first, with a
+   line saying why a big case price can still win.
+
+**A money bug step 2 introduced, found and fixed here:** `_resolve_supplier`
+used `.limit(1)` for the picked and preferred branches. With one row per vendor
+that was fine; with several forms it took whichever row the database handed back
+first, so an order could be costed at the loose rate when the case was meant.
+It now takes the vendor's cheapest form per base unit.
 
 **Nothing here changes what stock IS.** A kilo is a kilo whoever delivered it
 and however it was boxed. What changes is that the app stops inventing prices

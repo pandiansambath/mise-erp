@@ -18,7 +18,7 @@ import {
 } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
-import { chainSummary, packDisagreement, packSizes, stockInPacks } from "@/lib/packs";
+import { chainSummary, levelName, packDisagreement, packSizes, pricePerBase, stockInPacks, supplierPackSize } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
 import { Select } from "@/components/Select";
 import { SubNav } from "@/components/SubNav";
@@ -2004,6 +2004,77 @@ export default function InventoryPage() {
                                         it in.
                                       </p>
                                     )}
+                                    {/* ── EVERY WAY YOU CAN BUY IT ──────────
+                                        "in inventory we need to show them
+                                         clearly... even though they have
+                                         different price they all (box, loose
+                                         kg, g etc) are 1 item only."
+                                        Cheapest per base unit first, because
+                                        that is the only ranking that survives
+                                        a box and a loose kilo being compared. */}
+                                    {(() => {
+                                      const opts = itemSuppliers[openItem.id] ?? [];
+                                      if (opts.length === 0) return null;
+                                      const ways = opts
+                                        .map((v) => ({
+                                          v,
+                                          per: pricePerBase(openItem, v),
+                                          form: v.pack_level_id
+                                            ? levelName(openItem, v.pack_level_id)
+                                            : `loose, per ${openItem.unit}`,
+                                          size: v.pack_level_id
+                                            ? supplierPackSize(openItem, v)
+                                            : 0,
+                                        }))
+                                        .filter((w) => w.per > 0)
+                                        .sort((a, b) => a.per - b.per);
+                                      if (ways.length === 0) return null;
+                                      return (
+                                        <div className="mt-4 rounded-xl border border-line bg-paper-2/50 p-3">
+                                          <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                                            Every way you can buy it
+                                          </p>
+                                          <ul className="mt-2 space-y-1">
+                                            {ways.map((w, i) => (
+                                              <li
+                                                key={`${w.v.vendor_id}-${w.v.pack_level_id ?? "loose"}`}
+                                                className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs"
+                                              >
+                                                <span className="min-w-0 truncate">
+                                                  <span className="font-medium text-fg">
+                                                    {w.v.vendor_name}
+                                                  </span>
+                                                  <span className="ml-1.5 text-fg-faint">
+                                                    {w.v.pack_level_id
+                                                      ? `by the ${w.form}${w.size > 0 ? ` (${w.size} ${openItem.unit})` : ""}`
+                                                      : w.form}
+                                                  </span>
+                                                  {w.v.is_preferred && (
+                                                    <span className="ml-1 text-amber-300">★</span>
+                                                  )}
+                                                </span>
+                                                <span
+                                                  className={`shrink-0 tabular-nums ${
+                                                    i === 0 ? "mise-tone-good font-semibold" : "text-fg-soft"
+                                                  }`}
+                                                >
+                                                  {format(w.per.toFixed(2))}/{openItem.unit}
+                                                  <span className="ml-1 text-[10px] text-fg-faint">
+                                                    {format(w.v.price_per_unit)}
+                                                    {w.v.pack_level_id ? `/${w.form}` : ""}
+                                                  </span>
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                          <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
+                                            Ranked by what one {openItem.unit} really costs — a big
+                                            case with a big price can still be the cheapest.
+                                          </p>
+                                        </div>
+                                      );
+                                    })()}
+
                                     <div className="mt-3">
                                       <Link
                                         href={`/purchasing?openItem=${openItem.id}`}
