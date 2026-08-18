@@ -238,7 +238,7 @@ async def test_item_suppliers_reports_each_vendors_own_pack_size(client, make_us
     item's own size: a supplier whose box holds 500 kg was drawn as 50, with
     nothing anywhere looking broken.
     """
-    user = await make_user(Role.MANAGER)
+    user = await make_user("packsize@nirai.com", Role.SUPER_ADMIN.value)
     h = auth_header(user)
 
     r = await client.post("/api/inventory/items", json={"name": "Guava", "unit": "kg"}, headers=h)
