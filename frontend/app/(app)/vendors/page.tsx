@@ -1,6 +1,6 @@
 "use client";
 
-import { chainSummary, levelName, priceLines, pricePerBase, stockInPacks } from "@/lib/packs";
+import { chainSummary, levelName, priceLines, pricePerBase, stockInPacks, supplierPackSize } from "@/lib/packs";
 
 import { useEffect, useRef, useState } from "react";
 import { Select } from "@/components/Select";
@@ -1187,10 +1187,13 @@ export default function VendorsPage() {
               const mine = parseFloat(priceRow.price_per_unit) || 0;
               const best = cheapest[priceRow.item_id];
               const sup = {
+                vendor_id: priceRow.vendor_id,
+                vendor_name: selectedVendor?.name ?? "",
                 price_per_unit: priceRow.price_per_unit,
                 pack_level_id: priceRow.pack_level_id,
                 // Their own size, or every line below is the item's guess.
                 pack_size_override: priceRow.pack_size_override,
+                is_preferred: priceRow.is_preferred,
               } as SupplierOption;
               // "see that lemon 2 — it's confusing right? what's £3 for, 1 piece
               // of lemon or 1 bottle?" It never said. The hint asserted "per
@@ -1227,12 +1230,25 @@ export default function VendorsPage() {
                       // as a bottle can have 30." Stock is counted in the unit you
                       // cook with, which is the only count a kitchen can act on;
                       // what was missing is the sentence that makes it make sense.
-                      value={stockInPacks(it) || fmtQty(it.current_stock, it.unit)}
-                      hint={
-                        stockInPacks(it)
-                          ? `${fmtQty(it.current_stock, it.unit)} · ${chainSummary(it)[0] ?? ""}`
-                          : (chainSummary(it)[0] ?? undefined)
-                      }
+                      // ...in THEIR boxes. This sheet was saying "a box holds
+                      // 500 kg at this supplier" and, three lines below,
+                      // "8 boxes · 1 box = 50 kg" — contradicting itself on one
+                      // screen, because the count came from the item's chain
+                      // and ignored whose page it was on. On a supplier's own
+                      // page there is exactly one right size: theirs.
+                      value={stockInPacks(it, undefined, [sup]) || fmtQty(it.current_stock, it.unit)}
+                      hint={(() => {
+                        const packs = stockInPacks(it, undefined, [sup]);
+                        const size = supplierPackSize(it, sup);
+                        const name = levelName(it, priceRow.pack_level_id);
+                        const theirs =
+                          priceRow.pack_level_id && size > 0
+                            ? `1 ${name} = ${size} ${it.unit} at this supplier`
+                            : (chainSummary(it)[0] ?? "");
+                        return packs
+                          ? `${fmtQty(it.current_stock, it.unit)}${theirs ? ` · ${theirs}` : ""}`
+                          : theirs || undefined;
+                      })()}
                     />
                   )}
                   {best != null && (
