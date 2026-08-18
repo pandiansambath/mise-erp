@@ -85,7 +85,7 @@ async def upsert_vendor_item(
     *,
     is_preferred: bool | None = None,
     notes: str | None = None,
-    pack_level_id: uuid.UUID | None = None,
+    pack_level_id: uuid.UUID | None | _Keep = KEEP,
     pack_size_override: Decimal | None | _Keep = KEEP,
     source: str = "manual",
 ) -> VendorItem:
@@ -108,9 +108,11 @@ async def upsert_vendor_item(
     elif is_preferred is not None:
         vi.is_preferred = is_preferred
     vi.price_per_unit = price_per_unit
-    # Which size this price buys. None leaves it alone, so a plain price
-    # edit does not silently reset a supplier back to selling base units.
-    if pack_level_id is not None:
+    # Which size this price buys. KEEP leaves it alone, so a plain price edit
+    # does not silently reset a supplier back to selling base units — but an
+    # explicit None DOES set it back, which is how "actually they sell it
+    # loose" gets corrected.
+    if pack_level_id is not KEEP:
         vi.pack_level_id = pack_level_id
     # Three states, not two. KEEP (the default) means the caller never
     # mentioned it — a plain price edit must not wipe a supplier's bottle size.

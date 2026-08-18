@@ -107,10 +107,14 @@ export default function VendorsPage() {
   const [sheetLevel, setSheetLevel] = useState("");
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [piPrice, setPiPrice] = useState("");
-  // WHICH size this supplier's price buys. 0 = one base unit, which is what
-  // every price meant before the chain existed. His point: "we cant say all the
-  // vendors will have this BOX type, some vendor will have small packets too".
-  const [piLevel, setPiLevel] = useState(0);
+  // The supplier NAMES what they sell in, right next to the price, rather than
+  // picking a rung somebody had to create in Inventory first:
+  //   "that size need to be auto-picked like price bro, auto pick from vendor
+  //    and show in inventory... where we having price input field there itself
+  //    we have this too, so that all at once even layman can do."
+  // Empty name = sold loose, per the base unit.
+  const [piPackName, setPiPackName] = useState("");
+  const [piPackSize, setPiPackSize] = useState("");
 
   function load() {
     return Promise.all([
@@ -256,15 +260,24 @@ export default function VendorsPage() {
       // size it buys. It used to be divided down to a per-unit figure first —
       // £120 a box became 0.0080, rounded to four places and the real number
       // gone. Now £120 stays £120 and the app does the maths when it compares.
-      const it = items.find((i) => i.id === piItem);
-      const chain = it?.pack_levels ?? [];
-      const level = piLevel > 0 ? chain[piLevel - 1] : null;
+      const name = piPackName.trim();
+      if (name && !(parseFloat(piPackSize) > 0)) {
+        setError(`Say how many ${itemName(piItem) ? "units" : "units"} are in one ${name}.`);
+        return;
+      }
       await api.post<VendorItem>(`/vendors/${selected}/items`, {
         item_id: piItem,
         price_per_unit: piPrice,
-        pack_level_id: level?.id ?? null,
+        // The supplier's own words. An unfamiliar name joins the item's chain
+        // server-side; a familiar one is reused, and the size they quoted stays
+        // on THEIR row — which is the whole point when two suppliers both say
+        // "bottle" and mean different numbers.
+        pack_name: name,
+        pack_size: name ? piPackSize : null,
       });
       setPiPrice("");
+      setPiPackName("");
+      setPiPackSize("");
       selectVendor(selected);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save price");
@@ -842,7 +855,13 @@ export default function VendorsPage() {
                         // itself rather than making you find the form for it.
                         onClick={() => {
                           setPriceRow(vi);
-                          setSheetLevel(vi.pack_level_id ?? "");
+                          // The NAME they sell by, not its id — the field is
+                          // typed now, so a supplier can name a pack nobody has
+                          // created yet.
+                          const lv = (items.find((i) => i.id === vi.item_id)?.pack_levels ?? []).find(
+                            (l) => l.id === vi.pack_level_id,
+                          );
+                          setSheetLevel(lv?.name ?? "");
                         }}
                         className="cursor-pointer border-b border-line transition hover:bg-glass/[0.03]"
                       >
@@ -1010,43 +1029,71 @@ export default function VendorsPage() {
                       const it = items.find((i) => i.id === piItem);
                       const chain = it?.pack_levels ?? [];
                       const per = parseFloat(piPrice || "0");
-                      const base =
-                        piLevel > 0
-                          ? parseFloat(chain[piLevel - 1]?.base_size ?? "0") || 0
-                          : 1;
+                      const name = piPackName.trim();
+                      const size = parseFloat(piPackSize) || 0;
                       return (
                         <>
-                          {/* What does that price BUY? A supplier who only sells
-                              packets and one who sells the box both type a
-                              number into the same box, and only this says which
-                              is which. */}
-                          {chain.length > 0 ? (
+                          {/* What does that price BUY? Typed, not picked from a
+                              list — a supplier who sells bottles should not
+                              have to go and invent "bottle" somewhere else
+                              first. Existing names are offered as suggestions
+                              so the same word is reused rather than respelled. */}
+                          <label className="flex items-center gap-1.5 text-xs text-fg-faint">
+                            for one
+                            <input
+                              list="mise-pack-names"
+                              value={piPackName}
+                              onChange={(e) => setPiPackName(e.target.value)}
+                              placeholder={it?.unit || "unit"}
+                              aria-label="What this price buys — a unit, or a pack they sell"
+                              className="mise-well w-28 rounded-lg px-3 py-2 text-sm outline-none"
+                            />
+                          </label>
+                          <datalist id="mise-pack-names">
+                            {chain.map((lv) => (
+                              <option key={lv.id} value={lv.name} />
+                            ))}
+                            <option value="bottle" />
+                            <option value="box" />
+                            <option value="packet" />
+                            <option value="bag" />
+                            <option value="case" />
+                            <option value="tray" />
+                          </datalist>
+
+                          {/* Only asked once they have named a pack — bought
+                              loose there is nothing to hold anything. */}
+                          {name && name.toLowerCase() !== (it?.unit ?? "").toLowerCase() && (
                             <label className="flex items-center gap-1.5 text-xs text-fg-faint">
-                              for one
-                              <select
-                                value={piLevel}
-                                onChange={(e) => setPiLevel(Number(e.target.value))}
-                                aria-label="What this price buys"
-                                className="rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-sm text-fg outline-none focus:border-brand-500"
-                              >
-                                <option value={0}>{it?.unit || "unit"}</option>
-                                {chain.map((lv, i) => (
-                                  <option key={lv.id} value={i + 1}>
-                                    {lv.name}
-                                  </option>
-                                ))}
-                              </select>
+                              holding
+                              <input
+                                inputMode="decimal"
+                                value={piPackSize}
+                                onChange={(e) => setPiPackSize(numeric(e.target.value))}
+                                placeholder="how many"
+                                aria-label={`How many ${it?.unit ?? "units"} in one ${name}`}
+                                className="mise-well w-24 rounded-lg px-3 py-2 text-sm outline-none"
+                              />
+                              {it?.unit}
                             </label>
-                          ) : (
-                            <span className="text-xs text-fg-faint">per {it?.unit || "unit"}</span>
                           )}
+
                           <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
                             Save price
                           </button>
-                          {piLevel > 0 && per > 0 && base > 0 && (
-                            <span className="w-full text-xs text-indigo-300">
-                              = {format((per / base).toFixed(4))} per {it?.unit}
-                              {"  ·  "}1 {chain[piLevel - 1]?.name} = {base} {it?.unit}
+
+                          {/* The arithmetic, done where it is entered, so a
+                              wrong number is obvious before it is saved. */}
+                          {name && per > 0 && size > 0 && (
+                            <span className="mise-tone-info w-full text-xs">
+                              = {format((per / size).toFixed(4))} per {it?.unit}
+                              {"  ·  "}1 {name} = {size} {it?.unit}
+                            </span>
+                          )}
+                          {!name && per > 0 && (
+                            <span className="w-full text-xs text-fg-faint">
+                              Sold loose — {format(per.toFixed(2))} per {it?.unit}. Selling it by
+                              the bottle or box? Type that above.
                             </span>
                           )}
                         </>
@@ -1195,16 +1242,19 @@ export default function VendorsPage() {
                           const fd = new FormData(e.currentTarget);
                           const val = fd.get("np");
                           if (!val) return;
-                          const lvl = String(fd.get("lvl") ?? "");
+                          const name = String(fd.get("lvl") ?? "").trim();
                           const held = String(fd.get("held") ?? "").trim();
+                          if (name && !(parseFloat(held) > 0)) {
+                            setError(`Say how many ${it?.unit ?? "units"} are in one ${name}.`);
+                            return;
+                          }
                           try {
                             await api.post(`/vendors/${selected}/items`, {
                               item_id: priceRow.item_id,
                               price_per_unit: String(val),
-                              pack_level_id: lvl || null,
-                              // Blank means "whatever size the item says" — this
-                              // supplier has not claimed one of their own.
-                              pack_size_override: lvl && held ? held : null,
+                              // Empty name = they sell it loose again.
+                              pack_name: name,
+                              pack_size: name ? held : null,
                             });
                             setPriceRow(null);
                             selectVendor(selected);
@@ -1216,34 +1266,43 @@ export default function VendorsPage() {
                       >
                         <div className="flex flex-wrap items-center gap-2 text-sm text-fg-soft">
                           <span>They sell it by the</span>
-                          <select
+                          <input
                             name="lvl"
+                            list="mise-pack-names-sheet"
                             value={sheetLevel}
                             onChange={(e) => setSheetLevel(e.target.value)}
-                            className={`${inputCls} w-auto`}
-                            aria-label="The size they sell in"
-                          >
-                            <option value="">{it?.unit ?? "unit"} (loose)</option>
+                            placeholder={it?.unit ?? "unit"}
+                            className={`${inputCls} w-32`}
+                            aria-label="What they sell it by — a unit, or a pack"
+                          />
+                          <datalist id="mise-pack-names-sheet">
                             {(it?.pack_levels ?? []).map((lv) => (
-                              <option key={lv.id} value={lv.id}>
-                                {lv.name}
-                              </option>
+                              <option key={lv.id} value={lv.name} />
                             ))}
-                          </select>
+                            <option value="bottle" />
+                            <option value="box" />
+                            <option value="packet" />
+                            <option value="bag" />
+                            <option value="case" />
+                          </datalist>
                         </div>
 
                         {/* Only worth asking when they sell a PACK — bought
                             loose there is nothing to hold anything. */}
-                        {it && sheetLevel && (
+                        {it && sheetLevel.trim() &&
+                          sheetLevel.trim().toLowerCase() !== it.unit.toLowerCase() && (
                           <div className="flex flex-wrap items-center gap-2 text-sm text-fg-soft">
-                            <span>and 1 {levelName(it, sheetLevel)} holds</span>
+                            <span>and 1 {sheetLevel.trim()} holds</span>
                             <input
                               name="held"
                               inputMode="decimal"
-                              defaultValue={priceRow.pack_size_override ?? ""}
-                              placeholder={String(
-                                (it.pack_levels ?? []).find((l) => l.id === sheetLevel)?.base_size ?? "",
-                              )}
+                              defaultValue={
+                                priceRow.pack_size_override ??
+                                (it.pack_levels ?? []).find((l) => l.id === priceRow.pack_level_id)
+                                  ?.base_size ??
+                                ""
+                              }
+                              placeholder="how many"
                               onChange={(e) => { e.target.value = numeric(e.target.value); }}
                               className={`${inputCls} w-24`}
                               aria-label={`How many ${it.unit} in one of their packs`}
@@ -1267,12 +1326,11 @@ export default function VendorsPage() {
                           </button>
                         </div>
 
-                        {it && sheetLevel && (
+                        {it && sheetLevel.trim() && (
                           <p className="text-[11px] leading-relaxed text-fg-faint">
-                            Leave the middle box empty to use the item&apos;s own size. Fill it in
-                            only when THIS supplier&apos;s {levelName(it, sheetLevel)} is a
-                            different size to everyone else&apos;s — that is what keeps stock
-                            honest when the delivery is opened.
+                            This is <b>their</b> {sheetLevel.trim()}, not everyone&apos;s — another
+                            supplier can sell a {sheetLevel.trim()} of a different size and both
+                            stay right. Clear the box to say they sell it loose again.
                           </p>
                         )}
                       </form>

@@ -321,9 +321,61 @@ export async function burstBasket(): Promise<void> {
  * like a fountain of identical dots. All of it on transform and opacity, so it
  * costs the compositor and not the layout.
  */
+/**
+ * The puff the paper comes out of. Deliberately small.
+ *
+ * Smoke was here once and he threw it out for good reason: "it made a blind for
+ * a sec — clouds closed the entire page." That version was a full-screen veil,
+ * so for a moment the app was gone. This one is the opposite thing wearing the
+ * same name: a handful of soft puffs low on the screen that never exceed a
+ * fifth of opacity, never cover the middle, and are gone in a second. It reads
+ * as the pop that launched the confetti, not as weather.
+ */
+function smoke(): void {
+  if (typeof window === "undefined") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+  const host = document.createElement("div");
+  host.setAttribute("aria-hidden", "true");
+  // Bottom strip only — the page stays visible throughout, which is the whole
+  // difference between this and the version that blinded him.
+  host.className = "pointer-events-none fixed inset-x-0 bottom-0 z-[199] h-1/3 overflow-hidden";
+  document.body.appendChild(host);
+
+  const w = window.innerWidth;
+  for (let i = 0; i < 9; i++) {
+    const puff = document.createElement("div");
+    const size = 90 + Math.random() * 130;
+    const x = w * (0.1 + Math.random() * 0.8);
+    puff.style.cssText =
+      `position:absolute;left:${x - size / 2}px;bottom:-${size * 0.5}px;` +
+      `width:${size}px;height:${size}px;border-radius:50%;` +
+      `background:radial-gradient(circle at 50% 50%, rgba(255,255,255,.5), rgba(255,255,255,0) 68%);` +
+      `filter:blur(9px);will-change:transform,opacity;`;
+    host.appendChild(puff);
+
+    puff.animate(
+      [
+        { transform: "translate(0,0) scale(.5)", opacity: 0 },
+        { transform: `translate(${(Math.random() - 0.5) * 70}px, -70px) scale(1)`, opacity: 0.2, offset: 0.35 },
+        { transform: `translate(${(Math.random() - 0.5) * 130}px, -180px) scale(1.6)`, opacity: 0 },
+      ],
+      {
+        duration: 1000 + Math.random() * 420,
+        delay: Math.random() * 160,
+        easing: "cubic-bezier(.2,.7,.3,1)",
+        fill: "forwards",
+      },
+    );
+  }
+  window.setTimeout(() => host.remove(), 1700);
+}
+
 function confetti(): void {
   if (typeof window === "undefined") return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+  smoke();
 
   const host = document.createElement("div");
   host.setAttribute("aria-hidden", "true");
@@ -353,7 +405,13 @@ function confetti(): void {
     // Falling, drifting, and settling — with a little sideways wander so it
     // does not rain in straight lines.
     const drift = (fromLeft ? 1 : -1) * w * (0.04 + Math.random() * 0.12);
-    const fall = h * (0.9 + Math.random() * 0.55) - y0;
+    // It settles ON THE CARDS, not in a heap at the bottom: "once burst they
+    // need to spread stick on the cards there for 3-4 sec". Landing heights are
+    // spread across the whole viewport and biased toward the middle, where the
+    // cards actually are, so the page ends up littered rather than swept.
+    const bias = (Math.random() + Math.random()) / 2; // clusters mid-screen
+    const restY = h * (0.12 + bias * 0.78);
+    const fall = restY - y0;
 
     const size = 9 + Math.random() * 11;
     bit.style.cssText = `position:absolute;left:${x0}px;top:${y0}px;width:${size}px;height:${size * (0.4 + Math.random() * 0.5)}px;background:${colours[i % colours.length]};border-radius:1px;will-change:transform,opacity;`;
@@ -371,14 +429,27 @@ function confetti(): void {
           offset: 0.45,
         },
         {
-          // Lands and STAYS — it fades only right at the end, so the screen is
-          // covered in paper for three seconds rather than a flash of it.
-          transform: `translate(${drift}px, ${fall}px) rotate3d(1,1,0,${spinB}deg)`,
+          // Touchdown, slightly past where it settles, so it can rock back.
+          transform: `translate(${drift}px, ${fall + 6}px) rotate3d(1,1,0,${spinB}deg)`,
           opacity: 1,
-          offset: 0.82,
+          offset: 0.5,
         },
         {
-          transform: `translate(${drift}px, ${fall}px) rotate3d(1,1,0,${spinB}deg)`,
+          // Lands and STICKS — it fades only right at the end, so the cards
+          // stay littered for three-plus seconds rather than a flash of it.
+          // Held flat here (rotateZ only) so it reads as paper lying ON the
+          // card rather than frozen mid-tumble.
+          transform: `translate(${drift}px, ${fall}px) rotate(${spinB / 6}deg)`,
+          opacity: 1,
+          offset: 0.62,
+        },
+        {
+          transform: `translate(${drift}px, ${fall}px) rotate(${spinB / 6}deg)`,
+          opacity: 1,
+          offset: 0.88,
+        },
+        {
+          transform: `translate(${drift}px, ${fall}px) rotate(${spinB / 6}deg)`,
           opacity: 0,
           offset: 1,
         },
@@ -394,7 +465,7 @@ function confetti(): void {
     );
   }
 
-  window.setTimeout(() => host.remove(), 4600);
+  window.setTimeout(() => host.remove(), 5200);
 }
 
 

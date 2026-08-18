@@ -591,7 +591,7 @@ export function OrderFlow({
   return (
     <div className="min-w-0">
       {low.length > 0 && (
-        <div className="mise-card3d relative mb-3 flex items-center gap-2.5 overflow-hidden py-2 pl-3.5 pr-2">
+        <div className="mise-card3d mise-card3d-wide relative mb-3 flex items-center gap-2.5 overflow-hidden py-2 pl-3.5 pr-2">
           <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
           <span aria-hidden className="shrink-0 text-base leading-none">⚠</span>
           {/* One line that fits. It used to wrap and hang out of its own box —
