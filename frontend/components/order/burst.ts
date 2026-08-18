@@ -337,39 +337,63 @@ function smoke(): void {
 
   const host = document.createElement("div");
   host.setAttribute("aria-hidden", "true");
-  // Bottom strip only — the page stays visible throughout, which is the whole
-  // difference between this and the version that blinded him.
-  host.className = "pointer-events-none fixed inset-x-0 bottom-0 z-[199] h-1/3 overflow-hidden";
+  // Still bottom-anchored and still see-through: the page must stay readable,
+  // which is the whole difference between this and the veil that blinded him.
+  host.className = "pointer-events-none fixed inset-x-0 bottom-0 z-[199] h-1/2 overflow-hidden";
   document.body.appendChild(host);
 
   const w = window.innerWidth;
-  for (let i = 0; i < 9; i++) {
+  // CLUSTERED, not sprinkled. Nine puffs spread across the whole width was a
+  // faint haze nobody notices — "I can't able to see that". A burst comes from
+  // ONE place, so these rise as a column from the middle and spread as they
+  // climb, the way smoke actually behaves.
+  const cx = w / 2;
+  const N = 18;
+  for (let i = 0; i < N; i++) {
     const puff = document.createElement("div");
-    const size = 90 + Math.random() * 130;
-    const x = w * (0.1 + Math.random() * 0.8);
+    // Small and dense low down, big and thin higher up — that gradient is what
+    // reads as billowing rather than as circles fading.
+    const t = i / N;
+    const size = 70 + t * 190 + Math.random() * 70;
+    const spread = w * 0.06 + t * w * 0.16;
+    const x = cx + (Math.random() - 0.5) * spread * 2;
     puff.style.cssText =
-      `position:absolute;left:${x - size / 2}px;bottom:-${size * 0.5}px;` +
+      `position:absolute;left:${x - size / 2}px;bottom:-${size * 0.55}px;` +
       `width:${size}px;height:${size}px;border-radius:50%;` +
-      `background:radial-gradient(circle at 50% 50%, rgba(255,255,255,.5), rgba(255,255,255,0) 68%);` +
-      `filter:blur(9px);will-change:transform,opacity;`;
+      `background:radial-gradient(circle at 50% 55%, rgba(255,255,255,.62), rgba(255,255,255,0) 70%);` +
+      `filter:blur(11px);will-change:transform,opacity;`;
     host.appendChild(puff);
 
+    const rise = 150 + t * 260 + Math.random() * 90;
+    const drift = (Math.random() - 0.5) * 150;
     puff.animate(
       [
-        { transform: "translate(0,0) scale(.5)", opacity: 0 },
-        { transform: `translate(${(Math.random() - 0.5) * 70}px, -70px) scale(1)`, opacity: 0.2, offset: 0.35 },
-        { transform: `translate(${(Math.random() - 0.5) * 130}px, -180px) scale(1.6)`, opacity: 0 },
+        { transform: "translate(0,0) scale(.45)", opacity: 0 },
+        {
+          transform: `translate(${drift * 0.35}px, -${rise * 0.4}px) scale(1)`,
+          // Peak is still low enough to read straight through — the cap that
+          // keeps this a puff rather than weather.
+          opacity: 0.28,
+          offset: 0.3,
+        },
+        {
+          transform: `translate(${drift}px, -${rise}px) scale(1.85)`,
+          opacity: 0,
+        },
       ],
       {
-        duration: 1000 + Math.random() * 420,
-        delay: Math.random() * 160,
-        easing: "cubic-bezier(.2,.7,.3,1)",
+        // Longer tail, so the eye has time to catch it.
+        duration: 1500 + Math.random() * 700,
+        delay: t * 220 + Math.random() * 120,
+        easing: "cubic-bezier(.18,.7,.3,1)",
         fill: "forwards",
       },
     );
   }
-  window.setTimeout(() => host.remove(), 1700);
+
+  window.setTimeout(() => host.remove(), 2600);
 }
+
 
 function confetti(): void {
   if (typeof window === "undefined") return;

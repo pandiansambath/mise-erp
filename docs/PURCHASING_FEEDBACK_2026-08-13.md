@@ -446,10 +446,13 @@ It went in with `33c64bf`: `smoke()` in `components/order/burst.ts`, called from
 0.2 opacity, gone in ~1s — because the version he killed was a full-screen veil
 (*"it made a blind for a sec, clouds closed the entire page"*).
 
-He cannot see it, which means it is now too subtle to register. **OPEN:** make it
-read as a real puff without going back to a veil — more puffs, rising from where
-the basket sits rather than across the whole strip, and a longer tail so the eye
-catches it. The constraint that matters: the page must stay readable throughout.
+He cannot see it, which means it was too subtle to register. **Fixed:** nine
+puffs sprinkled across the full width is a haze nobody notices. A burst comes
+from ONE place, so it is now a column of 18 rising from the middle and spreading
+as it climbs — small and dense low down, big and thin higher up, which is the
+gradient that reads as billowing rather than as circles fading. Peak opacity
+0.28 and a 1.5-2.2s tail, so the eye catches it and the page still reads straight
+through. The cap is the point: a puff, not weather.
 
 ### 2. Recipes are written in GRAMS — real hotel feedback
 > "when they try to add recipes in recipe section, mostly they using grams but
