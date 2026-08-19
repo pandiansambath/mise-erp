@@ -410,6 +410,10 @@ async def move_order(
         )
     order.status = payload.status
     await db.commit()
+    # `updated_at` is computed by the database on UPDATE, so after the commit it
+    # is EXPIRED — reading it would trigger a lazy refresh, and a lazy refresh
+    # in async is a MissingGreenlet. Ask for it explicitly instead.
+    await db.refresh(order)
     if payload.status == OrderStatus.COMPLETED.value:
         await _record_sale(db, order)
     return _order_out(order)
