@@ -76,6 +76,8 @@ class MenuItemPatch(BaseModel):
     #: "only served at this particular time" — both blank means all day.
     serve_from: dt_time | None = None
     serve_to: dt_time | None = None
+    #: How long this dish takes. None = the hotel default.
+    prep_minutes: int | None = Field(default=None, ge=1, le=240)
 
 
 class MenuItemOut(BaseModel):
@@ -91,6 +93,7 @@ class MenuItemOut(BaseModel):
     sold_out_on: dt_date | None = None
     serve_from: dt_time | None = None
     serve_to: dt_time | None = None
+    prep_minutes: int | None = None
     recipe_id: uuid.UUID | None
     photo_key: str | None = Field(default=None, exclude=True)
 
@@ -127,6 +130,8 @@ def _order_out(o: Order, rider_name: str | None = None, table_label: str | None 
         "help_requested_at": (
             o.help_requested_at.isoformat() if o.help_requested_at else None
         ),
+        "eta_minutes": o.eta_minutes,
+        "guest_message": o.guest_message,
         "rider_name": rider_name,
         "code": o.code,
         "status": o.status,
@@ -1183,9 +1188,22 @@ async def place_table_order(
             )
         )
 
+    # THE ESTIMATE, WORKED OUT FROM WHAT THEY ACTUALLY ORDERED.
+    #
+    #   "once customer submitted the order they can instantly see somewhat
+    #    correct ETA timing."
+    #
+    # The LONGEST dish, not the sum: a kitchen cooks in parallel, and adding
+    # the times promises a wait nobody will actually have. None of the dishes
+    # having a time means we have nothing better than the hotel default, and
+    # NULL says exactly that rather than inventing a number.
+    dish_times = [m.prep_minutes for m in rows if m.prep_minutes]
+    eta = max(dish_times) if dish_times else None
+
     order = Order(
         hotel_id=hotel.id,
         code=f"T{secrets.randbelow(9000) + 1000}",
+        eta_minutes=eta,
         customer_name=(payload.customer_name or "").strip() or t.label,
         # The table IS the contact. A seated diner has no delivery details and
         # must not be asked to invent any.

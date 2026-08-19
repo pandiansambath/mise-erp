@@ -53,6 +53,8 @@ type LiveOrder = {
   total: string;
   created_at: string;
   updated_at?: string | null;
+  /** What the kitchen says THIS ticket takes. Null = the hotel default. */
+  eta_minutes?: number | null;
   items: { name: string; quantity: number; line_total: string }[];
 };
 
@@ -279,7 +281,8 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               // not five minutes from serving it, and a countdown that lies is
               // worse than none.
               const from = o.status === "NEW" ? null : new Date(o.updated_at ?? o.created_at).getTime();
-              const mins = hotel?.prep_minutes ?? 20;
+              // Narrowest wins: this ticket's own estimate, then the hotel's.
+              const mins = o.eta_minutes ?? hotel?.prep_minutes ?? 20;
               const left = from ? Math.max(0, Math.ceil((from + mins * 60000 - now) / 60000)) : null;
               return (
                 <div

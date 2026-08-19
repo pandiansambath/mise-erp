@@ -40,6 +40,7 @@ const NAV: NavItem[] = [
   // Kitchen rather than Money because the people who use them are cooking.
   { href: "/kitchen", label: "Kitchen screen", icon: "👨‍🍳", perm: "orders:write", feature: "ordering", group: "Kitchen", keywords: "kds pass tickets dine in table orders live chef screen" },
   { href: "/tables", label: "Tables & QR", icon: "🪑", perm: "orders:write", feature: "ordering", group: "Kitchen", keywords: "qr code table dine in scan menu card print seats" },
+  { href: "/menu", label: "Menu", icon: "🍽️", perm: "orders:write", feature: "ordering", group: "Kitchen", keywords: "menu dishes price availability out of stock serving hours prep time recipes" },
   { href: "/expenses", label: "Expenses", icon: "💸", perm: "expenses:read", feature: "expenses", group: "Money", keywords: "costs spend petty" },
   { href: "/payroll", label: "Payroll", icon: "💷", perm: "payroll:read", feature: "payroll", group: "Money", keywords: "payslip salary wages" },
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read", group: "Stock", keywords: "stock items shelf" },

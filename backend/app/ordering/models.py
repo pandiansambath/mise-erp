@@ -63,6 +63,9 @@ class MenuItem(Base):
     #: Served only between these, hotel-local. Both NULL = all day.
     serve_from: Mapped[time | None] = mapped_column(Time)
     serve_to: Mapped[time | None] = mapped_column(Time)
+    #: How long THIS dish takes. NULL = the hotel default. A biryani is forty
+    #: minutes and a lassi is two, and one number for both serves neither.
+    prep_minutes: Mapped[int | None] = mapped_column(Integer)
     recipe_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recipes.id"))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(

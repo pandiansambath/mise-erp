@@ -25,7 +25,7 @@ bottom and tick as it ships.** Nothing gets dropped because it scrolled past.
 
 ## 🔴 Open — in order
 
-*(1–10 and 14 shipped in `eeea6e7` + the follow-up; 11–13 remain.)*
+*(1–12 and 14 shipped. **13 — AI menu import — is the only one left.**)*
 
 ### ✅ 1. `/kds/<code>` page 404s
 The API shipped; **the page was never built**. My miss — the button hands you a
@@ -101,6 +101,10 @@ stating any figure it cannot source, from giving medical advice, and from ever
 declaring a dish allergy-safe.
 
 ### ✅ 10. Per-item prep time, and per-ticket override
+*Corrected: the first pass shipped only the per-TICKET override. The per-DISH
+time is in now, and the order stamps its estimate from the dishes chosen — the
+**longest** dish, not the sum, because a kitchen cooks in parallel and adding
+the times promises a wait nobody will actually have.*
 > "super admin or chef can add an estimated time for each item in menu
 > beforehand, so that when customer chooses that, once submitted they can
 > instantly see somewhat correct ETA. This timing also they can change
@@ -112,11 +116,11 @@ Three layers, narrowest wins: **this ticket's override → the dishes' own times
 the hotel default.** A biryani is forty minutes and a lassi is two; an average
 serves neither.
 
-### 11. The owner's menu page
+### ✅ 11. The owner's menu page
 The availability states are in the API with no UI. Needs: add · edit · reorder ·
 delete · photo · availability · serving hours · per-item prep time.
 
-### 12. Build the menu from recipes, and by hand
+### ✅ 12. Build the menu from recipes, and by hand
 > "while adding menu items we need feature like **copy items from recipe
 > section**... then if super wants to add 1 or 2 items manually then we need
 > allow him. We need to be flexible more and more."
