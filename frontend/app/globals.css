@@ -2766,6 +2766,10 @@ body[data-overlay] .mise-launcher-in {
   html.mise-printing [data-noprint],
   html.mise-printing .mise-bench-rail,
   html.mise-printing .mise-mobile-nav,
+  /* The page's own footer bar and the floating assistant. Both are screen
+     furniture; on paper they are a smudge across the bottom card. */
+  html.mise-printing .mise-bench-tally,
+  html.mise-printing [aria-label*="Copilot"],
   html.mise-printing .mise-copilot-fab {
     display: none !important;
   }
