@@ -1886,3 +1886,160 @@ async def guest_ask(code: str, payload: GuestAskIn, db: AsyncSession = Depends(g
             "\u201cNeed someone\u201d and a member of staff will come over.",
         }
     return {"ok": True, "answer": answer}
+
+
+# -- Reading a menu ----------------------------------------------------------
+#
+#   "he can upload the menu so that our AI can see the menu photo or excel and
+#    he can add to menu."
+#
+# Two shapes of the same job. A spreadsheet is read directly - it is already
+# structured, and asking a model to parse a column of numbers is paying for
+# guesswork we do not need. A photo goes to the model, because that genuinely
+# needs reading.
+#
+# NOTHING IS WRITTEN HERE. It returns a proposal; the owner confirms on screen
+# and the existing create endpoint does the writing. A model that can silently
+# add twenty dishes priced from a blurry photo is not a feature, it is a mess
+# somebody has to unpick dish by dish.
+
+
+@router.post("/menu/read")
+async def read_menu_document(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> dict:
+    """Propose menu items from a photo or a spreadsheet. Writes nothing."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That file was empty")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Please use a smaller file")
+
+    name = (file.filename or "").lower()
+    media = file.content_type or ""
+    proposed: list[dict] = []
+
+    if name.endswith((".xlsx", ".xls", ".csv")) or "sheet" in media or "csv" in media:
+        # STRUCTURED ALREADY. Read it ourselves rather than paying a model to
+        # guess at a column of numbers it can only get wrong.
+        proposed = _rows_from_sheet(data, name)
+        source = "spreadsheet"
+    else:
+        if media == "application/pdf":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Please upload a photo of the menu (JPG or PNG) or a spreadsheet.",
+            )
+        try:
+            read = await run_in_threadpool(
+                bedrock.understand_document, data, media or "image/jpeg", kind="menu"
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced as-is
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, f"Could not read that menu: {exc}"
+            ) from exc
+        for row in read.get("lines") or read.get("items") or []:
+            nm = (row.get("name") or "").strip()
+            if not nm:
+                continue
+            proposed.append(
+                {
+                    "name": nm[:120],
+                    "price": str(row.get("price") or row.get("unit_price") or "0"),
+                    "category": (row.get("category") or "Mains")[:60],
+                    "description": (row.get("description") or None),
+                }
+            )
+        source = "photo"
+
+    # Flag what is already there so the owner is not offered duplicates.
+    existing = {
+        n.strip().lower()
+        for n in (
+            await db.execute(select(MenuItem.name).where(MenuItem.hotel_id == user.hotel_id))
+        ).scalars()
+    }
+    for p in proposed:
+        p["already_on_menu"] = p["name"].strip().lower() in existing
+
+    return {
+        "source": source,
+        "found": len(proposed),
+        "items": proposed[:200],
+        # Said plainly, because the owner is about to accept these as prices.
+        "note": "Nothing has been saved yet. Check every price before adding.",
+    }
+
+
+def _rows_from_sheet(data: bytes, filename: str) -> list[dict]:
+    """Name, price, section - from whatever the columns happen to be called.
+
+    Headers are matched loosely because a real hotel's spreadsheet says "Dish",
+    "Item", "Rate", "Amount" or nothing at all. Anything without a name and a
+    positive price is skipped rather than imported as a zero, because a menu
+    item priced at zero is worse than a missing one.
+    """
+    rows: list[list] = []
+    if filename.endswith(".csv"):
+        import csv
+
+        text = data.decode("utf-8", errors="replace").splitlines()
+        rows = [r for r in csv.reader(text)]
+    else:
+        from openpyxl import load_workbook
+
+        wb = load_workbook(_BytesIO(data), data_only=True, read_only=True)
+        rows = [list(r) for r in wb[wb.sheetnames[0]].iter_rows(values_only=True)]
+
+    if not rows:
+        return []
+
+    def norm(v) -> str:
+        return str(v or "").strip().lower()
+
+    header = [norm(c) for c in rows[0]]
+    NAMES = {"name", "item", "dish", "product", "menu item"}
+    PRICES = {"price", "rate", "amount", "cost", "selling price"}
+    CATS = {"category", "section", "type", "group"}
+
+    def find(cands: set[str]) -> int:
+        for i, h in enumerate(header):
+            if h in cands:
+                return i
+        for i, h in enumerate(header):
+            if any(c in h for c in cands):
+                return i
+        return -1
+
+    ni, pi, ci = find(NAMES), find(PRICES), find(CATS)
+    body = rows[1:] if (ni >= 0 or pi >= 0) else rows
+    if ni < 0:
+        ni = 0
+    if pi < 0:
+        pi = 1
+
+    out: list[dict] = []
+    for r in body:
+        if ni >= len(r):
+            continue
+        nm = str(r[ni] or "").strip()
+        raw = str(r[pi] or "").strip() if pi < len(r) else ""
+        # Strip anything that is not part of a number: "£12.50", "12,50", "Rs 90".
+        cleaned = "".join(ch for ch in raw.replace(",", ".") if ch.isdigit() or ch == ".")
+        try:
+            price = Decimal(cleaned) if cleaned else Decimal("0")
+        except Exception:  # noqa: BLE001
+            price = Decimal("0")
+        if not nm or price <= 0:
+            continue
+        out.append(
+            {
+                "name": nm[:120],
+                "price": str(price),
+                "category": (str(r[ci]).strip()[:60] if 0 <= ci < len(r) and r[ci] else "Mains"),
+                "description": None,
+            }
+        )
+    return out

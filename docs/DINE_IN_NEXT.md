@@ -25,7 +25,7 @@ bottom and tick as it ships.** Nothing gets dropped because it scrolled past.
 
 ## 🔴 Open — in order
 
-*(1–12 and 14 shipped. **13 — AI menu import — is the only one left.**)*
+*(**All 14 shipped.** Kept here as the record of what was asked and why.)*
 
 ### ✅ 1. `/kds/<code>` page 404s
 The API shipped; **the page was never built**. My miss — the button hands you a
@@ -128,7 +128,7 @@ delete · photo · availability · serving hours · per-item prep time.
 Pull from Recipes (the costing is already there, so margin comes free) **and**
 add a one-off by hand. Neither is the only door.
 
-### 13. AI menu import
+### ✅ 13. AI menu import
 > "he can upload the menu so that our AI can see the menu photo or excel and he
 > can add to menu."
 
