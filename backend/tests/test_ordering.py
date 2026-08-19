@@ -215,3 +215,118 @@ async def test_autopilot_deducts_ingredients_on_completion(client, make_user, au
     db.expire_all()
     fresh = (await db.execute(select(Item).where(Item.id == chicken_id))).scalar_one()
     assert fresh.current_stock == Decimal("8.000")  # 10 - 4×0.5
+
+
+# ── Dine-in: a QR on every table ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_table_qr_orders_land_in_the_kitchen(client, make_user, auth_header, hotel):
+    """The whole feature in one test: scan, see the menu, order, kitchen sees it.
+
+    "customer comes and sits on table and he can scan qr... at the same time
+     other side customer, table, items etc super admin will get and this will be
+     displayed to tab which is inside the kitchen."
+    """
+    admin = await make_user("dinein@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+
+    made = await client.post("/api/ordering/tables", json={"label": "Table 1", "seats": 4}, headers=h)
+    assert made.status_code == 201, made.text
+    code = made.json()["code"]
+    assert len(code) == 7, "the printed code should stay short enough to type"
+
+    dish = await client.post(
+        "/api/ordering/menu",
+        json={"name": "Idli", "price": "3.00", "category": "Breakfast"},
+        headers=h,
+    )
+    assert dish.status_code == 201, dish.text
+    dish_id = dish.json()["id"]
+
+    # The diner's side needs NO login at all.
+    menu = await client.get(f"/api/public/table/{code}")
+    assert menu.status_code == 200, menu.text
+    assert menu.json()["table"]["label"] == "Table 1"
+    assert any(m["id"] == dish_id for m in menu.json()["menu"])
+
+    placed = await client.post(
+        f"/api/public/table/{code}",
+        json={"items": [{"menu_item_id": dish_id, "quantity": 3}]},
+    )
+    assert placed.status_code == 201, placed.text
+    assert placed.json()["total"] == "9.00", "3 idli at £3 is £9 — priced from OUR menu"
+
+    # ...and the kitchen sees it, pinned to the table.
+    board = (await client.get("/api/ordering/orders", headers=h)).json()
+    mine = [o for o in board["orders"] if o["code"] == placed.json()["code"]]
+    assert mine, "the order never reached the kitchen board"
+    assert mine[0]["fulfilment"] == "DINE_IN"
+
+
+@pytest.mark.asyncio
+async def test_a_diner_cannot_name_their_own_price(client, make_user, auth_header):
+    """A browser console must not be a discount. Prices come from our menu."""
+    admin = await make_user("price@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    code = (
+        await client.post("/api/ordering/tables", json={"label": "T9"}, headers=h)
+    ).json()["code"]
+    dish_id = (
+        await client.post(
+            "/api/ordering/menu", json={"name": "Dosa", "price": "5.00"}, headers=h
+        )
+    ).json()["id"]
+
+    placed = await client.post(
+        f"/api/public/table/{code}",
+        # A tampered client sends a price. It is simply not read.
+        json={"items": [{"menu_item_id": dish_id, "quantity": 2, "unit_price": "0.01"}]},
+    )
+    assert placed.status_code == 201, placed.text
+    assert placed.json()["total"] == "10.00"
+
+
+@pytest.mark.asyncio
+async def test_calling_for_help_raises_a_ticket_even_with_no_order(client, make_user, auth_header):
+    """The automated wave. Water or a spoon is a request with no food attached,
+    and it still has to reach the same screen."""
+    admin = await make_user("help@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    code = (
+        await client.post("/api/ordering/tables", json={"label": "T7"}, headers=h)
+    ).json()["code"]
+
+    r = await client.post(f"/api/public/table/{code}/help")
+    assert r.status_code == 202, r.text
+    live = (await client.get(f"/api/public/table/{code}/orders")).json()
+    assert live["orders"], "the call for help never appeared"
+
+
+@pytest.mark.asyncio
+async def test_bulk_tables_can_be_pressed_twice_without_duplicates(client, make_user, auth_header):
+    """Safely repeatable: a slip of the finger must not create Table 1 twice."""
+    admin = await make_user("bulk@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    first = await client.post("/api/ordering/tables/bulk", json={"count": 5}, headers=h)
+    assert first.status_code == 201, first.text
+    assert len(first.json()) == 5
+    await client.post("/api/ordering/tables/bulk", json={"count": 5}, headers=h)
+    all_tables = (await client.get("/api/ordering/tables", headers=h)).json()
+    labels = [t["label"] for t in all_tables]
+    assert len(labels) == len(set(labels)), f"duplicate table labels: {labels}"
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_or_disabled_table_takes_no_orders(client, make_user, auth_header):
+    admin = await make_user("off@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "T3"}, headers=h)).json()
+    assert (await client.get("/api/public/table/nosuch")).status_code == 404
+
+    await client.patch(
+        f"/api/ordering/tables/{t['id']}",
+        json={"label": "T3", "seats": 4, "is_active": False},
+        headers=h,
+    )
+    assert (await client.get(f"/api/public/table/{t['code']}")).status_code == 404

@@ -7,6 +7,7 @@
 import logging
 import secrets
 import uuid
+from datetime import UTC
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -20,15 +21,26 @@ from app.core import notify
 from app.core.config import settings
 from app.core.database import get_db
 from app.hotels.models import Hotel
-from app.ordering.models import ORDER_FLOW, MenuItem, Order, OrderItem, OrderStatus
+from app.ordering.models import (
+    ORDER_FLOW,
+    DiningTable,
+    MenuItem,
+    Order,
+    OrderItem,
+    OrderStatus,
+)
 from app.ordering.rider_models import Rider
 from app.ordering.rider_router import build_management_endpoints
 
 log = logging.getLogger("mise.ordering")
 router = APIRouter(prefix="/ordering", tags=["ordering"])
 public_router = APIRouter(prefix="/public/order", tags=["ordering-public"])
+# The QR flow gets its own public prefix so a table code is never mistaken for
+# a hotel id, and so the customer's URL is short enough to print: /t/<code>.
+table_router = APIRouter(prefix="/public/table", tags=["dine-in"])
 
-FULFILMENTS = {"PICKUP", "DELIVERY"}
+# DINE_IN is the QR-on-the-table flow: same pipeline, entered from a seat.
+FULFILMENTS = {"PICKUP", "DELIVERY", "DINE_IN"}
 
 
 # ── schemas ───────────────────────────────────────────────────────────────────
@@ -738,3 +750,452 @@ async def track_order(order_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -
 
 # hotel-side rider management + assignment endpoints (defined in rider_router)
 build_management_endpoints(router, require)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DINE-IN: a QR on every table
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#   "customer comes to hotel and he needs to call the bearer to order food...
+#    which means customer needs to call and wait for him to come and take the
+#    orders. What if we automate this."
+#
+# The whole feature is that sentence. A diner sits down, scans the card on the
+# table, and the order is in the kitchen before a waiter has crossed the room.
+# It reuses the pipeline that already exists — the same `orders` table the
+# takeaway page writes to, entered through a different door and pinned to a seat.
+
+
+def _table_url(hotel: Hotel | None, code: str) -> str:
+    """The address the QR encodes.
+
+    Each hotel lives on its own subdomain, so a card printed for Nirai must
+    point at nirai1.dineai.cloud and not at the apex — the apex has no idea
+    which kitchen the diner is sitting in, and a QR that lands on the wrong
+    hotel is worse than one that does not scan.
+    """
+    base = settings.app_base_url.rstrip("/")
+    if hotel is not None and hotel.username:
+        scheme, _, apex = base.partition("://")
+        base = f"{scheme}://{hotel.username}.{apex}"
+    return f"{base}/t/{code}"
+
+
+def _table_code() -> str:
+    """Short, unguessable, and safe to print.
+
+    Not sequential: these cards sit on tables in a public room, and /t/2 tells
+    anybody that /t/3 exists. Ordering onto a stranger's table is a prank that
+    costs the hotel real food.
+
+    No look-alike characters either — somebody WILL type this by hand when a
+    camera refuses to focus, and "was that a one or an ell" is a support call.
+    """
+    alphabet = "23456789abcdefghjkmnpqrstuvwxyz"
+    return "".join(secrets.choice(alphabet) for _ in range(7))
+
+
+class TableIn(BaseModel):
+    label: str = Field(min_length=1, max_length=40)
+    seats: int = Field(default=4, ge=1, le=40)
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class TableOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    label: str
+    code: str
+    seats: int
+    sort_order: int
+    is_active: bool
+
+
+@router.get("/tables", response_model=list[TableOut])
+async def list_tables(
+    db: AsyncSession = Depends(get_db), user: User = Depends(require("orders:write"))
+) -> list[TableOut]:
+    rows = (
+        (
+            await db.execute(
+                select(DiningTable)
+                .where(DiningTable.hotel_id == user.hotel_id)
+                .order_by(DiningTable.sort_order, DiningTable.label)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [TableOut.model_validate(t) for t in rows]
+
+
+@router.post("/tables", response_model=TableOut, status_code=status.HTTP_201_CREATED)
+async def create_table(
+    payload: TableIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> TableOut:
+    label = payload.label.strip()
+    clash = (
+        await db.execute(
+            select(DiningTable).where(
+                DiningTable.hotel_id == user.hotel_id, DiningTable.label == label
+            )
+        )
+    ).scalar_one_or_none()
+    if clash is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"There is already a {label}.")
+    t = DiningTable(
+        hotel_id=user.hotel_id,
+        label=label,
+        code=_table_code(),
+        seats=payload.seats,
+        sort_order=payload.sort_order,
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+    return TableOut.model_validate(t)
+
+
+class BulkTablesIn(BaseModel):
+    """Say how many tables you have, and get them.
+
+    "we dont know how many table each hotel have so we can make it configurable
+     by superadmin" — a twenty-cover restaurant should not press Add twenty
+    times.
+    """
+
+    count: int = Field(ge=1, le=200)
+    prefix: str = Field(default="Table", max_length=20)
+    seats: int = Field(default=4, ge=1, le=40)
+
+
+@router.post("/tables/bulk", response_model=list[TableOut], status_code=status.HTTP_201_CREATED)
+async def create_tables_bulk(
+    payload: BulkTablesIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> list[TableOut]:
+    """Create N tables, skipping labels that already exist.
+
+    Skipping rather than rejecting keeps the call safely repeatable: pressing it
+    twice must not produce two "Table 1", and must not fail outright either.
+    """
+    existing = set(
+        (
+            await db.execute(
+                select(DiningTable.label).where(DiningTable.hotel_id == user.hotel_id)
+            )
+        ).scalars()
+    )
+    start = (
+        await db.execute(
+            select(func.count())
+            .select_from(DiningTable)
+            .where(DiningTable.hotel_id == user.hotel_id)
+        )
+    ).scalar_one()
+
+    made: list[DiningTable] = []
+    i = 0
+    while len(made) < payload.count and i < payload.count * 4:
+        i += 1
+        label = f"{payload.prefix.strip()} {start + i}".strip()
+        if label in existing:
+            continue
+        t = DiningTable(
+            hotel_id=user.hotel_id,
+            label=label,
+            code=_table_code(),
+            seats=payload.seats,
+            sort_order=start + i,
+        )
+        db.add(t)
+        made.append(t)
+        existing.add(label)
+    await db.commit()
+    for t in made:
+        await db.refresh(t)
+    return [TableOut.model_validate(t) for t in made]
+
+
+@router.patch("/tables/{table_id}", response_model=TableOut)
+async def update_table(
+    table_id: uuid.UUID,
+    payload: TableIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> TableOut:
+    t = await db.get(DiningTable, table_id)
+    if t is None or t.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
+    # The CODE is deliberately not editable: it is printed on a card sitting on
+    # that table, and changing it silently turns the card into a dead end.
+    t.label = payload.label.strip()
+    t.seats = payload.seats
+    t.sort_order = payload.sort_order
+    t.is_active = payload.is_active
+    await db.commit()
+    await db.refresh(t)
+    return TableOut.model_validate(t)
+
+
+@router.delete("/tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_table(
+    table_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+):
+    from fastapi import Response
+
+    t = await db.get(DiningTable, table_id)
+    if t is None or t.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
+    await db.delete(t)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/tables/{table_id}/qr.svg")
+async def table_qr(
+    table_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+):
+    """The card that goes on the table, as SVG.
+
+    SVG because this gets PRINTED, and a raster QR at the wrong size is a QR
+    that will not scan across a dim dining room. Vector has no wrong size.
+    Error correction is set to the highest level so it still reads with a
+    thumbprint or a splash of curry on it, which is the real operating
+    environment for a card that lives on a table.
+    """
+    import segno
+    from fastapi import Response
+
+    t = await db.get(DiningTable, table_id)
+    if t is None or t.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
+    hotel_for_table = await db.get(Hotel, t.hotel_id)
+    url = _table_url(hotel_for_table, t.code)
+    qr = segno.make(url, error="h")
+    return Response(content=qr.svg_inline(scale=8, dark="#111111"), media_type="image/svg+xml")
+
+
+# ── The customer's side ──────────────────────────────────────────────────────
+
+
+async def _table_by_code(db: AsyncSession, code: str):
+    t = (
+        await db.execute(select(DiningTable).where(DiningTable.code == code.lower().strip()))
+    ).scalar_one_or_none()
+    if t is None or not t.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This table isn't taking orders")
+    hotel = await db.get(Hotel, t.hotel_id)
+    if hotel is None or not hotel.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This kitchen isn't taking orders")
+    return t, hotel
+
+
+@table_router.get("/{code}")
+async def table_menu(code: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """Everything the diner needs in one request: where they are, and the menu."""
+    t, hotel = await _table_by_code(db, code)
+    items = (
+        (
+            await db.execute(
+                select(MenuItem)
+                .where(MenuItem.hotel_id == hotel.id, MenuItem.is_available.is_(True))
+                .order_by(MenuItem.category, MenuItem.sort_order, MenuItem.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "table": {"label": t.label, "code": t.code, "seats": t.seats},
+        "hotel": {
+            "id": str(hotel.id),
+            "name": hotel.name,
+            "city": hotel.city,
+            "currency": hotel.base_currency,
+            "prep_minutes": hotel.prep_minutes,
+            "paused": hotel.ordering_paused,
+        },
+        "menu": [MenuItemOut.model_validate(m).model_dump(mode="json") for m in items],
+    }
+
+
+class TableOrderIn(BaseModel):
+    """A dine-in order.
+
+    No address, no phone, no email — they are sitting in the room. Asking a
+    seated diner for their postcode is exactly the friction this feature exists
+    to delete. The name is optional, and only so a shared table can tell whose
+    biryani is whose.
+    """
+
+    customer_name: str | None = Field(default=None, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
+    items: list[PublicOrderLine] = Field(min_length=1, max_length=50)
+
+
+@table_router.post("/{code}", status_code=status.HTTP_201_CREATED)
+async def place_table_order(
+    code: str, payload: TableOrderIn, db: AsyncSession = Depends(get_db)
+) -> dict:
+    t, hotel = await _table_by_code(db, code)
+    if hotel.ordering_paused:
+        raise HTTPException(
+            status.HTTP_423_LOCKED,
+            "The kitchen has paused new orders for a moment — please ask a member of staff.",
+        )
+
+    # Prices come from OUR menu. A diner with the browser console open must not
+    # be able to name their own price, and this is the only place that is
+    # enforced.
+    wanted = {line.menu_item_id: line.quantity for line in payload.items}
+    rows = (
+        (
+            await db.execute(
+                select(MenuItem).where(
+                    MenuItem.hotel_id == hotel.id,
+                    MenuItem.id.in_(wanted),
+                    MenuItem.is_available.is_(True),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Nothing on that order is available"
+        )
+
+    subtotal = Decimal("0")
+    lines: list[OrderItem] = []
+    for m in rows:
+        qty = int(wanted.get(m.id, 0))
+        if qty <= 0:
+            continue
+        line_total = (m.price * qty).quantize(Decimal("0.01"))
+        subtotal += line_total
+        lines.append(
+            OrderItem(
+                menu_item_id=m.id,
+                name=m.name,
+                unit_price=m.price,
+                quantity=qty,
+                line_total=line_total,
+            )
+        )
+
+    order = Order(
+        hotel_id=hotel.id,
+        code=f"T{secrets.randbelow(9000) + 1000}",
+        customer_name=(payload.customer_name or "").strip() or t.label,
+        # The table IS the contact. A seated diner has no delivery details and
+        # must not be asked to invent any.
+        phone="-",
+        fulfilment="DINE_IN",
+        table_id=t.id,
+        note=payload.note,
+        payment_method="COD",
+        subtotal=subtotal,
+        delivery_fee=Decimal("0"),
+        total=subtotal,
+        items=lines,
+    )
+    db.add(order)
+    await db.commit()
+    await db.refresh(order)
+
+    await notify.publish(hotel.id, {"type": "ordering", "action": "new", "table": t.label})
+    return _order_out(order)
+
+
+@table_router.get("/{code}/orders")
+async def table_orders(code: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """This table's live orders, so the diner can watch their food happen.
+
+    "which will show real-time estimation to bring that food." The estimate runs
+    from when the kitchen ACCEPTED it, not from when it was placed — a slammed
+    kitchen that has not looked at the ticket yet is not five minutes from
+    serving it, and a countdown that lies is worse than no countdown.
+    """
+    t, hotel = await _table_by_code(db, code)
+    rows = (
+        (
+            await db.execute(
+                select(Order)
+                .where(
+                    Order.table_id == t.id,
+                    Order.status.notin_(["COMPLETED", "REJECTED", "CANCELLED"]),
+                )
+                .order_by(Order.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "table": {"label": t.label, "code": t.code},
+        "prep_minutes": hotel.prep_minutes,
+        "currency": hotel.base_currency,
+        "orders": [_order_out(o) for o in rows],
+    }
+
+
+@table_router.post("/{code}/help", status_code=status.HTTP_202_ACCEPTED)
+async def call_for_help(code: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """"We need someone" — the automated wave.
+
+    Part of THIS feature rather than an afterthought, because the problem he
+    described is not only ordering: it is having to catch somebody's eye at all.
+    Water, a spoon, the bill — the same wave. It marks the table's live order,
+    or raises a bare ticket when there is none yet, so it lands on the same
+    kitchen screen as everything else instead of somewhere nobody is looking.
+    """
+    from datetime import datetime
+
+    t, hotel = await _table_by_code(db, code)
+    live = (
+        await db.execute(
+            select(Order)
+            .where(
+                Order.table_id == t.id,
+                Order.status.notin_(["COMPLETED", "REJECTED", "CANCELLED"]),
+            )
+            .order_by(Order.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    now = datetime.now(UTC)
+    if live is None:
+        live = Order(
+            hotel_id=hotel.id,
+            code=f"H{secrets.randbelow(9000) + 1000}",
+            customer_name=t.label,
+            phone="-",
+            fulfilment="DINE_IN",
+            table_id=t.id,
+            note="Asked for a member of staff",
+            payment_method="COD",
+            subtotal=Decimal("0"),
+            delivery_fee=Decimal("0"),
+            total=Decimal("0"),
+            status=OrderStatus.NEW.value,
+            help_requested_at=now,
+            items=[],
+        )
+        db.add(live)
+    else:
+        live.help_requested_at = now
+    await db.commit()
+    await notify.publish(hotel.id, {"type": "ordering", "action": "help", "table": t.label})
+    return {"ok": True, "table": t.label}

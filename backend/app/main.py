@@ -26,6 +26,7 @@ from app.jobs.router import router as jobs_router
 from app.notifications.router import router as notifications_router
 from app.ordering.rider_router import rider_router
 from app.ordering.router import public_router as ordering_public_router
+from app.ordering.router import table_router as dine_in_table_router
 from app.ordering.router import router as ordering_router
 from app.party.router import router as party_router
 from app.payroll.router import router as payroll_router
@@ -97,6 +98,8 @@ def create_app() -> FastAPI:
     app.include_router(billing_router, prefix="/api")
     app.include_router(ordering_router, prefix="/api")
     app.include_router(ordering_public_router, prefix="/api")
+    # The QR-on-the-table flow. Public: a diner has no login.
+    app.include_router(dine_in_table_router, prefix="/api")
     app.include_router(rider_router, prefix="/api")
     app.include_router(talent_router, prefix="/api")
     app.include_router(talent_public_router, prefix="/api")
