@@ -4,6 +4,7 @@
 `public_router` — the customer side (NO auth): browse a hotel's menu, place an
                   order (prices come from OUR db, never the client), track it.
 """
+import io
 import logging
 import secrets
 import uuid
@@ -1007,7 +1008,17 @@ async def table_qr(code: str, db: AsyncSession = Depends(get_db)):
 
     t, hotel = await _table_by_code(db, code)
     qr = segno.make(_table_url(hotel, t.code), error="h")
-    return Response(content=qr.svg_inline(scale=8, dark="#111111"), media_type="image/svg+xml")
+    # `svg_inline` omits the xmlns declaration — fine when pasted INTO html,
+    # fatal for a standalone file: a browser loading it through <img> refuses
+    # to render an SVG with no namespace, and the card comes out as alt text.
+    # `save` writes the complete document.
+    #
+    # White is baked in rather than left transparent, because this file gets
+    # opened, mailed and printed on its own, and a transparent QR on a dark
+    # background is one no camera will read.
+    buf = io.BytesIO()
+    qr.save(buf, kind="svg", scale=8, dark="#111111", light="#ffffff", border=2)
+    return Response(content=buf.getvalue(), media_type="image/svg+xml")
 
 
 # ── The customer's side ──────────────────────────────────────────────────────
