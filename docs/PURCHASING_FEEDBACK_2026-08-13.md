@@ -559,3 +559,26 @@ onto a supplier already in the basket MERGES them rather than duplicating.
 **One rough edge left:** while the pin is on, every line resolves to the pinned
 supplier, so two lines can look identical until it is reset. Correct, but worth
 naming the line's own supplier distinctly when it has one.
+
+---
+
+## 2026-08-19 — CONFIRM BEFORE YOU ACT (standing principle)
+
+> "in purchase page we have that supplier change in-place feature nah — we need
+> to show confirmation button instead. Just like that do, **every place we need
+> this confirmation** so that it will be a gate for user's intuition, i.e. even
+> in that 1 sec they will change their mind and regret."
+
+A control that acts the instant it is touched leaves nowhere to stand between
+the thought and the consequence. **Choosing and committing are two moments.**
+
+**Done:** the category popup's supplier pin. The dropdown stages a draft and
+nothing on the page moves; *"Show these prices"* commits it. Returning to normal
+is the same gate in reverse, not a silent revert. (`553b368`)
+
+**The sweep this implies — NOT done.** Every other control that applies on
+change rather than on press wants the same treatment. Candidates seen while
+working: the basket's per-line supplier select, the "group by" toggles, and the
+size pills in the order popup. Each needs judging on its own — a gate on
+something instant and reversible is friction, a gate on something that changes
+money is protection — but the principle is his and it is right.
