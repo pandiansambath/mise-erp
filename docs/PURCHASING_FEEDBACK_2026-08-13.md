@@ -466,8 +466,10 @@ that control: `QtyFields` rendered a single box plus a size dropdown offering
 the base unit and the rungs — **and nothing smaller**. So 200 g had to be typed
 as `0.2`.
 
-**Fixed:** the size dropdown now offers the sub-unit first — `g` before `kg`
-before `box`, smallest first, the way a recipe is written. Pick `g`, type 200,
+**Fixed and VERIFIED LIVE** — the control reads
+`What size, of Dragon fruit = [g, kg, box]`. The size dropdown offers the
+sub-unit first — `g` before `kg` before `box`, smallest first, the way a recipe
+is written. Pick `g`, type 200,
 and 0.2 kg is what gets stored. **The item's unit is untouched**, exactly as he
 asked: this only changes what you type, never what is recorded. Same for
 litre → ml.
