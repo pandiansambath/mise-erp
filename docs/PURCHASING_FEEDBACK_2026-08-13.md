@@ -541,3 +541,21 @@ quantity.
 bugs this month passed green text assertions, and this time a green assertion
 nearly created a bug report for working code — the same blindness in both
 directions.
+
+### 2 + 3 — SHIPPED AND SEEN (2026-08-19, `567abef`)
+Both verified by screenshot, not by string match.
+
+**The popup pin.** Amber banner: *"Showing prices from ⟨Exotic⟩ · Reset"* with
+*"Just for now — your ★ chosen supplier is unchanged, and nothing here is
+saved."* Every card re-priced to Exotic; leomon2/leomon3 kept Farm2Land because
+Exotic does not sell them, which is the right fallback. Clears when the sheet
+closes; `is_preferred` is never written.
+
+**Two suppliers, two lines.** The basket read *"2 items · £40.00"* with two
+Dragon fruit cards where the second used to overwrite the first. The choice
+lives on the line now and lines key on (item, vendor, form); re-pointing a line
+onto a supplier already in the basket MERGES them rather than duplicating.
+
+**One rough edge left:** while the pin is on, every line resolves to the pinned
+supplier, so two lines can look identical until it is reset. Correct, but worth
+naming the line's own supplier distinctly when it has one.
