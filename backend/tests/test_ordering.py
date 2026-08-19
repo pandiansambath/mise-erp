@@ -330,3 +330,108 @@ async def test_an_unknown_or_disabled_table_takes_no_orders(client, make_user, a
         headers=h,
     )
     assert (await client.get(f"/api/public/table/{t['code']}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_freeing_a_table_clears_it_for_the_next_party(client, make_user, auth_header):
+    """"how we will release the table... so that new customer can come and
+    occupy and cycle goes on."
+
+    A party that has eaten and left is not a ticket the kitchen still owes."""
+    admin = await make_user("release@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "R1"}, headers=h)).json()
+    dish = (
+        await client.post("/api/ordering/menu", json={"name": "Vada", "price": "2.00"}, headers=h)
+    ).json()
+    await client.post(
+        f"/api/public/table/{t['code']}",
+        json={"items": [{"menu_item_id": dish["id"], "quantity": 2}]},
+    )
+    live = (await client.get(f"/api/public/table/{t['code']}/orders")).json()
+    assert live["orders"], "nothing to release"
+
+    r = await client.post(f"/api/ordering/tables/{t['id']}/release", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["cleared"] >= 1
+
+    after = (await client.get(f"/api/public/table/{t['code']}/orders")).json()
+    assert after["orders"] == [], "the table still shows the old party's food"
+
+
+@pytest.mark.asyncio
+async def test_the_kitchen_screen_needs_no_login(client, make_user, auth_header):
+    """"so that the kitchen staff no need to have my super admin creds in tab."
+
+    Its own address, and it can read tickets and move them - nothing else."""
+    admin = await make_user("kds@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    link = await client.get("/api/ordering/kitchen-screen", headers=h)
+    assert link.status_code == 200, link.text
+    code = link.json()["code"]
+    assert len(code) > 12, "a kitchen-tablet URL should not be guessable"
+    assert f"/kds/{code}" in link.json()["url"]
+
+    t = (await client.post("/api/ordering/tables", json={"label": "K1"}, headers=h)).json()
+    dish = (
+        await client.post("/api/ordering/menu", json={"name": "Bonda", "price": "1.50"}, headers=h)
+    ).json()
+    placed = await client.post(
+        f"/api/public/table/{t['code']}",
+        json={"items": [{"menu_item_id": dish["id"], "quantity": 1}]},
+    )
+    order_id = placed.json()["id"]
+
+    # No auth header anywhere below.
+    board = await client.get(f"/api/public/kds/{code}")
+    assert board.status_code == 200, board.text
+    assert any(o["id"] == order_id for o in board.json()["orders"])
+
+    moved = await client.patch(
+        f"/api/public/kds/{code}/orders/{order_id}", json={"status": "CONFIRMED"}
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["status"] == "CONFIRMED"
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_kitchen_screen_code_sees_nothing(client):
+    assert (await client.get("/api/public/kds/not-a-real-code")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_rotating_the_kitchen_screen_kills_the_old_link(client, make_user, auth_header):
+    """For when a tablet walks off."""
+    admin = await make_user("rotate@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    old = (await client.get("/api/ordering/kitchen-screen", headers=h)).json()["code"]
+    new = (await client.post("/api/ordering/kitchen-screen/rotate", headers=h)).json()["code"]
+    assert new != old
+    assert (await client.get(f"/api/public/kds/{old}")).status_code == 404
+    assert (await client.get(f"/api/public/kds/{new}")).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_seats_are_the_hotels_to_decide(client, make_user, auth_header):
+    """"how you know each table will have 4 seats... it depends."""
+    admin = await make_user("seats@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    made = await client.post(
+        "/api/ordering/tables/bulk", json={"count": 2, "prefix": "Booth", "seats": 8}, headers=h
+    )
+    assert made.status_code == 201, made.text
+    assert all(t["seats"] == 8 for t in made.json())
+
+
+@pytest.mark.asyncio
+async def test_the_table_card_renders_a_real_svg(client, make_user, auth_header):
+    """A printed card is the whole point, and an SVG with no namespace renders
+    as alt text through <img>."""
+    admin = await make_user("qr@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "Q1"}, headers=h)).json()
+    r = await client.get(f"/api/public/table/{t['code']}/qr.svg")
+    assert r.status_code == 200, r.text
+    body = r.text
+    assert "xmlns" in body[:200], "an <img> will refuse an SVG with no namespace"
+    assert r.headers["content-type"].startswith("image/svg+xml")
