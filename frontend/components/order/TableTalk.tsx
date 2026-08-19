@@ -92,8 +92,40 @@ export function TableTalk({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="mise-pop w-full max-w-lg overflow-hidden rounded-t-3xl bg-shell sm:rounded-3xl">
-        <div className="flex items-center gap-2 border-b border-line/60 px-4 py-3">
+      <div className="mise-pop flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:rounded-3xl">
+        {/* A header that says where you are. The old sheet opened straight onto
+            two tabs and a wall of chips, which reads as a settings panel rather
+            than a conversation. */}
+        <div className="flex items-start gap-3 px-4 pt-4">
+          <span
+            aria-hidden
+            className="mise-well grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
+          >
+            {tab === "ai" ? "✨" : "💬"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-lg font-semibold leading-tight text-fg">
+              {tab === "ai" ? (dish ? dish.name : "Ask about the food") : "Ask for something"}
+            </p>
+            <p className="text-[11px] text-fg-faint">
+              {tab === "ai"
+                ? dish
+                  ? "What's in it, and what it does for you"
+                  : "The place, the menu, the hours"
+                : "It goes straight to the counter"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-full text-fg-faint hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 px-4 py-3">
           <div className="mise-well flex rounded-xl p-0.5">
             {(["ask", "ai"] as const).map((k) => (
               <button
@@ -104,22 +136,13 @@ export function TableTalk({
                   tab === k ? "bg-brand-600 text-white" : "text-fg-faint"
                 }`}
               >
-                {k === "ask" ? "💬 Ask for something" : "✨ Ask about the food"}
+                {k === "ask" ? "Ask for something" : "About the food"}
               </button>
             ))}
           </div>
-          <span className="flex-1" />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="mise-press grid h-8 w-8 place-items-center rounded-full text-fg-faint"
-          >
-            ✕
-          </button>
         </div>
 
-        <div className="max-h-[70dvh] overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           {tab === "ask" ? (
             sent ? (
               <p className="py-8 text-center text-sm font-medium text-brand-300">
@@ -190,14 +213,30 @@ export function TableTalk({
                 </div>
               )}
 
-              <div className="space-y-3">
+              <div className="mt-3 space-y-3">
                 {chat.map((c, i) => (
-                  <div key={i}>
-                    <p className="text-right text-xs text-fg-faint">{c.me}</p>
-                    <p className="mise-card3d mt-1 p-3 text-sm leading-relaxed text-fg">{c.ai}</p>
+                  <div key={i} className="space-y-1.5">
+                    <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3 py-2 text-sm text-white">
+                      {c.me}
+                    </p>
+                    <div className="mise-card3d mr-auto w-fit max-w-[92%] rounded-2xl rounded-bl-md p-3">
+                      <p className="text-sm leading-relaxed text-fg">{c.ai}</p>
+                    </div>
                   </div>
                 ))}
-                {busy && <p className="text-center text-xs text-fg-faint">thinking…</p>}
+                {busy && (
+                  <div className="mise-card3d mr-auto flex w-fit items-center gap-1.5 rounded-2xl rounded-bl-md px-3.5 py-3">
+                    {[0, 1, 2].map((d) => (
+                      <span
+                        key={d}
+                        aria-hidden
+                        className="mise-typing h-1.5 w-1.5 rounded-full bg-fg-faint"
+                        style={{ animationDelay: `${d * 160}ms` }}
+                      />
+                    ))}
+                    <span className="sr-only">thinking</span>
+                  </div>
+                )}
               </div>
 
               <div className="mt-3 flex gap-2">

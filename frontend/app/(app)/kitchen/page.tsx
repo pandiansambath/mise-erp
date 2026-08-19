@@ -227,7 +227,7 @@ export default function KitchenPage() {
       tools={
         <div className="flex flex-wrap items-end gap-2">
           <label className="block">
-            <span className="text-[11px] font-medium text-fg-soft">Food is ready in about</span>
+            <span className="mise-tool-label block text-[11px] font-medium text-fg-soft">Food is ready in about</span>
             <span className="mt-1 flex items-center gap-1.5">
               <input
                 inputMode="numeric"
@@ -292,7 +292,7 @@ export default function KitchenPage() {
               <p className="mise-tone-warn mb-2 text-xs font-semibold uppercase tracking-wide">
                 🔔 Waiting for someone
               </p>
-              <ul className="flex flex-wrap gap-2">
+              <ul className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(15rem, 100%), 1fr))" }}>
                 {calling.map((g) => {
                   const said = g.rows.find((r) => r.guest_message)?.guest_message;
                   const mins = Math.floor((now - +new Date(g.rows[0].created_at)) / 60000);
@@ -300,7 +300,7 @@ export default function KitchenPage() {
                     <li key={g.key}>
                       <a
                         href={`#t-${g.key}`}
-                        className="mise-press mise-card3d flex items-center gap-2.5 px-3 py-2 text-left"
+                        className="mise-press mise-card3d flex h-full items-center gap-2.5 px-3 py-2 text-left"
                       >
                         <span className="font-display text-lg font-semibold text-fg">
                           {g.title}
@@ -333,8 +333,11 @@ export default function KitchenPage() {
               const heat =
                 mins >= 20 ? "ring-2 ring-rose-400/70" : mins >= 10 ? "ring-1 ring-amber-400/60" : "";
               return (
-                <li key={g.key} id={`t-${g.key}`}>
-                  <div className={`mise-card3d relative overflow-hidden p-4 ${heat}`}>
+                <li key={g.key} id={`t-${g.key}`} className="h-full">
+                  {/* Cards stretch to the row's height and push their actions to
+                      the bottom, so a grid of tickets has ONE baseline instead of
+                      a ragged staircase — "there is no alignment". */}
+                  <div className={`mise-card3d relative flex h-full flex-col overflow-hidden p-4 ${heat}`}>
                     {help && (
                       <p className="mb-2 rounded-lg bg-amber-400/15 px-2.5 py-1.5 text-xs font-semibold text-amber-200">
                         🔔 This table asked for someone
@@ -364,6 +367,7 @@ export default function KitchenPage() {
                       </span>
                     </div>
 
+                    <div className="flex-1">
                     {g.rows.map((o, i) => {
                       const step = NEXT[o.status];
                       const stage = STAGE[o.status] ?? STAGE.NEW;
@@ -429,6 +433,8 @@ export default function KitchenPage() {
                         </div>
                       );
                     })}
+
+                    </div>
 
                     {g.dineIn && (
                       <button

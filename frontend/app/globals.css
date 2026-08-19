@@ -2589,14 +2589,40 @@ body[data-overlay] .mise-launcher-in {
 /* Condensed: the row collapses to nothing and the tools ride up into the space
    the title is no longer using, scaled down as they go. --bench-rise is the
    distance travelled; it matches the row height they left. */
-/* A TALL toolbar does not tuck. Sliding a two-row control group up beside the
-   title leaves most of it hanging below the rail, painted over the cards —
-   which is exactly the "worst UI" he screenshotted. It keeps its place and
-   simply gives up its padding. */
+/* A TALL toolbar CONDENSES rather than tucking sideways.
+   "here also that scroll down to shrink and up to grow is removed... I said to
+    make it enhancement and bug free."
+   Fair. My first pass stopped tall toolbars tucking because they hung over the
+   cards — which fixed the overlap by deleting the feature. A control group two
+   rows deep has nowhere to slide TO, but it can still get smaller: the labels
+   above the controls fold away and the whole row scales down, so the rail
+   genuinely shrinks on scroll and nothing ever overhangs the page. */
 .mise-bench-rail[data-condensed="true"][data-tall="true"] .mise-bench-tools {
   grid-template-rows: 1fr;
-  transform: none;
-  padding-bottom: 0.35rem;
+  transform: scale(0.88);
+  transform-origin: left center;
+  /* scale() leaves the original footprint behind, so the row is pulled up by
+     the space the shrink freed — otherwise the rail keeps its full height and
+     the whole point is lost. */
+  margin-bottom: -0.55rem;
+  padding-bottom: 0.2rem;
+}
+
+/* The little captions over each control ("How many tables?", "Or add one")
+   are teaching text. Once you have scrolled past, you know what the boxes are
+   and the words are just height. */
+.mise-bench-rail[data-condensed="true"][data-tall="true"] .mise-bench-tools .mise-tool-label {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin: 0;
+}
+.mise-tool-label {
+  max-height: 1.25rem;
+  opacity: 1;
+  transition:
+    max-height 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms ease;
 }
 
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools {
@@ -2852,4 +2878,16 @@ body[data-overlay] .mise-launcher-in {
 }
 @media (prefers-reduced-motion: reduce) {
   .mise-cooking { animation: none; }
+}
+
+/* Three dots while the assistant thinks. A spinner says "the app is busy";
+   this says "somebody is typing", which is the truer thing and the calmer one
+   for a guest waiting at a table. */
+@keyframes mise-typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30%           { transform: translateY(-3px); opacity: 1; }
+}
+.mise-typing { animation: mise-typing 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mise-typing { animation: none; }
 }
