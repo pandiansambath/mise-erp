@@ -144,6 +144,37 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    key: "self",
+    label: "Their own",
+    icon: "🙋",
+    areas: [
+      {
+        key: "self_rota",
+        label: "Their own rota & hours",
+        blurb: "Their shifts and clock-ins, nobody else's",
+        icon: "📅",
+        read: ["rota:self", "attendance:self"],
+        write: [],
+      },
+      {
+        key: "self_pay",
+        label: "Their own payslips",
+        blurb: "What they were paid, nobody else's",
+        icon: "💷",
+        read: ["payroll:self"],
+        write: [],
+      },
+      {
+        key: "self_docs",
+        label: "Their own documents",
+        blurb: "Contracts and certificates they upload",
+        icon: "📄",
+        read: ["documents:self"],
+        write: [],
+      },
+    ],
+  },
+  {
     key: "kitchen",
     label: "Kitchen",
     icon: "🍳",
