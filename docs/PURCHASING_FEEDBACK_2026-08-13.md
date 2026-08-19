@@ -479,3 +479,50 @@ litre → ml.
   handle this."* A bunch is a FORM, so the pack-forms work covers it: the
   supplier says "1 bunch = 0.1 kg for 40p". Worth checking on a real bunch item
   once step 4 lands.
+
+---
+
+## 2026-08-19 — four more
+
+### 1. "what the hell mismatch is this?" — FIXED, and it was a tenfold money bug
+RUDRA quote a box of **100 kg** for £1,000. The order popup's price panel said
+exactly that — *"1 box (100 kg at this supplier) £1,000.00"* — and directly
+above it the size toggle converted **the very same box at the item's own 10 kg**,
+so "1 box" priced 10 kg and offered to add it for **£100**.
+
+`orderSizes(item)` never asked WHOSE box. It takes the supplier now, so the two
+halves of the popup can no longer disagree. Same bug family as the display one
+last week, in the one place that decides what you actually pay.
+
+### 4. Recipes need fractions — FIXED
+> "cauliflower we don't put 1 full piece for 1 recipe always nah, it's depends...
+> chef may say in grams or kg or even piece (but 1/2 piece or 1/4 piece)... not
+> only cauliflower — curry leaves, coriander leaves etc."
+
+Half a cauliflower is **"1/2"** to a chef, never "0.5", and the field stripped
+the slash. `parseFraction` accepts `1/2`, `3/4`, `1 1/2`; ¼ ½ ¾ chips sit beside
+the box so tapping beats typing, and so the field advertises that it takes them.
+
+### 2. OPEN — supplier switch on the CATEGORY popup too
+> "we have supplier change feature in basket with small arrow dropdown, great —
+> but I also want the same in categories (the items showing popup). So that all
+> items will show as per that 1 vendor (reset will reset the normal). Also this
+> is IN PLACE only, not global — it will not affect the globally selected from
+> price comparison, that is fixed. The vendor change in runtime in basket and
+> this popup will be for just 1 time. Why highlighting means, this will create
+> confusion, that's why."
+
+A "showing prices from ⟨vendor⟩ · reset" control on the category sheet, filtering
+every card to that supplier's prices for this session only. Must be visibly
+temporary, never written to `is_preferred`.
+
+### 3. OPEN — same item from two suppliers must be two basket lines
+> "what if I choose 1 item now it's in basket, and I'm choosing same item but
+> different vendor — basket needs to allow, treat as different item. Basket is
+> now overriding and showing... both item names are same, also the vendor is
+> different nah, so we need to handle this."
+
+`OrderLine` is keyed on `item_id` alone, so the second choice overwrites the
+first. It needs keying on **(item, vendor, form)** — the same triple the price
+now lives on — and the card must name the supplier so two "Dragon fruit" lines
+are tellable apart. Touches the basket model, the totals and the submit payload.
