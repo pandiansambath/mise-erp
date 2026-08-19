@@ -36,6 +36,7 @@ import { DetailSection, DetailSheet, DetailStats } from "@/components/DetailShee
 import { SubNav } from "@/components/SubNav";
 import { Bars } from "@/components/charts";
 import { categoryEmoji, type PickedLine } from "@/components/ItemPicker";
+import type { OrderLine } from "@/components/order/OrderFlow";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -44,7 +45,9 @@ import { can } from "@/lib/permissions";
 import { spotlight, useDeepLink } from "@/components/fx";
 import { pricePerBase, stockInPacks } from "@/lib/packs";
 
-type Line = PickedLine;
+// A basket line carries its own supplier choice now, so the same item bought
+// from two vendors is two lines rather than one overwriting the other.
+type Line = OrderLine;
 
 /** `next` is either the new list or a function of the old one. */
 function value0(next: Line[], _prev: Line[]): Line[] {
@@ -396,12 +399,11 @@ export default function PurchasingPage() {
         .map((l) => ({
           item_id: l.item_id,
           required_qty: l.qty,
-          vendor_id: vendorPick[l.item_id] || undefined,
-          // Only meaningful alongside a picked vendor. "" means their loose
-          // price, which is a real choice and must not be sent as undefined.
-          pack_level_id: vendorPick[l.item_id]
-            ? formPick[l.item_id] || undefined
-            : undefined,
+          // The choice lives ON THE LINE now, so two lines of the same item
+          // against different suppliers each carry their own and become two
+          // purchase orders rather than overwriting each other.
+          vendor_id: l.vendor_id || undefined,
+          pack_level_id: l.vendor_id ? l.pack_level_id || undefined : undefined,
         })),
     };
     if (payload.items.length === 0) {
