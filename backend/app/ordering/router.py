@@ -8,7 +8,9 @@ import io
 import logging
 import secrets
 import uuid
-from datetime import UTC
+from datetime import UTC, date
+from datetime import date as dt_date
+from datetime import time as dt_time
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -21,7 +23,9 @@ from app.auth.models import User
 from app.core import events, notify
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.timezones import hotel_now, hotel_today
 from app.hotels.models import Hotel
+from app.ordering import availability as availability_states
 from app.ordering.models import (
     ORDER_FLOW,
     DiningTable,
@@ -64,6 +68,11 @@ class MenuItemPatch(BaseModel):
     category: str | None = Field(default=None, max_length=60)
     emoji: str | None = Field(default=None, max_length=8)
     is_available: bool | None = None
+    #: available | out_of_stock | finished_today | not_served
+    availability: str | None = None
+    #: "only served at this particular time" — both blank means all day.
+    serve_from: dt_time | None = None
+    serve_to: dt_time | None = None
 
 
 class MenuItemOut(BaseModel):
@@ -75,6 +84,10 @@ class MenuItemOut(BaseModel):
     category: str
     emoji: str | None
     is_available: bool
+    availability: str = "available"
+    sold_out_on: dt_date | None = None
+    serve_from: dt_time | None = None
+    serve_to: dt_time | None = None
     recipe_id: uuid.UUID | None
     photo_key: str | None = Field(default=None, exclude=True)
 
@@ -285,7 +298,18 @@ async def update_menu_item(
     ).scalar_one_or_none()
     if not item:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Menu item not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    fields = payload.model_dump(exclude_unset=True)
+    if "availability" in fields:
+        if fields["availability"] not in availability_states.STATES:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown availability")
+        # Stamp the day so "finished for today" can expire without anybody
+        # remembering to undo it tomorrow morning.
+        item.sold_out_on = (
+            date.today() if fields["availability"] == availability_states.FINISHED_TODAY else None
+        )
+        # Keep the old boolean honest for anything still reading it.
+        fields["is_available"] = fields["availability"] == availability_states.AVAILABLE
+    for k, v in fields.items():
         setattr(item, k, v)
     await db.commit()
     await db.refresh(item)
@@ -1044,17 +1068,33 @@ async def _table_by_code(db: AsyncSession, code: str):
 async def table_menu(code: str, db: AsyncSession = Depends(get_db)) -> dict:
     """Everything the diner needs in one request: where they are, and the menu."""
     t, hotel = await _table_by_code(db, code)
+    # Everything except what has been taken off the menu for good. A dish that
+    # is merely out of stock or outside its hours STAYS on the page with the
+    # reason on it — "say why, and say when it is back". A dish that silently
+    # vanishes makes a diner think the restaurant does not do it, which costs
+    # the hotel a sale it could have had tomorrow.
     items = (
         (
             await db.execute(
                 select(MenuItem)
-                .where(MenuItem.hotel_id == hotel.id, MenuItem.is_available.is_(True))
+                .where(
+                    MenuItem.hotel_id == hotel.id,
+                    MenuItem.availability != availability_states.NOT_SERVED,
+                )
                 .order_by(MenuItem.category, MenuItem.sort_order, MenuItem.name)
             )
         )
         .scalars()
         .all()
     )
+    today = hotel_today(hotel)
+    now_t = hotel_now(hotel).time()
+    menu = []
+    for m in items:
+        row = MenuItemOut.model_validate(m).model_dump(mode="json")
+        row["orderable"] = availability_states.orderable(m, today, now_t)
+        row["unavailable_reason"] = availability_states.why_not(m, today, now_t)
+        menu.append(row)
     return {
         "table": {"label": t.label, "code": t.code, "seats": t.seats},
         "hotel": {
@@ -1065,7 +1105,7 @@ async def table_menu(code: str, db: AsyncSession = Depends(get_db)) -> dict:
             "prep_minutes": hotel.prep_minutes,
             "paused": hotel.ordering_paused,
         },
-        "menu": [MenuItemOut.model_validate(m).model_dump(mode="json") for m in items],
+        "menu": menu,
     }
 
 
@@ -1111,9 +1151,15 @@ async def place_table_order(
         .scalars()
         .all()
     )
+    today = hotel_today(hotel)
+    now_t = hotel_now(hotel).time()
+    # A page left open on a table since breakfast must not be able to order the
+    # dosa at four o'clock. The menu says so, and so does this.
+    rows = [m for m in rows if availability_states.orderable(m, today, now_t)]
     if not rows:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Nothing on that order is available"
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Sorry — that is not being served right now. Please refresh the menu.",
         )
 
     subtotal = Decimal("0")
