@@ -498,6 +498,16 @@ export function OrderFlow({
   // Never written anywhere. It ranks above the ★ chosen supplier while the
   // popup is open and evaporates on reset — the ★ is untouched throughout.
   const [catVendor, setCatVendor] = useState<string>("");
+  // What the dropdown is SHOWING, before it is applied.
+  //
+  //   "we need to show confirmation button instead... every place we need this
+  //    confirmation so that it will be a gate for user's intuition — even in
+  //    that 1 sec they will change their mind and regret."
+  //
+  // A control that acts the instant it is touched gives you nowhere to stand
+  // between the thought and the consequence. Choosing and committing are two
+  // moments now, and the second one is a button you have to mean.
+  const [catDraft, setCatDraft] = useState<string>("");
   const [openItem, setOpenItem] = useState<Item | null>(null);
 
   // Submitting clears the whole stack, not just the basket. He watched the
@@ -768,7 +778,7 @@ export function OrderFlow({
       {/* Layer two: that category's items. */}
       {cat && (
         <Sheet
-          onClose={() => { setCat(null); setCatVendor(""); }}
+          onClose={() => { setCat(null); setCatVendor(""); setCatDraft(""); }}
           title={cat}
           subtitle={`${shown.length} items`}
           // Two items stay square; nine spread out rather than scrolling.
@@ -797,9 +807,9 @@ export function OrderFlow({
                   {catVendor ? "Showing prices from" : "Show prices from one supplier"}
                 </span>
                 <select
-                  value={catVendor}
-                  onChange={(e) => setCatVendor(e.target.value)}
-                  aria-label="Show every item at one supplier's prices, this time only"
+                  value={catDraft}
+                  onChange={(e) => setCatDraft(e.target.value)}
+                  aria-label="Choose a supplier to price every item at"
                   className="mise-well rounded-lg px-2 py-1 text-xs outline-none"
                 >
                   <option value="">every supplier (normal)</option>
@@ -807,20 +817,33 @@ export function OrderFlow({
                     <option key={id} value={id}>{name}</option>
                   ))}
                 </select>
+
+                {/* The gate. Nothing has changed on the page until this is
+                    pressed, so the second between picking and meaning it is
+                    yours. */}
+                {catDraft !== catVendor && (
+                  <button
+                    type="button"
+                    onClick={() => setCatVendor(catDraft)}
+                    className="mise-press rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white"
+                  >
+                    {catDraft ? "Show these prices" : "Back to normal"}
+                  </button>
+                )}
+                {catVendor && catDraft === catVendor && (
+                  <button
+                    type="button"
+                    onClick={() => { setCatVendor(""); setCatDraft(""); }}
+                    className="mise-press rounded-lg border border-line px-2 py-1 text-xs text-fg-soft hover:text-fg"
+                  >
+                    Reset
+                  </button>
+                )}
                 {catVendor && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setCatVendor("")}
-                      className="mise-press rounded-lg border border-line px-2 py-1 text-xs text-fg-soft hover:text-fg"
-                    >
-                      Reset
-                    </button>
-                    <span className="w-full text-[11px] text-fg-faint">
-                      Just for now — your ★ chosen supplier is unchanged, and nothing here is
-                      saved.
-                    </span>
-                  </>
+                  <span className="w-full text-[11px] text-fg-faint">
+                    Just for now — your ★ chosen supplier is unchanged, and nothing here is
+                    saved.
+                  </span>
                 )}
               </div>
             );
