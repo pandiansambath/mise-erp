@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require
 from app.auth.models import User
-from app.core import notify
+from app.core import events, notify
 from app.core.config import settings
 from app.core.database import get_db
 from app.hotels.models import Hotel
@@ -1133,10 +1133,24 @@ async def place_table_order(
     )
     db.add(order)
     await db.commit()
-    await db.refresh(order)
 
-    await notify.publish(hotel.id, {"type": "ordering", "action": "new", "table": t.label})
-    return _order_out(order)
+    # Built from what we already hold rather than from the refreshed row.
+    # `_order_out` walks `order.items`, and after a commit that is a lazy load
+    # with no greenlet around it — the takeaway endpoint returns a plain dict
+    # for precisely this reason.
+    out = {
+        "id": str(order.id),
+        "code": order.code,
+        "status": order.status,
+        "table_label": t.label,
+        "total": str(order.total),
+        "items": [
+            {"name": ln.name, "quantity": ln.quantity, "line_total": str(ln.line_total)}
+            for ln in lines
+        ],
+    }
+    await events.publish(hotel.id, {"type": "ordering", "action": "new", "table": t.label})
+    return out
 
 
 @table_router.get("/{code}/orders")
@@ -1218,5 +1232,5 @@ async def call_for_help(code: str, db: AsyncSession = Depends(get_db)) -> dict:
     else:
         live.help_requested_at = now
     await db.commit()
-    await notify.publish(hotel.id, {"type": "ordering", "action": "help", "table": t.label})
+    await events.publish(hotel.id, {"type": "ordering", "action": "help", "table": t.label})
     return {"ok": True, "table": t.label}
