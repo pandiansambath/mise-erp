@@ -95,8 +95,15 @@ answer "what should Ravi be allowed to do?".
 
 **Also visible and wrong:** `Kiosk` is offered as a base role. Per his standing
 decision the kiosk is PIN-only at `<hotel>/kiosk` and **nothing kiosk belongs in
-Roles & Access** — see [[nirai-kiosk-decision]]. Removing it is a bounded first
-step of the rebuild.
+Roles & Access**.
+
+Where it comes from — traced, not guessed: `Role.KIOSK` is a **backend** role
+(`app/auth/models.py:24`) whose envelope is deliberately **sealed**
+(`app/auth/kiosk.py`), and `components/RoleBuilder.tsx` renders its archetype
+tiles from the server's role list rather than from `lib/permissions.ts` — which
+is why the frontend `ROLES` array has no KIOSK and the tile appears anyway.
+**The fix is to filter KIOSK out of the archetypes the builder offers, NOT to
+touch the role itself** — the tablet login depends on it.
 
 ## Order of work
 1. ~~The permissions bug~~ — done, `3d45222`.
