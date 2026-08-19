@@ -33,7 +33,33 @@ import Magnet from "@/components/reactbits/Magnet";
 import { overlayOpened } from "@/lib/overlay";
 import { useConfirm } from "@/components/confirm";
 
-export type OrderLine = { item_id: string; qty: string };
+export type OrderLine = {
+  item_id: string;
+  qty: string;
+  /** An EXPLICIT supplier for this line — pinned in the popup or chosen in the
+   *  basket. Undefined means "let the server decide", which is what every line
+   *  meant before and what most still mean. */
+  vendor_id?: string;
+  /** Which of that supplier's forms. Only meaningful with vendor_id. */
+  pack_level_id?: string;
+};
+
+/** What makes two basket lines the SAME line.
+ *
+ *   "what if I choose 1 item now it's in basket, and I'm choosing same item but
+ *    different vendor — basket needs to allow, treat as different item. Basket
+ *    is now overriding and showing... both item names are same, also the vendor
+ *    is different nah."
+ *
+ * Right: a kilo from one supplier and a kilo from another are two purchases,
+ * not one, and they end up on two different purchase orders. Keying on the item
+ * alone made the second choice silently replace the first. Two lines with no
+ * explicit supplier are still one line — that is the ordinary case and it
+ * should go on merging.
+ */
+export function lineKey(l: OrderLine): string {
+  return `${l.item_id}|${l.vendor_id ?? ""}|${l.pack_level_id ?? ""}`;
+}
 
 /** Kill floating-point dust: 0.30000000000000004 is not a quantity anyone
  *  typed, and it becomes a penny somewhere downstream. */
@@ -462,6 +488,16 @@ export function OrderFlow({
 }) {
   const { format } = useCurrency();
   const [cat, setCat] = useState<string | null>(null);
+  // ONE SUPPLIER FOR THIS POPUP, for this sitting only.
+  //
+  //   "I also want the same in categories (the items showing popup) — so that
+  //    all items will show as per that 1 vendor (reset will reset the normal).
+  //    Also this is IN PLACE only, not global: it will not affect the globally
+  //    selected from price comparison, that is fixed."
+  //
+  // Never written anywhere. It ranks above the ★ chosen supplier while the
+  // popup is open and evaporates on reset — the ★ is untouched throughout.
+  const [catVendor, setCatVendor] = useState<string>("");
   const [openItem, setOpenItem] = useState<Item | null>(null);
 
   // Submitting clears the whole stack, not just the basket. He watched the
@@ -535,9 +571,25 @@ export function OrderFlow({
   const picked = useMemo(() => new Set(lines.map((l) => l.item_id)), [lines]);
 
   const supplierFor = useCallback(
-    (id: string): SupplierOption | undefined => {
+    (id: string, line?: OrderLine): SupplierOption | undefined => {
       const opts = suppliers[id] ?? [];
       if (!opts.length) return undefined;
+      // 0. The line's OWN choice, when it has one. Two lines of the same item
+      //    can sit in the basket against different suppliers, and each must be
+      //    priced as itself.
+      if (line?.vendor_id) {
+        const theirs = opts.filter((v) => v.vendor_id === line.vendor_id);
+        const exact = theirs.find((v) => (v.pack_level_id ?? "") === (line.pack_level_id ?? ""));
+        if (exact) return exact;
+        if (theirs.length) {
+          const it0 = byId.get(id);
+          return it0
+            ? [...theirs].sort(
+                (a, b) => (pricePerBase(it0, a) || Infinity) - (pricePerBase(it0, b) || Infinity),
+              )[0]
+            : theirs[0];
+        }
+      }
       // 1. Whoever was PICKED for this order. Same precedence the server uses
       //    when it splits the indent into purchase orders, so what the basket
       //    prices is what the purchase order will say.
@@ -557,10 +609,22 @@ export function OrderFlow({
             : mine[0];
         }
       }
-      // 2. The ★ chosen supplier. 3. Otherwise the genuinely cheapest — per
+      // 2. The supplier this POPUP is pinned to, if they price it. Temporary
+      //    and unwritten — it outranks the ★ only while the sheet is open.
+      const it = byId.get(id);
+      if (catVendor) {
+        const theirs = opts.filter((v) => v.vendor_id === catVendor);
+        if (theirs.length) {
+          return it
+            ? [...theirs].sort(
+                (a, b) => (pricePerBase(it, a) || Infinity) - (pricePerBase(it, b) || Infinity),
+              )[0]
+            : theirs[0];
+        }
+      }
+      // 3. The ★ chosen supplier. 4. Otherwise the genuinely cheapest — per
       //    BASE unit, not per quote: a £20 box of 10 kg is not cheaper than a
       //    £50 box of 50 kg.
-      const it = byId.get(id);
       return (
         opts.find((v) => v.is_preferred) ??
         [...opts].sort((a, b) => {
@@ -569,7 +633,7 @@ export function OrderFlow({
         })[0]
       );
     },
-    [suppliers, vendorPick, formPick, byId],
+    [suppliers, vendorPick, formPick, byId, catVendor],
   );
 
   const cats = useMemo(() => {
@@ -604,9 +668,18 @@ export function OrderFlow({
   /** Add, then burst the popup into the basket and let the basket react as it
    *  LANDS rather than on the click. */
   const add = async (item: Item, baseQty: string, from: HTMLElement | null) => {
-    const next = picked.has(item.id)
-      ? lines.map((l) => (l.item_id === item.id ? { ...l, qty: baseQty } : l))
-      : [...lines, { item_id: item.id, qty: baseQty }];
+    // A pinned popup supplier is an EXPLICIT choice and travels with the line,
+    // so pinning a different vendor and adding the same item makes a second
+    // line rather than overwriting the first.
+    const mine: OrderLine = {
+      item_id: item.id,
+      qty: baseQty,
+      ...(catVendor ? { vendor_id: catVendor } : {}),
+    };
+    const k = lineKey(mine);
+    const next = lines.some((l) => lineKey(l) === k)
+      ? lines.map((l) => (lineKey(l) === k ? { ...l, qty: baseQty } : l))
+      : [...lines, mine];
     onChange(next);
     setOpenItem(null);
     // Adding from the basket should not throw a bubble at the basket you are
@@ -695,12 +768,64 @@ export function OrderFlow({
       {/* Layer two: that category's items. */}
       {cat && (
         <Sheet
-          onClose={() => setCat(null)}
+          onClose={() => { setCat(null); setCatVendor(""); }}
           title={cat}
           subtitle={`${shown.length} items`}
           // Two items stay square; nine spread out rather than scrolling.
           columns={shown.length >= 9 ? 4 : shown.length >= 5 ? 3 : shown.length >= 3 ? 2 : 1}
         >
+          {/* Pin the whole popup to one supplier, for this sitting only. He
+              asked for it AND for it to look temporary in the same breath:
+              "why highlighting means, this will create confusion, that's why."
+              So it wears amber — the colour this app already uses for "not the
+              usual" — and says plainly that it is not saved. */}
+          {(() => {
+            const inCat = new Map<string, string>();
+            for (const it of shown) {
+              for (const v of suppliers[it.id] ?? []) inCat.set(v.vendor_id, v.vendor_name);
+            }
+            if (inCat.size < 2) return null;
+            return (
+              <div
+                className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
+                  catVendor
+                    ? "border-amber-400/45 bg-amber-400/10"
+                    : "border-line bg-paper-2/50"
+                }`}
+              >
+                <span className={catVendor ? "mise-tone-warn font-medium" : "text-fg-faint"}>
+                  {catVendor ? "Showing prices from" : "Show prices from one supplier"}
+                </span>
+                <select
+                  value={catVendor}
+                  onChange={(e) => setCatVendor(e.target.value)}
+                  aria-label="Show every item at one supplier's prices, this time only"
+                  className="mise-well rounded-lg px-2 py-1 text-xs outline-none"
+                >
+                  <option value="">every supplier (normal)</option>
+                  {[...inCat.entries()].map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </select>
+                {catVendor && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCatVendor("")}
+                      className="mise-press rounded-lg border border-line px-2 py-1 text-xs text-fg-soft hover:text-fg"
+                    >
+                      Reset
+                    </button>
+                    <span className="w-full text-[11px] text-fg-faint">
+                      Just for now — your ★ chosen supplier is unchanged, and nothing here is
+                      saved.
+                    </span>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
             <div
               className="mise-sheet-cascade grid gap-2.5"
@@ -875,8 +1000,6 @@ export function OrderFlow({
           onEdit={(it) => setOpenItem(it)}
           footer={footer}
           suppliers={suppliers}
-          vendorPick={vendorPick}
-          formPick={formPick}
           onVendorPick={onVendorPick}
         />
       )}
@@ -896,21 +1019,18 @@ function BasketSheet({
   onEdit,
   footer,
   suppliers,
-  vendorPick,
-  formPick,
   onVendorPick,
 }: {
   lines: OrderLine[];
   byId: Map<string, Item>;
-  supplierFor: (id: string) => SupplierOption | undefined;
+  supplierFor: (id: string, line?: OrderLine) => SupplierOption | undefined;
   onChange: (next: OrderLine[]) => void;
   onClose: () => void;
   /** Reopen the quantity popup for this line. */
   onEdit: (it: Item) => void;
   footer?: React.ReactNode;
   suppliers: Record<string, SupplierOption[]>;
-  vendorPick?: Record<string, string>;
-  formPick?: Record<string, string>;
+  /** Present = the basket may re-point a line at another supplier. */
   onVendorPick?: (itemId: string, vendorId: string, packLevelId: string) => void;
 }) {
   const { format } = useCurrency();
@@ -992,7 +1112,7 @@ function BasketSheet({
   const groups = useMemo(() => {
     const m = new Map<
       string,
-      { key: string; name: string; rows: { it: Item; qty: string }[]; total: number }
+      { key: string; name: string; rows: { it: Item; qty: string; line: OrderLine }[]; total: number }
     >();
     for (const l of lines) {
       const it = byId.get(l.item_id);
@@ -1016,7 +1136,7 @@ function BasketSheet({
       }
 
       const g = m.get(key) ?? { key, name, rows: [], total: 0 };
-      g.rows.push({ it, qty: l.qty });
+      g.rows.push({ it, qty: l.qty, line: l });
       g.total = exact(g.total + money);
       m.set(key, g);
     }
@@ -1176,8 +1296,10 @@ function BasketSheet({
               className="mt-2 grid gap-2"
               style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(10.5rem, 100%), 1fr))" }}
             >
-              {g.rows.map(({ it, qty }) => {
-                const sup = supplierFor(it.id);
+              {g.rows.map(({ it, qty, line: l }) => {
+                // Priced for THIS line's supplier, so two lines of the same
+                // item can legitimately show two different numbers.
+                const sup = supplierFor(it.id, l);
                 const n = parseFloat(qty) || 0;
                 const had = parseFloat(it.current_stock) || 0;
                 const after = exact(had + n);
@@ -1188,7 +1310,7 @@ function BasketSheet({
                 const sizes = sup ? priceLines(it, sup) : [];
                 const money = n * pricePerBase(it, sup);
                 return (
-                  <li key={it.id} className="mise-flip" data-flipped={flipped ? "true" : "false"}>
+                  <li key={lineKey(l)} className="mise-flip" data-flipped={flipped ? "true" : "false"}>
                     {/* The whole card turns. Not a corner of it — all of it. */}
                     <div
                       role="button"
@@ -1250,13 +1372,8 @@ function BasketSheet({
                               </p>
                             );
                           }
-                          const chosen = vendorPick?.[it.id] ?? "";
-                          const chosenForm = formPick?.[it.id] ?? "";
-                          // ONE ENTRY PER SUPPLIER *AND FORM*. A supplier can
-                          // quote a case and a loose kilo at rates that are not
-                          // multiples, so "who" is only half the question —
-                          // "two kilos" does not want the fifty-kilo case,
-                          // however good its rate.
+                          const chosen = l.vendor_id ?? "";
+                          const chosenForm = l.pack_level_id ?? "";
                           const ways = opts
                             .map((v) => ({ v, per: pricePerBase(it, v) || 0 }))
                             .filter((x) => x.per > 0)
@@ -1264,18 +1381,36 @@ function BasketSheet({
                           const key = (v: SupplierOption) =>
                             `${v.vendor_id}|${v.pack_level_id ?? ""}`;
                           return (
-                            <label
-                              className="mt-0.5 block"
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                            <label className="mt-0.5 block" onClick={(e) => e.stopPropagation()}>
                               <span className="sr-only">
                                 Supplier and pack for {it.name}, this order only
                               </span>
                               <select
                                 value={chosen ? `${chosen}|${chosenForm}` : ""}
                                 onChange={(e) => {
-                                  const [vid, lvl] = e.target.value.split("|");
-                                  onVendorPick(it.id, vid ?? "", lvl ?? "");
+                                  const [vid, lvl] = (e.target.value || "").split("|");
+                                  const k = lineKey(l);
+                                  const updated: OrderLine = {
+                                    ...l,
+                                    vendor_id: vid || undefined,
+                                    pack_level_id: vid ? lvl || undefined : undefined,
+                                  };
+                                  // Changing a line onto a supplier that is
+                                  // already in the basket MERGES the two, since
+                                  // they are now the same purchase.
+                                  const nk = lineKey(updated);
+                                  const clash = lines.find((x) => lineKey(x) !== k && lineKey(x) === nk);
+                                  onChange(
+                                    clash
+                                      ? lines
+                                          .filter((x) => lineKey(x) !== k)
+                                          .map((x) =>
+                                            lineKey(x) === nk
+                                              ? { ...x, qty: String((parseFloat(x.qty) || 0) + (parseFloat(l.qty) || 0)) }
+                                              : x,
+                                          )
+                                      : lines.map((x) => (lineKey(x) === k ? updated : x)),
+                                  );
                                 }}
                                 className={`w-full truncate rounded border-0 bg-transparent px-0 py-0 text-[10px] outline-none ${
                                   chosen ? "mise-tone-warn font-medium" : "text-fg-faint"
@@ -1289,9 +1424,7 @@ function BasketSheet({
                                 {ways.map(({ v, per }) => (
                                   <option key={key(v)} value={key(v)}>
                                     {v.vendor_name} ·{" "}
-                                    {v.pack_level_id
-                                      ? `by the ${levelName(it, v.pack_level_id)}`
-                                      : `loose`}{" "}
+                                    {v.pack_level_id ? `by the ${levelName(it, v.pack_level_id)}` : "loose"}{" "}
                                     · {format(per.toFixed(2))}/{it.unit}
                                   </option>
                                 ))}
