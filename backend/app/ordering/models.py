@@ -158,6 +158,15 @@ class Order(Base):
     # a flag so the kitchen screen can show HOW LONG they have been waiting,
     # which is the part that decides who gets attended to next.
     help_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: What the KITCHEN says THIS ticket will take. The hotel-wide prep time is
+    #: a decent default and a poor promise — a biryani is forty minutes and a
+    #: lassi is two. NULL = use the hotel default.
+    eta_minutes: Mapped[int | None] = mapped_column(Integer)
+    #: The last thing the table said. Kept apart from `note` on purpose: a note
+    #: tells the cook how to make the dish, a message is a conversation with the
+    #: room, and merging them makes the cook sift "more water" out of "no chilli".
+    guest_message: Mapped[str | None] = mapped_column(Text)
+    guest_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Money: COD (settle at door/counter) or ONLINE (Stripe checkout, test mode).
     payment_method: Mapped[str] = mapped_column(String(10), nullable=False, default="COD")
     payment_status: Mapped[str] = mapped_column(String(10), nullable=False, default="UNPAID")
