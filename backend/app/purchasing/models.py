@@ -63,6 +63,15 @@ class IndentItem(Base):
     # Optional per-line supplier override (the chef/admin picked one for THIS
     # order). None = fall back to the item's preferred vendor, else cheapest.
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vendors.id"))
+    # WHICH of that supplier's forms — their case, or their loose price. They
+    # can quote both at rates that are not multiples of each other, so
+    # "cheapest" is not always what the person ordering wants: a kitchen that
+    # needs two kilos does not want the fifty-kilo case, however good the rate.
+    # NULL = let the server pick their cheapest, which is what every line meant
+    # before and what most lines should go on meaning.
+    pack_level_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("item_pack_levels.id", ondelete="SET NULL")
+    )
     notes: Mapped[str | None] = mapped_column(Text)
 
 

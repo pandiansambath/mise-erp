@@ -442,6 +442,7 @@ export function OrderFlow({
   onAddAllLow,
   footer,
   vendorPick,
+  formPick,
   onVendorPick,
 }: {
   items: Item[];
@@ -452,10 +453,12 @@ export function OrderFlow({
   footer?: React.ReactNode;
   /** item_id -> the vendor picked for THIS order only. */
   vendorPick?: Record<string, string>;
+  /** item_id -> which of that vendor's FORMS (their pack level id, "" = loose). */
+  formPick?: Record<string, string>;
   /** Choose a supplier for one purchase. Never touches the ★ chosen supplier:
    *  "this is not overwrite default vendor, just for that 1 purchase I can
    *   choose." Passing "" puts the line back on the default. */
-  onVendorPick?: (itemId: string, vendorId: string) => void;
+  onVendorPick?: (itemId: string, vendorId: string, packLevelId: string) => void;
 }) {
   const { format } = useCurrency();
   const [cat, setCat] = useState<string | null>(null);
@@ -540,8 +543,19 @@ export function OrderFlow({
       //    prices is what the purchase order will say.
       const picked = vendorPick?.[id];
       if (picked) {
-        const mine = opts.find((v) => v.vendor_id === picked);
-        if (mine) return mine;
+        const mine = opts.filter((v) => v.vendor_id === picked);
+        if (mine.length) {
+          // A form was named as well — honour it even when it is the dearer
+          // one. Otherwise take that supplier's best rate, which is what the
+          // server does.
+          const form = formPick?.[id];
+          const exact = mine.find((v) => (v.pack_level_id ?? "") === (form ?? ""));
+          if (form !== undefined && exact) return exact;
+          const it0 = byId.get(id);
+          return it0
+            ? [...mine].sort((a, b) => (pricePerBase(it0, a) || Infinity) - (pricePerBase(it0, b) || Infinity))[0]
+            : mine[0];
+        }
       }
       // 2. The ★ chosen supplier. 3. Otherwise the genuinely cheapest — per
       //    BASE unit, not per quote: a £20 box of 10 kg is not cheaper than a
@@ -555,7 +569,7 @@ export function OrderFlow({
         })[0]
       );
     },
-    [suppliers, vendorPick, byId],
+    [suppliers, vendorPick, formPick, byId],
   );
 
   const cats = useMemo(() => {
@@ -862,6 +876,7 @@ export function OrderFlow({
           footer={footer}
           suppliers={suppliers}
           vendorPick={vendorPick}
+          formPick={formPick}
           onVendorPick={onVendorPick}
         />
       )}
@@ -882,6 +897,7 @@ function BasketSheet({
   footer,
   suppliers,
   vendorPick,
+  formPick,
   onVendorPick,
 }: {
   lines: OrderLine[];
@@ -894,7 +910,8 @@ function BasketSheet({
   footer?: React.ReactNode;
   suppliers: Record<string, SupplierOption[]>;
   vendorPick?: Record<string, string>;
-  onVendorPick?: (itemId: string, vendorId: string) => void;
+  formPick?: Record<string, string>;
+  onVendorPick?: (itemId: string, vendorId: string, packLevelId: string) => void;
 }) {
   const { format } = useCurrency();
   const confirm = useConfirm();
@@ -1234,45 +1251,50 @@ function BasketSheet({
                             );
                           }
                           const chosen = vendorPick?.[it.id] ?? "";
+                          const chosenForm = formPick?.[it.id] ?? "";
+                          // ONE ENTRY PER SUPPLIER *AND FORM*. A supplier can
+                          // quote a case and a loose kilo at rates that are not
+                          // multiples, so "who" is only half the question —
+                          // "two kilos" does not want the fifty-kilo case,
+                          // however good its rate.
+                          const ways = opts
+                            .map((v) => ({ v, per: pricePerBase(it, v) || 0 }))
+                            .filter((x) => x.per > 0)
+                            .sort((a, b) => a.per - b.per);
+                          const key = (v: SupplierOption) =>
+                            `${v.vendor_id}|${v.pack_level_id ?? ""}`;
                           return (
                             <label
                               className="mt-0.5 block"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="sr-only">Supplier for {it.name}, this order only</span>
+                              <span className="sr-only">
+                                Supplier and pack for {it.name}, this order only
+                              </span>
                               <select
-                                value={chosen}
-                                onChange={(e) => onVendorPick(it.id, e.target.value)}
+                                value={chosen ? `${chosen}|${chosenForm}` : ""}
+                                onChange={(e) => {
+                                  const [vid, lvl] = e.target.value.split("|");
+                                  onVendorPick(it.id, vid ?? "", lvl ?? "");
+                                }}
                                 className={`w-full truncate rounded border-0 bg-transparent px-0 py-0 text-[10px] outline-none ${
                                   chosen ? "mise-tone-warn font-medium" : "text-fg-faint"
                                 }`}
                               >
                                 <option value="">
-                                  {sup ? `${sup.vendor_name}${sup.is_preferred ? " ★" : " (cheapest)"}` : "no supplier"}
+                                  {sup
+                                    ? `${sup.vendor_name}${sup.is_preferred ? " ★" : " (best rate)"}`
+                                    : "no supplier"}
                                 </option>
-                                {/* ONE ENTRY PER SUPPLIER, at their best rate.
-                                    A supplier can quote several forms now, so
-                                    the raw list showed the same name two or
-                                    three times with different numbers — and
-                                    since only the supplier is recorded on the
-                                    line, picking either did the same thing.
-                                    The server also takes their cheapest form,
-                                    so this is the number the order will use. */}
-                                {[...new Map(opts.map((v) => [v.vendor_id, v])).values()]
-                                  .map((v) => {
-                                    const mine = opts.filter((o) => o.vendor_id === v.vendor_id);
-                                    const best = Math.min(
-                                      ...mine.map((o) => pricePerBase(it, o) || Infinity),
-                                    );
-                                    return { v, best, forms: mine.length };
-                                  })
-                                  .sort((a, b) => a.best - b.best)
-                                  .map(({ v, best, forms }) => (
-                                    <option key={v.vendor_id} value={v.vendor_id}>
-                                      {v.vendor_name} · {format(best.toFixed(2))}/{it.unit}
-                                      {forms > 1 ? ` · ${forms} ways` : ""}
-                                    </option>
-                                  ))}
+                                {ways.map(({ v, per }) => (
+                                  <option key={key(v)} value={key(v)}>
+                                    {v.vendor_name} ·{" "}
+                                    {v.pack_level_id
+                                      ? `by the ${levelName(it, v.pack_level_id)}`
+                                      : `loose`}{" "}
+                                    · {format(per.toFixed(2))}/{it.unit}
+                                  </option>
+                                ))}
                               </select>
                             </label>
                           );
