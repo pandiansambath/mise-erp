@@ -42,6 +42,8 @@ export default function TablesPage() {
   // these datas from super admin." Four is where the form starts, not a rule.
   const [seats, setSeats] = useState("4");
   const [oneSeats, setOneSeats] = useState("4");
+  // One question, two shapes — several at once, or one you name.
+  const [mode, setMode] = useState<"many" | "one">("many");
   const [printing, setPrinting] = useState(false);
   // When set, only this card is on the printed sheet.
   const [only, setOnly] = useState<string | null>(null);
@@ -140,68 +142,88 @@ export default function TablesPage() {
       subtitle="A card on every table. Diners scan it, order, and the kitchen sees it."
       tools={
         canWrite ? (
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="block">
-              <span className="text-[11px] font-medium text-fg-soft">How many tables?</span>
-              <span className="mt-1 flex items-center gap-1.5">
+          /* ONE CONTROL, NOT TWO COMPETING FORMS.
+             "this area is still confusing the laymans... instead of showing as
+              separate thing, show as single itself, in a unique way."
+             It was two forms answering one question, side by side, each with
+             its own button — so the reader has to work out which half applies
+             to them before they can start. It reads as a sentence now, and the
+             sentence changes shape depending on whether you are adding a batch
+             or naming one. */
+          <div className="mise-well flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2">
+            <span className="mise-tool-label block w-full text-[11px] font-medium text-fg-soft">
+              Add tables
+            </span>
+            <div className="flex shrink-0 rounded-xl bg-glass/10 p-0.5">
+              {([["many", "Several"], ["one", "Just one"]] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setMode(k)}
+                  className={`mise-press rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition ${
+                    mode === k ? "bg-brand-600 text-white" : "text-fg-faint hover:text-fg-soft"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {mode === "many" ? (
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-fg-soft">
                 <input
                   inputMode="numeric"
                   value={howMany}
                   onChange={(e) => setHowMany(e.target.value.replace(/\D/g, ""))}
-                  className="mise-well w-16 rounded-xl px-3 py-2.5 text-center text-sm outline-none"
+                  aria-label="How many tables"
+                  className="mise-well w-14 rounded-xl px-2 py-2 text-center text-sm outline-none"
                 />
+                <span>called</span>
                 <input
                   value={prefix}
                   onChange={(e) => setPrefix(e.target.value)}
                   aria-label="What to call them"
-                  className="mise-well w-24 rounded-xl px-3 py-2.5 text-sm outline-none"
+                  className="mise-well w-24 rounded-xl px-2 py-2 text-sm outline-none"
                 />
+                <span>seating</span>
                 <input
                   inputMode="numeric"
                   value={seats}
                   onChange={(e) => setSeats(e.target.value.replace(/\D/g, ""))}
-                  aria-label="Seats at each of them"
-                  title="Seats at each table"
-                  className="mise-well w-14 rounded-xl px-2 py-2.5 text-center text-sm outline-none"
+                  aria-label="Seats at each table"
+                  className="mise-well w-12 rounded-xl px-2 py-2 text-center text-sm outline-none"
                 />
-                <span className="text-[11px] text-fg-faint">seats</span>
-                <button
-                  type="button"
-                  onClick={addMany}
-                  disabled={busy}
-                  className="mise-press rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-                >
-                  Create
-                </button>
+                <span>each</span>
               </span>
-            </label>
-            <span className="h-8 w-px bg-line" aria-hidden />
-            <label className="block">
-              <span className="text-[11px] font-medium text-fg-soft">Or add one</span>
-              <span className="mt-1 flex items-center gap-1.5">
+            ) : (
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-fg-soft">
+                <span>called</span>
                 <input
                   value={oneLabel}
                   onChange={(e) => setOneLabel(e.target.value)}
                   placeholder="Bar 1"
-                  className="mise-well w-32 rounded-xl px-3 py-2.5 text-sm outline-none"
+                  aria-label="Name of the table"
+                  className="mise-well w-28 rounded-xl px-2 py-2 text-sm outline-none"
                 />
+                <span>seating</span>
                 <input
                   inputMode="numeric"
                   value={oneSeats}
                   onChange={(e) => setOneSeats(e.target.value.replace(/\D/g, ""))}
                   aria-label="Seats at this table"
-                  className="mise-well w-14 rounded-xl px-2 py-2.5 text-center text-sm outline-none"
+                  className="mise-well w-12 rounded-xl px-2 py-2 text-center text-sm outline-none"
                 />
-                <button
-                  type="button"
-                  onClick={addOne}
-                  disabled={busy || !oneLabel.trim()}
-                  className="mise-press mise-raised rounded-xl px-3 py-2.5 text-sm font-medium text-fg-soft disabled:opacity-40"
-                >
-                  Add
-                </button>
               </span>
-            </label>
+            )}
+
+            <button
+              type="button"
+              onClick={mode === "many" ? addMany : addOne}
+              disabled={busy || (mode === "one" && !oneLabel.trim())}
+              className="mise-press shrink-0 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {busy ? "…" : "Create"}
+            </button>
           </div>
         ) : undefined
       }

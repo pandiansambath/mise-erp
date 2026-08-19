@@ -39,11 +39,18 @@ const NEXT: Record<string, { to: string; label: string }> = {
   READY: { to: "COMPLETED", label: "Served" },
 };
 
-const STAGE: Record<string, { label: string; dot: string }> = {
-  NEW: { label: "New", dot: "bg-amber-400" },
-  CONFIRMED: { label: "Accepted", dot: "bg-sky-400" },
-  PREPARING: { label: "Cooking", dot: "bg-brand-400" },
-  READY: { label: "Ready to serve", dot: "bg-emerald-400" },
+// THIS SCREEN IS READ, NOT TOUCHED.
+//
+//   "this page is for focusing on SEEING — seeing from distance even, so need to
+//    show data highlighted so they no need to touch the screen."
+//
+// So status is a colour BAND, not an 8px dot nobody resolves at three metres,
+// and the words are large enough to read while walking past with a pan.
+const STAGE: Record<string, { label: string; dot: string; band: string }> = {
+  NEW: { label: "New", dot: "bg-amber-400", band: "bg-amber-400" },
+  CONFIRMED: { label: "Accepted", dot: "bg-sky-400", band: "bg-sky-400" },
+  PREPARING: { label: "Cooking", dot: "bg-brand-400", band: "bg-brand-400" },
+  READY: { label: "Ready to serve", dot: "bg-emerald-400", band: "bg-emerald-400" },
 };
 
 /** Waiting time in units a person reads, not 51655 minutes. */
@@ -191,8 +198,15 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
             const heat =
               mins >= 20 ? "ring-2 ring-rose-400/70" : mins >= 10 ? "ring-1 ring-amber-400/60" : "";
             return (
-              <li key={g.key}>
-                <div className={`mise-card3d overflow-hidden p-4 ${heat}`}>
+              <li key={g.key} className="h-full">
+                <div className={`mise-card3d relative flex h-full flex-col overflow-hidden p-4 pl-5 ${heat}`}>
+                  {/* The status, readable from the door. */}
+                  <span
+                    aria-hidden
+                    className={`absolute inset-y-0 left-0 w-1.5 ${
+                      (STAGE[first.status] ?? STAGE.NEW).band
+                    }`}
+                  />
                   {help && (
                     <p className="mb-2 rounded-lg bg-amber-400/15 px-2.5 py-2 text-sm font-semibold text-amber-200">
                       🔔 This table asked for someone
@@ -200,14 +214,14 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
                   )}
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-display text-3xl font-semibold leading-none">{g.title}</p>
+                      <p className="font-display text-4xl font-semibold leading-none">{g.title}</p>
                       <p className="mt-1 text-xs text-fg-faint">
                         {g.dineIn ? "in the room" : first.fulfilment.toLowerCase()}
                         {g.rows.length > 1 ? ` · ${g.rows.length} rounds` : ""}
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 text-right font-display text-2xl font-semibold tabular-nums ${
+                      className={`shrink-0 text-right font-display text-3xl font-semibold tabular-nums ${
                         mins >= 20 ? "text-rose-300" : mins >= 10 ? "text-amber-300" : "text-fg-soft"
                       }`}
                     >
@@ -234,8 +248,8 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
                         </p>
                         <ul className="space-y-1">
                           {o.items.map((it, k) => (
-                            <li key={k} className="flex items-baseline gap-2 text-base">
-                              <span className="font-display text-lg font-semibold tabular-nums text-brand-300">
+                            <li key={k} className="flex items-baseline gap-2 text-lg">
+                              <span className="font-display text-xl font-semibold tabular-nums text-brand-300">
                                 {it.quantity}×
                               </span>
                               <span className="min-w-0 flex-1 truncate">{it.name}</span>
