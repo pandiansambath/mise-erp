@@ -36,6 +36,10 @@ const NAV: NavItem[] = [
   { href: "/money", label: "Money", icon: "💰", perm: "reports:read", group: "Money", keywords: "cash in out" },
   { href: "/sales", label: "Sales & Cash", icon: "🧾", perm: "sales:read", group: "Money", keywords: "takings till revenue" },
   { href: "/orders", label: "Online Orders", icon: "🛵", perm: "orders:read", feature: "ordering", group: "Money", keywords: "delivery pickup takeaway swiggy zomato menu online customer" },
+  // Dine-in: the QR on the table, and the screen in the kitchen. Filed under
+  // Kitchen rather than Money because the people who use them are cooking.
+  { href: "/kitchen", label: "Kitchen screen", icon: "👨‍🍳", perm: "orders:write", feature: "ordering", group: "Kitchen", keywords: "kds pass tickets dine in table orders live chef screen" },
+  { href: "/tables", label: "Tables & QR", icon: "🪑", perm: "orders:write", feature: "ordering", group: "Kitchen", keywords: "qr code table dine in scan menu card print seats" },
   { href: "/expenses", label: "Expenses", icon: "💸", perm: "expenses:read", feature: "expenses", group: "Money", keywords: "costs spend petty" },
   { href: "/payroll", label: "Payroll", icon: "💷", perm: "payroll:read", feature: "payroll", group: "Money", keywords: "payslip salary wages" },
   { href: "/inventory", label: "Inventory", icon: "📦", perm: "inventory:read", group: "Stock", keywords: "stock items shelf" },

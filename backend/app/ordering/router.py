@@ -99,9 +99,15 @@ class PublicOrderIn(BaseModel):
     items: list[PublicOrderLine] = Field(min_length=1, max_length=50)
 
 
-def _order_out(o: Order, rider_name: str | None = None) -> dict:
+def _order_out(o: Order, rider_name: str | None = None, table_label: str | None = None) -> dict:
     return {
         "id": str(o.id),
+        # Which seat it came from, and whether they have asked for somebody.
+        # The kitchen screen reads the table before it reads anything else.
+        "table_label": table_label,
+        "help_requested_at": (
+            o.help_requested_at.isoformat() if o.help_requested_at else None
+        ),
         "rider_name": rider_name,
         "code": o.code,
         "status": o.status,
@@ -116,6 +122,9 @@ def _order_out(o: Order, rider_name: str | None = None) -> dict:
         "delivery_fee": str(o.delivery_fee),
         "total": str(o.total),
         "created_at": o.created_at.isoformat() if o.created_at else None,
+        # When the kitchen last moved it — the diner's countdown runs from the
+        # moment it was ACCEPTED, not from when it was placed.
+        "updated_at": o.updated_at.isoformat() if o.updated_at else None,
         "payment_method": o.payment_method,
         "payment_status": o.payment_status,
         "has_proof": bool(o.proof_key),
@@ -315,6 +324,17 @@ async def list_orders(
         .scalars()
         .all()
     )
+    # Table names for anything that came from the room, in one query rather
+    # than one per ticket.
+    table_names: dict[uuid.UUID, str] = {}
+    seats = {o.table_id for o in rows if o.table_id}
+    if seats:
+        table_names = {
+            t.id: t.label
+            for t in (
+                await db.execute(select(DiningTable).where(DiningTable.id.in_(seats)))
+            ).scalars()
+        }
     today = func.date(Order.created_at) == func.current_date()
     live = [
         s.value
@@ -356,7 +376,10 @@ async def list_orders(
             ).scalars().all()
         }
     return {
-        "orders": [_order_out(o, names.get(o.rider_id)) for o in rows],
+        "orders": [
+            _order_out(o, names.get(o.rider_id), table_names.get(o.table_id))
+            for o in rows
+        ],
         "vitals": vitals,
     }
 
@@ -959,29 +982,27 @@ async def delete_table(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/tables/{table_id}/qr.svg")
-async def table_qr(
-    table_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("orders:write")),
-):
+@table_router.get("/{code}/qr.svg")
+async def table_qr(code: str, db: AsyncSession = Depends(get_db)):
     """The card that goes on the table, as SVG.
 
+    PUBLIC, and keyed on the code rather than the table id, for a plain reason:
+    an <img> tag cannot send an auth header, so a token-protected QR simply
+    renders as a broken box on the very page that exists to print it. Nothing is
+    given away — the code is printed in large type on the card itself, and all
+    the QR encodes is the public menu URL that anybody sitting down can reach.
+
     SVG because this gets PRINTED, and a raster QR at the wrong size is a QR
-    that will not scan across a dim dining room. Vector has no wrong size.
-    Error correction is set to the highest level so it still reads with a
-    thumbprint or a splash of curry on it, which is the real operating
-    environment for a card that lives on a table.
+    that will not scan across a dim dining room; vector has no wrong size.
+    Error correction is the highest level so it still reads with a thumbprint or
+    a splash of curry on it, which is the real operating environment for a card
+    that lives on a table.
     """
     import segno
     from fastapi import Response
 
-    t = await db.get(DiningTable, table_id)
-    if t is None or t.hotel_id != user.hotel_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
-    hotel_for_table = await db.get(Hotel, t.hotel_id)
-    url = _table_url(hotel_for_table, t.code)
-    qr = segno.make(url, error="h")
+    t, hotel = await _table_by_code(db, code)
+    qr = segno.make(_table_url(hotel, t.code), error="h")
     return Response(content=qr.svg_inline(scale=8, dark="#111111"), media_type="image/svg+xml")
 
 
@@ -1146,7 +1167,7 @@ async def table_orders(code: str, db: AsyncSession = Depends(get_db)) -> dict:
         "table": {"label": t.label, "code": t.code},
         "prep_minutes": hotel.prep_minutes,
         "currency": hotel.base_currency,
-        "orders": [_order_out(o) for o in rows],
+        "orders": [_order_out(o, table_label=t.label) for o in rows],
     }
 
 
