@@ -526,3 +526,12 @@ temporary, never written to `is_preferred`.
 first. It needs keying on **(item, vendor, form)** — the same triple the price
 now lives on — and the card must name the supplier so two "Dragon fruit" lines
 are tellable apart. Touches the basket model, the totals and the submit payload.
+
+**⚠ NOT CONFIRMED — check this first.** `orderSizes` now takes the supplier and
+`ItemSheet` passes it (`supplier={supplierFor(openItem.id)}`, line 815), and the
+category CARDS price RUDRA's box correctly at **£1,000**. But on the live popup
+after the deploy the converter still read *"1 box = 10 kg"* and the button still
+said *"Add to basket · £100.00"*. So either `supplierFor` is handing the sheet a
+different supplier than the card shows, or the size is being taken from the
+item's chain somewhere else in that sheet. **This is the number that decides
+what you pay — verify before trusting it.**
