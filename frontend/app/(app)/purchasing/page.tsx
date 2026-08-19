@@ -117,6 +117,9 @@ export default function PurchasingPage() {
   const [suppliers, setSuppliers] = useState<Record<string, SupplierOption[]>>({});
   // item_id -> the vendor PICKED for this order ("" / missing = automatic)
   const [vendorPick, setVendorPick] = useState<Record<string, string>>({});
+  // Which of that supplier's FORMS the line buys — "" = their loose price,
+  // a level id = that pack. Absent = let the server take their cheapest.
+  const [formPick, setFormPick] = useState<Record<string, string>>({});
 
   // Read inside a debounced timer, so the saver always sees the CURRENT picks
   // without re-creating itself (and cancelling its own pending save) every time
@@ -394,6 +397,11 @@ export default function PurchasingPage() {
           item_id: l.item_id,
           required_qty: l.qty,
           vendor_id: vendorPick[l.item_id] || undefined,
+          // Only meaningful alongside a picked vendor. "" means their loose
+          // price, which is a real choice and must not be sent as undefined.
+          pack_level_id: vendorPick[l.item_id]
+            ? formPick[l.item_id] || undefined
+            : undefined,
         })),
     };
     if (payload.items.length === 0) {
@@ -1364,18 +1372,25 @@ export default function PurchasingPage() {
               onChange={setLines}
               onAddAllLow={orderAllLow}
               vendorPick={vendorPick}
+              formPick={formPick}
               // For THIS order only — `is_preferred` is never written, so the
               // ★ chosen supplier survives untouched. The server applies the
               // same precedence when it splits the indent: picked, then chosen,
               // then cheapest.
-              onVendorPick={(itemId, vendorId) =>
+              onVendorPick={(itemId, vendorId, packLevelId) => {
                 setVendorPick((p) => {
                   const next = { ...p };
                   if (vendorId) next[itemId] = vendorId;
                   else delete next[itemId];
                   return next;
-                })
-              }
+                });
+                setFormPick((p) => {
+                  const next = { ...p };
+                  if (vendorId) next[itemId] = packLevelId;
+                  else delete next[itemId];
+                  return next;
+                });
+              }}
               footer={
                 <div className="flex flex-wrap gap-2">
                   <button

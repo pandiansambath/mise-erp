@@ -130,10 +130,12 @@ and it is also the honest version of the `1 box = 50 kg` line we removed.
    The one-off is now called out in Inventory too — a delivery from anyone but
    the ★ chosen supplier says *"one-off · your usual is X"*, which is his
    "pile up confusion" warning answered.
-   **Still to do here:** picking the FORM (box vs loose) per line. Only the
-   supplier is recorded on an indent line today, and the server takes that
-   supplier's cheapest form; choosing the dearer form deliberately would need a
-   `pack_level_id` on `indent_items`.
+   **Done too:** the FORM is picked per line. `indent_items.pack_level_id`
+   (migration `2d320918a015`), honoured by `_resolve_supplier` — a named form
+   wins even when it is the dearer one, which is the whole point: cheapest-per-
+   kilo says take the fifty-kilo case, and somebody who wants two kilos knows
+   better. NULL still means "let the server take their cheapest", which is what
+   every existing line means.
 5. ~~Price Comparison: the "cheapest for the 2 kg I actually want" answer~~ —
    done. A quantity box on the Suppliers tab prices THAT amount against every
    supplier, rounding a case seller UP to whole cases (they cannot sell half a

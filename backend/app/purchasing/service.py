@@ -47,6 +47,7 @@ async def create_indent(
                 item_id=it["item_id"],
                 required_qty=it["required_qty"],
                 vendor_id=it.get("vendor_id"),
+                pack_level_id=it.get("pack_level_id"),
                 notes=it.get("notes"),
             )
         )
@@ -77,6 +78,7 @@ async def indent_items(db: AsyncSession, indent_id: uuid.UUID) -> list[dict]:
             "required_qty": ii.required_qty,
             "unit": it.unit,
             "vendor_id": ii.vendor_id,
+            "pack_level_id": ii.pack_level_id,
             "vendor_name": vname,  # the PICKED override, if any (display)
         }
         for ii, it, vname in rows.all()
@@ -252,6 +254,7 @@ async def _resolve_supplier(
     item_id: uuid.UUID,
     hotel_id: uuid.UUID,
     override_vendor_id: uuid.UUID | None = None,
+    override_pack_level_id: uuid.UUID | None = None,
 ) -> tuple[uuid.UUID, Decimal] | None:
     """Which vendor (and price) to order this item from.
 
@@ -292,7 +295,16 @@ async def _resolve_supplier(
         return min(rows, key=lambda r: per_base(r[1], r[2], r[3])) if rows else None
 
     if override_vendor_id is not None:
-        row = cheapest_of((await db.execute(base.where(Vendor.id == override_vendor_id))).all())
+        mine = (await db.execute(base.where(Vendor.id == override_vendor_id))).all()
+        # A FORM was named as well: buy that one even when it is the dearer of
+        # the two. Cheapest-per-kilo says take the fifty-kilo case; somebody who
+        # wants two kilos knows better, and this is where they say so.
+        if override_pack_level_id is not None:
+            exact = [r for r in mine if r[2] == override_pack_level_id]
+            if exact:
+                r = exact[0]
+                return (r[0], per_base(r[1], r[2], r[3]))
+        row = cheapest_of(mine)
         if row:
             return (row[0], per_base(row[1], row[2], row[3]))
     row = cheapest_of((await db.execute(base.where(VendorItem.is_preferred.is_(True)))).all())
@@ -372,7 +384,9 @@ async def generate_pos(db: AsyncSession, indent: Indent) -> dict:
     by_vendor: dict[uuid.UUID, list[dict]] = {}
     skipped: list[str] = []
     for it in items:
-        chosen = await _resolve_supplier(db, it["item_id"], indent.hotel_id, it["vendor_id"])
+        chosen = await _resolve_supplier(
+            db, it["item_id"], indent.hotel_id, it["vendor_id"], it.get("pack_level_id")
+        )
         if chosen is None:
             skipped.append(it["item_name"])
             continue

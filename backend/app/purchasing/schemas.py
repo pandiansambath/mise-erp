@@ -11,6 +11,11 @@ class IndentItemIn(BaseModel):
     required_qty: Decimal = Field(gt=0)
     # Optional supplier picked for THIS line (falls back preferred > cheapest).
     vendor_id: uuid.UUID | None = None
+    #: WHICH of that supplier's forms — their case, or their loose price. They
+    #: can quote both at rates that are not multiples, so "cheapest" is not
+    #: always wanted: two kilos does not want the fifty-kilo case, however good
+    #: the rate. None = let the server take their cheapest.
+    pack_level_id: uuid.UUID | None = None
     notes: str | None = None
 
 
@@ -25,6 +30,9 @@ class IndentItemOut(BaseModel):
     required_qty: Decimal
     unit: str
     vendor_id: uuid.UUID | None = None  # per-line override, if picked
+    #: Which of that supplier's forms to buy — their case or their loose price.
+    #: None = the server takes their cheapest per base unit.
+    pack_level_id: uuid.UUID | None = None
     vendor_name: str | None = None
 
 
