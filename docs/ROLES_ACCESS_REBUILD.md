@@ -105,6 +105,9 @@ is why the frontend `ROLES` array has no KIOSK and the tile appears anyway.
 **The fix is to filter KIOSK out of the archetypes the builder offers, NOT to
 touch the role itself** — the tablet login depends on it.
 
+✅ **DONE (`91f3910`), confirmed by screenshot:** the archetype grid now ends at
+Staff. Filtered in `RoleBuilder`, backend untouched, kiosk still works.
+
 ## Order of work
 1. ~~The permissions bug~~ — done, `3d45222`.
 2. Prove what is broken: a live pass creating a hotel, staff and logins.
