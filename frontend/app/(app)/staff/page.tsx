@@ -175,14 +175,18 @@ export default function StaffPage() {
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
+    // THE TABLET IS NOT A PERSON. It signs in with a PIN at <hotel>/kiosk, its
+    // permissions are sealed, and nobody manages its access — showing it here
+    // as somebody to tap is the same mistake as offering Kiosk as a job.
+    const people = users.filter((u) => u.role !== "KIOSK");
     const list = t
-      ? users.filter(
+      ? people.filter(
           (u) =>
             u.email.toLowerCase().includes(t) ||
             (u.preferred_name ?? "").toLowerCase().includes(t) ||
             (ROLE_LABELS[u.role] ?? u.role).toLowerCase().includes(t),
         )
-      : users;
+      : people;
     // Owners first, then anyone whose access has been tailored (the ones worth
     // a second look), then the rest.
     return [...list].sort((a, b) => {
