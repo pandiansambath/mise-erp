@@ -51,9 +51,13 @@ export default function KitchenPage() {
   const { user } = useAuth();
   const canWrite = can(user?.role, "orders:write");
   const [orders, setOrders] = useState<Order[]>([]);
+  const [tables, setTables] = useState<{ id: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
+  const [screen, setScreen] = useState<{ url: string } | null>(null);
+  const [prep, setPrep] = useState("");
+  const [savingPrep, setSavingPrep] = useState(false);
 
   const load = useCallback(
     () =>
@@ -75,6 +79,39 @@ export default function KitchenPage() {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  // The login-free address for the tablet, and the prep time the diner's
+  // countdown is built from — "where we will choose the estimate time?"
+  useEffect(() => {
+    api.get<{ url: string }>("/ordering/kitchen-screen").then(setScreen).catch(() => {});
+    api.get<{ id: string; label: string }[]>("/ordering/tables").then(setTables).catch(() => {});
+    api
+      .get<{ prep_minutes?: number }>("/ordering/settings")
+      .then((d) => setPrep(String(d.prep_minutes ?? 20)))
+      .catch(() => {});
+  }, []);
+
+  async function savePrep() {
+    setSavingPrep(true);
+    try {
+      await api.patch("/ordering/settings", { prep_minutes: Math.max(1, parseInt(prep, 10) || 20) });
+    } finally {
+      setSavingPrep(false);
+    }
+  }
+
+  /** Clear a table down for the next party. */
+  async function release(tableLabel: string, orderId: string) {
+    const t = tables.find((x) => x.label === tableLabel);
+    if (!t) return;
+    setBusy(orderId);
+    try {
+      await api.post(`/ordering/tables/${t.id}/release`, {});
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function advance(o: Order) {
     const step = NEXT[o.status];
@@ -127,6 +164,42 @@ export default function KitchenPage() {
     <Workbench
       title="Kitchen"
       subtitle="Every ticket waiting, oldest first. Tap to move it along."
+      tools={
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block">
+            <span className="text-[11px] font-medium text-fg-soft">Food is ready in about</span>
+            <span className="mt-1 flex items-center gap-1.5">
+              <input
+                inputMode="numeric"
+                value={prep}
+                onChange={(e) => setPrep(e.target.value.replace(/\D/g, ""))}
+                aria-label="Minutes until food is ready"
+                className="mise-well w-16 rounded-xl px-3 py-2.5 text-center text-sm outline-none"
+              />
+              <span className="text-xs text-fg-faint">min</span>
+              <button
+                type="button"
+                onClick={savePrep}
+                disabled={savingPrep}
+                className="mise-press mise-raised rounded-xl px-3 py-2.5 text-xs font-medium text-fg-soft disabled:opacity-40"
+              >
+                {savingPrep ? "…" : "Save"}
+              </button>
+            </span>
+          </label>
+          {screen && (
+            <a
+              href={screen.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mise-press rounded-xl border border-brand-400/40 bg-brand-400/10 px-4 py-2.5 text-sm font-semibold text-brand-300"
+              title="Opens a screen that needs no login — leave it on the kitchen tablet"
+            >
+              📺 Open kitchen screen
+            </a>
+          )}
+        </div>
+      }
       tally={
         <p className="text-xs text-fg-faint">
           <b className="text-fg-soft tabular-nums">{live.length}</b> on the pass ·{" "}
@@ -218,6 +291,17 @@ export default function KitchenPage() {
                     </p>
                   )}
 
+                  {o.fulfilment === "DINE_IN" && o.table_label && (
+                    <button
+                      type="button"
+                      onClick={() => release(o.table_label!, o.id)}
+                      disabled={busy === o.id}
+                      className="mise-press mt-3 w-full rounded-xl border border-line px-3 py-2 text-xs font-medium text-fg-faint hover:border-amber-400/50 hover:text-amber-200 disabled:opacity-50"
+                      title="They have left — clear it down for the next party"
+                    >
+                      🔄 Free up {o.table_label}
+                    </button>
+                  )}
                   {step && (
                     <button
                       type="button"

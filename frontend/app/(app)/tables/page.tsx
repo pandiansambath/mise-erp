@@ -38,6 +38,10 @@ export default function TablesPage() {
   const [howMany, setHowMany] = useState("10");
   const [prefix, setPrefix] = useState("Table");
   const [oneLabel, setOneLabel] = useState("");
+  // "how you know each table will have 4 seats... it depends, so we need to get
+  // these datas from super admin." Four is where the form starts, not a rule.
+  const [seats, setSeats] = useState("4");
+  const [oneSeats, setOneSeats] = useState("4");
   const [printing, setPrinting] = useState(false);
 
   function load() {
@@ -57,7 +61,11 @@ export default function TablesPage() {
     setBusy(true);
     setErr(null);
     try {
-      await api.post("/ordering/tables/bulk", { count: n, prefix: prefix.trim() || "Table" });
+      await api.post("/ordering/tables/bulk", {
+        count: n,
+        prefix: prefix.trim() || "Table",
+        seats: Math.max(1, parseInt(seats, 10) || 4),
+      });
       await load();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not add those tables.");
@@ -71,7 +79,10 @@ export default function TablesPage() {
     setBusy(true);
     setErr(null);
     try {
-      await api.post("/ordering/tables", { label: oneLabel.trim(), seats: 4 });
+      await api.post("/ordering/tables", {
+        label: oneLabel.trim(),
+        seats: Math.max(1, parseInt(oneSeats, 10) || 4),
+      });
       setOneLabel("");
       await load();
     } catch (e) {
@@ -120,6 +131,15 @@ export default function TablesPage() {
                   aria-label="What to call them"
                   className="mise-well w-24 rounded-xl px-3 py-2.5 text-sm outline-none"
                 />
+                <input
+                  inputMode="numeric"
+                  value={seats}
+                  onChange={(e) => setSeats(e.target.value.replace(/\D/g, ""))}
+                  aria-label="Seats at each of them"
+                  title="Seats at each table"
+                  className="mise-well w-14 rounded-xl px-2 py-2.5 text-center text-sm outline-none"
+                />
+                <span className="text-[11px] text-fg-faint">seats</span>
                 <button
                   type="button"
                   onClick={addMany}
@@ -139,6 +159,13 @@ export default function TablesPage() {
                   onChange={(e) => setOneLabel(e.target.value)}
                   placeholder="Terrace 2"
                   className="mise-well w-32 rounded-xl px-3 py-2.5 text-sm outline-none"
+                />
+                <input
+                  inputMode="numeric"
+                  value={oneSeats}
+                  onChange={(e) => setOneSeats(e.target.value.replace(/\D/g, ""))}
+                  aria-label="Seats at this table"
+                  className="mise-well w-14 rounded-xl px-2 py-2.5 text-center text-sm outline-none"
                 />
                 <button
                   type="button"
@@ -163,10 +190,13 @@ export default function TablesPage() {
               type="button"
               onClick={() => {
                 setPrinting(true);
-                // Give the QR images a beat to paint before the print dialog
-                // freezes the page — a sheet of empty boxes is a wasted tree.
+                // Mark the document so the print rules can scope to it, and
+                // give the QR images a beat to paint before the dialog freezes
+                // the page — a sheet of empty boxes is a wasted tree.
+                document.documentElement.classList.add("mise-printing");
                 window.setTimeout(() => {
                   window.print();
+                  document.documentElement.classList.remove("mise-printing");
                   setPrinting(false);
                 }, 700);
               }}
@@ -202,11 +232,11 @@ export default function TablesPage() {
         </Card>
       ) : (
         <ul
-          className="mise-stagger grid gap-2.5 print:block"
+          className="mise-print-sheet mise-stagger grid gap-2.5"
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(15rem, 100%), 1fr))" }}
         >
           {tables.map((t) => (
-            <li key={t.id} className="mise-card-print break-inside-avoid">
+            <li key={t.id} className="mise-print-card break-inside-avoid">
               <div className={`mise-card3d overflow-hidden p-3.5 ${t.is_active ? "" : "opacity-60"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">

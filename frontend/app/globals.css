@@ -2733,3 +2733,92 @@ body[data-overlay] .mise-launcher-in {
     animation: none;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   PRINTING THE TABLE CARDS
+   "I gave the print feature — see how clumsy to look."
+
+   He was right and the picture said it all: seven sheets for six tables, one
+   card stranded per page, the sidebar and the mobile nav bar printed down the
+   middle, and the browser's own header/footer on top.
+
+   A printed sheet is a DIFFERENT medium, not the screen with the colours
+   removed. Everything that is navigation on screen is noise on paper, so it
+   goes; the cards become a grid that fills the page; and each card is told not
+   to break across a page, because half a QR is not a QR.
+
+   Scoped to `printing` on <html> so nothing here can leak into a normal print
+   of any other page.
+   ════════════════════════════════════════════════════════════════════════ */
+@media print {
+  html.mise-printing,
+  html.mise-printing body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Everything that exists to get you somewhere else. */
+  html.mise-printing nav,
+  html.mise-printing aside,
+  html.mise-printing header,
+  html.mise-printing .mise-noprint,
+  html.mise-printing [data-noprint],
+  html.mise-printing .mise-bench-rail,
+  html.mise-printing .mise-mobile-nav,
+  html.mise-printing .mise-copilot-fab {
+    display: none !important;
+  }
+
+  /* The app lays out as a sidebar + pane; on paper there is one column. */
+  html.mise-printing .mise-app {
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  html.mise-printing main,
+  html.mise-printing .mise-bench-pane {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+  }
+
+  /* Two across, as many down as fit. Six cards land on one sheet instead of
+     six sheets — the whole complaint. */
+  html.mise-printing .mise-print-sheet {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10mm !important;
+    padding: 8mm !important;
+  }
+
+  /* Half a QR is not a QR. */
+  html.mise-printing .mise-print-card {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    border: 1px dashed #bbb !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #111 !important;
+    padding: 6mm !important;
+  }
+  /* The app's material is a screen thing: ink on paper costs money and reads
+     worse. */
+  html.mise-printing .mise-print-card * {
+    color: #111 !important;
+    text-shadow: none !important;
+  }
+  html.mise-printing .mise-card3d {
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+}
