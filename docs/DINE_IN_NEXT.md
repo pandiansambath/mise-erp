@@ -25,11 +25,13 @@ bottom and tick as it ships.** Nothing gets dropped because it scrolled past.
 
 ## 🔴 Open — in order
 
-### 1. `/kds/<code>` page 404s
+*(1–10 and 14 shipped in `eeea6e7` + the follow-up; 11–13 remain.)*
+
+### ✅ 1. `/kds/<code>` page 404s
 The API shipped; **the page was never built**. My miss — the button hands you a
 link to nothing. *Page written, not yet deployed.*
 
-### 2. Group a table's rounds into ONE card
+### ✅ 2. Group a table's rounds into ONE card
 > "if same table same customer do one more dish like juice, it's coming as a
 > separate table 4 — I can see 2 table 4. Actually we need to group them until
 > free up."
@@ -39,20 +41,20 @@ how a round of drinks reaches the wrong people. Each round keeps its own line
 and its own button (the starters finish before the juice), but they live in one
 card. Applies to `/kitchen` **and** `/kds/<code>`.
 
-### 3. Calls and messages jump to the top
+### ✅ 3. Calls and messages jump to the top
 > "if some table sending msg or calling someone means it need to at top
 > portion... better split that UI as 2 sections in runtime (only when we get
 > msg/call) so that one can easily see and go to that table instantly."
 
 A separate band above the pass that only exists when somebody is waiting.
 
-### 4. Sticky header overlaps the cards
+### ✅ 4. Sticky header overlaps the cards
 > "see top area buttons... let me scroll... now see... worst UI. Same issue in
 > kitchen page too."
 
 The tools row and the cards collide on scroll. Real on `/tables` and `/kitchen`.
 
-### 5. QR handling — download and print each one
+### ✅ 5. QR handling — download and print each one
 > "each QR we need download option — download as image or PDF — and one
 > consolidated download button. Also print option for each QR in each QR area."
 
@@ -60,19 +62,19 @@ Per card: **download PNG · download PDF · print this one**. Plus one
 **download all** (PDF sheet). Because: *"they will create QR once and print and
 paste in table, that's it. It stays."*
 
-### 6. Drop the "Terrace" wording
+### ✅ 6. Drop the "Terrace" wording
 > "what the terrace feature... please remove, don't want. Table itself is fine."
 
 It was only placeholder text and it read as a feature. Remove it.
 
-### 7. Message the kitchen from the table
+### ✅ 7. Message the kitchen from the table
 > "customer sitting in table can also msg using that QR in that same menu page
 > itself... have some suggestions here so that customer no need to type."
 
 Tap-to-send chips (more water · napkins · the bill · less spicy · a highchair)
 plus free text. Lands on the same screen as everything else.
 
-### 8. The guest assistant
+### ✅ 8. The guest assistant
 > "have our Sonnet AI also here, so that customer can ask any details abt this
 > hotel — what's so special, what famous, branches, origin, contact, owner name."
 >
@@ -85,7 +87,7 @@ guest. The endpoint is **starved**: handed the hotel's public profile and menu
 and nothing else — no P&L, no costs, no payroll, no supplier prices. It cannot
 leak what it was never given.
 
-### 9. "Touch me" — what this dish does for you
+### ✅ 9. "Touch me" — what this dish does for you
 > "our AI should show as suggestion in that page like 'touch me AI to see what
 > are all health benefits u will get if u eat this'... what are all nutrients
 > etc... **it need to say honestly**. This itself is the master feature which
@@ -98,7 +100,7 @@ diner with a condition is a genuinely bad day. So it is grounded in the dish's
 stating any figure it cannot source, from giving medical advice, and from ever
 declaring a dish allergy-safe.
 
-### 10. Per-item prep time, and per-ticket override
+### ✅ 10. Per-item prep time, and per-ticket override
 > "super admin or chef can add an estimated time for each item in menu
 > beforehand, so that when customer chooses that, once submitted they can
 > instantly see somewhat correct ETA. This timing also they can change
@@ -129,7 +131,7 @@ add a one-off by hand. Neither is the only door.
 Photo or spreadsheet in → proposed items → **confirm before anything is
 written**. The bill-scanner already has this shape.
 
-### 14. The diner's page has to be *impressive* — it is the marketing
+### ✅ 14. The diner's page has to be *impressive* — it is the marketing
 > "the customer public page UI is not that much impressive. Bro this is indirect
 > marketing — we need a best top-notch animated page for customer. Add smoke
 > effect, colour paper effects etc to impress them, so that hotel will get so

@@ -521,3 +521,52 @@ async def test_a_stale_page_cannot_order_what_is_off(client, make_user, auth_hea
     assert mine, "the dish vanished instead of explaining itself"
     assert mine[0]["orderable"] is False
     assert "stock" in (mine[0]["unavailable_reason"] or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_a_table_can_send_a_message(client, make_user, auth_header):
+    """"customer sitting in table can also msg using that QR."
+
+    It has to reach the same screen as everything else — a message that lands
+    where nobody looks is worse than none, because the diner believes they have
+    been heard."""
+    admin = await make_user("msg@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "M1"}, headers=h)).json()
+
+    r = await client.post(
+        f"/api/public/table/{t['code']}/message", json={"text": "More water please"}
+    )
+    assert r.status_code == 202, r.text
+
+    board = (await client.get("/api/ordering/orders", headers=h)).json()["orders"]
+    mine = [o for o in board if o.get("table_label") == "M1"]
+    assert mine, "the message never reached the kitchen"
+    assert mine[0]["guest_message"] == "More water please"
+    assert mine[0]["help_requested_at"], "nobody was flagged as waiting"
+
+
+@pytest.mark.asyncio
+async def test_the_kitchen_can_set_a_ticket_s_own_eta(client, make_user, auth_header):
+    """"chef and super admin can change the estimated time for each table order."
+
+    A biryani is forty minutes and a lassi is two; an average serves neither."""
+    admin = await make_user("eta@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "E1"}, headers=h)).json()
+    dish = (
+        await client.post("/api/ordering/menu", json={"name": "Biryani", "price": "9.00"}, headers=h)
+    ).json()
+    placed = await client.post(
+        f"/api/public/table/{t['code']}",
+        json={"items": [{"menu_item_id": dish["id"], "quantity": 1}]},
+    )
+    oid = placed.json()["id"]
+
+    r = await client.patch(f"/api/ordering/orders/{oid}/eta", json={"minutes": 40}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["eta_minutes"] == 40
+
+    # ...and blank puts it back on the hotel default.
+    r = await client.patch(f"/api/ordering/orders/{oid}/eta", json={"minutes": None}, headers=h)
+    assert r.json()["eta_minutes"] is None
