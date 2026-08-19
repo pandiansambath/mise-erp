@@ -21,6 +21,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -47,6 +48,41 @@ class MenuItem(Base):
     is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     recipe_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recipes.id"))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class DiningTable(Base):
+    """One seat in the room, with its own QR.
+
+    "each table will have a separate QR... we don't know how many tables each
+     hotel have so we can make it configurable by superadmin."
+
+    `code` is what the QR encodes and `label` is what the staff call it, kept
+    apart on purpose: a printed card outlives being renamed from "4" to
+    "Terrace 2", and it must keep working when it is.
+
+    The code is RANDOM, not sequential. These cards sit on tables in a public
+    room; /t/2 would tell anyone that /t/3 exists, and ordering onto somebody
+    else's table is a prank that costs the hotel food.
+    """
+
+    __tablename__ = "dining_tables"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_dining_table_code"),
+        UniqueConstraint("hotel_id", "label", name="uq_dining_table_label"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    label: Mapped[str] = mapped_column(String(40), nullable=False)
+    code: Mapped[str] = mapped_column(String(16), nullable=False)
+    seats: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -96,6 +132,15 @@ class Order(Base):
     )
     # The rider carrying this delivery (assigned by the kitchen on READY).
     rider_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("riders.id"))
+    # Which seat this came from. NULL for takeaway and delivery.
+    table_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("dining_tables.id", ondelete="SET NULL")
+    )
+    # "We need someone" — the automated version of waving at a passing waiter,
+    # and the thing the whole feature exists to remove. Timestamped rather than
+    # a flag so the kitchen screen can show HOW LONG they have been waiting,
+    # which is the part that decides who gets attended to next.
+    help_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Money: COD (settle at door/counter) or ONLINE (Stripe checkout, test mode).
     payment_method: Mapped[str] = mapped_column(String(10), nullable=False, default="COD")
     payment_status: Mapped[str] = mapped_column(String(10), nullable=False, default="UNPAID")
