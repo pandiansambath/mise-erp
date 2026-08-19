@@ -570,3 +570,71 @@ async def test_the_kitchen_can_set_a_ticket_s_own_eta(client, make_user, auth_he
     # ...and blank puts it back on the hotel default.
     r = await client.patch(f"/api/ordering/orders/{oid}/eta", json={"minutes": None}, headers=h)
     assert r.json()["eta_minutes"] is None
+
+
+@pytest.mark.asyncio
+async def test_the_guest_assistant_is_never_handed_the_money(
+    client, make_user, auth_header, monkeypatch
+):
+    """THE GUARANTEE, tested at the only place it can be tested.
+
+    "make our ai not to answer profit or revenue kinda question abt hotels."
+
+    A prompt instruction is not a control — it is a request that a determined
+    guest can talk their way around. The control is that the model is never
+    given the numbers. So this captures exactly what we send and asserts the
+    business's money is not in it.
+    """
+    captured: dict = {}
+
+    def fake_ask(question, **kw):
+        captured["question"] = question
+        captured["context"] = kw.get("context", "")
+        captured["system_extra"] = kw.get("system_extra", "")
+        return "We are known for our dosa."
+
+    from app.assistant import bedrock
+
+    monkeypatch.setattr(bedrock, "ask", fake_ask)
+
+    admin = await make_user("ask@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "AI1"}, headers=h)).json()
+    await client.post(
+        "/api/ordering/menu", json={"name": "Masala Dosa", "price": "7.50"}, headers=h
+    )
+
+    r = await client.post(
+        f"/api/public/table/{t['code']}/ask",
+        json={"question": "What is your profit on the dosa?"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+
+    ctx = captured["context"].lower()
+    # The menu IS there — that is what it is for.
+    assert "masala dosa" in ctx
+    # ...and nothing commercial is, whatever the guest asks.
+    for forbidden in ("profit", "margin", "revenue", "payroll", "wage", "supplier", "cost_price"):
+        assert forbidden not in ctx, f"the assistant was handed {forbidden}"
+
+
+@pytest.mark.asyncio
+async def test_the_cards_come_off_the_screen(client, make_user, auth_header):
+    """"each qr we need download option — download as image or PDF — and one
+    consolidated download button."""
+    admin = await make_user("pdf@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "P1"}, headers=h)).json()
+
+    png = await client.get(f"/api/public/table/{t['code']}/qr.png")
+    assert png.status_code == 200
+    assert png.content[:4] == b"\x89PNG"
+
+    one = await client.get(f"/api/ordering/tables/{t['id']}/card.pdf", headers=h)
+    assert one.status_code == 200
+    assert one.content[:4] == b"%PDF"
+
+    every = await client.get("/api/ordering/table-cards.pdf", headers=h)
+    assert every.status_code == 200
+    assert every.content[:4] == b"%PDF"
