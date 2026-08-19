@@ -187,13 +187,13 @@ async def test_setting_one_persons_access_creates_and_attaches_in_one_call(
     h = auth_header(admin)
     r = await client.put(
         f"/api/roles/user/{chef.id}/access",
-        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {"expenses:write": True}},
+        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {"stock:write": True}},
         headers=h,
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["custom_role_id"], "no role was created for them"
-    assert "expenses:write" in body["permissions"]
+    assert "stock:write" in body["permissions"]
 
     # And the person really holds it — not just the response saying so.
     users = (await client.get("/api/auth/users", headers=h)).json()
@@ -210,7 +210,7 @@ async def test_access_matching_the_job_exactly_leaves_no_role_behind(
     h = auth_header(admin)
     await client.put(
         f"/api/roles/user/{chef.id}/access",
-        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {"expenses:write": True}},
+        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {"stock:write": True}},
         headers=h,
     )
     r = await client.put(
