@@ -26,8 +26,8 @@ from app.jobs.router import router as jobs_router
 from app.notifications.router import router as notifications_router
 from app.ordering.rider_router import rider_router
 from app.ordering.router import public_router as ordering_public_router
-from app.ordering.router import table_router as dine_in_table_router
 from app.ordering.router import router as ordering_router
+from app.ordering.router import table_router as dine_in_table_router
 from app.party.router import router as party_router
 from app.payroll.router import router as payroll_router
 from app.platform_admin.router import router as platform_router
