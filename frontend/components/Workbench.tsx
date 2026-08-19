@@ -105,6 +105,33 @@ export function Workbench({
     return () => io.disconnect();
   }, [apply]);
 
+  // IS THE TOOLBAR SHORT ENOUGH TO TUCK?
+  //
+  //   "see top area buttons... let me scroll... now see... worst UI."
+  //
+  // Condensing slides the tools UP beside the title by a fixed distance. That
+  // works for a single row of buttons and fails badly for a tall toolbar —
+  // Tables and Kitchen both have labelled input groups, so most of the row was
+  // left hanging BELOW the rail, on top of the cards. A rail that overlaps the
+  // page is worse than a rail that never shrinks.
+  //
+  // So the tuck is earned, not assumed: measure the row, and only tuck when it
+  // genuinely fits on the title's line. Anything taller just loses its padding.
+  useEffect(() => {
+    const el = rail.current;
+    if (!el) return;
+    const measure = () => {
+      const box = el.querySelector<HTMLElement>(".mise-bench-tools");
+      // One row of controls is ~46px; two rows or labelled groups exceed this.
+      el.setAttribute("data-tall", box && box.offsetHeight > 62 ? "true" : "false");
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    const box = el.querySelector<HTMLElement>(".mise-bench-tools");
+    if (box) ro.observe(box);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div data-bench className="min-w-0">
       {/* One pixel, at the very top. When it leaves the viewport the rail

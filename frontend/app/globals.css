@@ -2589,6 +2589,16 @@ body[data-overlay] .mise-launcher-in {
 /* Condensed: the row collapses to nothing and the tools ride up into the space
    the title is no longer using, scaled down as they go. --bench-rise is the
    distance travelled; it matches the row height they left. */
+/* A TALL toolbar does not tuck. Sliding a two-row control group up beside the
+   title leaves most of it hanging below the rail, painted over the cards —
+   which is exactly the "worst UI" he screenshotted. It keeps its place and
+   simply gives up its padding. */
+.mise-bench-rail[data-condensed="true"][data-tall="true"] .mise-bench-tools {
+  grid-template-rows: 1fr;
+  transform: none;
+  padding-bottom: 0.35rem;
+}
+
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools {
   grid-template-rows: 0fr;
   padding-bottom: 0;
