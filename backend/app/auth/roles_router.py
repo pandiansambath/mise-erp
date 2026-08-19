@@ -180,3 +180,114 @@ def _clip(base_role: str, overrides: dict[str, bool]) -> dict[str, bool]:
     """
     allowed = set(envelope_for(base_role))
     return {k: bool(v) for k, v in overrides.items() if k in allowed}
+
+
+class AccessIn(BaseModel):
+    """What one PERSON may reach. Not a role — a person."""
+
+    #: Their job, which sets the ceiling. Omitted = leave their job alone.
+    base_role: str | None = None
+    #: Permission -> on/off, relative to that job's defaults.
+    overrides: dict[str, bool] = Field(default_factory=dict)
+
+
+@router.put("/user/{user_id}/access")
+async def set_user_access(
+    user_id: uuid.UUID,
+    payload: AccessIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("users:write")),
+) -> dict:
+    """Set what ONE person can reach, in a single call.
+
+    The old shape asked an owner to think like an administrator: pick an
+    archetype, toggle inside its envelope, name and save a ROLE, then go
+    somewhere else and ATTACH it. Four concepts to answer one question — and
+    the proof it did not work is that the only role this hotel ever designed
+    was attached to nobody.
+
+        "creating role for role like manager and assigning to role like manager
+         or staff, it's confusing the laymans. We definitely do something
+         simpler for them to easily do whatever they want."
+
+    So: open a person, change what they can reach, done. The custom role still
+    exists underneath — it is how the permissions are stored and resolved — but
+    it is created, named and attached here rather than being four errands. A
+    role built this way belongs to that person; naming one for reuse stays
+    available and stays optional.
+
+    The archetype ceiling is untouched: `resolve_permissions` still discards
+    anything outside the envelope, so this endpoint cannot grant a waiter the
+    payroll however it is called.
+    """
+    target = await db.get(User, user_id)
+    if target is None or target.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Person not found")
+    if target.role == Role.SUPER_ADMIN.value:
+        # The owner has no ceiling, so there is nothing here to edit — and a
+        # half-applied envelope would be a way to lock the owner out of their
+        # own hotel.
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "The owner can already do everything — there is nothing to change.",
+        )
+
+    base = payload.base_role or target.role
+    if base not in ASSIGNABLE:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That is not a job we can bound.")
+
+    # Their job may change as part of the same action; the ceiling follows it.
+    if payload.base_role and payload.base_role != target.role:
+        target.role = payload.base_role
+
+    allowed = set(envelope_for(base))
+    overrides = {p: v for p, v in payload.overrides.items() if p in allowed}
+    defaults = set(PERMISSIONS.get(base, []))
+    # Only store what actually DIFFERS from the job's defaults, so "this person
+    # is a plain Manager" stays visibly plain instead of accumulating a hundred
+    # redundant switches that later read as deliberate choices.
+    overrides = {p: v for p, v in overrides.items() if v != (p in defaults)}
+
+    cr: CustomRole | None = None
+    if target.custom_role_id:
+        cr = await db.get(CustomRole, target.custom_role_id)
+        if cr is not None and cr.hotel_id != user.hotel_id:
+            cr = None
+
+    if not overrides:
+        # Back to exactly their job. Detach rather than keep an empty role
+        # around pretending to be a decision.
+        target.custom_role_id = None
+    else:
+        who = target.preferred_name or target.email.split("@")[0]
+        if cr is None:
+            cr = CustomRole(
+                hotel_id=user.hotel_id,
+                name=f"{who} — custom access"[:60],
+                base_role=base,
+                overrides=overrides,
+            )
+            db.add(cr)
+            await db.flush()
+        else:
+            cr.base_role = base
+            cr.overrides = overrides
+            cr.is_active = True
+        target.custom_role_id = cr.id
+
+    await audit.record(
+        db,
+        hotel_id=user.hotel_id,
+        user=user,
+        action="user.access",
+        summary=f"Set what {target.preferred_name or target.email} can reach",
+        entity_type="user",
+        entity_id=target.id,
+    )
+    await db.commit()
+    return {
+        "user_id": str(target.id),
+        "base_role": target.role,
+        "custom_role_id": str(target.custom_role_id) if target.custom_role_id else None,
+        "permissions": resolve_permissions(base, overrides),
+    }
