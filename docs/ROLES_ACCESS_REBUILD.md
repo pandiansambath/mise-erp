@@ -68,6 +68,36 @@ none of it in the purchasing material. Wants the same treatment.
 
 ---
 
+## What the live page actually shows (2026-08-19, screenshot)
+
+Driven with his superadmin login, not read from notes:
+
+```
+Who can sign in    13 accounts
+What roles grant    1 role designed
+Who holds one       0 attached        <-- nobody holds it
+```
+
+**The one role that exists — "sub-admin, behaves like manager, 15 things" — is
+attached to NOBODY.** That is his complaint measured rather than described:
+somebody designed a role and it never reached a person, because designing and
+attaching are two separate acts and only the first one feels like the job.
+
+The create flow on screen is exactly the chain he called confusing:
+
+> "Create a role — Start from the job it most resembles. That choice sets the
+>  ceiling — you can turn things off, and on again, but never beyond what that
+>  job should ever reach."
+> Manager · Chef/kitchen · Accounts · Till · Staff · Kiosk
+
+Four concepts (archetype → ceiling → named role → attachment) before anyone can
+answer "what should Ravi be allowed to do?".
+
+**Also visible and wrong:** `Kiosk` is offered as a base role. Per his standing
+decision the kiosk is PIN-only at `<hotel>/kiosk` and **nothing kiosk belongs in
+Roles & Access** — see [[nirai-kiosk-decision]]. Removing it is a bounded first
+step of the rebuild.
+
 ## Order of work
 1. ~~The permissions bug~~ — done, `3d45222`.
 2. Prove what is broken: a live pass creating a hotel, staff and logins.
