@@ -172,3 +172,80 @@ async def test_a_staff_member_cannot_hand_out_roles(
         headers=auth_header(nobody),
     )
     assert res.status_code in (401, 403)
+
+
+# ── One person, one call ──────────────────────────────────────────────────────
+# The old shape needed four: choose an archetype, toggle inside it, name and
+# save a role, then attach it. The proof it did not work is that his hotel had
+# designed exactly one role and attached it to nobody.
+
+
+@pytest.mark.asyncio
+async def test_setting_one_persons_access_creates_and_attaches_in_one_call(
+    client, admin, chef, auth_header
+):
+    h = auth_header(admin)
+    r = await client.put(
+        f"/api/roles/user/{chef.id}/access",
+        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {"expenses:write": True}},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["custom_role_id"], "no role was created for them"
+    assert "expenses:write" in body["permissions"]
+
+    # And the person really holds it — not just the response saying so.
+    users = (await client.get("/api/auth/users", headers=h)).json()
+    mine = [u for u in users if u["id"] == str(chef.id)][0]
+    assert mine["custom_role_id"] == body["custom_role_id"]
+
+
+@pytest.mark.asyncio
+async def test_access_matching_the_job_exactly_leaves_no_role_behind(
+    client, admin, chef, auth_header
+):
+    """Back to plain: detach rather than keep an empty role pretending to be a
+    decision. Otherwise every person accumulates a role that says nothing."""
+    h = auth_header(admin)
+    await client.put(
+        f"/api/roles/user/{chef.id}/access",
+        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {"expenses:write": True}},
+        headers=h,
+    )
+    r = await client.put(
+        f"/api/roles/user/{chef.id}/access",
+        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {}},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["custom_role_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_the_ceiling_still_holds_through_the_new_door(client, admin, auth_header, make_user):
+    """A waiter must not reach hiring however the grant arrives."""
+    waiter = await make_user("waiter@test.com", Role.STAFF.value)
+    h = auth_header(admin)
+    r = await client.put(
+        f"/api/roles/user/{waiter.id}/access",
+        json={"base_role": Role.STAFF.value, "overrides": {"hiring:write": True, "payroll:write": True}},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    perms = r.json()["permissions"]
+    assert "hiring:write" not in perms
+    assert "payroll:write" not in perms
+
+
+@pytest.mark.asyncio
+async def test_the_owner_cannot_be_limited(client, admin, auth_header):
+    """No envelope, no toggle and no guard may fence the owner out of their own
+    hotel — it is the account that rescues every other one."""
+    h = auth_header(admin)
+    r = await client.put(
+        f"/api/roles/user/{admin.id}/access",
+        json={"base_role": Role.MANAGER.value, "overrides": {}},
+        headers=h,
+    )
+    assert r.status_code == 400
