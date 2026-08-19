@@ -1,6 +1,6 @@
 "use client";
 
-import { fmtQty as fmtQtyBase, weighedParts as weighedPartsBase } from "@/lib/quantity";
+import { fmtQty as fmtQtyBase, parseFraction, weighedParts as weighedPartsBase } from "@/lib/quantity";
 
 // Chef-friendly item picker: no dropdowns. Items are grouped into category
 // tabs (vegetables, meat, spices…), shown as big tappable cards with a live
@@ -100,18 +100,47 @@ export function QtyInput({
   const parts = weighedParts(unit);
   const aria = label ?? "Quantity";
   if (!parts) {
+    // FRACTIONS. Half a cauliflower is "1/2" to a chef, never "0.5", and the
+    // field used to strip the slash — so the only way to say it was to do the
+    // division in your head. The chips are there because tapping ½ beats
+    // typing it, and because they teach that the field accepts fractions.
     return (
-      <input
-        value={value}
-        onChange={(e) => onChange(numeric(e.target.value))}
-        inputMode="decimal"
-        placeholder="qty"
-        aria-label={aria}
-        className={
-          plainClassName ??
-          "w-20 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
-        }
-      />
+      <span className="inline-flex items-center gap-1">
+        <input
+          value={value}
+          onChange={(e) => {
+            const raw = e.target.value;
+            // Let a fraction be typed through: "1/" is halfway to "1/2", so
+            // keep it on screen instead of eating the slash.
+            if (/^[\d\s/.]*$/.test(raw)) {
+              const n = parseFraction(raw);
+              onChange(n !== null && !/\/\s*$/.test(raw) ? String(n) : raw);
+            }
+          }}
+          inputMode="text"
+          placeholder="qty"
+          aria-label={aria}
+          className={
+            plainClassName ??
+            "w-20 rounded-lg border border-line-2 bg-glass/5 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-500"
+          }
+        />
+        {!plainClassName && (
+          <span className="flex gap-0.5">
+            {([["¼", 0.25], ["½", 0.5], ["¾", 0.75]] as const).map(([label, v]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => onChange(String(v))}
+                aria-label={`${label} ${unit}`}
+                className="mise-press rounded border border-line-2 px-1.5 py-1 text-[11px] leading-none text-fg-faint hover:border-brand-400/50 hover:text-brand-300"
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+        )}
+      </span>
     );
   }
   const { big, sub } = parts;

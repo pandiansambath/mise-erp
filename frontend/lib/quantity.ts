@@ -108,3 +108,38 @@ export function fmtHours(dec: string | number | null | undefined): string {
   if (!h) return `${m}m`;
   return `${h}h ${m}m`;
 }
+
+/**
+ * "1/2" -> 0.5, "1 1/2" -> 1.5, "3/4" -> 0.75, "2" -> 2.
+ *
+ * His case, and it is not an edge one:
+ *
+ *   "here cauliflower, we don't put 1 full piece for 1 recipe always nah — it's
+ *    depends. So we need to be flexible to the chef; chef may say in grams or
+ *    kg or even piece (but 1/2 piece or 1/4 piece)... not only cauliflower, we
+ *    have so many like this — curry leaves, coriander leaves etc."
+ *
+ * A chef writes half a cauliflower as "1/2", never as "0.5". The field stripped
+ * the slash, so the only way to say it was to do the division yourself — which
+ * is exactly the sort of arithmetic that turns into 0.5 g by mistake.
+ *
+ * Returns null when it is not a number at all, so the caller can leave the box
+ * alone rather than blanking what someone is halfway through typing.
+ */
+export function parseFraction(raw: string): number | null {
+  const t = raw.trim().replace(/\s+/g, " ");
+  if (!t) return null;
+  // "1 1/2" — a whole and a part.
+  const mixed = t.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (mixed) {
+    const d = Number(mixed[3]);
+    return d > 0 ? Number(mixed[1]) + Number(mixed[2]) / d : null;
+  }
+  const frac = t.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (frac) {
+    const d = Number(frac[2]);
+    return d > 0 ? Number(frac[1]) / d : null;
+  }
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}

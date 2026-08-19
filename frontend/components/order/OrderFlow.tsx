@@ -231,7 +231,7 @@ function ItemSheet({
   onAdd: (baseQty: string, from: HTMLElement | null) => void;
 }) {
   const { format } = useCurrency();
-  const sizes = orderSizes(item);
+  const sizes = orderSizes(item, supplier);
 
   // ── HOW MUCH is held in BASE UNITS, always. ──────────────────────────────
   //

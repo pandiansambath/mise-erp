@@ -127,13 +127,23 @@ export function chainSummary(item: Item): string[] {
 
 /** Sizes you can order this item in — the base unit, then the chain.
  *  `levelId` of null means the base unit. */
-export function orderSizes(item: Item): { id: string | null; name: string; base: number }[] {
+export function orderSizes(
+  item: Item,
+  // WHOSE box. Without this the order sheet said "1 box (100 kg at this
+  // supplier)" in its price panel and converted the very same box at the
+  // item's 10 kg — so ordering one box priced 10 kg and charged £100 where the
+  // supplier wanted £1,000. Two halves of one popup, disagreeing tenfold.
+  sup?: SupplierOption | null,
+): { id: string | null; name: string; base: number }[] {
   return [
     { id: null, name: item.unit, base: 1 },
     ...(item.pack_levels ?? []).map((lv: PackLevel) => ({
       id: lv.id,
       name: lv.name,
-      base: parseFloat(lv.base_size) || 1,
+      base:
+        sup && sup.pack_level_id === lv.id
+          ? supplierPackSize(item, sup)
+          : parseFloat(lv.base_size) || 1,
     })),
   ];
 }
