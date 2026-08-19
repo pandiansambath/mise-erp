@@ -32,6 +32,7 @@ import { Card, PageHeader, Spinner } from "@/components/ui";
 import Link from "next/link";
 import { Workbench } from "@/components/Workbench";
 import { AccessSheet, type Person } from "@/components/AccessSheet";
+import { JobSheet, type Job } from "@/components/JobSheet";
 import { SECTIONS, levelOf, positionsFor } from "@/lib/access";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
@@ -56,6 +57,16 @@ export default function StaffPage() {
   const [denied, setDenied] = useState(false);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Person | null>(null);
+  // TWO DOORS, and the first one is the one most people need.
+  //
+  //   "it will make the job tough for layman that they need to keep on doing
+  //    this. So manager means what and all he can access."
+  //
+  // Jobs answers it once for everybody; People is the exception.
+  const [view, setView] = useState<"jobs" | "people">("jobs");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [everything, setEverything] = useState<string[]>([]);
+  const [openJob, setOpenJob] = useState<Job | null>(null);
 
   // add-a-login
   const [adding, setAdding] = useState(false);
@@ -79,6 +90,13 @@ export default function StaffPage() {
         .get<{ roles: CustomRole[] }>("/roles")
         .then((d) => setRoles(d.roles.filter((r) => r.is_active)))
         .catch(() => setRoles([])),
+      api
+        .get<{ jobs: Job[]; everything: string[] }>("/roles/jobs")
+        .then((d) => {
+          setJobs(d.jobs ?? []);
+          setEverything(d.everything ?? []);
+        })
+        .catch(() => setJobs([])),
     ]);
   }
 
@@ -219,7 +237,25 @@ export default function StaffPage() {
       subtitle="Tap a person to set what they can reach."
       tools={
         <div className="flex flex-wrap items-center gap-2">
-          <label className="min-w-[12rem] flex-1">
+          <div className="mise-well flex shrink-0 rounded-xl p-0.5">
+            {([
+              ["jobs", "🧩", "By job"],
+              ["people", "🧑‍🍳", "By person"],
+            ] as const).map(([k, icon, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setView(k)}
+                className={`mise-press rounded-lg px-3 py-2 text-xs font-medium transition ${
+                  view === k ? "bg-brand-600 text-white" : "text-fg-faint hover:text-fg-soft"
+                }`}
+              >
+                <span aria-hidden className="mr-1">{icon}</span>
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className={`min-w-[12rem] flex-1 ${view === "jobs" ? "hidden" : ""}`}>
             <span className="sr-only">Find a person</span>
             <input
               value={q}
@@ -228,7 +264,7 @@ export default function StaffPage() {
               className="mise-well w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
             />
           </label>
-          {canWrite && (
+          {canWrite && view === "people" && (
             <button
               type="button"
               onClick={() => setAdding((a) => !a)}
@@ -321,7 +357,86 @@ export default function StaffPage() {
         </form>
       )}
 
-      {loading ? (
+      {view === "jobs" ? (
+        <>
+          <p className="mb-3 rounded-xl border border-line bg-paper-2/50 px-3.5 py-2.5 text-[11px] leading-relaxed text-fg-soft">
+            Set what a job reaches once, and everyone with that job gets it. Need one person to
+            differ? Switch to <b>By person</b> — their own card always wins.
+          </p>
+          <ul
+            className="mise-stagger grid gap-2.5"
+            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(17rem, 100%), 1fr))" }}
+          >
+            {jobs.map((j) => {
+              const reach = (() => {
+                const held = new Set(j.permissions);
+                let on = 0;
+                let total = 0;
+                for (const sec of SECTIONS)
+                  for (const a of sec.areas) {
+                    total += 1;
+                    if (levelOf(a, held) !== "none") on += 1;
+                  }
+                return { on, total };
+              })();
+              return (
+                <li key={j.key}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setOpenJob(j)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setOpenJob(j);
+                      }
+                    }}
+                    className="mise-card3d mise-press relative w-full cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
+                  >
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-1 ${
+                        j.customised ? "bg-sky-400/60" : "bg-fg-faint/25"
+                      }`}
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-display text-base font-semibold text-fg">
+                        {j.label.split("—")[0].trim()}
+                      </span>
+                      <span aria-hidden className="shrink-0 text-fg-faint">›</span>
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] text-fg-faint">
+                      {j.label.split("—")[1]?.trim() ?? ""}
+                    </p>
+                    <dl className="mt-2.5 space-y-0.5 border-t border-line/50 pt-2 text-[11px]">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">Reaches</dt>
+                        <dd className="tabular-nums text-fg">
+                          {reach.on} of {reach.total} areas
+                        </dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">People</dt>
+                        <dd className="tabular-nums text-fg-soft">{j.people}</dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">Set up</dt>
+                        <dd>
+                          {j.customised ? (
+                            <span className="mise-tone-info">your own</span>
+                          ) : (
+                            <span className="text-fg-soft">DineAI default</span>
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : loading ? (
         <div className="grid place-items-center py-16">
           <Spinner />
         </div>
@@ -434,6 +549,12 @@ export default function StaffPage() {
       )}
 
       <AccessSheet person={open} onClose={() => setOpen(null)} onSaved={load} />
+      <JobSheet
+        job={openJob}
+        everything={everything}
+        onClose={() => setOpenJob(null)}
+        onSaved={load}
+      />
     </Workbench>
   );
 }

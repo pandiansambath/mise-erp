@@ -13,14 +13,21 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.auth.deps import require
-from app.auth.models import CustomRole, Role, User
+from app.auth.models import CustomRole, Role, RoleDefault, User
 from app.core.database import get_db
-from app.core.rbac import PERMISSIONS, envelope_for, resolve_permissions
+from app.core.rbac import ENVELOPES, PERMISSIONS, envelope_for, resolve_permissions
+
+# Every permission the app knows about. The owner is entitled to see the whole
+# board — the envelope becomes a hint, not a fence.
+ALL_PERMISSIONS = sorted(
+    {p for perms in PERMISSIONS.values() for p in perms if p != "*"}
+    | {p for perms in ENVELOPES.values() for p in perms if p != "*"}
+)
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -291,3 +298,152 @@ async def set_user_access(
         "custom_role_id": str(target.custom_role_id) if target.custom_role_id else None,
         "permissions": resolve_permissions(base, overrides),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# JOBS — what a role reaches, set ONCE
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#   "you gave for each page access, fine... but it will make the job tough for
+#    layman that they need to keep on doing this. So manager means what and all
+#    he can access — read only or write only or both... super admin can choose
+#    this... so please don't restrict any, let super admin do anything he wants."
+#
+# Per-person was the wrong unit of work. Answering "what can a manager do" once,
+# and having every manager inherit it, is the difference between a setting and a
+# chore. Per-person editing stays for the exceptions.
+
+
+class JobIn(BaseModel):
+    #: The COMPLETE list this job reaches at this hotel.
+    permissions: list[str] = Field(default_factory=list)
+
+
+@router.get("/jobs")
+async def list_jobs(
+    db: AsyncSession = Depends(get_db), user: User = Depends(require("users:read"))
+) -> dict:
+    """Every job, what it reaches here, and how many people hold it.
+
+    `everything` is the full catalogue rather than each job's envelope, because
+    the owner is entitled to see the whole board before deciding. The envelope
+    ships as `suggested` so the UI can WARN when something unusual is switched
+    on, without ever refusing.
+    """
+    rows = {
+        r.base_role: r
+        for r in (
+            await db.execute(select(RoleDefault).where(RoleDefault.hotel_id == user.hotel_id))
+        ).scalars()
+    }
+    counts = dict(
+        (
+            await db.execute(
+                select(User.role, func.count())
+                .where(User.hotel_id == user.hotel_id, User.is_active.is_(True))
+                .group_by(User.role)
+            )
+        ).all()
+    )
+    return {
+        "everything": sorted(ALL_PERMISSIONS),
+        "jobs": [
+            {
+                "key": key,
+                "label": _LABELS.get(key, key.replace("_", " ").title()),
+                "permissions": (
+                    list(rows[key].permissions or [])
+                    if key in rows
+                    else sorted(PERMISSIONS.get(key, []))
+                ),
+                # What we ship, so the UI can say "you have changed this".
+                "shipped": sorted(PERMISSIONS.get(key, [])),
+                # What we consider ordinary for the job — a hint, never a wall.
+                "suggested": envelope_for(key),
+                "customised": key in rows,
+                "people": counts.get(key, 0),
+            }
+            for key in ASSIGNABLE
+            if key != Role.KIOSK.value
+        ],
+    }
+
+
+@router.put("/jobs/{base_role}")
+async def set_job(
+    base_role: str,
+    payload: JobIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("users:write")),
+) -> dict:
+    """Say what this job reaches, for everyone who holds it.
+
+    NOT clipped to the archetype envelope. That wall exists to make an unsafe
+    grant unrepresentable, which is a good instinct with the wrong owner: the
+    person hitting it bought the software and is telling us what their manager
+    actually does. The UI warns; the server obeys.
+
+    Only the OWNER may do this. Letting a manager widen the manager role would
+    be a manager promoting themselves, which is the one grant that cannot be
+    walked back by anybody but the owner.
+    """
+    if user.role != Role.SUPER_ADMIN.value:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only the owner can change what a job reaches.",
+        )
+    if base_role not in ASSIGNABLE or base_role == Role.KIOSK.value:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That is not a job.")
+
+    # Unknown permission strings are dropped — a typo must not become a grant
+    # that nothing in the app can ever satisfy or revoke.
+    wanted = sorted({p for p in payload.permissions if p in ALL_PERMISSIONS})
+
+    row = (
+        await db.execute(
+            select(RoleDefault).where(
+                RoleDefault.hotel_id == user.hotel_id, RoleDefault.base_role == base_role
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        row = RoleDefault(hotel_id=user.hotel_id, base_role=base_role, permissions=wanted)
+        db.add(row)
+    else:
+        row.permissions = wanted
+
+    await audit.record(
+        db,
+        hotel_id=user.hotel_id,
+        user=user,
+        action="role.job",
+        summary=f"Set what a {_LABELS.get(base_role, base_role).split('—')[0].strip()} can reach",
+        entity_type="role",
+        entity_id=None,
+    )
+    await db.commit()
+    return {"base_role": base_role, "permissions": wanted}
+
+
+@router.delete("/jobs/{base_role}")
+async def reset_job(
+    base_role: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("users:write")),
+) -> dict:
+    """Put a job back to what DineAI ships. Undo for a bad afternoon."""
+    if user.role != Role.SUPER_ADMIN.value:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the owner can change what a job reaches."
+        )
+    row = (
+        await db.execute(
+            select(RoleDefault).where(
+                RoleDefault.hotel_id == user.hotel_id, RoleDefault.base_role == base_role
+            )
+        )
+    ).scalar_one_or_none()
+    if row is not None:
+        await db.delete(row)
+        await db.commit()
+    return {"base_role": base_role, "permissions": sorted(PERMISSIONS.get(base_role, []))}

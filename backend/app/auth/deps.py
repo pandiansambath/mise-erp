@@ -90,21 +90,61 @@ def _maybe_renew(response: Response, payload: dict, user: User) -> None:
 async def effective_permissions(db: AsyncSession, user: User) -> list[str] | None:
     """This user's permissions once their custom role is taken into account.
 
-    Returns None when they have no custom role, meaning "just use the base
-    archetype" — so the common path costs no extra query.
+    Order of authority, narrowest first:
+      1. their own per-person tweaks (the exception),
+      2. what THIS hotel says the job reaches (set once, in Roles & Access),
+      3. what we ship as that job's defaults.
+
+    Returns None only when nothing above the code's defaults applies.
     """
-    crid = getattr(user, "custom_role_id", None)
-    if not crid:
-        return None
-    from app.auth.models import CustomRole
+    from sqlalchemy import select
+
+    from app.auth.models import CustomRole, RoleDefault
     from app.core.rbac import resolve_permissions
 
+    # WHAT THIS HOTEL SAYS THE JOB DOES, if they have said anything.
+    #
+    #   "so manager means what and all he can access... super admin can choose
+    #    this."
+    #
+    # Set once, inherited by every holder of that job. It sits UNDER any
+    # per-person tweak, so the exception still wins.
+    async def job_defaults(role: str) -> list[str] | None:
+        row = (
+            await db.execute(
+                select(RoleDefault).where(
+                    RoleDefault.hotel_id == user.hotel_id, RoleDefault.base_role == role
+                )
+            )
+        ).scalar_one_or_none()
+        return list(row.permissions or []) if row is not None else None
+
+    crid = getattr(user, "custom_role_id", None)
+    if not crid:
+        # No per-person role: the hotel's own answer for their job, else ours.
+        return await job_defaults(user.role)
+
     cr = await db.get(CustomRole, crid)
-    # A deleted or deactivated custom role must fall back to the BASE archetype,
-    # never to "allow" — losing the row must never widen someone's access.
+    # A deleted or deactivated custom role must fall back to the job, never to
+    # "allow" — losing the row must never widen someone's access.
     if cr is None or not cr.is_active or cr.hotel_id != user.hotel_id:
-        return None
-    return resolve_permissions(cr.base_role or user.role, cr.overrides or {})
+        return await job_defaults(user.role)
+
+    base_role = cr.base_role or user.role
+    base = await job_defaults(base_role)
+    if base is None:
+        return resolve_permissions(base_role, cr.overrides or {})
+
+    # The hotel has redefined this job, so the person's tweaks apply on top of
+    # THAT rather than on top of our shipped defaults — otherwise editing one
+    # switch would silently snap everything else back to our idea of a manager.
+    effective = set(base)
+    for perm, on in (cr.overrides or {}).items():
+        if on:
+            effective.add(perm)
+        else:
+            effective.discard(perm)
+    return sorted(effective)
 
 
 def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
