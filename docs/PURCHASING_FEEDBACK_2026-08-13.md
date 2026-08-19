@@ -527,11 +527,17 @@ first. It needs keying on **(item, vendor, form)** — the same triple the price
 now lives on — and the card must name the supplier so two "Dragon fruit" lines
 are tellable apart. Touches the basket model, the totals and the submit payload.
 
-**⚠ NOT CONFIRMED — check this first.** `orderSizes` now takes the supplier and
-`ItemSheet` passes it (`supplier={supplierFor(openItem.id)}`, line 815), and the
-category CARDS price RUDRA's box correctly at **£1,000**. But on the live popup
-after the deploy the converter still read *"1 box = 10 kg"* and the button still
-said *"Add to basket · £100.00"*. So either `supplierFor` is handing the sheet a
-different supplier than the card shows, or the size is being taken from the
-item's chain somewhere else in that sheet. **This is the number that decides
-what you pay — verify before trusting it.**
+**✅ CONFIRMED BY SCREENSHOT.** At quantity 1 the popup reads `1 box = 100 kg`,
+`£1,000.00`, `Add to basket · £1,000.00`. Every number agrees.
+
+**I nearly recorded this as still broken, and the reason matters.** My text
+check saw `£100.00` and `= 10 kg` and concluded the bug survived. It had not:
+the basket already held 10 kg, so the popup was showing **0.1 of a 100 kg box**
+— £100 is correct arithmetic for 0.1 box. Reading the numbers without the
+picture, I could not tell a wrong price from a right one for a fractional
+quantity.
+
+**RULE: take the screenshot and LOOK at it.** Images can be read directly. Three
+bugs this month passed green text assertions, and this time a green assertion
+nearly created a bug report for working code — the same blindness in both
+directions.
