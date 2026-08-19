@@ -30,6 +30,10 @@ type MenuItem = {
   category: string;
   emoji: string | null;
   has_photo?: boolean;
+  /** Can it be added right now? */
+  orderable?: boolean;
+  /** If not: why, and when it is back. */
+  unavailable_reason?: string | null;
 };
 type TableInfo = { label: string; code: string; seats: number };
 type HotelInfo = {
@@ -312,7 +316,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           {shown.map((m) => {
             const q = cart[m.id] ?? 0;
             return (
-              <li key={m.id} className="mise-card3d overflow-hidden p-3">
+              <li
+                key={m.id}
+                className={`mise-card3d overflow-hidden p-3 ${m.orderable === false ? "opacity-60" : ""}`}
+              >
                 <div className="flex gap-3">
                   <span
                     aria-hidden
@@ -344,7 +351,15 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                       <span className="font-display text-sm font-semibold text-fg">
                         {money(m.price)}
                       </span>
-                      {q === 0 ? (
+                      {/* OFF THE MENU RIGHT NOW — said, not hidden. A dish that
+                          silently disappears reads as "they don't do that";
+                          one that says "served 07:00–11:00" brings them back
+                          tomorrow. */}
+                      {m.orderable === false ? (
+                        <span className="mise-tone-warn rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-medium">
+                          {m.unavailable_reason ?? "Not available"}
+                        </span>
+                      ) : q === 0 ? (
                         <button
                           type="button"
                           onClick={() => bump(m.id, 1)}

@@ -10,17 +10,19 @@ of ordering) — menus change, history must not.
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
     Uuid,
     func,
@@ -46,6 +48,21 @@ class MenuItem(Base):
     # Hotel-uploaded dish photo (storage key). Falls back to the bundled library.
     photo_key: Mapped[str | None] = mapped_column(String(255))
     is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: WHY it is or is not on the menu. One boolean was pretending to be four
+    #: different facts, and they behave differently:
+    #:
+    #:   available       on the menu
+    #:   out_of_stock    temporarily gone; a person puts it back
+    #:   finished_today  gone until tomorrow; CLEARS ITSELF overnight, because
+    #:                   "we ran out of biryani" must not still be true Tuesday
+    #:   not_served      off the menu but kept, so old orders still name it
+    availability: Mapped[str] = mapped_column(String(20), nullable=False, default="available")
+    #: The day `finished_today` was set, so it can expire without anybody
+    #: remembering to undo it.
+    sold_out_on: Mapped[date | None] = mapped_column(Date)
+    #: Served only between these, hotel-local. Both NULL = all day.
+    serve_from: Mapped[time | None] = mapped_column(Time)
+    serve_to: Mapped[time | None] = mapped_column(Time)
     recipe_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recipes.id"))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(

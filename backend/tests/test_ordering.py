@@ -435,3 +435,89 @@ async def test_the_table_card_renders_a_real_svg(client, make_user, auth_header)
     body = r.text
     assert "xmlns" in body[:200], "an <img> will refuse an SVG with no namespace"
     assert r.headers["content-type"].startswith("image/svg+xml")
+
+
+# ── Menu availability: four facts, not one boolean ───────────────────────────
+
+
+def test_finished_today_clears_itself_overnight():
+    """"we ran out of biryani" must not still be true on Tuesday.
+
+    Nobody comes in at 6am to un-tick yesterday's sold-out flag, and if the
+    software needs them to, the feature rots into "everything is off the menu".
+    """
+    from datetime import date, timedelta
+
+    from app.ordering import availability as av
+
+    today = date(2026, 8, 19)
+    assert av.effective_state(av.FINISHED_TODAY, today, today) == av.FINISHED_TODAY
+    assert av.effective_state(av.FINISHED_TODAY, today - timedelta(days=1), today) == av.AVAILABLE
+
+
+def test_serving_hours_can_cross_midnight():
+    """A late menu running 22:00-02:00 is exactly the case a naive
+    from <= now <= to gets silently wrong."""
+    from datetime import time
+
+    from app.ordering import availability as av
+
+    late_from, late_to = time(22, 0), time(2, 0)
+    assert av.within_hours(time(23, 30), late_from, late_to)
+    assert av.within_hours(time(1, 0), late_from, late_to)
+    assert not av.within_hours(time(15, 0), late_from, late_to)
+    # ...and the ordinary way round still works.
+    assert av.within_hours(time(9, 0), time(7, 0), time(11, 0))
+    assert not av.within_hours(time(15, 0), time(7, 0), time(11, 0))
+
+
+def test_a_dish_that_is_off_says_why_and_when_it_is_back():
+    """Hiding is the lazy option and it costs a sale: a dish that silently
+    vanishes reads as "they don't do that"."""
+    from datetime import date, time
+    from types import SimpleNamespace
+
+    from app.ordering import availability as av
+
+    today = date(2026, 8, 19)
+    dosa = SimpleNamespace(
+        availability=av.AVAILABLE, sold_out_on=None, serve_from=time(7, 0), serve_to=time(11, 0)
+    )
+    assert av.why_not(dosa, today, time(9, 0)) is None
+    assert "07:00" in (av.why_not(dosa, today, time(16, 0)) or "")
+
+    gone = SimpleNamespace(
+        availability=av.FINISHED_TODAY, sold_out_on=today, serve_from=None, serve_to=None
+    )
+    assert "tomorrow" in (av.why_not(gone, today, time(16, 0)) or "")
+
+
+@pytest.mark.asyncio
+async def test_a_stale_page_cannot_order_what_is_off(client, make_user, auth_header):
+    """A menu left open on a table since breakfast must not be able to order the
+    dosa at four o'clock."""
+    admin = await make_user("avail@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "A1"}, headers=h)).json()
+    dish = (
+        await client.post("/api/ordering/menu", json={"name": "Dosa", "price": "5.00"}, headers=h)
+    ).json()
+
+    off = await client.patch(
+        f"/api/ordering/menu/{dish['id']}", json={"availability": "out_of_stock"}, headers=h
+    )
+    assert off.status_code == 200, off.text
+    assert off.json()["availability"] == "out_of_stock"
+
+    placed = await client.post(
+        f"/api/public/table/{t['code']}",
+        json={"items": [{"menu_item_id": dish["id"], "quantity": 1}]},
+    )
+    assert placed.status_code == 422, "an out-of-stock dish was still orderable"
+
+    # ...and the diner is TOLD, rather than the dish vanishing.
+    menu = (await client.get(f"/api/public/table/{t['code']}")).json()["menu"]
+    mine = [m for m in menu if m["id"] == dish["id"]]
+    assert mine, "the dish vanished instead of explaining itself"
+    assert mine[0]["orderable"] is False
+    assert "stock" in (mine[0]["unavailable_reason"] or "").lower()
