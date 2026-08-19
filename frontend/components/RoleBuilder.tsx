@@ -58,7 +58,18 @@ export function RoleBuilder() {
 
   useEffect(() => {
     Promise.all([
-      api.get<{ archetypes: Archetype[] }>("/roles/archetypes").then((d) => setArchetypes(d.archetypes)),
+      api.get<{ archetypes: Archetype[] }>("/roles/archetypes").then((d) =>
+        // THE KIOSK IS NOT A JOB. It is the PIN screen on the tablet by the
+        // door, its permissions are sealed server-side, and nobody signs in as
+        // one — so offering it as something to build a role on top of is an
+        // invitation to a dead end. His standing decision: nothing kiosk in
+        // Roles & Access.
+        //
+        // Filtered HERE and not removed from the backend on purpose: Role.KIOSK
+        // is what the tablet login actually uses, so deleting it would break
+        // the kiosk. It simply stops being offered as a starting point.
+        setArchetypes(d.archetypes.filter((a) => !/kiosk/i.test(`${a.key} ${a.label}`))),
+      ),
       api.get<{ roles: Role[] }>("/roles").then((d) => setRoles(d.roles)),
     ])
       .catch(() => setMsg("Could not load roles."))
