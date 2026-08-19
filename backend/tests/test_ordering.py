@@ -696,3 +696,98 @@ async def test_reading_a_menu_writes_nothing(client, make_user, auth_header):
 
     after = (await client.get("/api/ordering/menu", headers=h)).json()
     assert len(after) == len(before), "reading a menu wrote to the menu"
+
+
+@pytest.mark.asyncio
+async def test_a_nutrition_question_is_looked_up_not_remembered(
+    client, make_user, auth_header, monkeypatch
+):
+    """"let ai use our search api and get the real datas instead of hallucination."
+
+    A model asked for calories always produces something plausible; only a
+    source makes it true. So the search runs first and its findings are handed
+    over as facts — this proves they reach the model.
+    """
+    seen: dict = {}
+
+    async def fake_search(query, count=5):
+        seen["query"] = query
+        return {"results": [{"title": "Butter chicken nutrition", "snippet": "~490 kcal"}]}
+
+    def fake_ask(question, **kw):
+        seen["context"] = kw.get("context", "")
+        return "Roughly 490 kcal by published figures — a rich one."
+
+    from app.assistant import bedrock, websearch
+
+    monkeypatch.setattr(websearch, "search", fake_search)
+    monkeypatch.setattr(bedrock, "ask", fake_ask)
+
+    admin = await make_user("nut@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "N1"}, headers=h)).json()
+    dish = (
+        await client.post(
+            "/api/ordering/menu", json={"name": "Butter Chicken", "price": "10.95"}, headers=h
+        )
+    ).json()
+
+    r = await client.post(
+        f"/api/public/table/{t['code']}/ask",
+        json={"question": "how many calories and how much fat?", "dish_id": dish["id"]},
+    )
+    assert r.status_code == 200, r.text
+    assert "butter chicken" in seen["query"].lower(), "the dish was not searched for"
+    assert "490" in seen["context"], "the search findings never reached the model"
+
+
+@pytest.mark.asyncio
+async def test_a_non_nutrition_question_does_not_search(
+    client, make_user, auth_header, monkeypatch
+):
+    """A web lookup on 'what are you known for' would drown the hotel's own
+    words in whatever the internet says about a similarly-named restaurant."""
+    called = {"n": 0}
+
+    async def fake_search(query, count=5):
+        called["n"] += 1
+        return {"results": []}
+
+    from app.assistant import bedrock, websearch
+
+    monkeypatch.setattr(websearch, "search", fake_search)
+    monkeypatch.setattr(bedrock, "ask", lambda q, **kw: "We are known for our dosa.")
+
+    admin = await make_user("nosearch@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "N2"}, headers=h)).json()
+
+    r = await client.post(
+        f"/api/public/table/{t['code']}/ask", json={"question": "What are you known for?"}
+    )
+    assert r.status_code == 200, r.text
+    assert called["n"] == 0, "it searched the web for a question about the hotel itself"
+
+
+@pytest.mark.asyncio
+async def test_a_switched_off_model_says_so_plainly(client, make_user, auth_header, monkeypatch):
+    """A vague apology sends the OWNER hunting through logs for a one-click fix."""
+
+    def boom(question, **kw):
+        raise RuntimeError("Claude isn't switched on for this AWS account yet")
+
+    from app.assistant import bedrock
+
+    monkeypatch.setattr(bedrock, "ask", boom)
+
+    admin = await make_user("off@ai.test", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "N3"}, headers=h)).json()
+
+    r = await client.post(f"/api/public/table/{t['code']}/ask", json={"question": "hello there"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is False
+    assert body["reason"] == "model_access"
+    # The diner still gets a warm line, never a stack trace.
+    assert "Need someone" in body["answer"]
