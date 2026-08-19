@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -22,6 +22,36 @@ class Role(str, enum.Enum):
     # reach nothing else. Listed last because it is not a rung on the ladder —
     # it is a different kind of thing.
     KIOSK = "KIOSK"
+
+
+class RoleDefault(Base):
+    """What a JOB reaches at THIS hotel.
+
+        "so manager means what and all he can access... super admin can choose
+         this... so please don't restrict any, let super admin do anything he
+         wants."
+
+    Answering "what can a manager do" once, so every manager inherits it, is
+    the difference between a setting and a chore. Per-person editing stays for
+    the exceptions; this stops it being the only door.
+
+    `permissions` is the COMPLETE list rather than a diff against the code's
+    defaults, deliberately: a hotel that has said what a manager does should not
+    have that answer change underneath them the next time we ship a new default.
+    """
+
+    __tablename__ = "role_defaults"
+    __table_args__ = (UniqueConstraint("hotel_id", "base_role", name="uq_role_default"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    base_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    permissions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class CustomRole(Base):

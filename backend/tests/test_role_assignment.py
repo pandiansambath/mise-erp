@@ -249,3 +249,71 @@ async def test_the_owner_cannot_be_limited(client, admin, auth_header):
         headers=h,
     )
     assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_a_job_can_be_set_once_and_everyone_inherits(client, admin, chef, auth_header):
+    """"manager means what and all he can access... super admin can choose this."
+
+    Set the job, and every holder of it inherits — no per-person visit."""
+    h = auth_header(admin)
+    r = await client.put(
+        f"/api/roles/jobs/{Role.KITCHEN_MANAGER.value}",
+        json={"permissions": ["recipes:write", "payroll:read", "reports:read"]},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert "payroll:read" in r.json()["permissions"]
+
+    # The chef holds that job and has no personal role, so they inherit it.
+    me = await client.get("/api/auth/me", headers=auth_header(chef))
+    assert me.status_code == 200, me.text
+    assert "payroll:read" in me.json()["permissions"], "the job's setting never reached them"
+
+
+@pytest.mark.asyncio
+async def test_the_owner_is_not_fenced_in_by_the_envelope(client, admin, auth_header):
+    """"so please dont restrci any please...let super admin can do anything he wnat."
+
+    reports:write is outside a Till worker's envelope. The UI warns; the server
+    obeys, because the person setting it owns the hotel."""
+    h = auth_header(admin)
+    r = await client.put(
+        f"/api/roles/jobs/{Role.CASHIER.value}",
+        json={"permissions": ["sales:write", "reports:write"]},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert "reports:write" in r.json()["permissions"], "the envelope is still a wall"
+
+
+@pytest.mark.asyncio
+async def test_only_the_owner_may_redefine_a_job(client, make_user, auth_header):
+    """A manager widening the manager role is a manager promoting themselves —
+    the one grant nobody but the owner can walk back."""
+    mgr = await make_user("mgr-job@test.com", Role.MANAGER.value)
+    r = await client.put(
+        f"/api/roles/jobs/{Role.MANAGER.value}",
+        json={"permissions": ["payroll:write"]},
+        headers=auth_header(mgr),
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_persons_own_tweak_still_beats_the_job(client, admin, chef, auth_header):
+    """The exception has to win, or per-person editing means nothing."""
+    h = auth_header(admin)
+    await client.put(
+        f"/api/roles/jobs/{Role.KITCHEN_MANAGER.value}",
+        json={"permissions": ["recipes:write"]},
+        headers=h,
+    )
+    await client.put(
+        f"/api/roles/user/{chef.id}/access",
+        json={"base_role": Role.KITCHEN_MANAGER.value, "overrides": {"stock:write": True}},
+        headers=h,
+    )
+    me = (await client.get("/api/auth/me", headers=auth_header(chef))).json()
+    assert "stock:write" in me["permissions"], "their own tweak was lost"
+    assert "recipes:write" in me["permissions"], "the job underneath was lost"

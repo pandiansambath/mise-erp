@@ -1,4 +1,4 @@
-import { test, type Page } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 const S = "e2e/__shots__";
 async function login(page: Page) {
   await page.goto("/login");
@@ -10,13 +10,17 @@ async function login(page: Page) {
   await page.reload();
   await page.waitForTimeout(2000);
 }
-test("kitchen + tables", async ({ page }) => {
+test("the printable cards", async ({ page }) => {
   test.setTimeout(240_000);
   await login(page);
-  await page.goto("/kitchen");
-  await page.waitForTimeout(4500);
-  await page.screenshot({ path: `${S}/72-kitchen.png` });
   await page.goto("/tables");
-  await page.waitForTimeout(5000);
-  await page.screenshot({ path: `${S}/73-tables.png` });
+  await page.waitForTimeout(6000);
+  await page.screenshot({ path: `${S}/80-tables.png` });
+  // Did the QR images actually decode?
+  const broken = await page.evaluate(() =>
+    [...document.querySelectorAll("img")].filter((i) => !i.complete || i.naturalWidth === 0).length,
+  );
+  const total = await page.locator("img").count();
+  console.log(`images: ${total}, broken: ${broken}`);
+  expect(broken, "QR images still not rendering").toBe(0);
 });
