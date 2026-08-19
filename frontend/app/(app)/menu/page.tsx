@@ -14,7 +14,7 @@
 // kitchen that has built its recipes should not retype them; a kitchen that
 // wants to add a special for tonight should not have to build a recipe first.
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, postForm } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
 import { useConfirm } from "@/components/confirm";
@@ -58,6 +58,13 @@ export default function MenuPage() {
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", price: "", category: "Mains", prep: "" });
+  // What the AI read out of an uploaded menu. NOTHING is saved until these are
+  // confirmed — a model that can silently add twenty dishes priced from a
+  // blurry photo is a mess somebody unpicks dish by dish.
+  const [proposed, setProposed] = useState<
+    { name: string; price: string; category: string; already_on_menu?: boolean }[] | null
+  >(null);
+  const [reading, setReading] = useState(false);
 
   function load() {
     return api
@@ -122,6 +129,46 @@ export default function MenuPage() {
     }
   }
 
+  /** "he can upload the menu so that our AI can see the menu photo or excel." */
+  async function readMenu(file: File) {
+    setReading(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const d = await postForm<{ items: typeof proposed; found: number }>(
+        "/ordering/menu/read",
+        fd,
+      );
+      setProposed(d.items ?? []);
+      if (!d.found) setErr("I could not find any dishes with a price in that file.");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not read that menu.");
+    } finally {
+      setReading(false);
+    }
+  }
+
+  async function addProposed() {
+    const wanted = (proposed ?? []).filter((p) => !p.already_on_menu);
+    setBusy("bulk");
+    try {
+      for (const p of wanted) {
+        await api
+          .post("/ordering/menu", {
+            name: p.name,
+            price: p.price,
+            category: p.category || "Mains",
+          })
+          .catch(() => {});
+      }
+      setProposed(null);
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function remove(m: MenuItem) {
     const ok = await confirm({
       title: `Remove ${m.name}?`,
@@ -172,6 +219,22 @@ export default function MenuPage() {
               >
                 {adding ? "Close" : "＋ Add a dish"}
               </button>
+              <label
+                className="mise-press mise-raised cursor-pointer rounded-xl px-4 py-2.5 text-sm font-medium text-fg-soft"
+                title="A photo of your menu, or a spreadsheet — DineAI reads it and you confirm"
+              >
+                {reading ? "Reading…" : "📷 Read a menu"}
+                <input
+                  type="file"
+                  accept="image/*,.csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) readMenu(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
               <button
                 type="button"
                 onClick={importRecipes}
@@ -197,6 +260,78 @@ export default function MenuPage() {
         <p className="mb-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
           {err}
         </p>
+      )}
+
+      {/* THE PROPOSAL. Read, shown, and only written when a person says so. */}
+      {proposed && (
+        <div className="mise-card3d mise-pop mb-4 p-4">
+          <p className="text-sm font-semibold text-fg">
+            Found {proposed.length} dish{proposed.length === 1 ? "" : "es"}
+          </p>
+          <p className="mt-0.5 text-[11px] text-fg-faint">
+            Nothing is saved yet. Check every price — a misread menu becomes a wrong bill.
+          </p>
+          <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto">
+            {proposed.map((p, i) => (
+              <li
+                key={i}
+                className="flex flex-wrap items-center gap-2 border-b border-line/50 py-1.5 text-sm last:border-0"
+              >
+                <input
+                  value={p.name}
+                  onChange={(e) =>
+                    setProposed((ps) =>
+                      (ps ?? []).map((x, k) => (k === i ? { ...x, name: e.target.value } : x)),
+                    )
+                  }
+                  className="mise-well min-w-0 flex-1 rounded-lg px-2 py-1 text-sm outline-none"
+                />
+                <input
+                  value={p.price}
+                  onChange={(e) =>
+                    setProposed((ps) =>
+                      (ps ?? []).map((x, k) =>
+                        k === i ? { ...x, price: e.target.value.replace(/[^\d.]/g, "") } : x,
+                      ),
+                    )
+                  }
+                  className="mise-well w-20 rounded-lg px-2 py-1 text-right text-sm outline-none"
+                />
+                <input
+                  value={p.category}
+                  onChange={(e) =>
+                    setProposed((ps) =>
+                      (ps ?? []).map((x, k) => (k === i ? { ...x, category: e.target.value } : x)),
+                    )
+                  }
+                  className="mise-well w-28 rounded-lg px-2 py-1 text-sm outline-none"
+                />
+                {p.already_on_menu && (
+                  <span className="mise-tone-warn text-[10px]">already on the menu</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={addProposed}
+              disabled={busy === "bulk"}
+              className="mise-press rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {busy === "bulk"
+                ? "Adding…"
+                : `Add ${proposed.filter((p) => !p.already_on_menu).length} to the menu`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setProposed(null)}
+              className="mise-press rounded-xl border border-line px-3 py-2 text-sm text-fg-soft"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
       )}
 
       {adding && canWrite && (

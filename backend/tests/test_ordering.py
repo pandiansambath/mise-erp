@@ -638,3 +638,61 @@ async def test_the_cards_come_off_the_screen(client, make_user, auth_header):
     every = await client.get("/api/ordering/table-cards.pdf", headers=h)
     assert every.status_code == 200
     assert every.content[:4] == b"%PDF"
+
+
+def test_a_real_hotels_spreadsheet_is_read_forgivingly():
+    """"he can upload the menu so that our AI can see the menu photo or excel."
+
+    A spreadsheet is already structured, so we read it ourselves rather than pay
+    a model to guess at a column of numbers. Real ones say "Dish" and "Rate",
+    carry currency symbols, and have blank rows in the middle.
+    """
+    from app.ordering.router import _rows_from_sheet
+
+    csv = (
+        "Dish,Rate,Section\n"
+        "Masala Dosa,7.50,Breakfast\n"
+        "Chicken 65,\u00a38.95,Starters\n"
+        ",,\n"
+        "Free Water,0,Drinks\n"
+    ).encode()
+    out = _rows_from_sheet(csv, "menu.csv")
+    names = [r["name"] for r in out]
+    assert names == ["Masala Dosa", "Chicken 65"], names
+    # The currency symbol is stripped rather than swallowing the number.
+    assert out[1]["price"] == "8.95"
+    assert out[0]["category"] == "Breakfast"
+    # A dish priced zero is skipped: a £0 menu item is worse than a missing one.
+    assert "Free Water" not in names
+
+
+def test_a_sheet_with_no_headers_still_reads():
+    """Plenty of kitchens keep a list with no header row at all."""
+    from app.ordering.router import _rows_from_sheet
+
+    out = _rows_from_sheet(b"Idli,3.00\nVada,2.50\n", "list.csv")
+    assert [r["name"] for r in out] == ["Idli", "Vada"]
+    assert out[0]["category"] == "Mains"
+
+
+@pytest.mark.asyncio
+async def test_reading_a_menu_writes_nothing(client, make_user, auth_header):
+    """A model that can silently add twenty dishes priced off a blurry photo is
+    a mess somebody unpicks dish by dish. It proposes; a person confirms."""
+    admin = await make_user("read@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    before = (await client.get("/api/ordering/menu", headers=h)).json()
+
+    r = await client.post(
+        "/api/ordering/menu/read",
+        files={"file": ("menu.csv", b"Dish,Rate\nPongal,4.50\n", "text/csv")},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["found"] == 1
+    assert body["items"][0]["name"] == "Pongal"
+    assert body["items"][0]["already_on_menu"] is False
+
+    after = (await client.get("/api/ordering/menu", headers=h)).json()
+    assert len(after) == len(before), "reading a menu wrote to the menu"
