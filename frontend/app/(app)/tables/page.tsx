@@ -10,7 +10,7 @@
 // printed sheet is the point of the page: a QR that never leaves the screen has
 // automated nothing.
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, API_BASE } from "@/lib/api";
+import { api, ApiError, API_BASE, downloadFile } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
 import { useConfirm } from "@/components/confirm";
@@ -43,6 +43,8 @@ export default function TablesPage() {
   const [seats, setSeats] = useState("4");
   const [oneSeats, setOneSeats] = useState("4");
   const [printing, setPrinting] = useState(false);
+  // When set, only this card is on the printed sheet.
+  const [only, setOnly] = useState<string | null>(null);
 
   function load() {
     return api
@@ -106,6 +108,29 @@ export default function TablesPage() {
     await load();
   }
 
+  /** PDFs come from the server, so they need the auth header a plain <a> has
+   *  no way to send. */
+  async function downloadPdf(path: string, filename: string) {
+    setErr(null);
+    try {
+      await downloadFile(path, filename);
+    } catch {
+      setErr("Could not build that PDF just now.");
+    }
+  }
+
+  /** Print ONE card: mark it, print, unmark. Cheaper and more predictable than
+   *  opening a second window that has none of the app's styles. */
+  function printOne(t: Table) {
+    setOnly(t.id);
+    document.documentElement.classList.add("mise-printing");
+    window.setTimeout(() => {
+      window.print();
+      document.documentElement.classList.remove("mise-printing");
+      setOnly(null);
+    }, 600);
+  }
+
   const live = useMemo(() => tables.filter((t) => t.is_active), [tables]);
   const base = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -152,12 +177,12 @@ export default function TablesPage() {
             </label>
             <span className="h-8 w-px bg-line" aria-hidden />
             <label className="block">
-              <span className="text-[11px] font-medium text-fg-soft">Or one, named</span>
+              <span className="text-[11px] font-medium text-fg-soft">Or add one</span>
               <span className="mt-1 flex items-center gap-1.5">
                 <input
                   value={oneLabel}
                   onChange={(e) => setOneLabel(e.target.value)}
-                  placeholder="Terrace 2"
+                  placeholder="Bar 1"
                   className="mise-well w-32 rounded-xl px-3 py-2.5 text-sm outline-none"
                 />
                 <input
@@ -205,6 +230,16 @@ export default function TablesPage() {
               🖨 Print the cards
             </button>
           )}
+          {live.length > 0 && (
+            <button
+              type="button"
+              onClick={() => downloadPdf("/ordering/table-cards.pdf", "table-cards.pdf")}
+              className="mise-press rounded-lg border border-line px-3 py-1.5 font-medium text-fg-soft"
+              title="One PDF of every card — the file you hand to a print shop"
+            >
+              ⬇ Download all as PDF
+            </button>
+          )}
         </div>
       }
     >
@@ -236,7 +271,12 @@ export default function TablesPage() {
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(15rem, 100%), 1fr))" }}
         >
           {tables.map((t) => (
-            <li key={t.id} className="mise-print-card break-inside-avoid">
+            <li
+              key={t.id}
+              className={`mise-print-card break-inside-avoid ${
+                only && only !== t.id ? "print:hidden" : ""
+              }`}
+            >
               <div className={`mise-card3d overflow-hidden p-3.5 ${t.is_active ? "" : "opacity-60"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -267,6 +307,31 @@ export default function TablesPage() {
                     alt={`QR code for ${t.label}`}
                     className="h-36 w-36"
                   />
+                </div>
+                {/* Taking THIS card away: the sheet is for the print shop,
+                    these are for when one card gets spilled on. */}
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-1 print:hidden">
+                  <a
+                    href={`${API_BASE}/api/public/table/${t.code}/qr.png`}
+                    download={`${t.label}.png`}
+                    className="mise-press rounded-lg border border-line px-2 py-1 text-[10px] text-fg-faint hover:text-fg"
+                  >
+                    ⬇ PNG
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => downloadPdf(`/ordering/tables/${t.id}/card.pdf`, `${t.label}.pdf`)}
+                    className="mise-press rounded-lg border border-line px-2 py-1 text-[10px] text-fg-faint hover:text-fg"
+                  >
+                    ⬇ PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => printOne(t)}
+                    className="mise-press rounded-lg border border-line px-2 py-1 text-[10px] text-fg-faint hover:text-fg"
+                  >
+                    🖨 Print
+                  </button>
                 </div>
                 <p className="mt-2 text-center text-[11px] leading-relaxed text-fg-faint">
                   Scan to see the menu and order
