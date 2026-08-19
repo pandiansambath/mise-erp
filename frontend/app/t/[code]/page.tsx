@@ -21,6 +21,8 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
 import { dishPhoto } from "@/lib/dishPhoto";
+import { TableTalk } from "@/components/order/TableTalk";
+import { burstAway } from "@/components/order/burst";
 
 type MenuItem = {
   id: string;
@@ -89,6 +91,8 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   const [err, setErr] = useState<string | null>(null);
   const [helped, setHelped] = useState(false);
   const [basketOpen, setBasketOpen] = useState(false);
+  // The talk sheet: null = shut, {dish} = opened about a dish.
+  const [talk, setTalk] = useState<{ dish?: { id: string; name: string } | null } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const firstLoad = useRef(true);
 
@@ -180,6 +184,11 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
       setCart({});
       setNote("");
       setBasketOpen(false);
+      // "this is indirect marketing... we need a best top-notch animated page."
+      // The celebration goes HERE and nowhere else: the order landing is the
+      // one moment worth a party, and a page that sparkles while somebody is
+      // reading a price is noise, not delight.
+      burstAway(document.getElementById("mise-table-basket"));
       const rr = await fetch(`${API_BASE}/api/public/table/${code}/orders`);
       if (rr.ok) setLive((await rr.json()).orders ?? []);
     } catch (e) {
@@ -241,6 +250,13 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           </div>
           <button
             type="button"
+            onClick={() => setTalk({})}
+            className="mise-press mise-well shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-fg-soft"
+          >
+            💬 Ask
+          </button>
+          <button
+            type="button"
             onClick={callStaff}
             className={`mise-press shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition ${
               helped ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
@@ -266,7 +282,12 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               const mins = hotel?.prep_minutes ?? 20;
               const left = from ? Math.max(0, Math.ceil((from + mins * 60000 - now) / 60000)) : null;
               return (
-                <div key={o.id} className="mise-card3d overflow-hidden p-3.5">
+                <div
+                  key={o.id}
+                  className={`mise-card3d overflow-hidden p-3.5 ${
+                    o.status === "PREPARING" ? "mise-cooking" : ""
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className={`text-sm font-semibold ${say.tone}`}>{say.label}</p>
@@ -347,6 +368,17 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                         {m.description}
                       </p>
                     )}
+                    {/* "touch me ai to see whats are all health benefits u will
+                        get if u eat this" — offered on the dish itself, where
+                        the curiosity actually happens. */}
+                    <button
+                      type="button"
+                      onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
+                      className="mise-press mise-tone-info mt-1 flex items-center gap-1 text-[11px] font-medium"
+                    >
+                      ✨ What&apos;s in it, and what it does for you
+                    </button>
+
                     <div className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="font-display text-sm font-semibold text-fg">
                         {money(m.price)}
@@ -404,9 +436,16 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         )}
       </main>
 
+      {talk && (
+        <TableTalk code={code} dish={talk.dish} onClose={() => setTalk(null)} />
+      )}
+
       {/* ── The basket, pinned. Never a page you have to go to. */}
       {count > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-glass/10 bg-shell/90 p-3 backdrop-blur-xl">
+        <div
+          id="mise-table-basket"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-glass/10 bg-shell/90 p-3 backdrop-blur-xl"
+        >
           <div className="mx-auto max-w-2xl">
             {basketOpen && (
               <div className="mise-pop mb-2 max-h-[45vh] overflow-y-auto rounded-2xl">
