@@ -39,6 +39,8 @@ public_router = APIRouter(prefix="/public/order", tags=["ordering-public"])
 # The QR flow gets its own public prefix so a table code is never mistaken for
 # a hotel id, and so the customer's URL is short enough to print: /t/<code>.
 table_router = APIRouter(prefix="/public/table", tags=["dine-in"])
+# The kitchen screen, addressed by a long random code instead of a login.
+kds_router = APIRouter(prefix="/public/kds", tags=["kitchen-screen"])
 
 # DINE_IN is the QR-on-the-table flow: same pipeline, entered from a seat.
 FULFILMENTS = {"PICKUP", "DELIVERY", "DINE_IN"}
@@ -898,6 +900,8 @@ class BulkTablesIn(BaseModel):
 
     count: int = Field(ge=1, le=200)
     prefix: str = Field(default="Table", max_length=20)
+    #: "how you know each table will have 4 seats... it depends, so we need to
+    #: get these datas from super admin." Four is only where the form starts.
     seats: int = Field(default=4, ge=1, le=40)
 
 
@@ -1249,3 +1253,191 @@ async def call_for_help(code: str, db: AsyncSession = Depends(get_db)) -> dict:
     await db.commit()
     await events.publish(hotel.id, {"type": "ordering", "action": "help", "table": t.label})
     return {"ok": True, "table": t.label}
+
+
+# ── The table has to be handed on ────────────────────────────────────────────
+#
+#   "user can see their orders any time as that table is locked for them until
+#    they windup... but how we will release the table? Let super admin or chef
+#    release the table so that new customer can come and occupy and cycle goes
+#    on."
+#
+# Right, and it is the difference between a demo and a service. A table holds
+# ONE sitting: everything ordered at it is that party's, they can see it the
+# whole time they are there, and when they leave somebody clears it down so the
+# next party starts from nothing. Without this, table 4 would show last week's
+# biryani to whoever sits there next.
+
+
+@router.post("/tables/{table_id}/release")
+async def release_table(
+    table_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> dict:
+    """Clear the table down for the next party.
+
+    Every unfinished order on it is completed — a diner who has eaten and left
+    is not a ticket the kitchen still owes, and leaving them open would haunt
+    the pass forever. Nothing is deleted: the orders keep their history, they
+    simply stop belonging to the live sitting.
+    """
+    t = await db.get(DiningTable, table_id)
+    if t is None or t.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
+
+    rows = (
+        (
+            await db.execute(
+                select(Order).where(
+                    Order.table_id == t.id,
+                    Order.status.notin_(["COMPLETED", "REJECTED", "CANCELLED"]),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for o in rows:
+        o.status = OrderStatus.COMPLETED.value
+        o.help_requested_at = None
+    await db.commit()
+    await events.publish(
+        user.hotel_id, {"type": "ordering", "action": "released", "table": t.label}
+    )
+    return {"table": t.label, "cleared": len(rows)}
+
+
+# ── A kitchen screen nobody has to log in to ─────────────────────────────────
+#
+#   "we also need one button here to open a kiosk page of this, so that the
+#    kitchen staff no need to have my super admin creds in tab."
+#
+# Exactly right, and it was a real hole: the only way to put the pass on a
+# screen was to leave the owner's account signed in on a tablet in a kitchen.
+# The screen gets its own long random address instead — the same trick as the
+# table cards, and the same reasoning. It can only ever READ.
+
+
+def _kds_code(hotel: Hotel) -> str:
+    """This hotel's kitchen-screen address, minted once and remembered.
+
+    Long and random because it is a URL that gets left open on a device in a
+    room with a back door. It shows tickets and nothing else — no money, no
+    people, no settings — so the worst case for a leaked link is somebody
+    watching curries being made.
+    """
+    prefs = dict(hotel.prefs or {})
+    code = prefs.get("kds_code")
+    if not code:
+        code = secrets.token_urlsafe(16)
+        prefs["kds_code"] = code
+        hotel.prefs = prefs
+    return code
+
+
+@router.get("/kitchen-screen")
+async def kitchen_screen_link(
+    db: AsyncSession = Depends(get_db), user: User = Depends(require("orders:write"))
+) -> dict:
+    hotel = await db.get(Hotel, user.hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    code = _kds_code(hotel)
+    await db.commit()
+    base = settings.app_base_url.rstrip("/")
+    if hotel.username:
+        scheme, _, apex = base.partition("://")
+        base = f"{scheme}://{hotel.username}.{apex}"
+    return {"code": code, "url": f"{base}/kds/{code}"}
+
+
+@router.post("/kitchen-screen/rotate")
+async def rotate_kitchen_screen(
+    db: AsyncSession = Depends(get_db), user: User = Depends(require("orders:write"))
+) -> dict:
+    """New address, old one dead. For when a tablet walks off."""
+    hotel = await db.get(Hotel, user.hotel_id)
+    if hotel is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hotel not found")
+    prefs = dict(hotel.prefs or {})
+    prefs["kds_code"] = secrets.token_urlsafe(16)
+    hotel.prefs = prefs
+    await db.commit()
+    return await kitchen_screen_link(db, user)
+
+
+@kds_router.get("/{code}")
+async def kitchen_screen_board(code: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """The pass, for a screen with no login.
+
+    READ ONLY on purpose is not enough on its own — a chef has to be able to
+    move a ticket along or the screen is a poster. So this pairs with the PATCH
+    below, and both are scoped to the one hotel the code belongs to. What the
+    code can NOT do is read money, people or settings.
+    """
+    hotel = (
+        await db.execute(
+            select(Hotel).where(Hotel.prefs["kds_code"].as_string() == code)
+        )
+    ).scalar_one_or_none()
+    if hotel is None or not hotel.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This screen is no longer connected")
+
+    rows = (
+        (
+            await db.execute(
+                select(Order)
+                .where(
+                    Order.hotel_id == hotel.id,
+                    Order.status.notin_(["COMPLETED", "REJECTED", "CANCELLED"]),
+                )
+                .order_by(Order.created_at)
+                .limit(60)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    names: dict[uuid.UUID, str] = {}
+    seats = {o.table_id for o in rows if o.table_id}
+    if seats:
+        names = {
+            t.id: t.label
+            for t in (
+                await db.execute(select(DiningTable).where(DiningTable.id.in_(seats)))
+            ).scalars()
+        }
+    return {
+        "hotel": {"name": hotel.name, "prep_minutes": hotel.prep_minutes},
+        "orders": [_order_out(o, None, names.get(o.table_id)) for o in rows],
+    }
+
+
+class KdsMove(BaseModel):
+    status: str
+
+
+@kds_router.patch("/{code}/orders/{order_id}")
+async def kitchen_screen_move(
+    code: str, order_id: uuid.UUID, payload: KdsMove, db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Move a ticket along from the kitchen screen."""
+    hotel = (
+        await db.execute(select(Hotel).where(Hotel.prefs["kds_code"].as_string() == code))
+    ).scalar_one_or_none()
+    if hotel is None or not hotel.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This screen is no longer connected")
+    order = await db.get(Order, order_id)
+    if order is None or order.hotel_id != hotel.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
+    if payload.status not in ORDER_FLOW.get(order.status, []):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Can't move {order.status} to {payload.status}",
+        )
+    order.status = payload.status
+    order.help_requested_at = None
+    await db.commit()
+    await db.refresh(order)
+    return _order_out(order)
