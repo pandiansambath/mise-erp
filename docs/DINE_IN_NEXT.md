@@ -1,100 +1,166 @@
-# Dine-in — what he asked for next
+# Dine-in — the working list
 
-Everything below is his, quoted. Built in this order.
+> "i said so many thngs ...please add all the stuff in that document and follow
+> that document md file until u complete all the tasks"
 
----
-
-## ✅ Done in `ed29ebc`
-
-- **Printing.** Seven sheets for six tables, one card stranded per page, sidebar
-  and mobile nav printed down the middle. Now: navigation gone, two cards
-  across, each card refuses to break across a page.
-- **Seats.** *"how you know each table will have 4 seats... it depends, so we
-  need to get these datas from super admin."* Asked for on both creators.
-- **Freeing a table.** *"how we will release the table? Let super admin or chef
-  release the table so that new customer can come and occupy and cycle goes
-  on."* Completes what is open on it, keeps the history.
-- **Kitchen screen with no login.** *"so that the kitchen staff no need to have
-  my super admin creds in tab."* Own long random address, rotatable, reads and
-  moves tickets and nothing else.
-- **The estimate.** *"where we will choose the estimate time?"* On the kitchen
-  page, beside the tickets it governs.
+Fair. Everything he has asked for, in his words, in one place. **Work top to
+bottom and tick as it ships.** Nothing gets dropped because it scrolled past.
 
 ---
 
-## 1. The QR is printed once and lives on a table — treat it that way
+## ✅ Shipped
 
-> "everytime hotel wont generate qr and keep on changing... they will create qr
-> once and they will print and paste in table, that's it, it stays. Later if
-> hotel need means they can again do this. It's not like frequent process, so we
-> need to be careful with qr and link to manage in app."
+| | What | Commit |
+|---|---|---|
+| ✅ | QR per table, diner page, kitchen board, orders reach the kitchen | `894b7fc` |
+| ✅ | Print sheet: 2-up, no app chrome, no card split across a page | `96a2a16` |
+| ✅ | Seats set by the hotel, not assumed to be 4 | `96a2a16` |
+| ✅ | Free up a table — clears it for the next party | `96a2a16` |
+| ✅ | Kitchen screen link that needs no login (`/kds/<code>`) — **API** | `96a2a16` |
+| ✅ | Prep time settable, waiting shown as min/hr/days | `96a2a16` |
+| ✅ | Menu availability: out of stock · finished today · not served · serving hours | `784b83b` |
+| ✅ | Diner is TOLD why a dish is off, not shown a gap | `784b83b` |
 
-He is right and it changes the emphasis: the code is **permanent by default**.
-Already true — the code is minted once, `label` is editable and `code` is not,
-so renaming a table never kills a printed card. What is still missing:
+---
 
-- **A visible warning** anywhere a code could change, and no accidental path to
-  it at all.
-- **Reprint one card** without reprinting the sheet (a card gets spilled on).
-- **Deleting a table** should say plainly that the printed card dies with it.
-- **Download the sheet as PDF** so a print shop can do it properly.
+## 🔴 Open — in order
 
-## 2. Menu management, and an AI that reads a menu
+### 1. `/kds/<code>` page 404s
+The API shipped; **the page was never built**. My miss — the button hands you a
+link to nothing. *Page written, not yet deployed.*
 
-> "we need a menu feature like super admin can decide the menu page or he can
-> upload the menu so that our AI can see the menu photo or excel and he can add
-> to menu... super admin can delete the menu, delete any recipe, mark as out of
-> stock, or over, or not served, only served at this particular time etc — all
-> these kinda feature we need."
+### 2. Group a table's rounds into ONE card
+> "if same table same customer do one more dish like juice, it's coming as a
+> separate table 4 — I can see 2 table 4. Actually we need to group them until
+> free up."
 
-Four separate things:
+A table is one party until somebody clears it down. Two cards for one table is
+how a round of drinks reaches the wrong people. Each round keeps its own line
+and its own button (the starters finish before the juice), but they live in one
+card. Applies to `/kitchen` **and** `/kds/<code>`.
 
-1. **A menu page** for the owner: add, edit, reorder, delete, with photos.
-   Partly exists (`/orders` has menu CRUD) but is not a first-class page.
-2. **Upload a menu and have the AI read it** — photo or spreadsheet in,
-   proposed items out, confirm before anything is written. The bill-scanning
-   path already does exactly this shape (`bedrock.understand_document`), so it
-   is a new prompt and a confirm screen rather than new machinery.
-3. **Availability, properly.** Not one boolean:
-   - *out of stock* — temporarily gone, comes back
-   - *finished for today* — gone until tomorrow, clears itself overnight
-   - *not served* — off the menu, kept for history
-4. **Served only at certain times.** Breakfast until 11, thali at lunch only.
-   Needs `serve_from` / `serve_to` per item and filtering on the diner's page.
+### 3. Calls and messages jump to the top
+> "if some table sending msg or calling someone means it need to at top
+> portion... better split that UI as 2 sections in runtime (only when we get
+> msg/call) so that one can easily see and go to that table instantly."
 
-## 3. The diner can send a message, and ask the AI
+A separate band above the pass that only exists when somebody is waiting.
 
+### 4. Sticky header overlaps the cards
+> "see top area buttons... let me scroll... now see... worst UI. Same issue in
+> kitchen page too."
+
+The tools row and the cards collide on scroll. Real on `/tables` and `/kitchen`.
+
+### 5. QR handling — download and print each one
+> "each QR we need download option — download as image or PDF — and one
+> consolidated download button. Also print option for each QR in each QR area."
+
+Per card: **download PNG · download PDF · print this one**. Plus one
+**download all** (PDF sheet). Because: *"they will create QR once and print and
+paste in table, that's it. It stays."*
+
+### 6. Drop the "Terrace" wording
+> "what the terrace feature... please remove, don't want. Table itself is fine."
+
+It was only placeholder text and it read as a feature. Remove it.
+
+### 7. Message the kitchen from the table
 > "customer sitting in table can also msg using that QR in that same menu page
-> itself — we need a send msg feature, he can send whatever he want (have some
-> suggestions here so that customer no need to type). Have our Sonnet AI also
-> here, so that customer can ask any details abt this hotel — what's so special,
-> what famous, branches of this hotel, origin, contact, owner name etc."
+> itself... have some suggestions here so that customer no need to type."
+
+Tap-to-send chips (more water · napkins · the bill · less spicy · a highchair)
+plus free text. Lands on the same screen as everything else.
+
+### 8. The guest assistant
+> "have our Sonnet AI also here, so that customer can ask any details abt this
+> hotel — what's so special, what famous, branches, origin, contact, owner name."
 >
-> **"make our ai not to answer profit or revenue kinda question abt hotels"**
+> **"make our AI not to answer profit or revenue kinda question abt hotels"**
 
-Two features sharing one box:
+**That second line is a design constraint, not a prompt line.** A guest-facing
+model that will discuss margins when asked cleverly is a data leak with a chat
+box in front of it, and no amount of "please refuse" survives a determined
+guest. The endpoint is **starved**: handed the hotel's public profile and menu
+and nothing else — no P&L, no costs, no payroll, no supplier prices. It cannot
+leak what it was never given.
 
-- **A message to the kitchen** with tap-to-send suggestions (more water, extra
-  napkins, the bill, less spicy, a highchair) so nobody has to type. Lands on
-  the kitchen screen exactly like the 🔔 does.
-- **A guest assistant**, scoped hard. It answers about the hotel — story,
-  specialities, branches, hours, contact — and **must refuse anything
-  commercial**: revenue, profit, margins, costs, wages, supplier prices, what a
-  dish costs to make.
+### 9. "Touch me" — what this dish does for you
+> "our AI should show as suggestion in that page like 'touch me AI to see what
+> are all health benefits u will get if u eat this'... what are all nutrients
+> etc... **it need to say honestly**. This itself is the master feature which
+> attracts customers."
 
-  **This is a hard boundary, not a prompt suggestion.** A guest-facing model
-  that will discuss margins if asked nicely is a data leak with a chat box in
-  front of it. Design: a separate public endpoint with its own system prompt and
-  its own allow-list of context — it is handed the hotel's *public* profile and
-  menu only, never the P&L, never inventory costs, never payroll. It cannot leak
-  what it was never given, which is the only guarantee that survives a clever
-  question.
+Honestly is the hard part. A model asked "is this healthy" with nothing to go on
+will invent grams of protein, and a restaurant repeating invented nutrition to a
+diner with a condition is a genuinely bad day. So it is grounded in the dish's
+**actual recipe ingredients** (names only, never costs), and forbidden from
+stating any figure it cannot source, from giving medical advice, and from ever
+declaring a dish allergy-safe.
+
+### 10. Per-item prep time, and per-ticket override
+> "super admin or chef can add an estimated time for each item in menu
+> beforehand, so that when customer chooses that, once submitted they can
+> instantly see somewhat correct ETA. This timing also they can change
+> flexibly."
+> "we need one feature like chef and super admin can change the estimated time
+> for each table order."
+
+Three layers, narrowest wins: **this ticket's override → the dishes' own times →
+the hotel default.** A biryani is forty minutes and a lassi is two; an average
+serves neither.
+
+### 11. The owner's menu page
+The availability states are in the API with no UI. Needs: add · edit · reorder ·
+delete · photo · availability · serving hours · per-item prep time.
+
+### 12. Build the menu from recipes, and by hand
+> "while adding menu items we need feature like **copy items from recipe
+> section**... then if super wants to add 1 or 2 items manually then we need
+> allow him. We need to be flexible more and more."
+
+Pull from Recipes (the costing is already there, so margin comes free) **and**
+add a one-off by hand. Neither is the only door.
+
+### 13. AI menu import
+> "he can upload the menu so that our AI can see the menu photo or excel and he
+> can add to menu."
+
+Photo or spreadsheet in → proposed items → **confirm before anything is
+written**. The bill-scanner already has this shape.
+
+### 14. The diner's page has to be *impressive* — it is the marketing
+> "the customer public page UI is not that much impressive. Bro this is indirect
+> marketing — we need a best top-notch animated page for customer. Add smoke
+> effect, colour paper effects etc to impress them, so that hotel will get so
+> many users and indirectly our app will be popular."
+
+He is right about the economics: this is the only screen a *stranger* ever sees,
+and every diner who scans it is being shown what DineAI can do. It is an advert
+that happens to take orders.
+
+What that means concretely, and the line I will hold: **delight on the moments
+that matter, silence everywhere else.** A dish card that shimmers while somebody
+is trying to read the price is not impressive, it is noise — the same lesson as
+the smoke that "made a blind for a sec". So:
+
+- The **order landing** gets the full celebration — colour paper across the
+  screen, the burst, the settle. It is the one moment worth a party.
+- Cards **arrive**, they do not idle: a staggered rise on first paint, a press
+  that sinks, a real spring on add-to-basket.
+- The **live ticket** breathes — a soft pulse while the kitchen is cooking, so
+  the page feels alive without anybody having to look at it.
+- Hero photography, big type, generous space. The menu should look like a menu
+  from a good restaurant, not a form.
+- **Nothing loops under text.** Nothing animates under `prefers-reduced-motion`.
 
 ---
 
-## Order of work
-1. Menu page + availability states + serving times (the owner's daily tool).
-2. AI menu import (photo/Excel → confirm → menu).
-3. Diner messaging + suggestions.
-4. The guest assistant, on a starved context.
-5. QR care: reprint one, PDF sheet, louder warnings.
+## Standing rules for this feature
+- **Say why, and say when it is back.** Never hide a dish; a gap reads as "they
+  don't do that" and costs tomorrow's sale.
+- **The QR is printed once and lives on a table.** The code never changes; the
+  label is free to.
+- **The kitchen screen sees tickets and nothing else.** No money, no people, no
+  settings — so a link left open on a tablet cannot become a breach.
+- **Confirm before acting** on anything a diner or a chef would regret.
