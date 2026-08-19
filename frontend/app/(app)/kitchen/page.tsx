@@ -100,6 +100,17 @@ export default function KitchenPage() {
   );
 
   const waiting = (o: Order) => Math.floor((now - +new Date(o.created_at)) / 60000);
+
+  /** How long it has been waiting, in units a person reads.
+   *
+   *  "51655 min" is arithmetically right and humanly useless — a ticket left
+   *  from last month should say so at a glance rather than make a chef do
+   *  division while holding a pan. */
+  const waited = (mins: number) => {
+    if (mins < 60) return { n: String(mins), unit: "min" };
+    if (mins < 60 * 24) return { n: (mins / 60).toFixed(mins < 600 ? 1 : 0), unit: "hr" };
+    return { n: String(Math.round(mins / 1440)), unit: "days" };
+  };
   const dineIn = live.filter((o) => o.fulfilment === "DINE_IN").length;
 
   if (!canWrite) {
@@ -180,8 +191,10 @@ export default function KitchenPage() {
                         mins >= 20 ? "text-rose-300" : mins >= 10 ? "text-amber-300" : "text-fg-soft"
                       }`}
                     >
-                      {mins}
-                      <span className="ml-0.5 text-[10px] font-normal text-fg-faint">min</span>
+                      {waited(mins).n}
+                      <span className="ml-0.5 text-[10px] font-normal text-fg-faint">
+                        {waited(mins).unit}
+                      </span>
                     </span>
                   </div>
 
