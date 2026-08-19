@@ -1940,10 +1940,10 @@ async def guest_ask(code: str, payload: GuestAskIn, db: AsyncSession = Depends(g
             "ok": False,
             "answer": (
                 "The menu assistant is not switched on here yet. Press "
-                "\u201cNeed someone\u201d and a member of staff will come over."
+                '"Need someone" and a member of staff will come over.'
                 if off
                 else "Sorry, I could not reach the assistant just then. Press "
-                "\u201cNeed someone\u201d and a member of staff will come over."
+                '"Need someone" and a member of staff will come over.'
             ),
             "reason": "model_access" if off else "error",
         }
