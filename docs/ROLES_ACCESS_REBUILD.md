@@ -1,4 +1,4 @@
-# Roles & Access — rebuild from zero
+# Roles & Access — rebuilt (2026-08-19)
 
 > "how you made the UI UX of purchase section this much awesome — like this we
 > need to do for next section which is roles and access section. Keep purchase
@@ -116,3 +116,43 @@ Staff. Filtered in `RoleBuilder`, backend untouched, kiosk still works.
 
 **Not started.** Purchasing came first by his own page-by-page rule, and this is
 the next page.
+
+
+---
+
+# ✅ REBUILT AND SHIPPED — `84246e8`
+
+## What it is now
+A list of PEOPLE. Tap one, set what they can reach, save. That is the whole
+interaction, and it replaces: choose an archetype → toggle inside an envelope
+you cannot see → name and save a role → find the attach panel → attach.
+
+- **`PUT /roles/user/{id}/access`** does the four old steps in one call. It
+  creates the custom role, names it after the person, attaches it, and — when
+  the access matches their job exactly — deletes it again rather than leaving an
+  empty role pretending to be a decision.
+- **39 permissions became 14 areas** a chef would recognise (`lib/access.ts`),
+  each with ONE control at three positions: **No access · Can see · Can change**.
+  A segmented control makes "can change but cannot see" unrepresentable, which
+  two on/off switches did not.
+- **The ceiling is untouched.** `resolve_permissions` still discards anything
+  outside the archetype envelope, and a test proves a waiter cannot reach hiring
+  *through the new door*.
+- **Nothing saves until pressed.** Changed rows are ringed and say *"was 'Can
+  see' · not saved yet"*; the footer arms with Save / Undo. His confirmation
+  gate: "even in that 1 sec they will change their mind and regret."
+- `RoleBuilder` and `RoleAttach` are deleted.
+
+## Two things only the screenshots caught
+1. **Staff read "0 of 0 areas"** — the commonest job on the page looking broken.
+   All their permissions are the `:self` kind and I had filed none of them.
+   There is now a **"Their own"** section — their own rota, payslips, documents
+   — which is what a staff login is actually FOR.
+2. **The attendance tablet was listed as a person to tap.** KIOSK accounts are
+   filtered out, same reasoning as removing Kiosk from the jobs.
+
+## Verified live, by picture not by string
+Opened balaji (Staff), moved "Their own rota & hours" to **No access**: the row
+ringed, the subtitle became *was "Can see" · not saved yet*, the headline fell
+from **2 of 3** to **1 of 3** as it was clicked, Save armed, the save landed and
+the card now reads **tailored**.
