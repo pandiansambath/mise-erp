@@ -58,15 +58,31 @@ test("the assistant answers, and answers in plain words", async ({ page }) => {
   const box = page.getByPlaceholder(/ask|message|type/i).first();
   await box.waitFor({ timeout: 60_000 });
 
+  // START A FRESH THREAD. The panel keeps history, so the first run of this
+  // test read a sentence from a conversation held BEFORE the fix and reported
+  // a bug that was already fixed. Old answers in the scrollback are not
+  // evidence about the code running now.
+  const fresh = page.getByRole("button", { name: /new (chat|conversation)|start over/i }).first();
+  if (await fresh.count()) {
+    await fresh.click();
+    await page.waitForTimeout(800);
+  }
+
   // Ask the question that used to answer "no suppliers have been linked" about
   // an item with five. A screenshot of an empty chat window proves nothing.
   await box.fill("which vendor is cheapest for guava");
   await box.press("Enter");
-  await page.getByText(/per kg|cheapest|Exotic|RUDRA/i).first().waitFor({ timeout: 120_000 });
-  await page.waitForTimeout(1500);
+
+  // WAIT FOR THE ANSWER, INSIDE THE PANEL. Matching page text caught "per kg"
+  // in the dashboard BEHIND the panel and screenshotted a "thinking" bubble —
+  // a green test of nothing, twice over. The reply has arrived when the
+  // thinking indicator goes away.
+  await page.getByText(/thinking/i).first().waitFor({ state: "hidden", timeout: 180_000 });
+  await page.waitForTimeout(1200);
   await page.screenshot({ path: "e2e/__screens__/ai-audit-assistant.png", fullPage: true });
 
   const text = await page.locator("body").innerText();
+  expect(text).toMatch(/per kg|cheapest|Exotic|RUDRA|SK/i);
   expect(text).not.toContain("Something went wrong");
   expect(text).not.toMatch(/no suppliers have been linked/i);
 });
