@@ -166,7 +166,16 @@ export function AccessSheet({
       .catch(() => {});
     api
       .get<{ roles: { id: string; name: string; is_active: boolean }[] }>("/roles")
-      .then((d) => setMine(d.roles.filter((r) => r.is_active).map((r) => ({ id: r.id, name: r.name }))))
+      // Per-person tuning creates a role named "<who> - custom access". Offering
+      // Balaji's private arrangement to the accountant is the exact mistake I
+      // filtered off the roles board and then left in place right here.
+      .then((d) =>
+        setMine(
+          d.roles
+            .filter((r) => r.is_active && !/— custom access$/.test(r.name))
+            .map((r) => ({ id: r.id, name: r.name })),
+        ),
+      )
       .catch(() => setMine([]));
   }, []);
 
