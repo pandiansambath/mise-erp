@@ -52,3 +52,49 @@ def test_an_invented_permission_is_still_ignored():
     got = resolve_permissions(Role.MANAGER.value, {"payroll:make_me_owner": True})
 
     assert "payroll:make_me_owner" not in got
+
+
+def test_every_area_that_can_be_seen_can_be_seen_without_being_changed():
+    """"we need literally all the pages access WITH READ AND WRITE."
+
+    Expenses, Documents, Approving orders and Food safety were on-or-off. The
+    routes had asked for `expenses:read` all along, but `:write` implies
+    `:read`, so nobody had ever needed the read on its own and it was not
+    grantable — leaving those rows with only "No access / Can change".
+    """
+    from app.auth.models import Role
+    from app.core.rbac import GRANTABLE, READ_HALVES, resolve_permissions
+
+    for half in READ_HALVES:
+        assert half in GRANTABLE, half
+
+    # Look, don't touch: the read on, the write explicitly off.
+    got = resolve_permissions(
+        Role.MANAGER.value, {"expenses:read": True, "expenses:write": False}
+    )
+    assert "expenses:read" in got
+    assert "expenses:write" not in got
+
+
+def test_food_safety_is_gated_by_its_own_permission_now():
+    """The "Food safety" switch controlled NOTHING.
+
+    The area toggled `safety:write`, and the safety router asked for
+    `inventory:write` — two different keys, so the switch moved and the pages
+    did not care. Re-pointing the router is only safe if nobody loses access
+    they already had, which is what the second half checks.
+    """
+    import pathlib
+
+    src = pathlib.Path("app/safety/router.py").read_text(encoding="utf-8")
+    assert "inventory:write" not in src
+    assert "inventory:read" not in src
+    assert 'require("safety:write")' in src
+
+    from app.auth.models import Role
+    from app.core.rbac import has_permission
+
+    # Exactly who reached it before, still reaches it.
+    assert has_permission(Role.SUPER_ADMIN.value, "safety:write")
+    assert has_permission(Role.MANAGER.value, "safety:write")
+    assert not has_permission(Role.CASHIER.value, "safety:write")
