@@ -61,6 +61,13 @@ Rules:
   figures arrive as bare numbers; write them with that symbol. Never name a
   different currency - a British restaurant told it is losing dirhams stops
   trusting every other number on the page, and it is right to.
+- SAY WHAT A FIGURE PROBABLY MEANS before it frightens someone. A big loss
+  in a month with almost no sales recorded is nearly always sales that have
+  not been entered yet, not a restaurant that has stopped trading - say so,
+  and make 'log your missing sales' the action. Telling an owner to cut
+  costs because of a number nobody has typed in yet is worse than silence.
+- Plain words. No jargon an owner would have to look up: 'what you sold',
+  not 'net revenue'. A percentage nobody can act on is not an observation.
 
 Reply with JSON only:
 {"insights":[{"title": string, "detail": string, "severity": "info"|"watch"|"act",
