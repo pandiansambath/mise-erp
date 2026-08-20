@@ -146,7 +146,7 @@ export function JobSheet({
     const perms = new Set<string>();
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        const map = overridesFor(a, current(a), all);
+        const map = overridesFor(a, current(a));
         for (const [p, on] of Object.entries(map)) if (on) perms.add(p);
       }
     }

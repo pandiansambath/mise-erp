@@ -126,7 +126,7 @@ export default function StaffPage() {
     let all = 0;
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        if (positionsFor(a, envelope).length === 0) continue;
+        if (positionsFor(a).length === 0) continue;
         all += 1;
         if (levelOf(a, held) !== "none") on += 1;
       }

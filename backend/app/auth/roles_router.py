@@ -20,7 +20,13 @@ from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import CustomRole, Role, RoleDefault, User
 from app.core.database import get_db
-from app.core.rbac import ENVELOPES, PERMISSIONS, envelope_for, resolve_permissions
+from app.core.rbac import (
+    ENVELOPES,
+    PERMISSIONS,
+    envelope_for,
+    grantable_for,
+    resolve_permissions,
+)
 
 # Every permission the app knows about. The owner is entitled to see the whole
 # board — the envelope becomes a hint, not a fence.
@@ -178,14 +184,19 @@ async def deactivate_role(
 
 
 def _clip(base_role: str, overrides: dict[str, bool]) -> dict[str, bool]:
-    """Keep only permissions inside the archetype's envelope.
+    """Keep anything the app actually knows how to grant.
 
-    The UI already hides the rest, so anything else arriving here is either a
-    stale client or someone poking the API directly. Either way it is dropped
-    silently rather than 400'd — a caller must not be able to probe the ceiling
-    by watching which grants are rejected.
+    This used to keep only what was inside the archetype's envelope, which made
+    the envelope a ceiling rather than a default — "for manager we have only
+    expense can change / can see option... we need literally all the pages with
+    read and write that super admin can choose to give."
+
+    So the filter is now "is this a real permission", not "is this typical for
+    the job". Unknown strings are still dropped silently rather than 400'd: a
+    caller must not be able to map the app by watching which grants stick. The
+    KIOSK keeps its seal — see `grantable_for`.
     """
-    allowed = set(envelope_for(base_role))
+    allowed = set(grantable_for(base_role))
     return {k: bool(v) for k, v in overrides.items() if k in allowed}
 
 
@@ -247,7 +258,9 @@ async def set_user_access(
     if payload.base_role and payload.base_role != target.role:
         target.role = payload.base_role
 
-    allowed = set(envelope_for(base))
+    # The same for ONE person: "even though if we give manager role to someone,
+    # super admin can edit permission for that particular user alone."
+    allowed = set(grantable_for(base))
     overrides = {p: v for p, v in payload.overrides.items() if p in allowed}
     defaults = set(PERMISSIONS.get(base, []))
     # Only store what actually DIFFERS from the job's defaults, so "this person
