@@ -226,12 +226,25 @@ async def item_detail(db: AsyncSession, user: User, args: dict) -> dict:
     suppliers: list[dict] = []
     if has_permission(user.role, "vendors:read"):
         cmp = await vendor_service.compare_vendor_prices(db, item.id, user.hotel_id)
-        if cmp and cmp.get("vendors"):
-            suppliers = [
-                {"vendor": v["vendor_name"], "price": _s(v["price_per_unit"]),
-                 "chosen": bool(v.get("is_preferred"))}
-                for v in cmp["vendors"][:8]
-            ]
+        #: `comparisons`, not `vendors` — reading the wrong key made this list
+        #: silently empty, so the assistant told people "no suppliers have been
+        #: linked" about items that had five. Nothing looked broken.
+        #:
+        #: And the number handed over is the price per BASE unit, never the raw
+        #: quote: one vendor's "£50" is a 5kg box and another's is 100kg, so
+        #: comparing the quotes is exactly the mistake this data exists to stop.
+        for v in (cmp or {}).get("comparisons", [])[:8]:
+            suppliers.append({
+                "vendor": v["vendor_name"],
+                "price_per_unit": f"{_s(v['price_per_base'])} per {item.unit}",
+                "quoted": (
+                    f"{_s(v['price_per_unit'])} per {v['pack_level_name']} "
+                    f"of {_s(v['pack_size'])} {item.unit}"
+                    if v.get("pack_level_name") and v.get("pack_size")
+                    else None
+                ),
+                "chosen": bool(v.get("is_preferred")),
+            })
     return {
         "name": item.name, "category": item.category, "unit": item.unit,
         "in_stock": _s(item.current_stock), "min_level": _s(item.min_stock_level),

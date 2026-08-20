@@ -182,6 +182,17 @@ _RECIPE_SCHEMA = """{
   "notes": string|null
 }"""
 
+_MENU_SCHEMA = """{
+  "doc_type": "menu",
+  "restaurant_name": string|null,
+  "currency": string|null,
+  "items": [
+    {"name": string, "description": string|null, "price": number|null,
+     "category": string|null, "confident": boolean}
+  ],
+  "notes": string|null
+}"""
+
 _EXTRACT_SYSTEM = """You read photographs of restaurant paperwork and turn them into \
 structured data.
 
@@ -213,7 +224,11 @@ def understand_document(
     `known_items` / `known_vendors` come from THIS hotel only, so matching
     can never reach across tenants.
     """
-    schema = {"bill": _BILL_SCHEMA, "recipe": _RECIPE_SCHEMA}.get(kind)
+    # A menu is its own kind of paperwork. Leaving it out of this map meant
+    # kind="menu" fell through to "either a bill or a recipe", so the model was
+    # asked the wrong question - and answered it. That is the "unrelevant
+    # response" when uploading a menu: not a weak model, a wrong prompt.
+    schema = {"bill": _BILL_SCHEMA, "recipe": _RECIPE_SCHEMA, "menu": _MENU_SCHEMA}.get(kind)
     if schema is None:
         schema = (
             "either\n" + _BILL_SCHEMA + "\nor\n" + _RECIPE_SCHEMA +
@@ -248,7 +263,16 @@ def understand_document(
                     {
                         "type": "text",
                         "text": (
-                            "Read this document and return JSON in exactly this shape:\n"
+                            (
+                                "This is a RESTAURANT MENU. List every dish you can "
+                                "read, with its price and the section it sits under "
+                                "(starters, mains, drinks...). Keep the dish names "
+                                "exactly as printed. Do not invent prices: if one is "
+                                "unreadable use null.\n\n"
+                                if kind == "menu"
+                                else "Read this document and "
+                            )
+                            + "Return JSON in exactly this shape:\n"
                             + schema
                         ),
                     },
