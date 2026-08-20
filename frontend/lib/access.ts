@@ -28,6 +28,26 @@ export type Area = {
   read: string[];
   /** Permissions that count as CHANGING it. Implies the read ones. */
   write: string[];
+  /**
+   * THE ACTUAL PAGES this unlocks, by the name in the sidebar.
+   *
+   *   "still we didn't show all the pages I guess... go count how many pages
+   *    we have and show ALL pages to super admin."
+   *
+   * There are 34 screens and 17 switches, and that mismatch is the whole
+   * problem: "Suppliers & buying" is honest to somebody who built the app and
+   * means nothing to somebody looking for Price Comparison. One switch can
+   * open several pages — that is deliberate, because Vendors and Price
+   * Comparison are one job — but the owner has to be able to SEE which ones,
+   * or he is agreeing to something invisible.
+   */
+  pages: string[];
+  /**
+   * What "on" is called for an area that has no middle position. "Can change"
+   * is nonsense for the assistant — "what will he change? AI is for using,
+   * right?" — and he is right. Defaults to the usual wording.
+   */
+  onLabel?: string;
 };
 
 export type Section = { key: string; label: string; icon: string; areas: Area[] };
@@ -54,6 +74,7 @@ export const SECTIONS: Section[] = [
         icon: "🧾",
         read: ["sales:read"],
         write: ["sales:write", "sales:config", "cash:write"],
+        pages: ["Sales & Cash", "Online Orders", "Money"],
       },
       {
         key: "expenses",
@@ -62,6 +83,7 @@ export const SECTIONS: Section[] = [
         icon: "💸",
         read: ["expenses:read"],
         write: ["expenses:write"],
+        pages: ["Expenses"],
       },
       {
         key: "payroll",
@@ -70,6 +92,7 @@ export const SECTIONS: Section[] = [
         icon: "💰",
         read: ["payroll:read"],
         write: ["payroll:write"],
+        pages: ["Payroll"],
       },
       {
         key: "reports",
@@ -78,6 +101,7 @@ export const SECTIONS: Section[] = [
         icon: "📈",
         read: ["reports:read"],
         write: ["reports:write"],
+        pages: ["Reports (P&L)", "Money"],
       },
     ],
   },
@@ -93,6 +117,7 @@ export const SECTIONS: Section[] = [
         icon: "📦",
         read: ["inventory:read", "stock:read"],
         write: ["inventory:write", "stock:write", "waste:write"],
+        pages: ["Inventory", "Stock-take", "Waste"],
       },
       {
         key: "vendors",
@@ -101,6 +126,7 @@ export const SECTIONS: Section[] = [
         icon: "🤝",
         read: ["vendors:read", "vendor_payments:read"],
         write: ["vendors:write", "indent:write", "vendor_payments:write"],
+        pages: ["Vendors", "Price Comparison", "Purchasing"],
       },
       {
         key: "approve",
@@ -109,6 +135,7 @@ export const SECTIONS: Section[] = [
         icon: "✅",
         read: ["indent:read"],
         write: ["indent:approve"],
+        pages: ["Purchasing — approving"],
       },
     ],
   },
@@ -124,6 +151,7 @@ export const SECTIONS: Section[] = [
         icon: "🧑‍🍳",
         read: ["employees:read", "users:read"],
         write: ["employees:write", "hiring:write"],
+        pages: ["Employees", "Hiring", "Messages", "Roles & Access", "Audit log"],
       },
       {
         key: "rota",
@@ -132,6 +160,7 @@ export const SECTIONS: Section[] = [
         icon: "📅",
         read: ["rota:read"],
         write: ["rota:write", "attendance:write"],
+        pages: ["Rota", "Attendance"],
       },
       {
         key: "documents",
@@ -140,6 +169,7 @@ export const SECTIONS: Section[] = [
         icon: "📄",
         read: ["documents:read"],
         write: ["documents:write"],
+        pages: ["Documents"],
       },
     ],
   },
@@ -155,6 +185,7 @@ export const SECTIONS: Section[] = [
         icon: "📅",
         read: ["rota:self", "attendance:self"],
         write: [],
+        pages: ["My rota"],
       },
       {
         key: "self_pay",
@@ -163,6 +194,7 @@ export const SECTIONS: Section[] = [
         icon: "💷",
         read: ["payroll:self"],
         write: [],
+        pages: ["My payslips"],
       },
       {
         key: "self_docs",
@@ -171,6 +203,7 @@ export const SECTIONS: Section[] = [
         icon: "📄",
         read: ["documents:self"],
         write: [],
+        pages: ["My documents"],
       },
     ],
   },
@@ -186,6 +219,7 @@ export const SECTIONS: Section[] = [
         icon: "🍜",
         read: ["recipes:read"],
         write: ["recipes:write"],
+        pages: ["Recipes", "Party Order", "Allergens"],
       },
       {
         key: "orders",
@@ -194,6 +228,7 @@ export const SECTIONS: Section[] = [
         icon: "🛵",
         read: ["party:read"],
         write: ["party:write", "orders:write"],
+        pages: ["Kitchen screen", "Tables & QR", "Menu", "Online Orders"],
       },
       {
         key: "safety",
@@ -202,6 +237,7 @@ export const SECTIONS: Section[] = [
         icon: "🌡️",
         read: ["safety:read"],
         write: ["safety:write"],
+        pages: ["Food Safety"],
       },
       {
         key: "ai",
@@ -210,6 +246,8 @@ export const SECTIONS: Section[] = [
         icon: "✨",
         read: [],
         write: ["ai:use"],
+        pages: ["Ask DineAI", "AI scan"],
+        onLabel: "Can use",
       },
     ],
   },
@@ -286,6 +324,23 @@ export const LEVEL_LABEL: Record<Level, string> = {
   view: "Can see",
   edit: "Can change",
 };
+
+/**
+ * What to CALL a position for a particular area.
+ *
+ *   "here what that AI toggle means? Can change for AI means? What he will
+ *    change? AI is for using, right?"
+ *
+ * He is right, and it reads as a bug because it is one. "Can change" is the
+ * generic word for the write half of a pair, and for the assistant there is no
+ * pair — `ai:use` is permission to ASK IT THINGS. Labelling that "Can change"
+ * invites the reader to wonder what they would be changing, and the honest
+ * answer is nothing.
+ */
+export function labelFor(area: Area, level: Level): string {
+  if (level === "edit" && area.onLabel) return area.onLabel;
+  return LEVEL_LABEL[level];
+}
 
 export const LEVEL_HINT: Record<Level, string> = {
   none: "Hidden from them entirely",

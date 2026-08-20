@@ -19,11 +19,13 @@ import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { DetailSheet } from "@/components/DetailSheet";
 import {
+  labelFor,
   LEVEL_HINT,
   LEVEL_LABEL,
-  SECTIONS,
   levelOf,
   overridesFor,
+  SECTIONS,
+  type Area,
   type Level,
 } from "@/lib/access";
 
@@ -42,11 +44,14 @@ function ThreeWay({
   options,
   onChange,
   label,
+  area,
 }: {
   value: Level;
   options: Level[];
   onChange: (l: Level) => void;
   label: string;
+  /** So an area can name its own positions - "Can use", not "Can change". */
+  area?: Area;
 }) {
   return (
     <div role="radiogroup" aria-label={label} className="mise-well inline-flex shrink-0 rounded-xl p-0.5">
@@ -70,7 +75,7 @@ function ThreeWay({
                 : "text-fg-faint hover:text-fg-soft"
             }`}
           >
-            {LEVEL_LABEL[o]}
+            {area ? labelFor(area, o) : LEVEL_LABEL[o]}
           </button>
         );
       })}
@@ -292,6 +297,7 @@ export function JobSheet({
                 </span>
                 <ThreeWay
                   label={a.label}
+                  area={a}
                   value={lvl}
                   options={opts}
                   onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}

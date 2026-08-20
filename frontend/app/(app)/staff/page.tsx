@@ -657,7 +657,7 @@ export default function StaffPage() {
       <RoleBuilder
         open={building}
         role={editing}
-        starts={arch.map((a) => ({ key: a.key, label: a.label, defaults: a.defaults }))}
+        
         people={editing ? users.filter((u) => u.custom_role_id === editing.id).length : 0}
         onClose={() => {
           setBuilding(false);

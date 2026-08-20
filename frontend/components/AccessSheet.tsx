@@ -21,13 +21,15 @@ import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { DetailSheet } from "@/components/DetailSheet";
 import {
+  isUnusual,
+  labelFor,
   LEVEL_HINT,
   LEVEL_LABEL,
-  SECTIONS,
   levelOf,
-  isUnusual,
   overridesFor,
   positionsFor,
+  SECTIONS,
+  type Area,
   type Level,
 } from "@/lib/access";
 
@@ -54,11 +56,14 @@ function ThreeWay({
   options,
   onChange,
   label,
+  area,
 }: {
   value: Level;
   options: Level[];
   onChange: (l: Level) => void;
   label: string;
+  /** So an area can name its own positions - "Can use", not "Can change". */
+  area?: Area;
 }) {
   return (
     <div
@@ -86,7 +91,7 @@ function ThreeWay({
                 : "text-fg-faint hover:text-fg-soft"
             }`}
           >
-            {LEVEL_LABEL[o]}
+            {area ? labelFor(area, o) : LEVEL_LABEL[o]}
           </button>
         );
       })}
@@ -430,6 +435,7 @@ export function AccessSheet({
                           </span>
                           <ThreeWay
                             label={a.label}
+                            area={a}
                             value={lvl}
                             options={positionsFor(a)}
                             onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}

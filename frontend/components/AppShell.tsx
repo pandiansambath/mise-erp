@@ -52,7 +52,7 @@ const NAV: NavItem[] = [
   { href: "/recipes", label: "Recipes", icon: "🍲", perm: "recipes:read", group: "Kitchen", keywords: "dishes menu costing" },
   { href: "/party-order", label: "Party Order", icon: "🎉", perm: "recipes:read", feature: "party_orders", group: "Kitchen", keywords: "event catering" },
   { href: "/allergens", label: "Allergens", icon: "⚠️", perm: "recipes:read", feature: "allergens", group: "Kitchen" },
-  { href: "/food-safety", label: "Food Safety", icon: "🌡️", perm: "inventory:read", feature: "food_safety", group: "Kitchen", keywords: "temperature haccp" },
+  { href: "/food-safety", label: "Food Safety", icon: "🌡️", perm: "safety:read", feature: "food_safety", group: "Kitchen", keywords: "temperature haccp" },
   { href: "/employees", label: "Employees", icon: "🧑‍🍳", perm: "employees:read", feature: "employees", group: "People", keywords: "team hr" },
   { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read", feature: "attendance", group: "People", keywords: "punch clock present" },
   { href: "/rota", label: "Rota", icon: "🗓️", perm: "employees:read", feature: "rota", group: "People", keywords: "shifts schedule week" },
