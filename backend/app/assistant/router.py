@@ -358,8 +358,8 @@ async def vision_read(
     # budget first: refuse before spending, never after
     await guard.enforce(db, user, "vision", feature="ai_scan")
 
-    if kind not in ("auto", "bill", "recipe"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "kind must be auto, bill or recipe")
+    if kind not in ("auto", "bill", "recipe", "menu"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "kind must be auto, bill, recipe or menu")
     data = await file.read()
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
