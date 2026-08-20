@@ -89,14 +89,20 @@ export function Workbench({
     // oscillation is stopped in time instead of in space. After a flip the
     // state is held for 350ms, which is longer than the reflow it causes, so
     // the reflow cannot flip it back.
+    // And the lock is ASYMMETRIC, because the problem is not symmetric.
+    // Condensing removes height; the reflow that follows can only ever push
+    // the sentinel back DOWN, so the only flip it can cause is the return to
+    // expanded. Guarding both directions equally meant the rail sat out a real
+    // scroll-down for 350ms and felt sticky. Going down is immediate; coming
+    // back up has to outlast the reflow that would have faked it.
     let lockedUntil = 0;
     const io = new IntersectionObserver(
       ([entry]) => {
         const now = performance.now();
-        if (now < lockedUntil) return;
         const next = !entry.isIntersecting;
         if (next === condensed.current) return;
-        lockedUntil = now + 350;
+        if (!next && now < lockedUntil) return; // expanding: prove it
+        lockedUntil = now + 420;
         apply(next);
       },
       { threshold: 0 },
