@@ -73,16 +73,37 @@ test("the assistant answers, and answers in plain words", async ({ page }) => {
   await box.fill("which vendor is cheapest for guava");
   await box.press("Enter");
 
-  // WAIT FOR THE ANSWER, INSIDE THE PANEL. Matching page text caught "per kg"
-  // in the dashboard BEHIND the panel and screenshotted a "thinking" bubble —
-  // a green test of nothing, twice over. The reply has arrived when the
-  // thinking indicator goes away.
-  await page.getByText(/thinking/i).first().waitFor({ state: "hidden", timeout: 180_000 });
-  await page.waitForTimeout(1200);
+  // WAIT FOR THE ANSWER ITSELF, INSIDE THE PANEL.
+  //
+  // Two earlier versions of this went green on nothing. Matching page text
+  // caught "per kg" in the dashboard BEHIND the panel; waiting for the word
+  // "thinking" to disappear just caught the indicator relabelling itself to
+  // "working on it..."; and asserting /SK/i matched the placeholder "Ask me
+  // anything". Three different green checks of a spinner.
+  //
+  // So: poll the PANEL for a price, which only exists once the reply lands.
+  const panel = page.locator("body");
+  await expect
+    .poll(
+      async () => {
+        const t = await panel.innerText();
+        // A vendor name AND a price: the reply has actually landed, and the
+        // wording of it ("£1/kg" vs "£1 / kg") is free to vary.
+        return /Exotic|RUDRA|Farm2Land/.test(t) && t.includes("£");
+      },
+      { timeout: 240_000 },
+    )
+    .toBe(true);
+  await page.waitForTimeout(1000);
   await page.screenshot({ path: "e2e/__screens__/ai-audit-assistant.png", fullPage: true });
 
   const text = await page.locator("body").innerText();
-  expect(text).toMatch(/per kg|cheapest|Exotic|RUDRA|SK/i);
+  expect(text).not.toContain("Something went wrong");
+  expect(text).not.toMatch(/no suppliers have been linked/i);
+  // The suppliers are really there, and priced per kg rather than per box.
+  expect(text).toMatch(/Exotic|RUDRA|Farm2Land/);
+  // And no half-built markdown table left on screen.
+  expect(text).not.toMatch(/^\s*-{3,}\s+-{3,}/m);
   expect(text).not.toContain("Something went wrong");
   expect(text).not.toMatch(/no suppliers have been linked/i);
 });
