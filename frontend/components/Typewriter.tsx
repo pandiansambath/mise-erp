@@ -26,8 +26,13 @@ const TICK_MS = 16;
 /** Markdown characters, removed while typing so they are never seen. */
 function stripSyntax(s: string): string {
   return s
+    // DIVIDERS FIRST, while the pipes are still there to recognise them by.
+    // The old order blanked the pipes into spaces and then looked for a line
+    // that was ONLY dashes - but `| --- | --- |` had become `  ---   ---  `,
+    // which is two groups of dashes with a space between and matched nothing.
+    // So every table typed itself out with a row of stray dashes across it.
+    .replace(/^[ \t|:-]*-{3,}[ \t|:-]*\r?\n/gm, "") // table dividers
     .replace(/\|/g, "  ")                       // table pipes
-    .replace(/^\s*[-:]{3,}\s*$/gm, "")           // table dividers
     .replace(/\*\*/g, "")                        // bold markers
     .replace(/`/g, "")                          // code ticks
     .replace(/\[([^\]]*)\]\([^)]*\)?/g, "$1");    // links -> their label
