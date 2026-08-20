@@ -81,3 +81,53 @@ def test_every_readable_name_is_a_view_not_a_table() -> None:
     """If a bare table name ever appears in the allow-list, the scoping is gone."""
     for name in READABLE:
         assert name.startswith("ai_"), name
+
+
+@pytest.mark.asyncio
+async def test_a_failed_query_leaves_the_caller_alone(db, hotel, make_user):
+    """A bad query from the model used to take the whole request down with it.
+
+    `run` executed on the REQUEST's session and rolled it back afterwards, and
+    `rollback()` expires every ORM object in that session — including the
+    authenticated user the rest of the request is built on. The next read of
+    `user.hotel_id` tried to lazily reload it mid-request, and the reply died.
+
+    On live, "how much did we spend last month" was a reliable 500: the model
+    reached for SQL, wrote `expense_date` (the column is `date`), the query
+    failed exactly as designed — and then the session it had poisoned killed
+    everything downstream. The failure was handled; the collateral was not.
+
+    The `ai_*` views come from a migration and the test schema is built with
+    `create_all`, so this query fails here for a different reason than it did
+    on live. That is fine and deliberate: what is under test is not WHY the
+    query failed, it is that a failure cannot reach the caller.
+    """
+    from app.assistant.query import run
+
+    owner = await make_user("q1@test.com", "SUPER_ADMIN")
+
+    out = await run(db, owner, "SELECT expense_date FROM ai_expenses")
+
+    assert "error" in out, "a query against a missing column must fail, not raise"
+    # THE ACTUAL ASSERTION. Reading these is what used to blow up: after the
+    # rollback they were expired, and reloading them needed a connection the
+    # request no longer had.
+    assert owner.hotel_id == hotel.id
+    assert owner.email == "q1@test.com"
+
+
+@pytest.mark.asyncio
+async def test_the_caller_can_still_write_afterwards(db, hotel, make_user):
+    """The other half: `SET LOCAL transaction_read_only = on` was applied to
+    the CALLER's transaction. Anything the request still had to save — an
+    audit row, a usage record — was writing into a transaction the assistant
+    had quietly made read-only."""
+    from app.assistant.query import run
+    from app.inventory import service as inv
+
+    owner = await make_user("q2@test.com", "SUPER_ADMIN")
+    await run(db, owner, "SELECT expense_date FROM ai_expenses")
+
+    item = await inv.create_item(db, hotel.id, name="After The Query", unit="kg")
+
+    assert item.id is not None
