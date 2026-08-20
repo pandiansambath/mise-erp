@@ -126,6 +126,13 @@ class VendorPriceRow(BaseModel):
     #: The number the comparison is actually made on. A £120 box and a 45p
     #: packet are only comparable once both are per gram.
     price_per_base: Decimal | None = None
+    #: How much is IN that pack, for THIS supplier. Without it the row can say
+    #: "£50 a box" and "£1/kg" but never "a box of 50 kg", so nobody can check
+    #: the figure against a real invoice. The service has always computed it;
+    #: leaving it off this schema meant response_model silently dropped it on
+    #: the way out - the same way `pack_size_override` went missing from
+    #: SupplierOption and drew a 100kg box as 50kg.
+    pack_size: Decimal | None = None
     is_preferred: bool
     last_updated: date
 

@@ -99,3 +99,32 @@ async def test_a_mixed_case_still_sorts_right(db, hotel):
     out = await compare_vendor_prices(db, item.id, hotel.id)
     assert out["cheapest_vendor"]["vendor_name"] == "Farm2Land"   # £0.0080/g
     assert out["most_expensive_vendor"]["vendor_name"] == "Loose"  # £0.0200/g
+
+
+@pytest.mark.asyncio
+async def test_the_pack_size_survives_the_response_model(client, make_user, auth_header, db, hotel):
+    """The service computed `pack_size` and FastAPI threw it away.
+
+    `VendorPriceRow` did not declare the field, and `response_model` drops
+    anything it does not declare — silently, with a 200. So the row could say
+    "£120 a box" and "£0.008 per gram" but never "a box of 15 000 g", which is
+    the only number that lets somebody check the figure against a real invoice.
+
+    Every other test in this file calls the service directly, which is exactly
+    why this survived: the field is present right up until it crosses the
+    schema. It is the same fault that drew a 100kg box as 50kg when
+    `pack_size_override` went missing from `SupplierOption`, so this one is
+    tested over HTTP on purpose.
+    """
+    item, _, _ = await _pepper_with_two_shapes(db, hotel.id)
+    owner = await make_user("packsize@test.com", "SUPER_ADMIN")
+
+    r = await client.get(
+        f"/api/vendors/items/{item.id}/price-comparison", headers=auth_header(owner)
+    )
+
+    assert r.status_code == 200, r.text
+    rows = {c["vendor_name"]: c for c in r.json()["comparisons"]}
+    assert rows["Farm2Land"]["pack_size"] is not None, "the box size never reached the client"
+    assert Decimal(str(rows["Farm2Land"]["pack_size"])) == Decimal("15000")
+    assert Decimal(str(rows["SK"]["pack_size"])) == Decimal("50")

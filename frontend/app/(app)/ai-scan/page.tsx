@@ -32,6 +32,8 @@ type Line = {
 
 type Scan = {
   doc_type: "bill" | "recipe";
+  /** A water bill is a real bill, but it is not a sack of rice. */
+  bill_for?: "goods" | "overhead" | null;
   vendor_name?: string | null;
   invoice_number?: string | null;
   date?: string | null;
@@ -50,6 +52,7 @@ type Draft = {
   date: string;
   total: string;
   category: string;
+  overhead: boolean;
   title: string;
   serves: number | null;
   steps: string[];
@@ -333,7 +336,8 @@ export default function AiScanPage() {
           vendor: s.vendor_name ?? "",
           date: (s.date ?? "").slice(0, 10),
           total: s.total != null ? String(s.total) : "",
-          category: "Food",
+          category: s.bill_for === "overhead" ? "Utilities" : "Food",
+          overhead: s.bill_for === "overhead",
           title: s.name ?? "",
           serves: s.serves ?? null,
           steps: s.steps ?? [],
@@ -347,7 +351,9 @@ export default function AiScanPage() {
       say(
         s.doc_type === "recipe"
           ? `Got it — that's a recipe with ${lines.length} ingredient${lines.length === 1 ? "" : "s"}.`
-          : `Here's what I read${s.vendor_name ? ` from ${s.vendor_name}` : ""}.` +
+          : s.bill_for === "overhead"
+            ? `That's an overhead bill${s.vendor_name ? ` from ${s.vendor_name}` : ""}, not a delivery — so it belongs in Expenses rather than the stock room. I've read the amounts; save it as an expense and nothing touches your stock.`
+            : `Here's what I read${s.vendor_name ? ` from ${s.vendor_name}` : ""}.` +
               (unsure
                 ? ` ${unsure} value${unsure === 1 ? "" : "s"} I couldn't read cleanly — they're marked in amber, please check those.`
                 : " Everything came through clearly, but have a quick look before you save."),
@@ -485,6 +491,16 @@ export default function AiScanPage() {
           ) : null}
         </div>
 
+        {bill && d.overhead ? (
+          // A water bill filed under "Food" quietly inflates food-cost % — the
+          // one number this whole app is built to get right. Say what it is and
+          // pre-file it correctly, rather than defaulting everything to Food.
+          <p className="mise-tone-info mt-2 rounded-xl px-3 py-2 text-xs leading-relaxed">
+            This looks like an <b>overhead</b> — utilities, rent or a service, not a
+            delivery. It is filed under <b>{d.category}</b> so it does not count against
+            your food cost. Change the category if that is wrong.
+          </p>
+        ) : null}
         {bill ? (
           <div className="mt-2 grid gap-1 px-1 sm:grid-cols-2">
             {(
