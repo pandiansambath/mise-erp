@@ -156,10 +156,38 @@ export default function StaffPage() {
     setSaving(true);
     setError(null);
     try {
+      // A role of ours, or one of theirs? The `role:` prefix keeps both in one
+      // <select> without needing a second control the reader has to notice.
+      const ownRole = role.startsWith("role:") ? role.slice(5) : null;
+      const baseRole = ownRole
+        ? (roles.find((r) => r.id === ownRole)?.base_role ?? "STAFF")
+        : role;
+
+      let created: UserOut | null = null;
       if (linkEmpId) {
-        await api.post(`/employees/${linkEmpId}/account`, { email, password, role });
+        await api.post(`/employees/${linkEmpId}/account`, {
+          email,
+          password,
+          role: baseRole,
+        });
       } else {
-        await api.post<UserOut>("/auth/users", { email, password, role });
+        created = await api.post<UserOut>("/auth/users", {
+          email,
+          password,
+          role: baseRole,
+        });
+      }
+
+      if (ownRole) {
+        // The account has to exist before it can be put in a role. When it was
+        // made from an employee record we do not get the id back, so find them
+        // by the email we just used.
+        let id = created?.id ?? null;
+        if (!id) {
+          const all = await api.get<UserOut[]>("/auth/users");
+          id = all.find((u) => u.email.toLowerCase() === email.trim().toLowerCase())?.id ?? null;
+        }
+        if (id) await api.put(`/roles/user/${id}/role`, { role_id: ownRole });
       }
       setEmail("");
       setPassword("");
@@ -314,7 +342,7 @@ export default function StaffPage() {
         <form onSubmit={addUser} className="mise-card3d mise-pop mb-5 p-4">
           <p className="text-sm font-semibold text-fg">A new login</p>
           <p className="mt-0.5 text-[11px] leading-relaxed text-fg-faint">
-            Pick the job it most resembles — you can fine-tune exactly what they reach straight
+            Pick one of your own roles, or a standard job — you can fine-tune exactly what they reach straight
             afterwards by tapping their card.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -342,14 +370,25 @@ export default function StaffPage() {
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-fg-soft">Their job</span>
+              <span className="text-xs font-medium text-fg-soft">What are they?</span>
+              {/* THE HOTEL'S OWN ROLES BELONG HERE TOO.
+                  "I created a new role called super master, but this is not
+                   reflecting in these areas."
+                  Right — it existed, and the one place you go to make a person
+                  could not see it. A role you cannot pick when creating
+                  somebody is a role you have to remember to apply afterwards. */}
               <Select
                 value={role}
                 onChange={setRole}
-                options={ROLES.filter((r) => r !== "SUPER_ADMIN" || isSuperAdmin).map((r) => ({
-                  value: r,
-                  label: ROLE_LABELS[r],
-                }))}
+                options={[
+                  ...roles.map((r) => ({ value: `role:${r.id}`, label: `${r.name} (yours)` })),
+                  // ROLES never contained KIOSK, so there is nothing to filter
+                  // out here - it is not a job anybody is hired into.
+                  ...ROLES.filter((r) => r !== "SUPER_ADMIN" || isSuperAdmin).map((r) => ({
+                    value: r,
+                    label: ROLE_LABELS[r],
+                  })),
+                ]}
               />
             </label>
             <label className="block">
