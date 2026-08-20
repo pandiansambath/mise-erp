@@ -51,8 +51,27 @@ _LABELS = {
 
 
 class RoleIn(BaseModel):
+    """A role the hotel invented, named in their own words.
+
+        "what if hotel need to create their own role like kitchen manager,
+         hotel manager... may be paratha manager, poori manager. Anything. We
+         need to make this thing very very loose and flexible - super admin is
+         the owner, he can do anything he wants."
+
+    Right, and the five we shipped were never a description of restaurants —
+    they were a description of our database. A kitchen with a Tandoor Lead and
+    a Sweets Counter has two jobs we have no word for, and the fix is not a
+    longer list of our words.
+
+    `base_role` is now a STARTING POINT, not a ceiling: it decides which
+    switches are already on when the sheet opens, and nothing else. Leave it
+    out and the role starts from STAFF, which is the narrowest thing we have —
+    a new role begins closed and is opened deliberately.
+    """
+
     name: str = Field(min_length=2, max_length=60)
-    base_role: str
+    #: Which job's defaults to begin from. Not a limit — see `_clip`.
+    base_role: str = Role.STAFF.value
     overrides: dict[str, bool] = Field(default_factory=dict)
 
 
@@ -119,7 +138,7 @@ async def create_role(
     user: User = Depends(require("users:write")),
 ) -> RoleOut:
     if payload.base_role not in ASSIGNABLE:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown base role")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown starting point")
     cr = CustomRole(
         hotel_id=user.hotel_id,
         name=payload.name.strip(),
@@ -148,7 +167,7 @@ async def update_role(
     if cr is None or cr.hotel_id != user.hotel_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Role not found")
     if payload.base_role not in ASSIGNABLE:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown base role")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown starting point")
     cr.name = payload.name.strip()
     cr.base_role = payload.base_role
     cr.overrides = _clip(payload.base_role, payload.overrides)
@@ -203,10 +222,72 @@ def _clip(base_role: str, overrides: dict[str, bool]) -> dict[str, bool]:
 class AccessIn(BaseModel):
     """What one PERSON may reach. Not a role — a person."""
 
-    #: Their job, which sets the ceiling. Omitted = leave their job alone.
+    #: Which job's defaults they start from. Omitted = leave their job alone.
     base_role: str | None = None
-    #: Permission -> on/off, relative to that job's defaults.
+    #: Permission -> on/off, relative to those defaults.
     overrides: dict[str, bool] = Field(default_factory=dict)
+
+
+class AssignIn(BaseModel):
+    """Put a person into one of the hotel's own roles.
+
+    Naming a role is only worth doing if it can be HANDED to somebody —
+    otherwise it is a saved draft. `null` takes them back out of it, onto the
+    plain defaults of their job.
+    """
+
+    role_id: uuid.UUID | None = None
+
+
+@router.put("/user/{user_id}/role")
+async def assign_role(
+    user_id: uuid.UUID,
+    payload: AssignIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("users:write")),
+) -> dict:
+    """Hand one of the hotel's own roles to a person.
+
+    A named role that cannot be handed to anybody is a saved draft, and that is
+    exactly what happened last time: the only role this hotel ever designed was
+    attached to nobody, because designing and attaching lived on different
+    screens. Creating a role and putting somebody in it are one flow now, and
+    this is the second half of it.
+
+    Their underlying job follows the role's starting point, so what they see in
+    the app and what the role says stay the same thing.
+    """
+    target = await db.get(User, user_id)
+    if target is None or target.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Person not found")
+    if target.role == Role.SUPER_ADMIN.value:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "The owner's access cannot be limited - it is the account that "
+            "rescues every other one.",
+        )
+
+    if payload.role_id is None:
+        target.custom_role_id = None
+        summary = f"Took {target.preferred_name or target.email} out of their role"
+    else:
+        cr = await db.get(CustomRole, payload.role_id)
+        if cr is None or cr.hotel_id != user.hotel_id or not cr.is_active:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Role not found")
+        target.custom_role_id = cr.id
+        target.role = cr.base_role
+        summary = f"Put {target.preferred_name or target.email} in '{cr.name}'"
+
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="user.role",
+        summary=summary, entity_type="user", entity_id=target.id,
+    )
+    await db.commit()
+    return {
+        "user_id": str(target.id),
+        "base_role": target.role,
+        "custom_role_id": str(target.custom_role_id) if target.custom_role_id else None,
+    }
 
 
 @router.put("/user/{user_id}/access")
@@ -234,9 +315,10 @@ async def set_user_access(
     role built this way belongs to that person; naming one for reuse stays
     available and stays optional.
 
-    The archetype ceiling is untouched: `resolve_permissions` still discards
-    anything outside the envelope, so this endpoint cannot grant a waiter the
-    payroll however it is called.
+    There is no archetype ceiling any more — that was removed deliberately, and
+    this docstring promised the opposite for a while after it went. The owner
+    decides; `grantable_for` only insists that a permission is one the app
+    actually knows how to honour, and that the KIOSK stays sealed.
     """
     target = await db.get(User, user_id)
     if target is None or target.hotel_id != user.hotel_id:

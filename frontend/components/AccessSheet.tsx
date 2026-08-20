@@ -106,6 +106,9 @@ export function AccessSheet({
   const [arch, setArch] = useState<Archetype[]>([]);
   const [held, setHeld] = useState<Set<string>>(new Set());
   const [job, setJob] = useState("");
+  // The hotel's OWN roles, so a person can simply be put into one instead
+  // of having their switches set by hand every time.
+  const [mine, setMine] = useState<{ id: string; name: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, Level>>({});
   const [tab, setTab] = useState("money");
   const [busy, setBusy] = useState(false);
@@ -116,6 +119,10 @@ export function AccessSheet({
       .get<{ archetypes: Archetype[] }>("/roles/archetypes")
       .then((d) => setArch(d.archetypes))
       .catch(() => {});
+    api
+      .get<{ roles: { id: string; name: string; is_active: boolean }[] }>("/roles")
+      .then((d) => setMine(d.roles.filter((r) => r.is_active).map((r) => ({ id: r.id, name: r.name }))))
+      .catch(() => setMine([]));
   }, []);
 
   // What they can reach TODAY — their job's defaults, plus whatever their
@@ -305,6 +312,54 @@ export function AccessSheet({
               <p className="mise-tone-warn mt-2 text-[11px]">
                 Changing their job resets the switches below to that job&apos;s normal access.
               </p>
+            )}
+
+            {/* PUT THEM IN ONE OF YOUR OWN ROLES.
+                A named role that cannot be handed to anybody is a saved draft,
+                and that is exactly what happened last time — the only role this
+                hotel ever designed was attached to nobody, because designing
+                and attaching lived on different screens. */}
+            {mine.length > 0 && (
+              <div className="mt-3 rounded-xl border border-line bg-paper-2/40 p-3">
+                <p className="mb-1.5 text-[11px] font-medium text-fg-faint">
+                  Or put them in one of your own roles
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={person?.custom_role_id ?? ""}
+                    onChange={async (e) => {
+                      if (!person) return;
+                      const id = e.target.value || null;
+                      setBusy(true);
+                      setErr(null);
+                      try {
+                        await api.put(`/roles/user/${person.id}/role`, { role_id: id });
+                        onSaved();
+                        onClose();
+                      } catch (ex) {
+                        setErr(
+                          ex instanceof ApiError ? ex.message : "Could not change their role.",
+                        );
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                    disabled={busy}
+                    className="mise-well min-w-[12rem] flex-1 rounded-xl px-3 py-2.5 text-sm outline-none"
+                  >
+                    <option value="">Their own settings (below)</option>
+                    {mine.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-1.5 text-[10px] leading-relaxed text-fg-faint">
+                  Everyone in a role gets the same access, and changing the role changes it for
+                  all of them. Leave it on <b>their own settings</b> to tune this one person.
+                </p>
+              </div>
             )}
           </div>
 

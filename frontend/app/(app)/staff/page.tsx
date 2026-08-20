@@ -33,6 +33,7 @@ import Link from "next/link";
 import { Workbench } from "@/components/Workbench";
 import { AccessSheet, type Person } from "@/components/AccessSheet";
 import { JobSheet, type Job } from "@/components/JobSheet";
+import { RoleBuilder } from "@/components/RoleBuilder";
 import { SECTIONS, levelOf, positionsFor } from "@/lib/access";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
@@ -67,6 +68,10 @@ export default function StaffPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [everything, setEverything] = useState<string[]>([]);
   const [openJob, setOpenJob] = useState<Job | null>(null);
+  // ROLES THE HOTEL INVENTED. `building` is open/closed; `editing` is which
+  // one (null = designing a new one).
+  const [building, setBuilding] = useState(false);
+  const [editing, setEditing] = useState<CustomRole | null>(null);
 
   // add-a-login
   const [adding, setAdding] = useState(false);
@@ -434,6 +439,94 @@ export default function StaffPage() {
                 </li>
               );
             })}
+
+            {/* THE HOTEL'S OWN ROLES, beside the ones we shipped rather than
+                filed away somewhere else. A named role that lives on a
+                different screen from the jobs is how the last one ended up
+                attached to nobody. */}
+            {roles.map((r) => {
+              const held = new Set(r.permissions);
+              let on = 0;
+              let total = 0;
+              for (const sec of SECTIONS)
+                for (const a of sec.areas) {
+                  total += 1;
+                  if (levelOf(a, held) !== "none") on += 1;
+                }
+              const holders = users.filter((u) => u.custom_role_id === r.id).length;
+              return (
+                <li key={r.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setEditing(r);
+                      setBuilding(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setEditing(r);
+                        setBuilding(true);
+                      }
+                    }}
+                    className="mise-card3d mise-press relative w-full cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
+                  >
+                    <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400/70" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-display text-base font-semibold text-fg">
+                        {r.name}
+                      </span>
+                      <span aria-hidden className="shrink-0 text-fg-faint">›</span>
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] text-fg-faint">
+                      A role you made
+                    </p>
+                    <dl className="mt-2.5 space-y-0.5 border-t border-line/50 pt-2 text-[11px]">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">Reaches</dt>
+                        <dd className="tabular-nums text-fg">
+                          {on} of {total} areas
+                        </dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">People</dt>
+                        <dd className="tabular-nums text-fg-soft">{holders}</dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">Set up</dt>
+                        <dd className="mise-tone-info">yours</dd>
+                      </div>
+                    </dl>
+                  </div>
+                </li>
+              );
+            })}
+
+            {canWrite && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(null);
+                    setBuilding(true);
+                  }}
+                  className="mise-press grid h-full w-full place-items-center rounded-2xl border border-dashed border-line p-3.5 text-center hover:border-brand-400/60"
+                >
+                  <span>
+                    <span aria-hidden className="block text-2xl">＋</span>
+                    <span className="mt-1 block font-display text-base font-semibold text-fg">
+                      Create a role
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-fg-faint">
+                      Poori Master, Tandoor Lead, anything you call it —
+                      <br />
+                      then choose what they can reach
+                    </span>
+                  </span>
+                </button>
+              </li>
+            )}
           </ul>
         </>
       ) : loading ? (
@@ -549,6 +642,18 @@ export default function StaffPage() {
       )}
 
       <AccessSheet person={open} onClose={() => setOpen(null)} onSaved={load} />
+      <RoleBuilder
+        open={building}
+        role={editing}
+        starts={arch.map((a) => ({ key: a.key, label: a.label, defaults: a.defaults }))}
+        people={editing ? users.filter((u) => u.custom_role_id === editing.id).length : 0}
+        onClose={() => {
+          setBuilding(false);
+          setEditing(null);
+        }}
+        onSaved={load}
+      />
+
       <JobSheet
         job={openJob}
         everything={everything}

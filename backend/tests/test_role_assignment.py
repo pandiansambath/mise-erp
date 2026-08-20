@@ -342,3 +342,93 @@ async def test_a_persons_own_tweak_still_beats_the_job(client, admin, chef, auth
     me = (await client.get("/api/auth/me", headers=auth_header(chef))).json()
     assert "stock:write" in me["permissions"], "their own tweak was lost"
     assert "recipes:write" in me["permissions"], "the job underneath was lost"
+
+
+@pytest.mark.asyncio
+async def test_a_hotel_can_invent_a_role_and_put_someone_in_it(
+    client, admin, auth_header, make_user
+):
+    """"what if hotel need to create their own role... may be paratha manager,
+    poori manager. Anything."
+
+    The five jobs we shipped were never a description of restaurants, they were
+    a description of our database. This is the whole flow in one test: name a
+    job nobody has ever heard of, say what it reaches, hand it to a person.
+    """
+    h = auth_header(admin)
+
+    made = await client.post(
+        "/api/roles",
+        json={
+            "name": "Poori Master",
+            "base_role": Role.STAFF.value,
+            "overrides": {"inventory:read": True, "recipes:write": True},
+        },
+        headers=h,
+    )
+    assert made.status_code == 201, made.text
+    role = made.json()
+    assert role["name"] == "Poori Master"
+    assert "recipes:write" in role["permissions"]
+
+    cook = await make_user("poori@test.com", Role.STAFF.value)
+    put = await client.put(
+        f"/api/roles/user/{cook.id}/role", json={"role_id": role["id"]}, headers=h
+    )
+    assert put.status_code == 200, put.text
+    assert put.json()["custom_role_id"] == role["id"]
+
+
+@pytest.mark.asyncio
+async def test_a_new_role_starts_closed(client, admin, auth_header):
+    """No starting point given means STAFF — the narrowest thing we have. A
+    role begins shut and is opened deliberately, never the other way round."""
+    r = await client.post("/api/roles", json={"name": "Tandoor Lead"}, headers=auth_header(admin))
+
+    assert r.status_code == 201, r.text
+    perms = r.json()["permissions"]
+    assert "payroll:write" not in perms
+    assert "reports:write" not in perms
+
+
+@pytest.mark.asyncio
+async def test_taking_someone_out_of_a_role_is_one_call(
+    client, admin, auth_header, make_user
+):
+    made = await client.post(
+        "/api/roles", json={"name": "Sweets Counter"}, headers=auth_header(admin)
+    )
+    role = made.json()
+    person = await make_user("sweets@test.com", Role.STAFF.value)
+    h = auth_header(admin)
+    await client.put(f"/api/roles/user/{person.id}/role", json={"role_id": role["id"]}, headers=h)
+
+    out = await client.put(f"/api/roles/user/{person.id}/role", json={"role_id": None}, headers=h)
+
+    assert out.status_code == 200, out.text
+    assert out.json()["custom_role_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_role_from_another_hotel_cannot_be_handed_out(
+    client, admin, auth_header, make_user, db
+):
+    """Tenant isolation on the new door, not just the old ones."""
+    from app.auth.models import CustomRole
+    from app.hotels.models import Hotel
+
+    other = Hotel(name="Someone Else", country="GB", base_currency="GBP", city="Leeds")
+    db.add(other)
+    await db.commit()
+    theirs = CustomRole(hotel_id=other.id, name="Theirs", base_role=Role.MANAGER.value)
+    db.add(theirs)
+    await db.commit()
+
+    person = await make_user("iso@test.com", Role.STAFF.value)
+    r = await client.put(
+        f"/api/roles/user/{person.id}/role",
+        json={"role_id": str(theirs.id)},
+        headers=auth_header(admin),
+    )
+
+    assert r.status_code == 404
