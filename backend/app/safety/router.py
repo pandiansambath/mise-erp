@@ -24,7 +24,7 @@ router = APIRouter(
 async def create_log(
     payload: SafetyLogCreate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("inventory:write")),
+    user: User = Depends(require("safety:write")),
 ) -> SafetyLogOut:
     log = await service.create_log(
         db,
@@ -72,7 +72,7 @@ async def list_logs(
     date_from: date_type | None = Query(default=None),
     date_to: date_type | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("inventory:read")),
+    user: User = Depends(require("safety:read")),
 ) -> list[SafetyLogOut]:
     logs = await service.list_logs(db, user.hotel_id, date_from, date_to)
     return [SafetyLogOut.model_validate(x) for x in logs]
@@ -83,7 +83,7 @@ async def export_logs_pdf(
     date_from: date_type | None = Query(default=None),
     date_to: date_type | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("inventory:read")),
+    user: User = Depends(require("safety:read")),
 ) -> Response:
     """The food-safety log as a clean, branded PDF (server-side, not a screen-print)."""
     hotel = await db.get(Hotel, user.hotel_id)

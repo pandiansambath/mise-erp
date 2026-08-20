@@ -18,6 +18,12 @@ PERMISSIONS: dict[str, list[str]] = {
         "payroll:read",
         "vendors:write",
         "inventory:write",
+        # Food safety used to ride in on inventory:write, because the safety
+        # router asked for that instead of its own permission - so the "Food
+        # safety" switch on the access page controlled nothing at all. The
+        # router asks for safety:* now, and this keeps every manager exactly
+        # the access they already had rather than quietly taking it away.
+        "safety:write",
         "recipes:write",
         "indent:write",
         "indent:approve",
@@ -115,10 +121,33 @@ ENVELOPES: dict[str, list[str]] = {
 }
 
 
+#: THE READ HALF OF A PAIR, made real.
+#:
+#:   "we need literally all the pages access WITH READ AND WRITE that super
+#:    admin can choose to give."
+#:
+#: Several areas only ever had a write. Expenses, Documents, Approving orders
+#: and Food safety were on-or-off, because ":write" implies ":read" (see
+#: `has_permission`) and nobody had ever needed to hand out the seeing without
+#: the changing. So the sheet could only offer "No access / Can change" for
+#: them - which is exactly what he was looking at.
+#:
+#: The routes already ask for these by name; `require("expenses:read")` has
+#: been there all along. They simply were not grantable on their own. Naming
+#: them here gives each of those areas a real middle position: look, do not
+#: touch.
+READ_HALVES = [
+    "expenses:read",
+    "documents:read",
+    "indent:read",
+    "safety:read",
+]
+
 #: Everything the app can grant a person. Not a role's *usual* set - the whole
 #: board. The owner is entitled to see all of it.
 GRANTABLE = sorted(
-    {p for perms in PERMISSIONS.values() for p in perms if p != "*"}
+    set(READ_HALVES)
+    | {p for perms in PERMISSIONS.values() for p in perms if p != "*"}
     | {p for perms in ENVELOPES.values() for p in perms if p != "*"}
 )
 
