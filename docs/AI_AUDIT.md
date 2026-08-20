@@ -181,3 +181,43 @@ Three of the eight faults were **a field or key that quietly did not exist** —
 returned a healthy 200 with a confident answer. Nothing threw where anyone
 would see it. The lesson is not "test more", it is **test at the boundary the
 user actually crosses**: the service-level tests passed for all three.
+
+
+---
+
+## Two more, found by looking rather than asserting
+
+Both came out of a Playwright screenshot of his own dashboard, and neither
+would ever have failed a test:
+
+9. **The dashboard told a British restaurant it was losing dirhams.** *"You are
+   losing roughly 15x every dirham earned."* Every figure on that card was
+   correct; the briefing is handed bare numbers and was never told what
+   currency they are in, so the model picked one. An owner who reads "dirham"
+   on a Harrow restaurant's dashboard has no reason to trust the £1,765.96
+   either.
+10. **Every table typed itself out with a row of stray dashes across it.** The
+    typewriter shows a syntax-free version while a reply types, but it blanked
+    the pipes to spaces FIRST and then looked for a line that was only dashes -
+    by which point `| --- | --- |` had become `  ---   ---  `. The final
+    rendered state was always fine; it was the seconds before it that looked
+    broken, and that is the part anybody actually watches.
+
+## The test that kept passing on nothing
+
+Worth writing down, because it happened **three times in a row** while
+verifying this work:
+
+1. Screenshotted a loading spinner - the assertion was "no error text", and a
+   spinner has no error text.
+2. Waited for text that also existed on the page BEHIND the panel.
+3. Waited for the word "thinking" to disappear - it had merely relabelled
+   itself to "working on it...". And the backstop assertion `/SK/i` matched the
+   placeholder "**Ask** me anything".
+
+Each run reported success. The fix each time was the same: **wait for the thing
+you are actually claiming, and assert on content only that thing could
+produce** - here, a vendor name and a price inside the panel.
+
+This is the same failure as the bugs above, wearing different clothes: a green
+check and a 200 both mean "nothing objected", not "it worked".
