@@ -115,27 +115,63 @@ ENVELOPES: dict[str, list[str]] = {
 }
 
 
+#: Everything the app can grant a person. Not a role's *usual* set - the whole
+#: board. The owner is entitled to see all of it.
+GRANTABLE = sorted(
+    {p for perms in PERMISSIONS.values() for p in perms if p != "*"}
+    | {p for perms in ENVELOPES.values() for p in perms if p != "*"}
+)
+
+
 def envelope_for(base_role: str) -> list[str]:
-    """Every permission this base role may be granted. The toggle UI renders
-    exactly this list, so an impossible grant is never even offered."""
+    """What this job USUALLY reaches. A hint now, not a fence.
+
+        "manager means what and all he can access... super admin can choose
+         this... so please don't restrict any, let super admin do anything he
+         wants."
+
+    It used to be the ceiling: the UI rendered exactly this list, and anything
+    outside it was dropped on the way in. So an owner who wanted his manager to
+    see the rota was told, by an absence, that it was not possible - and the
+    only signal was a toggle that was never drawn.
+
+    The set still means something: it is what the job does by default, and the
+    page marks anything outside it as unusual. Warn, do not block.
+    """
     return sorted(set(ENVELOPES.get(base_role, [])))
+
+
+def grantable_for(base_role: str) -> list[str]:
+    """Every permission the owner may switch on for this job.
+
+    The KIOSK is the one exception and stays sealed: it is a tablet by the
+    door, not a person. Nobody is choosing to trust it, and a device that can
+    be handed round a room must not be grantable into the payroll.
+    """
+    if base_role == Role.KIOSK.value:
+        return sorted(set(ENVELOPES.get(base_role, [])))
+    return list(GRANTABLE)
 
 
 def resolve_permissions(base_role: str, overrides: dict[str, bool] | None) -> list[str]:
     """A custom role's effective permissions.
 
-    `overrides` is the owner's per-permission on/off map. Anything outside the
-    envelope is DISCARDED rather than rejected — an override could survive a
-    tightening of the envelope in a later release, and the safe reading of a
-    stale grant is 'no'.
+    `overrides` is the owner's per-permission on/off map. It used to be clipped
+    to the archetype's ENVELOPE here as well as on the way in, so even a stored
+    grant outside the usual set was dropped at read time - which meant loosening
+    the write path alone would have changed nothing.
+
+    Now the only filter is "is this a permission the app knows about", plus the
+    KIOSK's seal. An unknown string is still ignored: the safe reading of a
+    grant we cannot interpret is 'no'.
     """
-    allowed = set(ENVELOPES.get(base_role, []))
-    if "*" in allowed:
+    if "*" in set(ENVELOPES.get(base_role, [])):
         return ["*"]
+    allowed = set(grantable_for(base_role))
     effective = set(PERMISSIONS.get(base_role, []))
     for perm, on in (overrides or {}).items():
         if perm not in allowed:
-            continue  # outside the ceiling — silently dropped, never granted
+            continue  # not a permission we know how to honour
         if on:
             effective.add(perm)
         else:

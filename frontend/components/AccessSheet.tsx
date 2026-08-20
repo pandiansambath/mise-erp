@@ -25,6 +25,7 @@ import {
   LEVEL_LABEL,
   SECTIONS,
   levelOf,
+  isUnusual,
   overridesFor,
   positionsFor,
   type Level,
@@ -162,8 +163,8 @@ export function AccessSheet({
     const overrides: Record<string, boolean> = {};
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        if (positionsFor(a, envelope).length === 0) continue;
-        Object.assign(overrides, overridesFor(a, current(a.key, a), envelope));
+        if (positionsFor(a).length === 0) continue;
+        Object.assign(overrides, overridesFor(a, current(a.key, a)));
       }
     }
     try {
@@ -188,7 +189,7 @@ export function AccessSheet({
     let all = 0;
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        if (positionsFor(a, envelope).length === 0) continue;
+        if (positionsFor(a).length === 0) continue;
         all += 1;
         if (current(a.key, a) !== "none") on += 1;
       }
@@ -308,13 +309,24 @@ export function AccessSheet({
           </div>
 
           {SECTIONS.filter((s) => s.key === tab).map((s) => {
-            const areas = s.areas.filter((a) => positionsFor(a, envelope).length > 0);
+            // EVERY AREA, ALWAYS. What a job "normally" does no longer decides
+            // what the owner is allowed to see on this page.
+            const areas = s.areas.filter((a) => positionsFor(a).length > 0);
+            const beyond = areas.filter((a) => isUnusual(a, envelope)).length;
             return (
               <div key={s.key}>
+                {beyond > 0 && (
+                  <p className="mb-2 rounded-xl border border-line bg-paper-2/50 px-3.5 py-2.5 text-[11px] leading-relaxed text-fg-faint">
+                    {beyond === areas.length
+                      ? `A ${jobLabel} does not normally reach ${s.label.toLowerCase()}.`
+                      : `${beyond} of these are outside what a ${jobLabel} normally does.`}{" "}
+                    They are marked <b>unusual</b> — you can still switch them on, and it takes
+                    effect immediately.
+                  </p>
+                )}
                 {areas.length === 0 ? (
                   <p className="rounded-xl border border-line bg-paper-2/50 p-3.5 text-sm text-fg-faint">
-                    A {jobLabel} never reaches {s.label.toLowerCase()}, so there is nothing here to
-                    switch on. Change their job above if they need it.
+                    Nothing in {s.label.toLowerCase()} can be switched per person.
                   </p>
                 ) : (
                   <ul className="space-y-2">
@@ -322,6 +334,9 @@ export function AccessSheet({
                       const lvl = current(a.key, a);
                       const was = levelOf(a, held);
                       const changed = lvl !== was;
+                      // Outside the job's usual set. Said out loud, on the row,
+                      // instead of the control simply not existing.
+                      const odd = isUnusual(a, envelope);
                       return (
                         <li
                           key={a.key}
@@ -334,8 +349,18 @@ export function AccessSheet({
                               {a.icon}
                             </span>
                             <span className="min-w-0">
-                              <span className="block truncate text-sm font-medium text-fg">
-                                {a.label}
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate text-sm font-medium text-fg">
+                                  {a.label}
+                                </span>
+                                {odd && (
+                                  <span
+                                    title={`Not normally part of a ${jobLabel}'s job`}
+                                    className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300"
+                                  >
+                                    unusual
+                                  </span>
+                                )}
                               </span>
                               <span className="block truncate text-[11px] text-fg-faint">
                                 {changed ? (
@@ -351,7 +376,7 @@ export function AccessSheet({
                           <ThreeWay
                             label={a.label}
                             value={lvl}
-                            options={positionsFor(a, envelope)}
+                            options={positionsFor(a)}
                             onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
                           />
                         </li>

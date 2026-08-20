@@ -229,32 +229,55 @@ export function levelOf(area: Area, held: Set<string>): Level {
   return "none";
 }
 
-/** Which of the three positions this area can actually offer, given the
- *  ceiling. An area with no read permission has no view-only position, and one
- *  the job may never reach at all is not shown. */
-export function positionsFor(area: Area, envelope: Set<string>): Level[] {
-  const canRead = area.read.some((p) => envelope.has(p));
-  const canWrite = area.write.some((p) => envelope.has(p));
+/**
+ * Which positions this area can offer.
+ *
+ *   "for manager we have only expense can change / can see option... bro we
+ *    need literally ALL the pages access with read and write that super admin
+ *    can choose to give. Give all toggles please."
+ *
+ * This used to take the job's envelope and hide anything outside it, so a
+ * Manager's sheet showed a handful of areas and the rest simply were not there.
+ * An absence is the worst possible way to say "not allowed": there is nothing
+ * to read, nothing to hover, and no reason given. The owner was left thinking
+ * the app could not do it.
+ *
+ * So the only thing that decides now is the AREA itself — whether it has a
+ * meaningful "see" as distinct from "change". An area whose permissions are all
+ * writes (Expenses, Food safety) is on or off, and `none`/`edit` is the honest
+ * pair. Everything is offered; the sheet marks what is unusual for the job
+ * rather than removing it. Warn, do not block.
+ */
+export function positionsFor(area: Area): Level[] {
+  const canRead = area.read.length > 0;
+  const canWrite = area.write.length > 0;
   if (!canRead && !canWrite) return [];
   return canRead && canWrite ? ["none", "view", "edit"] : ["none", canWrite ? "edit" : "view"];
+}
+
+/** True when this area sits outside what the job normally does — worth a word
+ *  on the page, never a reason to hide the control. */
+export function isUnusual(area: Area, envelope: Set<string>): boolean {
+  return ![...area.read, ...area.write].some((p) => envelope.has(p));
 }
 
 /**
  * Turn "Payroll: can see" back into the on/off map the server stores.
  *
- * Only permissions inside the envelope are touched, and the whole area is
- * written every time — set to view and the write permissions are explicitly
- * turned OFF rather than left as they were, because a half-applied change is
- * how somebody keeps an ability they were just told they had lost.
+ * The whole area is written every time — set it to "can see" and the write
+ * permissions are explicitly turned OFF rather than left as they were, because
+ * a half-applied change is how somebody keeps an ability they have just been
+ * told they lost.
+ *
+ * This no longer filters by the envelope either. It used to, which meant a
+ * toggle outside the job's usual set would have been dropped on the way out
+ * even if the sheet had drawn it — so opening up the UI alone would have
+ * produced a control that moved and then silently did nothing.
  */
-export function overridesFor(area: Area, level: Level, envelope: Set<string>): Record<string, boolean> {
+export function overridesFor(area: Area, level: Level): Record<string, boolean> {
   const out: Record<string, boolean> = {};
-  for (const p of area.read) {
-    if (envelope.has(p)) out[p] = level !== "none";
-  }
-  for (const p of area.write) {
-    if (envelope.has(p)) out[p] = level === "edit";
-  }
+  for (const p of area.read) out[p] = level !== "none";
+  for (const p of area.write) out[p] = level === "edit";
   return out;
 }
 

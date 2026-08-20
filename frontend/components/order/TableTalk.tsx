@@ -16,6 +16,7 @@
 // restaurant with a drink in their other hand, so the five things anybody
 // actually asks for are one tap away, and the keyboard is the fallback.
 import { useState } from "react";
+import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { API_BASE } from "@/lib/api";
 
 const ASKS = [
@@ -219,8 +220,11 @@ export function TableTalk({
                     <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3 py-2 text-sm text-white">
                       {c.me}
                     </p>
-                    <div className="mise-card3d mr-auto w-fit max-w-[92%] rounded-2xl rounded-bl-md p-3">
-                      <p className="text-sm leading-relaxed text-fg">{c.ai}</p>
+                    <div className="mise-card3d mr-auto w-fit max-w-[92%] rounded-2xl rounded-bl-md p-3 text-sm leading-relaxed text-fg">
+                      {/* It replies in markdown. This used to print the raw
+                          text, so a diner read literal ** around every bolded
+                          word — on the one screen a stranger ever sees. */}
+                      <ChatMarkdown text={c.ai} />
                     </div>
                   </div>
                 ))}
