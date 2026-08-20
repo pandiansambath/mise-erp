@@ -68,7 +68,7 @@ test("a manager's sheet offers every section, not just the usual ones", async ({
   expect(text).not.toMatch(/never reaches .* so there is nothing here to switch on/i);
 });
 
-test("what a job does not normally do is marked, not hidden", async ({ page }) => {
+test("a job that reaches almost nothing can still be given anything", async ({ page }) => {
   // The Till reaches 2 of 17 areas, so almost everything on its sheet is
   // outside the job's usual set. That is exactly the case that used to render
   // as an empty section with "a Till never reaches Money" and no controls.
@@ -82,9 +82,15 @@ test("what a job does not normally do is marked, not hidden", async ({ page }) =
   await page.waitForTimeout(1000);
   await page.screenshot({ path: "e2e/__screens__/access-sheet-unusual.png", fullPage: true });
 
-  const text = await sheet.innerText();
-  expect(text).toMatch(/unusual/i);
-  expect(text).toMatch(/you can still switch them on/i);
-  // The controls are THERE, which is the whole point.
-  expect(await sheet.getByText(/^No access$/).count()).toBeGreaterThan(0);
+  // The controls are THERE, which is the whole point — the Till reaches 2 of
+  // 17 and every one of the other 15 is still switchable rather than absent.
+  expect(await sheet.getByText(/^No access$/).count()).toBe(4);
+
+  // AND each of them offers the middle. Expenses was "No access / Can change"
+  // with no way to say "let him look at the bills without adding any", because
+  // `expenses:read` was not a grantable permission — only implied by the write.
+  const expenses = sheet.locator("li").filter({ hasText: "Bills and everyday spending" });
+  await expect(expenses.getByText("No access")).toBeVisible();
+  await expect(expenses.getByText("Can see")).toBeVisible();
+  await expect(expenses.getByText("Can change")).toBeVisible();
 });
