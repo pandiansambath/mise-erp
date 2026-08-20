@@ -52,10 +52,10 @@ with **no bare table**, and never a figure no tool returned?
 | B2 | "what is low on stock" | The list, in plain units | ✅ 10 items, split out-of-stock vs running-low |
 | B3 | "which vendor is cheapest for guava" | Names a vendor, price **per kg**, not per box | ✅ **after fixing.** Before: "no suppliers have been linked" — it has five. Now ranks all 5 per kg, marks the chosen one ★, spots the 3-way tie |
 | B4 | "wat shud i buy today" | Acts on the low-stock list; no menu-of-capabilities | ✅ typo understood, plain units ("only 2 kg left, min 15 kg"), offers to raise the PO |
-| B5 | "how much did we spend last month" | A number a tool returned, or an honest "can't see that" | |
+| B5 | "how much did we spend last month" | A number a tool returned, or an honest "can't see that" | ⚠️→✅ **was a reliable HTTP 500.** See #7 |
 | B6 | "explain gross profit like im 5" | Plain English, no jargon dump | ✅ £10 burger, £3 of ingredients, £7 left — then rent and wages |
 | B7 | "how many people work here" | A real count, or honest refusal | ✅ 6, named, with roles |
-| B8 | "tell me something useful" | One real observation from the data, not a feature list | |
+| B8 | "what is today's date, and what month was last month?" | The real date | ⚠️→✅ **it did not know what day it was.** See #8 |
 
 ## C. The guest AI — what it must refuse
 
@@ -83,7 +83,7 @@ Starved by design: it holds the public profile and menu, nothing else.
 
 ## What the audit actually found
 
-Four bugs. **Every one returned `200 OK` with a fluent, confident answer**,
+Six bugs. **Almost every one returned `200 OK` with a fluent, confident answer**,
 which is exactly why none of them had been noticed:
 
 1. **`item_detail` read `cmp["vendors"]`** from a payload whose key is
@@ -104,14 +104,36 @@ which is exactly why none of them had been noticed:
    it. That is the "unrelevant response" when uploading a menu: not a weak
    model, a wrong prompt. `"auto"` had the same hole.
 
+5. **"How much did we spend last month" was a reliable 500.** The model reaches
+   for SQL to answer it and wrote `expense_date`; the column is `date`. The
+   query failing is fine and expected. What was not fine: `query.run` executed
+   on the REQUEST's session and rolled it back, and `rollback()` expires every
+   ORM object in that session — including the authenticated `user` the rest of
+   the request is built on. The next read of `user.hotel_id` tried to lazily
+   reload it mid-request and the whole reply died. The failure was handled; the
+   collateral was not. `SET LOCAL transaction_read_only = on` was leaking into
+   the caller's transaction by the same route.
+
+   And the model was **never told what it got wrong** — the tool description
+   promises "if a column name is wrong the error will say so", then the code
+   returned "try asking a different way". One wrong column name ended the
+   attempt instead of costing one retry.
+
+6. **It did not know what day it was.** Asked directly, it said: *"I can't tell
+   you today's exact date — I don't have a real-time clock built in."* So every
+   relative question was guesswork, and "last month" came back about **May**
+   when last month was July. It passed unnoticed because the tools that return
+   their own dates quietly covered for it whenever one happened to be called.
+   The prompt now carries the restaurant's own local date.
+
 And two tuning faults, which matter as much because nothing is *broken*:
 
-5. **It spoke like an accountant.** "Net Sales / Cost of Sales / Gross Profit"
+7. **It spoke like an accountant.** "Net Sales / Cost of Sales / Gross Profit"
    to people who have never read a P&L. Worse: on a month showing £110.95 of
    sales it diagnosed a *trading* problem, when the obvious reading is that the
    takings have not been entered yet. A wrong diagnosis delivered confidently
    is worse than no answer at all.
-6. **The calorie question only worked if you tapped the dish.** Typing the same
+8. **The calorie question only worked if you tapped the dish.** Typing the same
    words left the question with no dish attached, so nothing was looked up.
    Butter Chicken answered beautifully and Chicken Biryani refused, and the
    difference was never the dish — it was which control the guest touched.
@@ -154,7 +176,7 @@ And two tuning faults, which matter as much because nothing is *broken*:
 
 ### The pattern worth keeping
 
-Three of the six faults were **a field or key that quietly did not exist** —
+Three of the eight faults were **a field or key that quietly did not exist** —
 `cmp["vendors"]`, `i.vendor_count`, `pack_size` — and every one of them
 returned a healthy 200 with a confident answer. Nothing threw where anyone
 would see it. The lesson is not "test more", it is **test at the boundary the

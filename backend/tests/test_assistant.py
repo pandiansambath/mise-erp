@@ -394,3 +394,26 @@ async def test_it_still_builds_without_a_hotel(db, make_user):
     owner = await make_user("cal2@test.com", "SUPER_ADMIN")
 
     assert "TODAY IS" in _build_system(owner, None)
+
+
+def test_the_briefing_is_told_which_currency_it_is_in():
+    """A UK restaurant was told on its own dashboard that it was "losing
+    roughly 15x every dirham earned".
+
+    The figures were right; the briefing was just never told what they were
+    denominated in. It is handed bare numbers, so the model picked a currency —
+    and one wrong word costs the whole card its credibility.
+    """
+    from app.assistant.insights import _symbol
+
+    class _H:
+        base_currency = "GBP"
+
+    assert "£" in _symbol(_H())
+    assert "dirham" not in _symbol(_H()).lower()
+
+    class _Blank:
+        base_currency = None
+
+    # No currency set must not mean "pick one".
+    assert "£" in _symbol(_Blank())
