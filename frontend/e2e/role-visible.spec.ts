@@ -68,3 +68,30 @@ test("a role you made can be given to a person", async ({ page }) => {
   // The ceiling-era promise is gone.
   expect(text).not.toMatch(/never past what the job should ever reach/i);
 });
+
+test("give everything actually gives everything", async ({ page }) => {
+  // A control that renders is not a control that works. This one exists to
+  // save taps, so the only thing worth asserting is that ONE tap moves the
+  // counter to the top.
+  await signIn(page);
+  await page.goto(`${BASE}/staff`);
+  await page.getByRole("button", { name: /create a role/i }).waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: /create a role/i }).click();
+
+  const sheet = page.getByRole("dialog").last();
+  await sheet.getByPlaceholder(/poori master/i).waitFor({ timeout: 30_000 });
+
+  // A new role starts blank.
+  await expect(sheet.getByText("0 of 17")).toBeVisible();
+
+  await sheet.getByRole("button", { name: /^give everything$/i }).last().click();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: "e2e/__screens__/bulk-give-all.png", fullPage: true });
+
+  await expect(sheet.getByText("17 of 17")).toBeVisible();
+
+  // ...and back down again, so it is not a one-way door.
+  await sheet.getByRole("button", { name: /^take it all away$/i }).last().click();
+  await page.waitForTimeout(700);
+  await expect(sheet.getByText("0 of 17")).toBeVisible();
+});
