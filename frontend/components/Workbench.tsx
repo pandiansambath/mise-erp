@@ -122,13 +122,26 @@ export function Workbench({
     if (!el) return;
     const measure = () => {
       const box = el.querySelector<HTMLElement>(".mise-bench-tools");
-      // One row of controls is ~46px; two rows or labelled groups exceed this.
-      el.setAttribute("data-tall", box && box.offsetHeight > 62 ? "true" : "false");
+      if (!box) return;
+      // TALL **or** WIDE. Tucking slides the tools up beside the title, which
+      // needs room in BOTH directions — and I only checked one. A single row of
+      // search-plus-three-buttons is short enough to tuck and far too wide to
+      // fit, so it slid up and ran straight off the right-hand edge: "the side
+      // top buttons are hidden".
+      //
+      // Anything that would need more than half the rail's width has nowhere to
+      // go beside a title, so it condenses in place instead.
+      const tall = box.offsetHeight > 62;
+      const wide = box.scrollWidth > el.clientWidth * 0.52;
+      el.setAttribute("data-tall", tall || wide ? "true" : "false");
     };
     measure();
     const ro = new ResizeObserver(measure);
     const box = el.querySelector<HTMLElement>(".mise-bench-tools");
     if (box) ro.observe(box);
+    // The rail itself resizes when the window does, and a toolbar that fitted
+    // at 1400px does not at 900.
+    ro.observe(el);
     return () => ro.disconnect();
   }, []);
 

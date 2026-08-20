@@ -463,8 +463,8 @@ def _help_text(configured: bool) -> str:
     )
     if not configured:
         base += (
-            "\n\n(The smart AI isn't switched on yet — add a free Google AI Studio "
-            "key to unlock full conversational answers.)"
+            "\n\n(The full assistant is not reachable right now, so this is the "
+            "built-in help. The numbers above are live and correct.)"
         )
     return base
 

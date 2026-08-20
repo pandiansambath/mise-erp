@@ -70,3 +70,30 @@ resource "aws_iam_role_policy" "cloudwatch_logs" {
     }]
   })
 }
+
+# The assistant's brain: Claude on Bedrock — the in-app Copilot, bill reading,
+# handwritten recipes, and the guest assistant on the table QR page.
+#
+# THIS WAS DELETED BY ACCIDENT in c8cc216 ("Textract is gone"). The Textract
+# policy and this one sat next to each other, and removing Textract took Bedrock
+# with it — so every AI feature started answering "the AI service is
+# unavailable" with nothing in the app having changed. It cost a month.
+#
+# The failure was doubly hard to see because bedrock.py maps ANY AccessDenied to
+# "Claude isn't switched on for this AWS account yet", which points at the
+# Bedrock console — a place where everything was, correctly, already enabled.
+#
+# Resource "*" because the model id is configurable (BEDROCK_MODEL_ID) and the
+# cross-region inference profiles resolve to several underlying model ARNs.
+resource "aws_iam_role_policy" "bedrock" {
+  name = "${var.project}-bedrock"
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+      Resource = "*"
+    }]
+  })
+}
