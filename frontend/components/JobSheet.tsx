@@ -83,6 +83,46 @@ function ThreeWay({
   );
 }
 
+/**
+ * SET A WHOLE SECTION AT ONCE.
+ *
+ *   "I need one extra feature like give ALL in this section, give in this
+ *    page — so that I don't need to click each and everything when I need to
+ *    give each and everything."
+ *
+ * Fair: handing somebody the run of the kitchen is one decision, and making it
+ * cost four taps invites people to stop halfway. `all` does the same for the
+ * whole app, which is the "make him a second me" case.
+ *
+ * It sets the HIGHEST position each area can offer, so an area with no middle
+ * lands on its only "on" rather than being skipped.
+ */
+function BulkSet({
+  onSet,
+  scope,
+}: {
+  onSet: (level: Level) => void;
+  scope: string;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5">
+      <span className="text-[11px] text-fg-faint">{scope}</span>
+      <span className="flex flex-wrap gap-1.5">
+        {(["edit", "view", "none"] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => onSet(l)}
+            className="mise-press mise-well rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-fg-soft hover:text-fg"
+          >
+            {l === "edit" ? "Give everything" : l === "view" ? "See everything" : "Take it all away"}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 export function JobSheet({
   job,
   everything,
@@ -143,6 +183,23 @@ export function JobSheet({
     }
     return out;
   }, [draft, held, suggested]);
+
+  /** The highest position this area can offer — so an area with no middle
+   *  lands on its only "on" instead of being quietly skipped. */
+  function bulk(level: Level, only?: string) {
+    setDraft((d) => {
+      const next = { ...d };
+      for (const s of SECTIONS) {
+        if (only && s.key !== only) continue;
+        for (const a of s.areas) {
+          if (level === "none") next[a.key] = "none";
+          else if (level === "edit") next[a.key] = a.write.length ? "edit" : "view";
+          else next[a.key] = a.read.length ? "view" : "none";
+        }
+      }
+      return next;
+    });
+  }
 
   async function save() {
     if (!job) return;
@@ -256,6 +313,9 @@ export function JobSheet({
           but it is worth being sure, because everyone with this job gets it.
         </p>
       )}
+
+      <BulkSet scope="Everything in this group:" onSet={(l) => bulk(l, tab)} />
+      <BulkSet scope="Every page in DineAI:" onSet={(l) => bulk(l)} />
 
       {SECTIONS.filter((s) => s.key === tab).map((s) => (
         <ul key={s.key} className="space-y-2">

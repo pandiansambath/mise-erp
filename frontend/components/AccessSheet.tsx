@@ -99,6 +99,46 @@ function ThreeWay({
   );
 }
 
+/**
+ * SET A WHOLE SECTION AT ONCE.
+ *
+ *   "I need one extra feature like give ALL in this section, give in this
+ *    page — so that I don't need to click each and everything when I need to
+ *    give each and everything."
+ *
+ * Fair: handing somebody the run of the kitchen is one decision, and making it
+ * cost four taps invites people to stop halfway. `all` does the same for the
+ * whole app, which is the "make him a second me" case.
+ *
+ * It sets the HIGHEST position each area can offer, so an area with no middle
+ * lands on its only "on" rather than being skipped.
+ */
+function BulkSet({
+  onSet,
+  scope,
+}: {
+  onSet: (level: Level) => void;
+  scope: string;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5">
+      <span className="text-[11px] text-fg-faint">{scope}</span>
+      <span className="flex flex-wrap gap-1.5">
+        {(["edit", "view", "none"] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => onSet(l)}
+            className="mise-press mise-well rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-fg-soft hover:text-fg"
+          >
+            {l === "edit" ? "Give everything" : l === "view" ? "See everything" : "Take it all away"}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 export function AccessSheet({
   person,
   onClose,
@@ -165,6 +205,23 @@ export function AccessSheet({
   const owner = person?.role === "SUPER_ADMIN";
   const dirty = Object.keys(draft).length > 0 || (person != null && job !== person.role);
 
+  /** The highest position this area can offer — so an area with no middle
+   *  lands on its only "on" instead of being quietly skipped. */
+  function bulk(level: Level, only?: string) {
+    setDraft((d) => {
+      const next = { ...d };
+      for (const s of SECTIONS) {
+        if (only && s.key !== only) continue;
+        for (const a of s.areas) {
+          if (level === "none") next[a.key] = "none";
+          else if (level === "edit") next[a.key] = a.write.length ? "edit" : "view";
+          else next[a.key] = a.read.length ? "view" : "none";
+        }
+      }
+      return next;
+    });
+  }
+
   async function save() {
     if (!person) return;
     setBusy(true);
@@ -229,7 +286,7 @@ export function AccessSheet({
           ? undefined
           : [
               { label: "Can reach", value: `${reach.on} of ${reach.all}`, hint: "areas of the app" },
-              { label: "Their job", value: jobLabel, hint: "sets what is possible" },
+              { label: "Their job", value: jobLabel, hint: "what they start from" },
               {
                 label: "Access",
                 value: person?.custom_role_id ? "Tailored" : "Standard",
@@ -277,21 +334,77 @@ export function AccessSheet({
             </p>
           )}
 
-          {/* THEIR JOB — the only abstraction left, and it is one a chef already
-              uses. It sets the ceiling; everything below is inside it. */}
+          {/* WHAT IS THIS PERSON? One list, one question.
+              "I checked for my custom role to give to this person, but not
+               showing."
+              It was there — buried under five job cards, in a second box, below
+              the fold. Two lists answering the same question is one list too
+              many: the hotel's own roles belong beside ours, because from where
+              he is standing "Till" and "super master" are the same kind of
+              thing. */}
           <div className="mise-card3d mb-4 p-3.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-              Their job here
+              What is this person?
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-fg-soft">
-              This sets what is even possible for them. Everything below is inside it — you can
-              turn things off, and back on, but never past what the job should ever reach.
+              Pick the job or the role they do. It fills in what they reach — you can change any
+              of it below, and nothing here is a limit.
             </p>
-            <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+
+            {mine.length > 0 && (
+              <>
+                <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-brand-300">
+                  Roles you made
+                </p>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                  {mine.map((r) => {
+                    const on = person?.custom_role_id === r.id;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        disabled={busy}
+                        onClick={async () => {
+                          if (!person) return;
+                          setBusy(true);
+                          setErr(null);
+                          try {
+                            await api.put(`/roles/user/${person.id}/role`, { role_id: r.id });
+                            onSaved();
+                            onClose();
+                          } catch (ex) {
+                            setErr(
+                              ex instanceof ApiError ? ex.message : "Could not change their role.",
+                            );
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                        className={`mise-press rounded-xl border px-3 py-2.5 text-left transition ${
+                          on
+                            ? "border-brand-400/60 bg-brand-400/10"
+                            : "border-line hover:border-brand-400/40"
+                        }`}
+                      >
+                        <span className="block text-sm font-medium text-fg">{r.name}</span>
+                        <span className="block text-[11px] text-fg-faint">
+                          {on ? "they are in this role" : "a role you made"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+              {mine.length > 0 ? "Or a standard job" : "Their job"}
+            </p>
+            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
               {arch
                 .filter((a) => !/kiosk/i.test(`${a.key} ${a.label}`))
                 .map((a) => {
-                  const on = job === a.key;
+                  const on = job === a.key && !person?.custom_role_id;
                   return (
                     <button
                       key={a.key}
@@ -319,54 +432,10 @@ export function AccessSheet({
               </p>
             )}
 
-            {/* PUT THEM IN ONE OF YOUR OWN ROLES.
-                A named role that cannot be handed to anybody is a saved draft,
-                and that is exactly what happened last time — the only role this
-                hotel ever designed was attached to nobody, because designing
-                and attaching lived on different screens. */}
-            {mine.length > 0 && (
-              <div className="mt-3 rounded-xl border border-line bg-paper-2/40 p-3">
-                <p className="mb-1.5 text-[11px] font-medium text-fg-faint">
-                  Or put them in one of your own roles
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={person?.custom_role_id ?? ""}
-                    onChange={async (e) => {
-                      if (!person) return;
-                      const id = e.target.value || null;
-                      setBusy(true);
-                      setErr(null);
-                      try {
-                        await api.put(`/roles/user/${person.id}/role`, { role_id: id });
-                        onSaved();
-                        onClose();
-                      } catch (ex) {
-                        setErr(
-                          ex instanceof ApiError ? ex.message : "Could not change their role.",
-                        );
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                    disabled={busy}
-                    className="mise-well min-w-[12rem] flex-1 rounded-xl px-3 py-2.5 text-sm outline-none"
-                  >
-                    <option value="">Their own settings (below)</option>
-                    {mine.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="mt-1.5 text-[10px] leading-relaxed text-fg-faint">
-                  Everyone in a role gets the same access, and changing the role changes it for
-                  all of them. Leave it on <b>their own settings</b> to tune this one person.
-                </p>
-              </div>
-            )}
           </div>
+
+          <BulkSet scope="Everything in this group:" onSet={(l) => bulk(l, tab)} />
+          <BulkSet scope="Every page in DineAI:" onSet={(l) => bulk(l)} />
 
           {SECTIONS.filter((s) => s.key === tab).map((s) => {
             // EVERY AREA, ALWAYS. What a job "normally" does no longer decides
