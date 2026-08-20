@@ -162,6 +162,7 @@ _BILL_SCHEMA = """{
   "date": "YYYY-MM-DD"|null,
   "currency": string|null,
   "total": number|null,
+  "bill_for": "goods"|"overhead",
   "lines": [
     {"name": string, "qty": number|null, "unit": string|null,
      "unit_price": number|null, "line_total": number|null,
@@ -205,6 +206,12 @@ Rules that matter more than being helpful:
   put its id in "matched_item_id" and otherwise leave it null.
 - Handwriting: transcribe what is actually written, including local ingredient
   names. If a word is ambiguous, choose the likeliest and set "confident": false.
+- On a bill, set "bill_for": "goods" when it is a delivery of things the kitchen
+  stocks, and "overhead" when it is for utilities, rent, insurance, subscriptions,
+  repairs or any other service. A water bill is real and worth recording, but it
+  is not a sack of rice, and offering to add "Wastewater" to the stock room is
+  how a stock list stops being trustworthy. Leave every line unmatched on an
+  overhead bill.
 
 Reply with JSON only — no prose, no code fences."""
 
