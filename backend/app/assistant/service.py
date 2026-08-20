@@ -2,6 +2,7 @@
 and harvest navigation actions. Degrades to a deterministic answer with no key."""
 from __future__ import annotations
 
+import logging
 import re
 
 from sqlalchemy import select
@@ -16,6 +17,8 @@ from . import brain, guard
 from .knowledge import PAGES, PERSONA, glossary_lookup, knowledge_brief
 from .schemas import Action, ChatRequest, ChatResponse, ProposedAction
 from .tools import EXECUTORS, tools_for
+
+log = logging.getLogger(__name__)
 
 
 async def _resolve_proposals(
@@ -232,7 +235,17 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
         fn = EXECUTORS.get(name)
         if fn is None:
             return {"error": f"unknown tool {name}"}
-        result = await fn(db, user, args)
+        try:
+            result = await fn(db, user, args)
+        except Exception:  # noqa: BLE001
+            # One broken tool must not cost the whole answer. `search_items`
+            # raised AttributeError on every match for weeks and took the
+            # entire reply down with it, because this call was unguarded.
+            # Hand the fault back as data: the model still has its other tools
+            # and can say what it could not look up, which is the honest
+            # version of the same failure.
+            log.exception("assistant tool %s failed", name)
+            return {"error": f"The {name} lookup failed just then."}
         collected.extend(result.get("actions") or [])
         if result.get("proposal"):
             proposals.append(result["proposal"])
@@ -309,7 +322,17 @@ async def answer_stream(db: AsyncSession, user: User, req: ChatRequest):
         fn = EXECUTORS.get(name)
         if fn is None:
             return {"error": f"unknown tool {name}"}
-        result = await fn(db, user, args)
+        try:
+            result = await fn(db, user, args)
+        except Exception:  # noqa: BLE001
+            # One broken tool must not cost the whole answer. `search_items`
+            # raised AttributeError on every match for weeks and took the
+            # entire reply down with it, because this call was unguarded.
+            # Hand the fault back as data: the model still has its other tools
+            # and can say what it could not look up, which is the honest
+            # version of the same failure.
+            log.exception("assistant tool %s failed", name)
+            return {"error": f"The {name} lookup failed just then."}
         collected.extend(result.get("actions") or [])
         if result.get("proposal"):
             proposals.append(result["proposal"])

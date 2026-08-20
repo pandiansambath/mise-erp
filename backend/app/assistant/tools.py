@@ -49,6 +49,11 @@ async def search_items(db: AsyncSession, user: User, args: dict) -> dict:
     matches = matches[:8]
     if not matches:
         return {"matches": [], "note": f"No stock item matches '{query}'."}
+    #: `vendor_count` is NOT a column - it is computed. Reading it straight off
+    #: the row raised AttributeError on every search that actually found
+    #: something, which killed the whole reply (the tool loop had no guard). It
+    #: stayed hidden because the model usually reaches for item_detail instead.
+    counts = await inventory_service.vendor_counts(db, user.hotel_id)
     rows = []
     for i in matches:
         minlvl = i.min_stock_level
@@ -60,7 +65,7 @@ async def search_items(db: AsyncSession, user: User, args: dict) -> dict:
             "average_cost": _s(i.average_cost),
             "min_level": _s(minlvl),
             "is_low": low,
-            "orderable": (i.vendor_count or 0) > 0,
+            "orderable": counts.get(i.id, 0) > 0,
         })
     actions = [{"label": "Open Inventory", "href": "/inventory"}]
     if any(r["is_low"] for r in rows):
