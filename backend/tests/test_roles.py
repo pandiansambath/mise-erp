@@ -1,4 +1,11 @@
+"""What the owner is allowed to hand out.
 
+The archetype's envelope used to be a ceiling in three places at once - the
+sheet hid the controls, `_clip` dropped them on the way in, and
+`resolve_permissions` dropped them again on the way out. These cover the
+two that are not UI, because opening only one of them produces a toggle
+that moves and then silently does nothing.
+"""
 
 def test_the_owner_can_grant_a_manager_anything():
     """"for manager we have only expense can change / can see option... bro we

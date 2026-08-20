@@ -1,29 +1,63 @@
-"""Role envelopes — the guarantee that an unsafe grant is UNREPRESENTABLE.
+"""Role envelopes — now a DEFAULT, not a ceiling.
 
-The owner names roles freely ("Kitchen Manager", "Accounts Assistant") but
-cannot invent permissions: the base archetype fixes a ceiling. These tests
-exist because the failure they prevent is silent — a waiter quietly holding
-the hiring page looks like nothing until it matters.
+These tests used to assert the opposite, and they were right for the design we
+had: the base archetype fixed a ceiling and an unsafe grant was meant to be
+unrepresentable. The owner has overruled that twice, in plain terms —
+
+    "manager means what and all he can access... super admin can choose this,
+     so please don't restrict any, let super admin do anything he wants."
+    "we need literally ALL the pages access with read and write that super
+     admin can choose to give. Give all toggles please."
+
+— and he is right about whose call it is. It is his restaurant, his staff, and
+he is the one who knows that his manager also does the rota. A ceiling that
+cannot be raised is not safety, it is a guess about someone else's business
+made by people who have never been in it.
+
+So what is asserted here has changed shape rather than gone away. The envelope
+still describes what a job does by DEFAULT, and the page marks anything outside
+it as unusual. What must still hold: the KIOSK stays sealed, an unknown
+permission is never honoured, and the owner can never be fenced out.
 """
-from app.core.rbac import ENVELOPES, PERMISSIONS, envelope_for, resolve_permissions
+from app.core.rbac import (
+    ENVELOPES,
+    GRANTABLE,
+    PERMISSIONS,
+    envelope_for,
+    grantable_for,
+    resolve_permissions,
+)
 
 
-def test_staff_can_never_reach_hiring_however_hard_you_try() -> None:
-    """The owner's exact worry: mis-ticking Hiring for a waiter."""
+def test_hiring_is_not_a_waiter_s_job_but_the_owner_may_still_grant_it() -> None:
+    """Both halves matter.
+
+    It is still not part of the job — the envelope says so, and the page uses
+    that to mark the toggle "unusual". But an owner who deliberately switches it
+    on gets it, because a small restaurant where the head waiter also does the
+    hiring is an ordinary restaurant, not a misconfiguration.
+    """
     assert "hiring:write" not in envelope_for("STAFF")
+
     granted = resolve_permissions("STAFF", {"hiring:write": True})
-    assert "hiring:write" not in granted
-    # ...and the same for the other things a waiter must never hold
-    for forbidden in ("payroll:write", "reports:write", "vendors:write", "users:read"):
-        assert forbidden not in resolve_permissions("STAFF", {forbidden: True}), forbidden
+    assert "hiring:write" in granted, "the owner's deliberate grant was dropped"
+
+    # And nothing is granted by accident: the default is still the default.
+    assert "hiring:write" not in resolve_permissions("STAFF", {})
 
 
-def test_a_permission_outside_the_envelope_is_dropped_not_honoured() -> None:
-    """Overrides can outlive a tightening of the envelope. The safe reading of
-    a stale grant is 'no', never 'yes'."""
+def test_a_permission_the_app_does_not_know_is_dropped_not_honoured() -> None:
+    """The filter is now "is this real", not "is this typical".
+
+    Opening the ceiling must not mean honouring any string that turns up. The
+    safe reading of a grant we cannot interpret is still 'no'.
+    """
     granted = resolve_permissions("CASHIER", {"payroll:write": True, "sales:write": True})
-    assert "payroll:write" not in granted
+    assert "payroll:write" in granted, "a real permission the owner chose"
     assert "sales:write" in granted
+
+    invented = resolve_permissions("CASHIER", {"payroll:make_me_owner": True})
+    assert "payroll:make_me_owner" not in invented
 
 
 def test_owner_can_narrow_a_role_within_its_envelope() -> None:
@@ -61,22 +95,41 @@ def test_envelopes_never_hand_out_the_wildcard_by_accident() -> None:
         assert "*" not in ceiling, f"{role} envelope contains the wildcard"
 
 
-def test_kitchen_never_touches_money_or_people() -> None:
-    """Separation that protects the owner: a chef runs food, not payroll."""
+def test_kitchen_defaults_stay_out_of_money_and_people() -> None:
+    """A chef runs food, not payroll — as a DEFAULT. Nothing here stops an
+    owner deciding otherwise for a particular person; it is what they get
+    without anybody choosing."""
     ceiling = envelope_for("KITCHEN_MANAGER")
     for forbidden in ("payroll:write", "payroll:read", "cash:write", "hiring:write"):
         assert forbidden not in ceiling, forbidden
+    for forbidden in ("payroll:write", "cash:write"):
+        assert forbidden not in PERMISSIONS["KITCHEN_MANAGER"], forbidden
 
 
-def test_the_api_clips_a_grant_it_should_never_have_received() -> None:
-    """The UI hides out-of-envelope permissions, so anything arriving here came
-    from a stale client or someone poking the API. It is dropped silently —
-    a 400 would let a caller map the ceiling by watching what gets rejected."""
+def test_the_api_keeps_real_grants_and_drops_invented_ones() -> None:
+    """Still dropped SILENTLY rather than 400'd: a caller must not be able to
+    map the app by watching which grants stick."""
     from app.auth.roles_router import _clip
 
     kept = _clip("STAFF", {"hiring:write": True, "attendance:self": True})
-    assert "hiring:write" not in kept
+    assert kept["hiring:write"] is True
     assert kept["attendance:self"] is True
+
+    assert _clip("STAFF", {"not:a-real-permission": True}) == {}
+
+
+def test_the_kiosk_is_the_one_thing_that_stays_sealed() -> None:
+    """A tablet by the door is not a person.
+
+    Everything else opened up because there is somebody accountable holding it.
+    Nobody is choosing to trust the kiosk — it sits in a doorway and gets
+    handed round a room, so it keeps the ceiling everyone else lost.
+    """
+    sealed = set(grantable_for("KIOSK"))
+
+    assert sealed == set(envelope_for("KIOSK"))
+    assert len(sealed) < len(GRANTABLE)
+    assert "payroll:write" not in resolve_permissions("KIOSK", {"payroll:write": True})
 
 
 def test_owner_archetype_is_not_offered_as_a_base() -> None:

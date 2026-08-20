@@ -223,13 +223,38 @@ async def test_access_matching_the_job_exactly_leaves_no_role_behind(
 
 
 @pytest.mark.asyncio
-async def test_the_ceiling_still_holds_through_the_new_door(client, admin, auth_header, make_user):
-    """A waiter must not reach hiring however the grant arrives."""
+async def test_the_owner_can_grant_one_person_anything(client, admin, auth_header, make_user):
+    """"even though if we give manager role to someone, super admin can edit
+    permission for that particular user alone."
+
+    This asserted the opposite until today — that a waiter could not reach
+    hiring however the grant arrived. The owner has overruled that: it is his
+    restaurant, and the head waiter who also does the hiring is an ordinary
+    arrangement rather than a mistake. What is still true is that he has to
+    CHOOSE it, per person, and the page tells him it is unusual.
+    """
     waiter = await make_user("waiter@test.com", Role.STAFF.value)
     h = auth_header(admin)
     r = await client.put(
         f"/api/roles/user/{waiter.id}/access",
         json={"base_role": Role.STAFF.value, "overrides": {"hiring:write": True, "payroll:write": True}},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    perms = r.json()["permissions"]
+    assert "hiring:write" in perms
+    assert "payroll:write" in perms
+
+
+@pytest.mark.asyncio
+async def test_a_plain_waiter_still_gets_a_waiter_s_access(client, admin, auth_header, make_user):
+    """Opening the ceiling must not raise the FLOOR. Somebody who was never
+    given anything extra keeps exactly what the job comes with."""
+    waiter = await make_user("waiter2@test.com", Role.STAFF.value)
+    h = auth_header(admin)
+    r = await client.put(
+        f"/api/roles/user/{waiter.id}/access",
+        json={"base_role": Role.STAFF.value, "overrides": {}},
         headers=h,
     )
     assert r.status_code == 200, r.text
