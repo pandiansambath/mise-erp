@@ -791,3 +791,108 @@ async def test_a_switched_off_model_says_so_plainly(client, make_user, auth_head
     assert body["reason"] == "model_access"
     # The diner still gets a warm line, never a stack trace.
     assert "Need someone" in body["answer"]
+
+
+@pytest.mark.asyncio
+async def test_a_dish_named_in_the_question_is_still_grounded(
+    client, make_user, auth_header, monkeypatch
+):
+    """"i asked how much calories i may get + how much fat is there."
+
+    That is how the question actually arrives — TYPED, with no dish attached.
+    Grounding only on `dish_id` meant a guest who tapped a card got a real
+    answer and a guest who typed the same words got "I can't tell you", which
+    is the dead end he complained about. The menu is already loaded, so the
+    dish is read out of the sentence.
+    """
+    seen: dict = {}
+
+    async def fake_search(query, count=5):
+        seen["query"] = query
+        return {"results": [{"title": "Biryani nutrition", "snippet": "~700 kcal"}]}
+
+    def fake_ask(question, **kw):
+        seen["context"] = kw.get("context", "")
+        return "Roughly 700 kcal by published figures."
+
+    from app.assistant import bedrock, websearch
+
+    monkeypatch.setattr(websearch, "search", fake_search)
+    monkeypatch.setattr(bedrock, "ask", fake_ask)
+
+    admin = await make_user("typed@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "T9"}, headers=h)).json()
+    await client.post(
+        "/api/ordering/menu", json={"name": "Chicken Biryani", "price": "14.95"}, headers=h
+    )
+
+    r = await client.post(
+        f"/api/public/table/{t['code']}/ask",
+        json={"question": "how many calories in the chicken biryani?"},
+    )
+
+    assert r.status_code == 200, r.text
+    assert "chicken biryani" in seen["query"].lower(), "the typed dish was never resolved"
+
+
+@pytest.mark.asyncio
+async def test_the_longest_dish_name_wins(client, make_user, auth_header, monkeypatch):
+    """"Chicken Biryani" must not resolve to "Chicken 65" just because that
+    name happened to be checked first."""
+    seen: dict = {}
+
+    async def fake_search(query, count=5):
+        seen["query"] = query
+        return {"results": []}
+
+    from app.assistant import bedrock, websearch
+
+    monkeypatch.setattr(websearch, "search", fake_search)
+    monkeypatch.setattr(bedrock, "ask", lambda q, **kw: "About 700 kcal, roughly.")
+
+    admin = await make_user("longest@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "T8"}, headers=h)).json()
+    for name in ("Chicken 65", "Chicken Biryani"):
+        await client.post("/api/ordering/menu", json={"name": name, "price": "9.95"}, headers=h)
+
+    await client.post(
+        f"/api/public/table/{t['code']}/ask",
+        json={"question": "calories in the chicken biryani please"},
+    )
+
+    assert "chicken biryani" in seen["query"].lower()
+    assert "chicken 65" not in seen["query"].lower()
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_dish_does_not_trigger_a_search(
+    client, make_user, auth_header, monkeypatch
+):
+    """Reading a dish out of a sentence must not become "search for anything".
+    Nothing on the menu was named, so there is nothing to ground on."""
+    called = {"n": 0}
+
+    async def fake_search(query, count=5):
+        called["n"] += 1
+        return {"results": []}
+
+    from app.assistant import bedrock, websearch
+
+    monkeypatch.setattr(websearch, "search", fake_search)
+    monkeypatch.setattr(bedrock, "ask", lambda q, **kw: "Let me fetch someone.")
+
+    admin = await make_user("unknown@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    t = (await client.post("/api/ordering/tables", json={"label": "T7"}, headers=h)).json()
+    await client.post(
+        "/api/ordering/menu", json={"name": "Masala Dosa", "price": "7.50"}, headers=h
+    )
+
+    await client.post(
+        f"/api/public/table/{t['code']}/ask",
+        json={"question": "how many calories in the wagyu steak?"},
+    )
+
+    assert called["n"] == 0

@@ -1804,6 +1804,7 @@ async def guest_ask(code: str, payload: GuestAskIn, db: AsyncSession = Depends(g
     # when a dish is named we hand over ITS ACTUAL INGREDIENTS - names only,
     # never costs - and forbid any figure we cannot source.
     dish_facts = None
+    dish = None
     if payload.dish_id is not None:
         dish = (
             await db.execute(
@@ -1812,27 +1813,42 @@ async def guest_ask(code: str, payload: GuestAskIn, db: AsyncSession = Depends(g
                 )
             )
         ).scalar_one_or_none()
-        if dish is not None:
-            made_with: list[str] = []
-            if dish.recipe_id:
-                from app.inventory.models import Item as InvItem
-                from app.recipes.models import RecipeIngredient
+    else:
+        # THE GUEST TYPED THE NAME instead of tapping the dish card - which is
+        # exactly how it was asked: "i asked how much calories i may get + how
+        # much fat is there". Without this the question arrives with no dish
+        # attached, nothing is looked up, and the answer is "I can't tell you"
+        # - the dead end he complained about. The menu is already loaded here,
+        # so read the dish out of the sentence.
+        #
+        # Longest name wins: "chicken biryani" must not resolve to "Chicken 65"
+        # just because that name was checked first.
+        asked_lower = payload.question.lower()
+        named = [m for m in items if m.name and m.name.lower() in asked_lower]
+        if named:
+            dish = max(named, key=lambda m: len(m.name))
 
-                made_with = list(
-                    (
-                        await db.execute(
-                            select(InvItem.name)
-                            .select_from(RecipeIngredient)
-                            .join(InvItem, RecipeIngredient.item_id == InvItem.id)
-                            .where(RecipeIngredient.recipe_id == dish.recipe_id)
-                        )
-                    ).scalars()
-                )
-            dish_facts = {
-                "name": dish.name,
-                "description": dish.description,
-                "made_with": made_with,
-            }
+    if dish is not None:
+        made_with: list[str] = []
+        if dish.recipe_id:
+            from app.inventory.models import Item as InvItem
+            from app.recipes.models import RecipeIngredient
+
+            made_with = list(
+                (
+                    await db.execute(
+                        select(InvItem.name)
+                        .select_from(RecipeIngredient)
+                        .join(InvItem, RecipeIngredient.item_id == InvItem.id)
+                        .where(RecipeIngredient.recipe_id == dish.recipe_id)
+                    )
+                ).scalars()
+            )
+        dish_facts = {
+            "name": dish.name,
+            "description": dish.description,
+            "made_with": made_with,
+        }
 
     # LOOK IT UP RATHER THAN REMEMBER IT.
     #
@@ -1913,8 +1929,13 @@ async def guest_ask(code: str, payload: GuestAskIn, db: AsyncSession = Depends(g
         "a rough RANGE reasoned from the ingredients and say plainly it is an "
         "estimate, for example 'roughly 600-750 kcal, it is a rich one'. Either way: "
         "never a single exact number, never a nutrition table, and never suggest the "
-        "kitchen has weighed it. If there are no ingredients listed at all, say you "
-        "cannot tell and offer to fetch someone. "
+        "kitchen has weighed it. If no ingredients are listed but you recognise "
+        "the dish by name, STILL give a labelled range from typical published "
+        "values for that style of dish, and say plainly that is what it is - we "
+        "have not weighed ours. Only if the dish means nothing to you, say you "
+        "cannot tell and offer to fetch someone. A refusal is the last resort, "
+        "not the first: a guest who asked a fair question is better served by an "
+        "honest estimate than by nothing. "
         "Never give medical or dietary advice, and never promise a dish is safe for "
         "an allergy or a condition - say a member of staff will check the allergen "
         "sheet. "
