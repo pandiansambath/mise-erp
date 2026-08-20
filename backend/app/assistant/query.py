@@ -29,6 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
+from app.core.database import AsyncSessionLocal
 
 log = logging.getLogger("mise.assistant.query")
 
@@ -93,6 +94,24 @@ def validate(sql: str, allowed: set[str] | None = None) -> str:
     return q
 
 
+
+def _for_the_model(exc: Exception) -> str:
+    """The database's own complaint, trimmed, addressed to the model.
+
+    Deliberately NOT a user-facing sentence: this is read by the assistant so
+    it can correct its own SQL. It is told to retry rather than to repeat any
+    of this out loud.
+    """
+    # `.orig` is the asyncpg error itself, which is the one useful sentence -
+    # `column "expense_date" does not exist`, often with a HINT naming the real
+    # one. Without it you get the whole SQLAlchemy wrapper and no room left.
+    msg = " ".join(str(getattr(exc, "orig", exc)).split())
+    return (
+        f"That SELECT did not run: {msg[:240]} "
+        "Correct the SQL and try once more; do not describe this error to the user."
+    )
+
+
 async def run(db: AsyncSession, user: User, sql: str) -> dict:
     """Run a model-written SELECT. The views do the scoping; this does the rest."""
     try:
@@ -104,23 +123,51 @@ async def run(db: AsyncSession, user: User, sql: str) -> dict:
     if not re.search(r"\blimit\s+\d+", q, re.I):
         q = f"{q} LIMIT {MAX_ROWS}"
 
-    try:
-        await db.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
-        await db.execute(text("SET LOCAL transaction_read_only = on"))
-        # What every ai_* view filters on. Set server-side from the session's
-        # authenticated user — never from anything the model produced.
-        await db.execute(
-            text("SELECT set_config('app.hotel_id', :hid, true)"),
-            {"hid": str(user.hotel_id)},
-        )
-        rows = [dict(r._mapping) for r in (await db.execute(text(q))).fetchall()[:MAX_ROWS]]
-    except Exception as exc:  # noqa: BLE001 — surfaced to the model to retry
-        log.warning("assistant query failed: %s", str(exc)[:300], extra={"code": "DINE-A3005"})
-        await db.rollback()
-        return {"error": "That query didn't run — try asking a different way."}
-    finally:
-        # Never leave a read-only transaction open for the next caller.
-        await db.rollback()
+    # ITS OWN SESSION, NEVER THE CALLER'S.
+    #
+    # This used to run on the request's session and roll it back afterwards.
+    # Two things went wrong with that, and the second one was a 500 on live:
+    #
+    #   * `SET LOCAL transaction_read_only = on` applied to the REQUEST's
+    #     transaction, not just this query's.
+    #   * `rollback()` EXPIRES every ORM object in the session — including the
+    #     authenticated `user` the rest of the request is built on. The next
+    #     read of `user.hotel_id` then tried to lazily reload it, mid-request,
+    #     and the whole reply died. "how much did we spend last month" was a
+    #     reliable 500 because the model reached for SQL to answer it.
+    #
+    # Model-written SQL is the last thing that should be able to disturb the
+    # request that asked for it. Read the hotel id first, while the caller's
+    # objects are still live, then do the work somewhere else entirely.
+    hotel_id = str(user.hotel_id)
+    async with AsyncSessionLocal() as ro:
+        try:
+            await ro.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+            await ro.execute(text("SET LOCAL transaction_read_only = on"))
+            # What every ai_* view filters on. Set server-side from the
+            # authenticated user — never from anything the model produced.
+            await ro.execute(
+                text("SELECT set_config('app.hotel_id', :hid, true)"),
+                {"hid": hotel_id},
+            )
+            rows = [dict(r._mapping) for r in (await ro.execute(text(q))).fetchall()[:MAX_ROWS]]
+        except Exception as exc:  # noqa: BLE001 — surfaced to the model to retry
+            log.warning(
+                "assistant query failed: %s", str(exc)[:300], extra={"code": "DINE-A3005"}
+            )
+            # TELL THE MODEL WHAT WAS ACTUALLY WRONG.
+            #
+            # The tool description promises "if a column name is wrong the
+            # error will say so - fix it and retry", and then this returned
+            # "try asking a different way", which says nothing it can act on.
+            # So a single wrong column name ended the attempt instead of
+            # costing one retry. Postgres already writes the useful sentence -
+            # `column "expense_date" does not exist`, often with a HINT naming
+            # the real one. This goes to the MODEL, not the guest.
+            return {"error": _for_the_model(exc)}
+        finally:
+            # Never leave a read-only transaction open on a pooled connection.
+            await ro.rollback()
 
     return {"row_count": len(rows), "rows": rows, "truncated": len(rows) >= MAX_ROWS}
 
@@ -156,15 +203,18 @@ async def run_operator(db: AsyncSession, sql: str) -> dict:
     if not re.search(r"limit\s+\d+", q, re.I):
         q = f"{q} LIMIT {MAX_ROWS}"
 
-    try:
-        await db.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
-        await db.execute(text("SET LOCAL transaction_read_only = on"))
-        rows = [dict(r._mapping) for r in (await db.execute(text(q))).fetchall()[:MAX_ROWS]]
-    except Exception as exc:  # noqa: BLE001
-        log.warning("operator query failed: %s", str(exc)[:300], extra={"code": "DINE-A3005"})
-        await db.rollback()
-        return {"error": "That query didn't run — try asking a different way."}
-    finally:
-        await db.rollback()
+    # Its own session, for the same reason as `run` above.
+    async with AsyncSessionLocal() as ro:
+        try:
+            await ro.execute(text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}"))
+            await ro.execute(text("SET LOCAL transaction_read_only = on"))
+            rows = [dict(r._mapping) for r in (await ro.execute(text(q))).fetchall()[:MAX_ROWS]]
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "operator query failed: %s", str(exc)[:300], extra={"code": "DINE-A3005"}
+            )
+            return {"error": _for_the_model(exc)}
+        finally:
+            await ro.rollback()
 
     return {"row_count": len(rows), "rows": rows, "truncated": len(rows) >= MAX_ROWS}
