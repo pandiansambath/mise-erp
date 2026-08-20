@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -142,8 +143,38 @@ def _where_am_i(user: User, hotel_name: str) -> str:
     )
 
 
+def _today_line(hotel) -> str:
+    """Tell it what day it is.
+
+    It did not know. Asked "what is today's date", it answered "I can't tell
+    you today's exact date - I don't have a real-time clock" and offered to use
+    whatever date the user typed. So every relative question - last month, this
+    week, yesterday, "how are we doing today" - was answered from a guess, and
+    "how much did we spend last month" came back about MAY when last month was
+    July. It looked right often enough not to be noticed, because a tool that
+    returns its own dates (the dashboard) quietly covered for it.
+
+    The restaurant's OWN local date, not the server's: a London kitchen closing
+    at 1am should not be told it is already tomorrow.
+    """
+    from app.core.timezones import hotel_today
+
+    today = hotel_today(hotel) if hotel is not None else date.today()
+    return (
+        # %-d is glibc-only and raises on Windows, so build the day by hand.
+        f"\n\nTODAY IS {today:%A} {today.day} {today:%B %Y} where this restaurant is. "
+        "Work out 'last month', 'this week', 'yesterday' and every other "
+        "relative date from THAT date. Never ask the user what today is, and "
+        "never guess a month."
+    )
+
+
 def _build_system(
-    user: User, route: str | None, user_name: str | None = None, hotel_name: str = "this restaurant"
+    user: User,
+    route: str | None,
+    user_name: str | None = None,
+    hotel_name: str = "this restaurant",
+    hotel=None,
 ) -> str:
     # Prefer the name the client passed (fresh edit); fall back to the one stored on
     # the account (server-side → works on any device, incl. staff logins).
@@ -156,7 +187,7 @@ def _build_system(
         )
     return (
         f"{PERSONA}\n\n{knowledge_brief(_can(user))}"
-        f"{_route_context(route)}{name_line}\n\n"
+        f"{_route_context(route)}{name_line}{_today_line(hotel)}\n\n"
         f"The current user's role is {user.role}."
     )
 
@@ -261,7 +292,7 @@ async def answer(db: AsyncSession, user: User, req: ChatRequest) -> ChatResponse
     trace: list[dict] = []
     try:
         reply, used = await brain.generate(
-            system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
+            system=_build_system(user, req.route, req.user_name, hotel_name, hotel) + prior,
             history=history,
             tools=tools_for(user, hotel),
             execute=execute,
@@ -341,7 +372,7 @@ async def answer_stream(db: AsyncSession, user: User, req: ChatRequest):
     meter: dict = {}
     try:
         async for ev in brain.generate_stream(
-            system=_build_system(user, req.route, req.user_name, hotel_name) + prior,
+            system=_build_system(user, req.route, req.user_name, hotel_name, hotel) + prior,
             history=history,
             tools=tools_for(user, hotel),
             execute=execute,
