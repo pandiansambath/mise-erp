@@ -43,8 +43,16 @@ test("invent a Poori Master and give it what it needs", async ({ page }) => {
   await sheet.getByPlaceholder(/poori master/i).fill(roleName);
 
   // Give it the kitchen: this is the point of a bespoke role.
+  // The starting-point dropdown is gone: a new role begins blank, so nothing
+  // is on until it is switched on here.
+  expect(await sheet.getByText(/start from/i).count()).toBe(0);
+
   await sheet.getByRole("button", { name: /kitchen/i }).first().click();
   await page.waitForTimeout(600);
+  // The assistant is permission to ASK IT THINGS, not to change anything.
+  const ai = sheet.locator("li").filter({ hasText: "Asking DineAI questions" }).first();
+  await expect(ai.getByText("Can use")).toBeVisible();
+  expect(await ai.getByText("Can change").count()).toBe(0);
   const recipes = sheet.locator("li").filter({ hasText: "Recipes" }).first();
   await recipes.getByText("Can change").click();
   await page.waitForTimeout(400);
