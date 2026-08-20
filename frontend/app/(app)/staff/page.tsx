@@ -93,7 +93,19 @@ export default function StaffPage() {
       api.get<Employee[]>("/employees").then(setEmployees).catch(() => {}),
       api
         .get<{ roles: CustomRole[] }>("/roles")
-        .then((d) => setRoles(d.roles.filter((r) => r.is_active)))
+        // PER-PERSON TUNING IS NOT A ROLE THE HOTEL DESIGNED.
+        //
+        // Setting one person's switches creates a CustomRole underneath, named
+        // "<who> - custom access". That is an implementation detail of "this
+        // one person differs", and putting it on the roles board next to
+        // Manager and Poori Master invites somebody to hand Balaji's private
+        // arrangement to three other people. It stays on the card where it was
+        // made; only roles that were NAMED belong here.
+        .then((d) =>
+          setRoles(
+            d.roles.filter((r) => r.is_active && !/— custom access$/.test(r.name)),
+          ),
+        )
         .catch(() => setRoles([])),
       api
         .get<{ jobs: Job[]; everything: string[] }>("/roles/jobs")
