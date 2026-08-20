@@ -1862,17 +1862,36 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    the subtitle's row collapses via a grid-rows trick, which is animatable and
    contained, so the list below genuinely gains the space rather than the top
    merely looking smaller.                                                    */
+/* ONE CLOCK FOR THE WHOLE RAIL.
+   "the scroll to grow shrink is hitting and making clumsy... make that smooth."
+
+   It was: the title moved over 320ms, the subtitle's height over 320ms but its
+   opacity over 200ms LINEAR, the tools over 340ms, and their labels over 260ms.
+   Four durations and three curves, all started by the same event — so the parts
+   arrived at four different moments and the rail looked like it was arguing
+   with itself rather than changing size. Nothing was broken; nothing agreed.
+
+   Everything below now moves on --bench-ms with --bench-ease. Opacity is the
+   one deliberate exception: it runs a little SHORTER so a thing has finished
+   fading before it finishes moving, which reads as clean rather than as a
+   fade that trails the motion. */
+:root {
+  --bench-ms: 280ms;
+  --bench-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --bench-fade: 180ms;
+}
+
 .mise-bench-rail {
   padding-top: 1.25rem;
   contain: layout style;
   /* One curve for everything that moves here, so the rail reads as a single
      object settling rather than four things easing at their own rates. */
-  transition: padding-top 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: padding-top var(--bench-ms) var(--bench-ease);
 }
 
 .mise-bench-head {
   padding-bottom: 0.75rem;
-  transition: padding-bottom 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: padding-bottom var(--bench-ms) var(--bench-ease);
 }
 
 .mise-bench-title {
@@ -1880,7 +1899,7 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   line-height: 1.15;
   letter-spacing: -0.02em;
   transform-origin: left center;
-  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--bench-ms) var(--bench-ease);
   will-change: transform;
 }
 
@@ -1892,8 +1911,8 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   grid-template-rows: 1fr;
   opacity: 0.85;
   transition:
-    grid-template-rows 320ms cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 200ms linear;
+    grid-template-rows var(--bench-ms) var(--bench-ease),
+    opacity var(--bench-fade) var(--bench-ease);
   will-change: grid-template-rows, opacity;
 }
 
@@ -2576,9 +2595,10 @@ body[data-overlay] .mise-launcher-in {
   padding-bottom: 0.75rem;
   transform-origin: left center;
   transition:
-    grid-template-rows 340ms cubic-bezier(0.32, 0.72, 0, 1),
-    transform 340ms cubic-bezier(0.32, 0.72, 0, 1),
-    padding-bottom 340ms cubic-bezier(0.32, 0.72, 0, 1);
+    grid-template-rows var(--bench-ms) var(--bench-ease),
+    transform var(--bench-ms) var(--bench-ease),
+    margin-bottom var(--bench-ms) var(--bench-ease),
+    padding-bottom var(--bench-ms) var(--bench-ease);
   will-change: transform, grid-template-rows;
 }
 
@@ -2624,16 +2644,19 @@ body[data-overlay] .mise-launcher-in {
   max-height: 1.25rem;
   opacity: 1;
   transition:
-    max-height 260ms cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 200ms ease;
+    max-height var(--bench-ms) var(--bench-ease),
+    opacity var(--bench-fade) var(--bench-ease);
 }
 
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools {
   grid-template-rows: 0fr;
   padding-bottom: 0;
   /* Measured, not guessed: at this lift the row's centre sits 1.5px off the
-     title's centre, and the whole thing stays inside the rail. */
-  transform: translate(clamp(0px, 40vw, 21rem), -2.6rem) scale(0.95);
+     title's centre, and the whole thing stays inside the rail.
+     The scale came down from 0.95 — "make it smooth and a bit small to adjust
+     to size when it shrinks". A slightly smaller row needs less of the title's
+     space to land in, so it stops arriving right on top of a long heading. */
+  transform: translate(clamp(0px, 36vw, 20rem), -2.6rem) scale(0.9);
 }
 
 /* The tools must stay visible while their row has zero height. */
