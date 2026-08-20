@@ -353,3 +353,44 @@ async def test_act_purchase_creates_po(db, make_user):
         db, user, "purchase", {"lines": [{"item": "Salt", "quantity": 1}]},
     )
     assert res2["ok"] and "Created 0 purchase orders" in res2["summary"]
+
+
+@pytest.mark.asyncio
+async def test_the_assistant_is_told_what_day_it_is(db, hotel, make_user):
+    """It did not know, and nothing said so.
+
+    Asked "what is today's date" it replied "I can't tell you today's exact
+    date - I don't have a real-time clock" and offered to use whatever date the
+    user typed. So every relative question was answered from a guess: "how much
+    did we spend last month" came back about MAY when last month was July.
+
+    It looked right often enough not to be noticed, because tools that return
+    their own dates (the dashboard) quietly covered for it.
+    """
+    from datetime import date
+
+    from app.assistant.service import _build_system
+
+    owner = await make_user("cal@test.com", "SUPER_ADMIN")
+
+    system = _build_system(owner, None, None, hotel.name, hotel)
+
+    # Tolerant of a day either side: the line carries the RESTAURANT's local
+    # date, which can be a different day from the server's around midnight.
+    from datetime import timedelta
+
+    days = [date.today() + timedelta(days=d) for d in (-1, 0, 1)]
+    assert "TODAY IS" in system
+    assert any(f"{d:%B}" in system for d in days), "no current month in the prompt"
+    assert any(str(d.year) in system for d in days)
+    assert any(f"{d:%A} {d.day} " in system for d in days), system[-300:]
+
+
+@pytest.mark.asyncio
+async def test_it_still_builds_without_a_hotel(db, make_user):
+    """The signature grew a parameter; nothing that omits it may break."""
+    from app.assistant.service import _build_system
+
+    owner = await make_user("cal2@test.com", "SUPER_ADMIN")
+
+    assert "TODAY IS" in _build_system(owner, None)
