@@ -20,16 +20,33 @@
 //
 //   * no ceiling: every area, every position, always;
 //   * no separate "attach" errand: you put people in it right here;
-//   * "start from" is a HEAD START, not a category. It fills the switches in
-//     and then stops mattering, and the sheet says so in those words.
+//   * NO STARTING POINT TO PICK. It begins blank.
 //
-// The last one is the whole trick. `base_role` is a real column and the server
-// still needs one, but a person naming a Poori Manager does not care and must
-// never be asked to think about it.
+// The last one I got wrong first time round. I kept a "start from" dropdown,
+// labelled it "a head start, not a limit", and thought that was enough:
+//
+//   "bro again we came to same point that super admin need to choose from
+//    these 6 roles. This is what I said — let super admin build his own."
+//
+// He is right. A dropdown of our six words, as the SECOND thing on the screen,
+// is the archetype concept wearing a friendlier caption. It does not matter
+// that it no longer constrains anything; it still asks somebody naming a Poori
+// Master to first decide which of our jobs he is closest to, and that question
+// has no answer. `base_role` is still a column the server needs, and it is now
+// exactly what it should be: an implementation detail he never sees.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { DetailSheet } from "@/components/DetailSheet";
-import { LEVEL_HINT, LEVEL_LABEL, SECTIONS, levelOf, overridesFor, type Level } from "@/lib/access";
+import {
+  labelFor,
+  LEVEL_HINT,
+  LEVEL_LABEL,
+  levelOf,
+  overridesFor,
+  SECTIONS,
+  type Area,
+  type Level,
+} from "@/lib/access";
 
 export type CustomRole = {
   id: string;
@@ -39,18 +56,19 @@ export type CustomRole = {
   permissions: string[];
 };
 
-export type StartPoint = { key: string; label: string; defaults: string[] };
-
 function ThreeWay({
   value,
   options,
   onChange,
   label,
+  area,
 }: {
   value: Level;
   options: Level[];
   onChange: (l: Level) => void;
   label: string;
+  /** So an area can name its own positions - "Can use", not "Can change". */
+  area?: Area;
 }) {
   return (
     <div
@@ -72,7 +90,7 @@ function ThreeWay({
               on ? "bg-brand-600 text-white" : "text-fg-faint hover:text-fg"
             }`}
           >
-            {LEVEL_LABEL[o]}
+            {area ? labelFor(area, o) : LEVEL_LABEL[o]}
           </button>
         );
       })}
@@ -83,7 +101,6 @@ function ThreeWay({
 export function RoleBuilder({
   open,
   role,
-  starts,
   people,
   onClose,
   onSaved,
@@ -91,30 +108,29 @@ export function RoleBuilder({
   open: boolean;
   /** null = designing a new one. */
   role: CustomRole | null;
-  starts: StartPoint[];
   /** How many people are in this role today. */
   people: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [name, setName] = useState("");
-  const [base, setBase] = useState("STAFF");
+  // Never chosen on screen. STAFF is the narrowest thing we have, so a new
+  // role begins shut and is opened one switch at a time.
+  const base = role?.base_role ?? "STAFF";
   const [draft, setDraft] = useState<Record<string, Level>>({});
   const [tab, setTab] = useState(SECTIONS[0].key);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // The switches start from whatever the role already grants (editing), or
-  // from the chosen starting point's defaults (designing).
-  const startDefaults = useMemo(
-    () => new Set(starts.find((s) => s.key === base)?.defaults ?? []),
-    [starts, base],
-  );
+  // A NEW ROLE STARTS WITH NOTHING ON. Every switch the owner sees at "No
+  // access" is one he turned on deliberately, which is the only version of
+  // this that is honest — a role pre-filled from an archetype quietly grants
+  // things nobody read.
+  const startDefaults = useMemo(() => new Set<string>(), []);
 
   useEffect(() => {
     if (!open) return;
     setName(role?.name ?? "");
-    setBase(role?.base_role ?? "STAFF");
     setDraft({});
     setTab(SECTIONS[0].key);
     setErr(null);
@@ -247,53 +263,28 @@ export function RoleBuilder({
 
       {/* THE TWO QUESTIONS, ANSWERED IN ORDER. Name first, because naming the
           job is the thing the owner actually came here to do. */}
-      <div className="mb-3 grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-medium text-fg-faint">
-            What is this job called?
-          </span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={60}
-            placeholder="Poori Master, Tandoor Lead, Floor Manager…"
-            className="mise-well w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-          />
-          <span className="mt-1 block text-[10px] leading-relaxed text-fg-faint">
-            Your words, not ours. This is what you will see next to their name.
-          </span>
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-medium text-fg-faint">
-            Start from (a head start, not a limit)
-          </span>
-          <select
-            value={base}
-            onChange={(e) => {
-              setBase(e.target.value);
-              setDraft({});
-            }}
-            disabled={!!role}
-            className="mise-well w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-50"
-          >
-            {starts.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label.split("—")[0].trim()}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-[10px] leading-relaxed text-fg-faint">
-            {role
-              ? "Set when the role was made. Change the switches below instead."
-              : "This just fills the switches in so you are not starting from nothing. Change any of them afterwards — nothing here is a ceiling."}
-          </span>
-        </label>
-      </div>
+      {/* ONE QUESTION, NOT TWO. Naming the job is what he came here to do. */}
+      <label className="mb-3 block">
+        <span className="mb-1 block text-[11px] font-medium text-fg-faint">
+          What is this job called?
+        </span>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={60}
+          autoFocus
+          placeholder="Poori Master, Tandoor Lead, Floor Manager…"
+          className="mise-well w-full rounded-xl px-3 py-2.5 text-base outline-none"
+        />
+        <span className="mt-1 block text-[10px] leading-relaxed text-fg-faint">
+          Your words, not ours. This is what you will see next to their name.
+        </span>
+      </label>
 
       <p className="mb-3 rounded-xl border border-line bg-paper-2/50 px-3.5 py-2.5 text-[11px] leading-relaxed text-fg-soft">
-        Every part of the app is below, in {SECTIONS.length} groups. For each one choose{" "}
-        <b>No access</b>, <b>Can see</b> (look, don&apos;t touch) or <b>Can change</b>. Nothing is
+        Every page in DineAI is below, in {SECTIONS.length} groups. Choose <b>No access</b>,{" "}
+        <b>Can see</b> (look, don&apos;t touch) or <b>Can change</b> for each. The pages each one
+        opens are listed underneath it, so you can see exactly what you are giving. Nothing is
         off-limits — it is your restaurant.
       </p>
 
@@ -321,13 +312,30 @@ export function RoleBuilder({
                   >
                     {a.icon}
                   </span>
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-fg">{a.label}</span>
-                    <span className="block truncate text-[11px] text-fg-faint">{a.blurb}</span>
+                    <span className="block text-[11px] leading-snug text-fg-faint">
+                      {a.blurb}
+                    </span>
+                    {/* THE PAGES. 34 screens behind 17 switches means a switch
+                        called "Suppliers & buying" has to say that it opens
+                        Vendors, Price Comparison and Purchasing, or the owner
+                        is agreeing to something he cannot see. */}
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {a.pages.map((pg) => (
+                        <span
+                          key={pg}
+                          className="mise-well rounded-md px-1.5 py-0.5 text-[10px] text-fg-faint"
+                        >
+                          {pg}
+                        </span>
+                      ))}
+                    </span>
                   </span>
                 </span>
                 <ThreeWay
                   label={a.label}
+                  area={a}
                   value={lvl}
                   options={opts}
                   onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}

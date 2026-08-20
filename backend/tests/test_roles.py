@@ -98,3 +98,38 @@ def test_food_safety_is_gated_by_its_own_permission_now():
     assert has_permission(Role.SUPER_ADMIN.value, "safety:write")
     assert has_permission(Role.MANAGER.value, "safety:write")
     assert not has_permission(Role.CASHIER.value, "safety:write")
+
+
+def test_the_kiosk_is_not_offered_as_a_job():
+    """"I would never need to see that word kiosk in role — it is an
+    automatically created one, please just hide it."
+
+    It is the tablet by the door: created by turning clock-in on, sealed so
+    nothing can be added to it, and never something anybody is hired as.
+    Listing it beside Manager invites "should my new person be a Kiosk?", which
+    has no good answer.
+    """
+    from app.auth.models import Role
+    from app.auth.roles_router import ASSIGNABLE
+
+    assert Role.KIOSK.value not in ASSIGNABLE
+    assert Role.SUPER_ADMIN.value not in ASSIGNABLE
+    assert Role.MANAGER.value in ASSIGNABLE and Role.STAFF.value in ASSIGNABLE
+
+
+def test_food_safety_is_gated_the_same_way_everywhere():
+    """The API, the sidebar and the page all have to agree.
+
+    Re-pointing the router at `safety:*` left the sidebar and the page itself
+    still asking for `inventory:*`, which would have shown somebody a menu item
+    leading to a 403 — the worst of both.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "frontend"
+    shell = (root / "components" / "AppShell.tsx").read_text(encoding="utf-8")
+    page = (root / "app" / "(app)" / "food-safety" / "page.tsx").read_text(encoding="utf-8")
+
+    nav_line = next(ln for ln in shell.splitlines() if '"/food-safety"' in ln)
+    assert 'perm: "safety:read"' in nav_line, nav_line
+    assert 'can(user?.role, "safety:write")' in page

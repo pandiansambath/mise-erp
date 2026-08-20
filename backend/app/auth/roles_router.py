@@ -39,7 +39,19 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 
 # Owner is excluded on purpose: it has no ceiling, so a custom role based on it
 # would just be a second owner. If you want another owner, make them one.
-ASSIGNABLE = [r.value for r in Role if r is not Role.SUPER_ADMIN]
+#
+# And the KIOSK is not a job.
+#
+#   "bro I would never need to see that word kiosk in role - it is an
+#    automatically created one, please just hide it so it won't create any
+#    confusion to super admin."
+#
+# Right. It is the tablet by the door: created by turning clock-in on, sealed
+# so nothing can be added to it, and never something anybody is hired as.
+# Listing it beside Manager and Chef invites the question "should my new person
+# be a Kiosk?", which has no good answer and costs the reader a moment every
+# time they look.
+ASSIGNABLE = [r.value for r in Role if r not in (Role.SUPER_ADMIN, Role.KIOSK)]
 
 _LABELS = {
     Role.MANAGER.value: "Manager — runs the venue day to day",

@@ -38,7 +38,7 @@ function StatusBadge({ s }: { s: string }) {
 
 export default function FoodSafetyPage() {
   const { user } = useAuth();
-  const canWrite = can(user?.role, "inventory:write");
+  const canWrite = can(user?.role, "safety:write");
 
   const [logs, setLogs] = useState<SafetyLog[] | null>(null);
   const [from, setFrom] = useState(today());
