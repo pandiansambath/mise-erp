@@ -167,3 +167,21 @@ test("the batch-3 fixes are actually on the page", async ({ page }) => {
   await page.screenshot({ path: "e2e/__screens__/batch3-people.png", fullPage: true });
   await expect(page.getByRole("dialog").last().getByText(/@/).first()).toBeVisible();
 });
+
+test("the owner keeps their whole sidebar", async ({ page }) => {
+  // THE ONE I BROKE. The page filter asked `levelOf(area, held)` first, and
+  // `levelOf` looks for an area's own permission strings — the owner holds the
+  // wildcard and none of those, so every area came back "none" and the sidebar
+  // collapsed to three items. The end-to-end test sailed past it because the
+  // probe account held real permissions; the only account it broke was the one
+  // I was signed in as.
+  await signIn(page);
+  await page.goto(`${BASE}/staff`);
+  await page.getByRole("button", { name: /create a role/i }).waitFor({ timeout: 60_000 });
+
+  const nav = page.locator("nav, aside").first();
+  const text = await nav.innerText();
+  for (const item of ["Inventory", "Purchasing", "Vendors", "Recipes", "Employees", "Payroll"]) {
+    expect(text, `the owner lost ${item} from their own sidebar`).toContain(item);
+  }
+});
