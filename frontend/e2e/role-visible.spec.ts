@@ -85,7 +85,11 @@ test("give everything actually gives everything", async ({ page }) => {
   // "why 17? I thought we have more."
   await expect(sheet.getByText("0 of 33")).toBeVisible();
 
+  // The bulk buttons ASK first now — one tap moves every switch on the page and
+  // there is no way to tell by looking what it was before. Confirming is part
+  // of the flow, so the test does it the way a person would.
   await sheet.getByRole("button", { name: /^give everything$/i }).last().click();
+  await page.getByRole("button", { name: /yes, do it/i }).first().click();
   await page.waitForTimeout(700);
   await page.screenshot({ path: "e2e/__screens__/bulk-give-all.png", fullPage: true });
 
@@ -93,6 +97,7 @@ test("give everything actually gives everything", async ({ page }) => {
 
   // ...and back down again, so it is not a one-way door.
   await sheet.getByRole("button", { name: /^take it all away$/i }).last().click();
+  await page.getByRole("button", { name: /take it away/i }).last().click();
   await page.waitForTimeout(700);
   await expect(sheet.getByText("0 of 33")).toBeVisible();
 });

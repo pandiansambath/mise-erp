@@ -50,8 +50,10 @@ test("a manager's sheet offers every section, not just the usual ones", async ({
   const tabs = ["Money", "Stock & buying", "People", "Their own", "Kitchen"];
   let total = 0;
   for (const tab of tabs) {
-    await sheet.getByRole("button", { name: new RegExp(tab, "i") }).first().click();
-    await page.waitForTimeout(700);
+    // The popup is master/detail now: the rail item carries its own live
+    // count in the same button, so match the text, not the whole name.
+    await sheet.getByText(tab, { exact: true }).first().click();
+    await page.waitForTimeout(600);
     const n = await sheet.getByText(/^No access$/).count();
     total += n;
     expect(n, `${tab} drew no controls at all`).toBeGreaterThan(0);
@@ -89,7 +91,9 @@ test("a job that reaches almost nothing can still be given anything", async ({ p
   // AND each of them offers the middle. Expenses was "No access / Can change"
   // with no way to say "let him look at the bills without adding any", because
   // `expenses:read` was not a grantable permission — only implied by the write.
-  const expenses = sheet.locator("li").filter({ hasText: "Bills and everyday spending" });
+  // Match the LABEL. The popup row shows each screen as its own tick where the
+  // one-line blurb used to be, so filtering on the blurb finds nothing.
+  const expenses = sheet.locator("li").filter({ hasText: "Expenses" }).first();
   await expect(expenses.getByText("No access")).toBeVisible();
   await expect(expenses.getByText("Can see")).toBeVisible();
   await expect(expenses.getByText("Can change")).toBeVisible();

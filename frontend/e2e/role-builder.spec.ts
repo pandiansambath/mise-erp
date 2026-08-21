@@ -47,21 +47,20 @@ test("invent a Poori Master and give it what it needs", async ({ page }) => {
   // is on until it is switched on here.
   expect(await sheet.getByText(/start from/i).count()).toBe(0);
 
-  // Screenshot BEFORE the assertions, so a failure still leaves something to
-  // look at rather than the previous run's picture.
-  await page.screenshot({ path: "e2e/__screens__/role-builder-top.png", fullPage: true });
-
-  // The tabs are gone — every group is on this one screen. The headings carry
-  // their icon in the same text node, so this cannot be an exact match.
-  for (const group of ["Stock & buying", "Their own", "Kitchen"]) {
-    await expect(sheet.getByText(group).first()).toBeVisible();
+  // It is a popup with a master rail now — every group is one click away and
+  // neither pane scrolls, so the test navigates it the way a person would.
+  for (const group of ["Money", "Stock & buying", "People", "Their own", "Kitchen"]) {
+    await expect(sheet.getByText(group, { exact: true }).first()).toBeVisible();
   }
 
   // One bulk row for the whole app, not two identical ones stacked.
   expect(await sheet.getByText(/every page in dineai:/i).count()).toBe(1);
 
+  await sheet.getByText("Kitchen", { exact: true }).first().click();
+  await page.waitForTimeout(600);
+
   // The assistant is permission to ASK IT THINGS, not to change anything.
-  const ai = sheet.locator("li").filter({ hasText: "Ask DineAI" }).first();
+  const ai = sheet.locator("li").filter({ hasText: "The assistant" }).first();
   await expect(ai.getByText("Can use")).toBeVisible();
   expect(await ai.getByText("Can change").count()).toBe(0);
 
@@ -71,6 +70,8 @@ test("invent a Poori Master and give it what it needs", async ({ page }) => {
   await page.screenshot({ path: "e2e/__screens__/role-builder.png", fullPage: true });
 
   await sheet.getByRole("button", { name: /create this role/i }).click();
+  // Saving asks first — nothing about somebody's access changes on a stray tap.
+  await page.getByRole("button", { name: /save it/i }).first().click();
 
   // It has to come back on the BOARD — a role that saves but never appears is
   // the saved-draft failure all over again.
