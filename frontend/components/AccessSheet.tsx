@@ -19,17 +19,13 @@
 // owner's problem to solve.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { DetailSheet } from "@/components/DetailSheet";
+import { AccessModal } from "@/components/AccessModal";
 import {
   isUnusual,
-  labelFor,
-  LEVEL_HINT,
-  LEVEL_LABEL,
   levelOf,
   overridesFor,
   positionsFor,
   SECTIONS,
-  type Area,
   type Level,
 } from "@/lib/access";
 
@@ -51,91 +47,6 @@ type Archetype = { key: string; label: string; defaults: string[]; envelope: str
  *  a nonsense fourth answer (can change but cannot see). A segmented control
  *  can only ever be in one position, so the impossible state cannot be typed.
  */
-function ThreeWay({
-  value,
-  options,
-  onChange,
-  label,
-  area,
-}: {
-  value: Level;
-  options: Level[];
-  onChange: (l: Level) => void;
-  label: string;
-  /** So an area can name its own positions - "Can use", not "Can change". */
-  area?: Area;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label={label}
-      className="mise-well inline-flex shrink-0 rounded-xl p-0.5"
-    >
-      {options.map((o) => {
-        const on = value === o;
-        return (
-          <button
-            key={o}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(o)}
-            title={LEVEL_HINT[o]}
-            className={`mise-press rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition sm:px-3 ${
-              on
-                ? o === "none"
-                  ? "bg-fg-faint/25 text-fg"
-                  : o === "view"
-                    ? "mise-tone-info bg-glass/10"
-                    : "bg-brand-600 text-white"
-                : "text-fg-faint hover:text-fg-soft"
-            }`}
-          >
-            {area ? labelFor(area, o) : LEVEL_LABEL[o]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * SET A WHOLE SECTION AT ONCE.
- *
- *   "I need one extra feature like give ALL in this section, give in this
- *    page — so that I don't need to click each and everything when I need to
- *    give each and everything."
- *
- * Fair: handing somebody the run of the kitchen is one decision, and making it
- * cost four taps invites people to stop halfway. `all` does the same for the
- * whole app, which is the "make him a second me" case.
- *
- * It sets the HIGHEST position each area can offer, so an area with no middle
- * lands on its only "on" rather than being skipped.
- */
-function BulkSet({ onSet }: { onSet: (level: Level) => void }) {
-  // One row for the whole app; each group heading carries its own give-all.
-  // Two stacked rows with identical buttons read as a duplicate, because they
-  // were one.
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5">
-      <span className="text-[11px] text-fg-faint">Every page in DineAI:</span>
-      <span className="flex flex-wrap gap-1.5">
-        {(["edit", "view", "none"] as const).map((l) => (
-          <button
-            key={l}
-            type="button"
-            onClick={() => onSet(l)}
-            className="mise-press mise-well rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-fg-soft hover:text-fg"
-          >
-            {l === "edit" ? "Give everything" : l === "view" ? "See everything" : "Take it all away"}
-          </button>
-        ))}
-      </span>
-    </div>
-  );
-}
-
 /** Counted in PAGES, not in our word "areas" - a number he can check against
  *  the sidebar rather than take on trust. */
 const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages)));
@@ -270,66 +181,33 @@ export function AccessSheet({
   }, [envelope, draft, held]);
 
   return (
-    <DetailSheet
+    <AccessModal
       open={!!person}
       onClose={onClose}
       icon="🔑"
       title={name}
       subtitle={owner ? "Owner — can do everything" : `${jobLabel} · ${person?.email ?? ""}`}
-      width="lg"
       stats={
         owner
-          ? undefined
+          ? [{ label: "Can reach", value: "Everything" }]
           : [
-              { label: "Can reach", value: `${reach.on} of ${reach.all}`, hint: "pages in DineAI" },
-              { label: "Their job", value: jobLabel, hint: "what they start from" },
-              {
-                label: "Access",
-                value: person?.custom_role_id ? "Tailored" : "Standard",
-                hint: person?.custom_role_id ? "differs from the job" : "exactly their job",
-                tone: person?.custom_role_id ? "warn" : "plain",
-              },
+              { label: "Pages they can open", value: `${reach.on} of ${reach.all}` },
+              { label: "Access", value: person?.custom_role_id ? "Tailored" : "Standard" },
             ]
       }
-      actions={
-        owner ? undefined : (
-          <div className="flex flex-wrap items-center gap-2">
-            {/* THE GATE. Nothing is written until this is pressed — "even in
-                that 1 sec they will change their mind and regret." */}
-            <button
-              type="button"
-              disabled={!dirty || busy}
-              onClick={save}
-              className="mise-press rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              {busy ? "Saving…" : dirty ? "Save what they can reach" : "No changes yet"}
-            </button>
-            {dirty && (
-              <button
-                type="button"
-                onClick={() => { setDraft({}); setJob(person?.role ?? ""); }}
-                className="mise-press rounded-xl border border-line px-3 py-2 text-sm text-fg-soft"
-              >
-                Undo
-              </button>
+      lead={
+        owner ? (
+          <p className="text-sm leading-relaxed text-fg-soft">
+            This is the owner&apos;s account. It reaches everything in the hotel and cannot be
+            limited — that is what makes it the account that can rescue every other one.
+          </p>
+        ) : (
+          <>
+            {err && (
+              <p className="mb-3 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
+                {err}
+              </p>
             )}
-          </div>
-        )
-      }
-    >
-      {owner ? (
-        <p className="text-sm leading-relaxed text-fg-soft">
-          This is the owner&apos;s account. It reaches everything in the hotel and cannot be
-          limited — that is what makes it the account that can rescue every other one.
-        </p>
-      ) : (
-        <>
-          {err && (
-            <p className="mb-3 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
-              {err}
-            </p>
-          )}
-
           {/* WHAT IS THIS PERSON? One list, one question.
               "I checked for my custom role to give to this person, but not
                showing."
@@ -429,94 +307,55 @@ export function AccessSheet({
             )}
 
           </div>
-
-          <BulkSet onSet={(l) => bulk(l)} />
-
-          {/* EVERY GROUP ON ONE SCREEN, same as the role builder. Five tabs
-              meant five visits to answer one question. */}
-          {SECTIONS.map((sec) => {
-            const areas = sec.areas.filter((a) => positionsFor(a).length > 0);
-            if (areas.length === 0) return null;
-            return (
-              <div key={sec.key} className="mb-3">
-                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
-                  <span aria-hidden>{sec.icon}</span>
-                  {sec.label}
-                  <button
-                    type="button"
-                    onClick={() => bulk("edit", sec.key)}
-                    className="mise-press ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-medium text-brand-300 hover:underline"
-                  >
-                    give all
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => bulk("none", sec.key)}
-                    className="mise-press rounded-md px-1.5 py-0.5 text-[10px] font-medium text-fg-faint hover:underline"
-                  >
-                    none
-                  </button>
-                </p>
-                <ul className="grid gap-1.5 lg:grid-cols-2">
-                  {areas.map((a) => {
-                    const lvl = current(a.key, a);
-                    const was = levelOf(a, held);
-                    const changed = lvl !== was;
-                    const odd = isUnusual(a, envelope);
-                    return (
-                      <li
-                        key={a.key}
-                        className={`mise-well rounded-xl px-3 py-2.5 ${
-                          changed ? "ring-1 ring-amber-400/50" : ""
-                        }`}
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span aria-hidden className="shrink-0 text-base">
-                            {a.icon}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-1.5">
-                              <span className="text-[13px] font-medium leading-tight text-fg">
-                                {a.label}
-                              </span>
-                              {odd && (
-                                <span
-                                  title={`Not normally part of a ${jobLabel}'s job`}
-                                  className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300"
-                                >
-                                  unusual
-                                </span>
-                              )}
-                            </span>
-                            <span className="block truncate text-[10px] text-fg-faint">
-                              {changed ? (
-                                <span className="mise-tone-warn">
-                                  was &ldquo;{LEVEL_LABEL[was]}&rdquo; · not saved yet
-                                </span>
-                              ) : (
-                                a.pages.join(" · ")
-                              )}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="mt-2 flex justify-end">
-                          <ThreeWay
-                            label={a.label}
-                            area={a}
-                            value={lvl}
-                            options={positionsFor(a)}
-                            onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
-                          />
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
-        </>
-      )}
-    </DetailSheet>
+          </>
+        )
+      }
+      intro={
+        owner ? undefined : (
+          <>
+            <b>{reach.all} pages</b> sit behind the <b>17 switches</b> here — one switch can
+            open several, and each row lists which.
+          </>
+        )
+      }
+      current={(a) => current(a.key, a)}
+      onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
+      onBulk={(l, g) => bulk(l, g)}
+      areaExtra={(a) =>
+        isUnusual(a, envelope) ? (
+          <span
+            title={`Not normally part of a ${jobLabel}'s job`}
+            className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300"
+          >
+            unusual
+          </span>
+        ) : null
+      }
+      actions={
+        owner ? undefined : (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* THE GATE. Nothing is written until this is pressed — "even in
+                that 1 sec they will change their mind and regret." */}
+            <button
+              type="button"
+              disabled={!dirty || busy}
+              onClick={save}
+              className="mise-press rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {busy ? "Saving…" : dirty ? "Save what they can reach" : "No changes yet"}
+            </button>
+            {dirty && (
+              <button
+                type="button"
+                onClick={() => { setDraft({}); setJob(person?.role ?? ""); }}
+                className="mise-press rounded-xl border border-line px-3 py-2 text-sm text-fg-soft"
+              >
+                Undo
+              </button>
+            )}
+          </div>
+        )
+      }
+    />
   );
 }
