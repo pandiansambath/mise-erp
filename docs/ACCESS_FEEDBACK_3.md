@@ -33,7 +33,7 @@ a page's UI is wrong, this is the one to copy.
 | 4.2 | "unusual" should be a button → why, the right way, the impact | ✅ "unusual — why?" opens its own popup |
 | 4.3 | By job / By person: after shrinking it looks tight and clumsy — move them right, smoothly | ✅ right-aligned exactly via `100cqw` |
 | 4.4 | Bottom-left of the popup, "Their own" is under a white overlay and cannot be clicked | ✅ panes bounded; it was overflow, not an overlay |
-| 5a | All **33 pages** individually configurable — not bundled under 17 | ⬜ |
+| 5a | All **33 pages** individually configurable — not bundled under 17 | ✅ per-page ticks; sidebar honours them |
 | 5b | "People in this role" should open the list of who they are | ✅ the count is a button → names + emails |
 | 5c | The name field needs a confirmation too — touching it must not silently edit | ✅ says "renaming from …", and save asks |
 | 6 | **Act as a manual tester**: make a staff login, grant a page, sign in AS them, prove it appears; revoke, prove it goes | ⬜ |
@@ -77,3 +77,27 @@ It is the biggest item here and it is what he has now asked for twice.
 Make a login, grant one page, sign in as that account, confirm the page is
 reachable and the others are not, revoke it, confirm it is gone. Playwright,
 his tenant, real screenshots.
+
+
+---
+
+## How 5a actually works, and its one honest limit
+
+Each of the 17 switches still decides what someone may **read or change** — that
+is a permission, and it cannot be split per page, because Inventory, Stock-take
+and Waste are all reading the same stock. Splitting it would need a separate
+permission behind every screen and a separate guard on every route.
+
+What IS now per-page is **which of those screens they are handed.** Every row
+lists its pages as ticks; untick Waste and Waste leaves their sidebar, while
+Inventory stays. Stored as `page:<slug>` grants, and the rule is deliberately
+quiet: an area nobody has narrowed shows all its pages, so nothing changes for a
+hotel that never opens this.
+
+**The limit, said plainly:** this takes screens away, it never adds them, and it
+is a menu rather than a lock. Somebody who is handed Inventory but not Waste
+cannot reach the Waste screen — but the stock permission behind it is still what
+guards the data itself. For "give him Inventory, not Waste" that is exactly
+right. If you ever want Waste to be genuinely sealed off from a person who can
+otherwise touch stock, that needs its own permission and its own guard, and I
+will say so rather than pretending a hidden menu did it.

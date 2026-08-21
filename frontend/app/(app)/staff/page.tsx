@@ -145,8 +145,8 @@ export default function StaffPage() {
     const all = new Set<string>();
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        for (const pg of a.pages) all.add(pg);
-        if (levelOf(a, held) !== "none") for (const pg of a.pages) on.add(pg);
+        for (const pg of a.pages) all.add(pg.slug);
+        if (levelOf(a, held) !== "none") for (const pg of a.pages) on.add(pg.slug);
       }
     }
     return { on: on.size, all: all.size };
@@ -460,8 +460,8 @@ export default function StaffPage() {
                 const allSet = new Set<string>();
                 for (const sec of SECTIONS)
                   for (const a of sec.areas) {
-                    for (const pg of a.pages) allSet.add(pg);
-                    if (levelOf(a, held) !== "none") for (const pg of a.pages) onSet.add(pg);
+                    for (const pg of a.pages) allSet.add(pg.slug);
+                    if (levelOf(a, held) !== "none") for (const pg of a.pages) onSet.add(pg.slug);
                   }
                 return { on: onSet.size, total: allSet.size };
               })();
@@ -532,8 +532,8 @@ export default function StaffPage() {
               const allSet = new Set<string>();
               for (const sec of SECTIONS)
                 for (const a of sec.areas) {
-                  for (const pg of a.pages) allSet.add(pg);
-                  if (levelOf(a, held) !== "none") for (const pg of a.pages) onSet.add(pg);
+                  for (const pg of a.pages) allSet.add(pg.slug);
+                  if (levelOf(a, held) !== "none") for (const pg of a.pages) onSet.add(pg.slug);
                 }
               const on = onSet.size;
               const total = allSet.size;

@@ -7,6 +7,8 @@ need via ``Depends(require("..."))`` (see app/auth/deps.py).
 The matrix below is the single source of truth for who-can-do-what. As new
 modules land, add their permissions here and add RBAC tests.
 """
+import re
+
 from app.auth.models import Role
 
 PERMISSIONS: dict[str, list[str]] = {
@@ -170,6 +172,30 @@ def envelope_for(base_role: str) -> list[str]:
     return sorted(set(ENVELOPES.get(base_role, [])))
 
 
+#: A PAGE, not a permission.
+#:
+#:   "under Inventory you gave 3 things - but what if super admin wants to give
+#:    only the Inventory page alone, not Stock-take and Waste? We need to be
+#:    flexible. Don't suppress under 17."
+#:
+#: The 17 permissions decide what DATA someone may read or change; they cannot
+#: be split per page, because Inventory, Stock-take and Waste are all reading
+#: the same stock. What CAN be split is which of those screens the person is
+#: given, and that is what a `page:<slug>` grant is.
+#:
+#: Read it honestly: this narrows what they SEE and can navigate to, inside
+#: what their permissions already allow. It is a menu, not a lock - the module
+#: permission is still the thing guarding the data, and nothing here can widen
+#: access beyond it. Used the way he means it (give Inventory, withhold Waste)
+#: that is exactly right, and it is why it is safe to let the UI define the
+#: slugs rather than enumerating them here.
+_PAGE_KEY = re.compile(r"^page:[a-z0-9-]{1,40}$")
+
+
+def is_page_key(perm: str) -> bool:
+    return bool(_PAGE_KEY.match(perm))
+
+
 def grantable_for(base_role: str) -> list[str]:
     """Every permission the owner may switch on for this job.
 
@@ -199,7 +225,9 @@ def resolve_permissions(base_role: str, overrides: dict[str, bool] | None) -> li
     allowed = set(grantable_for(base_role))
     effective = set(PERMISSIONS.get(base_role, []))
     for perm, on in (overrides or {}).items():
-        if perm not in allowed:
+        # `page:*` grants are which SCREENS to show, inside what the
+        # permissions already allow. The UI owns the slugs.
+        if perm not in allowed and not is_page_key(perm):
             continue  # not a permission we know how to honour
         if on:
             effective.add(perm)

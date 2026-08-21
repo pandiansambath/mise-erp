@@ -25,6 +25,7 @@ from app.core.rbac import (
     PERMISSIONS,
     envelope_for,
     grantable_for,
+    is_page_key,
     resolve_permissions,
 )
 
@@ -228,7 +229,11 @@ def _clip(base_role: str, overrides: dict[str, bool]) -> dict[str, bool]:
     KIOSK keeps its seal — see `grantable_for`.
     """
     allowed = set(grantable_for(base_role))
-    return {k: bool(v) for k, v in overrides.items() if k in allowed}
+    # `page:<slug>` says which SCREENS to show inside what the permissions
+    # already allow - it can never widen access, so the UI owns the slugs.
+    return {
+        k: bool(v) for k, v in overrides.items() if k in allowed or is_page_key(k)
+    }
 
 
 class AccessIn(BaseModel):
@@ -355,7 +360,9 @@ async def set_user_access(
     # The same for ONE person: "even though if we give manager role to someone,
     # super admin can edit permission for that particular user alone."
     allowed = set(grantable_for(base))
-    overrides = {p: v for p, v in payload.overrides.items() if p in allowed}
+    overrides = {
+        p: v for p, v in payload.overrides.items() if p in allowed or is_page_key(p)
+    }
     defaults = set(PERMISSIONS.get(base, []))
     # Only store what actually DIFFERS from the job's defaults, so "this person
     # is a plain Manager" stays visibly plain instead of accumulating a hundred
