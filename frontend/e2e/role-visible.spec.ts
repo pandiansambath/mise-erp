@@ -81,17 +81,18 @@ test("give everything actually gives everything", async ({ page }) => {
   const sheet = page.getByRole("dialog").last();
   await sheet.getByPlaceholder(/poori master/i).waitFor({ timeout: 30_000 });
 
-  // A new role starts blank.
-  await expect(sheet.getByText("0 of 17")).toBeVisible();
+  // A new role starts blank. Counted in PAGES now, not in our word "areas" —
+  // "why 17? I thought we have more."
+  await expect(sheet.getByText("0 of 33")).toBeVisible();
 
   await sheet.getByRole("button", { name: /^give everything$/i }).last().click();
   await page.waitForTimeout(700);
   await page.screenshot({ path: "e2e/__screens__/bulk-give-all.png", fullPage: true });
 
-  await expect(sheet.getByText("17 of 17")).toBeVisible();
+  await expect(sheet.getByText("33 of 33")).toBeVisible();
 
   // ...and back down again, so it is not a one-way door.
   await sheet.getByRole("button", { name: /^take it all away$/i }).last().click();
   await page.waitForTimeout(700);
-  await expect(sheet.getByText("0 of 17")).toBeVisible();
+  await expect(sheet.getByText("0 of 33")).toBeVisible();
 });
