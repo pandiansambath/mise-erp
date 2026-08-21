@@ -112,16 +112,15 @@ function ThreeWay({
  * It sets the HIGHEST position each area can offer, so an area with no middle
  * lands on its only "on" rather than being skipped.
  */
-function BulkSet({
-  onSet,
-  scope,
-}: {
-  onSet: (level: Level) => void;
-  scope: string;
-}) {
+function BulkSet({ onSet }: { onSet: (level: Level) => void }) {
+  // ONE ROW, NOT TWO. There used to be a "this group" row and an "every page"
+  // row stacked on top of each other with identical buttons - "why can I see
+  // 2 same thing duplicates". Fair: they looked the same because they were.
+  // Whole-app lives here; each group has its own small "give all / none" on
+  // its heading, where the group is.
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5">
-      <span className="text-[11px] text-fg-faint">{scope}</span>
+      <span className="text-[11px] text-fg-faint">Every page in DineAI:</span>
       <span className="flex flex-wrap gap-1.5">
         {(["edit", "view", "none"] as const).map((l) => (
           <button
@@ -137,6 +136,12 @@ function BulkSet({
     </div>
   );
 }
+
+/** Every page this level of access opens, so the headline can be counted in
+ *  PAGES rather than in our word "areas" — "why 17? I thought we have more".
+ *  There are 34 screens behind 17 switches, and 17 was never a number he had
+ *  any way to check. */
+const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages)));
 
 export function RoleBuilder({
   open,
@@ -158,7 +163,6 @@ export function RoleBuilder({
   // role begins shut and is opened one switch at a time.
   const base = role?.base_role ?? "STAFF";
   const [draft, setDraft] = useState<Record<string, Level>>({});
-  const [tab, setTab] = useState(SECTIONS[0].key);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -172,7 +176,6 @@ export function RoleBuilder({
     if (!open) return;
     setName(role?.name ?? "");
     setDraft({});
-    setTab(SECTIONS[0].key);
     setErr(null);
   }, [open, role]);
 
@@ -184,14 +187,10 @@ export function RoleBuilder({
   const current = (a: Parameters<typeof levelOf>[0]) => draft[a.key] ?? levelOf(a, held);
 
   const reach = useMemo(() => {
-    let on = 0;
-    let total = 0;
+    const pages = new Set<string>();
     for (const s of SECTIONS)
-      for (const a of s.areas) {
-        total += 1;
-        if (current(a) !== "none") on += 1;
-      }
-    return { on, total };
+      for (const a of s.areas) if (current(a) !== "none") for (const pg of a.pages) pages.add(pg);
+    return { on: pages.size, total: ALL_PAGES.size };
   }, [draft, held]);
 
   /** The highest position this area can offer — so an area with no middle
@@ -269,11 +268,8 @@ export function RoleBuilder({
       title={role ? role.name : name.trim() || "A new role"}
       subtitle={role ? "A role you made" : "Name it, then say what they can reach"}
       width="lg"
-      sections={SECTIONS.map((s) => ({ key: s.key, label: s.label, icon: s.icon }))}
-      active={tab}
-      onSection={setTab}
       stats={[
-        { label: "Reaches", value: `${reach.on} of ${reach.total}`, hint: "areas of the app" },
+        { label: "Reaches", value: `${reach.on} of ${reach.total}`, hint: "pages in DineAI" },
         {
           label: "People in this role",
           value: String(people),
@@ -345,68 +341,72 @@ export function RoleBuilder({
         off-limits — it is your restaurant.
       </p>
 
-      <BulkSet
-        scope="Everything in this group:"
-        onSet={(l) => bulk(l, tab)}
-      />
-      <BulkSet scope="Every page in DineAI:" onSet={(l) => bulk(l)} />
+      <BulkSet onSet={(l) => bulk(l)} />
 
-      {SECTIONS.filter((s) => s.key === tab).map((s) => (
-        <ul key={s.key} className="space-y-2">
-          {s.areas.map((a) => {
-            const lvl = current(a);
-            const was = levelOf(a, held);
-            const changed = lvl !== was;
-            const opts: Level[] =
-              a.read.length && a.write.length
-                ? ["none", "view", "edit"]
-                : ["none", a.write.length ? "edit" : "view"];
-            return (
-              <li
-                key={a.key}
-                className={`mise-card3d flex flex-wrap items-center justify-between gap-3 p-3.5 ${
-                  changed ? "ring-1 ring-amber-400/50" : ""
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden
-                    className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base"
-                  >
-                    {a.icon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-fg">{a.label}</span>
-                    <span className="block text-[11px] leading-snug text-fg-faint">
-                      {a.blurb}
+      {/* EVERY GROUP ON ONE SCREEN.
+          "this UI is a bit hard for me to scroll and pick... I want all in one
+           area so that I don't need to scroll or move from here, which will be
+           useful for all the laymen."
+          Tabs made you visit five places to answer one question, and you could
+          not see what you had already given without going back. Two columns of
+          compact rows fit the lot. */}
+      {SECTIONS.map((sec) => (
+        <div key={sec.key} className="mb-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+            <span aria-hidden>{sec.icon}</span>
+            {sec.label}
+            <button
+              type="button"
+              onClick={() => bulk("edit", sec.key)}
+              className="mise-press ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-medium text-brand-300 hover:underline"
+            >
+              give all
+            </button>
+            <button
+              type="button"
+              onClick={() => bulk("none", sec.key)}
+              className="mise-press rounded-md px-1.5 py-0.5 text-[10px] font-medium text-fg-faint hover:underline"
+            >
+              none
+            </button>
+          </p>
+          <ul className="grid gap-1.5 lg:grid-cols-2">
+            {sec.areas.map((a) => {
+              const lvl = current(a);
+              const opts: Level[] =
+                a.read.length && a.write.length
+                  ? ["none", "view", "edit"]
+                  : ["none", a.write.length ? "edit" : "view"];
+              return (
+                <li
+                  key={a.key}
+                  className="mise-well flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2"
+                >
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span aria-hidden className="shrink-0 text-base">
+                      {a.icon}
                     </span>
-                    {/* THE PAGES. 34 screens behind 17 switches means a switch
-                        called "Suppliers & buying" has to say that it opens
-                        Vendors, Price Comparison and Purchasing, or the owner
-                        is agreeing to something he cannot see. */}
-                    <span className="mt-1 flex flex-wrap gap-1">
-                      {a.pages.map((pg) => (
-                        <span
-                          key={pg}
-                          className="mise-well rounded-md px-1.5 py-0.5 text-[10px] text-fg-faint"
-                        >
-                          {pg}
-                        </span>
-                      ))}
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-medium text-fg">
+                        {a.label}
+                      </span>
+                      <span className="block truncate text-[10px] text-fg-faint">
+                        {a.pages.join(" · ")}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <ThreeWay
-                  label={a.label}
-                  area={a}
-                  value={lvl}
-                  options={opts}
-                  onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
-                />
-              </li>
-            );
-          })}
-        </ul>
+                  <ThreeWay
+                    label={a.label}
+                    area={a}
+                    value={lvl}
+                    options={opts}
+                    onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ))}
     </DetailSheet>
   );
