@@ -2047,11 +2047,15 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
   --tile-bg: var(--color-paper-2, #fff);
   --tile-side: color-mix(in srgb, #000 30%, var(--tile-bg));
   --tile-lip: color-mix(in srgb, #fff 82%, var(--tile-bg));
-  /* 8px, and the same on every surface. The banner he pointed at looked more
-     three-dimensional than the tiles for one reason: it is bigger, so an equal
-     depth reads as more. Raising it everywhere makes the smaller cards carry
-     the same weight rather than looking like a different material. */
-  --tile-depth: 8px;
+  /* 6px, down from 8.
+       "when I see, I can feel an over-shadow kind of feel... it's too much...
+        something is not good, I can't tell you, it's weird someway."
+     That "can't tell you" is the tell. Nothing is broken and no single value
+     is wrong — there is just more ink around every card than the shape needs,
+     and at eight cards to a screen it stops reading as depth and starts
+     reading as grime. The cheeks come down, the cast tightens, and the contact
+     shadow stops pooling underneath. Still a solid, just not shouting. */
+  --tile-depth: 6px;
 
   position: relative;
   border-radius: 0.9rem;
@@ -2075,10 +2079,12 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
     calc(var(--tile-depth) * -0.7) calc(var(--tile-depth) * -1) 0 0
       color-mix(in srgb, var(--tile-side) 62%, transparent),
     /* a soft cast up and left, away from the light */
-    calc(var(--tile-depth) * -1) calc(var(--tile-depth) * -1) 18px -2px
-      color-mix(in srgb, #000 30%, transparent),
-    /* and the contact shadow it sits in */
-    0 3px 10px -3px color-mix(in srgb, #000 30%, transparent),
+    calc(var(--tile-depth) * -1) calc(var(--tile-depth) * -1) 14px -4px
+      color-mix(in srgb, #000 20%, transparent),
+    /* and the contact shadow it sits in - "the shadow is too much UNDER the
+       card". It was: a 10px blur at 30% pooled under every tile, and on a grid
+       of them the gaps went muddy. */
+    0 2px 6px -4px color-mix(in srgb, #000 18%, transparent),
     /* lit rims on the two edges the light actually reaches */
     inset 0 -1px 0 var(--tile-lip),
     inset -1px 0 0 color-mix(in srgb, var(--tile-lip) 80%, transparent);
@@ -2102,11 +2108,11 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    something heavier. The lit rims and the lower-right light are untouched, so
    they are still solid — just not shouting. */
 .mise-card3d-wide {
-  --tile-depth: 5px;
+  --tile-depth: 4px;
 }
 
 .mise-card3d:hover {
-  --tile-depth: 9px;
+  --tile-depth: 7px;
   transform: translate(2px, -2px);
 }
 
@@ -2592,7 +2598,14 @@ body[data-overlay] .mise-launcher-in {
      space is still reclaimed) while the buttons stay full size and simply
      overhang, which is exactly what the lift below is for. */
   align-items: start;
-  padding-bottom: 0.75rem;
+  /* ROOM UNDER THE TOOLS.
+       "those By job / By person / Find a person buttons — it's very very near
+        to the edge of down. Make it free, why this much tight?"
+     The row sat 12px off the rail's edge, which looks fine in isolation and
+     cramped the moment anything is drawn immediately below it. The condensed
+     rule still takes this to zero, so the shrink reclaims every pixel of it —
+     the animation is untouched. */
+  padding-bottom: 1.15rem;
   transform-origin: left center;
   transition:
     grid-template-rows var(--bench-ms) var(--bench-ease),

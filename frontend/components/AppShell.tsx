@@ -257,25 +257,21 @@ function NavLinks({
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [openSection, setOpenSection] = useState<string | null>(null);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("mise.nav.open");
-      if (raw) setOpen(JSON.parse(raw) as Record<string, boolean>);
-    } catch {
-      /* private mode — defaults are fine */
-    }
-  }, []);
-
+  // OPENED SECTIONS DO NOT SURVIVE A RELOAD.
+  //
+  //   "the sub-sections are always opening automatically when I reload — it
+  //    needs to close, dude. Don't open always; when we need it we can open
+  //    it, else it's very clumsy to look."
+  //
+  // They used to be written to localStorage, so one curious tap on Attendance
+  // three weeks ago meant Attendance, Rota and Recipes were still hanging open
+  // on every page load — a wall of links nobody asked for that morning. The
+  // sidebar now starts clean and opens only the section you are standing in,
+  // which it works out from the URL rather than from memory. Opening one is
+  // cheap; closing four is a chore, and only one of those is a decision the
+  // reader actually made.
   const toggleOpen = (href: string, next: boolean) => {
-    setOpen((prev) => {
-      const merged = { ...prev, [href]: next };
-      try {
-        localStorage.setItem("mise.nav.open", JSON.stringify(merged));
-      } catch {
-        /* nothing to do */
-      }
-      return merged;
-    });
+    setOpen((prev) => ({ ...prev, [href]: next }));
   };
 
   // The page announces which job it has open — including when the choice was
