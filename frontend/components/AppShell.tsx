@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { SECTIONS } from "@/lib/sections";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { API_BASE, api, featureOn, getToken, clearToken } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
-import { can } from "@/lib/permissions";
+import { canOpenPage } from "@/lib/access";
+import { can, getGrantedPermissions } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
 import CommandPalette from "@/components/CommandPalette";
 import { Copilot } from "@/components/Copilot";
@@ -694,11 +695,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("mise:tour", h);
   }, []);
 
+  // 5a — THE SIDEBAR HONOURS THE PER-PAGE SHORTLIST.
+  //
+  //   "under Inventory you gave 3 things — what if super admin wants to give
+  //    only the Inventory page alone, not Stock-take and Waste?"
+  //
+  // The permission still decides whether they may touch stock at all; this
+  // decides which of the screens behind it they are handed. It can only ever
+  // take a page away, never add one, so a hotel that has never opened the
+  // shortlist sees exactly what it saw before.
+  const held = useMemo(() => new Set(getGrantedPermissions() ?? []), [user]);
   const navItems = NAV.filter(
     (item) =>
       (!item.perm || can(user?.role, item.perm)) &&
       (!item.hideIfPerm || !can(user?.role, item.hideIfPerm)) &&
-      (!item.feature || featureOn(hotel, item.feature))
+      (!item.feature || featureOn(hotel, item.feature)) &&
+      (held.size === 0 || canOpenPage(item.href, held))
   );
 
   return (

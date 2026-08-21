@@ -24,9 +24,9 @@ import {
   LEVEL_HINT,
   LEVEL_LABEL,
   levelOf,
-  whyUnusual,
   overridesFor,
   SECTIONS,
+  whyUnusual,
   type Area,
   type Level,
 } from "@/lib/access";
@@ -125,7 +125,7 @@ function BulkSet({ onSet }: { onSet: (level: Level) => void }) {
 
 /** Counted in PAGES, not in our word "areas" - "why 17? I thought we have
  *  more". 17 was our grouping, and he had no way to check it. */
-const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages)));
+const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages.map((p) => p.slug))));
 
 export function JobSheet({
   job,
@@ -166,7 +166,7 @@ export function JobSheet({
   const reach = useMemo(() => {
     const pages = new Set<string>();
     for (const s of SECTIONS)
-      for (const a of s.areas) if (current(a) !== "none") for (const pg of a.pages) pages.add(pg);
+      for (const a of s.areas) if (current(a) !== "none") for (const pg of a.pages) pages.add(pg.slug);
     return { on: pages.size, total: ALL_PAGES.size };
   }, [draft, held]);
 
@@ -202,6 +202,29 @@ export function JobSheet({
     });
   }
 
+  /**
+   * 5a — which SCREENS each area hands over. `undefined` for an area means
+   * "all of them", which is what every existing role means today, so nothing
+   * changes for anybody who never opens this.
+   */
+  const [pageDraft, setPageDraft] = useState<Record<string, Set<string>>>({});
+
+  function shownPages(a: Area): Set<string> | undefined {
+    if (pageDraft[a.key]) return pageDraft[a.key];
+    const narrowed = a.pages.some((pg) => held.has(`page:${pg.slug}`));
+    if (!narrowed) return undefined;
+    return new Set(a.pages.filter((pg) => held.has(`page:${pg.slug}`)).map((pg) => pg.slug));
+  }
+
+  function togglePage(a: Area, slug: string, on: boolean) {
+    setPageDraft((d) => {
+      const now = new Set(d[a.key] ?? shownPages(a) ?? a.pages.map((pg) => pg.slug));
+      if (on) now.add(slug);
+      else now.delete(slug);
+      return { ...d, [a.key]: now };
+    });
+  }
+
   async function save() {
     const ok = await confirm({
       title: "Apply this to everyone?",
@@ -215,7 +238,7 @@ export function JobSheet({
     const perms = new Set<string>();
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        const map = overridesFor(a, current(a));
+        const map = overridesFor(a, current(a), shownPages(a));
         for (const [p, on] of Object.entries(map)) if (on) perms.add(p);
       }
     }
@@ -279,6 +302,8 @@ export function JobSheet({
         if (!perms.length || perms.some((p) => suggested.has(p))) return null;
         return whyUnusual(a, name || "job");
       }}
+      pagesOn={(a) => shownPages(a)}
+      onTogglePage={(a, slug, on) => togglePage(a, slug, on)}
       current={(a) => current(a)}
       onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
       onBulk={(l, g) => bulk(l, g)}

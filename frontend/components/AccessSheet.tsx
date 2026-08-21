@@ -23,11 +23,12 @@ import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
 import {
   isUnusual,
-  whyUnusual,
   levelOf,
   overridesFor,
   positionsFor,
   SECTIONS,
+  whyUnusual,
+  type Area,
   type Level,
 } from "@/lib/access";
 
@@ -51,7 +52,7 @@ type Archetype = { key: string; label: string; defaults: string[]; envelope: str
  */
 /** Counted in PAGES, not in our word "areas" - a number he can check against
  *  the sidebar rather than take on trust. */
-const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages)));
+const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages.map((p) => p.slug))));
 
 export function AccessSheet({
   person,
@@ -144,6 +145,29 @@ export function AccessSheet({
     });
   }
 
+  /**
+   * 5a — which SCREENS each area hands over. `undefined` for an area means
+   * "all of them", which is what every existing role means today, so nothing
+   * changes for anybody who never opens this.
+   */
+  const [pageDraft, setPageDraft] = useState<Record<string, Set<string>>>({});
+
+  function shownPages(a: Area): Set<string> | undefined {
+    if (pageDraft[a.key]) return pageDraft[a.key];
+    const narrowed = a.pages.some((pg) => held.has(`page:${pg.slug}`));
+    if (!narrowed) return undefined;
+    return new Set(a.pages.filter((pg) => held.has(`page:${pg.slug}`)).map((pg) => pg.slug));
+  }
+
+  function togglePage(a: Area, slug: string, on: boolean) {
+    setPageDraft((d) => {
+      const now = new Set(d[a.key] ?? shownPages(a) ?? a.pages.map((pg) => pg.slug));
+      if (on) now.add(slug);
+      else now.delete(slug);
+      return { ...d, [a.key]: now };
+    });
+  }
+
   async function save() {
     const ok = await confirm({
       title: "Change what they can reach?",
@@ -161,7 +185,7 @@ export function AccessSheet({
     for (const s of SECTIONS) {
       for (const a of s.areas) {
         if (positionsFor(a).length === 0) continue;
-        Object.assign(overrides, overridesFor(a, current(a.key, a)));
+        Object.assign(overrides, overridesFor(a, current(a.key, a), shownPages(a)));
       }
     }
     try {
@@ -185,7 +209,7 @@ export function AccessSheet({
     const pages = new Set<string>();
     for (const s of SECTIONS)
       for (const a of s.areas)
-        if (current(a.key, a) !== "none") for (const pg of a.pages) pages.add(pg);
+        if (current(a.key, a) !== "none") for (const pg of a.pages) pages.add(pg.slug);
     return { on: pages.size, all: ALL_PAGES.size };
   }, [envelope, draft, held]);
 
@@ -336,6 +360,8 @@ export function AccessSheet({
           </>
         )
       }
+      pagesOn={(a) => shownPages(a)}
+      onTogglePage={(a, slug, on) => togglePage(a, slug, on)}
       current={(a) => current(a.key, a)}
       onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
       onBulk={(l, g) => bulk(l, g)}

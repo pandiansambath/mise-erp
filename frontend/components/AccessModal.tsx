@@ -158,7 +158,7 @@ function WhyPopup({ area, why, onClose }: { area: Area; why: Why; onClose: () =>
             <dt className="text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
               Opens these pages
             </dt>
-            <dd className="text-fg-soft">{area.pages.join(" · ")}</dd>
+            <dd className="text-fg-soft">{area.pages.map((p) => p.label).join(" · ")}</dd>
           </div>
         </dl>
 
@@ -241,6 +241,8 @@ export function AccessModal({
   lead,
   current,
   onSet,
+  pagesOn,
+  onTogglePage,
   onBulk,
   areaExtra,
   explain,
@@ -259,6 +261,9 @@ export function AccessModal({
   lead?: ReactNode;
   current: (a: Area) => Level;
   onSet: (a: Area, l: Level) => void;
+  /** Which of an area's screens are shown. Undefined = all of them. */
+  pagesOn?: (a: Area) => Set<string> | undefined;
+  onTogglePage?: (a: Area, slug: string, on: boolean) => void;
   /** level, or a group key to limit it to. */
   onBulk: (l: Level, group?: string) => void;
   /** Per-area trimmings the caller owns: "not saved yet", etc. */
@@ -502,9 +507,47 @@ export function AccessModal({
                           )}
                           {areaExtra?.(a)}
                         </span>
-                        <span className="block truncate text-[10px] leading-tight text-fg-faint">
-                          {a.pages.join(" · ")}
-                        </span>
+                        {onTogglePage ? (
+                          /* 5a — "under Inventory you gave 3 things, but what if
+                             super admin wants to give only the Inventory page
+                             alone?" Each screen this switch opens is now its own
+                             tick. Untick one and it disappears from their sidebar;
+                             the permission behind the row is untouched, so this
+                             only ever takes screens away. */
+                          <span className="mt-1 flex flex-wrap gap-1">
+                            {a.pages.map((pg) => {
+                              const only = pagesOn?.(a);
+                              const shown = !only || only.has(pg.slug);
+                              const off = current(a) === "none";
+                              return (
+                                <button
+                                  key={pg.slug}
+                                  type="button"
+                                  disabled={off}
+                                  onClick={() => onTogglePage(a, pg.slug, !shown)}
+                                  title={
+                                    off
+                                      ? "Switch this on first"
+                                      : shown
+                                        ? `Hide ${pg.label} from them`
+                                        : `Show ${pg.label} to them`
+                                  }
+                                  className={`mise-press rounded-md border px-1.5 py-0.5 text-[10px] transition disabled:opacity-40 ${
+                                    shown && !off
+                                      ? "border-brand-400/50 bg-brand-400/10 text-fg-soft"
+                                      : "border-line text-fg-faint line-through"
+                                  }`}
+                                >
+                                  {pg.label}
+                                </button>
+                              );
+                            })}
+                          </span>
+                        ) : (
+                          <span className="block truncate text-[10px] leading-tight text-fg-faint">
+                            {a.pages.map((pg) => pg.label).join(" · ")}
+                          </span>
+                        )}
                       </span>
                     </span>
                     <span className="mt-2 flex justify-end">
