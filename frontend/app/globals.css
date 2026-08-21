@@ -2725,6 +2725,19 @@ body[data-overlay] .mise-launcher-in {
    becomes as narrow as its buttons. THEN `translateX(calc(100cqw - 100%))`
    has somewhere to take it, and the buttons end up at the right with the title
    alone on the left, which is what he asked for four times. */
+/* AND THE THING THAT ACTUALLY MOVES THEM.
+   Measured: the condensed transform came out as
+   `matrix(0.85, 0, 0, 0.85, 0, 0)` — scale applied, translate resolved to
+   ZERO. `translateX(calc(100cqw - 100%))` is 0 here because the tools row's
+   BOX already spans the rail: 100% and 100cqw are the same number. I spent
+   four attempts sliding a box that was already exactly where it could go.
+   The buttons sit INSIDE that box, so the box was never the thing to move.
+   Push the content to the end of the row instead, and let the search box's
+   collapsing width do the animating — the buttons slide right as it gives up
+   its stretch, on the same clock as everything else. */
+.mise-bench-rail[data-condensed="true"] .mise-bench-tools > * {
+  justify-content: flex-end;
+}
 .mise-bench-rail[data-condensed="true"] .mise-bench-tools label {
   flex: 0 1 auto;
   min-width: 0;
@@ -2750,7 +2763,7 @@ body[data-overlay] .mise-launcher-in {
      Same measurement as the other rule: `100cqw - 100%` is exactly the room
      left over, so a row with space slides into it and a row that already fills
      the rail stays put. Nothing to guess, nothing to clamp. */
-  transform: translateX(calc(100cqw - 100%)) scale(0.85);
+  transform: scale(0.85);
   transform-origin: right center;
   /* scale() leaves the original footprint behind, so the row is pulled up by
      the space the shrink freed — otherwise the rail keeps its full height and
@@ -2790,7 +2803,7 @@ body[data-overlay] .mise-launcher-in {
      stopped well short of the edge and parked the row right next to the title.
      That is the tightness: not the size, the distance. Now it goes exactly as
      far as there is room for, measured off the rail itself. */
-  transform: translate(calc(100cqw - 100%), -2.6rem) scale(0.9);
+  transform: translateY(-2.6rem) scale(0.9);
   transform-origin: right center;
 }
 
