@@ -36,7 +36,7 @@ a page's UI is wrong, this is the one to copy.
 | 5a | All **33 pages** individually configurable — not bundled under 17 | ✅ per-page ticks; sidebar honours them |
 | 5b | "People in this role" should open the list of who they are | ✅ the count is a button → names + emails |
 | 5c | The name field needs a confirmation too — touching it must not silently edit | ✅ says "renaming from …", and save asks |
-| 6 | **Act as a manual tester**: make a staff login, grant a page, sign in AS them, prove it appears; revoke, prove it goes | ⬜ |
+| 6 | **Act as a manual tester**: make a staff login, grant a page, sign in AS them, prove it appears; revoke, prove it goes | ✅ done on his tenant, 3 sign-ins, screenshots |
 | 7 | Use the popup's card style on the Roles & Access board cards | ✅ `.mise-card-inset` — trial on this page |
 
 ---
@@ -101,3 +101,24 @@ guards the data itself. For "give him Inventory, not Waste" that is exactly
 right. If you ever want Waste to be genuinely sealed off from a person who can
 otherwise touch stock, that needs its own permission and its own guard, and I
 will say so rather than pretending a hidden menu did it.
+
+
+---
+
+## 6 · What the end-to-end run actually proved
+
+Run against the live site as a throwaway `probe*@dineai.cloud` login, signing in
+as that person three times:
+
+| Step | Their own sidebar |
+|---|---|
+| Fresh STAFF account | Dashboard · My Space · How it works. **No Stock at all.** |
+| Granted `inventory:read` + `page:inventory` only | **STOCK → Inventory.** No Stock-take. No Waste. |
+| `/inventory` opened directly | Loads. No 403, no "you don't have access". |
+| Revoked | The whole STOCK section gone again. |
+
+That is 5a proven from the other side of the account, which is the only side
+that counts. The account was deleted afterwards — this runs against his real
+restaurant.
+
+**All twelve items are now ticked.**

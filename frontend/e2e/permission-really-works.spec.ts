@@ -22,7 +22,7 @@ const OWNER = { email: "superadmin@gmail.com", password: "superadmin@123" };
 // A throwaway account per run, so a leftover from last time cannot make this
 // pass without proving anything.
 const STAMP = Date.now().toString().slice(-6);
-const SUBJECT = { email: `probe${STAMP}@dineai.test`, password: "probe-pass-8891" };
+const SUBJECT = { email: `probe${STAMP}@dineai.cloud`, password: "probe-pass-8891" };
 
 test.setTimeout(300_000);
 
