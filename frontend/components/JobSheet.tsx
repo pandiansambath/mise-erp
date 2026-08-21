@@ -17,7 +17,7 @@
 //      does; our job is to make the consequence visible, not to argue.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { DetailSheet } from "@/components/DetailSheet";
+import { AccessModal } from "@/components/AccessModal";
 import {
   labelFor,
   LEVEL_HINT,
@@ -235,27 +235,41 @@ export function JobSheet({
   const name = job?.label.split("—")[0].trim() ?? "";
 
   return (
-    <DetailSheet
+    <AccessModal
       open={!!job}
       onClose={onClose}
       icon="🧩"
       title={name}
       subtitle={job?.label.split("—")[1]?.trim() ?? ""}
-      width="lg"
       stats={[
-        { label: "Reaches", value: `${reach.on} of ${reach.total}`, hint: "pages in DineAI" },
-        {
-          label: "People with this job",
-          value: String(job?.people ?? 0),
-          hint: "they all inherit this",
-        },
-        {
-          label: "Set up",
-          value: job?.customised ? "Your own" : "DineAI default",
-          hint: job?.customised ? "you have changed this" : "as shipped",
-          tone: job?.customised ? "warn" : "plain",
-        },
+        { label: "Pages they can open", value: `${reach.on} of ${reach.total}` },
+        { label: "People with this job", value: String(job?.people ?? 0) },
       ]}
+      intro={
+        <>
+          Everyone with this job gets this — one person can still be changed on their own
+          card, which always wins. <b>{reach.total} pages</b> sit behind the <b>17 switches</b>
+          below: one switch can open several, and each row lists which.
+        </>
+      }
+      banner={
+        unusual.length > 0 ? (
+          <p className="mise-tone-warn mt-2 rounded-xl bg-amber-400/10 px-3.5 py-2.5 text-[11px] leading-relaxed">
+            <b>Unusual for a {name}:</b> {unusual.join(", ")}. That is allowed — it is your
+            hotel — but it is worth being sure, because everyone with this job gets it.
+          </p>
+        ) : null
+      }
+      current={(a) => current(a)}
+      onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
+      onBulk={(l, g) => bulk(l, g)}
+      areaExtra={(a) =>
+        current(a) !== levelOf(a, held) ? (
+          <span className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300">
+            unsaved
+          </span>
+        ) : null
+      }
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -286,101 +300,6 @@ export function JobSheet({
           )}
         </div>
       }
-    >
-      {err && (
-        <p className="mb-3 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
-          {err}
-        </p>
-      )}
-
-      <p className="mb-3 rounded-xl border border-line bg-paper-2/50 px-3.5 py-2.5 text-[11px] leading-relaxed text-fg-soft">
-        Everyone with this job gets this. You can still change one person on their own card —
-        that always wins over what is set here.
-      </p>
-
-      {/* WARN, DON'T BLOCK. */}
-      {unusual.length > 0 && (
-        <p className="mise-tone-warn mb-3 rounded-xl bg-amber-400/10 px-3.5 py-2.5 text-[11px] leading-relaxed">
-          <b>Unusual for a {name}:</b> {unusual.join(", ")}. That is allowed — it is your hotel —
-          but it is worth being sure, because everyone with this job gets it.
-        </p>
-      )}
-
-      <BulkSet onSet={(l) => bulk(l)} />
-
-      {/* EVERY GROUP ON ONE SCREEN. Same as the other two sheets - this one
-          was missed the first time round, which is exactly the screen he
-          opened, so nothing appeared to have changed at all. */}
-      {SECTIONS.map((sec) => (
-        <div key={sec.key} className="mb-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
-            <span aria-hidden>{sec.icon}</span>
-            {sec.label}
-            <button
-              type="button"
-              onClick={() => bulk("edit", sec.key)}
-              className="mise-press ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-medium text-brand-300 hover:underline"
-            >
-              give all
-            </button>
-            <button
-              type="button"
-              onClick={() => bulk("none", sec.key)}
-              className="mise-press rounded-md px-1.5 py-0.5 text-[10px] font-medium text-fg-faint hover:underline"
-            >
-              none
-            </button>
-          </p>
-          <ul className="grid gap-1.5 lg:grid-cols-2">
-            {sec.areas.map((a) => {
-              const lvl = current(a);
-              const was = levelOf(a, held);
-              const changed = lvl !== was;
-              const opts: Level[] =
-                a.read.length && a.write.length
-                  ? ["none", "view", "edit"]
-                  : ["none", a.write.length ? "edit" : "view"];
-              return (
-                <li
-                  key={a.key}
-                  className={`mise-well rounded-xl px-3 py-2.5 ${
-                    changed ? "ring-1 ring-amber-400/50" : ""
-                  }`}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span aria-hidden className="shrink-0 text-base">
-                      {a.icon}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-medium leading-tight text-fg">
-                        {a.label}
-                      </span>
-                      <span className="block truncate text-[10px] leading-tight text-fg-faint">
-                        {changed ? (
-                          <span className="mise-tone-warn">
-                            was &ldquo;{LEVEL_LABEL[was]}&rdquo; · not saved yet
-                          </span>
-                        ) : (
-                          a.pages.join(" · ")
-                        )}
-                      </span>
-                    </span>
-                  </span>
-                  <span className="mt-2 flex justify-end">
-                    <ThreeWay
-                      label={a.label}
-                      area={a}
-                      value={lvl}
-                      options={opts}
-                      onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
-                    />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </DetailSheet>
+    />
   );
 }

@@ -92,3 +92,89 @@ page and the first one anybody would try.
 Two screenshots of two working sheets is not evidence about a third. The
 mechanical audit above exists so the next claim of "all done" is checkable in
 one command instead of resting on which screens I happened to look at.
+
+---
+
+# Second batch — 21 Aug, afternoon
+
+Raised after the first seven shipped. Same rule as above: **three sheets share
+this UI**, so every row here has to land in all of them or it has not landed.
+
+| # | What he said | Status |
+|---|---|---|
+| 8 | "I said a POPUP (like the purchase page popup)... this is not popup, it's coming in right side bar" | ✅ `AccessModal`, centred |
+| 9 | "I should not feel the scroll... instead of scroll we need CLICK AND SEE" | ✅ master/detail, neither pane scrolls |
+| 10 | "I can only see 17 toggles but the top says 13 of 33 — where are the others?" | ✅ units named; every card counts pages |
+| 11 | "the cards are not aligned evenly — owner card and tailored card, it's not even" | ✅ `auto-rows-fr` + `h-full`, all 3 grids |
+
+## 8 + 9 · A real popup, and no scrolling
+
+`DetailSheet` is a right-hand drawer. He asked for the centred modal the
+purchasing page uses, and separately for the scrolling to stop.
+
+Those two pull against each other: 17 switches do not fit on one phone-sized
+surface however they are arranged, so "all of it at once" and "no scrolling"
+cannot both be literally true. What CAN be true is that **you never leave** —
+one popup holds everything, and moving between its parts is a click.
+
+So: **master and detail inside one modal.** Five groups down the left with a
+live "3 of 4 on" count; the group you tap fills the right. The biggest group
+holds four switches, so neither pane ever scrolls.
+
+Built as ONE shared component (`components/AccessModal.tsx`) rather than three
+copies, because the last round shipped into two of the three sheets and missed
+the one he opened.
+
+## 10 · "Where are the other 16?"
+
+A fair reading of two different units in the same box: **33 is pages, 17 is
+switches**, and one switch opens several pages — Suppliers & buying opens
+Vendors, Price Comparison and Purchasing. Nothing is missing, but the card
+never said so. It says which unit it means now, and how many switches are
+below.
+
+## 11 · Cards of unequal height
+
+A person with tailored access carries a "Stop access" row that a plain card
+does not, so that card is taller and the grid row grows around it. The cards
+need to fill their row whatever is inside them.
+
+Also on those cards: "2 of 17 areas", which is the old unit again. The card and
+the sheet it opens must agree.
+
+
+---
+
+# 12 · One switch PER PAGE — not done yet, and here is why
+
+> "let me count... below we have so many but only 17 you are showing. Please
+>  show all — let super admin decide what he can show to that role."
+
+He listed all 33 sidebar pages. He is asking for 33 switches, not 17.
+
+**This one I am not going to half-do and call finished.** The 17 are not a
+display choice — they are the permissions the app actually has. Several pages
+are opened by a single permission:
+
+| One permission | Opens |
+|---|---|
+| `inventory:read` | Inventory, Stock-take, Waste |
+| `orders:write` | Kitchen screen, Tables & QR, Menu |
+| `recipes:read` | Recipes, Party Order, Allergens |
+| `employees:read` | Employees, Rota, Hiring, Messages |
+| `vendors:read` | Vendors, Price Comparison |
+| `users:read` | Roles & Access, Audit log |
+| `reports:read` | Reports (P&L), Money |
+
+So a "Waste" switch that did not also move Inventory is not something the UI
+can fake — there is no permission behind it. Drawing 33 switches over 17
+permissions would give him three toggles that move together and no explanation,
+which is worse than 17 honest ones.
+
+**What it actually takes:** a permission per page (about 15 new ones), each page
+gated on its own, and the sidebar following suit. That is a real piece of work
+across the backend, the nav and every affected page — not a CSS change — and it
+is next.
+
+Until then every switch names the pages it opens, on the row, so nothing is
+hidden: "Inventory · Stock-take · Waste".
