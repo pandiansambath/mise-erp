@@ -94,3 +94,32 @@ test("a job that reaches almost nothing can still be given anything", async ({ p
   await expect(expenses.getByText("Can see")).toBeVisible();
   await expect(expenses.getByText("Can change")).toBeVisible();
 });
+
+test("the standard job sheet got the same treatment as the others", async ({ page }) => {
+  // THE SHEET I MISSED. Clicking "Manager" on the By job board opens JobSheet,
+  // a third file that does the same work as RoleBuilder and AccessSheet. I
+  // rebuilt those two, screenshotted them, called all seven done — and never
+  // opened this one, which is the most obvious thing on the page.
+  await signIn(page);
+  await page.goto(`${BASE}/staff`);
+  await page.getByText("Manager", { exact: false }).first().click();
+
+  const sheet = page.getByRole("dialog").last();
+  await sheet.getByText(/^No access$/).first().waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: "e2e/__screens__/jobsheet-manager.png", fullPage: true });
+
+  const text = await sheet.innerText();
+  // 6 — counted in pages he can check, not our word "areas".
+  expect(text).toMatch(/pages in DineAI/i);
+  expect(text).not.toMatch(/areas of the app/i);
+  // 1 + 1b — one consolidated row, at the top.
+  expect(await sheet.getByText(/every page in dineai:/i).count()).toBe(1);
+  expect(await sheet.getByText(/everything in this group:/i).count()).toBe(0);
+  // 2 — every group on one screen, so all five headings are here at once.
+  for (const group of ["Stock & buying", "Their own", "Kitchen"]) {
+    await expect(sheet.getByText(group).first()).toBeVisible();
+  }
+  // ...and all 17 switches, not one tab's worth.
+  expect(await sheet.getByText(/^No access$/).count()).toBe(17);
+});
