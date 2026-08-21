@@ -464,6 +464,14 @@ export function AccessModal({
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-5 py-2.5">
           <span className="text-[11px] text-fg-faint">Every page in DineAI:</span>
+          {/* "we can see all pages like Reports, P&L, Money etc... but what
+              about the Dashboard? We have a page named Dashboard, that we
+              don't have here as a toggle?"
+              Correct, and on purpose: Dashboard and How it works are where
+              everybody lands after signing in. A switch that can leave somebody
+              with nowhere to go is not a setting, it is a way to lock a person
+              out of their own account by accident. Said out loud here rather
+              than left as a gap he has to notice. */}
           {(["edit", "view", "none"] as const).map((l) => (
             <button
               key={l}
@@ -485,7 +493,14 @@ export function AccessModal({
             straight through the footer instead of being contained. The footer is
             opaque, so it read as something laid on top. Each pane is bounded now,
             and the rail can never be covered. */}
-        <div className="grid flex-1 sm:grid-cols-[13rem_1fr]">
+        {/* `min-h-0` so the footer is never pushed out of the popup — "see the
+            bottom of the popup, that OK button is hidden completely". Removing
+            the panes' scrollbars fixed the scrolling and let tall content shove
+            the footer off the end instead. The detail pane keeps a scrollbar as
+            a LAST RESORT only; with the chooser now one line it never reaches
+            for it, and a save button you cannot see is worse than a scrollbar
+            you never use. */}
+        <div className="grid min-h-0 flex-1 sm:grid-cols-[13rem_1fr]">
           {/* FIVE ITEMS DO NOT SCROLL.
               "just 4 cards we having — even for this also we need to scroll?"
               They did, because the block above was eating the height and both
@@ -521,7 +536,13 @@ export function AccessModal({
             })}
           </nav>
 
-          <div className="min-w-0 flex-1 p-3">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
+            {sec.key === SECTIONS[0].key && (
+              <p className="mb-2 rounded-lg border border-line bg-paper-2/40 px-2.5 py-1.5 text-[10px] leading-relaxed text-fg-faint">
+                <b>Dashboard</b> and <b>How it works</b> are not switchable — they are where
+                everyone lands after signing in, so nobody can be left with nowhere to go.
+              </p>
+            )}
             <div className="mb-2 flex items-center gap-2 px-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
                 {sec.label}

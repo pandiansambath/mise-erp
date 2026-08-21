@@ -308,10 +308,10 @@ export function JobSheet({
       onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
       onBulk={(l, g) => bulk(l, g)}
       areaExtra={(a) =>
+        // Same fix as the "unusual" chip: pale ink on a pale wash at 9px is a
+        // smudge, not a word.
         current(a) !== levelOf(a, held) ? (
-          <span className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300">
-            unsaved
-          </span>
+          <span className="mise-chip-warn shrink-0">unsaved</span>
         ) : null
       }
       actions={
