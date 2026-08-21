@@ -285,4 +285,17 @@ test("the toolbar actually moves right when the rail condenses", async ({ page }
     after,
     `the buttons did not move right (first button at ${before}px -> ${after}px from the rail's left edge)`,
   ).toBeGreaterThan(before + 40);
+
+  // ...and they are not sitting ON the rail's bottom edge. "that button is
+  // placed very edge to below card" — the row was dragged onto the border by a
+  // -0.7rem margin, so it touched whatever scrolled underneath.
+  const floor = await page.evaluate(() => {
+    const b = document
+      .querySelector(".mise-bench-tools")!
+      .querySelector("button")!
+      .getBoundingClientRect();
+    const r = document.querySelector(".mise-bench-rail")!.getBoundingClientRect();
+    return Math.round(r.bottom - b.bottom);
+  });
+  expect(floor, `only ${floor}px between the buttons and the rail's edge`).toBeGreaterThan(4);
 });
