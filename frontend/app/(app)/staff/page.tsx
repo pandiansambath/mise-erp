@@ -130,25 +130,26 @@ export default function StaffPage() {
     load().finally(() => setLoading(false));
   }, [canRead]);
 
-  /** What this person can reach, as "3 of 11 areas" — the headline the list
+  /** What this person can reach, as "3 of 11 pages" — the headline the list
    *  exists to give. Computed from their job's defaults plus their designed
    *  role, so the card never disagrees with the sheet it opens. */
   function reachOf(u: UserOut): { on: number; all: number } {
     if (u.role === "SUPER_ADMIN") return { on: 1, all: 1 };
     const base = arch.find((a) => a.key === u.role);
-    const envelope = new Set(base?.envelope ?? []);
     const mine = u.custom_role_id ? roles.find((r) => r.id === u.custom_role_id) : null;
     const held = new Set(mine?.permissions ?? base?.defaults ?? []);
-    let on = 0;
-    let all = 0;
+    // COUNTED IN PAGES, like the sheet this card opens. It used to say
+    // "2 of 17 areas" while the sheet said "of 33 pages" - two units for one
+    // fact, on two screens one tap apart.
+    const on = new Set<string>();
+    const all = new Set<string>();
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        if (positionsFor(a).length === 0) continue;
-        all += 1;
-        if (levelOf(a, held) !== "none") on += 1;
+        for (const pg of a.pages) all.add(pg);
+        if (levelOf(a, held) !== "none") for (const pg of a.pages) on.add(pg);
       }
     }
-    return { on, all };
+    return { on: on.size, all: all.size };
   }
 
   async function addUser(e: React.FormEvent) {
@@ -420,20 +421,21 @@ export default function StaffPage() {
             differ? Switch to <b>By person</b> — their own card always wins.
           </p>
           <ul
-            className="mise-stagger grid gap-2.5"
+            className="mise-stagger grid auto-rows-fr gap-2.5"
             style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(17rem, 100%), 1fr))" }}
           >
             {jobs.map((j) => {
               const reach = (() => {
                 const held = new Set(j.permissions);
-                let on = 0;
-                let total = 0;
+                // Pages, so the card and the popup it opens agree.
+                const onSet = new Set<string>();
+                const allSet = new Set<string>();
                 for (const sec of SECTIONS)
                   for (const a of sec.areas) {
-                    total += 1;
-                    if (levelOf(a, held) !== "none") on += 1;
+                    for (const pg of a.pages) allSet.add(pg);
+                    if (levelOf(a, held) !== "none") for (const pg of a.pages) onSet.add(pg);
                   }
-                return { on, total };
+                return { on: onSet.size, total: allSet.size };
               })();
               return (
                 <li key={j.key}>
@@ -447,7 +449,7 @@ export default function StaffPage() {
                         setOpenJob(j);
                       }
                     }}
-                    className="mise-card3d mise-press relative w-full cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
+                    className="mise-card3d mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
                   >
                     <span
                       aria-hidden
@@ -468,7 +470,7 @@ export default function StaffPage() {
                       <div className="flex items-baseline justify-between gap-2">
                         <dt className="text-fg-faint">Reaches</dt>
                         <dd className="tabular-nums text-fg">
-                          {reach.on} of {reach.total} areas
+                          {reach.on} of {reach.total} pages
                         </dd>
                       </div>
                       <div className="flex items-baseline justify-between gap-2">
@@ -497,13 +499,16 @@ export default function StaffPage() {
                 attached to nobody. */}
             {roles.map((r) => {
               const held = new Set(r.permissions);
-              let on = 0;
-              let total = 0;
+              // Pages, like every other card and every sheet.
+              const onSet = new Set<string>();
+              const allSet = new Set<string>();
               for (const sec of SECTIONS)
                 for (const a of sec.areas) {
-                  total += 1;
-                  if (levelOf(a, held) !== "none") on += 1;
+                  for (const pg of a.pages) allSet.add(pg);
+                  if (levelOf(a, held) !== "none") for (const pg of a.pages) onSet.add(pg);
                 }
+              const on = onSet.size;
+              const total = allSet.size;
               const holders = users.filter((u) => u.custom_role_id === r.id).length;
               return (
                 <li key={r.id}>
@@ -521,7 +526,7 @@ export default function StaffPage() {
                         setBuilding(true);
                       }
                     }}
-                    className="mise-card3d mise-press relative w-full cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
+                    className="mise-card3d mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
                   >
                     <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400/70" />
                     <div className="flex items-center gap-1.5">
@@ -537,7 +542,7 @@ export default function StaffPage() {
                       <div className="flex items-baseline justify-between gap-2">
                         <dt className="text-fg-faint">Reaches</dt>
                         <dd className="tabular-nums text-fg">
-                          {on} of {total} areas
+                          {on} of {total} pages
                         </dd>
                       </div>
                       <div className="flex items-baseline justify-between gap-2">
@@ -592,7 +597,16 @@ export default function StaffPage() {
         </Card>
       ) : (
         <ul
-          className="mise-stagger grid gap-2.5"
+          // EVERY CARD FILLS ITS ROW.
+          //   "the cards are not aligned evenly - owner card and tailored card,
+          //    it's not even."
+          // A person with tailored access carries a "Stop access" row that a
+          // plain card does not, so that card was taller and the whole grid row
+          // grew around it, leaving the others with a gap under them.
+          // `auto-rows-fr` makes every row the same height and `h-full` on the
+          // card makes it actually fill it, so the bottoms line up whatever is
+          // inside.
+          className="mise-stagger grid auto-rows-fr gap-2.5"
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(17rem, 100%), 1fr))" }}
         >
           {shown.map((u) => {
@@ -612,7 +626,7 @@ export default function StaffPage() {
                       setOpen(u as Person);
                     }
                   }}
-                  className={`mise-card3d mise-press relative w-full cursor-pointer overflow-hidden p-3.5 pl-4 text-left ${
+                  className={`mise-card3d mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left ${
                     u.is_active === false ? "opacity-60" : ""
                   }`}
                 >
@@ -647,7 +661,7 @@ export default function StaffPage() {
                     <div className="flex items-baseline justify-between gap-2">
                       <dt className="text-fg-faint">Can reach</dt>
                       <dd className="shrink-0 tabular-nums text-fg">
-                        {owner ? "everything" : `${reach.on} of ${reach.all} areas`}
+                        {owner ? "everything" : `${reach.on} of ${reach.all} pages`}
                       </dd>
                     </div>
                     <div className="flex items-baseline justify-between gap-2">
