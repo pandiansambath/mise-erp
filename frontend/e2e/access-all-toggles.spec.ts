@@ -110,16 +110,25 @@ test("the standard job sheet got the same treatment as the others", async ({ pag
   await page.screenshot({ path: "e2e/__screens__/jobsheet-manager.png", fullPage: true });
 
   const text = await sheet.innerText();
-  // 6 — counted in pages he can check, not our word "areas".
-  expect(text).toMatch(/pages in DineAI/i);
+  // 6 + 10 — counted in pages he can check against the sidebar, and the unit is
+  // NAMED, because "13 of 33" over 17 visible switches read as 16 missing ones.
+  expect(text).toMatch(/pages they can open/i);
+  expect(text).toMatch(/sit behind the/i);
   expect(text).not.toMatch(/areas of the app/i);
   // 1 + 1b — one consolidated row, at the top.
   expect(await sheet.getByText(/every page in dineai:/i).count()).toBe(1);
   expect(await sheet.getByText(/everything in this group:/i).count()).toBe(0);
-  // 2 — every group on one screen, so all five headings are here at once.
-  for (const group of ["Stock & buying", "Their own", "Kitchen"]) {
-    await expect(sheet.getByText(group).first()).toBeVisible();
+  // 8 + 9 — a centred POPUP with master/detail, so every group is reachable in
+  // one click and neither pane scrolls. All five sit in the left rail at once
+  // with a live count; the one you tap fills the right.
+  for (const group of ["Money", "Stock & buying", "People", "Their own", "Kitchen"]) {
+    await expect(sheet.getByText(group, { exact: true }).first()).toBeVisible();
   }
-  // ...and all 17 switches, not one tab's worth.
-  expect(await sheet.getByText(/^No access$/).count()).toBe(17);
+  expect(text).toMatch(/\d+ of \d+ on/);
+
+  // Clicking a group swaps the right pane — no scrolling to reach it.
+  await sheet.getByText("Kitchen", { exact: true }).first().click();
+  await page.waitForTimeout(500);
+  await expect(sheet.getByText("Food safety").first()).toBeVisible();
+  await expect(sheet.getByText("The assistant").first()).toBeVisible();
 });
