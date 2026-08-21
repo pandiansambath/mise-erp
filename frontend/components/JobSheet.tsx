@@ -248,8 +248,8 @@ export function JobSheet({
       intro={
         <>
           Everyone with this job gets this — one person can still be changed on their own
-          card, which always wins. <b>{reach.total} pages</b> sit behind the <b>17 switches</b>
-          below: one switch can open several, and each row lists which.
+          card, which always wins. <b>{reach.total} pages</b> sit behind the{" "}
+          <b>17 switches</b> below: one switch can open several, and each row lists which.
         </>
       }
       banner={
