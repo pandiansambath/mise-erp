@@ -239,3 +239,41 @@ test("nothing inside the popup scrolls", async ({ page }) => {
 
   await page.screenshot({ path: "e2e/__screens__/noscroll-kitchen.png", fullPage: true });
 });
+
+test("the toolbar actually moves right when the rail condenses", async ({ page }) => {
+  // 4.3, MEASURED. He told me twice that this was not done, and both times I had
+  // changed a rule that was not the one applying. So this asks the browser where
+  // the row IS, before and after — a screenshot cannot tell you 30px.
+  await signIn(page);
+  await page.goto(`${BASE}/staff`);
+  await page.getByText(/Chef \/ kitchen/i).first().waitFor({ timeout: 60_000 });
+
+  const tools = page.locator(".mise-bench-tools").first();
+  const rail = page.locator(".mise-bench-rail").first();
+  await tools.waitFor({ timeout: 30_000 });
+
+  const gapBefore = await page.evaluate(() => {
+    const t = document.querySelector(".mise-bench-tools")!.getBoundingClientRect();
+    const r = document.querySelector(".mise-bench-rail")!.getBoundingClientRect();
+    return r.right - t.right;
+  });
+
+  // Scroll far enough to cross the sentinel and settle past the lock.
+  await page.mouse.wheel(0, 900);
+  await page.waitForTimeout(1400);
+  expect(await rail.getAttribute("data-condensed"), "the rail never condensed").toBe("true");
+
+  const gapAfter = await page.evaluate(() => {
+    const t = document.querySelector(".mise-bench-tools")!.getBoundingClientRect();
+    const r = document.querySelector(".mise-bench-rail")!.getBoundingClientRect();
+    return r.right - t.right;
+  });
+
+  await page.screenshot({ path: "e2e/__screens__/toolbar-condensed.png", fullPage: false });
+
+  // Condensed, the row should sit against the right edge — so the gap to the
+  // rail's right edge collapses towards nothing and is far smaller than it was.
+  expect(gapAfter, `row did not move right (gap ${gapBefore} -> ${gapAfter})`).toBeLessThan(
+    Math.max(24, gapBefore * 0.5),
+  );
+});
