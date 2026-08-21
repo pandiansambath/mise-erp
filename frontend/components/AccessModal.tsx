@@ -28,7 +28,14 @@ import { createPortal } from "react-dom";
 
 import { useConfirm } from "@/components/confirm";
 
-import { LEVEL_HINT, SECTIONS, labelFor, type Area, type Level } from "@/lib/access";
+import {
+  LEVEL_HINT,
+  SECTIONS,
+  labelFor,
+  type Area,
+  type Level,
+  type PageRef,
+} from "@/lib/access";
 
 export type Stat = {
   label: string;
@@ -288,6 +295,56 @@ export function AccessModal({
    * A single switch is one visible thing and undoes itself by being tapped
    * again; seventeen at once does not.
    */
+  /**
+   * ONE SWITCH ASKS AS WELL.
+   *
+   *   "when I move the toggle from Can change to No access, no confirmation
+   *    screen I can see — just like that the toggle is working... have a
+   *    confirmation screen with details before doing something please."
+   *
+   * I had only guarded the bulk buttons, on the reasoning that a single switch
+   * is one visible thing and undoes itself by being tapped again. He is looking
+   * at it as the owner rather than the author: moving somebody from "can
+   * change" to "no access" is a decision about a person, and a decision about a
+   * person should never happen because a finger landed somewhere.
+   *
+   * So it asks — and because it has to interrupt anyway, it earns the
+   * interruption by saying which pages it touches and what the level actually
+   * means, rather than "are you sure?".
+   */
+  async function setWithConfirm(a: Area, l: Level) {
+    const was = current(a);
+    if (was === l) return;
+    const means: Record<Level, string> = {
+      none: `They lose ${a.label} entirely — it disappears from their menu.`,
+      view: `They can look at ${a.label} but change nothing in it.`,
+      edit: `They can add, edit and delete in ${a.label}.`,
+    };
+    const ok = await confirm({
+      title: `${labelFor(a, l)} — ${a.label}?`,
+      message:
+        `${means[l]}\n\nPages: ${a.pages.map((pg) => pg.label).join(", ")}.` +
+        `\n\nNothing is saved until you press save.`,
+      confirmText: l === "none" ? "Take it away" : `Set to "${labelFor(a, l)}"`,
+      tone: l === "none" ? "danger" : "default",
+    });
+    if (ok) onSet(a, l);
+  }
+
+  /** Same for a single screen. The strike-through is a lovely control and it is
+   *  still a decision about what somebody can reach. */
+  async function togglePageWithConfirm(a: Area, pg: PageRef, on: boolean) {
+    const ok = await confirm({
+      title: on ? `Show ${pg.label}?` : `Hide ${pg.label}?`,
+      message: on
+        ? `${pg.label} goes back into their menu. The rest of ${a.label} is unchanged.`
+        : `${pg.label} leaves their menu. They keep the rest of ${a.label} — this hides one screen, it does not change what they may touch.`,
+      confirmText: on ? "Show it" : "Hide it",
+      tone: on ? "default" : "danger",
+    });
+    if (ok) onTogglePage?.(a, pg.slug, on);
+  }
+
   async function bulkWithConfirm(l: Level, groupKey?: string) {
     const scope = groupKey
       ? (SECTIONS.find((x) => x.key === groupKey)?.label ?? "this group")
@@ -530,7 +587,7 @@ export function AccessModal({
                                   key={pg.slug}
                                   type="button"
                                   disabled={off}
-                                  onClick={() => onTogglePage(a, pg.slug, !shown)}
+                                  onClick={() => togglePageWithConfirm(a, pg, !shown)}
                                   title={
                                     off
                                       ? "Switch this on first"
@@ -561,7 +618,7 @@ export function AccessModal({
                         area={a}
                         value={current(a)}
                         options={opts}
-                        onChange={(l) => onSet(a, l)}
+                        onChange={(l) => setWithConfirm(a, l)}
                       />
                     </span>
                   </li>

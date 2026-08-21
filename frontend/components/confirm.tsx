@@ -91,7 +91,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <h3 className="text-base font-semibold text-fg">
               {opts.title ?? "Are you sure?"}
             </h3>
-            <div className="mt-2 text-sm text-fg-soft">{opts.message}</div>
+            {/* A confirm that has to interrupt should earn it by explaining, and an
+                explanation needs paragraphs. Without this the line breaks in a
+                message collapse and it reads as one run-on sentence. */}
+            <div className="mt-2 whitespace-pre-line text-sm leading-relaxed text-fg-soft">
+              {opts.message}
+            </div>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => settle(false)}
