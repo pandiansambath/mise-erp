@@ -19,9 +19,11 @@
 // owner's problem to solve.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
 import {
   isUnusual,
+  whyUnusual,
   levelOf,
   overridesFor,
   positionsFor,
@@ -68,6 +70,7 @@ export function AccessSheet({
   const [mine, setMine] = useState<{ id: string; name: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, Level>>({});
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,6 +145,12 @@ export function AccessSheet({
   }
 
   async function save() {
+    const ok = await confirm({
+      title: "Change what they can reach?",
+      message: `${name} will be able to open ${reach.on} of ${reach.all} pages. This affects only them.`,
+      confirmText: "Save it",
+    });
+    if (!ok) return;
     if (!person) return;
     setBusy(true);
     setErr(null);
@@ -240,6 +249,15 @@ export function AccessSheet({
                         disabled={busy}
                         onClick={async () => {
                           if (!person) return;
+                          // Putting somebody in a role takes effect at once —
+                          // there is no save button behind it to change your
+                          // mind at.
+                          const ok = await confirm({
+                            title: `Put ${name} in "${r.name}"?`,
+                            message: `They get exactly what that role reaches, and it changes for them straight away. Whenever you edit "${r.name}" later, ${name} changes with it.`,
+                            confirmText: "Yes, do it",
+                          });
+                          if (!ok) return;
                           setBusy(true);
                           setErr(null);
                           try {
@@ -321,16 +339,7 @@ export function AccessSheet({
       current={(a) => current(a.key, a)}
       onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
       onBulk={(l, g) => bulk(l, g)}
-      areaExtra={(a) =>
-        isUnusual(a, envelope) ? (
-          <span
-            title={`Not normally part of a ${jobLabel}'s job`}
-            className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300"
-          >
-            unusual
-          </span>
-        ) : null
-      }
+      explain={(a) => (isUnusual(a, envelope) ? whyUnusual(a, jobLabel) : null)}
       actions={
         owner ? undefined : (
           <div className="flex flex-wrap items-center gap-2">

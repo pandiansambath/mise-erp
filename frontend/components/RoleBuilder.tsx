@@ -36,6 +36,7 @@
 // exactly what it should be: an implementation detail he never sees.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
 import {
   levelOf,
@@ -79,6 +80,7 @@ export function RoleBuilder({
   const base = role?.base_role ?? "STAFF";
   const [draft, setDraft] = useState<Record<string, Level>>({});
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
   const [err, setErr] = useState<string | null>(null);
 
   // A NEW ROLE STARTS WITH NOTHING ON. Every switch the owner sees at "No
@@ -129,6 +131,12 @@ export function RoleBuilder({
   const dirty = Object.keys(draft).length > 0 || name.trim() !== (role?.name ?? "");
 
   async function save() {
+    const ok = await confirm({
+      title: "Save this role?",
+      message: `"${name.trim()}" will reach ${reach.on} of ${reach.total} pages${people ? ` — and ${people} ${people === 1 ? "person is" : "people are"} in this role` : ""}.`,
+      confirmText: "Save it",
+    });
+    if (!ok) return;
     if (!named) return;
     setBusy(true);
     setErr(null);
@@ -163,6 +171,15 @@ export function RoleBuilder({
 
   async function remove() {
     if (!role) return;
+    const ok = await confirm({
+      title: `Remove "${role.name}"?`,
+      message: people
+        ? `${people} ${people === 1 ? "person is" : "people are"} in this role. They fall back to their plain job, which reaches less — nobody gains access by this.`
+        : "Nobody is in this role, so nothing changes for anyone today.",
+      confirmText: "Remove it",
+      tone: "danger",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await api.delete(`/roles/${role.id}`);

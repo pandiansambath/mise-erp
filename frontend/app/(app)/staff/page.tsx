@@ -424,6 +424,34 @@ export default function StaffPage() {
             className="mise-stagger grid auto-rows-fr gap-2.5"
             style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(17rem, 100%), 1fr))" }}
           >
+            {/* 2 — "that Create new role + icon, we can have as the 1st card, so
+                the user doesn't need to scroll down to reach it." Making a role is
+                the reason most people open this page; it was behind everything else. */}
+            {canWrite && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(null);
+                    setBuilding(true);
+                  }}
+                  className="mise-press grid h-full w-full place-items-center rounded-2xl border border-dashed border-line p-3.5 text-center hover:border-brand-400/60"
+                >
+                  <span>
+                    <span aria-hidden className="block text-2xl">＋</span>
+                    <span className="mt-1 block font-display text-base font-semibold text-fg">
+                      Create a role
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-fg-faint">
+                      Poori Master, Tandoor Lead, anything you call it —
+                      <br />
+                      then choose what they can reach
+                    </span>
+                  </span>
+                </button>
+              </li>
+            )}
+
             {jobs.map((j) => {
               const reach = (() => {
                 const held = new Set(j.permissions);
@@ -559,30 +587,6 @@ export default function StaffPage() {
               );
             })}
 
-            {canWrite && (
-              <li>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(null);
-                    setBuilding(true);
-                  }}
-                  className="mise-press grid h-full w-full place-items-center rounded-2xl border border-dashed border-line p-3.5 text-center hover:border-brand-400/60"
-                >
-                  <span>
-                    <span aria-hidden className="block text-2xl">＋</span>
-                    <span className="mt-1 block font-display text-base font-semibold text-fg">
-                      Create a role
-                    </span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-fg-faint">
-                      Poori Master, Tandoor Lead, anything you call it —
-                      <br />
-                      then choose what they can reach
-                    </span>
-                  </span>
-                </button>
-              </li>
-            )}
           </ul>
         </>
       ) : loading ? (

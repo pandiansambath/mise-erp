@@ -17,12 +17,14 @@
 //      does; our job is to make the consequence visible, not to argue.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
 import {
   labelFor,
   LEVEL_HINT,
   LEVEL_LABEL,
   levelOf,
+  whyUnusual,
   overridesFor,
   SECTIONS,
   type Area,
@@ -140,6 +142,7 @@ export function JobSheet({
   const [held, setHeld] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<Record<string, Level>>({});
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -197,6 +200,12 @@ export function JobSheet({
   }
 
   async function save() {
+    const ok = await confirm({
+      title: "Apply this to everyone?",
+      message: `Everyone with the ${name} job gets this — ${job?.people ?? 0} ${(job?.people ?? 0) === 1 ? "person" : "people"} right now. They will see the change the next time they open DineAI.`,
+      confirmText: "Save it",
+    });
+    if (!ok) return;
     if (!job) return;
     setBusy(true);
     setErr(null);
@@ -260,6 +269,13 @@ export function JobSheet({
           </p>
         ) : null
       }
+      explain={(a) => {
+        const lvl = current(a);
+        if (lvl === "none") return null;
+        const perms = lvl === "edit" ? [...a.read, ...a.write] : a.read;
+        if (!perms.length || perms.some((p) => suggested.has(p))) return null;
+        return whyUnusual(a, name || "job");
+      }}
       current={(a) => current(a)}
       onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
       onBulk={(l, g) => bulk(l, g)}
