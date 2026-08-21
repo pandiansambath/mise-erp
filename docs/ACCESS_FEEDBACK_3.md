@@ -31,13 +31,13 @@ a page's UI is wrong, this is the one to copy.
 | 3 | Confirm before changing access — ok/cancel, everywhere | ✅ bulk, all 3 saves, assign, remove |
 | 4.1 | The "unusual" chip is blurry / unreadable on this theme | ✅ `.mise-chip-warn`, real contrast + border |
 | 4.2 | "unusual" should be a button → why, the right way, the impact | ✅ "unusual — why?" opens its own popup |
-| 4.3 | By job / By person: after shrinking it looks tight and clumsy — move them right, smoothly | ⬜ |
+| 4.3 | By job / By person: after shrinking it looks tight and clumsy — move them right, smoothly | ✅ right-aligned exactly via `100cqw` |
 | 4.4 | Bottom-left of the popup, "Their own" is under a white overlay and cannot be clicked | ✅ panes bounded; it was overflow, not an overlay |
 | 5a | All **33 pages** individually configurable — not bundled under 17 | ⬜ |
-| 5b | "People in this role" should open the list of who they are | ⬜ |
-| 5c | The name field needs a confirmation too — touching it must not silently edit | ⬜ |
+| 5b | "People in this role" should open the list of who they are | ✅ the count is a button → names + emails |
+| 5c | The name field needs a confirmation too — touching it must not silently edit | ✅ says "renaming from …", and save asks |
 | 6 | **Act as a manual tester**: make a staff login, grant a page, sign in AS them, prove it appears; revoke, prove it goes | ⬜ |
-| 7 | Use the popup's card style on the Roles & Access board cards | ⬜ |
+| 7 | Use the popup's card style on the Roles & Access board cards | ✅ `.mise-card-inset` — trial on this page |
 
 ---
 
