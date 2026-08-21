@@ -97,16 +97,14 @@ function ThreeWay({
  * It sets the HIGHEST position each area can offer, so an area with no middle
  * lands on its only "on" rather than being skipped.
  */
-function BulkSet({
-  onSet,
-  scope,
-}: {
-  onSet: (level: Level) => void;
-  scope: string;
-}) {
+function BulkSet({ onSet }: { onSet: (level: Level) => void }) {
+  // ONE ROW, AT THE TOP. There used to be two stacked rows with identical
+  // buttons - "that 2 same button is confusing, better keep in top area as
+  // this is a consolidated button". Whole-app lives here; each group heading
+  // carries its own give-all where the group actually is.
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5">
-      <span className="text-[11px] text-fg-faint">{scope}</span>
+      <span className="text-[11px] text-fg-faint">Every page in DineAI:</span>
       <span className="flex flex-wrap gap-1.5">
         {(["edit", "view", "none"] as const).map((l) => (
           <button
@@ -123,6 +121,10 @@ function BulkSet({
   );
 }
 
+/** Counted in PAGES, not in our word "areas" - "why 17? I thought we have
+ *  more". 17 was our grouping, and he had no way to check it. */
+const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages)));
+
 export function JobSheet({
   job,
   everything,
@@ -137,7 +139,6 @@ export function JobSheet({
 }) {
   const [held, setHeld] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<Record<string, Level>>({});
-  const [tab, setTab] = useState("money");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -145,7 +146,6 @@ export function JobSheet({
     if (!job) return;
     setHeld(new Set(job.permissions));
     setDraft({});
-    setTab("money");
     setErr(null);
   }, [job]);
 
@@ -158,15 +158,10 @@ export function JobSheet({
   const dirty = Object.keys(draft).length > 0;
 
   const reach = useMemo(() => {
-    let on = 0;
-    let total = 0;
-    for (const s of SECTIONS) {
-      for (const a of s.areas) {
-        total += 1;
-        if (current(a) !== "none") on += 1;
-      }
-    }
-    return { on, total };
+    const pages = new Set<string>();
+    for (const s of SECTIONS)
+      for (const a of s.areas) if (current(a) !== "none") for (const pg of a.pages) pages.add(pg);
+    return { on: pages.size, total: ALL_PAGES.size };
   }, [draft, held]);
 
   /** Areas switched on that this job would not ordinarily reach. Warned about,
@@ -247,11 +242,8 @@ export function JobSheet({
       title={name}
       subtitle={job?.label.split("—")[1]?.trim() ?? ""}
       width="lg"
-      sections={SECTIONS.map((s) => ({ key: s.key, label: s.label, icon: s.icon }))}
-      active={tab}
-      onSection={setTab}
       stats={[
-        { label: "Reaches", value: `${reach.on} of ${reach.total}`, hint: "areas of the app" },
+        { label: "Reaches", value: `${reach.on} of ${reach.total}`, hint: "pages in DineAI" },
         {
           label: "People with this job",
           value: String(job?.people ?? 0),
@@ -314,58 +306,80 @@ export function JobSheet({
         </p>
       )}
 
-      <BulkSet scope="Everything in this group:" onSet={(l) => bulk(l, tab)} />
-      <BulkSet scope="Every page in DineAI:" onSet={(l) => bulk(l)} />
+      <BulkSet onSet={(l) => bulk(l)} />
 
-      {SECTIONS.filter((s) => s.key === tab).map((s) => (
-        <ul key={s.key} className="space-y-2">
-          {s.areas.map((a) => {
-            const lvl = current(a);
-            const was = levelOf(a, held);
-            const changed = lvl !== was;
-            // Every area, every position — nothing withheld.
-            const opts: Level[] =
-              a.read.length && a.write.length
-                ? ["none", "view", "edit"]
-                : ["none", a.write.length ? "edit" : "view"];
-            return (
-              <li
-                key={a.key}
-                className={`mise-card3d flex flex-wrap items-center justify-between gap-3 p-3.5 ${
-                  changed ? "ring-1 ring-amber-400/50" : ""
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden
-                    className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base"
-                  >
-                    {a.icon}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-fg">{a.label}</span>
-                    <span className="block truncate text-[11px] text-fg-faint">
-                      {changed ? (
-                        <span className="mise-tone-warn">
-                          was &ldquo;{LEVEL_LABEL[was]}&rdquo; · not saved yet
-                        </span>
-                      ) : (
-                        a.blurb
-                      )}
+      {/* EVERY GROUP ON ONE SCREEN. Same as the other two sheets - this one
+          was missed the first time round, which is exactly the screen he
+          opened, so nothing appeared to have changed at all. */}
+      {SECTIONS.map((sec) => (
+        <div key={sec.key} className="mb-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+            <span aria-hidden>{sec.icon}</span>
+            {sec.label}
+            <button
+              type="button"
+              onClick={() => bulk("edit", sec.key)}
+              className="mise-press ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-medium text-brand-300 hover:underline"
+            >
+              give all
+            </button>
+            <button
+              type="button"
+              onClick={() => bulk("none", sec.key)}
+              className="mise-press rounded-md px-1.5 py-0.5 text-[10px] font-medium text-fg-faint hover:underline"
+            >
+              none
+            </button>
+          </p>
+          <ul className="grid gap-1.5 lg:grid-cols-2">
+            {sec.areas.map((a) => {
+              const lvl = current(a);
+              const was = levelOf(a, held);
+              const changed = lvl !== was;
+              const opts: Level[] =
+                a.read.length && a.write.length
+                  ? ["none", "view", "edit"]
+                  : ["none", a.write.length ? "edit" : "view"];
+              return (
+                <li
+                  key={a.key}
+                  className={`mise-well rounded-xl px-3 py-2.5 ${
+                    changed ? "ring-1 ring-amber-400/50" : ""
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span aria-hidden className="shrink-0 text-base">
+                      {a.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-medium leading-tight text-fg">
+                        {a.label}
+                      </span>
+                      <span className="block truncate text-[10px] leading-tight text-fg-faint">
+                        {changed ? (
+                          <span className="mise-tone-warn">
+                            was &ldquo;{LEVEL_LABEL[was]}&rdquo; · not saved yet
+                          </span>
+                        ) : (
+                          a.pages.join(" · ")
+                        )}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <ThreeWay
-                  label={a.label}
-                  area={a}
-                  value={lvl}
-                  options={opts}
-                  onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
-                />
-              </li>
-            );
-          })}
-        </ul>
+                  <span className="mt-2 flex justify-end">
+                    <ThreeWay
+                      label={a.label}
+                      area={a}
+                      value={lvl}
+                      options={opts}
+                      onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
+                    />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ))}
     </DetailSheet>
   );
