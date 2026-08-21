@@ -113,16 +113,13 @@ function ThreeWay({
  * It sets the HIGHEST position each area can offer, so an area with no middle
  * lands on its only "on" rather than being skipped.
  */
-function BulkSet({
-  onSet,
-  scope,
-}: {
-  onSet: (level: Level) => void;
-  scope: string;
-}) {
+function BulkSet({ onSet }: { onSet: (level: Level) => void }) {
+  // One row for the whole app; each group heading carries its own give-all.
+  // Two stacked rows with identical buttons read as a duplicate, because they
+  // were one.
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5">
-      <span className="text-[11px] text-fg-faint">{scope}</span>
+      <span className="text-[11px] text-fg-faint">Every page in DineAI:</span>
       <span className="flex flex-wrap gap-1.5">
         {(["edit", "view", "none"] as const).map((l) => (
           <button
@@ -138,6 +135,10 @@ function BulkSet({
     </div>
   );
 }
+
+/** Counted in PAGES, not in our word "areas" - a number he can check against
+ *  the sidebar rather than take on trust. */
+const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages)));
 
 export function AccessSheet({
   person,
@@ -155,7 +156,6 @@ export function AccessSheet({
   // of having their switches set by hand every time.
   const [mine, setMine] = useState<{ id: string; name: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, Level>>({});
-  const [tab, setTab] = useState("money");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -185,7 +185,6 @@ export function AccessSheet({
   useEffect(() => {
     if (!person) return;
     setErr(null);
-    setTab("money");
     setJob(person.role);
     const base = arch.find((a) => a.key === person.role);
     const defaults = new Set(base?.defaults ?? []);
@@ -263,16 +262,11 @@ export function AccessSheet({
   // How much of the app they can reach, as one number — the headline a person
   // actually wants: "what does this account get to see?"
   const reach = useMemo(() => {
-    let on = 0;
-    let all = 0;
-    for (const s of SECTIONS) {
-      for (const a of s.areas) {
-        if (positionsFor(a).length === 0) continue;
-        all += 1;
-        if (current(a.key, a) !== "none") on += 1;
-      }
-    }
-    return { on, all };
+    const pages = new Set<string>();
+    for (const s of SECTIONS)
+      for (const a of s.areas)
+        if (current(a.key, a) !== "none") for (const pg of a.pages) pages.add(pg);
+    return { on: pages.size, all: ALL_PAGES.size };
   }, [envelope, draft, held]);
 
   return (
@@ -283,18 +277,11 @@ export function AccessSheet({
       title={name}
       subtitle={owner ? "Owner — can do everything" : `${jobLabel} · ${person?.email ?? ""}`}
       width="lg"
-      sections={
-        owner
-          ? undefined
-          : SECTIONS.map((s) => ({ key: s.key, label: s.label, icon: s.icon }))
-      }
-      active={tab}
-      onSection={setTab}
       stats={
         owner
           ? undefined
           : [
-              { label: "Can reach", value: `${reach.on} of ${reach.all}`, hint: "areas of the app" },
+              { label: "Can reach", value: `${reach.on} of ${reach.all}`, hint: "pages in DineAI" },
               { label: "Their job", value: jobLabel, hint: "what they start from" },
               {
                 label: "Access",
@@ -443,86 +430,86 @@ export function AccessSheet({
 
           </div>
 
-          <BulkSet scope="Everything in this group:" onSet={(l) => bulk(l, tab)} />
-          <BulkSet scope="Every page in DineAI:" onSet={(l) => bulk(l)} />
+          <BulkSet onSet={(l) => bulk(l)} />
 
-          {SECTIONS.filter((s) => s.key === tab).map((s) => {
-            // EVERY AREA, ALWAYS. What a job "normally" does no longer decides
-            // what the owner is allowed to see on this page.
-            const areas = s.areas.filter((a) => positionsFor(a).length > 0);
-            const beyond = areas.filter((a) => isUnusual(a, envelope)).length;
+          {/* EVERY GROUP ON ONE SCREEN, same as the role builder. Five tabs
+              meant five visits to answer one question. */}
+          {SECTIONS.map((sec) => {
+            const areas = sec.areas.filter((a) => positionsFor(a).length > 0);
+            if (areas.length === 0) return null;
             return (
-              <div key={s.key}>
-                {beyond > 0 && (
-                  <p className="mb-2 rounded-xl border border-line bg-paper-2/50 px-3.5 py-2.5 text-[11px] leading-relaxed text-fg-faint">
-                    {beyond === areas.length
-                      ? `A ${jobLabel} does not normally reach ${s.label.toLowerCase()}.`
-                      : `${beyond} of these are outside what a ${jobLabel} normally does.`}{" "}
-                    They are marked <b>unusual</b> — you can still switch them on, and it takes
-                    effect immediately.
-                  </p>
-                )}
-                {areas.length === 0 ? (
-                  <p className="rounded-xl border border-line bg-paper-2/50 p-3.5 text-sm text-fg-faint">
-                    Nothing in {s.label.toLowerCase()} can be switched per person.
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {areas.map((a) => {
-                      const lvl = current(a.key, a);
-                      const was = levelOf(a, held);
-                      const changed = lvl !== was;
-                      // Outside the job's usual set. Said out loud, on the row,
-                      // instead of the control simply not existing.
-                      const odd = isUnusual(a, envelope);
-                      return (
-                        <li
-                          key={a.key}
-                          className={`mise-card3d flex flex-wrap items-center justify-between gap-3 p-3.5 ${
-                            changed ? "ring-1 ring-amber-400/50" : ""
-                          }`}
-                        >
-                          <span className="flex min-w-0 items-center gap-3">
-                            <span aria-hidden className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base">
-                              {a.icon}
-                            </span>
-                            <span className="min-w-0">
-                              <span className="flex items-center gap-1.5">
-                                <span className="truncate text-sm font-medium text-fg">
-                                  {a.label}
+              <div key={sec.key} className="mb-3">
+                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+                  <span aria-hidden>{sec.icon}</span>
+                  {sec.label}
+                  <button
+                    type="button"
+                    onClick={() => bulk("edit", sec.key)}
+                    className="mise-press ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-medium text-brand-300 hover:underline"
+                  >
+                    give all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bulk("none", sec.key)}
+                    className="mise-press rounded-md px-1.5 py-0.5 text-[10px] font-medium text-fg-faint hover:underline"
+                  >
+                    none
+                  </button>
+                </p>
+                <ul className="grid gap-1.5 lg:grid-cols-2">
+                  {areas.map((a) => {
+                    const lvl = current(a.key, a);
+                    const was = levelOf(a, held);
+                    const changed = lvl !== was;
+                    const odd = isUnusual(a, envelope);
+                    return (
+                      <li
+                        key={a.key}
+                        className={`mise-well flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 ${
+                          changed ? "ring-1 ring-amber-400/50" : ""
+                        }`}
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
+                          <span aria-hidden className="shrink-0 text-base">
+                            {a.icon}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate text-[13px] font-medium text-fg">
+                                {a.label}
+                              </span>
+                              {odd && (
+                                <span
+                                  title={`Not normally part of a ${jobLabel}'s job`}
+                                  className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300"
+                                >
+                                  unusual
                                 </span>
-                                {odd && (
-                                  <span
-                                    title={`Not normally part of a ${jobLabel}'s job`}
-                                    className="shrink-0 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300"
-                                  >
-                                    unusual
-                                  </span>
-                                )}
-                              </span>
-                              <span className="block truncate text-[11px] text-fg-faint">
-                                {changed ? (
-                                  <span className="mise-tone-warn">
-                                    was &ldquo;{LEVEL_LABEL[was]}&rdquo; · not saved yet
-                                  </span>
-                                ) : (
-                                  a.blurb
-                                )}
-                              </span>
+                              )}
+                            </span>
+                            <span className="block truncate text-[10px] text-fg-faint">
+                              {changed ? (
+                                <span className="mise-tone-warn">
+                                  was &ldquo;{LEVEL_LABEL[was]}&rdquo; · not saved yet
+                                </span>
+                              ) : (
+                                a.pages.join(" · ")
+                              )}
                             </span>
                           </span>
-                          <ThreeWay
-                            label={a.label}
-                            area={a}
-                            value={lvl}
-                            options={positionsFor(a)}
-                            onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
-                          />
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                        </span>
+                        <ThreeWay
+                          label={a.label}
+                          area={a}
+                          value={lvl}
+                          options={positionsFor(a)}
+                          onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             );
           })}
