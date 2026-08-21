@@ -47,13 +47,25 @@ test("invent a Poori Master and give it what it needs", async ({ page }) => {
   // is on until it is switched on here.
   expect(await sheet.getByText(/start from/i).count()).toBe(0);
 
-  await sheet.getByRole("button", { name: /kitchen/i }).first().click();
-  await page.waitForTimeout(600);
+  // Screenshot BEFORE the assertions, so a failure still leaves something to
+  // look at rather than the previous run's picture.
+  await page.screenshot({ path: "e2e/__screens__/role-builder-top.png", fullPage: true });
+
+  // The tabs are gone — every group is on this one screen. The headings carry
+  // their icon in the same text node, so this cannot be an exact match.
+  for (const group of ["Stock & buying", "Their own", "Kitchen"]) {
+    await expect(sheet.getByText(group).first()).toBeVisible();
+  }
+
+  // One bulk row for the whole app, not two identical ones stacked.
+  expect(await sheet.getByText(/every page in dineai:/i).count()).toBe(1);
+
   // The assistant is permission to ASK IT THINGS, not to change anything.
-  const ai = sheet.locator("li").filter({ hasText: "Asking DineAI questions" }).first();
+  const ai = sheet.locator("li").filter({ hasText: "Ask DineAI" }).first();
   await expect(ai.getByText("Can use")).toBeVisible();
   expect(await ai.getByText("Can change").count()).toBe(0);
-  const recipes = sheet.locator("li").filter({ hasText: "Recipes" }).first();
+
+  const recipes = sheet.locator("li").filter({ hasText: "Recipes & dishes" }).first();
   await recipes.getByText("Can change").click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: "e2e/__screens__/role-builder.png", fullPage: true });
