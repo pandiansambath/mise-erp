@@ -197,3 +197,45 @@ test("the owner keeps their whole sidebar", async ({ page }) => {
     expect(text, `the owner lost ${item} from their own sidebar`).toContain(item);
   }
 });
+
+test("nothing inside the popup scrolls", async ({ page }) => {
+  // MEASURED, NOT EYEBALLED.
+  //
+  //   "I need to scroll over cards to reach the 3rd or 4th card. Just 4 cards
+  //    we having, even for this also we need to scroll?"
+  //
+  // A screenshot cannot tell you whether a pane scrolls — it looks identical
+  // either way until you try. scrollHeight vs clientHeight can, so the test
+  // asks the browser instead of asking me.
+  await signIn(page);
+  await page.goto(`${BASE}/staff`);
+  await page.getByText(/Chef \/ kitchen/i).first().waitFor({ timeout: 60_000 });
+  await page.getByText("Manager", { exact: false }).first().click();
+
+  const sheet = page.getByRole("dialog").last();
+  await sheet.getByText(/^No access$/).first().waitFor({ timeout: 60_000 });
+
+  for (const group of ["Money", "Stock & buying", "People", "Their own", "Kitchen"]) {
+    await sheet.getByText(group, { exact: true }).first().click();
+    await page.waitForTimeout(400);
+
+    const overflowing = await sheet.evaluate((el) => {
+      const bad: string[] = [];
+      el.querySelectorAll("*").forEach((n) => {
+        const e = n as HTMLElement;
+        // 2px of slack for sub-pixel rounding
+        if (e.scrollHeight > e.clientHeight + 2 && e.clientHeight > 40) {
+          const style = getComputedStyle(e);
+          if (style.overflowY === "auto" || style.overflowY === "scroll") {
+            bad.push(`${e.className}`.slice(0, 60));
+          }
+        }
+      });
+      return bad;
+    });
+
+    expect(overflowing, `${group} has a scrolling pane`).toEqual([]);
+  }
+
+  await page.screenshot({ path: "e2e/__screens__/noscroll-kitchen.png", fullPage: true });
+});
