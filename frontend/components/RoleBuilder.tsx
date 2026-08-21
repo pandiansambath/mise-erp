@@ -69,8 +69,8 @@ export function RoleBuilder({
   open: boolean;
   /** null = designing a new one. */
   role: CustomRole | null;
-  /** How many people are in this role today. */
-  people: number;
+  /** Who is in this role today — names, so the count can be opened. */
+  people: { id: string; name: string; email?: string | null }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -133,7 +133,11 @@ export function RoleBuilder({
   async function save() {
     const ok = await confirm({
       title: "Save this role?",
-      message: `"${name.trim()}" will reach ${reach.on} of ${reach.total} pages${people ? ` — and ${people} ${people === 1 ? "person is" : "people are"} in this role` : ""}.`,
+      message:
+        (role && name.trim() !== role.name
+          ? `Renaming "${role.name}" to "${name.trim()}". `
+          : "") +
+        `"${name.trim()}" will reach ${reach.on} of ${reach.total} pages${people.length ? ` — and ${people.length} ${people.length === 1 ? "person is" : "people are"} in this role` : ""}.`,
       confirmText: "Save it",
     });
     if (!ok) return;
@@ -173,8 +177,8 @@ export function RoleBuilder({
     if (!role) return;
     const ok = await confirm({
       title: `Remove "${role.name}"?`,
-      message: people
-        ? `${people} ${people === 1 ? "person is" : "people are"} in this role. They fall back to their plain job, which reaches less — nobody gains access by this.`
+      message: people.length
+        ? `${people.length} ${people.length === 1 ? "person is" : "people are"} in this role. They fall back to their plain job, which reaches less — nobody gains access by this.`
         : "Nobody is in this role, so nothing changes for anyone today.",
       confirmText: "Remove it",
       tone: "danger",
@@ -201,7 +205,7 @@ export function RoleBuilder({
       subtitle={role ? "A role you made" : "Name it, then say what they can reach"}
       stats={[
         { label: "Pages they can open", value: `${reach.on} of ${reach.total}` },
-        { label: "People in this role", value: String(people) },
+        { label: "People in this role", value: String(people.length), people },
       ]}
       lead={
         <>
@@ -222,8 +226,20 @@ export function RoleBuilder({
               placeholder="Poori Master, Tandoor Lead, Floor Manager…"
               className="mise-well w-full rounded-xl px-3 py-2.5 text-base outline-none"
             />
+            {/* 5c — "if I touch and edit, it is edited. No, we need a
+                confirmation to change anything."
+                A confirm on every keystroke would be unusable, so the honest
+                version is: typing changes NOTHING until you save, the field
+                says so the moment it differs, and the save asks. */}
             <span className="mt-1 block text-[10px] leading-relaxed text-fg-faint">
-              Your words, not ours. This is what you will see next to their name.
+              {role && name.trim() !== role.name ? (
+                <span className="mise-tone-warn font-medium">
+                  Renaming from &ldquo;{role.name}&rdquo; — nothing changes until you save, and
+                  we will ask first.
+                </span>
+              ) : (
+                <>Your words, not ours. This is what you will see next to their name.</>
+              )}
             </span>
           </label>
         </>
@@ -250,8 +266,8 @@ export function RoleBuilder({
               : !named
                 ? "Give it a name first"
                 : role
-                  ? people
-                    ? `Save — applies to ${people} ${people === 1 ? "person" : "people"}`
+                  ? people.length
+                    ? `Save — applies to ${people.length} ${people.length === 1 ? "person" : "people"}`
                     : "Save"
                   : "Create this role"}
           </button>

@@ -30,7 +30,18 @@ import { useConfirm } from "@/components/confirm";
 
 import { LEVEL_HINT, SECTIONS, labelFor, type Area, type Level } from "@/lib/access";
 
-export type Stat = { label: string; value: string; hint?: string };
+export type Stat = {
+  label: string;
+  value: string;
+  hint?: string;
+  /**
+   * 5b — "if we click 'people in this role' it needs to open the list, so super
+   * admin can get the information instantly by viewing."
+   * A count that cannot be opened is a number you have to go and verify
+   * somewhere else. Give a stat some names and it becomes a button.
+   */
+  people?: { id: string; name: string; email?: string | null }[];
+};
 
 /** The three-position control. One per area, named by the area where the
  *  generic word would be wrong ("Can use" for the assistant, not "Can change"). */
@@ -169,6 +180,56 @@ function WhyPopup({ area, why, onClose }: { area: Area; why: Why; onClose: () =>
   );
 }
 
+/** 5b — who, exactly. A count is only useful if you can see the names behind it. */
+function PeoplePopup({ stat, onClose }: { stat: Stat; onClose: () => void }) {
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center p-0 sm:items-center sm:p-6"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="mise-fade-in absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="mise-pop-lg relative w-full max-w-sm rounded-t-3xl border border-line bg-paper p-5 shadow-2xl shadow-black/60 sm:rounded-3xl">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-base font-semibold leading-tight text-fg">
+              {stat.label}
+            </p>
+            <p className="text-[11px] text-fg-faint">{stat.value}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="mise-press grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-faint hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>
+        <ul className="mt-3 space-y-1.5">
+          {(stat.people ?? []).map((m) => (
+            <li key={m.id} className="mise-well flex items-center gap-2.5 rounded-xl px-3 py-2">
+              <span
+                aria-hidden
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-semibold text-white"
+              >
+                {(m.name || "?").slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-medium text-fg">{m.name}</span>
+                {m.email && (
+                  <span className="block truncate text-[10px] text-fg-faint">{m.email}</span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function AccessModal({
   open,
   icon,
@@ -209,6 +270,7 @@ export function AccessModal({
 }) {
   const [group, setGroup] = useState(SECTIONS[0].key);
   const [asked, setAsked] = useState<Area | null>(null);
+  const [who, setWho] = useState<Stat | null>(null);
   const confirm = useConfirm();
 
   /**
@@ -286,16 +348,33 @@ export function AccessModal({
             {subtitle && <p className="truncate text-[11px] text-fg-faint">{subtitle}</p>}
           </div>
           <div className="hidden shrink-0 items-center gap-4 sm:flex">
-            {stats.map((s) => (
-              <div key={s.label} className="text-right">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-fg-faint">
-                  {s.label}
-                </p>
-                <p className="font-display text-base font-semibold leading-tight text-fg">
-                  {s.value}
-                </p>
-              </div>
-            ))}
+            {stats.map((s) =>
+              s.people && s.people.length > 0 ? (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => setWho(s)}
+                  className="mise-press rounded-lg px-1.5 py-0.5 text-right transition hover:bg-paper-2"
+                  title="See who"
+                >
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-fg-faint">
+                    {s.label}
+                  </p>
+                  <p className="font-display text-base font-semibold leading-tight text-brand-300 underline decoration-dotted underline-offset-2">
+                    {s.value}
+                  </p>
+                </button>
+              ) : (
+                <div key={s.label} className="text-right">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-fg-faint">
+                    {s.label}
+                  </p>
+                  <p className="font-display text-base font-semibold leading-tight text-fg">
+                    {s.value}
+                  </p>
+                </div>
+              ),
+            )}
           </div>
           <button
             type="button"
@@ -450,6 +529,7 @@ export function AccessModal({
       {asked && explain?.(asked) && (
         <WhyPopup area={asked} why={explain(asked)!} onClose={() => setAsked(null)} />
       )}
+      {who && <PeoplePopup stat={who} onClose={() => setWho(null)} />}
     </div>,
     document.body,
   );

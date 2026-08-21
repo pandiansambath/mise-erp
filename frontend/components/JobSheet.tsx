@@ -129,11 +129,14 @@ const ALL_PAGES = new Set(SECTIONS.flatMap((s) => s.areas.flatMap((a) => a.pages
 
 export function JobSheet({
   job,
+  holders = [],
   everything,
   onClose,
   onSaved,
 }: {
   job: Job | null;
+  /** Who holds this job — so the count opens into names. */
+  holders?: { id: string; name: string; email?: string | null }[];
   /** The whole catalogue — every area is offered, nothing is hidden. */
   everything: string[];
   onClose: () => void;
@@ -252,7 +255,7 @@ export function JobSheet({
       subtitle={job?.label.split("—")[1]?.trim() ?? ""}
       stats={[
         { label: "Pages they can open", value: `${reach.on} of ${reach.total}` },
-        { label: "People with this job", value: String(job?.people ?? 0) },
+        { label: "People with this job", value: String(job?.people ?? 0), people: holders },
       ]}
       intro={
         <>

@@ -885,6 +885,49 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
     inset 0 2px 6px color-mix(in srgb, #000 28%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--color-glass) 7%, transparent);
 }
+/* 7 — THE BOARD CARDS, IN THE POPUP'S CLOTHES.
+     "I said I like this UI, those cards — inside the card we have shadows which
+      make a 3D feel... I don't like this card shadow UI, better follow that
+      popup's card shadow UI here also. Try. Let's see — if fine we can
+      implement in our entire project."
+
+   The board used `mise-card3d`: depth built from a hard band on two edges and a
+   cast underneath, which at eight cards to a screen is a lot of ink between
+   things. The popup's rows use `mise-well` — the shadow lives INSIDE the card,
+   so the depth reads as a pressed panel rather than a stack of paper, and the
+   gaps between cards stay clean.
+
+   This is a trial on ONE page, in his words. If it holds up it goes everywhere. */
+.mise-card-inset {
+  background: color-mix(in srgb, var(--color-shell) 55%, var(--color-paper));
+  border: 1px solid var(--color-line);
+  border-radius: 0.9rem;
+  box-shadow:
+    inset 0 2px 6px color-mix(in srgb, #000 28%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-glass) 7%, transparent);
+  transition:
+    border-color 200ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    box-shadow 200ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    transform 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.mise-card-inset:hover {
+  border-color: color-mix(in srgb, var(--color-brand-400) 45%, transparent);
+  box-shadow:
+    inset 0 2px 8px color-mix(in srgb, #000 22%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-glass) 10%, transparent);
+  transform: translateY(-1px);
+}
+.mise-app[data-mode="light"] .mise-card-inset {
+  background: color-mix(in srgb, #0f172a 4%, var(--color-paper));
+  box-shadow:
+    inset 0 2px 6px color-mix(in srgb, #0f172a 10%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, #fff 70%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-card-inset { transition: none; }
+  .mise-card-inset:hover { transform: none; }
+}
+
 .mise-well:focus-within {
   border-color: color-mix(in srgb, var(--color-brand-400) 55%, transparent);
   box-shadow:
@@ -1911,6 +1954,13 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 .mise-bench-rail {
   padding-top: 1.25rem;
   contain: layout style;
+  /* 4.3 — so the condensed tools can be RIGHT-ALIGNED EXACTLY rather than
+     shoved by a guessed distance. `cqw` measures this rail, so
+     `translateX(calc(100cqw - 100%))` lands the row flush with its right edge
+     whatever the screen is — and because it is still a transform, it animates
+     on the same clock as everything else. inline-size containment does NOT
+     imply paint containment, so the lifted row is not clipped. */
+  container-type: inline-size;
   /* One curve for everything that moves here, so the rail reads as a single
      object settling rather than four things easing at their own rates. */
   transition: padding-top var(--bench-ms) var(--bench-ease);
@@ -2696,7 +2746,14 @@ body[data-overlay] .mise-launcher-in {
      The scale came down from 0.95 — "make it smooth and a bit small to adjust
      to size when it shrinks". A slightly smaller row needs less of the title's
      space to land in, so it stops arriving right on top of a long heading. */
-  transform: translate(clamp(0px, 36vw, 20rem), -2.6rem) scale(0.9);
+  /* "After shrinking it's looking tight and clumsy — better with smooth
+     animation bring those buttons to the right side."
+     It used to travel a fixed clamp(0px, 36vw, 20rem), which on a wide screen
+     stopped well short of the edge and parked the row right next to the title.
+     That is the tightness: not the size, the distance. Now it goes exactly as
+     far as there is room for, measured off the rail itself. */
+  transform: translate(calc(100cqw - 100%), -2.6rem) scale(0.9);
+  transform-origin: right center;
 }
 
 /* The tools must stay visible while their row has zero height. */

@@ -477,7 +477,7 @@ export default function StaffPage() {
                         setOpenJob(j);
                       }
                     }}
-                    className="mise-card3d mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
+                    className="mise-card-inset mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
                   >
                     <span
                       aria-hidden
@@ -554,7 +554,7 @@ export default function StaffPage() {
                         setBuilding(true);
                       }
                     }}
-                    className="mise-card3d mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
+                    className="mise-card-inset mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left"
                   >
                     <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400/70" />
                     <div className="flex items-center gap-1.5">
@@ -630,7 +630,7 @@ export default function StaffPage() {
                       setOpen(u as Person);
                     }
                   }}
-                  className={`mise-card3d mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left ${
+                  className={`mise-card-inset mise-press relative flex h-full w-full flex-col cursor-pointer overflow-hidden p-3.5 pl-4 text-left ${
                     u.is_active === false ? "opacity-60" : ""
                   }`}
                 >
@@ -715,7 +715,17 @@ export default function StaffPage() {
         open={building}
         role={editing}
         
-        people={editing ? users.filter((u) => u.custom_role_id === editing.id).length : 0}
+        people={
+          editing
+            ? users
+                .filter((u) => u.custom_role_id === editing.id)
+                .map((u) => ({
+                  id: u.id,
+                  name: u.preferred_name || u.email.split("@")[0],
+                  email: u.email,
+                }))
+            : []
+        }
         onClose={() => {
           setBuilding(false);
           setEditing(null);
@@ -725,6 +735,17 @@ export default function StaffPage() {
 
       <JobSheet
         job={openJob}
+        holders={
+          openJob
+            ? users
+                .filter((u) => u.role === openJob.key && !u.custom_role_id)
+                .map((u) => ({
+                  id: u.id,
+                  name: u.preferred_name || u.email.split("@")[0],
+                  email: u.email,
+                }))
+            : []
+        }
         everything={everything}
         onClose={() => setOpenJob(null)}
         onSaved={load}
