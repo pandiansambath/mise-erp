@@ -2000,6 +2000,9 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 
 .mise-bench-rail[data-condensed="true"] {
   padding-top: 0.9rem;
+  /* A hair of floor under the whole rail too, so nothing it holds ends up
+     touching the border that separates it from the page. */
+  padding-bottom: 0.15rem;
 }
 
 .mise-bench-rail[data-condensed="true"] .mise-bench-head {
@@ -2768,8 +2771,12 @@ body[data-overlay] .mise-launcher-in {
   /* scale() leaves the original footprint behind, so the row is pulled up by
      the space the shrink freed — otherwise the rail keeps its full height and
      the whole point is lost. */
-  margin-bottom: -0.7rem;
-  padding-bottom: 0.2rem;
+  /* — but only PART of it. At -0.7rem the row was dragged onto the rail's own
+     bottom border, so the buttons sat flush against the cards scrolling under
+     it: "that button is placed very edge to below card". Reclaim most of the
+     height, keep enough that the row still has a floor to stand on. */
+  margin-bottom: -0.3rem;
+  padding-bottom: 0.55rem;
 }
 
 /* The little captions over each control ("How many tables?", "Or add one")
