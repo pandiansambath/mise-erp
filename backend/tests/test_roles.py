@@ -133,3 +133,38 @@ def test_food_safety_is_gated_the_same_way_everywhere():
     nav_line = next(ln for ln in shell.splitlines() if '"/food-safety"' in ln)
     assert 'perm: "safety:read"' in nav_line, nav_line
     assert 'can(user?.role, "safety:write")' in page
+
+
+def test_a_page_grant_is_kept_and_a_junk_one_is_not():
+    """"under Inventory you gave 3 things \u2014 what if super admin wants to give
+    only the Inventory page alone, not Stock-take and Waste?"
+
+    A `page:<slug>` grant says which SCREENS to hand over inside what the
+    permission already allows. The UI owns the slugs, which is only safe
+    because these can never widen access \u2014 so the shape is checked, not a list.
+    """
+    from app.auth.models import Role
+    from app.core.rbac import is_page_key, resolve_permissions
+
+    assert is_page_key("page:stock-take")
+    assert not is_page_key("page:../../etc/passwd")
+    assert not is_page_key("pages:inventory")
+
+    got = resolve_permissions(
+        Role.STAFF.value, {"inventory:read": True, "page:inventory": True}
+    )
+    assert "inventory:read" in got
+    assert "page:inventory" in got
+
+
+def test_a_page_grant_survives_the_api_clip():
+    """It was being dropped on the way in: `_clip` only kept real permissions,
+    and a page key is not one."""
+    from app.auth.models import Role
+    from app.auth.roles_router import _clip
+
+    kept = _clip(Role.STAFF.value, {"page:inventory": True, "page:waste": False})
+
+    assert kept["page:inventory"] is True
+    assert kept["page:waste"] is False
+    assert _clip(Role.STAFF.value, {"page:not a slug": True}) == {}
