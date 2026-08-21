@@ -537,6 +537,33 @@ html:has(.mise-app) { background: #04120d; }
   --tone-good: #047857;
   --tone-warn: #b45309;
 }
+/* 4.1 — "that 'unusual' text and surrounding yellow is not showing clearly...
+   I can barely read it, it's not in HD form, it's like blur form."
+   It was 9px uppercase amber-300 on amber-400/15. On the light theme that is
+   pale ink on a pale wash at a size below where antialiasing can hold an edge,
+   so it reads as a smudge rather than a word. A chip is a LABEL, not a
+   decoration: it gets real contrast, a real size, and a border so its shape
+   survives whatever surface it lands on. */
+.mise-chip-warn {
+  color: var(--tone-warn);
+  background: color-mix(in srgb, var(--tone-warn) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tone-warn) 45%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+[data-mode="light"] .mise-chip-warn {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.mise-chip-warn:hover {
+  background: color-mix(in srgb, var(--tone-warn) 26%, transparent);
+}
+
 .mise-tone-info { color: var(--tone-info); }
 .mise-tone-good { color: var(--tone-good); }
 .mise-tone-warn { color: var(--tone-warn); }

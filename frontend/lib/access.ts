@@ -319,6 +319,35 @@ export function overridesFor(area: Area, level: Level): Record<string, boolean> 
   return out;
 }
 
+/**
+ * Why an area is flagged as unusual for a job, in words a person can act on.
+ *
+ *   "that 'unusual' is very generic — I need a clear explanation: why it's
+ *    unusual and what is the correct way. But still you are the owner, you can
+ *    decide. Also show the impact."
+ *
+ * Built from the area itself rather than a hand-written table, so a new area
+ * cannot arrive with no explanation behind its own warning.
+ */
+export function whyUnusual(area: Area, jobLabel: string) {
+  const canChange = area.write.length > 0;
+  return {
+    why:
+      `A ${jobLabel} does not normally reach ${area.label.toLowerCase()}, so this is ` +
+      `outside what the job is set up to do. It is a note, not a block.`,
+    normal:
+      `Usually ${area.label.toLowerCase()} sits with whoever owns that part of the ` +
+      `business — the owner, or the person whose job it already is. Most places leave ` +
+      `it off for this role and give it to one named person instead.`,
+    impact: canChange
+      ? `Switched to "Can change", they can add, edit and delete here — and anyone else ` +
+        `with this job gets the same. "Can see" lets them look without touching, which ` +
+        `is usually the safer middle.`
+      : `Switched on, they can use this. There is no look-but-don't-touch position for ` +
+        `it — it is on or off.`,
+  };
+}
+
 export const LEVEL_LABEL: Record<Level, string> = {
   none: "No access",
   view: "Can see",
