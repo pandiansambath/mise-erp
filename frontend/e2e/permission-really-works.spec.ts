@@ -125,5 +125,15 @@ test("a page granted to somebody actually appears in THEIR account", async ({
   expect(gone, "revoking must actually remove it").not.toMatch(/Inventory/i);
 
   // 7 · clean up after ourselves — this runs against his live restaurant.
+  //
+  // Deleting the login is not enough: tuning one person's switches creates a
+  // CustomRole named "<who> — custom access" underneath, and four of those
+  // were left littering his roles list before I noticed. Take the role too.
   await request.delete(`${BASE}/api/auth/users/${subjectId}`, { headers: auth });
+  const roles = await (await request.get(`${BASE}/api/roles`, { headers: auth })).json();
+  for (const r of roles.roles ?? []) {
+    if (r.is_active && r.name.startsWith(`probe${STAMP}`)) {
+      await request.delete(`${BASE}/api/roles/${r.id}`, { headers: auth });
+    }
+  }
 });
