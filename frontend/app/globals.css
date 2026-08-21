@@ -2709,11 +2709,18 @@ body[data-overlay] .mise-launcher-in {
    genuinely shrinks on scroll and nothing ever overhangs the page. */
 .mise-bench-rail[data-condensed="true"][data-tall="true"] .mise-bench-tools {
   grid-template-rows: 1fr;
-  /* A touch smaller than before: he asked for it to "adjust to size when it
-     shrinks" rather than merely move, and 0.85 is the point where a wide row
-     stops fighting the edge without the text going unreadable. */
-  transform: scale(0.85);
-  transform-origin: left center;
+  /* 4.3, PROPERLY THIS TIME.
+       "still that button when I scroll down, they are tightly fitting in that
+        place itself instead of moving to the right."
+     He was right and I had missed why. I right-aligned the plain condensed rule
+     and never noticed THIS one — two attribute selectors, higher specificity —
+     overriding it with a bare `scale()`. Roles & Access has a wide toolbar, so
+     it is this rule that applies there, and the row never moved at all.
+     Same measurement as the other rule: `100cqw - 100%` is exactly the room
+     left over, so a row with space slides into it and a row that already fills
+     the rail stays put. Nothing to guess, nothing to clamp. */
+  transform: translateX(calc(100cqw - 100%)) scale(0.85);
+  transform-origin: right center;
   /* scale() leaves the original footprint behind, so the row is pulled up by
      the space the shrink freed — otherwise the rail keeps its full height and
      the whole point is lost. */
