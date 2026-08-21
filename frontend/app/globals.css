@@ -2707,6 +2707,37 @@ body[data-overlay] .mise-launcher-in {
    rows deep has nowhere to slide TO, but it can still get smaller: the labels
    above the controls fold away and the whole row scales down, so the rail
    genuinely shrinks on scroll and nothing ever overhangs the page. */
+/* 4.3, AND THIS TIME I MEASURED IT FIRST.
+   "this is the 4th time I'm saying this same issue."
+
+   Fair, and the first three attempts all failed for the same reason: I never
+   checked whether the row COULD move. Playwright says the gap between the
+   row's right edge and the rail's right edge is 32px before condensing and
+   32px after — it does not move a pixel, and right-aligning it is meaningless,
+   because the row is already the full width of the rail.
+
+   It is full width because the search box is `flex-1 min-w-[12rem]`: it
+   stretches to fill whatever is left. So there is no room to slide into, and
+   every "move it right" I wrote was a no-op.
+
+   Make the room first. Condensed, the search gives up its stretch and shrinks
+   to a stub — you have scrolled past, you are not searching — and the row
+   becomes as narrow as its buttons. THEN `translateX(calc(100cqw - 100%))`
+   has somewhere to take it, and the buttons end up at the right with the title
+   alone on the left, which is what he asked for four times. */
+.mise-bench-rail[data-condensed="true"] .mise-bench-tools label {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.mise-bench-rail[data-condensed="true"] .mise-bench-tools input {
+  max-width: 8.5rem;
+  transition: max-width var(--bench-ms) var(--bench-ease);
+}
+.mise-bench-tools input {
+  max-width: 100%;
+  transition: max-width var(--bench-ms) var(--bench-ease);
+}
+
 .mise-bench-rail[data-condensed="true"][data-tall="true"] .mise-bench-tools {
   grid-template-rows: 1fr;
   /* 4.3, PROPERLY THIS TIME.
