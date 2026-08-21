@@ -241,39 +241,48 @@ test("nothing inside the popup scrolls", async ({ page }) => {
 });
 
 test("the toolbar actually moves right when the rail condenses", async ({ page }) => {
-  // 4.3, MEASURED. He told me twice that this was not done, and both times I had
-  // changed a rule that was not the one applying. So this asks the browser where
-  // the row IS, before and after — a screenshot cannot tell you 30px.
+  // 4.3, MEASURED — and measured on the thing that actually scrolls.
+  //
+  // Two earlier readings of "32 -> 32" were both worthless: the first scrolled
+  // the sidebar (Playwright's mouse starts at 0,0, which is over it), and the
+  // second ran at a viewport where the page FITS, so nothing scrolled and the
+  // rail was never asked to condense. The scroller is `main.lg:overflow-y-auto`,
+  // and it only has anything to scroll when the content is taller than it.
   await signIn(page);
+  await page.setViewportSize({ width: 1280, height: 620 });
   await page.goto(`${BASE}/staff`);
-  await page.getByText(/Chef \/ kitchen/i).first().waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: /by person/i }).first().click();
+  await page.waitForTimeout(2000);
 
-  const tools = page.locator(".mise-bench-tools").first();
   const rail = page.locator(".mise-bench-rail").first();
-  await tools.waitFor({ timeout: 30_000 });
+  // Measure the FIRST BUTTON, not the row's box. The box already spans the
+  // rail, which is exactly why four attempts at translating it did nothing —
+  // its left edge is fixed whatever you do. Where the buttons START is the
+  // thing he can actually see move.
+  const firstButtonLeft = () =>
+    page.evaluate(() => {
+      const row = document.querySelector(".mise-bench-tools")!;
+      const b = row.querySelector("button")!.getBoundingClientRect();
+      const r = document.querySelector(".mise-bench-rail")!.getBoundingClientRect();
+      return Math.round(b.left - r.left);
+    });
 
-  const gapBefore = await page.evaluate(() => {
-    const t = document.querySelector(".mise-bench-tools")!.getBoundingClientRect();
-    const r = document.querySelector(".mise-bench-rail")!.getBoundingClientRect();
-    return r.right - t.right;
+  const before = await firstButtonLeft();
+
+  await page.evaluate(() => {
+    const main = document.querySelector("main");
+    if (main) main.scrollTop = 600;
   });
+  await page.waitForTimeout(1500);
 
-  // Scroll far enough to cross the sentinel and settle past the lock.
-  await page.mouse.wheel(0, 900);
-  await page.waitForTimeout(1400);
   expect(await rail.getAttribute("data-condensed"), "the rail never condensed").toBe("true");
+  const after = await firstButtonLeft();
+  await page.screenshot({ path: "e2e/__screens__/toolbar-condensed.png" });
 
-  const gapAfter = await page.evaluate(() => {
-    const t = document.querySelector(".mise-bench-tools")!.getBoundingClientRect();
-    const r = document.querySelector(".mise-bench-rail")!.getBoundingClientRect();
-    return r.right - t.right;
-  });
-
-  await page.screenshot({ path: "e2e/__screens__/toolbar-condensed.png", fullPage: false });
-
-  // Condensed, the row should sit against the right edge — so the gap to the
-  // rail's right edge collapses towards nothing and is far smaller than it was.
-  expect(gapAfter, `row did not move right (gap ${gapBefore} -> ${gapAfter})`).toBeLessThan(
-    Math.max(24, gapBefore * 0.5),
-  );
+  // Condensed, the row gives up the search box's stretch and slides right, so
+  // the gap to the rail's right edge shrinks towards nothing.
+  expect(
+    after,
+    `the buttons did not move right (first button at ${before}px -> ${after}px from the rail's left edge)`,
+  ).toBeGreaterThan(before + 40);
 });
