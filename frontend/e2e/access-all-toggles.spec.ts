@@ -139,6 +139,10 @@ test("the batch-3 fixes are actually on the page", async ({ page }) => {
   await signIn(page);
   await page.goto(`${BASE}/staff`);
   await page.getByRole("button", { name: /create a role/i }).waitFor({ timeout: 60_000 });
+  // The board fetches users, roles and jobs separately; wait for the real data
+  // rather than for the shell, or this screenshots a fading empty page.
+  await page.getByText(/Chef \/ kitchen/i).first().waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(1200);
 
   // 2 — "Create a role" is the FIRST card, not the last.
   const cards = page.locator("main li, main > div li");
@@ -157,7 +161,11 @@ test("the batch-3 fixes are actually on the page", async ({ page }) => {
   await sheet.getByText(/^No access$/).first().waitFor({ timeout: 60_000 });
   await page.waitForTimeout(800);
 
-  // 5a — every screen behind a switch is its own tick.
+  // 5a — every screen behind a switch is its own tick. Inventory's screens live
+  // in Stock & buying, so go there first; the whole point of the rail is that
+  // this is one click rather than a scroll.
+  await sheet.getByText("Stock & buying").first().click();
+  await page.waitForTimeout(600);
   await expect(sheet.getByRole("button", { name: "Stock-take" }).first()).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Waste" }).first()).toBeVisible();
 

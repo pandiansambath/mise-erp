@@ -122,3 +122,30 @@ that counts. The account was deleted afterwards — this runs against his real
 restaurant.
 
 **All twelve items are now ticked.**
+
+
+---
+
+## The regression I shipped, and what it cost
+
+Twenty minutes after 5a went live, a screenshot showed the OWNER's sidebar
+collapsed to Dashboard, How it works and Your plan.
+
+`canOpenPage` asked `levelOf(area, held)` before anything else. `levelOf` looks
+for an area's own permission strings; the owner holds the wildcard `*` and none
+of those, so every area came back "none" and the filter hid all of it.
+
+**The end-to-end test I had just written sailed straight past it.** It signs in
+as a probe account holding real permissions and real page grants — the one
+account it broke was the one I was signed in as. So the rule he gave me needs
+one more clause: being the manual tester is not enough if you only ever test as
+one kind of user. There is now a test asserting the owner keeps Inventory,
+Purchasing, Vendors, Recipes, Employees and Payroll in their own sidebar.
+
+Verified on the live build afterwards, by looking:
+
+- the sidebar is whole again
+- **Create a role** is the first card
+- board cards carry `.mise-card-inset`, no `.mise-card3d` left on the page
+- Stock-take and Waste are their own clickable ticks under Inventory
+- **People with this job → 2** opens onto manager@gmail.com and manager2@gmail.com
