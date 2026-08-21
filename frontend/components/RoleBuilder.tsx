@@ -378,30 +378,29 @@ export function RoleBuilder({
                   ? ["none", "view", "edit"]
                   : ["none", a.write.length ? "edit" : "view"];
               return (
-                <li
-                  key={a.key}
-                  className="mise-well flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2"
-                >
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                <li key={a.key} className="mise-well rounded-xl px-3 py-2.5">
+                  <span className="flex min-w-0 items-center gap-2">
                     <span aria-hidden className="shrink-0 text-base">
                       {a.icon}
                     </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium text-fg">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-medium leading-tight text-fg">
                         {a.label}
                       </span>
-                      <span className="block truncate text-[10px] text-fg-faint">
+                      <span className="block truncate text-[10px] leading-tight text-fg-faint">
                         {a.pages.join(" · ")}
                       </span>
                     </span>
                   </span>
-                  <ThreeWay
-                    label={a.label}
-                    area={a}
-                    value={lvl}
-                    options={opts}
-                    onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
-                  />
+                  <span className="mt-2 flex justify-end">
+                    <ThreeWay
+                      label={a.label}
+                      area={a}
+                      value={lvl}
+                      options={opts}
+                      onChange={(l) => setDraft((d) => ({ ...d, [a.key]: l }))}
+                    />
+                  </span>
                 </li>
               );
             })}
