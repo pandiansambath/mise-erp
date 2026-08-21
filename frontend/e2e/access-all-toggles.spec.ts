@@ -132,3 +132,38 @@ test("the standard job sheet got the same treatment as the others", async ({ pag
   await expect(sheet.getByText("Food safety").first()).toBeVisible();
   await expect(sheet.getByText("The assistant").first()).toBeVisible();
 });
+
+test("the batch-3 fixes are actually on the page", async ({ page }) => {
+  // Every one of these was a thing he pointed at in a screenshot, so each is
+  // checked by looking rather than by trusting the diff.
+  await signIn(page);
+  await page.goto(`${BASE}/staff`);
+  await page.getByRole("button", { name: /create a role/i }).waitFor({ timeout: 60_000 });
+
+  // 2 — "Create a role" is the FIRST card, not the last.
+  const cards = page.locator("main li, main > div li");
+  const firstText = await cards.first().innerText();
+  expect(firstText).toMatch(/create a role/i);
+
+  await page.screenshot({ path: "e2e/__screens__/batch3-board.png", fullPage: true });
+
+  // 7 — the board cards wear the popup's inset shadow now.
+  expect(await page.locator(".mise-card-inset").count()).toBeGreaterThan(0);
+  expect(await page.locator("main .mise-card3d").count()).toBe(0);
+
+  // open a job to check the popup itself
+  await page.getByText("Manager", { exact: false }).first().click();
+  const sheet = page.getByRole("dialog").last();
+  await sheet.getByText(/^No access$/).first().waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(800);
+
+  // 5a — every screen behind a switch is its own tick.
+  await expect(sheet.getByRole("button", { name: "Stock-take" }).first()).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Waste" }).first()).toBeVisible();
+
+  // 5b — the people count opens into names.
+  await sheet.getByRole("button", { name: /people with this job/i }).first().click();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: "e2e/__screens__/batch3-people.png", fullPage: true });
+  await expect(page.getByRole("dialog").last().getByText(/@/).first()).toBeVisible();
+});
