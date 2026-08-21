@@ -71,6 +71,7 @@ export function AccessSheet({
   const [mine, setMine] = useState<{ id: string; name: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, Level>>({});
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const confirm = useConfirm();
   const [err, setErr] = useState<string | null>(null);
 
@@ -213,7 +214,121 @@ export function AccessSheet({
     return { on: pages.size, all: ALL_PAGES.size };
   }, [envelope, draft, held]);
 
+  /** The full chooser, on demand. It is a question you ask occasionally, so it
+   *  does not sit above the switches taking a third of the popup. */
+  const picker =
+    picking && person ? (
+      <div
+        className="fixed inset-0 z-[80] flex items-end justify-center p-0 sm:items-center sm:p-6"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          className="mise-fade-in absolute inset-0 bg-black/50"
+          onClick={() => setPicking(false)}
+        />
+        <div className="mise-pop-lg relative w-full max-w-lg rounded-t-3xl border border-line bg-paper p-5 shadow-2xl shadow-black/60 sm:rounded-3xl">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-base font-semibold leading-tight text-fg">
+                What is {name}?
+              </p>
+              <p className="text-[11px] text-fg-faint">
+                It fills in what they reach. Nothing here is a limit.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPicking(false)}
+              aria-label="Close"
+              className="mise-press grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-faint hover:text-fg"
+            >
+              ✕
+            </button>
+          </div>
+
+          {mine.length > 0 && (
+            <>
+              <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-brand-300">
+                Roles you made
+              </p>
+              <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                {mine.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Put ${name} in "${r.name}"?`,
+                        message: `They get exactly what that role reaches, straight away. Whenever you edit "${r.name}" later, ${name} changes with it.`,
+                        confirmText: "Yes, do it",
+                      });
+                      if (!ok) return;
+                      setBusy(true);
+                      setErr(null);
+                      try {
+                        await api.put(`/roles/user/${person.id}/role`, { role_id: r.id });
+                        onSaved();
+                        onClose();
+                      } catch (ex) {
+                        setErr(ex instanceof ApiError ? ex.message : "Could not change their role.");
+                      } finally {
+                        setBusy(false);
+                        setPicking(false);
+                      }
+                    }}
+                    className={`mise-press rounded-xl border px-3 py-2 text-left transition ${
+                      person.custom_role_id === r.id
+                        ? "border-brand-400/60 bg-brand-400/10"
+                        : "border-line hover:border-brand-400/40"
+                    }`}
+                  >
+                    <span className="block text-[13px] font-medium text-fg">{r.name}</span>
+                    <span className="block text-[10px] text-fg-faint">a role you made</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+            {mine.length > 0 ? "Or a standard job" : "Their job"}
+          </p>
+          <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+            {arch
+              .filter((a) => !/kiosk/i.test(`${a.key} ${a.label}`))
+              .map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  onClick={() => {
+                    setJob(a.key);
+                    setDraft({});
+                    setPicking(false);
+                  }}
+                  className={`mise-press rounded-xl border px-3 py-2 text-left transition ${
+                    job === a.key && !person.custom_role_id
+                      ? "border-brand-400/60 bg-brand-400/10"
+                      : "border-line hover:border-brand-400/40"
+                  }`}
+                >
+                  <span className="block text-[13px] font-medium text-fg">
+                    {a.label.split("—")[0].trim()}
+                  </span>
+                  <span className="block text-[10px] text-fg-faint">
+                    {a.label.split("—")[1]?.trim() ?? ""}
+                  </span>
+                </button>
+              ))}
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   return (
+    <>
+      {picker}
     <AccessModal
       open={!!person}
       onClose={onClose}
@@ -237,118 +352,34 @@ export function AccessSheet({
         ) : (
           <>
             {err && (
-              <p className="mb-3 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
+              <p className="mb-2 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
                 {err}
               </p>
             )}
-          {/* WHAT IS THIS PERSON? One list, one question.
-              "I checked for my custom role to give to this person, but not
-               showing."
-              It was there — buried under five job cards, in a second box, below
-              the fold. Two lists answering the same question is one list too
-              many: the hotel's own roles belong beside ours, because from where
-              he is standing "Till" and "super master" are the same kind of
-              thing. */}
-          <div className="mise-card3d mb-4 p-3.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-              What is this person?
-            </p>
-            <p className="mt-1 text-[11px] leading-relaxed text-fg-soft">
-              Pick the job or the role they do. It fills in what they reach — you can change any
-              of it below, and nothing here is a limit.
-            </p>
-
-            {mine.length > 0 && (
-              <>
-                <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-brand-300">
-                  Roles you made
-                </p>
-                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                  {mine.map((r) => {
-                    const on = person?.custom_role_id === r.id;
-                    return (
-                      <button
-                        key={r.id}
-                        type="button"
-                        disabled={busy}
-                        onClick={async () => {
-                          if (!person) return;
-                          // Putting somebody in a role takes effect at once —
-                          // there is no save button behind it to change your
-                          // mind at.
-                          const ok = await confirm({
-                            title: `Put ${name} in "${r.name}"?`,
-                            message: `They get exactly what that role reaches, and it changes for them straight away. Whenever you edit "${r.name}" later, ${name} changes with it.`,
-                            confirmText: "Yes, do it",
-                          });
-                          if (!ok) return;
-                          setBusy(true);
-                          setErr(null);
-                          try {
-                            await api.put(`/roles/user/${person.id}/role`, { role_id: r.id });
-                            onSaved();
-                            onClose();
-                          } catch (ex) {
-                            setErr(
-                              ex instanceof ApiError ? ex.message : "Could not change their role.",
-                            );
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                        className={`mise-press rounded-xl border px-3 py-2.5 text-left transition ${
-                          on
-                            ? "border-brand-400/60 bg-brand-400/10"
-                            : "border-line hover:border-brand-400/40"
-                        }`}
-                      >
-                        <span className="block text-sm font-medium text-fg">{r.name}</span>
-                        <span className="block text-[11px] text-fg-faint">
-                          {on ? "they are in this role" : "a role you made"}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
-              {mine.length > 0 ? "Or a standard job" : "Their job"}
-            </p>
-            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-              {arch
-                .filter((a) => !/kiosk/i.test(`${a.key} ${a.label}`))
-                .map((a) => {
-                  const on = job === a.key && !person?.custom_role_id;
-                  return (
-                    <button
-                      key={a.key}
-                      type="button"
-                      onClick={() => { setJob(a.key); setDraft({}); }}
-                      className={`mise-press rounded-xl border px-3 py-2.5 text-left transition ${
-                        on
-                          ? "border-brand-400/60 bg-brand-400/10"
-                          : "border-line hover:border-brand-400/40"
-                      }`}
-                    >
-                      <span className="block text-sm font-medium text-fg">
-                        {a.label.split("—")[0].trim()}
-                      </span>
-                      <span className="block text-[11px] text-fg-faint">
-                        {a.label.split("—")[1]?.trim() ?? ""}
-                      </span>
-                    </button>
-                  );
-                })}
+            {/* ONE LINE, NOT A WALL.
+                "even for 4 cards we need to scroll?"
+                This was the reason. The chooser listed every role and every job
+                as its own card — eight buttons, four rows deep — directly above
+                the switches, so the switches started halfway down the popup and
+                had to scroll to be reached. What somebody IS takes one line;
+                changing it is a question you ask occasionally, so it opens on
+                demand instead of sitting there all the time. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-fg-faint">They are</span>
+              <span className="mise-well rounded-lg px-2.5 py-1 text-[13px] font-medium text-fg">
+                {mine.find((r) => r.id === person?.custom_role_id)?.name ?? jobLabel}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPicking(true)}
+                className="mise-press rounded-lg border border-line px-2.5 py-1 text-[11px] font-medium text-fg-soft hover:border-brand-400/50"
+              >
+                Change
+              </button>
+              <span className="text-[10px] text-fg-faint">
+                — or set their switches below, just for them
+              </span>
             </div>
-            {job !== person?.role && (
-              <p className="mise-tone-warn mt-2 text-[11px]">
-                Changing their job resets the switches below to that job&apos;s normal access.
-              </p>
-            )}
-
-          </div>
           </>
         )
       }
@@ -392,5 +423,6 @@ export function AccessSheet({
         )
       }
     />
+    </>
   );
 }

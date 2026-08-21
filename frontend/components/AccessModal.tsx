@@ -336,7 +336,7 @@ export function AccessModal({
         className="mise-fade-in absolute inset-0 bg-black/60 backdrop-blur-[3px]"
         onClick={onClose}
       />
-      <div className="mise-pop-lg relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-line bg-paper shadow-2xl shadow-black/60 sm:max-w-5xl sm:rounded-3xl">
+      <div className="mise-pop-lg relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-line bg-paper shadow-2xl shadow-black/60 sm:max-w-6xl sm:rounded-3xl">
         <div aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-fg/15 sm:hidden" />
 
         <header className="flex shrink-0 items-center gap-3 border-b border-line bg-gradient-to-r from-brand-500/10 via-transparent to-transparent px-5 py-3.5">
@@ -394,10 +394,10 @@ export function AccessModal({
         {/* The only part that may ever scroll is what the CALLER puts here —
             a name field, the who-is-this chooser. The switches below never do. */}
         {(lead || intro || banner) && (
-          <div className="max-h-[34dvh] shrink-0 overflow-y-auto border-b border-line px-5 py-3">
+          <div className="shrink-0 border-b border-line px-5 py-2.5">
             {lead}
             {intro && (
-              <p className="rounded-xl border border-line bg-paper-2/50 px-3.5 py-2.5 text-[11px] leading-relaxed text-fg-soft">
+              <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-fg-faint" title="">
                 {intro}
               </p>
             )}
@@ -428,8 +428,14 @@ export function AccessModal({
             straight through the footer instead of being contained. The footer is
             opaque, so it read as something laid on top. Each pane is bounded now,
             and the rail can never be covered. */}
-        <div className="grid min-h-0 flex-1 overflow-hidden sm:grid-cols-[13.5rem_1fr]">
-          <nav className="flex min-h-0 gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r">
+        <div className="grid flex-1 sm:grid-cols-[13rem_1fr]">
+          {/* FIVE ITEMS DO NOT SCROLL.
+              "just 4 cards we having — even for this also we need to scroll?"
+              They did, because the block above was eating the height and both
+              panes had been given their own scrollbar as a safety net. The net
+              became the behaviour. Nothing here scrolls now; the modal is wider
+              and everything above is one line tall. */}
+          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r">
             {SECTIONS.map((s) => {
               const on = s.key === group;
               const live = s.areas.filter((a) => current(a) !== "none").length;
@@ -458,7 +464,7 @@ export function AccessModal({
             })}
           </nav>
 
-          <div className="min-h-0 overflow-y-auto p-3">
+          <div className="min-w-0 flex-1 p-3">
             <div className="mb-2 flex items-center gap-2 px-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
                 {sec.label}
@@ -478,14 +484,14 @@ export function AccessModal({
                 none
               </button>
             </div>
-            <ul className="grid gap-1.5 lg:grid-cols-2">
+            <ul className="grid gap-1.5 sm:grid-cols-2">
               {sec.areas.map((a) => {
                 const opts: Level[] =
                   a.read.length && a.write.length
                     ? ["none", "view", "edit"]
                     : ["none", a.write.length ? "edit" : "view"];
                 return (
-                  <li key={a.key} className="mise-well rounded-xl px-3 py-2.5">
+                  <li key={a.key} className="mise-well rounded-xl px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2">
                       <span aria-hidden className="shrink-0 text-base">
                         {a.icon}
@@ -550,7 +556,7 @@ export function AccessModal({
                         )}
                       </span>
                     </span>
-                    <span className="mt-2 flex justify-end">
+                    <span className="mt-1.5 flex justify-end">
                       <ThreeWay
                         area={a}
                         value={current(a)}
