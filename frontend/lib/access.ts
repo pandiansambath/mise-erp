@@ -284,7 +284,6 @@ export const ALL_PAGES: PageRef[] = SECTIONS.flatMap((s) =>
  * this only ever takes screens away.
  */
 export function pageAllowed(area: Area, page: PageRef, held: Set<string>): boolean {
-  if (levelOf(area, held) === "none") return false;
   const narrowed = area.pages.some((pg) => held.has(`page:${pg.slug}`));
   return !narrowed || held.has(`page:${page.slug}`);
 }
@@ -298,9 +297,23 @@ export function areaForHref(href: string): Area | null {
 
 /** Can this person open this URL? Used by the nav and by each page. */
 export function canOpenPage(href: string, held: Set<string>): boolean {
+  // THE OWNER HELD "*" AND LOST THE WHOLE SIDEBAR.
+  //
+  // The first version of this asked `levelOf(area, held)` before anything else,
+  // and `levelOf` looks for the area's own permission strings. The owner holds
+  // the wildcard `*` and none of those, so every area came back "none" and the
+  // filter hid all of it. My end-to-end test passed straight through it,
+  // because the probe account held real permissions and page grants — the one
+  // account it broke was the one I was signed in as.
+  //
+  // So this now does ONE job and only that job: if some pages in this area have
+  // been shortlisted, show the shortlisted ones. Whether they may reach the area
+  // at all is the permission check's business, and it has already run.
+  if (held.has("*")) return true;
   const area = areaForHref(href);
-  if (!area) return true; // Dashboard, How it works - never gated
-  const page = area.pages.find((p) => p.href === href)!;
+  if (!area) return true; // Dashboard, How it works — never gated
+  const page = area.pages.find((p) => p.href === href);
+  if (!page) return true;
   return pageAllowed(area, page, held);
 }
 

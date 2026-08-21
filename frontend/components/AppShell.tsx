@@ -710,7 +710,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       (!item.perm || can(user?.role, item.perm)) &&
       (!item.hideIfPerm || !can(user?.role, item.hideIfPerm)) &&
       (!item.feature || featureOn(hotel, item.feature)) &&
-      (held.size === 0 || canOpenPage(item.href, held))
+      canOpenPage(item.href, held)
   );
 
   return (
