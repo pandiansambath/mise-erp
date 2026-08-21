@@ -66,6 +66,9 @@ test("invent a Poori Master and give it what it needs", async ({ page }) => {
 
   const recipes = sheet.locator("li").filter({ hasText: "Recipes & dishes" }).first();
   await recipes.getByText("Can change").click();
+  // Single switches ask now too — moving somebody from one level to another is
+  // a decision about a person, so it is confirmed the way a person would.
+  await page.getByRole("button", { name: /^set to "can change"$/i }).first().click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: "e2e/__screens__/role-builder.png", fullPage: true });
 

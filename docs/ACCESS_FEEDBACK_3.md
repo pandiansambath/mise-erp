@@ -149,3 +149,43 @@ Verified on the live build afterwards, by looking:
 - board cards carry `.mise-card-inset`, no `.mise-card3d` left on the page
 - Stock-take and Waste are their own clickable ticks under Inventory
 - **People with this job → 2** opens onto manager@gmail.com and manager2@gmail.com
+
+
+---
+
+# Batch 4 — 21 Aug, evening
+
+| # | What he said | Status |
+|---|---|---|
+| 13 | "just 4 cards — even for this we need to scroll?" (both panes, top and bottom) | ✅ nothing inside the popup scrolls |
+| 14 | "why do we have both in the same popup — please split them so we get some place" | ✅ role choice is its own popup |
+| 15 | "moving a toggle from Can change to No access has no confirmation" | ✅ every switch asks, with details |
+| 16 | "I love that in-place cross mark idea, but confirm before doing something" | ✅ page ticks ask too |
+
+## 13 + 14 · The scrolling was never about the cards
+
+Five rail items and four cards were scrolling because of what sat ABOVE them:
+the chooser listed every role and every job as its own card — eight buttons,
+four rows deep — permanently between the header and the switches. So the
+switches began halfway down and had to be scrolled to. Both panes also had
+`overflow-y-auto` as a safety net, and the net became the behaviour.
+
+What somebody IS now takes one line — "They are **Accounts** · Change" — and the
+full chooser opens on demand in its own popup. That is his split, and with it
+gone nothing inside scrolls: the rail is `overflow-visible` and the detail pane
+has no scrollbar at all.
+
+**The lesson this page keeps teaching:** when something needs to scroll, look at
+what is above it before making the thing itself smaller.
+
+## 15 + 16 · One switch asks too
+
+I had guarded only the bulk buttons, reasoning that a single switch is one
+visible thing that undoes itself by being tapped again. He is looking at it as
+the owner rather than the author: moving somebody from "can change" to "no
+access" is a decision about a PERSON.
+
+It asks now, and because it interrupts it earns the interruption — what the
+level means, which pages it touches, and that nothing saves until save. The page
+ticks ask too, and theirs makes the narrow point explicitly: hiding one screen
+does not change what they may touch.
