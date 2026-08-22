@@ -434,6 +434,27 @@ export function AccessModal({
                   <p className="font-display text-base font-semibold leading-tight text-fg">
                     {s.value}
                   </p>
+                  {/* 18 — "you can make it better to look, it looks simple now."
+                      A bar under the number turns two digits into a SHAPE: how
+                      much of the app this person reaches, readable at a glance
+                      without doing the arithmetic. */}
+                  {/^\d+ of \d+$/.test(s.value) && (
+                    <span
+                      aria-hidden
+                      className="mt-1 block h-1 w-16 overflow-hidden rounded-full bg-fg/10"
+                    >
+                      <span
+                        className="block h-full rounded-full bg-brand-500 transition-all duration-500"
+                        style={{
+                          width: `${
+                            (Number(s.value.split(" of ")[0]) /
+                              Math.max(1, Number(s.value.split(" of ")[1]))) *
+                            100
+                          }%`,
+                        }}
+                      />
+                    </span>
+                  )}
                 </div>
               ),
             )}
@@ -537,6 +558,19 @@ export function AccessModal({
                     >
                       {live} of {s.areas.length} on
                     </span>
+                    <span
+                      aria-hidden
+                      className={`mt-1 block h-0.5 overflow-hidden rounded-full ${
+                        on ? "bg-white/25" : "bg-fg/10"
+                      }`}
+                    >
+                      <span
+                        className={`block h-full rounded-full transition-all duration-500 ${
+                          on ? "bg-white" : "bg-brand-500"
+                        }`}
+                        style={{ width: `${(live / s.areas.length) * 100}%` }}
+                      />
+                    </span>
                   </span>
                 </button>
               );
@@ -579,7 +613,24 @@ export function AccessModal({
                     ? ["none", "view", "edit"]
                     : ["none", a.write.length ? "edit" : "view"];
                 return (
-                  <li key={a.key} className="mise-well rounded-xl px-3 py-2">
+                  <li
+                    key={a.key}
+                    className={`mise-well relative overflow-hidden rounded-xl px-3 py-2 transition ${
+                      current(a) === "none" ? "opacity-70" : ""
+                    }`}
+                  >
+                    {/* A hairline down the left edge: on at a glance, without
+                        reading three button labels to find out. */}
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-0.5 transition ${
+                        current(a) === "edit"
+                          ? "bg-brand-500"
+                          : current(a) === "view"
+                            ? "bg-brand-500/40"
+                            : "bg-transparent"
+                      }`}
+                    />
                     <span className="flex min-w-0 items-center gap-2">
                       <span aria-hidden className="shrink-0 text-base">
                         {a.icon}

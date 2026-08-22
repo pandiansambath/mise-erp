@@ -5,7 +5,7 @@ Grow/shrink signed off ("perfect now"). Everything below is what came next.
 | # | What he said | Status |
 |---|---|---|
 | 17 | "the last 2 cards is hitting bottom… last category I can't click" | ✅ rail can scroll as a last resort; Dashboard note moved out of the cards |
-| 18 | "this popup UI you can make better to look — it looks simple now" | ⬜ |
+| 18 | "this popup UI you can make better to look — it looks simple now" | ✅ reach bars, live group meters, an on/off hairline |
 | 19 | "while adding new login… make this a POPUP instead of in-place" | ✅ `AddLoginModal` |
 | 20 | "'What are they?' — why the word they?" | ✅ "What is this person?" |
 | 21 | **Bulk import** via template + preview + one click | ✅ download, upload, preview table, confirm |
@@ -51,3 +51,16 @@ The toolbar already carries By job · By person · search · Add a login. Four
 controls is the limit before it reads as a cockpit, so the new ways to add
 people belong **inside** the add-login popup as its three routes — one at a
 time, one on screen — rather than three more buttons on the page.
+
+
+## 18 · What "make it better" turned into
+
+Not decoration — three places where a number was making him do arithmetic:
+
+- **The header stat gets a bar.** "28 of 33" is two digits; the bar under it is a
+  shape, so how much of the app somebody reaches reads at a glance.
+- **Each group in the rail gets a hairline meter.** The list now says how full
+  every group is without being opened.
+- **A switched-on card carries a left edge**: solid for "can change", faded for
+  "can see", nothing for off — so a group's state reads without parsing three
+  button labels per row.
