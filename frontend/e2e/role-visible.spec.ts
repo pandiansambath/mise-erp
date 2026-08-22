@@ -57,13 +57,17 @@ test("a role you made can be given to a person", async ({ page }) => {
   const sheet = page.getByRole("dialog").last();
   // What somebody IS is one line now — the full chooser was costing a third of
   // the popup and pushing the switches out of reach, so it opens on demand.
-  await sheet.getByText(/they are/i).waitFor({ timeout: 60_000 });
+  // Exact: the Dashboard note further down also contains "they are".
+  await sheet.getByText("They are", { exact: true }).waitFor({ timeout: 60_000 });
   await page.waitForTimeout(900);
   await page.screenshot({ path: "e2e/__screens__/role-in-person.png", fullPage: true });
 
   await sheet.getByRole("button", { name: /^change$/i }).first().click();
   await page.waitForTimeout(700);
-  const picker = page.getByRole("dialog").last();
+  // The picker renders INLINE while the access modal is portalled to <body>,
+  // so `.last()` reaches the modal, not the picker. Find it by what it says.
+  const picker = page.getByRole("dialog").filter({ hasText: "Roles you made" }).first();
+  await picker.waitFor({ timeout: 30_000 });
   const text = await picker.innerText();
   // Both halves of the ONE chooser, in its own popup.
   expect(text).toMatch(/roles you made/i);
