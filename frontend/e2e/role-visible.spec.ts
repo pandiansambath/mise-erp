@@ -55,18 +55,26 @@ test("a role you made can be given to a person", async ({ page }) => {
   // Open somebody who is not the owner.
   await page.getByText(/cashier@|manager@|accountant@/i).first().click();
   const sheet = page.getByRole("dialog").last();
-  await sheet.getByText(/what is this person/i).waitFor({ timeout: 60_000 });
+  // What somebody IS is one line now — the full chooser was costing a third of
+  // the popup and pushing the switches out of reach, so it opens on demand.
+  await sheet.getByText(/they are/i).waitFor({ timeout: 60_000 });
   await page.waitForTimeout(900);
   await page.screenshot({ path: "e2e/__screens__/role-in-person.png", fullPage: true });
 
-  const text = await sheet.innerText();
-  // Both halves of the ONE chooser.
+  await sheet.getByRole("button", { name: /^change$/i }).first().click();
+  await page.waitForTimeout(700);
+  const picker = page.getByRole("dialog").last();
+  const text = await picker.innerText();
+  // Both halves of the ONE chooser, in its own popup.
   expect(text).toMatch(/roles you made/i);
   expect(text).toMatch(/or a standard job/i);
+  await picker.getByRole("button", { name: "Close" }).first().click();
+  await page.waitForTimeout(400);
   // And the bulk control he asked for.
-  expect(text).toMatch(/give everything/i);
+  const sheetText = await sheet.innerText();
+  expect(sheetText).toMatch(/give everything/i);
   // The ceiling-era promise is gone.
-  expect(text).not.toMatch(/never past what the job should ever reach/i);
+  expect(sheetText).not.toMatch(/never past what the job should ever reach/i);
 });
 
 test("give everything actually gives everything", async ({ page }) => {

@@ -1946,7 +1946,10 @@ input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
    fading before it finishes moving, which reads as clean rather than as a
    fade that trails the motion. */
 :root {
-  --bench-ms: 280ms;
+  /* 280ms read as a snap — "that transition is not smooth when scrolling,
+     it's like very fast". Long enough to follow, short enough not to lag
+     behind the scroll that caused it. */
+  --bench-ms: 420ms;
   --bench-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --bench-fade: 180ms;
 }
@@ -2810,7 +2813,9 @@ body[data-overlay] .mise-launcher-in {
      stopped well short of the edge and parked the row right next to the title.
      That is the tightness: not the size, the distance. Now it goes exactly as
      far as there is room for, measured off the rail itself. */
-  transform: translateY(-2.6rem) scale(0.9);
+  /* 43px, measured off the live page: the gap between the button's centre
+     and the title's centre when condensed. Not a guess this time. */
+  transform: translateY(-2.7rem) scale(0.9);
   transform-origin: right center;
 }
 
