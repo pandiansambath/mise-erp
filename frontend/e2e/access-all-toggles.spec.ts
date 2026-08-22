@@ -267,6 +267,16 @@ test("the toolbar actually moves right when the rail condenses", async ({ page }
       return Math.round(b.left - r.left);
     });
 
+  // ESTABLISH THE STARTING STATE. Run on its own this passed; run after the
+  // other specs it compared 592 to 592, because the rail was ALREADY condensed
+  // when the "before" reading was taken. A measurement is only a comparison if
+  // you know where you started.
+  await page.evaluate(() => {
+    const main = document.querySelector("main");
+    if (main) main.scrollTop = 0;
+  });
+  await page.waitForTimeout(900);
+  expect(await rail.getAttribute("data-condensed"), "did not start expanded").not.toBe("true");
   const before = await firstButtonLeft();
 
   await page.evaluate(() => {
@@ -298,4 +308,25 @@ test("the toolbar actually moves right when the rail condenses", async ({ page }
     return Math.round(r.bottom - b.bottom);
   });
   expect(floor, `only ${floor}px between the buttons and the rail's edge`).toBeGreaterThan(4);
+
+  // ...and they sit ON THE TITLE'S LINE.
+  //
+  //   "can you see that word heading — ROLES & ACCESS? Why can't you keep this
+  //    as a measurement and keep our buttons straight to that, so they will be
+  //    in a straight line when in shrink mode."
+  //
+  // He is describing the measurement I should have taken from the start. It was
+  // 43px out: the buttons had their own row below the heading.
+  const drift = await page.evaluate(() => {
+    const t = document.querySelector(".mise-bench-title")!.getBoundingClientRect();
+    const b = document
+      .querySelector(".mise-bench-tools")!
+      .querySelector("button")!
+      .getBoundingClientRect();
+    return Math.round(b.top + b.height / 2 - (t.top + t.height / 2));
+  });
+  expect(
+    Math.abs(drift),
+    `buttons are ${drift}px off the heading's line`,
+  ).toBeLessThanOrEqual(10);
 });

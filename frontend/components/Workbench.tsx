@@ -129,17 +129,25 @@ export function Workbench({
     const measure = () => {
       const box = el.querySelector<HTMLElement>(".mise-bench-tools");
       if (!box) return;
-      // TALL **or** WIDE. Tucking slides the tools up beside the title, which
-      // needs room in BOTH directions — and I only checked one. A single row of
-      // search-plus-three-buttons is short enough to tuck and far too wide to
-      // fit, so it slid up and ran straight off the right-hand edge: "the side
-      // top buttons are hidden".
+      // TALL means TALL now — genuinely two rows of controls, which cannot sit
+      // on the title's line whatever you do with it.
       //
-      // Anything that would need more than half the rail's width has nowhere to
-      // go beside a title, so it condenses in place instead.
+      // It used to mean "tall OR wide", because a wide row tucked up beside the
+      // title used to run off the right-hand edge. That is no longer true: the
+      // condensed row gives up its search box's stretch and justifies its
+      // content to the end, so a one-row toolbar now FITS beside the title
+      // however wide it started.
+      //
+      // Lumping the two together is what left Roles & Access with its buttons
+      // on a line of their own, 43px below the heading — "why can't you keep
+      // this as a measurement and keep our buttons straight to that". Measured,
+      // and now they share the line.
       const tall = box.offsetHeight > 62;
       const wide = box.scrollWidth > el.clientWidth * 0.52;
-      el.setAttribute("data-tall", tall || wide ? "true" : "false");
+      // `wide` is still measured because a genuinely wide AND tall row is the
+      // case that has nowhere to go; width alone no longer disqualifies a tuck.
+      el.setAttribute("data-tall", tall ? "true" : "false");
+      el.setAttribute("data-wide", wide ? "true" : "false");
     };
     measure();
     const ro = new ResizeObserver(measure);
