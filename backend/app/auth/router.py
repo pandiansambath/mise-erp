@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -431,6 +432,91 @@ async def update_user(
         clear_custom_role=payload.clear_custom_role,
     )
     return UserOut.model_validate(user)
+
+
+class DraftFromText(BaseModel):
+    """Whatever he typed, plus the names of roles this hotel has invented."""
+
+    text: str = Field(min_length=3, max_length=6000)
+    roles: list[str] = Field(default_factory=list)
+
+
+@router.post("/users/draft-from-text")
+async def draft_users_from_text(
+    payload: DraftFromText,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("users:write")),
+) -> dict:
+    """Read a plain-English list of people into rows to CHECK, never to create.
+
+        "suppose they won't wish to use our template - owner can use our Sonnet
+         AI to add. No need template excel and all, just typing in normal
+         English. Anyway our AI will ask follow-up questions."
+
+    Nothing is written here. The reply is a table the owner reads and confirms,
+    which is the only sane way to make a hundred logins: the model is good at
+    turning "Arun and Meena as chefs, Priya on the till" into rows, and nobody
+    should trust it with somebody's access without looking.
+
+    If something is missing it says so in `question` rather than inventing an
+    email address - a made-up address is a login nobody can use and an invite
+    that lands on a stranger.
+    """
+    from app.assistant import bedrock, guard
+
+    await guard.enforce(db, user, "chat", feature="ai_assistant")
+
+    known = ", ".join(payload.roles) if payload.roles else "none yet"
+    system = (
+        "You turn a restaurant owner's description of their staff into rows for "
+        "creating logins. Reply with JSON only, no prose:\n"
+        '{"rows":[{"name":string,"email":string,"password":string,"role":string}],'
+        '"question":string|null}\n\n'
+        "Rules:\n"
+        "- NEVER invent an email address. If one is missing or only a pattern was "
+        'given (\"firstname@nirai.com\"), APPLY the pattern; if there is no '
+        "pattern, leave email empty and say so in `question`.\n"
+        "- If no password was given, make one that is easy to read aloud and at "
+        "least 8 characters - they will be handed to a person, not typed by a "
+        "machine.\n"
+        f"- `role` must be one of this hotel's own roles ({known}) or one of: "
+        "Manager, Kitchen Manager, Accountant, Cashier, Staff. Use the closest "
+        "match to what they said; if it is genuinely unclear, use Staff and ask.\n"
+        "- `question` is what you still need, in one short sentence, or null."
+    )
+    meter: dict = {}
+    try:
+        raw = await run_in_threadpool(
+            bedrock.ask,
+            payload.text,
+            hotel_name="this restaurant",
+            system_extra=system,
+            meter=meter,
+            model=await guard.model_for(db, user),
+        )
+    except Exception as exc:  # noqa: BLE001 - the owner gets a sentence, not a trace
+        log.exception("draft-from-text failed")
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "The assistant could not read that just now.",
+        ) from exc
+
+    data = bedrock._json_from(raw) or {}
+    rows = data.get("rows") or []
+    return {
+        "rows": [
+            {
+                "name": (r.get("name") or "").strip(),
+                "email": (r.get("email") or "").strip(),
+                "password": (r.get("password") or "").strip(),
+                "role": (r.get("role") or "Staff").strip(),
+            }
+            for r in rows
+            if isinstance(r, dict)
+        ][:200],
+        "question": data.get("question"),
+        "note": f"Read {len(rows)} {'person' if len(rows) == 1 else 'people'} from what you wrote.",
+    }
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)

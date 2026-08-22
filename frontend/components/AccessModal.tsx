@@ -507,7 +507,14 @@ export function AccessModal({
               panes had been given their own scrollbar as a safety net. The net
               became the behaviour. Nothing here scrolls now; the modal is wider
               and everything above is one line tall. */}
-          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r">
+          {/* 17 — "the left corner categories, last category I can't click."
+              The rail was `overflow-visible` so it would never scroll. When the
+              space runs short that does not keep it whole, it CLIPS it: the last
+              item is still there, still laid out, and simply unreachable. A
+              scrollbar you never see beats a category you cannot click, so it
+              gets one as a last resort — five items fit, and on the day they do
+              not, they are reachable instead of gone. */}
+          <nav className="flex min-h-0 shrink-0 gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r">
             {SECTIONS.map((s) => {
               const on = s.key === group;
               const live = s.areas.filter((a) => current(a) !== "none").length;
@@ -534,15 +541,18 @@ export function AccessModal({
                 </button>
               );
             })}
+            {/* Where the ungated pages get their explanation — at the foot of
+                the list of groups, which is what it is about, instead of a
+                full-width block above the cards eating the height that was
+                running out. */}
+            <p className="mt-auto hidden px-2 pt-3 text-[10px] leading-relaxed text-fg-faint sm:block">
+              <b>Dashboard</b> and <b>How it works</b> are not switchable — everyone lands
+              there after signing in.
+            </p>
           </nav>
 
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
-            {sec.key === SECTIONS[0].key && (
-              <p className="mb-2 rounded-lg border border-line bg-paper-2/40 px-2.5 py-1.5 text-[10px] leading-relaxed text-fg-faint">
-                <b>Dashboard</b> and <b>How it works</b> are not switchable — they are where
-                everyone lands after signing in, so nobody can be left with nowhere to go.
-              </p>
-            )}
+
             <div className="mb-2 flex items-center gap-2 px-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
                 {sec.label}
