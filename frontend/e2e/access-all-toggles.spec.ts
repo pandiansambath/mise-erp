@@ -283,9 +283,15 @@ test("the toolbar actually moves right when the rail condenses", async ({ page }
     const main = document.querySelector("main");
     if (main) main.scrollTop = 600;
   });
-  await page.waitForTimeout(1500);
 
-  expect(await rail.getAttribute("data-condensed"), "the rail never condensed").toBe("true");
+  // WAIT FOR THE STATE, NOT FOR A DURATION. A fixed 1500ms wait passed until
+  // the transition slowed from 280ms to 420ms and then started racing it —
+  // which reads as "the rail never condensed" when the rail was condensing
+  // perfectly well, just not by the time I looked.
+  await expect
+    .poll(async () => rail.getAttribute("data-condensed"), { timeout: 20_000 })
+    .toBe("true");
+  await page.waitForTimeout(700); // let the move finish before measuring it
   const after = await firstButtonLeft();
   await page.screenshot({ path: "e2e/__screens__/toolbar-condensed.png" });
 
