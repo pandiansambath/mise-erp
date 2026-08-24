@@ -18,6 +18,49 @@
 > this decision: **Polly has neither.** The day he wants a Madurai kitchen
 > talking to it in Tamil, this page is the plan again.
 
+## What shipped, and where the latency went
+
+**The browser hears, Claude thinks, Polly speaks.** Web Speech API for the ears,
+Claude Sonnet on Bedrock for the brain, Amazon Polly (eu-west-2) for the mouth.
+
+**Sonnet, not Haiku.** I proposed dropping to Haiku for latency and he rejected
+it: *"are u sure u going to use haiku? is this capable enough to handle the
+datas actions etc? we should not compromise in the intelligence."* He was right
+— there was an accuracy complaint open at the same moment, and a weaker model
+would have made it worse. Every millisecond since has come out of the ORDER OF
+OPERATIONS instead, and none out of the brain.
+
+Measured on the live box, not estimated:
+
+| | Before | After |
+|---|---|---|
+| Round trips | 2, in series | 1 |
+| Text on screen | ~5.4s, nothing until the whole turn finished | streams as written |
+| First sound | ~7.8s | first sentence, as soon as the answer is known |
+| Polly engine | generative, 2.39s | neural, 0.93s |
+
+Three changes:
+
+1. **One endpoint.** `/voice/stream` sends text, page actions and audio as each
+   becomes true, instead of `/voice/turn` and then `/voice/speak`.
+2. **Sentence-at-a-time speech.** The reply is cut at sentence boundaries, so
+   the first sentence plays while the rest is still being synthesised. The
+   splitter refuses to cut on the dot in "1.5 kg".
+3. **Drafts, and the distinction that makes them safe.** Fragments reach the
+   SCREEN as they arrive, but nothing is SPOKEN until the lap is confirmed to be
+   the answer rather than the model thinking out loud on its way to a tool call.
+   A dropped draft becomes an honest status line instead of a half-answer that
+   vanishes. `brain.generate_stream(live=True)`.
+
+**The microphone stays open.** *"once it is turned on it needs to be live always
+until they close the site."* `continuous` was `false`, which is exactly why it
+answered half a sentence. The turn now ends when HE stops talking — every result
+resets a 1.3s silence timer — and the session restarts itself when Chrome drops
+it. It ignores the room while it is speaking, or it transcribes its own voice
+off the speakers and answers itself.
+
+---
+
 ## The decision at the time: **Gemini Live API**
 
 `gemini-2.5-flash-native-audio` (or `gemini-3.1-flash-live-preview`)
