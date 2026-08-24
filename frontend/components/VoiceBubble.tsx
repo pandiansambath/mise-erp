@@ -169,6 +169,7 @@ export function VoiceBubble() {
     async (text: string) => {
       if (!text.trim()) return;
       setPhase("speaking");
+      let tick: number | null = null;
       try {
         const res = await fetch(`${API_BASE}/api/assistant/voice/speak`, {
           method: "POST",
@@ -184,17 +185,25 @@ export function VoiceBubble() {
         audioRef.current = a;
         // The ring breathes with the speech. Without a real analyser this is a
         // gentle simulation, which is honest enough: it says "still talking".
-        const tick = window.setInterval(() => setLevel(0.35 + Math.random() * 0.5), 110);
+        tick = window.setInterval(() => setLevel(0.35 + Math.random() * 0.5), 110);
         const done = () => {
-          window.clearInterval(tick);
+          if (tick) window.clearInterval(tick);
+          tick = null;
           setLevel(0);
           setPhase("idle");
           URL.revokeObjectURL(url);
         };
         a.onended = done;
         a.onerror = done;
+        // play() REJECTS when a browser refuses autoplay.
         await a.play();
       } catch {
+        // On success `done` clears the ticker when playback ends. Only the
+        // failure path has to clean up here, and it must: a rejected play()
+        // otherwise left the ring pulsing for the life of the page, for audio
+        // that was never going to arrive.
+        if (tick) window.clearInterval(tick);
+        setLevel(0);
         setPhase("idle");
       }
     },
