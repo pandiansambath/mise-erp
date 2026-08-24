@@ -177,8 +177,8 @@ function Bubble({
           </div>
         ))}
       <div
-        className={`max-w-[min(46rem,86%)] rounded-2xl ${
-          tight ? "p-2" : "px-4.5 py-3.5"
+        className={`max-w-[min(48rem,84%)] rounded-2xl ${
+          tight ? "p-2" : "px-5 py-4"
         } text-[15px] leading-[1.65] ${
           mine
             ? "mise-press rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20"
@@ -634,7 +634,7 @@ export default function AiScanPage() {
   }
 
   return (
-    <div className="mise-page-grow mx-auto -mb-28 flex h-[calc(100dvh-12rem)] max-w-3xl flex-col lg:h-[calc(100dvh-7rem)]">
+    <div className="mise-page-grow mx-auto -mb-28 flex h-[calc(100dvh-12rem)] max-w-5xl flex-col lg:h-[calc(100dvh-7rem)]">
       <style>{`
         @keyframes aiRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         .ai-rise { animation: aiRise .32s cubic-bezier(.22,1,.36,1) both; }
@@ -645,8 +645,15 @@ export default function AiScanPage() {
       {/* Header modelled on the recipe sheet: an identity block, a progress
           RING, and stat tiles with big legible numbers. The old version buried
           the same facts in 11px grey text nobody reads. */}
-      <header className="mise-neo-raised mb-3 rounded-2xl px-4 py-3">
-        <div className="flex items-center gap-3">
+      <header className="mise-neo-raised relative mb-4 overflow-hidden rounded-3xl px-5 py-4">
+        {/* The same aurora as the voice bubble - one assistant, heard or read. */}
+        <span aria-hidden className="mise-aurora" data-phase="idle">
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        <div className="relative flex items-center gap-3">
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-sky-400 text-lg text-white shadow-lg shadow-brand-500/25">
             ✦
           </div>
@@ -786,7 +793,7 @@ export default function AiScanPage() {
       )}
 
       {/* the thread */}
-      <div className="mise-glass flex-1 space-y-5 overflow-y-auto rounded-2xl p-5 sm:p-6">
+      <div className="mise-glass flex-1 space-y-6 overflow-y-auto rounded-3xl p-6 sm:p-8">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];

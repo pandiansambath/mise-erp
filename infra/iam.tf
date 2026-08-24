@@ -97,3 +97,30 @@ resource "aws_iam_role_policy" "bedrock" {
     }]
   })
 }
+
+# The VOICE. Polly turns the assistant's reply into speech.
+#
+# Why Polly and not Nova Sonic, which is the obvious answer on an AWS stack:
+#
+#   * Nova Sonic's Python support is an EXPERIMENTAL awslabs SDK, not boto3.
+#     A production dependency that ships with "experimental" on the tin, for
+#     the one feature an owner talks to all day, is a bad trade.
+#   * It is not in eu-west-2. London audio would cross to us-east-1 - a UK
+#     restaurant's takings, read aloud, leaving the country.
+#   * He said it himself: "anyway action done by claude". Claude already holds
+#     every tool, every permission check and every bit of tuning we have done.
+#
+# So: the browser hears, Claude thinks, Polly speaks. All three stay in
+# eu-west-2, all on SDKs that are not labelled experimental.
+resource "aws_iam_role_policy" "polly" {
+  name = "${var.project}-polly"
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["polly:SynthesizeSpeech", "polly:DescribeVoices"]
+      Resource = "*"
+    }]
+  })
+}

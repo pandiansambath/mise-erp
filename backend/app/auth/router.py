@@ -464,7 +464,7 @@ async def draft_users_from_text(
     """
     from app.assistant import bedrock, guard
 
-    await guard.enforce(db, user, "chat", feature="ai_assistant")
+    await guard.enforce(db, user, "chat", feature="ai_copilot")
 
     known = ", ".join(payload.roles) if payload.roles else "none yet"
     system = (
