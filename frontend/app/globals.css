@@ -3322,3 +3322,50 @@ body[data-overlay] .mise-launcher-in {
     animation-duration: 1ms;
   }
 }
+
+/* A dot that says which of the four states it is in, at a glance and without
+   reading. The label spells it out; this is for the corner of the eye. */
+.mise-voice-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-fg-faint);
+  box-shadow: 0 0 0 0 currentColor;
+  flex-shrink: 0;
+}
+.mise-voice-dot[data-phase="listening"] {
+  background: #10b981;
+  animation: mise-voice-pip 1.1s ease-in-out infinite;
+}
+.mise-voice-dot[data-phase="thinking"] {
+  background: #8b5cf6;
+  animation: mise-voice-pip 0.7s ease-in-out infinite;
+}
+.mise-voice-dot[data-phase="speaking"] {
+  background: #06b6d4;
+  animation: mise-voice-pip 1.5s ease-in-out infinite;
+}
+@keyframes mise-voice-pip {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.78);
+  }
+}
+
+/* The card carries a real surface now: it sits over live page content, and a
+   translucent panel with busy text behind it is the "not nice to see" in his
+   screenshot. Opaque enough to read, blurred enough to feel like glass. */
+.mise-voice-card {
+  background: color-mix(in srgb, var(--color-paper) 94%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-voice-dot {
+    animation: none;
+  }
+}

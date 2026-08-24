@@ -9,11 +9,21 @@
 //    that the owner feels like hands free."
 //   "target more on UI please."
 //
-// So the bubble is deliberately SMALL and never covers the page: the whole
-// point is watching the app move while you talk to it. What it does cover, it
-// covers in the corner, and the aurora is the only thing that draws the eye —
-// because when you are speaking to a machine the one question you have is "is
-// it hearing me", and a ring that answers that costs nothing to read.
+// THREE THINGS HIS SCREENSHOTS TAUGHT ME, all of them my fault:
+//
+//   1. It landed on top of the "Ask DineAI" pill. That pill is DRAGGABLE, so
+//      the user decides where it lives and I cannot dodge it by picking a
+//      cleverer corner. The voice now sits a clear 6rem above the bottom edge,
+//      and the launcher disappears while the panel is open — so there are never
+//      two floating things fighting over the same square inch.
+//   2. "I did not catch that" — because he is on Brave, which ships
+//      webkitSpeechRecognition and then blocks the Google endpoint it needs.
+//      A blank refusal is the worst possible answer: it reads as OUR bug. It
+//      now names the browser fact in the way, and there is a text box so the
+//      feature works anyway, in any browser, today.
+//   3. "no voice choosing thing and all, nothing is there" — it WAS there, as a
+//      7-pixel gear nobody would ever find. Invisible is the same as absent.
+//      The current voice is now a named button you can read across the room.
 //
 // THE HONEST BIT: it fills forms, it does not submit them. The model can ask
 // the page to open Sales and type 120 into the amount; the save button is his.
@@ -34,17 +44,21 @@ type Phase = "idle" | "listening" | "thinking" | "speaking";
 
 // "confirmation on screen before serious actions, configurable: always ask /
 //  give all access / never ask." Held per browser, defaulting to the careful
-//  end - a person who wants the fast one will find it, and a person who never
+//  end — a person who wants the fast one will find it, and a person who never
 //  opens settings should not discover the fast one by accident.
 type Ask = "always" | "money" | "never";
 const ASK_MODES: { id: Ask; label: string; note: string }[] = [
   { id: "always", label: "Ask me every time", note: "Nothing is typed in before you say so" },
-  { id: "money", label: "Ask about money & people", note: "Sales, wages, staff. The rest just happens" },
+  {
+    id: "money",
+    label: "Ask about money & people",
+    note: "Sales, wages, staff. The rest just happens",
+  },
   { id: "never", label: "Just do it", note: "No confirmation. You are watching anyway" },
 ];
 // Which fields make a thing "serious". A number that ends up in his books is
 // worth a second of his attention; a date is not.
-const WEIGHTY = /amount|total|price|cost|pay|wage|salary|rate|hours|qty|quantity|staff|employee|name/i;
+const WEIGHTY = /amount|total|price|cost|pay|wage|salary|rate|hours|qty|quantity|staff|employee/i;
 
 function needsAsking(mode: Ask, fields: Record<string, string>): boolean {
   if (mode === "never") return false;
@@ -53,7 +67,7 @@ function needsAsking(mode: Ask, fields: Record<string, string>): boolean {
 }
 
 // The Web Speech API ships no types with TypeScript, so this is the slice of it
-// we actually touch - written out rather than reached for through `any`, which
+// we actually touch — written out rather than reached for through `any`, which
 // would hide a typo in exactly the place a typo is hardest to notice.
 type SpeechAlt = { transcript: string };
 type SpeechResult = { isFinal: boolean; 0: SpeechAlt; length: number };
@@ -76,12 +90,22 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => Recognizer;
 };
 
-/** Browser speech recognition, under its two vendor names. */
 function recognition(): Recognizer | null {
   if (typeof window === "undefined") return null;
   const W = window as SpeechWindow;
   const Ctor = W.SpeechRecognition || W.webkitSpeechRecognition;
   return Ctor ? new Ctor() : null;
+}
+
+/** Say what is actually in the way, not "something went wrong". */
+function explain(err: string): string {
+  if (err === "not-allowed" || err === "service-not-allowed")
+    return "The microphone is blocked for this site — allow it from the padlock in the address bar, then try again.";
+  if (err === "network")
+    return "This browser blocks the speech service (Brave and some privacy browsers do). Type it below — I'll still answer out loud.";
+  if (err === "audio-capture") return "I can't find a microphone on this machine.";
+  if (err === "no-speech") return "I didn't hear anything that time.";
+  return "I didn't catch that — try again, or type it below.";
 }
 
 export function VoiceBubble() {
@@ -91,35 +115,35 @@ export function VoiceBubble() {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [heard, setHeard] = useState("");
-  const [said, setSaid] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voice, setVoice] = useState("Amy");
-  const [pickingVoice, setPickingVoice] = useState(false);
+  const [panel, setPanel] = useState<"none" | "voice" | "ask">("none");
   const [err, setErr] = useState<string | null>(null);
-  const [pending, setPending] = useState<{ fields: Record<string, string>; summary: string } | null>(
-    null,
-  );
+  const [pending, setPending] = useState<{
+    fields: Record<string, string>;
+    summary: string;
+  } | null>(null);
   const [askMode, setAskMode] = useState<Ask>("money");
   const [level, setLevel] = useState(0);
+  const [typed, setTyped] = useState("");
 
   const recRef = useRef<Recognizer | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const logRef = useRef<HTMLDivElement | null>(null);
   const supported = typeof window !== "undefined" && !!recognition();
+  const current = voices.find((v) => v.id === voice);
 
   useEffect(() => {
     if (!open || voices.length) return;
     api
       .get<{ voices: Voice[]; default: string }>("/assistant/voice/voices")
-      .then((d) => {
-        setVoices(d.voices ?? []);
-        setVoice((v) => v || d.default);
-      })
+      .then((d) => setVoices(d.voices ?? []))
       .catch(() => {});
   }, [open, voices.length]);
 
-  // Remember the chosen voice. A person picks a voice once; asking again every
-  // session is the app forgetting something it was told.
+  // A person picks a voice once; asking again every session is the app
+  // forgetting something it was told.
   useEffect(() => {
     try {
       const v = localStorage.getItem("mise.voice");
@@ -127,9 +151,13 @@ export function VoiceBubble() {
       const a = localStorage.getItem("mise.voice.ask");
       if (a === "always" || a === "money" || a === "never") setAskMode(a);
     } catch {
-      /* private mode — the default is fine */
+      /* private mode — the defaults are fine */
     }
   }, []);
+
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns, phase]);
 
   const say = useCallback(
     async (text: string) => {
@@ -145,19 +173,20 @@ export function VoiceBubble() {
           body: JSON.stringify({ text, voice }),
         });
         if (!res.ok) throw new Error("no audio");
-        const buf = await res.blob();
-        const url = URL.createObjectURL(buf);
+        const url = URL.createObjectURL(await res.blob());
         const a = new Audio(url);
         audioRef.current = a;
         // The ring breathes with the speech. Without a real analyser this is a
         // gentle simulation, which is honest enough: it says "still talking".
         const tick = window.setInterval(() => setLevel(0.35 + Math.random() * 0.5), 110);
-        a.onended = () => {
+        const done = () => {
           window.clearInterval(tick);
           setLevel(0);
           setPhase("idle");
           URL.revokeObjectURL(url);
         };
+        a.onended = done;
+        a.onerror = done;
         await a.play();
       } catch {
         setPhase("idle");
@@ -168,9 +197,6 @@ export function VoiceBubble() {
 
   /** Type the values into the real form on the real page. */
   const fillIn = useCallback(async (fields: Record<string, string>) => {
-    // Find each field by what a person would call it, and type into it - the
-    // real input on the real page, so what he watches is what would have
-    // happened had he done it himself.
     await new Promise((r) => setTimeout(r, 400));
     for (const [name, value] of Object.entries(fields)) {
       const el = findField(name);
@@ -185,37 +211,34 @@ export function VoiceBubble() {
     }
   }, []);
 
-  /** Do what the model asked the PAGE to do. Never a write. */
-  const perform = useCallback(
+  const goTo = useCallback(
     async (actions: Action[]) => {
       for (const a of actions) {
-        if (a.kind === "navigate") {
-          router.push(`/${a.page.replace(/^\//, "")}`);
-          await new Promise((r) => setTimeout(r, 900));
-        }
-        if (a.kind === "fill") await fillIn(a.fields);
+        if (a.kind !== "navigate") continue;
+        router.push(`/${a.page.replace(/^\//, "")}`);
+        await new Promise((r) => setTimeout(r, 900));
       }
     },
-    [router, fillIn],
+    [router],
   );
 
   const ask = useCallback(
     async (text: string) => {
       setPhase("thinking");
       setErr(null);
+      setHeard("");
       setTurns((t) => [...t, { role: "user", content: text }]);
       try {
         const out = await api.post<{ reply: string; spoken: string; actions: Action[] }>(
           "/assistant/voice/turn",
           { text, history: turns.slice(-8), route: pathname },
         );
-        setSaid(out.reply);
         setTurns((t) => [...t, { role: "assistant", content: out.reply }]);
+
         if (out.actions?.length) {
-          // Navigation is never gated - opening a page shows him something, it
-          // does not change anything, and asking permission to LOOK is the kind
-          // of confirmation that trains people to click yes without reading.
-          await perform(out.actions.filter((a) => a.kind === "navigate"));
+          // Opening a page shows him something; it does not change anything.
+          // Asking permission to LOOK trains people to click yes without reading.
+          await goTo(out.actions);
 
           // Several fills are one intention: "a 120 pound cash sale" is one
           // thing to agree to, not three. Merge them into a single question.
@@ -227,7 +250,10 @@ export function VoiceBubble() {
               string,
               string
             >;
-            const summary = fills.map((f) => f.summary).filter(Boolean).join(" ");
+            const summary = fills
+              .map((f) => f.summary)
+              .filter(Boolean)
+              .join(" ");
             if (needsAsking(askMode, fields)) setPending({ fields, summary });
             else await fillIn(fields);
           }
@@ -238,7 +264,7 @@ export function VoiceBubble() {
         setErr(e instanceof ApiError ? e.message : "I could not reach the assistant.");
       }
     },
-    [turns, pathname, perform, fillIn, askMode, say],
+    [turns, pathname, goTo, fillIn, askMode, say],
   );
 
   const listen = useCallback(() => {
@@ -252,7 +278,7 @@ export function VoiceBubble() {
     setErr(null);
     setPhase("listening");
 
-    rec.onresult = (e: SpeechEvent) => {
+    rec.onresult = (e) => {
       let text = "";
       for (let i = 0; i < e.results.length; i += 1) text += e.results[i][0].transcript;
       setHeard(text);
@@ -262,22 +288,26 @@ export function VoiceBubble() {
         if (text.trim()) ask(text.trim());
       }
     };
-    rec.onerror = (e: SpeechErrorEvent) => {
+    rec.onerror = (e) => {
       setPhase("idle");
       setLevel(0);
-      if (e.error === "not-allowed") setErr("The microphone is blocked for this site.");
-      else if (e.error !== "aborted") setErr("I did not catch that.");
+      if (e.error !== "aborted") setErr(explain(e.error));
     };
     rec.onend = () => {
       setLevel(0);
       setPhase((p) => (p === "listening" ? "idle" : p));
     };
-    rec.start();
+    try {
+      rec.start();
+    } catch {
+      setPhase("idle");
+      setErr("The microphone is already in use.");
+    }
   }, [ask]);
 
   const stop = useCallback(() => {
     recRef.current?.abort();
-    audioRef.current?.pause?.();
+    audioRef.current?.pause();
     setPhase("idle");
     setLevel(0);
   }, []);
@@ -291,9 +321,10 @@ export function VoiceBubble() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Talk to DineAI"
-        className="mise-voice-launch fixed bottom-24 right-5 z-[60] grid h-14 w-14 place-items-center rounded-full text-white shadow-lg sm:bottom-6 sm:right-24"
+        title="Talk to DineAI"
+        className="mise-voice-launch fixed bottom-44 right-5 z-[60] grid h-14 w-14 place-items-center rounded-full text-white sm:bottom-24 sm:right-6"
       >
-        <span aria-hidden className="text-xl">🎙️</span>
+        <MicIcon className="h-6 w-6" />
       </button>
     );
   }
@@ -304,15 +335,15 @@ export function VoiceBubble() {
       : phase === "thinking"
         ? "Thinking…"
         : phase === "speaking"
-          ? "Speaking"
-          : "Tap to talk";
+          ? `${current?.label ?? "DineAI"} is talking`
+          : "Tap the mic and talk";
 
   return createPortal(
     <>
-      <div className="mise-voice fixed bottom-5 right-5 z-[65] w-[min(22rem,calc(100vw-2.5rem))]">
-        <div className="mise-voice-card relative overflow-hidden rounded-3xl border border-line p-4">
+      <div className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] sm:bottom-24 sm:right-6">
+        <div className="mise-voice-card relative overflow-hidden rounded-3xl border border-line">
           {/* THE AURORA. Four blurred blobs drifting behind the glass — it is
-              the whole personality of this thing, and it costs three divs. */}
+              the whole personality of this thing, and it costs four divs. */}
           <span aria-hidden className="mise-aurora" data-phase={phase}>
             <i />
             <i />
@@ -320,132 +351,196 @@ export function VoiceBubble() {
             <i />
           </span>
 
-          <div className="relative flex items-start gap-3">
-            <button
-              type="button"
-              onClick={phase === "idle" ? listen : stop}
-              disabled={!supported}
-              aria-label={phase === "idle" ? "Start talking" : "Stop"}
-              className="mise-voice-orb grid h-14 w-14 shrink-0 place-items-center rounded-full"
-              data-phase={phase}
-              style={{ "--level": level } as React.CSSProperties}
-            >
-              <span aria-hidden className="text-lg">
-                {phase === "idle" ? "🎙️" : phase === "speaking" ? "🔊" : "■"}
-              </span>
-            </button>
-
-            <div className="min-w-0 flex-1 pt-0.5">
-              <p className="font-display text-sm font-semibold leading-tight text-fg">{label}</p>
-              <p className="mt-0.5 line-clamp-3 text-[11px] leading-relaxed text-fg-soft">
-                {heard || said || "Ask me anything, or tell me to put something in."}
-              </p>
-            </div>
-
-            <div className="flex shrink-0 flex-col gap-1">
+          {/* ── Header ─────────────────────────────────────────────────── */}
+          <div className="relative flex items-center gap-2 border-b border-line/70 px-3.5 py-2.5">
+            <span className="mise-voice-dot" data-phase={phase} aria-hidden />
+            <p className="font-display text-[13px] font-semibold text-fg">DineAI Voice</p>
+            <div className="ml-auto flex items-center gap-1">
+              {/* The voice, named. It was a 7-pixel gear and he could not find
+                  it, which is the same as it not being there. */}
               <button
                 type="button"
-                onClick={() => setPickingVoice((v) => !v)}
+                onClick={() => setPanel((p) => (p === "voice" ? "none" : "voice"))}
+                className="mise-press mise-card-inset flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-fg-soft"
                 aria-label="Choose a voice"
+              >
+                <span aria-hidden>{current?.sex === "male" ? "🧔" : "👩"}</span>
+                {current?.label ?? voice}
+                <span aria-hidden className="text-[8px] opacity-70">
+                  ▾
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPanel((p) => (p === "ask" ? "none" : "ask"))}
+                aria-label="When to ask me first"
+                title="When to ask me first"
                 className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint hover:text-fg"
               >
-                ⚙
+                <GearIcon className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 onClick={() => {
                   stop();
                   setOpen(false);
+                  setPanel("none");
                 }}
                 aria-label="Close"
                 className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint hover:text-fg"
               >
-                ✕
+                <XIcon className="h-4 w-4" />
               </button>
             </div>
           </div>
 
+          {/* ── Settings sheets ────────────────────────────────────────── */}
+          {panel === "voice" && (
+            <div className="relative grid gap-1 border-b border-line/70 px-3 py-2.5">
+              <p className="px-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                Whose voice
+              </p>
+              {voices.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => {
+                    setVoice(v.id);
+                    remember("mise.voice", v.id);
+                    setPanel("none");
+                    say(`Hello — I'm ${v.label}. Shall we get on with it?`);
+                  }}
+                  className={`mise-press flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[12px] transition ${
+                    voice === v.id ? "bg-brand-600 text-white" : "mise-card-inset text-fg-soft"
+                  }`}
+                >
+                  <span aria-hidden>{v.sex === "male" ? "🧔" : "👩"}</span>
+                  <span className="font-medium">{v.label}</span>
+                  <span
+                    className={`ml-auto text-[10px] ${
+                      voice === v.id ? "text-white/75" : "text-fg-faint"
+                    }`}
+                  >
+                    {v.who}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {panel === "ask" && (
+            <div className="relative grid gap-1 border-b border-line/70 px-3 py-2.5">
+              <p className="px-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                Before I fill something in
+              </p>
+              {ASK_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setAskMode(m.id);
+                    remember("mise.voice.ask", m.id);
+                    setPanel("none");
+                  }}
+                  className={`mise-press rounded-xl px-2.5 py-1.5 text-left transition ${
+                    askMode === m.id ? "bg-brand-600 text-white" : "mise-card-inset text-fg-soft"
+                  }`}
+                >
+                  <span className="block text-[12px] font-medium">{m.label}</span>
+                  <span
+                    className={`block text-[10px] leading-tight ${
+                      askMode === m.id ? "text-white/75" : "text-fg-faint"
+                    }`}
+                  >
+                    {m.note}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── The orb ────────────────────────────────────────────────── */}
+          <div className="relative flex flex-col items-center px-4 pb-3 pt-4">
+            <button
+              type="button"
+              onClick={phase === "idle" ? listen : stop}
+              disabled={!supported}
+              aria-label={phase === "idle" ? "Start talking" : "Stop"}
+              className="mise-voice-orb grid h-20 w-20 place-items-center rounded-full"
+              data-phase={phase}
+              style={{ "--level": level } as React.CSSProperties}
+            >
+              {phase === "idle" ? (
+                <MicIcon className="h-7 w-7" />
+              ) : phase === "speaking" ? (
+                <WaveIcon className="h-7 w-7" />
+              ) : (
+                <span aria-hidden className="block h-4 w-4 rounded-[3px] bg-white" />
+              )}
+            </button>
+            <p className="mt-2.5 font-display text-[13px] font-semibold text-fg">{label}</p>
+            {heard && <p className="mt-0.5 text-center text-[11px] text-fg-soft">“{heard}”</p>}
+          </div>
+
+          {/* ── What has been said ─────────────────────────────────────── */}
+          {turns.length > 0 && (
+            <div
+              ref={logRef}
+              className="relative max-h-40 space-y-2 overflow-y-auto border-t border-line/70 px-3.5 py-3"
+            >
+              {turns.slice(-6).map((t, i) => (
+                <p
+                  key={i}
+                  className={`text-[12px] leading-relaxed ${
+                    t.role === "user"
+                      ? "text-right text-fg-faint"
+                      : "mise-card-inset rounded-2xl px-3 py-2 text-fg"
+                  }`}
+                >
+                  {t.content}
+                </p>
+              ))}
+            </div>
+          )}
+
           {err && (
-            <p className="relative mt-2 rounded-xl border border-rose-400/40 bg-rose-400/10 px-2.5 py-1.5 text-[11px] text-rose-200">
+            <p className="relative mx-3.5 mb-2 mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-200">
               {err}
             </p>
           )}
 
-          {!supported && (
-            <p className="relative mt-2 text-[11px] leading-relaxed text-fg-faint">
-              This browser will not give me a microphone. Chrome, Edge or Brave will.
-            </p>
-          )}
-
-          {pickingVoice && (
-            <div className="relative mt-3 border-t border-line pt-3">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
-                My voice
-              </p>
-              <div className="grid gap-1">
-                {voices.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => {
-                      setVoice(v.id);
-                      remember("mise.voice", v.id);
-                      say(`Hello — I'm ${v.label}. Shall we get on with it?`);
-                    }}
-                    className={`mise-press flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[12px] transition ${
-                      voice === v.id ? "bg-brand-600 text-white" : "mise-card-inset text-fg-soft"
-                    }`}
-                  >
-                    <span aria-hidden>{v.sex === "male" ? "🧔" : "👩"}</span>
-                    <span className="font-medium">{v.label}</span>
-                    <span
-                      className={`ml-auto text-[10px] ${
-                        voice === v.id ? "text-white/75" : "text-fg-faint"
-                      }`}
-                    >
-                      {v.who}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <p className="mb-1.5 mt-3 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
-                Before I fill something in
-              </p>
-              <div className="grid gap-1">
-                {ASK_MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setAskMode(m.id);
-                      remember("mise.voice.ask", m.id);
-                    }}
-                    className={`mise-press rounded-xl px-2.5 py-1.5 text-left transition ${
-                      askMode === m.id ? "bg-brand-600 text-white" : "mise-card-inset text-fg-soft"
-                    }`}
-                  >
-                    <span className="block text-[12px] font-medium">{m.label}</span>
-                    <span
-                      className={`block text-[10px] leading-tight ${
-                        askMode === m.id ? "text-white/75" : "text-fg-faint"
-                      }`}
-                    >
-                      {m.note}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setPickingVoice(false)}
-                className="mise-press mt-2.5 w-full rounded-xl border border-line py-1.5 text-[12px] text-fg-soft"
-              >
-                Done
-              </button>
-            </div>
-          )}
+          {/* ── Type it instead ────────────────────────────────────────── */}
+          {/*  Not a consolation prize. Brave and several privacy browsers ship
+              the speech API and block the service behind it, a phone in a loud
+              kitchen mishears, and sometimes you simply cannot talk out loud.
+              Typed or spoken, the same brain answers and the same page moves —
+              so the feature is never dead, it only changes how it starts.  */}
+          <form
+            className="relative flex items-center gap-2 border-t border-line/70 px-3 py-2.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const t = typed.trim();
+              if (!t) return;
+              setTyped("");
+              ask(t);
+            }}
+          >
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={supported ? "…or type it here" : "Type what you need"}
+              aria-label="Type what you need"
+              className="mise-card-inset min-w-0 flex-1 rounded-xl bg-transparent px-3 py-2 text-[12px] text-fg outline-none placeholder:text-fg-faint"
+            />
+            <button
+              type="submit"
+              disabled={!typed.trim() || phase === "thinking"}
+              aria-label="Send"
+              className="mise-press grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-brand-600 text-white disabled:opacity-40"
+            >
+              <ArrowIcon className="h-4 w-4" />
+            </button>
+          </form>
         </div>
       </div>
 
@@ -465,9 +560,7 @@ export function VoiceBubble() {
               <i />
             </span>
             <div className="relative">
-              <p className="font-display text-base font-semibold text-fg">
-                Shall I put this in?
-              </p>
+              <p className="font-display text-base font-semibold text-fg">Shall I put this in?</p>
               {pending.summary && (
                 <p className="mt-1 text-[12px] leading-relaxed text-fg-soft">{pending.summary}</p>
               )}
@@ -511,12 +604,52 @@ export function VoiceBubble() {
   );
 }
 
+/* ── Icons. Drawn rather than typed, because an emoji glyph is a different
+      shape and weight in every browser, and this one is the product's face. */
+function MicIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
+    </svg>
+  );
+}
+function WaveIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" />
+    </svg>
+  );
+}
+function GearIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" />
+    </svg>
+  );
+}
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+function ArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12h13M12 5l7 7-7 7" />
+    </svg>
+  );
+}
+
 /** Save a preference, shrugging if the browser will not keep one. */
 function remember(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
   } catch {
-    /* private mode - it lasts the session, which is better than an error */
+    /* private mode — it lasts the session, which is better than an error */
   }
 }
 
@@ -524,10 +657,8 @@ function remember(key: string, value: string) {
 function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
   const want = name.toLowerCase().replace(/[^a-z0-9]/g, "");
   const inputs = [
-    ...document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-      "main input, main select, input, select",
-    ),
-  ].filter((el) => el.offsetParent !== null && !el.disabled);
+    ...document.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select"),
+  ].filter((el) => el.offsetParent !== null && !el.disabled && el.getAttribute("type") !== "hidden");
 
   const score = (el: HTMLElement) => {
     const bits = [
@@ -563,7 +694,8 @@ function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
 
 /** React tracks input values on the node, so `el.value = x` is invisible to it. */
 function setNativeValue(el: HTMLInputElement | HTMLSelectElement, value: string) {
-  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  const proto =
+    el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   if (setter) setter.call(el, value);
   else el.value = value;
