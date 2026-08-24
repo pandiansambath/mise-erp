@@ -6,7 +6,8 @@ import time
 import uuid
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -507,6 +508,127 @@ async def vision_commit(
 
 class KioskQuoteIn(BaseModel):
     on: str = ""
+
+
+class VoiceTurnIn(BaseModel):
+    """One thing the owner said out loud."""
+
+    text: str = Field(min_length=1, max_length=2000)
+    history: list[dict] = Field(default_factory=list)
+    #: Which page he is looking at, so "put it in here" means something.
+    route: str | None = None
+
+
+class SpeakIn(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+    voice: str = "Amy"
+
+
+# ── 🎙️ THE VOICE ────────────────────────────────────────────────────────────
+@router.get("/voice/voices")
+async def voice_options(_: User = Depends(require("ai:use"))) -> dict:
+    """The six voices, named the way a person would pick one."""
+    from app.assistant.voice import DEFAULT_VOICE, VOICES
+
+    return {"voices": VOICES, "default": DEFAULT_VOICE}
+
+
+@router.post("/voice/turn")
+async def voice_turn(
+    payload: "VoiceTurnIn",
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("ai:use")),
+) -> dict:
+    """One spoken turn: hear it, think, answer, and maybe ask the PAGE to move.
+
+    Nothing here writes. If the owner says "put a 120 pound cash sale in", the
+    reply carries an action telling the browser to open Sales and fill the form
+    - and the form saves it exactly as it would if he had typed it, with the
+    same permission check and the same confirm. A spoken instruction is a
+    request, not a password.
+    """
+    from app.assistant import brain, guard, voice
+    from app.assistant.tools import EXECUTORS
+    from app.hotels.models import Hotel
+
+    await guard.enforce(db, user, "chat", feature="ai_copilot")
+    hotel = await db.get(Hotel, user.hotel_id)
+
+    actions: list[dict] = []
+
+    async def execute(name: str, args: dict) -> dict:
+        # The two UI tools never reach the database - they are messages to the
+        # browser. Everything else is an ordinary read tool, scoped to this
+        # person exactly as it is when they type.
+        ui = voice.action_from(name, args)
+        if ui is not None:
+            actions.append(ui)
+            return {"ok": True, "note": "The page is doing that now."}
+        fn = EXECUTORS.get(name)
+        if fn is None:
+            return {"error": f"unknown tool {name}"}
+        try:
+            return await fn(db, user, args)
+        except Exception:  # noqa: BLE001 - one bad tool must not end the answer
+            log.exception("voice tool %s failed", name)
+            return {"error": f"The {name} lookup failed just then."}
+
+    system = (
+        voice.PERSONA
+        + f"\n\nYou are in {hotel.name if hotel else 'this restaurant'}."
+        + (f" They are looking at the {payload.route} page." if payload.route else "")
+        + f"\n\nThe person you are talking to is a {user.role}."
+    )
+
+    meter: dict = {}
+    try:
+        reply, _used = await brain.generate(
+            system=system,
+            history=[
+                *voice.history_for(payload.history),
+                {"role": "user", "content": payload.text},
+            ],
+            tools=voice.tools_for_voice(user),
+            execute=execute,
+            model=await guard.model_for(db, user),
+            meter=meter,
+        )
+    except Exception as exc:  # noqa: BLE001 - he is standing there waiting
+        log.exception("voice turn failed")
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "I could not hear that properly just then.",
+        ) from exc
+
+    await guard.record(
+        db, user, kind="chat", model=meter.get("model", ""),
+        input_tokens=meter.get("input_tokens", 0),
+        output_tokens=meter.get("output_tokens", 0),
+    )
+    return {
+        "reply": reply,
+        "spoken": voice.spoken_form(reply),
+        "actions": actions,
+    }
+
+
+@router.post("/voice/speak")
+async def voice_speak(
+    payload: "SpeakIn",
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("ai:use")),
+) -> Response:
+    """Say it out loud. MP3 back, played by the bubble."""
+    from app.assistant import voice
+
+    try:
+        audio = await run_in_threadpool(voice.speak, payload.text, payload.voice)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("polly failed")
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "The voice is not available right now."
+        ) from exc
+    return Response(content=audio, media_type="audio/mpeg")
 
 
 @router.post("/kiosk-quote")

@@ -12,6 +12,7 @@ import { can, getGrantedPermissions } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
 import CommandPalette from "@/components/CommandPalette";
 import { Copilot } from "@/components/Copilot";
+import { VoiceBubble } from "@/components/VoiceBubble";
 import NotificationBell from "@/components/NotificationBell";
 import { Select } from "@/components/Select";
 import { Tour, shouldAutoStartTour } from "@/components/Tour";
@@ -817,6 +818,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <MobileTabBar onSearch={() => setPaletteOpen(true)} items={navItems} />
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       {featureOn(hotel, "ai_copilot") && <Copilot />}
+      {/* The voice rides on the same feature flag as the written assistant:
+          it is the same brain, just heard rather than read. */}
+      {featureOn(hotel, "ai_copilot") && <VoiceBubble />}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

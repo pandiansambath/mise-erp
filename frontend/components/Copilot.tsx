@@ -768,7 +768,7 @@ export function Copilot() {
   const drag = useDraggable("mise.copilot.pos");
   // How big the assistant is, and where. Remembered, because resizing the same
   // window twice a day is worse than it being the wrong size once.
-  const panel = useResizable("mise.copilot.box", { w: 400, h: 600 });
+  const panel = useResizable("mise.copilot.box", { w: 480, h: 700 });
   const [isWide, setIsWide] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 640px)");
@@ -924,11 +924,16 @@ export function Copilot() {
             // could mean "unreachable".
             onDoubleClick={isWide ? panel.reset : undefined}
             title={isWide ? "Drag to move · double-click to reset" : undefined}
-            className={`mise-chat-head relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3 ${
+            className={`mise-chat-head relative flex items-center gap-2.5 overflow-hidden border-b border-glass/10 px-4 py-3.5 ${
               isWide ? "cursor-grab touch-none active:cursor-grabbing" : ""
             }`}
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-brand-600/25 via-brand-500/10 to-transparent" aria-hidden />
+            <span aria-hidden className="mise-aurora" data-phase={loading ? "thinking" : "idle"}>
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
             {/* A grip you can SEE. A grab cursor only appears once the pointer
                 is already there, so it cannot tell you the thing is movable —
                 which is why he thought it was not. */}
@@ -1079,13 +1084,13 @@ export function Copilot() {
           )}
 
           {/* Messages */}
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
             {/* Before anything is typed, say what it can be ASKED.
                 An empty box with a blinking cursor tests whether you can guess
                 the phrasing it wants. These are the real questions, tuned to
                 the page you are standing on, so the first one costs nothing. */}
             {messages.length <= 1 && !loading && (
-              <div className="mise-stagger space-y-1.5 pt-1">
+              <div className="mise-stagger space-y-2 pt-1">
                 <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
                   Try asking
                 </p>
@@ -1094,7 +1099,7 @@ export function Copilot() {
                     key={q}
                     type="button"
                     onClick={() => send(q)}
-                    className="mise-press block w-full rounded-xl border border-line px-3 py-2 text-left text-[13px] leading-snug text-fg-soft transition hover:border-brand-400/50 hover:bg-brand-400/[0.06] hover:text-fg"
+                    className="mise-press mise-card-inset block w-full rounded-2xl px-3.5 py-2.5 text-left text-[13px] leading-snug text-fg-soft transition hover:text-fg"
                   >
                     {q}
                   </button>
@@ -1107,7 +1112,7 @@ export function Copilot() {
                 {m.role === "assistant" && (
                   <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-[13px] text-white shadow-sm" aria-hidden>✨</span>
                 )}
-                <div className="max-w-[80%]">
+                <div className="max-w-[86%]">
                   {/* eslint-disable-next-line @next/next/no-img-element -- data-URL thumbnail, nothing for next/image to optimise */}
                   {m.image && <img src={m.image} alt={m.file?.name ?? "attachment"} className="mb-1.5 max-h-40 rounded-xl border border-glass/15 object-cover" />}
                   {/* Anything that is not an image gets an honest chip instead
