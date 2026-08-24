@@ -145,6 +145,11 @@ async def generate(
     execute: ExecuteFn,
     attachment: dict | None = None,
     model: str = "",
+    # The voice needs two sentences, fast. The written assistant needs room to
+    # lay out a table. Same brain, different ceiling — and a lower ceiling is
+    # genuinely faster, because a model that is not writing is not costing
+    # seconds.
+    max_tokens: int = 1600,
     meter: dict[str, Any] | None = None,
     # Filled in as it works, so the caller can show what happened rather than a
     # spinner. Optional: nothing depends on it being collected.
@@ -158,7 +163,7 @@ async def generate(
     for lap in range(MAX_LAPS):
         body: dict[str, Any] = {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1600,
+            "max_tokens": max_tokens,
             "system": bedrock._cached_system(system),
             "messages": messages,
         }

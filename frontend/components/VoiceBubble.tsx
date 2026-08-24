@@ -66,6 +66,12 @@ const WEIGHTY = /amount|total|price|cost|pay|wage|salary|rate|hours|qty|quantity
 // shape of what it does is obvious after reading three lines.
 const STARTERS = ["What did we take today?", "What's running low?", "Open expenses"];
 
+// How long a gap counts as "he has stopped talking". Short enough that it does
+// not feel like waiting; long enough to survive the pause in the middle of "a
+// hundred and twenty... cash". The browser's own `isFinal` fires on a rhythm
+// nobody can predict, which is why the turn is ended here instead.
+const SILENCE_MS = 1300;
+
 function needsAsking(mode: Ask, fields: Record<string, string>): boolean {
   if (mode === "never") return false;
   if (mode === "always") return true;
@@ -138,23 +144,56 @@ export function VoiceBubble() {
   // in a light theme. Mirror it onto the card. An aurora tuned against a
   // near-black surface is a highlighter over near-white.
   const [mode, setMode] = useState<"light" | "dark">("dark");
+  // "that aurora effect + bubble icon color... you need to change according to
+  //  the theme selected... but don't compromise the aurora effects."
+  //
+  // Every theme already ships its own aurora triple and brand ramp — the
+  // landing page has used them all along. The voice was the one thing painting
+  // itself emerald-and-violet regardless, which is why it clashed the moment he
+  // picked a different theme. So it reads the SAME variables everyone else
+  // does. The motion, the blur and the layering are untouched; only the
+  // pigment now comes from his choice instead of mine.
+  const [paint, setPaint] = useState<Record<string, string>>({});
   useEffect(() => {
-    const read = () =>
-      setMode(
-        document.querySelector(".mise-app")?.getAttribute("data-mode") === "light"
-          ? "light"
-          : "dark",
-      );
-    read();
     const app = document.querySelector(".mise-app");
+    const read = () => {
+      setMode(app?.getAttribute("data-mode") === "light" ? "light" : "dark");
+      const from = app ?? document.documentElement;
+      const cs = getComputedStyle(from);
+      const pick = (name: string, fallback: string) =>
+        (cs.getPropertyValue(name) || "").trim() || fallback;
+      setPaint({
+        "--v1": pick("--mise-aurora-1", "#10b981"),
+        "--v2": pick("--mise-aurora-2", "#0ea5e9"),
+        "--v3": pick("--mise-aurora-3", "#14b8a6"),
+        // A fourth, warmer note so the drift does not read as one colour
+        // breathing. The brand ramp is the only place to get it that is
+        // guaranteed to suit whatever he picked.
+        "--v4": pick("--color-brand-400", "#34d399"),
+        "--vbrand": pick("--color-brand-500", "#10b981"),
+      });
+    };
+    read();
     if (!app) return;
     const obs = new MutationObserver(read);
-    obs.observe(app, { attributes: true, attributeFilter: ["data-mode"] });
+    obs.observe(app, { attributes: true, attributeFilter: ["data-mode", "style", "class"] });
     return () => obs.disconnect();
   }, []);
 
+  const [live, setLive] = useState(false);
+  // A browser that refused to autoplay has to be tapped once before it will
+  // ever make a sound. Saying so is the difference between "broken" and "tap".
+  const [needsTap, setNeedsTap] = useState(false);
+
   const recRef = useRef<Recognizer | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Refs, not state, because the recogniser's callbacks are created once and
+  // would otherwise read whatever these were when the microphone started.
+  const liveRef = useRef(false);
+  const heardRef = useRef("");
+  const silenceRef = useRef<number | null>(null);
+  const queueRef = useRef<string[]>([]);
+  const drainingRef = useRef(false);
   const logRef = useRef<HTMLDivElement | null>(null);
   const supported = typeof window !== "undefined" && !!recognition();
   const current = voices.find((v) => v.id === voice);
@@ -184,50 +223,46 @@ export function VoiceBubble() {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [turns, phase]);
 
-  const say = useCallback(
-    async (text: string) => {
-      if (!text.trim()) return;
-      setPhase("speaking");
-      let tick: number | null = null;
-      try {
-        const res = await fetch(`${API_BASE}/api/assistant/voice/speak`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-          },
-          body: JSON.stringify({ text, voice }),
-        });
-        if (!res.ok) throw new Error("no audio");
-        const url = URL.createObjectURL(await res.blob());
-        const a = new Audio(url);
-        audioRef.current = a;
-        // The ring breathes with the speech. Without a real analyser this is a
-        // gentle simulation, which is honest enough: it says "still talking".
-        tick = window.setInterval(() => setLevel(0.35 + Math.random() * 0.5), 110);
-        const done = () => {
-          if (tick) window.clearInterval(tick);
-          tick = null;
-          setLevel(0);
-          setPhase("idle");
-          URL.revokeObjectURL(url);
-        };
-        a.onended = done;
-        a.onerror = done;
-        // play() REJECTS when a browser refuses autoplay.
-        await a.play();
-      } catch {
-        // On success `done` clears the ticker when playback ends. Only the
-        // failure path has to clean up here, and it must: a rejected play()
-        // otherwise left the ring pulsing for the life of the page, for audio
-        // that was never going to arrive.
-        if (tick) window.clearInterval(tick);
-        setLevel(0);
-        setPhase("idle");
+  // ── The mouth: a queue, not a request ────────────────────────────────────
+  //
+  // The server now sends audio a sentence at a time, as each sentence is
+  // written. So playback is a QUEUE that drains in order — the first sentence
+  // is already being spoken while the model is still thinking of the second.
+  // That is where the eight seconds went.
+  const playChunk = useCallback((b64: string) => {
+    return new Promise<void>((resolve) => {
+      const a = new Audio(`data:audio/mpeg;base64,${b64}`);
+      audioRef.current = a;
+      const done = () => resolve();
+      a.onended = done;
+      a.onerror = done;
+      a.play().catch(() => {
+        // A browser that refuses autoplay must not leave the queue hanging.
+        setNeedsTap(true);
+        resolve();
+      });
+    });
+  }, []);
+
+  const drain = useCallback(async () => {
+    if (drainingRef.current) return;
+    drainingRef.current = true;
+    setPhase("speaking");
+    const tick = window.setInterval(() => setLevel(0.35 + Math.random() * 0.5), 110);
+    try {
+      while (queueRef.current.length) {
+        const next = queueRef.current.shift();
+        if (next) await playChunk(next);
       }
-    },
-    [voice],
-  );
+    } finally {
+      window.clearInterval(tick);
+      setLevel(0);
+      drainingRef.current = false;
+      // Back to listening, because the microphone never actually left.
+      setPhase(liveRef.current ? "listening" : "idle");
+    }
+  }, [playChunk]);
+
 
   /** Type the values into the real form on the real page. */
   const fillIn = useCallback(async (fields: Record<string, string>) => {
@@ -256,90 +291,225 @@ export function VoiceBubble() {
     [router],
   );
 
+  // ── One turn, streamed ───────────────────────────────────────────────────
+  //
+  // Text arrives as it is written and audio a sentence at a time, so the reply
+  // starts appearing in well under a second instead of after eight. Same model,
+  // same tools, same answers — only the order changed.
   const ask = useCallback(
     async (text: string) => {
       setPhase("thinking");
       setErr(null);
       setHeard("");
       setTurns((t) => [...t, { role: "user", content: text }]);
+      let reply = "";
+      const fills: Extract<Action, { kind: "fill" }>[] = [];
+
       try {
-        const out = await api.post<{ reply: string; spoken: string; actions: Action[] }>(
-          "/assistant/voice/turn",
-          { text, history: turns.slice(-8), route: pathname },
-        );
-        setTurns((t) => [...t, { role: "assistant", content: out.reply }]);
+        const res = await fetch(`${API_BASE}/api/assistant/voice/stream`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+          },
+          body: JSON.stringify({
+            text,
+            history: turns.slice(-8),
+            route: pathname,
+            voice,
+          }),
+        });
+        if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
 
-        if (out.actions?.length) {
-          // Opening a page shows him something; it does not change anything.
-          // Asking permission to LOOK trains people to click yes without reading.
-          await goTo(out.actions);
+        setTurns((t) => [...t, { role: "assistant", content: "" }]);
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
 
-          // Several fills are one intention: "a 120 pound cash sale" is one
-          // thing to agree to, not three. Merge them into a single question.
-          const fills = out.actions.filter(
-            (a): a is Extract<Action, { kind: "fill" }> => a.kind === "fill",
-          );
-          if (fills.length) {
-            const fields = Object.assign({}, ...fills.map((f) => f.fields)) as Record<
-              string,
-              string
-            >;
-            const summary = fills
-              .map((f) => f.summary)
-              .filter(Boolean)
-              .join(" ");
-            if (needsAsking(askMode, fields)) setPending({ fields, summary });
-            else await fillIn(fields);
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const frames = buf.split("\n\n");
+          buf = frames.pop() ?? "";
+
+          for (const frame of frames) {
+            const line = frame
+              .split("\n")
+              .find((l) => l.startsWith("data:"));
+            if (!line) continue;
+            let ev: Record<string, unknown>;
+            try {
+              ev = JSON.parse(line.slice(5).trim());
+            } catch {
+              continue;
+            }
+
+            if (ev.type === "delta") {
+              reply += String(ev.text ?? "");
+              setTurns((t) => {
+                const copy = [...t];
+                copy[copy.length - 1] = { role: "assistant", content: reply };
+                return copy;
+              });
+            } else if (ev.type === "audio" && typeof ev.b64 === "string") {
+              queueRef.current.push(ev.b64);
+              void drain();
+            } else if (ev.type === "action") {
+              const a = ev.action as Action;
+              // Navigating shows him something; it changes nothing. Gating a
+              // LOOK behind a dialog just teaches people to click yes.
+              if (a?.kind === "navigate") await goTo([a]);
+              else if (a?.kind === "fill") fills.push(a);
+            } else if (ev.type === "error") {
+              throw new Error(String(ev.message ?? "the assistant stopped"));
+            }
           }
         }
-        await say(out.spoken || out.reply);
+
+        if (fills.length) {
+          // Several fills are one intention: "a 120 pound cash sale" is one
+          // thing to agree to, not three. Merge them into a single question.
+          const fields = Object.assign({}, ...fills.map((f) => f.fields)) as Record<
+            string,
+            string
+          >;
+          const summary = fills
+            .map((f) => f.summary)
+            .filter(Boolean)
+            .join(" ");
+          if (needsAsking(askMode, fields)) setPending({ fields, summary });
+          else await fillIn(fields);
+        }
       } catch (e) {
-        setPhase("idle");
         setErr(e instanceof ApiError ? e.message : "I could not reach the assistant.");
+        setPhase(liveRef.current ? "listening" : "idle");
+        return;
+      }
+
+      // If nothing is queued to say, we are done talking; if something is, the
+      // drain will put us back to listening when it finishes.
+      if (!queueRef.current.length && !drainingRef.current) {
+        setPhase(liveRef.current ? "listening" : "idle");
       }
     },
-    [turns, pathname, goTo, fillIn, askMode, say],
+    [turns, pathname, voice, goTo, fillIn, askMode, drain],
   );
 
-  const listen = useCallback(() => {
+  // ── The ear: on until he turns it off ────────────────────────────────────
+  //
+  // "we are not implementing voice to text model... once the voice model is
+  //  turned on it needs to be live always until they close the site... it need
+  //  to listen to each and every thing in realtime."
+  //
+  // Two things had to change for that. `continuous` was FALSE, so the
+  // recogniser stopped at the first pause — which is exactly why it answered
+  // half a sentence. And the turn was ended by the browser's own idea of
+  // "final", which arrives whenever it feels like it. Now WE decide the turn
+  // is over: every result resets a silence timer, and the turn ends when he
+  // has actually stopped talking.
+  const askRef = useRef(ask);
+  askRef.current = ask;
+
+  const armSilence = useCallback(() => {
+    if (silenceRef.current) window.clearTimeout(silenceRef.current);
+    silenceRef.current = window.setTimeout(() => {
+      const said = heardRef.current.trim();
+      heardRef.current = "";
+      if (said) void askRef.current(said);
+    }, SILENCE_MS);
+  }, []);
+
+  const startLive = useCallback(() => {
     const rec = recognition();
     if (!rec) return;
     rec.lang = "en-GB";
     rec.interimResults = true;
-    rec.continuous = false;
+    rec.continuous = true;
     recRef.current = rec;
-    setHeard("");
+    liveRef.current = true;
+    setLive(true);
     setErr(null);
+    setHeard("");
+    heardRef.current = "";
     setPhase("listening");
 
     rec.onresult = (e) => {
+      // Ignore the room while WE are talking, or it transcribes its own voice
+      // coming back out of the speakers and answers itself.
+      if (drainingRef.current) return;
       let text = "";
       for (let i = 0; i < e.results.length; i += 1) text += e.results[i][0].transcript;
+      heardRef.current = text;
       setHeard(text);
       setLevel(0.3 + Math.min(0.6, text.length / 60));
-      if (e.results[e.results.length - 1].isFinal) {
-        rec.stop();
-        if (text.trim()) ask(text.trim());
-      }
+      armSilence();
     };
     rec.onerror = (e) => {
-      setPhase("idle");
+      if (e.error === "aborted" || e.error === "no-speech") return;
       setLevel(0);
-      if (e.error !== "aborted") setErr(explain(e.error));
+      setErr(explain(e.error));
+      // A blocked speech service is permanent for this browser; restarting in
+      // a loop would spin forever and say nothing. This is what left him
+      // staring at "Listening…" for two minutes.
+      if (e.error === "network" || e.error === "not-allowed" || e.error === "service-not-allowed") {
+        liveRef.current = false;
+        setLive(false);
+        setPhase("idle");
+      }
     };
     rec.onend = () => {
-      setLevel(0);
-      setPhase((p) => (p === "listening" ? "idle" : p));
+      // Chrome ends the session on its own every so often even in continuous
+      // mode. If he has not turned it off, it goes straight back on — that is
+      // what "live until they close the site" actually costs.
+      if (!liveRef.current) {
+        setPhase("idle");
+        return;
+      }
+      try {
+        rec.start();
+      } catch {
+        /* already running — nothing to do */
+      }
     };
+
     try {
       rec.start();
     } catch {
       setPhase("idle");
       setErr("The microphone is already in use.");
     }
-  }, [ask]);
+  }, [armSilence]);
+
+  /** Say one line in a voice, so picking one is a decision you can hear. */
+  const preview = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/assistant/voice/speak`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+          },
+          body: JSON.stringify({ text: `Hello, I'm ${id}. Shall we get on with it?`, voice: id }),
+        });
+        if (!res.ok) return;
+        const buf = await res.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        queueRef.current.push(b64);
+        void drain();
+      } catch {
+        /* a preview that will not play is not worth an error message */
+      }
+    },
+    [drain],
+  );
 
   const stop = useCallback(() => {
+    liveRef.current = false;
+    setLive(false);
+    if (silenceRef.current) window.clearTimeout(silenceRef.current);
+    queueRef.current = [];
     recRef.current?.abort();
     audioRef.current?.pause();
     setPhase("idle");
@@ -368,6 +538,7 @@ export function VoiceBubble() {
         onClick={() => setOpen(true)}
         aria-label="Talk to DineAI"
         title="Talk to DineAI"
+        style={paint as React.CSSProperties}
         className="mise-voice-launch fixed bottom-44 right-5 z-[60] grid h-14 w-14 place-items-center rounded-full text-white lg:bottom-24 lg:right-6"
       >
         <MicIcon className="h-6 w-6" />
@@ -375,14 +546,19 @@ export function VoiceBubble() {
     );
   }
 
+  // It is live until he stops it, so "listening" is the resting state, not a
+  // held button. The wording has to say that, or he taps it again to "start"
+  // something that never stopped.
   const label =
     phase === "listening"
-      ? "Listening…"
+      ? heard
+        ? "…go on"
+        : "Listening — just talk"
       : phase === "thinking"
         ? "Thinking…"
         : phase === "speaking"
           ? `${current?.label ?? "DineAI"} is talking`
-          : "Tap the mic and talk";
+          : "Tap to go live";
 
   return createPortal(
     <>
@@ -393,7 +569,13 @@ export function VoiceBubble() {
           whether the machine is still listening to you. Nothing but light: it
           takes no clicks and covers nothing. */}
       {phase !== "idle" && (
-        <div className="mise-live-glow" data-phase={phase} data-mode={mode} aria-hidden />
+        <div
+          className="mise-live-glow"
+          data-phase={phase}
+          data-mode={mode}
+          style={paint as React.CSSProperties}
+          aria-hidden
+        />
       )}
 
       <div className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6">
@@ -401,6 +583,7 @@ export function VoiceBubble() {
           className="mise-voice-card relative rounded-3xl border border-line"
           data-live={phase !== "idle"}
           data-mode={mode}
+          style={paint as React.CSSProperties}
         >
           {/* THE AURORA. Four blurred blobs drifting behind the glass — it is
               the whole personality of this thing, and it costs four divs. */}
@@ -414,7 +597,14 @@ export function VoiceBubble() {
           {/* ── Header ─────────────────────────────────────────────────── */}
           <div className="relative flex items-center gap-2 border-b border-line/70 px-3.5 py-2.5">
             <span className="mise-voice-dot" data-phase={phase} aria-hidden />
-            <p className="font-display text-[13px] font-semibold text-fg">DineAI Voice</p>
+            <p className="font-display text-[13px] font-semibold text-fg">
+              DineAI Voice
+              {live && (
+                <span className="mise-voice-live ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wider">
+                  live
+                </span>
+              )}
+            </p>
             <div className="ml-auto flex items-center gap-1">
               {/* The voice, named. It was a 7-pixel gear and he could not find
                   it, which is the same as it not being there. */}
@@ -468,7 +658,7 @@ export function VoiceBubble() {
                     setVoice(v.id);
                     remember("mise.voice", v.id);
                     setPanel("none");
-                    say(`Hello — I'm ${v.label}. Shall we get on with it?`);
+                    void preview(v.id);
                   }}
                   className={`mise-press flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[12px] transition ${
                     voice === v.id ? "bg-brand-600 text-white" : "mise-card-inset text-fg-soft"
@@ -523,12 +713,12 @@ export function VoiceBubble() {
           <div className="relative flex flex-col items-center px-4 pb-3 pt-4">
             <button
               type="button"
-              onClick={phase === "idle" ? listen : stop}
+              onClick={live ? stop : startLive}
               disabled={!supported}
-              aria-label={phase === "idle" ? "Start talking" : "Stop"}
+              aria-label={live ? "Stop listening" : "Start listening"}
               className="mise-voice-orb grid h-20 w-20 place-items-center rounded-full"
               data-phase={phase}
-              style={{ "--level": level } as React.CSSProperties}
+              style={{ ...paint, "--level": level } as React.CSSProperties}
             >
               {phase === "idle" ? (
                 <MicIcon className="h-7 w-7" />
@@ -582,6 +772,22 @@ export function VoiceBubble() {
             <p className="mise-voice-warn relative mx-3.5 mb-2 mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-200">
               {err}
             </p>
+          )}
+
+          {/* A browser that has never been interacted with refuses to make a
+              sound, and the rejection is silent. Without this the assistant
+              looks broken when it is one tap from working. */}
+          {needsTap && (
+            <button
+              type="button"
+              onClick={() => {
+                setNeedsTap(false);
+                void drain();
+              }}
+              className="mise-voice-warn relative mx-3.5 mb-2 mt-2 block w-[calc(100%-1.75rem)] rounded-xl border border-amber-400/40 bg-amber-400/10 px-2.5 py-2 text-left text-[11px] leading-relaxed text-amber-200"
+            >
+              This browser won’t let me speak until you tap once. Tap here and I’ll carry on.
+            </button>
           )}
 
           {/* ── Type it instead ────────────────────────────────────────── */}
