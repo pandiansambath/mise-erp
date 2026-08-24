@@ -1,5 +1,6 @@
 """Copilot endpoint. Any authenticated user may ask; tools enforce their own
 permission + hotel scope, so answers never leak across roles or tenants."""
+import base64
 import json
 import logging
 import time
@@ -610,6 +611,143 @@ async def voice_turn(
         "spoken": voice.spoken_form(reply),
         "actions": actions,
     }
+
+
+def _sse(event: dict) -> str:
+    """One server-sent event, in the shape the frontend already parses."""
+    return f"data: {json.dumps(event, default=str)}\n\n"
+
+
+@router.post("/voice/stream")
+async def voice_stream(
+    payload: "VoiceTurnIn",
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """One spoken turn, sent out in pieces the moment each piece exists.
+
+    The old path was two requests in series and nothing began until everything
+    had finished: 5.4s to write the reply, then another 2.4s to synthesise it,
+    then it spoke. Nearly eight seconds of silence with a person standing
+    there. Measured, on the live box, not guessed.
+
+    This changes the ORDER, not the brain. Same model, same tools, same
+    answers - but the text goes out as it is written, the page starts moving
+    the instant the model asks for it, and the first sentence is already coming
+    out of Polly while the second is still being thought of.
+
+    Events: `delta` (text as written), `action` (navigate/fill, immediately),
+    `audio` (base64 mp3 per sentence, in order), `done`, `error`.
+    """
+    from app.assistant import brain, guard, voice
+    from app.assistant.tools import EXECUTORS
+    from app.hotels.models import Hotel
+
+    await guard.enforce(db, user, "chat", feature="ai_assistant")
+    hotel = await db.get(Hotel, user.hotel_id)
+    system = await voice.system_for(db, user, hotel, payload.route)
+    model = await guard.model_for(db, user)
+    chosen_voice = payload.voice or voice.DEFAULT_VOICE
+
+    # `generate_stream` yields its `tool` event BEFORE running the tool, so the
+    # result never rides on the event. The executor drops UI actions here and
+    # the loop drains them on its next pass — which is the first moment the
+    # action is knowable at all.
+    ui_queue: list[dict] = []
+
+    async def execute(name: str, args: dict) -> dict:
+        ui = voice.action_from(name, args)
+        if ui is not None:
+            ui_queue.append(ui)
+            return {"ok": True, "note": "The page is doing that now."}
+        fn = EXECUTORS.get(name)
+        if fn is None:
+            return {"error": f"unknown tool {name}"}
+        try:
+            return await fn(db, user, args)
+        except Exception:  # noqa: BLE001 - one bad tool must not end the answer
+            log.exception("voice tool %s failed", name)
+            return {"error": f"The {name} lookup failed just then."}
+
+    async def events():
+        meter: dict = {}
+        spoken_buffer = ""
+        seq = 0
+        full = ""
+
+        async def say(chunk: str) -> str | None:
+            """Synthesise one chunk. Never lets a voice failure end the turn."""
+            try:
+                audio = await run_in_threadpool(voice.speak, chunk, chosen_voice)
+                return base64.b64encode(audio).decode("ascii")
+            except Exception:  # noqa: BLE001
+                log.exception("polly chunk failed")
+                return None
+
+        try:
+            async for ev in brain.generate_stream(
+                system=system,
+                history=[
+                    *voice.history_for(payload.history),
+                    {"role": "user", "content": payload.text},
+                ],
+                tools=voice.tools_for_voice(user),
+                execute=execute,
+                model=model,
+                meter=meter,
+            ):
+                # The page moves NOW, not after the sentence describing it.
+                while ui_queue:
+                    yield _sse({"type": "action", "action": ui_queue.pop(0)})
+
+                kind = ev.get("type")
+                if kind == "delta":
+                    piece = ev.get("text", "")
+                    full += piece
+                    spoken_buffer += piece
+                    yield _sse({"type": "delta", "text": piece})
+                    chunk, spoken_buffer = voice.next_sentence(spoken_buffer)
+                    if chunk:
+                        b64 = await say(chunk)
+                        if b64:
+                            yield _sse({"type": "audio", "b64": b64, "seq": seq})
+                            seq += 1
+                elif kind == "done":
+                    full = ev.get("text") or full
+        except Exception as exc:  # noqa: BLE001 - he is standing there waiting
+            log.exception("voice stream failed")
+            yield _sse({"type": "error", "message": str(exc)[:200]})
+            return
+
+        while ui_queue:
+            yield _sse({"type": "action", "action": ui_queue.pop(0)})
+
+        tail, _ = voice.next_sentence(spoken_buffer, force=True)
+        if tail:
+            b64 = await say(tail)
+            if b64:
+                yield _sse({"type": "audio", "b64": b64, "seq": seq})
+
+        try:
+            await guard.record(
+                db, user, kind="chat", model=meter.get("model", ""),
+                input_tokens=meter.get("input_tokens", 0),
+                output_tokens=meter.get("output_tokens", 0),
+            )
+        except Exception:  # noqa: BLE001 - metering must not break the answer
+            log.exception("voice metering failed")
+
+        yield _sse({"type": "done", "text": full})
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/voice/speak")

@@ -75,7 +75,14 @@ def _polly():
     return boto3.client("polly", region_name="eu-west-2")
 
 
-def speak(text: str, voice: str = DEFAULT_VOICE) -> bytes:
+#: Measured on the live box, same sentence: generative 2.39s, neural 0.93s.
+#: "voice response is very very late" — so the default is the fast one. The
+#: generative engine sounds better and a kitchen with a person waiting in it
+#: does not care; a second and a half of silence is the thing he noticed.
+FAST_ENGINE = "neural"
+
+
+def speak(text: str, voice: str = DEFAULT_VOICE, engine: str = FAST_ENGINE) -> bytes:
     """Turn a reply into MP3.
 
     Polly is told to read it as speech, not as a document: the assistant's
@@ -84,17 +91,25 @@ def speak(text: str, voice: str = DEFAULT_VOICE) -> bytes:
     """
     chosen = next((v for v in VOICES if v["id"] == voice), None) or VOICES[0]
     clean = spoken_form(text)
-    for engine in (chosen["engine"], "neural"):
+    # Ask for the requested engine, then the voice's own, then neural - without
+    # repeating one. Any voice can lose an engine in a region at any time, and
+    # "the assistant went mute" is a worse outcome than "it sounded slightly
+    # flatter for one sentence".
+    order: list[str] = []
+    for e in (engine, chosen["engine"], "neural"):
+        if e and e not in order:
+            order.append(e)
+    for eng in order:
         try:
             out = _polly().synthesize_speech(
                 Text=clean,
                 OutputFormat="mp3",
                 VoiceId=chosen["id"],
-                Engine=engine,
+                Engine=eng,
             )
             return out["AudioStream"].read()
         except Exception:  # noqa: BLE001 - botocore's errors, without the import
-            log.warning("polly %s/%s failed", chosen["id"], engine, exc_info=True)
+            log.warning("polly %s/%s failed", chosen["id"], eng, exc_info=True)
     raise RuntimeError(f"Polly would not speak as {chosen['id']}")
 
 
@@ -215,7 +230,25 @@ PERSONA = (
     "button: 'filled it in, have a look'.\n\n"
     "WHEN YOU MISHEAR. A kitchen is loud and money is exact. If a number could be "
     "wrong, say it back: 'a hundred and twenty, cash - yes?' Better a second of "
-    "checking than a wrong figure in his books."
+    "checking than a wrong figure in his books.\n\n"
+    "YOUR MICROPHONE IS ALWAYS ON. He turned you on and walked away; you are "
+    "hearing the whole room, not a question aimed at you. So:\n"
+    "- If what you heard was not addressed to you - kitchen talk, someone "
+    "else's conversation, half a sentence - reply with exactly NOTHING. Not "
+    "'sorry?', not 'I did not catch that'. An assistant that answers the room "
+    "is worse than no assistant.\n"
+    "- Only speak when you were spoken to, or clearly asked for something."
+    "\n\n"
+    "DOING WHAT HE ASKED, NOT WHAT IT SOUNDED LIKE. When he asks for something "
+    "to be DONE:\n"
+    "1. Work out which page it lives on. Sales for takings, Expenses for money "
+    "out, Inventory for stock levels, Purchasing for ordering.\n"
+    "2. go_to that page FIRST. Always. Filling a form on a page that is not "
+    "open puts the numbers nowhere.\n"
+    "3. Then fill_form, using the plainest field names you can.\n"
+    "If a question has BOTH a question and an instruction in it - 'what is low "
+    "and order some onions' - answer the question AND do the action. Do not "
+    "pick one. He asked for both because he wanted both."
 )
 
 
@@ -289,3 +322,78 @@ def action_from(tool_name: str, tool_input: dict[str, Any]) -> dict | None:
 
 def to_json(value: Any) -> str:
     return json.dumps(value, default=str)[:6000]
+
+
+# ── Speaking before the sentence is finished ────────────────────────────────
+#
+# "text response came within 3 sec but voice response is very very late... we
+#  need to speed up... user will hate our app."
+#
+# Measured on the live box: /voice/turn 5.4s, then /voice/speak another 2.4s,
+# in series. Nearly eight seconds before a sound, because NOTHING started until
+# EVERYTHING had finished — the whole reply had to be written before the first
+# word could be synthesised, and the browser had to ask twice.
+#
+# A person does not wait for their whole thought before starting to say it, and
+# neither should this. The reply is cut at sentence boundaries as it streams;
+# the first sentence goes to Polly while the model is still writing the second.
+# The brain is unchanged — Sonnet, every tool, same answers. Only the order of
+# operations moved.
+_ENDINGS = ".!?"
+
+
+def next_sentence(buffer: str, *, at_least: int = 20, force: bool = False) -> tuple[str, str]:
+    """Split off a chunk worth speaking. Returns (chunk, what is left).
+
+    ``at_least`` stops us shipping "Yes." to Polly as its own request — the
+    per-call overhead would cost more than it saves, and the speech comes out
+    chopped. It is deliberately LOW: at 45 characters a perfectly ordinary
+    opening line ("We took twelve hundred pounds today.") failed the test and
+    the whole reply was held back, which is the exact delay this exists to
+    remove. ``force`` is the end of the stream, where whatever remains is the
+    last thing to say however short it is.
+    """
+    if force:
+        return buffer.strip(), ""
+    for i, ch in enumerate(buffer):
+        if ch in _ENDINGS and i + 1 >= at_least:
+            # Don't cut mid-number: "1.5 kg" is not the end of a sentence.
+            if ch == "." and i + 1 < len(buffer) and buffer[i + 1].isdigit():
+                continue
+            return buffer[: i + 1].strip(), buffer[i + 1 :]
+    return "", buffer
+
+
+async def system_for(db, user: User, hotel, route: str | None) -> str:
+    """Everything the voice needs to know before it opens its mouth.
+
+    "this ai should have all permissions and all action it need to do.. and all
+     knowledge base it need to have knowledge of its entire hotel"
+
+    So it is handed the SAME knowledge brief the written assistant gets - every
+    page, every term, what each number means - rather than a thinner "voice
+    version". A quieter assistant is not a friendlier one, it is just one that
+    knows less. The only thing that differs is the delivery: this one is being
+    listened to, not read, and PERSONA above is entirely about that.
+
+    The knowledge brief is already scoped to what THIS person may see, so a
+    cook's voice and an owner's voice are handed different facts by the same
+    call. That is the permission model doing its job one layer earlier than the
+    tools do.
+    """
+    from app.assistant.service import _can, _route_context, _today_line
+
+    try:
+        from app.assistant.knowledge import knowledge_brief
+
+        brief = knowledge_brief(_can(user))
+    except Exception:  # noqa: BLE001 - never let grounding failure mute the voice
+        log.exception("voice knowledge brief failed")
+        brief = ""
+
+    where = _route_context(route) if route else ""
+    return (
+        f"{PERSONA}\n\n{brief}{where}{_today_line(hotel)}\n\n"
+        f"You are in {getattr(hotel, 'name', None) or 'this restaurant'}. "
+        f"The person talking to you is a {user.role}."
+    )
