@@ -20,12 +20,21 @@ const PASSWORD = "superadmin@123";
 test.setTimeout(240_000);
 
 async function signIn(page: import("@playwright/test").Page) {
+  // The guided tour is a bottom sheet at z-70 and it EATS clicks aimed at the
+  // floating launchers. Setting the flag after the dashboard paints is too
+  // late - the sheet is already up. Plant it before the app ever loads.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("mise.tour.done", "1");
+    } catch {
+      /* ignore */
+    }
+  });
   await page.goto(`${BASE}/login`);
   await page.locator("#li-email:visible").first().fill(EMAIL);
   await page.locator("#li-password:visible").first().fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
-  await page.evaluate(() => localStorage.setItem("mise.tour.done", "1"));
 }
 
 /** Call the API as the signed-in user, from inside the page. */
@@ -158,7 +167,7 @@ test("the chat is no longer tight - bubble and full page, measured", async ({ pa
   await signIn(page);
 
   // The bubble. It was 400x600 and he called it very very tight.
-  await page.getByRole("button", { name: /dineai|copilot|ask/i }).first().click();
+  await page.getByRole("button", { name: /ask dineai/i }).first().click();
   const panel = page.getByRole("dialog", { name: /copilot/i });
   await expect(panel).toBeVisible({ timeout: 15_000 });
   const pbox = (await panel.boundingBox())!;

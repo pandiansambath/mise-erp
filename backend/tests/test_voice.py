@@ -289,3 +289,35 @@ async def test_a_cook_can_talk_to_it_not_just_the_owner(
         headers=auth_header(cook),
     )
     assert r.status_code == 200, f"a cook was locked out of the voice: {r.text[:200]}"
+
+
+def test_the_ui_tools_carry_a_schema_the_brain_can_actually_read() -> None:
+    """The bug this exists to prevent, which cost a whole deploy to find.
+
+    brain._to_anthropic_tools() reads `t["parameters"]` and falls back to an EMPTY
+    object schema. The UI tools were written with `input_schema`, the key
+    Anthropic's own API uses - so they reached the model with no parameters at
+    all. `go_to` had nowhere to put a page name.
+
+    Nothing raised. The endpoint returned 200, the model replied warmly, and
+    `actions` came back empty every single time: "take me to sales" was
+    answered with a sentence and the page never moved. That is the whole
+    feature, failing silently, behind a perfectly good HTTP status.
+    """
+    for tool in voice.UI_ACTIONS:
+        schema = tool.get("parameters")
+        assert schema, f"{tool['name']} has no `parameters` - brain would send an empty schema"
+        assert schema.get("properties"), f"{tool['name']} declares no properties"
+        assert schema.get("required"), f"{tool['name']} makes every argument optional"
+
+
+def test_every_tool_the_voice_offers_survives_the_brains_translation() -> None:
+    """Belt and braces: run the real translation and check nothing comes out
+    hollow. A read tool renamed upstream would fail here too."""
+    from app.assistant import brain
+
+    translated = brain._to_anthropic_tools(voice.tools_for_voice(_FakeUser()))
+    for t in translated:
+        assert t["input_schema"].get("properties") is not None, f"{t['name']} lost its schema"
+    names = {t["name"] for t in translated}
+    assert {"go_to", "fill_form"} <= names
