@@ -321,3 +321,85 @@ def test_every_tool_the_voice_offers_survives_the_brains_translation() -> None:
         assert t["input_schema"].get("properties") is not None, f"{t['name']} lost its schema"
     names = {t["name"] for t in translated}
     assert {"go_to", "fill_form"} <= names
+
+
+# ── Speaking early, without speaking a thought ──────────────────────────────
+
+
+def test_a_sentence_is_split_off_as_soon_as_there_is_one():
+    from app.assistant.voice import next_sentence
+
+    chunk, rest = next_sentence("We took twelve hundred pounds today. It is up on yesterday.")
+    assert chunk == "We took twelve hundred pounds today."
+    assert rest.strip() == "It is up on yesterday."
+
+
+def test_a_decimal_is_not_the_end_of_a_sentence():
+    """"1.5 kg" would otherwise be shipped to Polly as "1." then " 5 kg"."""
+    from app.assistant.voice import next_sentence
+
+    chunk, _ = next_sentence("The onion is at 1.5 kg against a minimum of ten kilos. Order it.")
+    assert chunk == "The onion is at 1.5 kg against a minimum of ten kilos."
+
+
+def test_a_short_fragment_waits_for_more():
+    """A per-request round trip costs more than "Yes." saves, and it comes out chopped."""
+    from app.assistant.voice import next_sentence
+
+    chunk, rest = next_sentence("Yes. ")
+    assert chunk == ""
+    assert rest == "Yes. "
+
+
+def test_the_last_thing_said_is_never_left_unspoken():
+    from app.assistant.voice import next_sentence
+
+    chunk, rest = next_sentence("no full stop on this one", force=True)
+    assert chunk == "no full stop on this one"
+    assert rest == ""
+
+
+def test_a_thought_is_drafted_but_never_kept(monkeypatch):
+    """The whole reason drafts and deltas are different events.
+
+    Lap one is the model thinking out loud on its way to a tool call. Lap two
+    is the answer. Only the second may reach Polly - reading "let me check the
+    sales" aloud as if it were the reply is worse than a short wait.
+    """
+    import asyncio
+
+    from app.assistant import brain
+
+    laps = [
+        ("Let me check the sales.", [{"type": "tool_use", "id": "t1", "name": "sales", "input": {}}]),
+        ("We took twelve hundred pounds.", []),
+    ]
+
+    async def fake_lap(body, model, on_delta=None):
+        text, calls = laps.pop(0)
+        for word in text.split(" "):
+            if on_delta:
+                await on_delta(word + " ")
+        return text, calls, {"input_tokens": 1, "output_tokens": 1}
+
+    monkeypatch.setattr(brain.streaming, "_one_lap", fake_lap)
+
+    async def execute(name, args):
+        return {"ok": True}
+
+    async def run():
+        return [
+            ev
+            async for ev in brain.generate_stream(
+                system="s", history=[{"role": "user", "content": "hi"}],
+                tools=[], execute=execute, live=True,
+            )
+        ]
+
+    events = asyncio.run(run())
+    ends = [e for e in events if e["type"] == "draft_end"]
+    assert [e["kept"] for e in ends] == [False, True], events
+    drafted = "".join(e["text"] for e in events if e["type"] == "draft")
+    assert "Let me check" in drafted, "the thought should still reach the SCREEN"
+    # And in live mode nothing is sent twice.
+    assert not [e for e in events if e["type"] == "delta"], "live mode double-sent the reply"
