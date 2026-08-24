@@ -33,8 +33,6 @@ import json
 import logging
 from typing import Any
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel, Field
 
 from app.auth.models import User
@@ -69,6 +67,11 @@ DEFAULT_VOICE = "Amy"
 
 
 def _polly():
+    # Imported here, not at module scope. Everything else in this file is a
+    # pure function, and making the module unimportable without boto3 puts a
+    # network library between the tests and the rules they check.
+    import boto3
+
     return boto3.client("polly", region_name="eu-west-2")
 
 
@@ -90,7 +93,7 @@ def speak(text: str, voice: str = DEFAULT_VOICE) -> bytes:
                 Engine=engine,
             )
             return out["AudioStream"].read()
-        except (BotoCoreError, ClientError):
+        except Exception:  # noqa: BLE001 - botocore's errors, without the import
             log.warning("polly %s/%s failed", chosen["id"], engine, exc_info=True)
     raise RuntimeError(f"Polly would not speak as {chosen['id']}")
 

@@ -526,7 +526,7 @@ class SpeakIn(BaseModel):
 
 # ── 🎙️ THE VOICE ────────────────────────────────────────────────────────────
 @router.get("/voice/voices")
-async def voice_options(_: User = Depends(require("ai:use"))) -> dict:
+async def voice_options(_: User = Depends(get_current_user)) -> dict:
     """The six voices, named the way a person would pick one."""
     from app.assistant.voice import DEFAULT_VOICE, VOICES
 
@@ -537,7 +537,7 @@ async def voice_options(_: User = Depends(require("ai:use"))) -> dict:
 async def voice_turn(
     payload: "VoiceTurnIn",
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("ai:use")),
+    user: User = Depends(get_current_user),
 ) -> dict:
     """One spoken turn: hear it, think, answer, and maybe ask the PAGE to move.
 
@@ -616,7 +616,7 @@ async def voice_turn(
 async def voice_speak(
     payload: "SpeakIn",
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("ai:use")),
+    user: User = Depends(get_current_user),
 ) -> Response:
     """Say it out loud. MP3 back, played by the bubble."""
     from app.assistant import voice

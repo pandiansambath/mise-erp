@@ -42,9 +42,17 @@
       the real page, lit up so he can watch it happen.
 - [x] **V11 · Confirmation, configurable.** Ask every time / ask about money and
       people (default) / just do it. In the bubble's own settings.
-- [x] **V12 · The gate was a lie, and is fixed.** `enforce(feature="ai_assistant")`
-      named a flag that does not exist, and unknown flags default to **on** — so
-      that check passed everything. Now `ai_copilot`, the real one.
+- [x] **V12 · Two gates that looked right and were not.**
+      `enforce(feature="ai_assistant")` named a flag that does not exist, and
+      unknown flags default to **on** — so that check passed everything. And
+      `require("ai:use")` looked stricter than it was useful: `ai:use` lives in
+      ENVELOPES, what an owner MAY grant, not in PERMISSIONS, what a role HAS.
+      Only the owner holds `*`, so the owner would have tested the voice, found
+      it perfect, and every member of staff would have got a silent 403 — while
+      the written chat let them straight in. The voice now gates exactly as chat
+      does. There is a test for a cook using it.
+- [x] **V13 · Tests.** `tests/test_voice.py` — 21 of them, on the things that go
+      wrong without raising: what it says out loud, and what tools it holds.
 
 ### C — the chat
 
