@@ -11,7 +11,6 @@ import { canOpenPage } from "@/lib/access";
 import { can, getGrantedPermissions } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
 import CommandPalette from "@/components/CommandPalette";
-import { Copilot } from "@/components/Copilot";
 import { VoiceBubble } from "@/components/VoiceBubble";
 import NotificationBell from "@/components/NotificationBell";
 import { Select } from "@/components/Select";
@@ -817,9 +816,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           on every page. The Copilot only appears when the hotel has AI enabled. */}
       <MobileTabBar onSearch={() => setPaletteOpen(true)} items={navItems} />
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
-      {featureOn(hotel, "ai_copilot") && <Copilot />}
-      {/* The voice rides on the same feature flag as the written assistant:
-          it is the same brain, just heard rather than read. */}
+      {/* ONE assistant, one button.
+          "why we have 2 bubbles... it feels awkward to look... better combine
+           both" — and he is right that two floating launchers for one
+          assistant was never a design, it was an artefact of building the
+          voice second. He also said which one to keep, in the same breath:
+          the voice panel is "best top notch" and the chat is "worst". So the
+          voice panel IS the assistant now — it types as well as it talks, and
+          the same brain answers either way. The Copilot still powers the full
+          page at /ai-scan, where files and history live. */}
       {featureOn(hotel, "ai_copilot") && <VoiceBubble />}
       <CommandPalette
         open={paletteOpen}

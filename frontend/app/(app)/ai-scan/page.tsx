@@ -182,7 +182,7 @@ function Bubble({
         } text-[15px] leading-[1.65] ${
           mine
             ? "mise-press rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20"
-            : "mise-neo-raised rounded-bl-md text-fg"
+            : "mise-card-inset rounded-bl-md text-fg"
         }`}
       >
         {children}
@@ -761,23 +761,31 @@ export default function AiScanPage() {
         </button>
         </div>
 
-        {/* Stat tiles. The recipe sheet works because the numbers that matter
-            are big and labelled; these were 11px grey text nobody read. */}
+        {/*  "how tight it is.. make it free... this expanded look is very very
+            poor to see."
+
+            These were three full-height tiles announcing Model / Plan /
+            Questions-left above the conversation. On a laptop that is a
+            quarter of the window spent on facts that do not change during a
+            chat, and the chat itself got what was left — which is the band he
+            screenshotted. They are the same three facts, now a line of chips
+            in the header, and the conversation gets the room back.  */}
         {usage?.model && (
-          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-line/60 pt-3">
+          <div className="relative mt-2 flex flex-wrap items-center gap-1.5">
             {(
               [
                 ["Model", usage.model.includes("haiku") ? "Haiku" : "Sonnet"],
                 ["Plan", usage.plan ?? "—"],
-                ["Questions left", usage.daily_limit ? String(left) : "—"],
+                ["Left today", usage.daily_limit ? String(left) : "—"],
               ] as const
             ).map(([label, value]) => (
-              <div key={label} className="mise-well rounded-xl px-3 py-2">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-fg-faint">
-                  {label}
-                </p>
-                <p className="mt-0.5 truncate font-display text-base text-fg">{value}</p>
-              </div>
+              <span
+                key={label}
+                className="mise-card-inset rounded-full px-2.5 py-1 text-[11px] text-fg-soft"
+              >
+                <span className="text-fg-faint">{label}</span>{" "}
+                <span className="font-semibold text-fg">{value}</span>
+              </span>
             ))}
           </div>
         )}
@@ -793,7 +801,7 @@ export default function AiScanPage() {
       )}
 
       {/* the thread */}
-      <div className="mise-glass flex-1 space-y-6 overflow-y-auto rounded-3xl p-6 sm:p-8">
+      <div className="mise-chat-log flex-1 space-y-7 overflow-y-auto rounded-3xl p-6 sm:p-9">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];

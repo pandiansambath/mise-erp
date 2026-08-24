@@ -629,6 +629,24 @@ export function VoiceBubble() {
               >
                 <GearIcon className="h-4 w-4" />
               </button>
+              {/* This is the only assistant button on the page now, so the
+                  way through to files and history has to live here — or
+                  combining the two launchers would have quietly removed
+                  bill scanning from every screen. */}
+              <button
+                type="button"
+                onClick={() => {
+                  stop();
+                  setOpen(false);
+                  setPanel("none");
+                  router.push("/ai-scan");
+                }}
+                aria-label="Open the full chat"
+                title="Full chat, files and history"
+                className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint hover:text-fg"
+              >
+                <ExpandIcon className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -710,26 +728,59 @@ export function VoiceBubble() {
           )}
 
           {/* ── The orb ────────────────────────────────────────────────── */}
-          <div className="relative flex flex-col items-center px-4 pb-3 pt-4">
+          {/*  It is the whole personality of this thing when there is nothing
+              else to look at, and it is in the way the moment there is. So it
+              is full size on an empty panel and a small control once a
+              conversation exists — the room goes to the words.  */}
+          <div
+            className={`relative flex px-4 ${
+              turns.length
+                ? "items-center gap-3 pb-2.5 pt-3"
+                : "flex-col items-center pb-3 pt-4"
+            }`}
+          >
             <button
               type="button"
               onClick={live ? stop : startLive}
               disabled={!supported}
               aria-label={live ? "Stop listening" : "Start listening"}
-              className="mise-voice-orb grid h-20 w-20 place-items-center rounded-full"
+              className={`mise-voice-orb grid shrink-0 place-items-center rounded-full ${
+                turns.length ? "h-11 w-11" : "h-20 w-20"
+              }`}
               data-phase={phase}
               style={{ ...paint, "--level": level } as React.CSSProperties}
             >
               {phase === "idle" ? (
-                <MicIcon className="h-7 w-7" />
+                <MicIcon className={turns.length ? "h-5 w-5" : "h-7 w-7"} />
               ) : phase === "speaking" ? (
-                <WaveIcon className="h-7 w-7" />
+                <WaveIcon className={turns.length ? "h-5 w-5" : "h-7 w-7"} />
               ) : (
-                <span aria-hidden className="block h-4 w-4 rounded-[3px] bg-white" />
+                <span
+                  aria-hidden
+                  className={`block rounded-[3px] bg-white ${
+                    turns.length ? "h-3 w-3" : "h-4 w-4"
+                  }`}
+                />
               )}
             </button>
-            <p className="mt-2.5 font-display text-[13px] font-semibold text-fg">{label}</p>
-            {heard && <p className="mt-0.5 text-center text-[11px] text-fg-soft">“{heard}”</p>}
+            <div className={turns.length ? "min-w-0 flex-1" : "contents"}>
+              <p
+                className={`font-display text-[13px] font-semibold text-fg ${
+                  turns.length ? "" : "mt-2.5"
+                }`}
+              >
+                {label}
+              </p>
+              {heard && (
+                <p
+                  className={`text-[11px] text-fg-soft ${
+                    turns.length ? "truncate" : "mt-0.5 text-center"
+                  }`}
+                >
+                  “{heard}”
+                </p>
+              )}
+            </div>
 
             {turns.length === 0 && phase === "idle" && !heard && (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
@@ -748,23 +799,37 @@ export function VoiceBubble() {
           </div>
 
           {/* ── What has been said ─────────────────────────────────────── */}
+          {/*  "how tight it is.. make it free" — it was 160px of flat
+              paragraphs, which is a log, not a conversation. Now it is the
+              biggest thing in the panel, it keeps the whole exchange rather
+              than the last six lines, and the two speakers actually look
+              different from each other.  */}
           {turns.length > 0 && (
             <div
               ref={logRef}
-              className="relative max-h-40 space-y-2 overflow-y-auto border-t border-line/70 px-3.5 py-3"
+              className="relative max-h-[44vh] min-h-[8rem] space-y-2.5 overflow-y-auto border-t border-line/70 px-3.5 py-3.5"
             >
-              {turns.slice(-6).map((t, i) => (
-                <p
-                  key={i}
-                  className={`text-[12px] leading-relaxed ${
-                    t.role === "user"
-                      ? "text-right text-fg-faint"
-                      : "mise-card-inset rounded-2xl px-3 py-2 text-fg"
-                  }`}
-                >
-                  {t.content}
-                </p>
-              ))}
+              {turns.map((t, i) =>
+                t.role === "user" ? (
+                  <div key={i} className="flex justify-end">
+                    <p className="mise-voice-said max-w-[85%] rounded-2xl rounded-br-md px-3 py-2 text-[12.5px] leading-relaxed">
+                      {t.content}
+                    </p>
+                  </div>
+                ) : (
+                  <div key={i} className="flex justify-start">
+                    <p className="mise-card-inset max-w-[92%] rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[12.5px] leading-relaxed text-fg">
+                      {t.content || (
+                        <span className="mise-voice-dots" aria-label="thinking">
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                ),
+              )}
             </div>
           )}
 
@@ -903,6 +968,14 @@ function WaveIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+function ExpandIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" />
+    </svg>
+  );
+}
+
 function GearIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
