@@ -647,7 +647,7 @@ export default function AiScanPage() {
           the same facts in 11px grey text nobody reads. */}
       <header className="mise-neo-raised relative mb-4 overflow-hidden rounded-3xl px-5 py-4">
         {/* The same aurora as the voice bubble - one assistant, heard or read. */}
-        <span aria-hidden className="mise-aurora" data-phase="idle">
+        <span aria-hidden className="mise-voice-aurora" data-phase="idle">
           <i />
           <i />
           <i />

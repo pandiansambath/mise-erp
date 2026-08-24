@@ -133,6 +133,25 @@ export function VoiceBubble() {
   const [askMode, setAskMode] = useState<Ask>("money");
   const [level, setLevel] = useState(0);
   const [typed, setTyped] = useState("");
+  // The bubble renders into document.body, OUTSIDE the `.mise-app` element
+  // that carries `data-mode` — so no CSS in globals can tell whether the app is
+  // in a light theme. Mirror it onto the card. An aurora tuned against a
+  // near-black surface is a highlighter over near-white.
+  const [mode, setMode] = useState<"light" | "dark">("dark");
+  useEffect(() => {
+    const read = () =>
+      setMode(
+        document.querySelector(".mise-app")?.getAttribute("data-mode") === "light"
+          ? "light"
+          : "dark",
+      );
+    read();
+    const app = document.querySelector(".mise-app");
+    if (!app) return;
+    const obs = new MutationObserver(read);
+    obs.observe(app, { attributes: true, attributeFilter: ["data-mode"] });
+    return () => obs.disconnect();
+  }, []);
 
   const recRef = useRef<Recognizer | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -373,16 +392,19 @@ export function VoiceBubble() {
           other side of a kitchen, which is exactly when you need to know
           whether the machine is still listening to you. Nothing but light: it
           takes no clicks and covers nothing. */}
-      {phase !== "idle" && <div className="mise-live-glow" data-phase={phase} aria-hidden />}
+      {phase !== "idle" && (
+        <div className="mise-live-glow" data-phase={phase} data-mode={mode} aria-hidden />
+      )}
 
       <div className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6">
         <div
-          className="mise-voice-card relative overflow-hidden rounded-3xl border border-line"
+          className="mise-voice-card relative rounded-3xl border border-line"
           data-live={phase !== "idle"}
+          data-mode={mode}
         >
           {/* THE AURORA. Four blurred blobs drifting behind the glass — it is
               the whole personality of this thing, and it costs four divs. */}
-          <span aria-hidden className="mise-aurora" data-phase={phase}>
+          <span aria-hidden className="mise-voice-aurora" data-phase={phase}>
             <i />
             <i />
             <i />
@@ -557,7 +579,7 @@ export function VoiceBubble() {
           )}
 
           {err && (
-            <p className="relative mx-3.5 mb-2 mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-200">
+            <p className="mise-voice-warn relative mx-3.5 mb-2 mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-200">
               {err}
             </p>
           )}
@@ -605,8 +627,9 @@ export function VoiceBubble() {
             className="mise-fade-in absolute inset-0 bg-black/50"
             onClick={() => setPending(null)}
           />
-          <div className="mise-pop-lg mise-voice-card relative w-full max-w-sm overflow-hidden rounded-3xl border border-line p-5">
-            <span aria-hidden className="mise-aurora" data-phase="speaking">
+          <div className="mise-pop-lg mise-voice-card relative w-full max-w-sm rounded-3xl border border-line p-5"
+            data-mode={mode}>
+            <span aria-hidden className="mise-voice-aurora" data-phase="speaking">
               <i />
               <i />
               <i />

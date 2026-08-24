@@ -928,7 +928,7 @@ export function Copilot() {
               isWide ? "cursor-grab touch-none active:cursor-grabbing" : ""
             }`}
           >
-            <span aria-hidden className="mise-aurora" data-phase={loading ? "thinking" : "idle"}>
+            <span aria-hidden className="mise-voice-aurora" data-phase={loading ? "thinking" : "idle"}>
               <i />
               <i />
               <i />
