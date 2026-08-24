@@ -142,6 +142,22 @@ test("the bubble opens in the corner and the page stays visible", async ({ page 
   // The aurora is the UI he asked for by name.
   await expect(page.locator(".mise-aurora").first()).toBeAttached();
 
+  // "the alignment and placement is not nice to see" was two floating things
+  // sitting on top of each other. Overlap is a rectangle intersection, so it
+  // is checked as one - not squinted at.
+  const pill = page.getByRole("button", { name: /ask dineai/i }).first();
+  const pillBox = await pill.boundingBox();
+  if (pillBox) {
+    const clash =
+      box.x < pillBox.x + pillBox.width &&
+      pillBox.x < box.x + box.width &&
+      box.y < pillBox.y + pillBox.height &&
+      pillBox.y < box.y + box.height;
+    expect(clash, `the voice card is sitting on the Ask DineAI pill: ${JSON.stringify(pillBox)}`).toBe(
+      false,
+    );
+  }
+
   await page.screenshot({ path: "e2e/__screens__/voice-bubble.png" });
 });
 
