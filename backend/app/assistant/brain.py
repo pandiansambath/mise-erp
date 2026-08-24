@@ -237,6 +237,7 @@ async def generate_stream(
     attachment: dict | None = None,
     model: str = "",
     meter: dict[str, Any] | None = None,
+    live: bool = False,
 ) -> AsyncIterator[dict]:
     """The same turn, narrated as it happens.
 
@@ -248,7 +249,16 @@ async def generate_stream(
     ends in an answer or a tool call until the blocks arrive. Forwarding text
     from a lap that then calls a tool would type the model's private "let me
     check the sales" out as if it were the reply.
+
+    `live=True` forwards them anyway, as `draft` events, and follows each lap
+    with a `draft_end` saying whether that text turned out to BE the answer.
+    The voice needs this: buffering means nothing appears until the lap is
+    over, which is most of the delay a person actually feels. The caller shows
+    a draft immediately and, if the lap turns out to have been a tool call,
+    drops it — the model was thinking out loud, and now the screen says so
+    rather than pretending it was the reply.
     """
+    import asyncio
     messages = build_messages(history, attachment)
     spec = _to_anthropic_tools(tools)
     used: list[str] = []
@@ -270,10 +280,35 @@ async def generate_stream(
             body["tools"] = spec
 
         queue.clear()
-        try:
-            text, calls, usage = await streaming._one_lap(body, model, on_delta=emit)
-        except bedrock.BedrockUnavailable as exc:
-            raise BrainError(str(exc)) from exc
+        if live:
+            # `_one_lap` hands fragments to a callback, and a callback cannot
+            # yield out of an async generator. A queue bridges the two: the lap
+            # runs as a task and we forward whatever it has produced so far.
+            pipe: asyncio.Queue[str | None] = asyncio.Queue()
+
+            # Bound as defaults, not captured: a fresh queue is made every lap
+            # and a late callback must post to ITS own queue, not the newest.
+            async def pump(piece: str, _q: asyncio.Queue = pipe) -> None:
+                queue.append(piece)
+                await _q.put(piece)
+
+            task = asyncio.create_task(streaming._one_lap(body, model, on_delta=pump))
+            task.add_done_callback(lambda _t, _q=pipe: _q.put_nowait(None))
+            while True:
+                piece = await pipe.get()
+                if piece is None:
+                    break
+                yield {"type": "draft", "text": piece}
+            try:
+                text, calls, usage = await task
+            except bedrock.BedrockUnavailable as exc:
+                raise BrainError(str(exc)) from exc
+            yield {"type": "draft_end", "kept": not calls}
+        else:
+            try:
+                text, calls, usage = await streaming._one_lap(body, model, on_delta=emit)
+            except bedrock.BedrockUnavailable as exc:
+                raise BrainError(str(exc)) from exc
 
         if meter is not None:
             meter["model"] = model or bedrock._model_id()
@@ -281,9 +316,12 @@ async def generate_stream(
                 meter[key] = meter.get(key, 0) + value
 
         if not calls:
-            # This lap WAS the answer. Everything buffered is real reply text.
-            for piece in queue:
-                yield {"type": "delta", "text": piece}
+            # This lap WAS the answer. Everything buffered is real reply text —
+            # unless we already streamed it live, in which case sending it
+            # again would double the reply.
+            if not live:
+                for piece in queue:
+                    yield {"type": "delta", "text": piece}
             yield {"type": "done", "text": text, "tools": used}
             return
 
