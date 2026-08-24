@@ -3369,3 +3369,119 @@ body[data-overlay] .mise-launcher-in {
     animation: none;
   }
 }
+
+/* While the voice panel is up, the other floating launcher stands down. The
+   "Ask DineAI" pill is draggable — the user decides where it lives — so there
+   is no corner the voice could claim that is guaranteed free. Two floating
+   things overlapping is what "the alignment and placement is not nice to see"
+   looked like, and this is the only fix that cannot be defeated by a drag. */
+body.mise-voice-open .mise-launcher-in {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+/* ── 🌈 LIVE GLOW ────────────────────────────────────────────────────────
+   "when we are live with voice then it need to glow in aurora kinda color
+    ui... glowing effect i need please"
+
+   The whole window edge breathes in aurora colours while it is hearing or
+   speaking. It is deliberately the loudest thing the app ever does, because
+   this is the one moment where the only question in the user's head is "is it
+   still listening to me?" — and a glow you can see from across a kitchen
+   answers that without them walking back to the screen.
+
+   Light only: no pointer events, no layout, nothing covered. */
+.mise-live-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 64;
+  pointer-events: none;
+  animation: mise-live-edge 4.5s ease-in-out infinite;
+}
+/* A second, softer frame just inside the first. One shadow reads as a border;
+   two at different depths read as light coming from somewhere. */
+.mise-live-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  animation: mise-live-edge-2 6s ease-in-out infinite;
+}
+@keyframes mise-live-edge {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 70px -14px rgba(16, 185, 129, 0.7),
+      inset 0 0 180px -50px rgba(6, 182, 212, 0.55);
+  }
+  33% {
+    box-shadow:
+      inset 0 0 95px -14px rgba(6, 182, 212, 0.75),
+      inset 0 0 200px -50px rgba(139, 92, 246, 0.6);
+  }
+  66% {
+    box-shadow:
+      inset 0 0 82px -14px rgba(139, 92, 246, 0.7),
+      inset 0 0 190px -50px rgba(245, 158, 11, 0.5);
+  }
+}
+@keyframes mise-live-edge-2 {
+  0%,
+  100% {
+    box-shadow: inset 0 0 26px -6px rgba(139, 92, 246, 0.5);
+  }
+  50% {
+    box-shadow: inset 0 0 34px -6px rgba(16, 185, 129, 0.55);
+  }
+}
+/* Listening is the urgent state — it means the machine has the microphone.
+   Speaking is the same light, calmer, because nothing is being captured. */
+.mise-live-glow[data-phase="listening"] {
+  animation-duration: 2.4s;
+}
+.mise-live-glow[data-phase="thinking"] {
+  animation-duration: 3s;
+  opacity: 0.75;
+}
+.mise-live-glow[data-phase="speaking"] {
+  opacity: 0.85;
+}
+
+/* The bubble itself lifts on the same light, so the corner and the window edge
+   are obviously one thing rather than two effects that happen to coincide. */
+.mise-voice-card[data-live="true"] {
+  animation: mise-voice-card-glow 4.5s ease-in-out infinite;
+}
+@keyframes mise-voice-card-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 24px 60px -18px rgba(0, 0, 0, 0.65),
+      0 0 0 1px rgba(16, 185, 129, 0.35),
+      0 0 34px -4px rgba(16, 185, 129, 0.5);
+  }
+  33% {
+    box-shadow:
+      0 24px 60px -18px rgba(0, 0, 0, 0.65),
+      0 0 0 1px rgba(6, 182, 212, 0.4),
+      0 0 42px -4px rgba(6, 182, 212, 0.55);
+  }
+  66% {
+    box-shadow:
+      0 24px 60px -18px rgba(0, 0, 0, 0.65),
+      0 0 0 1px rgba(139, 92, 246, 0.4),
+      0 0 40px -4px rgba(139, 92, 246, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-live-glow,
+  .mise-live-glow::after,
+  .mise-voice-card[data-live="true"] {
+    animation: none;
+  }
+  /* Still say it is live — just without the pulsing. */
+  .mise-live-glow {
+    box-shadow: inset 0 0 80px -16px rgba(16, 185, 129, 0.6);
+  }
+}

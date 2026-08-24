@@ -70,6 +70,34 @@
 
 ---
 
+### The round he sent screenshots for
+
+- [x] **S1 · It sat on top of the "Ask DineAI" pill.** That pill is DRAGGABLE, so
+      no corner is safe and picking a cleverer one would only have moved the
+      collision. The voice sits higher, and the pill stands down while the voice
+      panel is open. There is a Playwright assertion on the two rectangles not
+      intersecting, because overlap is a measurement.
+- [x] **S2 · "the voice is not working... no response."** Root cause was not the
+      microphone. `brain._to_anthropic_tools()` reads `t["parameters"]`; the UI
+      tools were written with `input_schema` — Anthropic's own key, which is why
+      it looked right — so `go_to` reached the model with an EMPTY schema and
+      nowhere to put a page name. 200 OK, a warm reply, `actions: []`, every
+      time. Fourth appearance of this exact fault; there are now two tests on it.
+- [x] **S3 · Brave blocks the speech service.** It ships
+      `webkitSpeechRecognition` and blocks the Google endpoint behind it, so our
+      voice was taking the blame for the browser. It now names what is in the
+      way — and there is a text box, so the same brain answers and the same page
+      moves whether he speaks or types. A loud kitchen mishears too.
+- [x] **S4 · "no voice choosing thing and all, nothing is there."** It was
+      there, as a 7-pixel gear nobody would find. Invisible is the same as
+      absent. The voice is now a named button, and the confirm modes have their
+      own.
+- [x] **S5 · The live glow.** "when we are live with voice then it need to glow
+      in aurora kinda color ui." The whole window edge breathes in aurora
+      colours while it is hearing or speaking — the loudest thing the app does,
+      because that is the one moment the only question in your head is whether
+      it is still listening.
+
 ## The rule this all hangs on
 
 > **The voice never decides whether an action is allowed. It proposes; the

@@ -315,6 +315,18 @@ export function VoiceBubble() {
   // An open microphone on a counter is a bill. Close on the way out.
   useEffect(() => () => stop(), [stop]);
 
+  // Get the OTHER floating launcher out of the way while this panel is up.
+  //
+  // The "Ask DineAI" pill is draggable - the user decides where it lives - so
+  // there is no corner I can pick that is guaranteed to be free, and his
+  // screenshot is what picking one looks like when you guess wrong. Standing
+  // it down while the voice is open is the only version that cannot collide.
+  useEffect(() => {
+    const cls = "mise-voice-open";
+    document.body.classList.toggle(cls, open);
+    return () => document.body.classList.remove(cls);
+  }, [open]);
+
   if (!open) {
     return (
       <button
@@ -340,8 +352,19 @@ export function VoiceBubble() {
 
   return createPortal(
     <>
+      {/* 🌈 LIVE. The whole window breathes in aurora colours while it is
+          hearing or speaking — "when we are live with voice then it needs to
+          glow in aurora kinda colour". It is the thing you can see from the
+          other side of a kitchen, which is exactly when you need to know
+          whether the machine is still listening to you. Nothing but light: it
+          takes no clicks and covers nothing. */}
+      {phase !== "idle" && <div className="mise-live-glow" data-phase={phase} aria-hidden />}
+
       <div className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] sm:bottom-24 sm:right-6">
-        <div className="mise-voice-card relative overflow-hidden rounded-3xl border border-line">
+        <div
+          className="mise-voice-card relative overflow-hidden rounded-3xl border border-line"
+          data-live={phase !== "idle"}
+        >
           {/* THE AURORA. Four blurred blobs drifting behind the glass — it is
               the whole personality of this thing, and it costs four divs. */}
           <span aria-hidden className="mise-aurora" data-phase={phase}>
