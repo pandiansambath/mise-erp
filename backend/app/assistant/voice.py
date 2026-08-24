@@ -217,6 +217,19 @@ def tools_for_voice(user: User) -> list[dict]:
 
     Read tools come from the ordinary assistant, so the voice can never see
     anything the same person could not see by typing.
+
+    Two things are dropped rather than kept:
+
+    * every ``propose_*`` tool, because a voice does not get to write. It opens
+      the page and fills the form, and the form writes.
+    * ``navigate``, which returns a LINK for the model to mention. On a screen
+      that is helpful; spoken it is useless, and worse, it would satisfy "take
+      me to sales" without the page moving an inch. ``go_to`` is the only way
+      to answer that here, so it must be the only one on offer.
+
+    ``query_data`` stays. It is a read - one plain SELECT, a forced LIMIT, a
+    read-only transaction and per-tenant views - and it is how "what did we
+    spend last month" gets answered at all.
     """
     from app.assistant.tools import tools_for
 
@@ -224,10 +237,8 @@ def tools_for_voice(user: User) -> list[dict]:
     safe = [
         t
         for t in written
-        if not any(
-            w in t.get("name", "")
-            for w in ("propose", "create", "update", "delete", "commit", "query_data")
-        )
+        if not t.get("name", "").startswith(("propose_", "commit"))
+        and t.get("name") != "navigate"
     ]
     return safe + UI_ACTIONS
 
