@@ -143,7 +143,7 @@ test("the bubble opens in the corner and the page stays visible", async ({ page 
   expect(covered, `covers ${(covered * 100).toFixed(1)}% of the screen`).toBeLessThan(0.12);
 
   // The aurora is the UI he asked for by name.
-  await expect(page.locator(".mise-aurora").first()).toBeAttached();
+  await expect(page.locator(".mise-voice-aurora").first()).toBeAttached();
 
   // "the alignment and placement is not nice to see" was two floating things
   // sitting on top of each other. Overlap is a rectangle intersection, so it
@@ -243,4 +243,59 @@ test("it offers something to say instead of a silence", async ({ page }) => {
   // A mic and a blank panel is a guessing game about what it understands.
   await expect(page.getByRole("button", { name: /what did we take today/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /running low/i })).toBeVisible();
+});
+
+
+test("the card cannot scroll sideways, so its text cannot walk off the edge", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  await page.getByRole("button", { name: /talk to dineai/i }).click();
+  // Opening the voice list is what triggered it: focusing a button inside made
+  // the browser scroll the card to reveal it. The aurora sat at inset:-40%, so
+  // `overflow:hidden` had given the card 146px of scrollable area on each side
+  // — and every row shunted 68px left, clean off the edge. His screenshot read
+  // "nna", "phen", "l Voice". Nothing threw and every other assertion passed.
+  await page.getByRole("button", { name: /choose a voice/i }).click();
+  await page.waitForTimeout(500);
+
+  const geom = await page.evaluate(() => {
+    const card = document.querySelector(".mise-voice-card") as HTMLElement;
+    const cb = card.getBoundingClientRect();
+    const rows = [...card.querySelectorAll("button, p")]
+      .map((el) => el.getBoundingClientRect())
+      .filter((b) => b.width > 0);
+    return {
+      scrollLeft: card.scrollLeft,
+      scrollWidth: card.scrollWidth,
+      clientWidth: card.clientWidth,
+      worstSpill: Math.max(0, ...rows.map((b) => cb.left - b.left)),
+    };
+  });
+  console.log("card geometry:", JSON.stringify(geom));
+
+  expect(geom.scrollLeft, "the card scrolled its own contents out of view").toBe(0);
+  expect(
+    geom.scrollWidth,
+    "the card has a scrollable area it should not have — something inside overhangs it",
+  ).toBeLessThanOrEqual(geom.clientWidth + 1);
+  expect(geom.worstSpill, "text is hanging off the left edge of the card").toBeLessThan(2);
+});
+
+test("the card is a surface, not a tint", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  await page.getByRole("button", { name: /talk to dineai/i }).click();
+
+  // It was 94% opaque leaning on a backdrop blur that was reporting `none`, so
+  // the dashboard read straight through it. A panel floating over live data has
+  // to be readable without the page competing for the same pixels.
+  const bg = await page.evaluate(() => {
+    const card = document.querySelector(".mise-voice-card") as HTMLElement;
+    const c = getComputedStyle(card).backgroundColor;
+    const m = c.match(/[\d.]+/g)?.map(Number) ?? [];
+    // rgb() is opaque; rgba()/color() carry a 4th value.
+    return { raw: c, alpha: m.length >= 4 ? m[3] : 1 };
+  });
+  console.log("card background:", JSON.stringify(bg));
+  expect(bg.alpha, `card background ${bg.raw} lets the page through`).toBeGreaterThanOrEqual(0.99);
 });

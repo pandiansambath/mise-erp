@@ -3153,46 +3153,57 @@ body[data-overlay] .mise-launcher-in {
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 
-.mise-aurora {
+/* inset:0 and it clips its OWN blobs.
+   It used to be inset:-40%, which made it 146px wider than the card on each
+   side. `overflow:hidden` clips that visually but still creates a SCROLLABLE
+   area - so the moment a button inside the panel took focus, the browser
+   scrolled the card to reveal it and shunted every row 68px to the left, off
+   the edge. That is why the names read "nna" and "phen" in his screenshot.
+   Measured, not guessed: scrollLeft 68, scrollWidth 512, clientWidth 366. */
+.mise-voice-aurora {
   position: absolute;
-  inset: -40%;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
   pointer-events: none;
-  filter: blur(28px);
   opacity: 0.55;
   transition: opacity 500ms ease;
 }
-.mise-aurora i {
+.mise-voice-aurora i {
   position: absolute;
-  width: 55%;
-  height: 55%;
+  width: 70%;
+  height: 70%;
   border-radius: 9999px;
-  animation: mise-aurora-drift 14s ease-in-out infinite;
+  /* The blur lives on each blob now. On the container it would have blurred a
+     already-clipped square and drawn a hard edge at the card's border. */
+  filter: blur(30px);
+  animation: mise-voice-drift 14s ease-in-out infinite;
 }
-.mise-aurora i:nth-child(1) {
+.mise-voice-aurora i:nth-child(1) {
   background: #10b981;
-  top: 4%;
-  left: 2%;
+  top: -14%;
+  left: -12%;
 }
-.mise-aurora i:nth-child(2) {
+.mise-voice-aurora i:nth-child(2) {
   background: #06b6d4;
-  top: 12%;
-  right: 0%;
+  top: -8%;
+  right: -14%;
   animation-delay: -3.5s;
 }
-.mise-aurora i:nth-child(3) {
+.mise-voice-aurora i:nth-child(3) {
   background: #8b5cf6;
-  bottom: 2%;
-  left: 22%;
+  bottom: -16%;
+  left: 14%;
   animation-delay: -7s;
 }
-.mise-aurora i:nth-child(4) {
+.mise-voice-aurora i:nth-child(4) {
   background: #f59e0b;
-  bottom: 8%;
-  right: 12%;
+  bottom: -10%;
+  right: 6%;
   animation-delay: -10.5s;
   opacity: 0.7;
 }
-@keyframes mise-aurora-drift {
+@keyframes mise-voice-drift {
   0%,
   100% {
     transform: translate(0, 0) scale(1);
@@ -3205,25 +3216,25 @@ body[data-overlay] .mise-launcher-in {
   }
 }
 /* The colours wake up when it is listening and go quiet when it is not. */
-.mise-aurora[data-phase="idle"] {
+.mise-voice-aurora[data-phase="idle"] {
   opacity: 0.34;
 }
-.mise-aurora[data-phase="listening"] {
+.mise-voice-aurora[data-phase="listening"] {
   opacity: 0.9;
 }
-.mise-aurora[data-phase="listening"] i {
+.mise-voice-aurora[data-phase="listening"] i {
   animation-duration: 6s;
 }
-.mise-aurora[data-phase="thinking"] {
+.mise-voice-aurora[data-phase="thinking"] {
   opacity: 0.72;
 }
-.mise-aurora[data-phase="thinking"] i {
+.mise-voice-aurora[data-phase="thinking"] i {
   animation-duration: 3.4s;
 }
-.mise-aurora[data-phase="speaking"] {
+.mise-voice-aurora[data-phase="speaking"] {
   opacity: 0.82;
 }
-.mise-aurora[data-phase="speaking"] i {
+.mise-voice-aurora[data-phase="speaking"] i {
   animation-duration: 4.5s;
 }
 
@@ -3311,7 +3322,7 @@ body[data-overlay] .mise-launcher-in {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mise-aurora i,
+  .mise-voice-aurora i,
   .mise-voice-launch::after,
   .mise-voice-orb::after,
   .mise-voice-orb[data-phase="thinking"],
@@ -3361,7 +3372,41 @@ body[data-overlay] .mise-launcher-in {
    translucent panel with busy text behind it is the "not nice to see" in his
    screenshot. Opaque enough to read, blurred enough to feel like glass. */
 .mise-voice-card {
-  background: color-mix(in srgb, var(--color-paper) 94%, transparent);
+  /* OPAQUE. It was 94% with a backdrop blur behind it - except the blur was
+     reporting `none`, so the dashboard read straight through the card and the
+     panel looked like a smear. A floating panel over live data has to be a
+     surface, not a tint. */
+  background: var(--color-paper);
+  /* `clip` rather than `hidden`: hidden creates a scroll container, and a
+     scroll container is what silently shunted this card's contents sideways.
+     `clip` cuts the overflow and refuses to scroll, so the bug is not merely
+     fixed here, it is unrepresentable. */
+  overflow: clip;
+}
+
+/* THE PORTAL PROBLEM. The bubble renders into document.body, OUTSIDE the
+   `.mise-app` element that carries `data-mode` - so no `[data-mode="light"]`
+   selector in this file can reach it. The component mirrors the mode onto the
+   card itself, and these are the rules that need it: an aurora tuned against a
+   near-black surface becomes a highlighter over near-white. */
+.mise-voice-card[data-mode="light"] .mise-voice-aurora {
+  opacity: 0.2;
+}
+.mise-voice-card[data-mode="light"] .mise-voice-aurora[data-phase="listening"] {
+  opacity: 0.4;
+}
+.mise-voice-card[data-mode="light"] .mise-voice-aurora[data-phase="thinking"],
+.mise-voice-card[data-mode="light"] .mise-voice-aurora[data-phase="speaking"] {
+  opacity: 0.32;
+}
+/* Same reason: amber-200 on a dark tint is legible; on white it is invisible. */
+.mise-voice-card[data-mode="light"] .mise-voice-warn {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: rgba(180, 83, 9, 0.35);
+}
+.mise-live-glow[data-mode="light"] {
+  opacity: 0.55;
 }
 
 @media (prefers-reduced-motion: reduce) {
