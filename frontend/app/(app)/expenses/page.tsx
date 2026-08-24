@@ -13,7 +13,6 @@ import {
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
 import { SubNav } from "@/components/SubNav";
-import { recall, remember } from "@/lib/rangeMemory";
 import { Bars, Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortTh, useSort } from "@/components/sortable";
@@ -56,12 +55,18 @@ export default function ExpensesPage() {
     setCategories(await api.get<ExpenseCategory[]>("/expenses/categories"));
   };
 
-  // Start from what the user last chose THIS SESSION, falling back to the
-  // page's default. Expenses default to the month because a single day of
-  // overheads answers nothing.
-  const remembered = typeof window === "undefined" ? null : recall("expenses");
-  const [from, setFrom] = useState(remembered?.from ?? monthStart());
-  const [to, setTo] = useState(remembered?.to ?? today());
+  // "in expense section we need to return to today's in filter even when it is
+  //  changed for investigation... always show today's expense."
+  //
+  // NOTE, because this REVERSES something he asked for earlier: remembering the
+  // range for the session was itself his request, and it still holds everywhere
+  // else — Reports, Attendance, Sales. Expenses is the exception he has now
+  // named, and the reason is sound: you widen it to chase one thing down, and
+  // then every later glance is quietly answering a question you stopped asking.
+  // So this page always opens on today and the range is a deliberate act each
+  // time, rather than a state you can be left in without noticing.
+  const [from, setFrom] = useState(today());
+  const [to, setTo] = useState(today());
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const sort = useSort<"date" | "category" | "amount">("date", "desc");
@@ -117,7 +122,7 @@ export default function ExpensesPage() {
   function applyRange(f: string, t: string) {
     setFrom(f);
     setTo(t);
-    remember("expenses", { from: f, to: t });
+    // Deliberately NOT remembered — see the range initialiser above.
     setLoading(true);
     loadData(f, t).finally(() => setLoading(false));
   }

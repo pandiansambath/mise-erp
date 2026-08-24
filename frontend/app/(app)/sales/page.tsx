@@ -235,6 +235,27 @@ export default function SalesPage() {
   const variance = summary.cash_variance;
   const varianceNum = variance != null ? parseFloat(variance) : null;
 
+  // "previous closing is today's opening, but this is not happening
+  //  automatically... I need to click this grey dead save button, then only I
+  //  can see the total cash amount."
+  //
+  // The carry-forward was already there — the server offers yesterday's close
+  // as `suggested_opening` and it goes straight into the field. What did NOT
+  // move was every total below it, because those came from the SAVED record,
+  // where the opening is still zero. So the page showed a float in the box and
+  // £0.00 expected at the same time, and the only way to reconcile them was to
+  // press the one button that looked disabled.
+  //
+  // The server's number is adjusted by the difference rather than recomputed
+  // here: `expected` also subtracts unbooked petty cash, which this panel never
+  // shows, and a second copy of a money formula is a second thing to get wrong.
+  const savedOpening = parseFloat(summary.opening_cash ?? "0") || 0;
+  const typedOpening = parseFloat(opening || "0") || 0;
+  const expectedNow = String(
+    (parseFloat(summary.expected_cash ?? "0") || 0) + (typedOpening - savedOpening),
+  );
+  const dirtyCash = typedOpening !== savedOpening || (counted ?? "") !== (summary.cash_counted ?? "");
+
   // Today's takings by channel — the composition donut.
   const channelSegs: DonutSegment[] = (() => {
     const byChannel = new Map<string, number>();
@@ -277,7 +298,7 @@ export default function SalesPage() {
         // the bar itself — the "gap" that looked broken. A pinned toolbar has
         // to be a solid lid: it spans the content width exactly (matching
         // AppShell's px-4 lg:px-8) and nothing passes behind it.
-        className="sticky top-0 z-30 -mx-4 mb-5 flex items-center justify-end gap-3 border-b border-line bg-paper px-4 py-2.5 lg:-mx-8 lg:px-8"
+        className="mise-cash-lid sticky top-0 z-30 -mx-4 mb-5 flex items-center justify-end gap-3 border-b border-line bg-paper px-4 py-2.5 lg:-mx-8 lg:px-8"
       >
         <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-fg-faint">
           <span aria-hidden className="mr-1">🪙</span> In the cash box
@@ -289,7 +310,7 @@ export default function SalesPage() {
           className="mise-press flex items-baseline gap-2 rounded-xl px-2 py-1 text-right transition hover:bg-glass/5"
         >
           <span className="font-display text-xl font-semibold tabular-nums text-fg">
-            {format(summary.expected_cash)}
+            {format(expectedNow)}
           </span>
           <span className="text-[10px] text-fg-faint">
             {summary.cash_counted
@@ -620,7 +641,7 @@ export default function SalesPage() {
             )}
             <div className="flex justify-between font-medium text-fg">
               <span>= Expected in drawer</span>
-              <span>{format(summary.expected_cash)}</span>
+              <span>{format(expectedNow)}</span>
             </div>
             <div>
               <label className="flex items-center justify-between text-fg-faint">
@@ -752,9 +773,13 @@ export default function SalesPage() {
             {canWrite && (
               <button
                 onClick={saveCash}
-                className="w-full rounded-lg bg-glass/10 ring-1 ring-glass/15 px-4 py-2 text-sm font-semibold text-white hover:bg-glass/15"
+                // It was bg-glass/10 with white text: a pale block that reads
+                // as disabled, which is what he called "that grey color dead
+                // save button". It is the only way to commit the count, so it
+                // has to look like the primary action it is.
+                className="mise-press w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
               >
-                Save cash
+                {dirtyCash ? "Save cash" : "Saved"}
               </button>
             )}
           </div>
