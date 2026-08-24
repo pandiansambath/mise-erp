@@ -340,7 +340,7 @@ export function VoiceBubble() {
         onClick={() => setOpen(true)}
         aria-label="Talk to DineAI"
         title="Talk to DineAI"
-        className="mise-voice-launch fixed bottom-44 right-5 z-[60] grid h-14 w-14 place-items-center rounded-full text-white sm:bottom-24 sm:right-6"
+        className="mise-voice-launch fixed bottom-44 right-5 z-[60] grid h-14 w-14 place-items-center rounded-full text-white lg:bottom-24 lg:right-6"
       >
         <MicIcon className="h-6 w-6" />
       </button>
@@ -366,7 +366,7 @@ export function VoiceBubble() {
           takes no clicks and covers nothing. */}
       {phase !== "idle" && <div className="mise-live-glow" data-phase={phase} aria-hidden />}
 
-      <div className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] sm:bottom-24 sm:right-6">
+      <div className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6">
         <div
           className="mise-voice-card relative overflow-hidden rounded-3xl border border-line"
           data-live={phase !== "idle"}
