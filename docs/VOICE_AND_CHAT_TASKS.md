@@ -104,6 +104,20 @@
       because that is the one moment the only question in your head is whether
       it is still listening.
 
+- [x] **S6 · Something to say.** A mic and a silence is a test of whether you can
+      guess the phrasing it wants. Three real sentences are an offer — one of
+      each kind on purpose (a number, a check, a page), so the shape of what it
+      does is clear after reading three lines.
+- [x] **S7 · It was sitting on the mobile tab bar on every tablet.** The tab bar
+      is `lg:hidden`, not `sm:hidden`, and the voice used `sm:` for its desktop
+      offset — so from 640px to 1024px it dropped low and landed on the bar. The
+      same overlap he screenshotted, on a width I had not looked at.
+- [x] **S8 · A refused autoplay left the ring pulsing forever.** `play()` rejects
+      when a browser declines to start audio; the ticker driving the pulse was
+      only cleared by the ended/error handlers, which never fire if playback
+      never began. A leaked timer animating a ring for audio that was never
+      going to arrive.
+
 ## The rule this all hangs on
 
 > **The voice never decides whether an action is allowed. It proposes; the
