@@ -24,8 +24,14 @@
       in `infra/iam.tf` *and* applied live so the running box has it now.
 - [x] **V3 · The backend.** `app/assistant/voice.py` + three endpoints:
       `GET /voice/voices`, `POST /voice/turn`, `POST /voice/speak`.
-- [x] **V4 · Six voices, three of each.** Amy, Danielle, Kajal / Arthur,
-      Matthew, Stephen. Remembered per browser; previewed when picked.
+- [x] **V4 · Six voices, three of each.** Amy (British), Joanna (American),
+      Kajal (Indian English) / Brian (British), Stephen (American), Arthur
+      (British). Remembered per browser; spoken aloud the moment you pick one.
+      **The engine is per-voice, not a constant:** four of the six have Polly's
+      `generative` engine, which breathes and lands a joke where `neural` reads.
+      Kajal and Arthur only offer neural. `speak()` falls back if an engine
+      refuses — a voice going silent because a region changed is a dead feature;
+      a slightly plainer voice is not.
 - [x] **V5 · The friendly tone.** `PERSONA` — warm, funny, two or three
       sentences, never a list, says numbers the way a person says them.
 - [x] **V6 · Speech, not documents.** `spoken_form()` strips markdown, emoji and
@@ -51,7 +57,7 @@
       it perfect, and every member of staff would have got a silent 403 — while
       the written chat let them straight in. The voice now gates exactly as chat
       does. There is a test for a cook using it.
-- [x] **V13 · Tests.** `tests/test_voice.py` — 21 of them, on the things that go
+- [x] **V13 · Tests.** `tests/test_voice.py` — 23 of them, on the things that go
       wrong without raising: what it says out loud, and what tools it holds.
 
 ### C — the chat

@@ -9,7 +9,16 @@
 
 ---
 
-## The decision: **Gemini Live API**
+> ⚠️ **SUPERSEDED on the model, 2026-08-24 — he said English-only is fine for
+> now, and that removed the single thing ruling Bedrock out. What shipped is
+> Claude on Bedrock + Amazon Polly. The architecture below still holds, word for
+> word: the voice proposes and the server authorises. Only the vendor changed.**
+>
+> The Tamil/Telugu argument is preserved because it is the thing that reopens
+> this decision: **Polly has neither.** The day he wants a Madurai kitchen
+> talking to it in Tamil, this page is the plan again.
+
+## The decision at the time: **Gemini Live API**
 
 `gemini-2.5-flash-native-audio` (or `gemini-3.1-flash-live-preview`)
 
