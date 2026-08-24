@@ -139,6 +139,9 @@ export function VoiceBubble() {
   const [askMode, setAskMode] = useState<Ask>("money");
   const [level, setLevel] = useState(0);
   const [typed, setTyped] = useState("");
+  // What it is doing while it is not yet answering — the model's own words for
+  // it, which beat a spinner and beat a lie.
+  const [doing, setDoing] = useState("");
   // The bubble renders into document.body, OUTSIDE the `.mise-app` element
   // that carries `data-mode` — so no CSS in globals can tell whether the app is
   // in a light theme. Mirror it onto the card. An aurora tuned against a
@@ -301,6 +304,7 @@ export function VoiceBubble() {
       setPhase("thinking");
       setErr(null);
       setHeard("");
+      setDoing("");
       setTurns((t) => [...t, { role: "user", content: text }]);
       let reply = "";
       const fills: Extract<Action, { kind: "fill" }>[] = [];
@@ -345,7 +349,28 @@ export function VoiceBubble() {
               continue;
             }
 
-            if (ev.type === "delta") {
+            if (ev.type === "draft") {
+              // Straight onto the screen. It is not spoken until the server
+              // says it was the answer rather than a thought.
+              reply += String(ev.text ?? "");
+              if (reply) setDoing("");
+              setTurns((t) => {
+                const copy = [...t];
+                copy[copy.length - 1] = { role: "assistant", content: reply };
+                return copy;
+              });
+            } else if (ev.type === "draft_drop") {
+              // That text was the model thinking out loud on its way to
+              // looking something up. Say so, honestly, instead of leaving a
+              // half-answer on screen that is about to be replaced.
+              reply = "";
+              setDoing(String(ev.text ?? "") || "Looking that up…");
+              setTurns((t) => {
+                const copy = [...t];
+                copy[copy.length - 1] = { role: "assistant", content: "" };
+                return copy;
+              });
+            } else if (ev.type === "delta") {
               reply += String(ev.text ?? "");
               setTurns((t) => {
                 const copy = [...t];
@@ -819,13 +844,16 @@ export function VoiceBubble() {
                 ) : (
                   <div key={i} className="flex justify-start">
                     <p className="mise-card-inset max-w-[92%] rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[12.5px] leading-relaxed text-fg">
-                      {t.content || (
-                        <span className="mise-voice-dots" aria-label="thinking">
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      )}
+                      {t.content ||
+                        (i === turns.length - 1 && doing ? (
+                          <span className="text-fg-faint">{doing}</span>
+                        ) : (
+                          <span className="mise-voice-dots" aria-label="thinking">
+                            <i />
+                            <i />
+                            <i />
+                          </span>
+                        ))}
                     </p>
                   </div>
                 ),

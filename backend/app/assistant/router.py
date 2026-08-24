@@ -674,6 +674,7 @@ async def voice_stream(
         spoken_buffer = ""
         seq = 0
         full = ""
+        draft = ""
 
         async def say(chunk: str) -> str | None:
             """Synthesise one chunk. Never lets a voice failure end the turn."""
@@ -695,23 +696,45 @@ async def voice_stream(
                 execute=execute,
                 model=model,
                 meter=meter,
+                live=True,
             ):
                 # The page moves NOW, not after the sentence describing it.
                 while ui_queue:
                     yield _sse({"type": "action", "action": ui_queue.pop(0)})
 
                 kind = ev.get("type")
-                if kind == "delta":
+                if kind == "draft":
+                    # On screen immediately. NOT spoken yet: this lap may turn
+                    # out to have been the model thinking out loud on its way
+                    # to a tool call, and "let me check the sales" said aloud
+                    # as if it were the answer is worse than a short wait.
+                    piece = ev.get("text", "")
+                    draft += piece
+                    yield _sse({"type": "draft", "text": piece})
+                elif kind == "draft_end":
+                    if ev.get("kept"):
+                        # It WAS the answer. Now it may be spoken - and it goes
+                        # sentence by sentence, so the first one is already
+                        # coming out of Polly while the rest is synthesised.
+                        full += draft
+                        spoken_buffer += draft
+                        while True:
+                            chunk, spoken_buffer = voice.next_sentence(spoken_buffer)
+                            if not chunk:
+                                break
+                            b64 = await say(chunk)
+                            if b64:
+                                yield _sse({"type": "audio", "b64": b64, "seq": seq})
+                                seq += 1
+                    else:
+                        # A thought, not a reply. Tell the page to drop it.
+                        yield _sse({"type": "draft_drop", "text": draft.strip()[:120]})
+                    draft = ""
+                elif kind == "delta":
                     piece = ev.get("text", "")
                     full += piece
                     spoken_buffer += piece
                     yield _sse({"type": "delta", "text": piece})
-                    chunk, spoken_buffer = voice.next_sentence(spoken_buffer)
-                    if chunk:
-                        b64 = await say(chunk)
-                        if b64:
-                            yield _sse({"type": "audio", "b64": b64, "seq": seq})
-                            seq += 1
                 elif kind == "done":
                     full = ev.get("text") or full
         except Exception as exc:  # noqa: BLE001 - he is standing there waiting
