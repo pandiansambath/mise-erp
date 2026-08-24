@@ -3530,3 +3530,68 @@ body.mise-voice-open .mise-launcher-in {
     box-shadow: inset 0 0 80px -16px color-mix(in srgb, var(--v1, #10b981) 60%, transparent);
   }
 }
+
+/* The person's own words, in the brand colour, so a glance separates the two
+   speakers without reading either. */
+.mise-voice-said {
+  background: var(--vbrand, var(--color-brand-600));
+  color: #fff;
+}
+.mise-voice-card[data-mode="light"] .mise-voice-said {
+  background: var(--color-brand-600);
+}
+
+/* Three dots while the first token is still in the air. A streamed reply
+   starts empty, and an empty bubble reads as a bug. */
+.mise-voice-dots {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.15rem 0;
+}
+.mise-voice-dots i {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.4;
+  animation: mise-voice-dot 1.1s ease-in-out infinite;
+}
+.mise-voice-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.mise-voice-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes mise-voice-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-voice-dots i {
+    animation: none;
+  }
+}
+
+/* The full-page conversation. Same surface as the voice panel — he asked for
+   one look across the whole assistant, and two "nearly the same" cards read as
+   a mistake rather than a family. */
+.mise-chat-log {
+  background: color-mix(in srgb, var(--color-paper) 92%, transparent);
+  border: 1px solid var(--color-line);
+  box-shadow:
+    0 18px 48px -24px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--color-glass) 4%, transparent) inset;
+}
+.mise-app[data-mode="light"] .mise-chat-log {
+  box-shadow:
+    0 18px 44px -26px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(15, 23, 42, 0.05) inset;
+}
