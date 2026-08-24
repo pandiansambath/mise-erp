@@ -29,21 +29,22 @@ test("a role you made can be picked when creating a login", async ({ page }) => 
   // people job, not a jobs-board one.
   await page.getByRole("button", { name: /by person/i }).first().click();
   await page.getByRole("button", { name: /add a login/i }).first().click();
-  await page.waitForTimeout(1200);
-
-  // It is a custom Select, so the options do not exist until it is opened.
-  // Asserting on the closed control would have read only "Staff" and passed
-  // for the wrong reason.
-  await page.getByText("What are they?").click();
-  await page.waitForTimeout(700);
+  const modal = page.getByRole("dialog").filter({ hasText: "Give somebody a login" }).first();
+  await modal.waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(800);
   await page.screenshot({ path: "e2e/__screens__/role-in-newlogin.png", fullPage: true });
 
-  const body = await page.locator("body").innerText();
-  expect(body).toMatch(/what are they/i);
+  // The form is a popup now, and its job picker is a NATIVE select — so the
+  // options are in the DOM without opening it. The old version clicked
+  // "What are they?" to open a custom Select; both the wording and the control
+  // changed underneath this test.
+  const picker = modal.locator("select").first();
+  const options = await picker.locator("option").allInnerTexts();
+
   // A role of his own, offered right where the person is created.
-  expect(body).toMatch(/\(yours\)/i);
+  expect(options.join(" | ")).toMatch(/\(yours\)/i);
   // And never the tablet by the door.
-  expect(body).not.toMatch(/kiosk/i);
+  expect(options.join(" | ")).not.toMatch(/kiosk/i);
 });
 
 test("a role you made can be given to a person", async ({ page }) => {
