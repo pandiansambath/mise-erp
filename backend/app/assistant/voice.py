@@ -43,18 +43,26 @@ log = logging.getLogger("mise.voice")
 
 #: Six voices, three of each, as he asked. Polly's names mean nothing to an
 #: owner, so each carries the word a person would actually use to pick one.
+#:
+#: ENGINE. "generative" is Polly's conversational engine and it is a different
+#: thing to listen to - it breathes, it lands a joke, it does not read. He asked
+#: for "friendly, with humour, very very friendly", so where a voice has it, it
+#: gets it. Only four English voices do; the other two fall back to neural,
+#: which is why the engine is per-voice rather than a constant. It costs about
+#: twice as much per character and a spoken reply is two sentences, so the
+#: difference is fractions of a penny a turn.
 VOICES: list[dict[str, str]] = [
     {"id": "Amy", "label": "Amy", "who": "British, warm",
-     "sex": "female", "engine": "neural"},
-    {"id": "Danielle", "label": "Danielle", "who": "American, bright",
-     "sex": "female", "engine": "neural"},
+     "sex": "female", "engine": "generative"},
+    {"id": "Joanna", "label": "Joanna", "who": "American, bright",
+     "sex": "female", "engine": "generative"},
     {"id": "Kajal", "label": "Kajal", "who": "Indian English, easy",
      "sex": "female", "engine": "neural"},
-    {"id": "Arthur", "label": "Arthur", "who": "British, calm",
-     "sex": "male", "engine": "neural"},
-    {"id": "Matthew", "label": "Matthew", "who": "American, friendly",
-     "sex": "male", "engine": "neural"},
+    {"id": "Brian", "label": "Brian", "who": "British, dry",
+     "sex": "male", "engine": "generative"},
     {"id": "Stephen", "label": "Stephen", "who": "American, upbeat",
+     "sex": "male", "engine": "generative"},
+    {"id": "Arthur", "label": "Arthur", "who": "British, calm",
      "sex": "male", "engine": "neural"},
 ]
 DEFAULT_VOICE = "Amy"
@@ -73,17 +81,18 @@ def speak(text: str, voice: str = DEFAULT_VOICE) -> bytes:
     """
     chosen = next((v for v in VOICES if v["id"] == voice), None) or VOICES[0]
     clean = spoken_form(text)
-    try:
-        out = _polly().synthesize_speech(
-            Text=clean,
-            OutputFormat="mp3",
-            VoiceId=chosen["id"],
-            Engine=chosen["engine"],
-        )
-        return out["AudioStream"].read()
-    except (BotoCoreError, ClientError):
-        log.exception("polly failed")
-        raise
+    for engine in (chosen["engine"], "neural"):
+        try:
+            out = _polly().synthesize_speech(
+                Text=clean,
+                OutputFormat="mp3",
+                VoiceId=chosen["id"],
+                Engine=engine,
+            )
+            return out["AudioStream"].read()
+        except (BotoCoreError, ClientError):
+            log.warning("polly %s/%s failed", chosen["id"], engine, exc_info=True)
+    raise RuntimeError(f"Polly would not speak as {chosen['id']}")
 
 
 def spoken_form(text: str) -> str:
