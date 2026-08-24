@@ -134,7 +134,10 @@ test("the bubble opens in the corner and the page stays visible", async ({ page 
   console.log("bubble box:", JSON.stringify(box));
   expect(box.width, "a corner bubble, not a panel").toBeLessThan(420);
   expect(box.x + box.width, "hugs the right edge").toBeGreaterThan(1440 - 60);
-  expect(box.y + box.height, "sits at the bottom").toBeGreaterThan(900 - 60);
+  // Low, but deliberately NOT flush: it is raised to clear the draggable
+  // "Ask DineAI" pill, which is what the overlap check below is really about.
+  expect(box.y, "lives in the bottom half").toBeGreaterThan(450);
+  expect(box.y + box.height, "still near the bottom").toBeGreaterThan(900 - 160);
   // The share of the screen it covers is the actual complaint being tested.
   const covered = (box.width * box.height) / (1440 * 900);
   expect(covered, `covers ${(covered * 100).toFixed(1)}% of the screen`).toBeLessThan(0.12);
@@ -165,12 +168,17 @@ test("the voice settings offer 6 voices and his three confirm modes", async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   await page.getByRole("button", { name: /talk to dineai/i }).click();
-  await page.getByRole("button", { name: /choose a voice/i }).click();
 
+  // "no voice choosing thing and all, nothing is there" — it was a 7-pixel
+  // gear. It is now a named button, so it is found the way he would find it.
+  await page.getByRole("button", { name: /choose a voice/i }).click();
   for (const name of ["Amy", "Joanna", "Kajal", "Brian", "Stephen", "Arthur"]) {
     await expect(page.getByRole("button", { name: new RegExp(name, "i") })).toBeVisible();
   }
-  // "confirmation before serious actions, configurable."
+  await page.screenshot({ path: "e2e/__screens__/voice-picker.png" });
+
+  // "confirmation before serious actions, configurable." Its own control now.
+  await page.getByRole("button", { name: /when to ask me first/i }).click();
   await expect(page.getByRole("button", { name: /ask me every time/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /ask about money/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /just do it/i })).toBeVisible();
@@ -200,4 +208,39 @@ test("the chat is no longer tight - bubble and full page, measured", async ({ pa
   console.log("full page column:", JSON.stringify(cbox));
   expect(cbox.width, "a 48rem corridor on a wide screen").toBeGreaterThan(900);
   await page.screenshot({ path: "e2e/__screens__/chat-full-page.png", fullPage: false });
+});
+
+
+test("it glows while it is live, and only while it is live", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  await page.getByRole("button", { name: /talk to dineai/i }).click();
+
+  // "when we are live with voice then it need to glow in aurora kinda color."
+  // Idle is the important half of that sentence: a glow that never stops does
+  // not mean anything, so it must be ABSENT here.
+  await expect(page.locator(".mise-live-glow")).toHaveCount(0);
+
+  // The typed route reaches the same brain and the same states, which is the
+  // only way to drive this in a headless browser with no microphone.
+  await page.getByLabel(/type what you need/i).fill("what did we take today");
+  await page.getByRole("button", { name: /^send$/i }).click();
+
+  const glow = page.locator(".mise-live-glow");
+  await expect(glow).toBeVisible({ timeout: 20_000 });
+  await expect(glow).toHaveAttribute("data-phase", /thinking|speaking/);
+  // It must cover the window and catch nothing — it is light, not a layer.
+  const box = (await glow.boundingBox())!;
+  expect(box.width).toBeGreaterThan(1400);
+  expect(await glow.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+  await page.screenshot({ path: "e2e/__screens__/voice-live-glow.png" });
+});
+
+test("it offers something to say instead of a silence", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  await page.getByRole("button", { name: /talk to dineai/i }).click();
+  // A mic and a blank panel is a guessing game about what it understands.
+  await expect(page.getByRole("button", { name: /what did we take today/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /running low/i })).toBeVisible();
 });

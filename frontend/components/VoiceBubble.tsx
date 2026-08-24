@@ -60,6 +60,12 @@ const ASK_MODES: { id: Ask; label: string; note: string }[] = [
 // worth a second of his attention; a date is not.
 const WEIGHTY = /amount|total|price|cost|pay|wage|salary|rate|hours|qty|quantity|staff|employee/i;
 
+// The hardest thing about talking to a machine is not knowing what it can be
+// asked. A mic and a silence is a guessing game; three real sentences are an
+// offer. One of each kind on purpose — a number, a check, and a page — so the
+// shape of what it does is obvious after reading three lines.
+const STARTERS = ["What did we take today?", "What's running low?", "Open expenses"];
+
 function needsAsking(mode: Ask, fields: Record<string, string>): boolean {
   if (mode === "never") return false;
   if (mode === "always") return true;
@@ -503,6 +509,21 @@ export function VoiceBubble() {
             </button>
             <p className="mt-2.5 font-display text-[13px] font-semibold text-fg">{label}</p>
             {heard && <p className="mt-0.5 text-center text-[11px] text-fg-soft">“{heard}”</p>}
+
+            {turns.length === 0 && phase === "idle" && !heard && (
+              <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                {STARTERS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => ask(q)}
+                    className="mise-press mise-card-inset rounded-full px-2.5 py-1 text-[11px] text-fg-soft transition hover:text-fg"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── What has been said ─────────────────────────────────────── */}
