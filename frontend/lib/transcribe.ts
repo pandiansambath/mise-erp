@@ -219,3 +219,13 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
 
   return { stop: shutdown, level: () => loudness };
 }
+
+/** Exposed for tests only.
+ *
+ * The Python twin of this framing was accepted by Transcribe on the live
+ * account — the handshake completed and AWS parsed the audio events without
+ * complaint. This browser copy has never met AWS at all, and a byte wrong in a
+ * CRC or a length prefix fails as a silent disconnect rather than an error.
+ * So it is pinned to the bytes that are known to work.
+ */
+export const __testing = { audioEvent, toPcm16, crc32, downsample };
