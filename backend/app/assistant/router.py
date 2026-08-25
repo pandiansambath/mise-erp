@@ -709,7 +709,13 @@ async def voice_stream(
                     yield _sse({"type": "action", "action": ui_queue.pop(0)})
 
                 kind = ev.get("type")
-                if kind == "draft":
+                if kind == "tool":
+                    # The tool fires about a second in; the first word of the
+                    # reply lands nearer three, because the model has to decide,
+                    # run it, and only then start writing. Saying what it is
+                    # doing turns a silent wait into a visible one.
+                    yield _sse({"type": "doing", "label": voice.doing_label(ev.get("name", ""))})
+                elif kind == "draft":
                     # On screen immediately. NOT spoken yet: this lap may turn
                     # out to have been the model thinking out loud on its way
                     # to a tool call, and "let me check the sales" said aloud

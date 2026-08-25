@@ -610,3 +610,48 @@ async def test_a_cook_can_use_the_stream_too(client, make_user, auth_header, mon
     assert "Four things are low." in "".join(
         e["text"] for e in _frames(r.text) if e["type"] == "draft"
     )
+
+
+@pytest.mark.asyncio
+async def test_it_says_what_it_is_doing_before_it_can_answer(
+    client, make_user, auth_header, monkeypatch
+):
+    """Filling the three seconds before the first word.
+
+    Measured on the live box: the tool fires around a second in, the first word
+    of the reply nearer three. He had already called three seconds too slow, so
+    the wait has to be visible rather than silent - and in words a person uses,
+    not the tool's own name.
+    """
+    from app.assistant import brain, voice
+
+    async def fake_stream(**kw):
+        yield {"type": "tool", "name": "sales_today", "input": {}}
+        yield {"type": "draft", "text": "Nothing yet today."}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "Nothing yet today."}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    owner = await make_user("owner-doing@x.com", Role.SUPER_ADMIN.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "what did we take", "history": []},
+        headers=auth_header(owner),
+    )
+    evs = _frames(r.text)
+    kinds = [e["type"] for e in evs]
+    assert "doing" in kinds, "nothing was shown while it looked things up"
+    assert kinds.index("doing") < kinds.index("draft")
+    label = next(e["label"] for e in evs if e["type"] == "doing")
+    assert "sales_today" not in label, f"the tool's own name leaked to the screen: {label}"
+    assert label == "Checking today's takings…"
+
+
+def test_an_unknown_tool_still_gets_a_readable_label():
+    """A new tool must not put a snake_case identifier on his screen."""
+    from app.assistant.voice import doing_label
+
+    assert doing_label("some_new_lookup") == "Checking some new lookup…"
+    assert doing_label("") == "Working on it…"

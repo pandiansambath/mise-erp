@@ -397,3 +397,35 @@ async def system_for(db, user: User, hotel, route: str | None) -> str:
         f"You are in {getattr(hotel, 'name', None) or 'this restaurant'}. "
         f"The person talking to you is a {user.role}."
     )
+
+
+#: What each tool is doing, in words a person would use. The model's own tool
+#: names ("search_items", "query_data") are engineering nouns, and a status line
+#: that says `query_data` is worse than no status line at all.
+_DOING = {
+    "go_to": "Opening the page",
+    "fill_form": "Filling it in",
+    "query_data": "Checking the numbers",
+    "search_items": "Looking through your stock",
+    "low_stock": "Checking what's low",
+    "sales_today": "Checking today's takings",
+    "expenses_summary": "Checking what you've spent",
+    "who_is_in": "Checking who's in",
+    "vendor_prices": "Comparing supplier prices",
+    "recipe_cost": "Working out the cost",
+}
+
+
+def doing_label(tool_name: str) -> str:
+    """A human sentence for the thing it is about to do.
+
+    Measured on the live box: the first WORD of a reply lands about three
+    seconds in, because the model has to decide on a tool, run it, and only
+    then start writing. He had already called three seconds too slow. This is
+    what fills those three seconds - the tool fires at roughly one second, so
+    saying what it is doing turns a silent wait into a visible one.
+    """
+    if tool_name in _DOING:
+        return _DOING[tool_name] + "…"
+    pretty = tool_name.replace("_", " ").strip()
+    return f"Checking {pretty}…" if pretty else "Working on it…"

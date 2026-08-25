@@ -349,7 +349,15 @@ export function VoiceBubble() {
               continue;
             }
 
-            if (ev.type === "draft") {
+            if (ev.type === "doing") {
+              // Something on screen at ~1s instead of ~3s. It is the truth,
+              // too: this is genuinely what it is off doing.
+              setDoing(String(ev.label ?? ""));
+              setTurns((t) => {
+                if (t.length && t[t.length - 1].role === "assistant") return t;
+                return [...t, { role: "assistant", content: "" }];
+              });
+            } else if (ev.type === "draft") {
               // Straight onto the screen. It is not spoken until the server
               // says it was the answer rather than a thought.
               reply += String(ev.text ?? "");
