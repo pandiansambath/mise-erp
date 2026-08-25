@@ -660,20 +660,38 @@ async def voice_stream(
     # the loop drains them on its next pass — which is the first moment the
     # action is knowable at all.
     ui_queue: list[dict] = []
+    # Asking the same question twice does not make the answer arrive. Observed
+    # on prod: query_data called three times with identical arguments, the lap
+    # budget spent, and the turn ended having said NOTHING - which is the
+    # silence he reported in the first place.
+    seen_calls: dict[str, dict] = {}
 
     async def execute(name: str, args: dict) -> dict:
         ui = voice.action_from(name, args)
         if ui is not None:
             ui_queue.append(ui)
             return {"ok": True, "note": "The page is doing that now."}
+        signature = f"{name}:{json.dumps(args, sort_keys=True, default=str)[:400]}"
+        if signature in seen_calls:
+            prior = seen_calls[signature]
+            return {
+                **prior,
+                "_note": (
+                    "You have already run this exact lookup and this is the same "
+                    "result. Do not call it again - answer him now with what you "
+                    "have, even if it is only part of the picture."
+                ),
+            }
         fn = EXECUTORS.get(name)
         if fn is None:
             return {"error": f"unknown tool {name}"}
         try:
-            return await fn(db, user, args)
+            out = await fn(db, user, args)
         except Exception:  # noqa: BLE001 - one bad tool must not end the answer
             log.exception("voice tool %s failed", name)
-            return {"error": f"The {name} lookup failed just then."}
+            out = {"error": f"The {name} lookup failed just then."}
+        seen_calls[signature] = out if isinstance(out, dict) else {"result": out}
+        return out
 
     async def events():
         meter: dict = {}
@@ -771,6 +789,21 @@ async def voice_stream(
             )
         except Exception:  # noqa: BLE001 - metering must not break the answer
             log.exception("voice metering failed")
+
+        # NEVER end a turn having said nothing. Observed on prod: the model
+        # spent its whole lap budget on tool calls and produced no text, so the
+        # panel just stopped - no words, no sound, no error. That is
+        # indistinguishable from a hang, and it is exactly the complaint this
+        # whole piece of work started from.
+        if not full.strip():
+            full = (
+                "Sorry - I got tangled up looking that one up and lost my thread. "
+                "Ask me again?"
+            )
+            yield _sse({"type": "delta", "text": full})
+            b64 = await say(full)
+            if b64:
+                yield _sse({"type": "audio", "b64": b64, "seq": seq})
 
         yield _sse({"type": "done", "text": full})
 
