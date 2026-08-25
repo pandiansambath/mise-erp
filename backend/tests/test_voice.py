@@ -699,3 +699,76 @@ async def test_the_system_prompt_is_the_same_bytes_on_every_page(
             headers=auth_header(owner),
         )
     assert len(set(seen)) == 1, "the system prompt changes per page, so the cache never hits"
+
+
+@pytest.mark.asyncio
+async def test_a_turn_never_ends_having_said_nothing(
+    client, make_user, auth_header, monkeypatch
+):
+    """Observed on prod, and it is the original complaint in a new costume.
+
+    The model spent its whole lap budget on tool calls and produced no text, so
+    the stream simply stopped: no words, no sound, no error. That is
+    indistinguishable from a hang — which is exactly what "I tapped and waited
+    two minutes" felt like.
+    """
+    from app.assistant import brain, voice
+
+    async def fake_stream(**kw):
+        # Three laps of looking things up and never answering.
+        for _ in range(3):
+            yield {"type": "draft_end", "kept": False}
+            yield {"type": "tool", "name": "query_data", "input": {}}
+        yield {"type": "done", "text": ""}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    owner = await make_user("owner-silent@x.com", Role.SUPER_ADMIN.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "what did we take today", "history": []},
+        headers=auth_header(owner),
+    )
+    evs = _frames(r.text)
+    said = "".join(e.get("text", "") for e in evs if e["type"] in ("draft", "delta"))
+    assert said.strip(), "the turn ended in total silence"
+    assert any(e["type"] == "audio" for e in evs), "it went quiet as well as blank"
+    assert evs[-1]["type"] == "done"
+    assert evs[-1]["text"].strip()
+
+
+@pytest.mark.asyncio
+async def test_the_same_lookup_twice_is_told_to_stop(
+    client, make_user, auth_header, monkeypatch
+):
+    """Asking the same question twice does not make the answer arrive.
+
+    Prod called query_data three times with identical arguments and burned the
+    whole lap budget doing it. The second identical call now comes back with
+    the same data AND an instruction to answer from what it already has.
+    """
+    from app.assistant import brain, voice
+
+    results: list[dict] = []
+
+    async def fake_stream(*, execute, **kw):
+        results.append(await execute("query_data", {"sql": "select 1"}))
+        results.append(await execute("query_data", {"sql": "select 1"}))
+        yield {"type": "draft", "text": "Twelve hundred."}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "Twelve hundred."}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    owner = await make_user("owner-loop@x.com", Role.SUPER_ADMIN.value)
+    await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "what did we take", "history": []},
+        headers=auth_header(owner),
+    )
+    assert len(results) == 2
+    assert "_note" not in results[0], "the FIRST call must be clean"
+    assert "_note" in results[1], "a repeated identical lookup was not challenged"
+    assert "answer him now" in results[1]["_note"]
