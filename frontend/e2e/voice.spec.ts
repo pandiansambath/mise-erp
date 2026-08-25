@@ -164,30 +164,46 @@ test("the voice settings offer 6 voices and his three confirm modes", async ({ p
   await page.screenshot({ path: "e2e/__screens__/voice-settings.png" });
 });
 
-test("the chat is no longer tight - bubble and full page, measured", async ({ page }) => {
+test("the chat has room now - the panel and the full page, measured", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
 
-  // The bubble. It was 400x600 and he called it very very tight.
-  await page.getByRole("button", { name: /ask dineai/i }).first().click();
-  const panel = page.getByRole("dialog", { name: /copilot/i });
-  await expect(panel).toBeVisible({ timeout: 15_000 });
-  const pbox = (await panel.boundingBox())!;
-  console.log("copilot panel:", JSON.stringify(pbox));
-  expect(pbox.width, "was 400").toBeGreaterThanOrEqual(470);
-  expect(pbox.height, "was 600").toBeGreaterThanOrEqual(660);
+  // The panel IS the chat now — there is no second launcher to click. Its
+  // transcript used to be 160px of flat paragraphs capped at six lines, which
+  // is the "very very tight" he meant.
+  await page.getByRole("button", { name: /talk to dineai/i }).click();
+  await page.getByLabel(/type what you need/i).fill("what did we take today");
+  await page.getByRole("button", { name: /^send$/i }).click();
+
+  const log = page.locator(".mise-voice-card .overflow-y-auto").first();
+  await expect(log).toBeVisible({ timeout: 25_000 });
+  const lbox = (await log.boundingBox())!;
+  console.log("conversation area:", JSON.stringify(lbox));
+  expect(lbox.height, "the conversation is still a letterbox").toBeGreaterThan(150);
+
+  // The orb has to stand down once there is something to read, or it eats the
+  // room it was supposed to be giving up.
+  const orb = page.locator(".mise-voice-orb").first();
+  const obox = (await orb.boundingBox())!;
+  expect(obox.height, "the orb is still full size over a conversation").toBeLessThan(60);
   await page.screenshot({ path: "e2e/__screens__/chat-bubble.png" });
 
-  // The full page. It was max-w-3xl - 48rem on a 1440 screen.
+  // The full page. Model/Plan/Questions-left were three full-height tiles
+  // above the conversation, so the chat got the band that was left.
   await page.goto(`${BASE}/ai-scan`);
   const column = page.locator(".mise-page-grow").first();
   await expect(column).toBeVisible({ timeout: 20_000 });
   const cbox = (await column.boundingBox())!;
-  console.log("full page column:", JSON.stringify(cbox));
+  const thread = page.locator(".mise-chat-log").first();
+  const tbox = (await thread.boundingBox())!;
+  console.log("full page column:", JSON.stringify(cbox), "thread:", JSON.stringify(tbox));
   expect(cbox.width, "a 48rem corridor on a wide screen").toBeGreaterThan(900);
+  expect(
+    tbox.height / cbox.height,
+    "the header is still eating the page the conversation is for",
+  ).toBeGreaterThan(0.6);
   await page.screenshot({ path: "e2e/__screens__/chat-full-page.png", fullPage: false });
 });
-
 
 test("it glows while it is live, and only while it is live", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
