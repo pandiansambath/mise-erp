@@ -33,6 +33,7 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 
 import { API_BASE, api, ApiError, getToken } from "@/lib/api";
+import { listen as awsListen, type Listener } from "@/lib/transcribe";
 
 type Turn = { role: "user" | "assistant"; content: string };
 type Action =
@@ -193,8 +194,12 @@ export function VoiceBubble() {
   // Refs, not state, because the recogniser's callbacks are created once and
   // would otherwise read whatever these were when the microphone started.
   const liveRef = useRef(false);
+  // Once a browser has proved it will not do speech, stop asking it.
+  const preferAwsRef = useRef(false);
+  const greetedRef = useRef(false);
   const heardRef = useRef("");
   const silenceRef = useRef<number | null>(null);
+  const awsRef = useRef<Listener | null>(null);
   const queueRef = useRef<string[]>([]);
   const drainingRef = useRef(false);
   const logRef = useRef<HTMLDivElement | null>(null);
@@ -471,9 +476,65 @@ export function VoiceBubble() {
     }, SILENCE_MS);
   }, []);
 
+  /** Plan B, and for Brave the only plan: stream to Transcribe ourselves. */
+  const startAws = useCallback(async () => {
+    try {
+      const { url } = await api.get<{ url: string }>("/assistant/voice/listen-url");
+      const handle = await awsListen({
+        url,
+        muted: () => drainingRef.current,
+        onError: (m) => setErr(m),
+        onText: (text, final) => {
+          heardRef.current = text;
+          setHeard(text);
+          setLevel(0.3 + Math.min(0.6, text.length / 60));
+          // Transcribe tells us when an utterance ended, which is a better
+          // signal than any timer — but the timer stays as a backstop for a
+          // sentence it never closes.
+          if (final) {
+            if (silenceRef.current) window.clearTimeout(silenceRef.current);
+            const said = text.trim();
+            heardRef.current = "";
+            if (said) void askRef.current(said);
+          } else {
+            armSilence();
+          }
+        },
+      });
+      awsRef.current = handle;
+      liveRef.current = true;
+      setLive(true);
+      setErr(null);
+      setPhase("listening");
+      // A level meter that follows the actual microphone, not a guess.
+      const tick = window.setInterval(() => {
+        if (!liveRef.current) {
+          window.clearInterval(tick);
+          return;
+        }
+        if (!drainingRef.current) setLevel(Math.min(1, handle.level() * 3));
+      }, 120);
+    } catch (e) {
+      setPhase("idle");
+      setLive(false);
+      liveRef.current = false;
+      setErr(
+        e instanceof Error && /denied|not allowed|Permission/i.test(e.message)
+          ? "The microphone is blocked for this site — allow it from the padlock in the address bar."
+          : "I couldn't open the microphone just then. Try again?",
+      );
+    }
+  }, [armSilence]);
+
   const startLive = useCallback(() => {
     const rec = recognition();
-    if (!rec) return;
+    // Brave ships the API and blocks the service behind it, so "it exists" is
+    // not the same as "it works". We find that out from the network error and
+    // switch permanently for this session rather than failing twice.
+    if (!rec || preferAwsRef.current) {
+      void startAws();
+      return;
+    }
     rec.lang = "en-GB";
     rec.interimResults = true;
     rec.continuous = true;
@@ -503,7 +564,20 @@ export function VoiceBubble() {
       // A blocked speech service is permanent for this browser; restarting in
       // a loop would spin forever and say nothing. This is what left him
       // staring at "Listening…" for two minutes.
-      if (e.error === "network" || e.error === "not-allowed" || e.error === "service-not-allowed") {
+      if (e.error === "network" || e.error === "service-not-allowed") {
+        // The browser's own speech service is unreachable. Do not stand down —
+        // this is exactly the case our own ears exist for.
+        preferAwsRef.current = true;
+        setErr(null);
+        try {
+          rec.abort();
+        } catch {
+          /* already stopped */
+        }
+        void startAws();
+        return;
+      }
+      if (e.error === "not-allowed") {
         liveRef.current = false;
         setLive(false);
         setPhase("idle");
@@ -530,7 +604,31 @@ export function VoiceBubble() {
       setPhase("idle");
       setErr("The microphone is already in use.");
     }
-  }, [armSilence]);
+  }, [armSilence, startAws]);
+
+  // It speaks first. "once user click the voice model that model need to start
+  // the conversation... it need to guide and initiate conversation." An
+  // assistant that waits to be spoken to is a strange thing to have built.
+  useEffect(() => {
+    if (!open || greetedRef.current) return;
+    greetedRef.current = true;
+    api
+      .get<{ text: string; audio: string }>(`/assistant/voice/hello?voice_id=${voice}`)
+      .then((d) => {
+        if (!d.text) return;
+        setTurns((t) => (t.length ? t : [{ role: "assistant", content: d.text }]));
+        if (d.audio) {
+          queueRef.current.push(d.audio);
+          void drain();
+        }
+      })
+      .catch(() => {
+        /* a silent open is survivable; a broken one is not */
+      });
+    // `voice` is read once, on open, on purpose — changing voice mid-session
+    // must not re-greet him.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, drain]);
 
   /** Say one line in a voice, so picking one is a decision you can hear. */
   const preview = useCallback(
@@ -562,10 +660,32 @@ export function VoiceBubble() {
     if (silenceRef.current) window.clearTimeout(silenceRef.current);
     queueRef.current = [];
     recRef.current?.abort();
+    awsRef.current?.stop();
+    awsRef.current = null;
     audioRef.current?.pause();
     setPhase("idle");
     setLevel(0);
   }, []);
+
+  /** Pass a file to the page that can read it.
+   *
+   * Reimplementing the scan flow in a corner bubble would mean a second copy of
+   * the extract-confirm-save path — the part where a wrong number reaches his
+   * books. So the file rides across in memory and /ai-scan picks it up.
+   */
+  const handOff = useCallback(
+    (file: File) => {
+      try {
+        (window as Window & { __miseHandoff?: File }).__miseHandoff = file;
+      } catch {
+        /* nothing to do */
+      }
+      stop();
+      setOpen(false);
+      router.push("/ai-scan?handoff=1");
+    },
+    [router, stop],
+  );
 
   // An open microphone on a counter is a bill. Close on the way out.
   useEffect(() => () => stop(), [stop]);
@@ -932,6 +1052,30 @@ export function VoiceBubble() {
               aria-label="Type what you need"
               className="mise-card-inset min-w-0 flex-1 rounded-xl bg-transparent px-3 py-2 text-[12px] text-fg outline-none placeholder:text-fg-faint"
             />
+            {/* "what and all feature we had in previous ai chat interface — the
+                photo, file upload feature etc — are missing in this ai
+                interface." Combining the two launchers must not quietly delete
+                bill scanning from every screen, so the paperclip comes back —
+                and it hands the file to the page that is actually built to
+                read it, with its confirm-before-saving flow intact. */}
+            <label
+              className="mise-press grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-xl text-fg-faint hover:text-fg"
+              title="Send a bill, a photo or a file"
+              aria-label="Send a bill, a photo or a file"
+            >
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  handOff(file);
+                  e.target.value = "";
+                }}
+              />
+              <ClipIcon className="h-4 w-4" />
+            </label>
             <button
               type="submit"
               disabled={!typed.trim() || phase === "thinking"}
@@ -1022,6 +1166,14 @@ function WaveIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+function ClipIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a1.5 1.5 0 0 1-2.12-2.12l7.78-7.78" />
+    </svg>
+  );
+}
+
 function ExpandIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

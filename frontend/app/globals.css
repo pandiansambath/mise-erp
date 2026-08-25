@@ -3610,3 +3610,32 @@ body.mise-voice-open .mise-launcher-in {
   height: 2.5rem;
   background: var(--color-paper);
 }
+
+/* The full page's composer, in the same language as the bubble's. He said the
+   expanded view is "very tight" and that he wants the bubble's look on it, and
+   two surfaces that are nearly the same read as a mistake rather than a family. */
+.mise-chat-composer {
+  background: color-mix(in srgb, var(--color-paper) 96%, transparent);
+  border: 1px solid var(--color-line);
+  box-shadow:
+    0 10px 30px -18px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 color-mix(in srgb, var(--color-glass) 6%, transparent);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.mise-chat-composer:focus-within {
+  border-color: color-mix(in srgb, var(--color-brand-500) 45%, transparent);
+  box-shadow:
+    0 14px 34px -18px rgba(0, 0, 0, 0.5),
+    0 0 0 3px color-mix(in srgb, var(--color-brand-500) 14%, transparent);
+}
+.mise-app[data-mode="light"] .mise-chat-composer {
+  box-shadow:
+    0 10px 26px -20px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* A conversation is easier to read in a column than across a whole desk. */
+.mise-chat-log > * {
+  max-width: 60rem;
+  margin-inline: auto;
+}
