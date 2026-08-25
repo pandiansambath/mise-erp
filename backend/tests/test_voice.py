@@ -437,7 +437,7 @@ async def test_the_stream_sends_text_then_audio(client, make_user, auth_header, 
     monkeypatch.setattr(brain, "generate_stream", fake_stream)
     monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
 
-    owner = await make_user("owner-stream@x.com", Role.OWNER.value)
+    owner = await make_user("owner-stream@x.com", Role.SUPER_ADMIN.value)
     r = await client.post(
         "/api/assistant/voice/stream",
         json={"text": "what did we take today", "history": []},
@@ -480,7 +480,7 @@ async def test_a_thought_is_shown_but_never_spoken(client, make_user, auth_heade
 
     monkeypatch.setattr(voice, "speak", spy)
 
-    owner = await make_user("owner-thought@x.com", Role.OWNER.value)
+    owner = await make_user("owner-thought@x.com", Role.SUPER_ADMIN.value)
     r = await client.post(
         "/api/assistant/voice/stream",
         json={"text": "how are sales", "history": []},
@@ -508,7 +508,7 @@ async def test_the_page_is_told_to_move_before_the_sentence_about_it(
     monkeypatch.setattr(brain, "generate_stream", fake_stream)
     monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
 
-    owner = await make_user("owner-nav@x.com", Role.OWNER.value)
+    owner = await make_user("owner-nav@x.com", Role.SUPER_ADMIN.value)
     r = await client.post(
         "/api/assistant/voice/stream",
         json={"text": "take me to sales", "history": []},
@@ -537,7 +537,7 @@ async def test_a_mute_polly_still_answers_in_text(client, make_user, auth_header
     monkeypatch.setattr(brain, "generate_stream", fake_stream)
     monkeypatch.setattr(voice, "speak", boom)
 
-    owner = await make_user("owner-mute@x.com", Role.OWNER.value)
+    owner = await make_user("owner-mute@x.com", Role.SUPER_ADMIN.value)
     r = await client.post(
         "/api/assistant/voice/stream",
         json={"text": "what is low", "history": []},
@@ -569,7 +569,7 @@ async def test_a_dead_brain_ends_the_stream_politely(
 
     monkeypatch.setattr(brain, "generate_stream", fake_stream)
 
-    owner = await make_user("owner-dead@x.com", Role.OWNER.value)
+    owner = await make_user("owner-dead@x.com", Role.SUPER_ADMIN.value)
     r = await client.post(
         "/api/assistant/voice/stream",
         json={"text": "what is low", "history": []},
