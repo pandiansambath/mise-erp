@@ -112,6 +112,32 @@ resource "aws_iam_role_policy" "bedrock" {
 #
 # So: the browser hears, Claude thinks, Polly speaks. All three stay in
 # eu-west-2, all on SDKs that are not labelled experimental.
+# 🎧 THE EARS.
+#
+# The browser's own speech API is a Chrome feature that ships the audio to
+# Google, and Brave - which is what he actually uses - strips it out. There is
+# no flag we can set from our side, so the ears move onto our own stack.
+#
+# The browser streams audio DIRECTLY to Transcribe over a presigned WebSocket:
+# our server signs the URL and never touches a byte of audio, so nothing is
+# proxied through the box and a long conversation costs us no bandwidth.
+resource "aws_iam_role_policy" "transcribe" {
+  name = "mise-transcribe"
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "TranscribeStreaming"
+      Effect = "Allow"
+      Action = [
+        "transcribe:StartStreamTranscriptionWebSocket",
+        "transcribe:StartStreamTranscription",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "polly" {
   name = "${var.project}-polly"
   role = aws_iam_role.ec2.id

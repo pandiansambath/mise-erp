@@ -772,3 +772,66 @@ async def test_the_same_lookup_twice_is_told_to_stop(
     assert "_note" not in results[0], "the FIRST call must be clean"
     assert "_note" in results[1], "a repeated identical lookup was not challenged"
     assert "answer him now" in results[1]["_note"]
+
+
+def test_the_signed_listen_url_is_shaped_the_way_transcribe_wants(monkeypatch):
+    """Brave's refusal is not something we can argue with, so we grew our own ears.
+
+    The browser opens this socket ITSELF — no audio passes through our box —
+    so the URL has to be right without anything downstream to correct it.
+    """
+    import sys
+    import types
+
+    fake = types.ModuleType("boto3")
+
+    class Creds:
+        access_key = "AKIAEXAMPLE"
+        secret_key = "shhh"
+        token = "sess-token"
+
+        def get_frozen_credentials(self):
+            return self
+
+    fake.Session = lambda: types.SimpleNamespace(get_credentials=lambda: Creds())
+    monkeypatch.setitem(sys.modules, "boto3", fake)
+
+    from importlib import reload
+
+    from app.assistant import listen as listen_mod
+
+    reload(listen_mod)
+    import urllib.parse as up
+
+    url = listen_mod.presigned_url()
+    parsed = up.urlparse(url)
+    q = up.parse_qs(parsed.query)
+
+    assert parsed.scheme == "wss"
+    assert parsed.netloc == "transcribestreaming.eu-west-2.amazonaws.com:8443"
+    assert parsed.path == "/stream-transcription-websocket"
+    assert q["media-encoding"] == ["pcm"]
+    assert q["sample-rate"] == ["16000"]
+    assert len(q["X-Amz-Signature"][0]) == 64
+    # A temporary credential's session token must be SIGNED, not merely
+    # attached — an unsigned token is rejected at the handshake.
+    assert "X-Amz-Security-Token" in q
+    first = q["X-Amz-Signature"][0]
+    Creds.token = "a-different-token"
+    second = up.parse_qs(up.urlparse(listen_mod.presigned_url()).query)["X-Amz-Signature"][0]
+    assert first != second, "the session token is not part of the signature"
+
+
+def test_it_opens_its_own_mouth():
+    """"once user click the voice model that model need to start the conversation."""
+    from app.assistant.voice import GREETINGS, greeting
+
+    assert len(GREETINGS) >= 3, "one fixed hello becomes wallpaper by Tuesday"
+    # The property that matters is not punctuation - "Ask me about the money,
+    # the stock or the rota" invites plenty without a question mark. It is that
+    # every opener says what he can ASK FOR. The hardest thing about talking to
+    # a machine is not knowing what it is for, and "Hello!" does not help.
+    offers = ("ask", "tell me", "shall i", "what do you need", "want")
+    for line in GREETINGS:
+        assert any(w in line.lower() for w in offers), f"this opener offers nothing: {line}"
+    assert greeting(0) != greeting(1), "it does not rotate"

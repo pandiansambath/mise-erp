@@ -307,6 +307,20 @@ export default function AiScanPage() {
     [push],
   );
 
+  // A file handed over from the voice panel. It travels in memory rather than
+  // through storage: it is a photo of a bill, it is only wanted for the next
+  // second, and putting it anywhere persistent would be a copy of his paperwork
+  // nobody asked for.
+  useEffect(() => {
+    const w = window as Window & { __miseHandoff?: File };
+    const file = w.__miseHandoff;
+    if (!file) return;
+    delete w.__miseHandoff;
+    void read(file);
+    // Mount only: a handoff is consumed once, by the load it arrived with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* photo → Bedrock → a live card in the thread */
   async function read(file: File) {
     setBusy(true);
@@ -937,13 +951,13 @@ export default function AiScanPage() {
             e.target.value = "";
           }}
         />
-        <div className="mise-neo flex items-end gap-2 p-2.5">
+        <div className="mise-chat-composer flex items-end gap-2 rounded-2xl p-2">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={busy || offline}
             title="Photograph a bill or recipe"
-            className="mise-press grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-lg text-white hover:bg-brand-700 disabled:opacity-50"
+            className="mise-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-lg text-white hover:bg-brand-700 disabled:opacity-50"
           >
             📷
           </button>
@@ -970,7 +984,7 @@ export default function AiScanPage() {
             type="button"
             onClick={() => send()}
             disabled={busy || !text.trim()}
-            className="mise-press grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-paper-2 text-fg-soft hover:bg-paper-3 disabled:opacity-40"
+            className="mise-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40"
           >
             ➤
           </button>

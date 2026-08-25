@@ -447,3 +447,26 @@ def doing_label(tool_name: str) -> str:
         return _DOING[tool_name] + "…"
     pretty = tool_name.replace("_", " ").strip()
     return f"Checking {pretty}…" if pretty else "Working on it…"
+
+
+#: How it opens its mouth first. "once user click the voice model that model
+#: need to start the conversation... like hi nirai how was the day... whatsup..
+#: how can i help... any thing u need please ask... i can even do action."
+#:
+#: Not one fixed line, because hearing the same sentence every morning is how
+#: you learn to stop listening. And it says what it can DO, because the hardest
+#: thing about talking to a machine is not knowing what it is for.
+GREETINGS = [
+    "Hey! How's the day going? Ask me anything — or tell me to put something in and I'll do it.",
+    "Hello! What do you need? I can check your numbers, or open a page and fill it in for you.",
+    "Hi there! Want to know how today's going, or shall I put something in for you?",
+    "Hey — I'm listening. Ask me about the money, the stock, the rota, or just tell me what to do.",
+    "Hello! Fancy a look at today's takings, or is there something you want me to log?",
+]
+
+
+def greeting(seed: int | None = None) -> str:
+    """One opening line. Rotated so it does not become wallpaper."""
+    import random
+
+    return GREETINGS[seed % len(GREETINGS)] if seed is not None else random.choice(GREETINGS)

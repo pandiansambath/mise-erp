@@ -624,6 +624,65 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event, default=str)}\n\n"
 
 
+@router.get("/voice/hello")
+async def voice_hello(
+    voice_id: str = "Amy",
+    user: User = Depends(get_current_user),
+) -> dict:
+    """What it says when he opens the panel, before he has said anything.
+
+    "once user click the voice model that model need to start the conversation
+     ... it can even do action ... this voice model need to guide and initiate
+     conversation."
+
+    He is right that an assistant which waits to be spoken to first is a strange
+    thing to build. This is deliberately NOT a model call: it must be instant
+    and free, it is the same handful of sentences either way, and spending a
+    Bedrock turn on "hello" would put a two-second pause on opening a panel.
+    """
+    from app.assistant import voice
+
+    line = voice.greeting()
+    audio = ""
+    try:
+        raw = await run_in_threadpool(voice.speak, line, voice_id)
+        audio = base64.b64encode(raw).decode("ascii")
+    except Exception:  # noqa: BLE001 - a silent hello still reads fine
+        log.exception("greeting audio failed")
+    return {"text": line, "audio": audio}
+
+
+@router.get("/voice/listen-url")
+async def voice_listen_url(
+    language: str = "en-GB",
+    user: User = Depends(get_current_user),
+) -> dict:
+    """A signed WebSocket the browser may open to Amazon Transcribe.
+
+    "tried voice model..still its not listenig the voice"
+
+    Brave ships the browser speech API and blocks the Google service behind it,
+    so our voice was taking the blame for a browser decision. This moves the
+    ears onto our own stack - and the browser opens the socket ITSELF, so no
+    audio passes through this box. An always-on microphone proxied through a
+    t3.micro would be a permanent audio stream per user.
+
+    The credential never leaves the server; the browser gets a signature that
+    expires in five minutes and permits nothing but transcription.
+    """
+    from app.assistant import listen
+
+    try:
+        url = await run_in_threadpool(listen.presigned_url, language)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("could not sign a transcribe url")
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "I can't reach the transcription service right now.",
+        ) from exc
+    return {"url": url, "sample_rate": listen.SAMPLE_RATE}
+
+
 @router.post("/voice/stream")
 async def voice_stream(
     payload: "VoiceTurnIn",
