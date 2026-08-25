@@ -518,6 +518,12 @@ class VoiceTurnIn(BaseModel):
     history: list[dict] = Field(default_factory=list)
     #: Which page he is looking at, so "put it in here" means something.
     route: str | None = None
+    #: Which of the six voices to answer in. The browser has always sent this
+    #: and the schema did not declare it, so pydantic dropped it on the floor
+    #: and `payload.voice` raised on every single streamed turn. Same family of
+    #: fault as the response_model that strips undeclared fields - a field that
+    #: quietly is not there, failing far from where it was omitted.
+    voice: str = "Amy"
 
 
 class SpeakIn(BaseModel):
