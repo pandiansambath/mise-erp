@@ -13,6 +13,7 @@ Two kinds of fault live in this module and neither shows up as an exception:
 So the assertions here are about MEANING, not about the code running.
 """
 
+import json
 import uuid
 
 import pytest
@@ -403,3 +404,209 @@ def test_a_thought_is_drafted_but_never_kept(monkeypatch):
     assert "Let me check" in drafted, "the thought should still reach the SCREEN"
     # And in live mode nothing is sent twice.
     assert not [e for e in events if e["type"] == "delta"], "live mode double-sent the reply"
+
+
+# ── The streaming turn, end to end ──────────────────────────────────────────
+
+
+def _frames(body: str) -> list[dict]:
+    """The SSE frames of a response, as the browser would parse them."""
+    out = []
+    for frame in body.split("\n\n"):
+        line = next((line for line in frame.split("\n") if line.startswith("data:")), None)
+        if line:
+            out.append(json.loads(line[5:].strip()))
+    return out
+
+
+@pytest.mark.asyncio
+async def test_the_stream_sends_text_then_audio(client, make_user, auth_header, monkeypatch):
+    """One request now carries what two used to, in the order each becomes true.
+
+    It was /voice/turn and then /voice/speak, in series, with nothing beginning
+    until everything had finished - about eight seconds before a sound.
+    """
+    from app.assistant import brain, voice
+
+    async def fake_stream(**kw):
+        for piece in ("We took ", "twelve hundred pounds today. ", "Steady enough."):
+            yield {"type": "draft", "text": piece}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "We took twelve hundred pounds today. Steady enough."}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    owner = await make_user("owner-stream@x.com", Role.OWNER.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "what did we take today", "history": []},
+        headers=auth_header(owner),
+    )
+    assert r.status_code == 200
+    evs = _frames(r.text)
+    kinds = [e["type"] for e in evs]
+
+    assert "draft" in kinds, "no text was streamed"
+    assert "audio" in kinds, "nothing was ever spoken"
+    # Text must not wait for the audio - that ordering IS the feature.
+    assert kinds.index("draft") < kinds.index("audio")
+    assert kinds[-1] == "done"
+    said = "".join(e["text"] for e in evs if e["type"] == "draft")
+    assert "twelve hundred pounds" in said
+
+
+@pytest.mark.asyncio
+async def test_a_thought_is_shown_but_never_spoken(client, make_user, auth_header, monkeypatch):
+    """The safety property of the whole streaming design.
+
+    Lap one is the model thinking out loud on its way to a tool call. Reading
+    "let me check the sales" aloud as if it were the answer is worse than a
+    short wait, so a dropped draft must produce NO audio at all.
+    """
+    from app.assistant import brain, voice
+
+    async def fake_stream(**kw):
+        yield {"type": "draft", "text": "Let me check the sales."}
+        yield {"type": "draft_end", "kept": False}
+        yield {"type": "done", "text": ""}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    spoken: list[str] = []
+
+    def spy(text, v=None, engine=None):
+        spoken.append(text)
+        return b"ID3fake-mp3"
+
+    monkeypatch.setattr(voice, "speak", spy)
+
+    owner = await make_user("owner-thought@x.com", Role.OWNER.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "how are sales", "history": []},
+        headers=auth_header(owner),
+    )
+    kinds = [e["type"] for e in _frames(r.text)]
+    assert "draft_drop" in kinds, "the page was never told to drop the thought"
+    assert "audio" not in kinds, f"a thought was spoken aloud: {spoken}"
+    assert spoken == [], f"Polly was asked to say a thought: {spoken}"
+
+
+@pytest.mark.asyncio
+async def test_the_page_is_told_to_move_before_the_sentence_about_it(
+    client, make_user, auth_header, monkeypatch
+):
+    """"take me to sales" has to MOVE the page, not describe moving it."""
+    from app.assistant import brain, voice
+
+    async def fake_stream(*, execute, **kw):
+        await execute("go_to", {"page": "sales"})
+        yield {"type": "draft", "text": "Sales is open for you now."}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "Sales is open for you now."}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    owner = await make_user("owner-nav@x.com", Role.OWNER.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "take me to sales", "history": []},
+        headers=auth_header(owner),
+    )
+    evs = _frames(r.text)
+    actions = [e["action"] for e in evs if e["type"] == "action"]
+    assert actions == [{"kind": "navigate", "page": "sales"}], evs
+    kinds = [e["type"] for e in evs]
+    assert kinds.index("action") < kinds.index("draft"), "the page moved after the sentence"
+
+
+@pytest.mark.asyncio
+async def test_a_mute_polly_still_answers_in_text(client, make_user, auth_header, monkeypatch):
+    """Losing the voice must not lose the reply. He can still read it."""
+    from app.assistant import brain, voice
+
+    async def fake_stream(**kw):
+        yield {"type": "draft", "text": "Onions are the urgent one."}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "Onions are the urgent one."}
+
+    def boom(text, v=None, engine=None):
+        raise RuntimeError("Polly is down")
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", boom)
+
+    owner = await make_user("owner-mute@x.com", Role.OWNER.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "what is low", "history": []},
+        headers=auth_header(owner),
+    )
+    assert r.status_code == 200
+    evs = _frames(r.text)
+    kinds = [e["type"] for e in evs]
+    assert "audio" not in kinds
+    assert kinds[-1] == "done", "a dead Polly killed the whole turn"
+    assert "Onions" in "".join(e["text"] for e in evs if e["type"] == "draft")
+
+
+@pytest.mark.asyncio
+async def test_a_dead_brain_ends_the_stream_politely(
+    client, make_user, auth_header, monkeypatch
+):
+    """Bedrock falling over mid-sentence must not hang the panel.
+
+    The browser is holding an open connection and a person is watching a
+    listening ring. A stream that simply stops looks exactly like a stream that
+    is still thinking, which is the two-minute silence all over again.
+    """
+    from app.assistant import brain
+
+    async def fake_stream(**kw):
+        yield {"type": "draft", "text": "Let me look."}
+        raise RuntimeError("bedrock threw")
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+
+    owner = await make_user("owner-dead@x.com", Role.OWNER.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "what is low", "history": []},
+        headers=auth_header(owner),
+    )
+    assert r.status_code == 200, "the failure must arrive IN the stream, not as a dead socket"
+    evs = _frames(r.text)
+    assert evs[-1]["type"] == "error", evs
+    assert evs[-1]["message"]
+
+
+@pytest.mark.asyncio
+async def test_a_cook_can_use_the_stream_too(client, make_user, auth_header, monkeypatch):
+    """The same gate that was wrong on /voice/turn, checked on its replacement.
+
+    `require("ai:use")` looked right and was not - `ai:use` lives in ENVELOPES,
+    what an owner MAY grant, not in PERMISSIONS, what a role HAS. The owner
+    would have tested it, found it perfect, and every member of staff would
+    have got a silent 403. A new endpoint is a new chance to make that mistake.
+    """
+    from app.assistant import brain, voice
+
+    async def fake_stream(**kw):
+        yield {"type": "draft", "text": "Four things are low."}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "Four things are low."}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    cook = await make_user("cook-stream@x.com", Role.KITCHEN_MANAGER.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "what is low", "history": []},
+        headers=auth_header(cook),
+    )
+    assert r.status_code == 200, "a cook was locked out of the voice"
+    assert "Four things are low." in "".join(
+        e["text"] for e in _frames(r.text) if e["type"] == "draft"
+    )
