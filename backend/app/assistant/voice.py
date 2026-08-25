@@ -381,7 +381,7 @@ async def system_for(db, user: User, hotel, route: str | None) -> str:
     call. That is the permission model doing its job one layer earlier than the
     tools do.
     """
-    from app.assistant.service import _can, _route_context, _today_line
+    from app.assistant.service import _can, _today_line
 
     try:
         from app.assistant.knowledge import knowledge_brief
@@ -391,12 +391,30 @@ async def system_for(db, user: User, hotel, route: str | None) -> str:
         log.exception("voice knowledge brief failed")
         brief = ""
 
-    where = _route_context(route) if route else ""
+    # NOTE the route is deliberately NOT in here. Bedrock's prompt cache only
+    # hits on a BYTE-IDENTICAL system block, and this one carries the whole
+    # knowledge brief - the expensive part. Putting the current page in it meant
+    # every navigation wrote a fresh cache entry instead of reading a warm one,
+    # so the biggest prompt we send was re-processed from scratch all day.
     return (
-        f"{PERSONA}\n\n{brief}{where}{_today_line(hotel)}\n\n"
+        f"{PERSONA}\n\n{brief}{_today_line(hotel)}\n\n"
         f"You are in {getattr(hotel, 'name', None) or 'this restaurant'}. "
         f"The person talking to you is a {user.role}."
     )
+
+
+def with_route(text: str, route: str | None) -> str:
+    """The question, plus which page he is standing on.
+
+    "put it in here" and "what does this say" only mean anything if you know
+    what he is looking at. It rides with the QUESTION rather than in the
+    system prompt, because it changes on every navigation and the system
+    prompt has to stay byte-identical to stay cached - and it belongs here
+    anyway: it is something he is doing, not something the assistant knows.
+    """
+    if not route:
+        return text
+    return f"[He is on the {route} page right now.]\n{text}"
 
 
 #: What each tool is doing, in words a person would use. The model's own tool

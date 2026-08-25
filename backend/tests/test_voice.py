@@ -655,3 +655,47 @@ def test_an_unknown_tool_still_gets_a_readable_label():
 
     assert doing_label("some_new_lookup") == "Checking some new lookup…"
     assert doing_label("") == "Working on it…"
+
+
+def test_the_page_he_is_on_rides_with_the_question_not_the_system_prompt():
+    """Bedrock's prompt cache only hits on a byte-identical system block.
+
+    That block carries the whole knowledge brief - the expensive part - so
+    putting the current page in it meant every navigation wrote a fresh cache
+    entry instead of reading a warm one, and the biggest prompt we send was
+    re-processed from scratch all day.
+    """
+    from app.assistant.voice import with_route
+
+    assert with_route("add 120 cash", "/sales").startswith("[He is on the /sales page")
+    assert "add 120 cash" in with_route("add 120 cash", "/sales")
+    # No page, no noise.
+    assert with_route("hello", None) == "hello"
+
+
+@pytest.mark.asyncio
+async def test_the_system_prompt_is_the_same_bytes_on_every_page(
+    client, make_user, auth_header, monkeypatch
+):
+    """The property the cache actually depends on, asserted directly."""
+    from app.assistant import brain, voice
+
+    seen: list[str] = []
+
+    async def fake_stream(*, system, **kw):
+        seen.append(system)
+        yield {"type": "draft", "text": "Fine."}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "Fine."}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    owner = await make_user("owner-cache@x.com", Role.SUPER_ADMIN.value)
+    for route in ("/dashboard", "/sales", "/expenses"):
+        await client.post(
+            "/api/assistant/voice/stream",
+            json={"text": "how are we doing", "history": [], "route": route},
+            headers=auth_header(owner),
+        )
+    assert len(set(seen)) == 1, "the system prompt changes per page, so the cache never hits"

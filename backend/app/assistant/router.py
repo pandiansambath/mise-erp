@@ -593,7 +593,7 @@ async def voice_turn(
             system=system,
             history=[
                 *voice.history_for(payload.history),
-                {"role": "user", "content": payload.text},
+                {"role": "user", "content": voice.with_route(payload.text, payload.route)},
             ],
             tools=voice.tools_for_voice(user),
             execute=execute,
@@ -696,7 +696,7 @@ async def voice_stream(
                 system=system,
                 history=[
                     *voice.history_for(payload.history),
-                    {"role": "user", "content": payload.text},
+                    {"role": "user", "content": voice.with_route(payload.text, payload.route)},
                 ],
                 tools=voice.tools_for_voice(user),
                 execute=execute,
