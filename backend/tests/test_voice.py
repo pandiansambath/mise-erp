@@ -488,8 +488,17 @@ async def test_a_thought_is_shown_but_never_spoken(client, make_user, auth_heade
     )
     kinds = [e["type"] for e in _frames(r.text)]
     assert "draft_drop" in kinds, "the page was never told to drop the thought"
-    assert "audio" not in kinds, f"a thought was spoken aloud: {spoken}"
-    assert spoken == [], f"Polly was asked to say a thought: {spoken}"
+    # The property is about WHAT was spoken, not whether anything was.
+    #
+    # This originally asserted no audio at all, and then a second guard landed —
+    # a turn may no longer end in silence — so the fallback line ("I got tangled
+    # up...") is now spoken here, correctly. Asserting "nothing was said" made
+    # the two guards look like they contradicted each other when they do not:
+    # the thought must never be read aloud AS the answer, and a dead turn must
+    # still say something. Both hold.
+    assert not any("check the sales" in t.lower() for t in spoken), (
+        f"the model's private thought was read aloud: {spoken}"
+    )
 
 
 @pytest.mark.asyncio
