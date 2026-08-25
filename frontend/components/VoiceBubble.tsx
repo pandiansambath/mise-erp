@@ -270,9 +270,16 @@ export function VoiceBubble() {
   /** Type the values into the real form on the real page. */
   const fillIn = useCallback(async (fields: Record<string, string>) => {
     await new Promise((r) => setTimeout(r, 400));
+    // Anything we could not place. Saying "filled it in" over an empty box is
+    // the worst outcome available: he walks away believing a number is in his
+    // books. If a field cannot be found he has to be TOLD, in the same breath.
+    const missed: string[] = [];
     for (const [name, value] of Object.entries(fields)) {
       const el = findField(name);
-      if (!el) continue;
+      if (!el) {
+        missed.push(name);
+        continue;
+      }
       setNativeValue(el, value);
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -280,6 +287,12 @@ export function VoiceBubble() {
       el.classList.add("mise-voice-filled");
       window.setTimeout(() => el.classList.remove("mise-voice-filled"), 2400);
       await new Promise((r) => setTimeout(r, 220));
+    }
+    if (missed.length) {
+      setErr(
+        `I couldn't find a box for ${missed.join(" or ")} on this page — you'll need to put ` +
+          `that one in yourself.`,
+      );
     }
   }, []);
 
@@ -1045,8 +1058,25 @@ function remember(key: string, value: string) {
 }
 
 /** Find an input by what a person calls it, not by an id nobody knows. */
+// The model says "amount". The Sales page says "Gross". Both are right, and
+// nothing matches — so the number was silently typed nowhere, which is the
+// worst possible outcome: it navigated, it said "filled it in", and the box was
+// empty. The model cannot see the page, so the translation has to live here.
+const SYNONYMS: Record<string, string[]> = {
+  amount: ["gross", "total", "value", "price", "net", "sum", "cost"],
+  method: ["paymentmethod", "paidby", "payment", "type"],
+  category: ["cat", "group", "kind", "type"],
+  description: ["note", "notes", "detail", "details", "memo", "reference", "what"],
+  vendor: ["supplier", "seller", "from", "payee"],
+  date: ["on", "when", "day"],
+  quantity: ["qty", "count", "number", "howmany", "units"],
+  item: ["product", "ingredient", "name", "what"],
+};
+
 function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
-  const want = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const raw = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const want = raw;
+  const alsoTry = SYNONYMS[raw] ?? [];
   const inputs = [
     ...document.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select"),
   ].filter((el) => el.offsetParent !== null && !el.disabled && el.getAttribute("type") !== "hidden");
@@ -1065,9 +1095,15 @@ function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "");
     if (!bits) return 0;
-    if (bits === want) return 3;
-    if (bits.includes(want)) return 2;
-    if (want.length > 3 && want.includes(bits)) return 1;
+    if (bits === want) return 5;
+    if (bits.includes(want)) return 4;
+    if (want.length > 3 && want.includes(bits)) return 3;
+    // A synonym is a weaker match than the real name, never a stronger one:
+    // "total" must not beat a field actually called "amount".
+    for (const alt of alsoTry) {
+      if (bits === alt) return 2;
+      if (bits.includes(alt)) return 1;
+    }
     return 0;
   };
 

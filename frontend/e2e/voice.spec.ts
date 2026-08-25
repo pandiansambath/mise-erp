@@ -293,3 +293,45 @@ test("the card is a surface, not a tint", async ({ page }) => {
   console.log("card background:", JSON.stringify(bg));
   expect(bg.alpha, `card background ${bg.raw} lets the page through`).toBeGreaterThanOrEqual(0.99);
 });
+
+
+test("hands free: it opens Sales and types the number into the real form", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+
+  // This is the sentence the whole feature was asked for:
+  // "when I say 'hey could you please add this sales into sales page' it needs
+  //  to navigate to that sales page in realtime and enter the sale value."
+  //
+  // Correct ACTIONS coming back over the wire is not the same as the number
+  // landing in the box — the field matcher has to find a real input by the
+  // plainest name a person would use, on a page it has never seen.
+  await page.getByRole("button", { name: /talk to dineai/i }).click();
+  await page.getByLabel(/type what you need/i).fill("add a 120 pound cash sale into the sales page");
+  await page.getByRole("button", { name: /^send$/i }).click();
+
+  // It must actually go there.
+  await page.waitForURL("**/sales", { timeout: 45_000 });
+
+  // Then either it fills, or it asks first — both are correct, and which one
+  // depends on his confirm setting. Money defaults to asking.
+  // isVisible() does NOT wait — it answers about this instant, and the reply
+  // takes several seconds. Asking it immediately said "no dialog" and the test
+  // sailed past the very step it existed to exercise.
+  const confirm = page.getByRole("button", { name: /yes, fill it in/i });
+  await confirm.waitFor({ state: "visible", timeout: 45_000 }).catch(() => {});
+  if (await confirm.isVisible()) await confirm.click();
+
+  // The number has to be IN a field, not merely mentioned in the reply.
+  const landed = await page.waitForFunction(
+    () => {
+      const inputs = [...document.querySelectorAll("input")];
+      return inputs.some((el) => el.offsetParent !== null && el.value.replace(/[^\d.]/g, "") === "120");
+    },
+    undefined,
+    { timeout: 25_000 },
+  ).catch(() => null);
+
+  await page.screenshot({ path: "e2e/__screens__/voice-hands-free.png" });
+  expect(landed, "it navigated and talked about the sale but never typed the 120").toBeTruthy();
+});
