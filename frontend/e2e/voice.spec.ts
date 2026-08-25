@@ -332,6 +332,23 @@ test("hands free: it opens Sales and types the number into the real form", async
     { timeout: 25_000 },
   ).catch(() => null);
 
+  // The METHOD matters as much as the number. He said cash; a <select> only
+  // accepts a value that is one of its options, so assigning "cash" to a
+  // dropdown of CARD/CASH did nothing and it stayed on CARD. The reply still
+  // said "cash". Silently recording a card sale is worse than recording none.
+  const method = await page.evaluate(() => {
+    const sel = [...document.querySelectorAll("select")].find((s) =>
+      ((s.closest("label")?.textContent || "") + (s.getAttribute("name") || "") +
+        (s.previousElementSibling?.textContent || "")).toLowerCase().includes("method"),
+    );
+    return sel ? (sel.options[sel.selectedIndex]?.textContent || sel.value).trim() : null;
+  });
+  console.log("method dropdown reads:", method);
+
   await page.screenshot({ path: "e2e/__screens__/voice-hands-free.png" });
   expect(landed, "it navigated and talked about the sale but never typed the 120").toBeTruthy();
+  expect(
+    (method ?? "").toLowerCase(),
+    `it said cash and left the method on "${method}"`,
+  ).toContain("cash");
 });

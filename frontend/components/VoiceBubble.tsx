@@ -280,7 +280,12 @@ export function VoiceBubble() {
         missed.push(name);
         continue;
       }
-      setNativeValue(el, value);
+      if (!setNativeValue(el, value)) {
+        // The box exists but will not take that value — a dropdown with no
+        // matching option. Say so rather than leaving the old one showing.
+        missed.push(`${name} (no "${value}" to choose)`);
+        continue;
+      }
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
       el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1120,10 +1125,26 @@ function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
 }
 
 /** React tracks input values on the node, so `el.value = x` is invisible to it. */
-function setNativeValue(el: HTMLInputElement | HTMLSelectElement, value: string) {
+function setNativeValue(el: HTMLInputElement | HTMLSelectElement, value: string): boolean {
+  // A <select> only accepts a value that IS one of its options. He said "cash",
+  // the option is <option value="card">CARD</option> and friends — so assigning
+  // "cash" did nothing at all and the dropdown stayed on CARD. The number went
+  // in, the reply said "cash", and the sale would have been recorded against
+  // the wrong payment method. Silently wrong is worse than visibly empty, and
+  // this one is about money.
+  if (el instanceof HTMLSelectElement) {
+    const want = value.trim().toLowerCase();
+    const match =
+      [...el.options].find((o) => o.value.trim().toLowerCase() === want) ??
+      [...el.options].find((o) => (o.textContent || "").trim().toLowerCase() === want) ??
+      [...el.options].find((o) => (o.textContent || "").trim().toLowerCase().includes(want));
+    if (!match) return false;
+    value = match.value;
+  }
   const proto =
     el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   if (setter) setter.call(el, value);
   else el.value = value;
+  return true;
 }
