@@ -1,5 +1,6 @@
 """Copilot endpoint. Any authenticated user may ask; tools enforce their own
 permission + hotel scope, so answers never leak across roles or tenants."""
+import asyncio
 import base64
 import json
 import logging
@@ -727,8 +728,20 @@ async def voice_stream(
         thread_id = None
     if thread_id is None:
         thread_id = await mem.latest_thread(db, user) or uuid.uuid4()
-    await mem.touch_thread(db, user, thread_id, payload.text)
-    await mem.remember(db, user, thread_id, "user", payload.text)
+
+    async def _save_question() -> None:
+        """Write his question down. Deliberately NOT awaited before the model.
+
+        Persisting the conversation put two database round trips in front of
+        every spoken turn — in front of the one number he actually feels, which
+        is how long he stands there before it says anything. The record matters;
+        it does not matter BEFORE the answer starts.
+        """
+        try:
+            await mem.touch_thread(db, user, thread_id, payload.text)
+            await mem.remember(db, user, thread_id, "user", payload.text)
+        except Exception:  # noqa: BLE001 - a lost log line must not cost a reply
+            log.exception("could not store the question")
     model = await guard.model_for(db, user)
     chosen_voice = payload.voice or voice.DEFAULT_VOICE
 
@@ -793,6 +806,7 @@ async def voice_stream(
                 log.exception("polly chunk failed")
                 return None
 
+        saving = asyncio.create_task(_save_question())
         try:
             async for ev in brain.generate_stream(
                 system=system,
@@ -910,6 +924,12 @@ async def voice_stream(
             actions_sent,
             seq,
         )
+        # The question's write has to land before the answer's, or the
+        # conversation reads back out of order.
+        try:
+            await saving
+        except Exception:  # noqa: BLE001
+            log.exception("question write failed")
         try:
             await mem.remember(db, user, thread_id, "assistant", full)
         except Exception:  # noqa: BLE001 - a lost log line must not lose the reply
