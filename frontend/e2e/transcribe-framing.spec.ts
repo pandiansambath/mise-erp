@@ -100,5 +100,26 @@ test("a final that repeats the partial does not double it", () => {
   foldSegments(u, [seg("a", "open the rota")]);
   const out = foldSegments(u, [seg("a", "open the rota", false)]);
   expect(out?.whole).toBe("open the rota");
-  expect(out?.allFinal).toBe(true);
+  // `allFinal` is no longer asserted: the flag proved unreliable in the real
+  // stream — every partial arrived marked NOT partial — so the turn is ended by
+  // silence instead, and nothing should be reading this.
+});
+
+test("a growing partial is one sentence, even when IsPartial lies", () => {
+  // Straight from his CloudWatch line:
+  //   heard='II justI just wantI just want toI just want to seeI '
+  // Every arrival marked NOT partial, which is what made two previous fixes
+  // useless. The words themselves say it is one sentence growing.
+  const u = fresh();
+  const said = ["I", "I just", "I just want", "I just want to", "I just want to see the rota"];
+  let out;
+  for (const t of said) out = foldSegments(u, [{ IsPartial: false, Alternatives: [{ Transcript: t }] }]);
+  expect(out?.whole).toBe("I just want to see the rota");
+});
+
+test("genuinely new speech still gets added, not swallowed", () => {
+  const u = fresh();
+  foldSegments(u, [{ IsPartial: false, Alternatives: [{ Transcript: "open the rota" }] }]);
+  const out = foldSegments(u, [{ IsPartial: true, Alternatives: [{ Transcript: "add Balaji" }] }]);
+  expect(out?.whole).toBe("open the rota add Balaji");
 });

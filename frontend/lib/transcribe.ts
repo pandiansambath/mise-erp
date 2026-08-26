@@ -289,16 +289,37 @@ export function foldSegments(
     const text = (r.Alternatives?.[0]?.Transcript ?? "").trim();
     if (!text) continue;
     touched = true;
-    if (r.IsPartial) {
-      u.partial = text;
+
+    // TRUST THE TEXT, NOT THE FLAGS. Third attempt at this, and the log from
+    // his phone is why: heard='II justI just wantI just want toI just want to
+    // see'. Every partial had been APPENDED — which happens when `IsPartial`
+    // arrives falsy, so each growing partial looks like a finished segment.
+    //
+    // Both previous fixes depended on the protocol telling the truth: first on
+    // ordering, then on ResultId. This depends on nothing but the words. A
+    // partial GROWS — each one starts with the last — so a growing prefix is
+    // the same sentence and replaces itself. Only text that is not a
+    // continuation is genuinely new, and only that gets added.
+    const current = u.partial;
+    if (!current || text.startsWith(current)) {
+      u.partial = text;               // it grew, or it is the first
+    } else if (current.startsWith(text)) {
+      // A shorter re-send of what we already have. Keep the longer version.
     } else {
-      // A re-sent final must not be counted twice, and a final that merely
-      // repeats what the partial already said must not be added on top of it.
-      if (u.finals[u.finals.length - 1] !== text) u.finals.push(text);
-      u.partial = "";
+      // A real new segment: close the last one and start again.
+      if (u.finals[u.finals.length - 1] !== current) u.finals.push(current);
+      u.partial = text;
     }
+    // Deliberately NOT closing on `IsPartial === false`. Closing there is what
+    // made my first attempt at this fail its own test: the growing text was
+    // filed away after every arrival, so the next one had nothing to compare
+    // itself against and looked new. The flag is unreliable in this stream —
+    // a segment is closed by the words moving on, and the turn is ended by
+    // silence, which is the signal that was always doing the real work.
   }
   if (!touched) return null;
   const whole = [...u.finals, u.partial].filter(Boolean).join(" ").trim();
-  return { whole, allFinal: u.partial === "" };
+  // `allFinal` is advisory only — the component ends a turn on silence, not on
+  // this, precisely because the flag cannot be trusted.
+  return { whole, allFinal: false };
 }
