@@ -62,6 +62,46 @@ const isDivider = (l: string) => /^\s*\|[\s|:-]+\|\s*$/.test(l);
 const cells = (l: string) =>
   l.trim().slice(1, -1).split("|").map((c) => c.trim());
 
+/** Take the table away with you.
+ *
+ * Markdown is stripped of its own formatting on the way out — a cell reading
+ * "**Farm2Land**" in a spreadsheet is worse than one reading "Farm2Land". The
+ * .xls is a plain HTML table, which every version of Excel and Numbers opens
+ * without a library and without a build step.
+ */
+function downloadTable(head: string[], body: string[][], kind: "csv" | "xls") {
+  const clean = (c: string) =>
+    c.replace(/\*\*|__|`/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").trim();
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  let blob: Blob;
+  if (kind === "csv") {
+    const esc = (c: string) => `"${clean(c).replace(/"/g, '""')}"`;
+    const rows = [head.map(esc).join(","), ...body.map((r) => r.map(esc).join(","))];
+    const bom = "\uFEFF";
+    const nl = "\r\n";
+    blob = new Blob([bom + rows.join(nl)], { type: "text/csv;charset=utf-8" });
+  } else {
+    const cell = (c: string, tag: string) =>
+      `<${tag}>${clean(c).replace(/&/g, "&amp;").replace(/</g, "&lt;")}</${tag}>`;
+    const html =
+      `<html><head><meta charset="utf-8"></head><body><table border="1">` +
+      `<tr>${head.map((h) => cell(h, "th")).join("")}</tr>` +
+      body.map((r) => `<tr>${r.map((c) => cell(c, "td")).join("")}</tr>`).join("") +
+      `</table></body></html>`;
+    blob = new Blob([html], { type: "application/vnd.ms-excel" });
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `dineai-${stamp}.${kind === "csv" ? "csv" : "xls"}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function ChatMarkdown({ text }: { text: string }) {
   const lines = (text || "").split("\n");
   const blocks: ReactNode[] = [];
@@ -82,7 +122,28 @@ export function ChatMarkdown({ text }: { text: string }) {
       blocks.push(
         // Scrolls inside itself: a wide table must never push the whole chat
         // sideways.
-        <div key={`t${i}`} className="my-2 overflow-x-auto rounded-xl border border-line/70">
+        <div key={`t${i}`} className="my-2 rounded-xl border border-line/70">
+          {/* "suppose user asking like show staff list in table view means it
+              needs to show with download as excel/csv kind of feature."
+              A table he can read is halfway; a table he can take to his
+              accountant is the thing. */}
+          <div className="flex items-center justify-end gap-1 border-b border-line/70 px-2 py-1">
+            <button
+              type="button"
+              onClick={() => downloadTable(head, body, "csv")}
+              className="mise-press rounded-lg px-2 py-0.5 text-[10px] font-medium text-fg-faint hover:text-fg"
+            >
+              CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadTable(head, body, "xls")}
+              className="mise-press rounded-lg px-2 py-0.5 text-[10px] font-medium text-fg-faint hover:text-fg"
+            >
+              Excel
+            </button>
+          </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-line/70 bg-paper-3/50">
@@ -105,6 +166,7 @@ export function ChatMarkdown({ text }: { text: string }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>,
       );
       continue;
