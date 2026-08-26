@@ -763,6 +763,7 @@ async def voice_stream(
         # did it take, how much did it say, what did it do, did it loop.
         t0 = time.monotonic()
         tools_used: list[str] = []
+        actions_sent = 0
         first_word_ms: int | None = None
 
         async def say(chunk: str) -> str | None:
@@ -791,6 +792,7 @@ async def voice_stream(
             ):
                 # The page moves NOW, not after the sentence describing it.
                 while ui_queue:
+                    actions_sent += 1
                     yield _sse({"type": "action", "action": ui_queue.pop(0)})
 
                 kind = ev.get("type")
@@ -843,6 +845,7 @@ async def voice_stream(
             return
 
         while ui_queue:
+            actions_sent += 1
             yield _sse({"type": "action", "action": ui_queue.pop(0)})
 
         tail, _ = voice.next_sentence(spoken_buffer, force=True)
@@ -886,7 +889,7 @@ async def voice_stream(
             first_word_ms if first_word_ms is not None else "-",
             int((time.monotonic() - t0) * 1000),
             ",".join(tools_used) or "-",
-            seq,
+            actions_sent,
             seq,
         )
         yield _sse({"type": "done", "text": full})

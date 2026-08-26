@@ -336,30 +336,31 @@ test("hands free: it opens Sales and types the number into the real form", async
   // accepts a value that is one of its options, so assigning "cash" to a
   // dropdown of CARD/CASH did nothing and it stayed on CARD. The reply still
   // said "cash". Silently recording a card sale is worse than recording none.
-  const selects = await page.evaluate(() =>
-    [...document.querySelectorAll("select")]
-      .filter((s) => (s as HTMLSelectElement).offsetParent !== null)
-      .map((s) => {
-        const el = s as HTMLSelectElement;
-        return {
-          near: (
-            (el.closest("label")?.textContent || "") +
-            " " + (el.getAttribute("name") || "") +
-            " " + (el.getAttribute("aria-label") || "") +
-            " " + (el.previousElementSibling?.textContent || "") +
-            " " + (el.parentElement?.previousElementSibling?.textContent || "")
-          ).trim().slice(0, 40),
-          value: (el.options[el.selectedIndex]?.textContent || el.value).trim(),
-          options: [...el.options].map((o) => o.textContent?.trim()).slice(0, 5),
-        };
-      }),
-  );
-  console.log("selects on the page:", JSON.stringify(selects, null, 1));
-  const method =
-    selects.find((s) => /method|payment/i.test(s.near))?.value ??
-    selects.find((s) => s.options.some((o) => /cash/i.test(o ?? "")))?.value ??
-    null;
-  console.log("method dropdown reads:", method);
+  // The Method control is NOT a <select> — it is one of our own components, a
+  // button that opens a portaled listbox. An earlier version of this test only
+  // queried <select> and therefore could not see the very control it existed to
+  // check: it reported null and I read that as a failure of the fix.
+  const method = await page.evaluate(() => {
+    const labelNear = (el: HTMLElement) => {
+      let node: HTMLElement | null = el;
+      for (let i = 0; i < 4 && node; i += 1) {
+        node = node.parentElement;
+        const lab = node?.querySelector(":scope > label");
+        if (lab?.textContent) return lab.textContent.toLowerCase();
+      }
+      return (el.getAttribute("aria-label") || "").toLowerCase();
+    };
+    const native = [...document.querySelectorAll("select")].find((el) =>
+      labelNear(el as HTMLElement).includes("method"),
+    ) as HTMLSelectElement | undefined;
+    if (native) return (native.options[native.selectedIndex]?.textContent || native.value).trim();
+
+    const custom = [...document.querySelectorAll<HTMLElement>('button[aria-haspopup="listbox"]')]
+      .filter((el) => el.offsetParent !== null)
+      .find((el) => labelNear(el).includes("method"));
+    return custom ? (custom.textContent || "").replace(/[▾▼]/g, "").trim() : null;
+  });
+  console.log("method control reads:", method);
 
   await page.screenshot({ path: "e2e/__screens__/voice-hands-free.png" });
   expect(landed, "it navigated and talked about the sale but never typed the 120").toBeTruthy();

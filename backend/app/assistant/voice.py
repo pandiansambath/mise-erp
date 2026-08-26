@@ -182,7 +182,11 @@ UI_ACTIONS = [
         "name": "go_to",
         "description": (
             "Open a page in the app so the owner can see it. Use for 'take me to', "
-            "'open', 'show me the', and BEFORE filling anything in on that page."
+            "'open', 'show me the', and ALWAYS BEFORE filling anything in on that "
+            "page. If he NAMES a page - 'into the sales page', 'in expenses' - "
+            "call this FIRST, before any lookup. Observed failure: given 'add a "
+            "120 pound cash sale into the sales page' the model sometimes ran a "
+            "data query instead, so the page never moved and nothing was filled."
         ),
         "parameters": {
             "type": "object",
@@ -274,6 +278,8 @@ PERSONA = (
     "- Only speak when you were spoken to, or clearly asked for something."
     "\n\n"
     "DOING WHAT HE ASKED. When he asks for something to be DONE:\n"
+    "0. If he NAMED a page, go_to it immediately. Do not look anything up "
+    "first - a lookup cannot tell you where he asked to be.\n"
     "1. Work out which page it lives on. Sales for takings, Expenses for money "
     "out, Inventory for stock levels, Purchasing for ordering.\n"
     "2. go_to that page FIRST. Always. Filling a form on a page that is not "
