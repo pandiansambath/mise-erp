@@ -3787,3 +3787,28 @@ body.mise-voice-open .mise-launcher-in {
     animation: none;
   }
 }
+
+/* THE AURORA IS EXPENSIVE, AND PHONES PAY FOR IT.
+   A layer at 200% of the card, blurred 30px, saturated, and rotating
+   continuously is several full-screen composites per frame. On a desktop GPU
+   that is free; on a phone it is the flicker he keeps seeing while the voice
+   replies — the browser dropping frames trying to keep up.
+   So the phone gets the same LOOK with a fraction of the work: no rotation on
+   the container, a smaller blur, and the drift alone carrying the movement. */
+@media (max-width: 640px) {
+  .mise-voice-aurora {
+    animation: none;
+    inset: 0;
+    border-radius: inherit;
+  }
+  .mise-voice-aurora i {
+    filter: blur(22px);
+    animation-duration: 11s;
+  }
+}
+
+/* Promote it once, so the compositor keeps it on its own layer instead of
+   repainting the card underneath on every frame. */
+.mise-voice-aurora i {
+  will-change: transform;
+}
