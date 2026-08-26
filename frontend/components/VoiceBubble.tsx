@@ -294,6 +294,9 @@ export function VoiceBubble() {
   const awsRef = useRef<Listener | null>(null);
   const queueRef = useRef<string[]>([]);
   const drainingRef = useRef(false);
+  // True while a turn is still arriving, so playback holds the floor
+  // between sentences instead of declaring itself finished.
+  const streamingRef = useRef(false);
   // It hears itself. Amy comes out of the speakers, back in through the
   // microphone, gets transcribed, and answers — and every answer starts
   // another one. That is the flicker: a new turn every second, forever.
@@ -414,9 +417,27 @@ export function VoiceBubble() {
     setPhase("speaking");
     const tick = window.setInterval(() => setLevel(0.35 + Math.random() * 0.5), 110);
     try {
-      while (queueRef.current.length) {
+      // "while speaking itself it's stopping in between and after a few it's
+      //  continuing."
+      //
+      // This used to stop the moment the queue emptied — but the SERVER is
+      // still synthesising the next sentence at that point. So it played
+      // sentence one, went quiet, decided it had finished, and then started
+      // again when sentence two arrived a few hundred milliseconds later. The
+      // gap was audible, and worse, the phase flapped back to "listening"
+      // mid-reply, which opened the microphone in the middle of its own
+      // sentence.
+      //
+      // It now waits for the TURN to end, not the queue.
+      for (;;) {
         const next = queueRef.current.shift();
-        if (next) await playChunk(next);
+        if (next) {
+          await playChunk(next);
+          continue;
+        }
+        if (!streamingRef.current) break;
+        // Nothing to play yet and more is coming: hold the floor.
+        await new Promise((r) => setTimeout(r, 60));
       }
     } finally {
       window.clearInterval(tick);
@@ -515,6 +536,7 @@ export function VoiceBubble() {
       setErr(null);
       setHeard("");
       setDoing("");
+      streamingRef.current = true;
       setTurns((t) => [...t, { role: "user", content: text }]);
       let reply = "";
       const fills: Extract<Action, { kind: "fill" }>[] = [];
@@ -633,9 +655,14 @@ export function VoiceBubble() {
           else await fillIn(fields);
         }
       } catch (e) {
+        streamingRef.current = false;
         setErr(e instanceof ApiError ? e.message : "I could not reach the assistant.");
         setPhase(liveRef.current ? "listening" : "idle");
         return;
+      } finally {
+        // Whatever happened, the turn is over — playback must be allowed to
+        // finish rather than hold the floor for ever.
+        streamingRef.current = false;
       }
 
       // If nothing is queued to say, we are done talking; if something is, the
