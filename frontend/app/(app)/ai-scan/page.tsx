@@ -177,9 +177,9 @@ function Bubble({
           </div>
         ))}
       <div
-        className={`max-w-[min(54rem,78%)] rounded-2xl ${
-          tight ? "p-2" : "px-6 py-4.5"
-        } text-[15px] leading-[1.75] ${
+        className={`max-w-[min(58rem,82%)] rounded-2xl ${
+          tight ? "p-2" : "px-4 py-3"
+        } text-[13.5px] leading-[1.7] ${
           mine
             ? "mise-press rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20"
             : "mise-card-inset rounded-bl-md text-fg"
@@ -249,6 +249,7 @@ export default function AiScanPage() {
   }
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const anyFileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   // The conversation lives on the server against THIS person, so it survives a
@@ -736,13 +737,13 @@ export default function AiScanPage() {
       {/* Header modelled on the recipe sheet: an identity block, a progress
           RING, and stat tiles with big legible numbers. The old version buried
           the same facts in 11px grey text nobody reads. */}
-      <header className="mise-neo-raised relative mb-3 overflow-hidden rounded-2xl px-4 py-3">
+      <header className="mise-neo-raised relative mb-2.5 shrink-0 overflow-hidden rounded-2xl px-3.5 py-2.5">
         <div className="relative flex items-center gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-sky-400 text-base text-white shadow-lg shadow-brand-500/25">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-sky-400 text-sm text-white shadow-lg shadow-brand-500/25">
             ✦
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-base font-semibold leading-tight text-fg">DineAI Copilot</h1>
+            <h1 className="text-sm font-semibold leading-tight text-fg">DineAI Copilot</h1>
             <p className="truncate text-xs text-fg-faint">
               {offline ? "AI is switched off" : "Ask anything, or send any file"}
             </p>
@@ -846,7 +847,7 @@ export default function AiScanPage() {
             screenshotted. They are the same three facts, now a line of chips
             in the header, and the conversation gets the room back.  */}
         {usage?.model && (
-          <div className="relative mt-2 flex flex-wrap items-center gap-1.5 lg:absolute lg:right-4 lg:top-3 lg:mt-0">
+          <div className="relative mt-1.5 flex flex-wrap items-center gap-1.5">
             {(
               [
                 ["Model", usage.model.includes("haiku") ? "Haiku" : "Sonnet"],
@@ -877,7 +878,7 @@ export default function AiScanPage() {
 
       {/* the thread */}
       <div className="mise-chat-shell relative flex min-h-0 flex-1 overflow-hidden rounded-3xl">
-        <div className="mise-chat-log relative z-[1] flex-1 space-y-9 overflow-y-auto p-5 sm:p-10">
+        <div className="mise-chat-log relative z-[1] flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];
@@ -1016,6 +1017,30 @@ export default function AiScanPage() {
           }}
         />
         <div className="mise-chat-composer flex items-end gap-2 rounded-2xl p-2">
+          {/* "here we have only camera icon, we need paper clip here also." */}
+          <input
+            ref={anyFileRef}
+            type="file"
+            accept="image/*,application/pdf,.csv,.xlsx,.xls,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) read(f);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => anyFileRef.current?.click()}
+            disabled={busy || offline}
+            title="Attach a bill, a spreadsheet or a document"
+            aria-label="Attach a file"
+            className="mise-press grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line text-fg-soft hover:text-fg disabled:opacity-50"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a1.5 1.5 0 0 1-2.12-2.12l7.78-7.78" />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}

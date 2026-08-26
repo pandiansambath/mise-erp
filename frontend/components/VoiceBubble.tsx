@@ -79,6 +79,11 @@ const SILENCE_MS = 1300;
 // also what a noisy kitchen produces on its own. Acting on two words of it
 // wastes a model call and puts a wrong answer on screen; more importantly it
 // TEACHES him the thing mishears, when really it was never spoken to.
+// How long it stays listening after being called by name, before it needs the
+// name again. Long enough for a conversation, short enough that the room does
+// not start talking to it half an hour later.
+const AWAKE_MS = 45_000;
+
 const MIN_WORDS = 2;
 const MIN_CHARS = 7;
 
@@ -96,8 +101,12 @@ function worthAnswering(text: string): boolean {
 // Off by default, because a wake word makes every other sentence be ignored and
 // that is a surprise if you did not ask for it. On, it is the difference
 // between an assistant in the room and one listening to the room.
+// Transcribe PUNCTUATES. It returns "Hi, DineAI" — with a comma — and the
+// first version of this demanded whitespace immediately after the greeting,
+// so the one phrase he actually tried was the one it could not match. The
+// name on its own counts too: by the second sentence nobody says "hey".
 const WAKE = new RegExp(
-  "\\b(hey|hi|hello|ok|okay)\\s+(dine\\s*ai|dinei|nirai|jarvis)\\b",
+  "\\b(?:(?:hey|hi|hello|ok|okay)[\\s,.!-]+)?(dine\\s*ai|dinei|nirai|jarvis)\\b",
   "i",
 );
 
@@ -190,6 +199,8 @@ export function VoiceBubble() {
     orbRef.current?.style.setProperty("--level", String(v));
   }, []);
   const [typed, setTyped] = useState("");
+  // Momentarily out of the way while the page it just opened is revealed.
+  const [peeking, setPeeking] = useState(false);
   // What it is doing while it is not yet answering — the model's own words for
   // it, which beat a spinner and beat a lie.
   const [doing, setDoing] = useState("");
@@ -291,6 +302,7 @@ export function VoiceBubble() {
   const silenceRef = useRef<number | null>(null);
   // Read inside the recogniser callbacks, which are created once.
   const wakeRef = useRef(false);
+  const awakeUntilRef = useRef(0);
   const lastAskRef = useRef({ text: "", at: 0 });
   const awsRef = useRef<Listener | null>(null);
   const queueRef = useRef<string[]>([]);
@@ -492,10 +504,25 @@ export function VoiceBubble() {
 
   const goTo = useCallback(
     async (actions: Action[]) => {
-      for (const a of actions) {
-        if (a.kind !== "navigate") continue;
-        router.push(`/${a.page.replace(/^\//, "")}`);
-        await new Promise((r) => setTimeout(r, 900));
+      const hops = actions.filter((a) => a.kind === "navigate");
+      if (!hops.length) return;
+
+      // "when we do action navigation the chatbox needs to be closed, and once
+      //  the action is done it needs to auto open."
+      //
+      // Right — the whole point of watching it navigate is watching it, and a
+      // panel sitting over the page you were sent to defeats the trip. It steps
+      // out of the way, lets him see where he landed, and comes back.
+      setPeeking(true);
+      try {
+        for (const a of hops) {
+          router.push(`/${(a as Extract<Action, { kind: "navigate" }>).page.replace(/^\//, "")}`);
+          await new Promise((r) => setTimeout(r, 900));
+        }
+        // A beat with a clear view before the panel returns.
+        await new Promise((r) => setTimeout(r, 700));
+      } finally {
+        setPeeking(false);
       }
     },
     [router],
@@ -532,6 +559,13 @@ export function VoiceBubble() {
       // Even with one stream, a stray repeat is worth swallowing: he asked once.
       const now = Date.now();
       if (text === lastAskRef.current.text && now - lastAskRef.current.at < 6000) return;
+      // "some background noise came, AI stopped and started listening and
+      //  giving response."
+      //
+      // A second turn must not start while the first is still arriving. The
+      // room is noisy and a fragment of it should never cut the answer he is
+      // waiting for — it used to interrupt, restart, and answer the noise.
+      if (streamingRef.current) return;
       lastAskRef.current = { text, at: now };
       setPhase("thinking");
       setErr(null);
@@ -699,16 +733,23 @@ export function VoiceBubble() {
 
       // With the wake word on, everything before "hey DineAI" is the room
       // talking. What follows it is the request.
-      if (wakeRef.current) {
+      //
+      // And once woken it STAYS woken for a while — "i need it to be awake
+      // always to take user's command". Making him say the name before every
+      // sentence is not an assistant, it is a turnstile. Any reply resets the
+      // window, so a back-and-forth never needs it twice.
+      if (wakeRef.current && Date.now() > awakeUntilRef.current) {
         const asked = afterWake(said);
         if (asked === null) {
           setHeard("");
           return;
         }
+        awakeUntilRef.current = Date.now() + AWAKE_MS;
         if (worthAnswering(asked)) void askRef.current(asked);
         else setHeard("");
         return;
       }
+      if (wakeRef.current) awakeUntilRef.current = Date.now() + AWAKE_MS;
       if (worthAnswering(said)) void askRef.current(said);
       else setHeard("");
     }, SILENCE_MS);
@@ -1023,6 +1064,7 @@ export function VoiceBubble() {
 
       <div
         style={panelDrag.style}
+        data-peeking={peeking || undefined}
         className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6"
       >
         <div
