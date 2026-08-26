@@ -69,7 +69,11 @@ function pointerPrototype(): Pointer {
 
 export default function SplashCursor({
   SIM_RESOLUTION = 128,
-  DYE_RESOLUTION = 1440,
+  // 1440 was the library default and it is aimed at a full-screen showpiece.
+  // Ours sits behind a hero as atmosphere: at 720 the smoke is the same smoke
+  // and the fragment work is quartered. He asked to KEEP this effect, so the
+  // cost had to come out of resolution rather than out of the effect.
+  DYE_RESOLUTION = 720,
   CAPTURE_RESOLUTION = 512,
   DENSITY_DISSIPATION = 3.5,
   VELOCITY_DISSIPATION = 2,
@@ -866,7 +870,11 @@ export default function SplashCursor({
     }
 
     function scaleByPixelRatio(input: number) {
-      const pixelRatio = window.devicePixelRatio || 1;
+      // CAPPED. This was the full devicePixelRatio, so a 2x display rendered
+      // four times the fragments — for an effect that is soft, blurred smoke.
+      // There is no detail at 2x for a viewer to lose, and it is the single
+      // largest cost in the whole simulation.
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.25);
       return Math.floor(input * pixelRatio);
     }
 
@@ -876,14 +884,49 @@ export default function SplashCursor({
     let lastUpdateTime = Date.now();
     let colorUpdateTimer = 0.0;
 
+    // ── WHEN THIS IS ALLOWED TO RUN ──────────────────────────────────────
+    //
+    // "our landing page is lagging..when i scroll its very laggy... it was
+    //  smooth before, once we added this cursor smoke the landing page alone is
+    //  lagging now."
+    //
+    // A fluid simulation was rendering a full-viewport WebGL pass on EVERY
+    // frame, for ever — whether the pointer had moved, whether the tab was
+    // visible, whether he was mid-scroll. Scrolling and this were competing for
+    // the same GPU, and scrolling lost.
+    //
+    // The loop stays alive (restarting it is where bugs live); the WORK is what
+    // gets skipped. Three reasons to skip, all of them times he cannot see the
+    // effect anyway:
+    let idleUntil = Date.now() + 4000;  // no pointer for a while → nothing to draw
+    let scrollingUntil = 0;             // mid-scroll → give the compositor the GPU
+    let frame = 0;
+
+    const wake = () => {
+      idleUntil = Date.now() + 2500;
+    };
+    const onScroll = () => {
+      scrollingUntil = Date.now() + 140;
+    };
+    window.addEventListener("mousemove", wake, { passive: true });
+    window.addEventListener("pointerdown", wake, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+
     function updateFrame() {
+      frame = requestAnimationFrame(updateFrame);
+      const now = Date.now();
+      if (document.hidden || now < scrollingUntil || now > idleUntil) {
+        // Keep the clock honest, or the first frame after a pause integrates a
+        // huge dt and the fluid jumps.
+        lastUpdateTime = now;
+        return;
+      }
       const dt = calcDeltaTime();
       if (resizeCanvas()) initFramebuffers();
       updateColors(dt);
       applyInputs();
       step(dt);
       render(null);
-      requestAnimationFrame(updateFrame);
     }
 
     function calcDeltaTime() {
@@ -1298,6 +1341,17 @@ export default function SplashCursor({
         updatePointerUpData(pointer);
       }
     });
+    // Nothing here was ever torn down: the frame loop and its listeners
+    // outlived the component. On a client-routed site that means a second
+    // simulation starts on the next visit while the first is still running,
+    // and they both keep rendering. Whatever else was making this heavy, that
+    // would have compounded it every time he came back to the page.
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("mousemove", wake);
+      window.removeEventListener("pointerdown", wake);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, [
     SIM_RESOLUTION,
     DYE_RESOLUTION,

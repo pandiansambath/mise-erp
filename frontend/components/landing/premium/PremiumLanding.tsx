@@ -58,16 +58,40 @@ function ScrollProgress() {
   );
 }
 
-/** SplashCursor, but only where a cursor exists. */
+/** The fluid smoke — now on phones too, at a size their GPU can carry.
+ *
+ * "i want that cursor jellyfish kinda smoke animation not only in desktop, but
+ *  also in mobile view too (optimised way)."
+ *
+ * It was gated to `(pointer: fine)`, so touch devices got nothing. The
+ * simulation already handles touch; what it could not handle was a phone GPU at
+ * desktop settings. So the effect is the same effect and the BUDGET is
+ * different: a quarter of the dye resolution, a coarser velocity grid, and half
+ * the pressure iterations — the three costs that scale with fill rate.
+ */
 function FluidCursor() {
-  const [on, setOn] = useState(false);
+  const [mode, setMode] = useState<"off" | "desktop" | "phone">("off");
   useEffect(() => {
-    setOn(
-      window.matchMedia("(pointer: fine)").matches &&
-        !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    );
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const decide = () =>
+      setMode(window.matchMedia("(max-width: 768px)").matches ? "phone" : "desktop");
+    decide();
+    const mq = window.matchMedia("(max-width: 768px)");
+    mq.addEventListener("change", decide);
+    return () => mq.removeEventListener("change", decide);
   }, []);
-  if (!on) return null;
+
+  if (mode === "off") return null;
+  if (mode === "phone") {
+    return (
+      <SplashCursor
+        DYE_RESOLUTION={360}
+        SIM_RESOLUTION={64}
+        PRESSURE_ITERATIONS={12}
+        SPLAT_RADIUS={0.3}
+      />
+    );
+  }
   return <SplashCursor />;
 }
 
