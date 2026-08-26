@@ -1683,7 +1683,12 @@ async function setCustomSelect(name: string, value: string): Promise<boolean> {
   const alts = [want, ...(SYNONYMS[want] ?? [])];
   const triggers = [
     ...document.querySelectorAll<HTMLElement>('button[aria-haspopup="listbox"]'),
-  ].filter((el) => el.offsetParent !== null);
+  ].filter(
+    (el) =>
+      el.offsetParent !== null &&
+      !el.closest(".mise-voice-card") &&
+      !el.closest("[data-mise-assistant]"),
+  );
 
   const trigger = triggers.find((el) => {
     const near = labelNear(el);
@@ -1721,13 +1726,15 @@ async function setCustomSelect(name: string, value: string): Promise<boolean> {
 // empty. The model cannot see the page, so the translation has to live here.
 const SYNONYMS: Record<string, string[]> = {
   amount: ["gross", "total", "value", "price", "net", "sum", "cost"],
-  method: ["paymentmethod", "paidby", "payment", "type"],
-  category: ["cat", "group", "kind", "type"],
+  // "type" is deliberately NOT here: it matches half the labels on any page,
+  // including this panel's own "Type what you need".
+  method: ["paymentmethod", "paidby", "payment", "paidwith"],
+  category: ["cat", "group", "kind"],
   description: ["note", "notes", "detail", "details", "memo", "reference", "what"],
   vendor: ["supplier", "seller", "from", "payee"],
   date: ["on", "when", "day"],
   quantity: ["qty", "count", "number", "howmany", "units"],
-  item: ["product", "ingredient", "name", "what"],
+  item: ["product", "ingredient", "name"],
 };
 
 function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
@@ -1736,7 +1743,19 @@ function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
   const alsoTry = SYNONYMS[raw] ?? [];
   const inputs = [
     ...document.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select"),
-  ].filter((el) => el.offsetParent !== null && !el.disabled && el.getAttribute("type") !== "hidden");
+  ].filter(
+    (el) =>
+      el.offsetParent !== null &&
+      !el.disabled &&
+      el.getAttribute("type") !== "hidden" &&
+      // NEVER the assistant's own panel. It matched its own text box — whose
+      // label is "Type what you need" — through the synonym "type", and wrote
+      // the payment method into it. The dropdown behind it kept saying CARD
+      // while the reply said "cash". A tool that fills forms must not count
+      // itself as a form.
+      !el.closest(".mise-voice-card") &&
+      !el.closest("[data-mise-assistant]"),
+  );
 
   const score = (el: HTMLElement) => {
     const bits = [
