@@ -263,16 +263,27 @@ test("the card cannot scroll sideways, so its text cannot walk off the edge", as
       scrollWidth: card.scrollWidth,
       clientWidth: card.clientWidth,
       worstSpill: Math.max(0, ...rows.map((b) => cb.left - b.left)),
+      overflowX: getComputedStyle(card).overflowX,
     };
   });
   console.log("card geometry:", JSON.stringify(geom));
 
+  // The failure mode is CONTENT MOVING, not overflow existing.
+  //
+  // This used to demand scrollWidth <= clientWidth, which was right when the
+  // card used `overflow: hidden` — hidden makes a scroll container, and a
+  // scroll container is what shunted the text 68px sideways when a button
+  // inside took focus. The card now uses `overflow: clip`, which is not a
+  // scroll container at all: the rotating aurora deliberately overhangs it and
+  // `scrollLeft` is structurally incapable of changing. Keeping the old
+  // assertion would have failed a design that is strictly safer than the one it
+  // was written for.
   expect(geom.scrollLeft, "the card scrolled its own contents out of view").toBe(0);
-  expect(
-    geom.scrollWidth,
-    "the card has a scrollable area it should not have — something inside overhangs it",
-  ).toBeLessThanOrEqual(geom.clientWidth + 1);
   expect(geom.worstSpill, "text is hanging off the left edge of the card").toBeLessThan(2);
+  expect(
+    geom.overflowX,
+    "the card is a scroll container again — `hidden` is what caused the original bug",
+  ).toBe("clip");
 });
 
 test("the card is a surface, not a tint", async ({ page }) => {
@@ -307,6 +318,11 @@ test("hands free: it opens Sales and types the number into the real form", async
   // landing in the box — the field matcher has to find a real input by the
   // plainest name a person would use, on a page it has never seen.
   await page.getByRole("button", { name: /talk to dineai/i }).click();
+  // A fresh conversation. Now that turns persist server-side, two tests running
+  // against the same account share a thread — and this one must not inherit
+  // another test's context.
+  await page.getByRole("button", { name: /^new chat$/i }).click();
+  await page.waitForTimeout(800);
   await page.getByLabel(/type what you need/i).fill("add a 120 pound cash sale into the sales page");
   await page.getByRole("button", { name: /^send$/i }).click();
 

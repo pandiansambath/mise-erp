@@ -789,6 +789,9 @@ async def voice_stream(
         seq = 0
         full = ""
         draft = ""
+        #: Sentences already handed to Polly while the model is still writing.
+        ahead: list = []
+        speech_buffer = ""
         # One line per turn, so the questions he actually asks about the voice
         # are answerable from CloudWatch instead of by reproduction: how long
         # did it take, how much did it say, what did it do, did it loop.
@@ -836,32 +839,57 @@ async def voice_stream(
                     # doing turns a silent wait into a visible one.
                     yield _sse({"type": "doing", "label": voice.doing_label(ev.get("name", ""))})
                 elif kind == "draft":
-                    # On screen immediately. NOT spoken yet: this lap may turn
-                    # out to have been the model thinking out loud on its way
-                    # to a tool call, and "let me check the sales" said aloud
-                    # as if it were the answer is worse than a short wait.
+                    # On screen immediately, and SYNTHESISED SPECULATIVELY.
+                    #
+                    # "i can see text as soon as i complete... then after that
+                    #  text fully came then only voice model is starting."
+                    #
+                    # Exactly what the code did: nothing reached Polly until
+                    # `draft_end`, which only fires once the whole reply has
+                    # been written. So the audio clock started where the text
+                    # clock stopped, and he heard the sum of the two.
+                    #
+                    # Now each finished sentence goes to Polly the moment it
+                    # exists, in the background, while the next one is still
+                    # being written. Nothing is EMITTED until draft_end confirms
+                    # this lap was the answer — so a thought is still never
+                    # spoken aloud; we have merely done the waiting in advance.
+                    # A dropped draft costs one wasted Polly call, which is
+                    # about a hundredth of a penny against seconds of his time.
                     piece = ev.get("text", "")
                     if first_word_ms is None:
                         first_word_ms = int((time.monotonic() - t0) * 1000)
                     draft += piece
                     yield _sse({"type": "draft", "text": piece})
+
+                    speech_buffer += piece
+                    while True:
+                        chunk, speech_buffer = voice.next_sentence(speech_buffer)
+                        if not chunk:
+                            break
+                        ahead.append(asyncio.create_task(say(chunk)))
                 elif kind == "draft_end":
                     if ev.get("kept"):
-                        # It WAS the answer. Now it may be spoken - and it goes
-                        # sentence by sentence, so the first one is already
-                        # coming out of Polly while the rest is synthesised.
                         full += draft
-                        spoken_buffer += draft
-                        while True:
-                            chunk, spoken_buffer = voice.next_sentence(spoken_buffer)
-                            if not chunk:
-                                break
-                            b64 = await say(chunk)
+                        # Whatever is already in flight, plus the tail that
+                        # never reached a full stop.
+                        tail = speech_buffer.strip()
+                        speech_buffer = ""
+                        if tail:
+                            ahead.append(asyncio.create_task(say(tail)))
+                        for task in ahead:
+                            b64 = await task
                             if b64:
                                 yield _sse({"type": "audio", "b64": b64, "seq": seq})
                                 seq += 1
+                        ahead = []
                     else:
-                        # A thought, not a reply. Tell the page to drop it.
+                        # A thought, not a reply. Throw the speculative audio
+                        # away rather than letting it reach his speakers.
+                        for task in ahead:
+                            task.cancel()
+                        ahead = []
+                        speech_buffer = ""
                         yield _sse({"type": "draft_drop", "text": draft.strip()[:120]})
                     draft = ""
                 elif kind == "delta":

@@ -3812,3 +3812,17 @@ body.mise-voice-open .mise-launcher-in {
 .mise-voice-aurora i {
   will-change: transform;
 }
+
+/* Out of the way while the page it just opened is revealed.
+   Faded and click-through rather than unmounted: unmounting would tear down the
+   microphone and the audio queue in the middle of the very turn that asked for
+   the navigation. */
+.mise-voice[data-peeking] {
+  opacity: 0.12;
+  pointer-events: none;
+  transform: translateY(6px) scale(0.985);
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+.mise-voice {
+  transition: opacity 320ms ease, transform 320ms ease;
+}
