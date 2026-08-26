@@ -153,6 +153,7 @@ export function VoiceBubble() {
     summary: string;
   } | null>(null);
   const [askMode, setAskMode] = useState<Ask>("money");
+  const [closeOnOutside, setCloseOnOutside] = useState(false);
   const [level, setLevel] = useState(0);
   const [typed, setTyped] = useState("");
   // What it is doing while it is not yet answering — the model's own words for
@@ -181,14 +182,29 @@ export function VoiceBubble() {
       const cs = getComputedStyle(from);
       const pick = (name: string, fallback: string) =>
         (cs.getPropertyValue(name) || "").trim() || fallback;
+      // "yes im the one who said match aurora with theme...but now its not
+      //  giving that much impact...actually its spoiling the aurora effect...
+      //  we need aurora back, in all themes it need to be clearly visible...
+      //  like we have in gemini voice ui"
+      //
+      // He is right, and both halves of that are true at once. "Obey the
+      // theme" was never "be made of the theme's palest colours" — and his
+      // rose theme's aurora triple is three shades of pale pink, so reading it
+      // literally turned the whole effect into a faint wash.
+      //
+      // A Gemini aurora is vividly saturated in every theme it ships. What
+      // makes it BELONG is the hue, not the weakness. So the theme still picks
+      // the hue and the aurora gets its chroma back: each colour is pushed
+      // toward full saturation rather than used as-is.
+      const vivid = (name: string, fallback: string) =>
+        `color-mix(in oklab, ${pick(name, fallback)} 62%, ${fallback})`;
       setPaint({
-        "--v1": pick("--mise-aurora-1", "#10b981"),
-        "--v2": pick("--mise-aurora-2", "#0ea5e9"),
-        "--v3": pick("--mise-aurora-3", "#14b8a6"),
+        "--v1": vivid("--mise-aurora-1", "#10b981"),
+        "--v2": vivid("--mise-aurora-2", "#0ea5e9"),
+        "--v3": vivid("--mise-aurora-3", "#8b5cf6"),
         // A fourth, warmer note so the drift does not read as one colour
-        // breathing. The brand ramp is the only place to get it that is
-        // guaranteed to suit whatever he picked.
-        "--v4": pick("--color-brand-400", "#34d399"),
+        // breathing.
+        "--v4": vivid("--color-brand-400", "#f59e0b"),
         "--vbrand": pick("--color-brand-500", "#10b981"),
       });
     };
@@ -265,6 +281,7 @@ export function VoiceBubble() {
       if (v) setVoice(v);
       const a = localStorage.getItem("mise.voice.ask");
       if (a === "always" || a === "money" || a === "never") setAskMode(a);
+      setCloseOnOutside(localStorage.getItem("mise.voice.closeOutside") === "1");
     } catch {
       /* private mode — the defaults are fine */
     }
@@ -773,7 +790,16 @@ export function VoiceBubble() {
           bubbleDrag.dragging ? "scale-110 cursor-grabbing" : "cursor-grab"
         }`}
       >
-        <MicIcon className="h-6 w-6" />
+        {/* The launcher had a flat gradient, so "the mic logo bubble is not
+            clearly visible, I mean the aurora effect". It gets the real thing:
+            the same drifting blobs as the panel, clipped to the circle. */}
+        <span aria-hidden className="mise-voice-aurora" data-phase="listening">
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        <MicIcon className="relative h-6 w-6 drop-shadow" />
       </button>
     );
   }
@@ -964,6 +990,48 @@ export function VoiceBubble() {
                   </span>
                 </button>
               ))}
+
+              <p className="mb-1.5 mt-3 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                The panel
+              </p>
+              {/* "where is the chat ui setting button (go check our previous
+                  dineai setting, what and all we had, that all we need here
+                  too)". This is what that panel actually held — plus a reset,
+                  which only became necessary once dragging came back: a window
+                  dragged half off-screen has to be recoverable. */}
+              <label className="mise-card-inset mise-press flex cursor-pointer items-start gap-2.5 rounded-xl px-2.5 py-2">
+                <input
+                  type="checkbox"
+                  checked={closeOnOutside}
+                  onChange={(e) => {
+                    setCloseOnOutside(e.target.checked);
+                    remember("mise.voice.closeOutside", e.target.checked ? "1" : "0");
+                  }}
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand-500"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-medium text-fg">
+                    Close when I click outside
+                  </span>
+                  <span className="block text-[10px] leading-tight text-fg-faint">
+                    Off keeps it open while you work on the page behind it.
+                  </span>
+                </span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  panelDrag.reset();
+                  bubbleDrag.reset();
+                  setPanel("none");
+                }}
+                className="mise-press mise-card-inset mt-1 w-full rounded-xl px-2.5 py-1.5 text-left text-[12px] text-fg-soft"
+              >
+                Put it back in the corner
+                <span className="block text-[10px] leading-tight text-fg-faint">
+                  Undo where you dragged the panel and the bubble
+                </span>
+              </button>
             </div>
           )}
 

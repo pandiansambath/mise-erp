@@ -68,6 +68,13 @@ export function useDraggable(storageKey: string) {
     (e: React.PointerEvent<HTMLElement>) => {
       // Ignore right-click and anything that is not a primary press.
       if (e.button !== 0) return;
+      // A drag HANDLE is often also a toolbar. Capturing the pointer here
+      // swallows every button underneath it — he could see the close button,
+      // the settings button and the voice picker, and press none of them,
+      // which is worse than having no drag at all. Anything interactive keeps
+      // its own click; the space between them is the handle.
+      const hit = e.target as HTMLElement | null;
+      if (hit?.closest("button, a, input, select, textarea, label, [role='button']")) return;
       const el = e.currentTarget;
       const rect = el.getBoundingClientRect();
       origin.current = { x: rect.left, y: rect.top };
@@ -127,10 +134,23 @@ export function useDraggable(storageKey: string) {
     return true;
   }, []);
 
+  /** Forget where it was dragged to, and go back to the stylesheet's corner.
+   *  A window dragged half off-screen has to be recoverable without clearing
+   *  site data. */
+  const reset = useCallback(() => {
+    setPos(null);
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      /* nothing stored, nothing to remove */
+    }
+  }, [storageKey]);
+
   return {
     pos,
     dragging,
     wasDrag,
+    reset,
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
     /** Inline style pinning it where the user left it. */
     style: pos
