@@ -3181,7 +3181,7 @@ body[data-overlay] .mise-launcher-in {
   /* The blur lives on each blob now. On the container it would have blurred a
      already-clipped square and drawn a hard edge at the card's border. */
   filter: blur(30px);
-  animation: mise-voice-drift 14s ease-in-out infinite;
+  animation: mise-voice-drift 9s ease-in-out infinite;
 }
 .mise-voice-aurora i:nth-child(1) {
   background: var(--v1, #10b981);
@@ -3208,15 +3208,20 @@ body[data-overlay] .mise-launcher-in {
   opacity: 0.7;
 }
 @keyframes mise-voice-drift {
-  0%,
-  100% {
+  0% {
     transform: translate(0, 0) scale(1);
   }
-  33% {
-    transform: translate(18%, 12%) scale(1.18);
+  25% {
+    transform: translate(52%, 30%) scale(1.35);
   }
-  66% {
-    transform: translate(-12%, 16%) scale(0.9);
+  50% {
+    transform: translate(18%, 66%) scale(0.82);
+  }
+  75% {
+    transform: translate(-40%, 26%) scale(1.22);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
   }
 }
 /* The colours wake up when it is listening and go quiet when it is not. */
@@ -3227,7 +3232,7 @@ body[data-overlay] .mise-launcher-in {
   opacity: 0.9;
 }
 .mise-voice-aurora[data-phase="listening"] i {
-  animation-duration: 6s;
+  animation-duration: 4s;
 }
 .mise-voice-aurora[data-phase="thinking"] {
   opacity: 0.72;
@@ -3719,4 +3724,66 @@ body.mise-voice-open .mise-launcher-in {
   background: transparent;
   border: 0;
   box-shadow: none;
+}
+
+
+/* The whole panel must fit the screen it is on, not merely start on it. He hit
+   this on desktop AND mobile: an anchored panel that grows downward eventually
+   grows past the edge, and the controls at the bottom become unreachable. */
+.mise-voice {
+  max-height: min(46rem, calc(100dvh - 6rem));
+  display: flex;
+  flex-direction: column;
+}
+.mise-voice > .mise-voice-card {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+
+/* THE AURORA HAS TO BE SEEN MOVING.
+   "aurora is not moving bro..its static aurora va? then not nice... it need to
+    move like gemini ui."
+   It always had a drift animation — but ±18% over fourteen seconds, behind a
+   30px blur, is a tide rather than a motion: technically animated, visually
+   still. The blobs now travel more than half their own width and the whole
+   layer counter-rotates, so the light actually crosses the card. */
+.mise-voice-aurora {
+  animation: mise-voice-swirl 18s linear infinite;
+}
+@keyframes mise-voice-swirl {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.mise-voice-aurora[data-phase="listening"],
+.mise-voice-aurora[data-phase="speaking"] {
+  animation-duration: 9s;
+}
+/* Rotating a square layer would show its corners; a circle twice the width has
+   none to show, and keeps the blobs inside the card at every angle. */
+.mise-voice-aurora {
+  border-radius: 50%;
+  inset: -50%;
+}
+/* CLIP, not hidden — and this is not a style preference.
+   `hidden` creates a scroll container, and an aurora at inset:-50% would give
+   it 50% of scrollable area on every side. That is the exact fault that once
+   shunted this card's text 68px off its own left edge when a button inside took
+   focus. `clip` cuts the overflow and refuses to scroll, so the oversized
+   rotating layer is safe. */
+.mise-voice-card {
+  overflow: clip;
+}
+.mise-voice-launch {
+  overflow: clip;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-voice-aurora {
+    animation: none;
+  }
 }

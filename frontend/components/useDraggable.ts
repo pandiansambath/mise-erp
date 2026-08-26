@@ -73,8 +73,15 @@ export function useDraggable(storageKey: string) {
       // the settings button and the voice picker, and press none of them,
       // which is worse than having no drag at all. Anything interactive keeps
       // its own click; the space between them is the handle.
+      // Skip only controls INSIDE the handle, never the handle itself.
+      //
+      // The first version of this checked `hit.closest("button, ...")` flat —
+      // which let him press the close button again but stopped him dragging the
+      // LAUNCHER, because the launcher is itself a button. One fix, one new
+      // breakage, the same morning.
       const hit = e.target as HTMLElement | null;
-      if (hit?.closest("button, a, input, select, textarea, label, [role='button']")) return;
+      const control = hit?.closest("button, a, input, select, textarea, label, [role='button']");
+      if (control && control !== e.currentTarget && e.currentTarget.contains(control)) return;
       const el = e.currentTarget;
       const rect = el.getBoundingClientRect();
       origin.current = { x: rect.left, y: rect.top };

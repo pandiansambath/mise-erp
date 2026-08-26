@@ -680,12 +680,6 @@ export default function AiScanPage() {
           conversation it exists to serve. */}
       {railOpen && (
         <aside className="mise-chat-rail hidden w-64 shrink-0 flex-col overflow-hidden rounded-3xl lg:flex">
-          <span aria-hidden className="mise-voice-aurora" data-phase="idle">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
           <div className="relative flex items-center justify-between px-4 pb-2 pt-4">
             <p className="font-display text-sm font-semibold text-fg">Conversations</p>
             <button
@@ -743,13 +737,6 @@ export default function AiScanPage() {
           RING, and stat tiles with big legible numbers. The old version buried
           the same facts in 11px grey text nobody reads. */}
       <header className="mise-neo-raised relative mb-3 overflow-hidden rounded-2xl px-4 py-3">
-        {/* The same aurora as the voice bubble - one assistant, heard or read. */}
-        <span aria-hidden className="mise-voice-aurora" data-phase="idle">
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
         <div className="relative flex items-center gap-3">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-sky-400 text-base text-white shadow-lg shadow-brand-500/25">
             ✦
@@ -890,17 +877,6 @@ export default function AiScanPage() {
 
       {/* the thread */}
       <div className="mise-chat-shell relative flex min-h-0 flex-1 overflow-hidden rounded-3xl">
-        {/* "we need aurora effect for the entire chat ui interface."
-            It sits on the SHELL, not inside the scroller: an absolutely
-            positioned layer inside an overflow-y-auto box sizes to the content
-            rather than the visible area, so it would scroll away — and a
-            `fixed` one would pin itself to the whole window instead. */}
-        <span aria-hidden className="mise-voice-aurora" data-phase="idle">
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
         <div className="mise-chat-log relative z-[1] flex-1 space-y-8 overflow-y-auto p-5 sm:p-8">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
