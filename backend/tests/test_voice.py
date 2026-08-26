@@ -844,3 +844,78 @@ def test_it_opens_its_own_mouth():
     for line in GREETINGS:
         assert any(w in line.lower() for w in offers), f"this opener offers nothing: {line}"
     assert greeting(0) != greeting(1), "it does not rotate"
+
+
+def test_a_fragment_is_not_an_instruction():
+    """The debris of a feedback loop must not become a question.
+
+    "my.", "money pin.", "the money thing." are what came back when Amy was
+    being transcribed off his speakers. Answering two words of that wastes a
+    model call, puts a wrong answer on screen, and TEACHES him the thing
+    mishears — when it was never spoken to in the first place.
+
+    This mirrors `worthAnswering` in VoiceBubble.tsx; the browser is where it
+    runs, but the rule is worth stating somewhere it can be read.
+    """
+    def worth(t: str) -> bool:
+        t = t.strip()
+        return len(t) >= 7 and len([w for w in t.split() if w]) >= 2
+
+    for junk in ["my.", "the.", "ok", "hmm", "a b", "  "]:
+        assert not worth(junk), f"would have answered junk: {junk!r}"
+    for real in ["open the money page", "what did we take today", "show expenses"]:
+        assert worth(real), f"would have ignored a real instruction: {real!r}"
+
+    # And the honest limit of this net, stated rather than wished away:
+    # "money pin." is ten characters and two words, and so is "show sales".
+    # Nothing about their SHAPE separates them, so no length rule can reject
+    # one and keep the other — and rejecting real two-word commands would be a
+    # worse bug than the one being defended against.
+    assert worth("money pin.") == worth("show sales")
+    # Which is why the real defence is upstream: not hearing itself at all.
+    # This is a net for debris, not the fix for the loop.
+
+
+def test_the_vocabulary_is_never_named_unless_aws_says_it_is_ready(monkeypatch):
+    """Naming a PENDING vocabulary makes Transcribe refuse the connection.
+
+    That trades a mishearing for total silence, which is the worse of the two
+    by a wide margin — and it is a failure he would report as "the voice
+    stopped working" with no way to tell why.
+    """
+    import sys
+    import types
+
+    calls = {"state": "PENDING"}
+
+    fake = types.ModuleType("boto3")
+
+    class Creds:
+        access_key = "AKIA"
+        secret_key = "s"
+        token = None
+
+        def get_frozen_credentials(self):
+            return self
+
+    fake.Session = lambda: types.SimpleNamespace(get_credentials=lambda: Creds())
+    fake.client = lambda *a, **k: types.SimpleNamespace(
+        get_vocabulary=lambda VocabularyName: {"VocabularyState": calls["state"]}
+    )
+    monkeypatch.setitem(sys.modules, "boto3", fake)
+
+    from importlib import reload
+
+    from app.assistant import listen as mod
+
+    reload(mod)
+    assert mod._vocabulary_name() == "", "a PENDING vocabulary was used"
+
+    reload(mod)
+    calls["state"] = "READY"
+    assert mod._vocabulary_name() == "mise-terms", "a READY vocabulary was ignored"
+
+    # And a broken Transcribe API must not stop him being heard at all.
+    reload(mod)
+    fake.client = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no"))
+    assert mod._vocabulary_name() == ""

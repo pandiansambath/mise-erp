@@ -33,6 +33,7 @@ import datetime as dt
 import hashlib
 import hmac
 import logging
+import os
 import urllib.parse
 
 import boto3
@@ -50,6 +51,46 @@ SAMPLE_RATE = 16000
 #: for as long as he keeps talking. A short window limits what a leaked URL is
 #: worth without limiting the conversation.
 EXPIRES = 300
+#: A custom vocabulary lives in the account, not the request. Empty until one
+#: has been created, because naming a vocabulary that does not exist makes
+#: Transcribe reject the whole connection - a worse failure than a mishearing.
+VOCABULARY = os.environ.get("TRANSCRIBE_VOCABULARY", "mise-terms")
+#: Whether that vocabulary is actually usable. Checked once per process, and
+#: NOT assumed: naming a vocabulary that is still PENDING makes Transcribe
+#: refuse the whole connection, which is a far worse failure than a mishearing.
+#: None = not yet asked.
+_vocab_ready: bool | None = None
+
+
+def _vocabulary_name() -> str:
+    """The custom vocabulary, if AWS says it is ready to use."""
+    global _vocab_ready
+    if not VOCABULARY:
+        return ""
+    if _vocab_ready is None:
+        try:
+            state = (
+                boto3.client("transcribe", region_name=REGION)
+                .get_vocabulary(VocabularyName=VOCABULARY)
+                .get("VocabularyState")
+            )
+            _vocab_ready = state == "READY"
+            if not _vocab_ready:
+                log.info("transcribe vocabulary %s is %s, not using it", VOCABULARY, state)
+        except Exception:  # noqa: BLE001 - never let this stop him being heard
+            log.warning("could not check transcribe vocabulary", exc_info=True)
+            _vocab_ready = False
+    return VOCABULARY if _vocab_ready else ""
+
+#: The words worth teaching it: every page he can ask for, plus the handful of
+#: kitchen terms a general model has never met.
+VOCABULARY_TERMS = [
+    "DineAI", "dashboard", "inventory", "purchasing", "vendors", "expenses",
+    "payroll", "attendance", "rota", "stock-take", "waste", "recipes",
+    "reports", "sales", "money", "profit", "budget", "kiosk", "indent",
+    "petty-cash", "stock", "supplier", "takings", "till", "margin",
+    "poori", "masala", "paneer", "dosa", "idli", "biryani", "tandoor",
+]
 
 
 def _sign(key: bytes, msg: str) -> bytes:
@@ -81,11 +122,22 @@ def presigned_url(language: str = "en-GB") -> str:
 
     params = {
         "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+        # "open the money page" came back as "money pin". Stabilisation makes
+        # Transcribe hold a partial until it is reasonably sure rather than
+        # revising it in public, which is both steadier to read and less likely
+        # to be the version we act on.
+        "enable-partial-results-stabilization": "true",
+        "partial-results-stability": "high",
         "X-Amz-Credential": f"{creds.access_key}/{scope}",
         "X-Amz-Date": amz_date,
         "X-Amz-Expires": str(EXPIRES),
         "X-Amz-SignedHeaders": "host",
         "language-code": language,
+        # The words this app is made of. Without them "money" competes with
+        # "money pin", "rota" with "rooter", "poori" with "puri" - a general
+        # model has no reason to prefer ours, and every one of these is a page
+        # he might ask for by name.
+        **({"vocabulary-name": name} if (name := _vocabulary_name()) else {}),
         "media-encoding": "pcm",
         "sample-rate": str(SAMPLE_RATE),
     }

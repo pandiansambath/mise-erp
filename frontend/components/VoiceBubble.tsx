@@ -34,6 +34,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { API_BASE, api, ApiError, getToken } from "@/lib/api";
 import { listen as awsListen, type Listener } from "@/lib/transcribe";
+import { useDraggable } from "@/components/useDraggable";
 
 type Turn = { role: "user" | "assistant"; content: string };
 type Action =
@@ -72,6 +73,20 @@ const STARTERS = ["What did we take today?", "What's running low?", "Open expens
 // hundred and twenty... cash". The browser's own `isFinal` fires on a rhythm
 // nobody can predict, which is why the turn is ended here instead.
 const SILENCE_MS = 1300;
+
+// "my.", "the money thing.", "money pin." — the debris of a feedback loop, and
+// also what a noisy kitchen produces on its own. Acting on two words of it
+// wastes a model call and puts a wrong answer on screen; more importantly it
+// TEACHES him the thing mishears, when really it was never spoken to.
+const MIN_WORDS = 2;
+const MIN_CHARS = 7;
+
+function worthAnswering(text: string): boolean {
+  const t = text.trim();
+  if (t.length < MIN_CHARS) return false;
+  if (t.split(/\s+/).filter(Boolean).length < MIN_WORDS) return false;
+  return true;
+}
 
 function needsAsking(mode: Ask, fields: Record<string, string>): boolean {
   if (mode === "never") return false;
@@ -189,6 +204,21 @@ export function VoiceBubble() {
   // ever make a sound. Saying so is the difference between "broken" and "tap".
   const [needsTap, setNeedsTap] = useState(false);
 
+  useEffect(() => {
+    phaseRef.current = phase;
+    // Thinking counts as deaf too: a reply is coming, and anything picked up
+    // in the meantime is either the room or our own last sentence.
+    if (phase === "thinking" || phase === "speaking") deafUntilRef.current = Date.now() + 1200;
+  }, [phase]);
+
+  // "we can drag the chat ui anywhere in screen... we can tap the bubble and
+  //  move anywhere in screen... these are missing." They were: the old Copilot
+  //  had both, and I dropped them when the voice panel became the only
+  //  assistant. Where a floating thing lives is the user's decision — no corner
+  //  we pick is free on every page.
+  const bubbleDrag = useDraggable("mise.voice.bubble");
+  const panelDrag = useDraggable("mise.voice.panel");
+
   const recRef = useRef<Recognizer | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Refs, not state, because the recogniser's callbacks are created once and
@@ -202,7 +232,20 @@ export function VoiceBubble() {
   const awsRef = useRef<Listener | null>(null);
   const queueRef = useRef<string[]>([]);
   const drainingRef = useRef(false);
+  // It hears itself. Amy comes out of the speakers, back in through the
+  // microphone, gets transcribed, and answers — and every answer starts
+  // another one. That is the flicker: a new turn every second, forever.
+  //
+  // `draining` alone was deaf only while a chunk was actually PLAYING, which
+  // leaves three holes: before the first chunk arrives, between queued
+  // sentences, and while the last word is still in the room. Each is wide
+  // enough to start the loop. `echoCancellation` cannot help — a laptop
+  // speaker into a laptop microphone defeats browser AEC routinely.
+  const deafUntilRef = useRef(0);
+  const phaseRef = useRef<Phase>("idle");
   const logRef = useRef<HTMLDivElement | null>(null);
+  const pickRef = useRef<HTMLInputElement | null>(null);
+  const camRef = useRef<HTMLInputElement | null>(null);
   const supported = typeof window !== "undefined" && !!recognition();
   const current = voices.find((v) => v.id === voice);
 
@@ -266,6 +309,8 @@ export function VoiceBubble() {
       window.clearInterval(tick);
       setLevel(0);
       drainingRef.current = false;
+      // The last word is still in the room after the file has finished.
+      deafUntilRef.current = Date.now() + 900;
       // Back to listening, because the microphone never actually left.
       setPhase(liveRef.current ? "listening" : "idle");
     }
@@ -472,9 +517,16 @@ export function VoiceBubble() {
     silenceRef.current = window.setTimeout(() => {
       const said = heardRef.current.trim();
       heardRef.current = "";
-      if (said) void askRef.current(said);
+      if (worthAnswering(said)) void askRef.current(said);
+      else setHeard("");
     }, SILENCE_MS);
   }, []);
+
+  /** Deaf while we are talking, thinking, or still echoing. */
+  const isDeaf = useCallback(
+    () => drainingRef.current || phaseRef.current !== "listening" || Date.now() < deafUntilRef.current,
+    [],
+  );
 
   /** Plan B, and for Brave the only plan: stream to Transcribe ourselves. */
   const startAws = useCallback(async () => {
@@ -482,9 +534,12 @@ export function VoiceBubble() {
       const { url } = await api.get<{ url: string }>("/assistant/voice/listen-url");
       const handle = await awsListen({
         url,
-        muted: () => drainingRef.current,
+        muted: () => isDeaf(),
         onError: (m) => setErr(m),
         onText: (text, final) => {
+          // Belt and braces: audio already in flight when we went deaf still
+          // comes back as a transcript a moment later.
+          if (isDeaf()) return;
           heardRef.current = text;
           setHeard(text);
           setLevel(0.3 + Math.min(0.6, text.length / 60));
@@ -495,7 +550,8 @@ export function VoiceBubble() {
             if (silenceRef.current) window.clearTimeout(silenceRef.current);
             const said = text.trim();
             heardRef.current = "";
-            if (said) void askRef.current(said);
+            if (worthAnswering(said)) void askRef.current(said);
+            else setHeard("");
           } else {
             armSilence();
           }
@@ -524,7 +580,7 @@ export function VoiceBubble() {
           : "I couldn't open the microphone just then. Try again?",
       );
     }
-  }, [armSilence]);
+  }, [armSilence, isDeaf]);
 
   const startLive = useCallback(() => {
     const rec = recognition();
@@ -547,9 +603,8 @@ export function VoiceBubble() {
     setPhase("listening");
 
     rec.onresult = (e) => {
-      // Ignore the room while WE are talking, or it transcribes its own voice
-      // coming back out of the speakers and answers itself.
-      if (drainingRef.current) return;
+      // Same loop, same deafness — the browser's own ears hear the speakers too.
+      if (isDeaf()) return;
       let text = "";
       for (let i = 0; i < e.results.length; i += 1) text += e.results[i][0].transcript;
       heardRef.current = text;
@@ -604,7 +659,7 @@ export function VoiceBubble() {
       setPhase("idle");
       setErr("The microphone is already in use.");
     }
-  }, [armSilence, startAws]);
+  }, [armSilence, startAws, isDeaf]);
 
   // It speaks first. "once user click the voice model that model need to start
   // the conversation... it need to guide and initiate conversation." An
@@ -706,11 +761,17 @@ export function VoiceBubble() {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        {...bubbleDrag.handlers}
+        onClick={() => {
+          if (bubbleDrag.wasDrag()) return;
+          setOpen(true);
+        }}
         aria-label="Talk to DineAI"
         title="Talk to DineAI"
-        style={paint as React.CSSProperties}
-        className="mise-voice-launch fixed bottom-44 right-5 z-[60] grid h-14 w-14 place-items-center rounded-full text-white lg:bottom-24 lg:right-6"
+        style={{ ...paint, ...bubbleDrag.style } as React.CSSProperties}
+        className={`mise-voice-launch fixed bottom-44 right-5 z-[60] grid h-14 w-14 touch-none place-items-center rounded-full text-white lg:bottom-24 lg:right-6 ${
+          bubbleDrag.dragging ? "scale-110 cursor-grabbing" : "cursor-grab"
+        }`}
       >
         <MicIcon className="h-6 w-6" />
       </button>
@@ -749,7 +810,10 @@ export function VoiceBubble() {
         />
       )}
 
-      <div className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6">
+      <div
+        style={panelDrag.style}
+        className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6"
+      >
         <div
           className="mise-voice-card relative rounded-3xl border border-line"
           data-live={phase !== "idle"}
@@ -766,7 +830,12 @@ export function VoiceBubble() {
           </span>
 
           {/* ── Header ─────────────────────────────────────────────────── */}
-          <div className="relative flex items-center gap-2 border-b border-line/70 px-3.5 py-2.5">
+          <div
+            {...panelDrag.handlers}
+            className={`relative flex touch-none items-center gap-2 border-b border-line/70 px-3.5 py-2.5 ${
+              panelDrag.dragging ? "cursor-grabbing" : "cursor-grab"
+            }`}
+          >
             <span className="mise-voice-dot" data-phase={phase} aria-hidden />
             <p className="font-display text-[13px] font-semibold text-fg">
               DineAI Voice
@@ -1064,8 +1133,13 @@ export function VoiceBubble() {
               aria-label="Send a bill, a photo or a file"
             >
               <input
+                ref={pickRef}
                 type="file"
-                accept="image/*,application/pdf"
+                // "if mobile means we need to allow camera also..photos etc."
+                // A phone offers Camera, Photo Library and Files from ONE
+                // input as long as we do not pin it to a capture device —
+                // `capture` would force the camera and remove the choice.
+                accept="image/*,application/pdf,.csv,.xlsx,.xls,.txt"
                 className="sr-only"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -1076,6 +1150,30 @@ export function VoiceBubble() {
               />
               <ClipIcon className="h-4 w-4" />
             </label>
+            <button
+              type="button"
+              onClick={() => camRef.current?.click()}
+              title="Take a photo of a bill"
+              aria-label="Take a photo of a bill"
+              className="mise-press grid h-8 w-8 shrink-0 place-items-center rounded-xl text-fg-faint hover:text-fg lg:hidden"
+            >
+              <CameraIcon className="h-4 w-4" />
+            </button>
+            {/* A SECOND input, camera-pinned, for the phone. One input cannot
+                both offer the library and open the lens straight away. */}
+            <input
+              ref={camRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                handOff(file);
+                e.target.value = "";
+              }}
+            />
             <button
               type="submit"
               disabled={!typed.trim() || phase === "thinking"}
@@ -1166,6 +1264,15 @@ function WaveIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+function CameraIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
 function ClipIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
