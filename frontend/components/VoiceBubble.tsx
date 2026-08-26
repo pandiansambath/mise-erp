@@ -35,6 +35,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { API_BASE, api, ApiError, getToken } from "@/lib/api";
 import { listen as awsListen, type Listener } from "@/lib/transcribe";
 import { useDraggable } from "@/components/useDraggable";
+import { ChatMarkdown } from "@/components/ChatMarkdown";
 
 type Turn = { role: "user" | "assistant"; content: string };
 type Action =
@@ -1393,9 +1394,17 @@ export function VoiceBubble() {
                   </div>
                 ) : (
                   <div key={i} className="flex justify-start">
-                    <p className="mise-card-inset max-w-[92%] rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[12.5px] leading-relaxed text-fg">
-                      {t.content ||
-                        (i === turns.length - 1 && doing ? (
+                    <div className="mise-card-inset max-w-[92%] rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[12.5px] leading-relaxed text-fg">
+                      {t.content ? (
+                        // It was rendering the reply as PLAIN TEXT, so a table
+                        // arrived as a wall of pipes and "**Dragon Fruit**"
+                        // kept its asterisks. The written chat has had a proper
+                        // renderer all along — the voice panel simply never
+                        // used it, which is the kind of gap that only shows up
+                        // the first time the model answers something detailed.
+                        <ChatMarkdown text={t.content} />
+                      ) : (
+                        i === turns.length - 1 && doing ? (
                           <span className="text-fg-faint">{doing}</span>
                         ) : (
                           <span className="mise-voice-dots" aria-label="thinking">
@@ -1403,8 +1412,9 @@ export function VoiceBubble() {
                             <i />
                             <i />
                           </span>
-                        ))}
-                    </p>
+                        )
+                      )}
+                    </div>
                   </div>
                 ),
               )}
