@@ -3166,7 +3166,11 @@ body[data-overlay] .mise-launcher-in {
   overflow: hidden;
   border-radius: inherit;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.75;
+  /* The single biggest thing that brings it back. Blurred blobs at moderate
+     opacity go grey-ish once composited; pushing saturation after the blur is
+     what makes it read as LIGHT rather than as a tint. */
+  filter: saturate(1.9) contrast(1.06);
   transition: opacity 500ms ease;
 }
 .mise-voice-aurora i {
@@ -3217,7 +3221,7 @@ body[data-overlay] .mise-launcher-in {
 }
 /* The colours wake up when it is listening and go quiet when it is not. */
 .mise-voice-aurora[data-phase="idle"] {
-  opacity: 0.34;
+  opacity: 0.55;
 }
 .mise-voice-aurora[data-phase="listening"] {
   opacity: 0.9;
@@ -3390,14 +3394,16 @@ body[data-overlay] .mise-launcher-in {
    card itself, and these are the rules that need it: an aurora tuned against a
    near-black surface becomes a highlighter over near-white. */
 .mise-voice-card[data-mode="light"] .mise-voice-aurora {
-  opacity: 0.2;
+  /* Light mode needs LESS alpha to avoid washing out text, but the same
+     chroma — pale is the failure mode, not bright. */
+  opacity: 0.42;
 }
 .mise-voice-card[data-mode="light"] .mise-voice-aurora[data-phase="listening"] {
-  opacity: 0.4;
+  opacity: 0.62;
 }
 .mise-voice-card[data-mode="light"] .mise-voice-aurora[data-phase="thinking"],
 .mise-voice-card[data-mode="light"] .mise-voice-aurora[data-phase="speaking"] {
-  opacity: 0.32;
+  opacity: 0.55;
 }
 /* Same reason: amber-200 on a dark tint is legible; on white it is invisible. */
 .mise-voice-card[data-mode="light"] .mise-voice-warn {
@@ -3641,4 +3647,76 @@ body.mise-voice-open .mise-launcher-in {
    the full width and the bubbles pick a side. */
 .mise-chat-log > * {
   max-width: none;
+}
+
+
+/* The launcher carries the aurora too — it is the first thing he sees and it
+   was a flat gradient. `overflow: hidden` keeps the blobs inside the circle,
+   and the icon sits above them. */
+.mise-voice-launch {
+  position: fixed;
+  overflow: hidden;
+  isolation: isolate;
+}
+.mise-voice-launch .mise-voice-aurora {
+  border-radius: 9999px;
+  opacity: 0.9;
+  z-index: 0;
+}
+.mise-voice-launch > svg,
+.mise-voice-launch > .relative {
+  position: relative;
+  z-index: 1;
+}
+
+/* The left pane of the expanded chat. Same family as the voice card, because
+   he asked for one look across the whole assistant. */
+.mise-chat-rail {
+  position: relative;
+  isolation: isolate;
+  background: color-mix(in srgb, var(--color-paper) 92%, transparent);
+  border: 1px solid var(--color-line);
+  box-shadow:
+    0 18px 48px -24px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--color-glass) 4%, transparent) inset;
+}
+.mise-chat-rail .mise-voice-aurora {
+  opacity: 0.3;
+  z-index: 0;
+}
+.mise-chat-rail > *:not(.mise-voice-aurora) {
+  position: relative;
+  z-index: 1;
+}
+.mise-app[data-mode="light"] .mise-chat-rail {
+  box-shadow:
+    0 18px 44px -26px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(15, 23, 42, 0.05) inset;
+}
+
+/* The conversation gets the aurora too — he asked for it across the whole
+   interface, not just the bubble. It lives on the SHELL, which does not
+   scroll, so the light stays where it is while the messages move over it. */
+.mise-chat-shell {
+  isolation: isolate;
+  background: color-mix(in srgb, var(--color-paper) 92%, transparent);
+  border: 1px solid var(--color-line);
+  box-shadow:
+    0 18px 48px -24px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--color-glass) 4%, transparent) inset;
+}
+.mise-app[data-mode="light"] .mise-chat-shell {
+  box-shadow:
+    0 18px 44px -26px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(15, 23, 42, 0.05) inset;
+}
+.mise-chat-shell > .mise-voice-aurora {
+  opacity: 0.3;
+  z-index: 0;
+}
+/* The log itself is now just the scroller; the shell carries the surface. */
+.mise-chat-log {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }

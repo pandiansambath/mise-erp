@@ -221,6 +221,7 @@ export default function AiScanPage() {
   // back to the old thread it may as well have.
   const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
   const [showThreads, setShowThreads] = useState(false);
+  const [railOpen, setRailOpen] = useState(true);
 
   const loadThreads = useCallback(() => {
     api
@@ -320,6 +321,18 @@ export default function AiScanPage() {
     // Mount only: a handoff is consumed once, by the load it arrived with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Start a fresh conversation, keeping the old ones. */
+  async function newChat() {
+    try {
+      const d = await api.post<{ thread_id: string }>("/assistant/history/new", {});
+      setThreadId(d.thread_id);
+    } catch {
+      setThreadId(null);
+    }
+    setMsgs([{ id: nid(), who: "ai", kind: "text", text: GREETING }]);
+    loadThreads();
+  }
 
   /* photo → Bedrock → a live card in the thread */
   async function read(file: File) {
@@ -648,13 +661,83 @@ export default function AiScanPage() {
   }
 
   return (
-    <div className="mise-page-grow mx-auto -mb-28 flex h-[calc(100dvh-12rem)] max-w-5xl flex-col lg:h-[calc(100dvh-7rem)]">
+    // "take that entire square screen and in left side you can keep the
+    //  history other stuff and all (with inside outside closing feature)..
+    //  right side you can keep the full chat... it looks like a rectangle now"
+    //
+    // It WAS a rectangle: a 64rem column centred in a 1440px window, with the
+    // history hidden in a dropdown. Now the room is used — a rail on the left
+    // that opens and closes, and the conversation taking everything else.
+    <div className="mise-page-grow -mb-28 flex h-[calc(100dvh-12rem)] w-full gap-4 lg:h-[calc(100dvh-7rem)]">
       <style>{`
         @keyframes aiRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         .ai-rise { animation: aiRise .32s cubic-bezier(.22,1,.36,1) both; }
         @keyframes aiDot { 0%,80%,100% { transform: translateY(0); opacity: .35 } 40% { transform: translateY(-4px); opacity: 1 } }
         .ai-dot { animation: aiDot 1.2s infinite; }
       `}</style>
+
+      {/* The left pane. Hidden on phones, where a rail would eat the
+          conversation it exists to serve. */}
+      {railOpen && (
+        <aside className="mise-chat-rail hidden w-64 shrink-0 flex-col overflow-hidden rounded-3xl lg:flex">
+          <span aria-hidden className="mise-voice-aurora" data-phase="idle">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          <div className="relative flex items-center justify-between px-4 pb-2 pt-4">
+            <p className="font-display text-sm font-semibold text-fg">Conversations</p>
+            <button
+              type="button"
+              onClick={() => setRailOpen(false)}
+              title="Hide this panel"
+              aria-label="Hide the conversations panel"
+              className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint hover:text-fg"
+            >
+              ‹
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => newChat()}
+            className="mise-press mise-card-inset relative mx-3 mb-2 rounded-xl px-3 py-2 text-left text-[13px] text-fg"
+          >
+            + New chat
+          </button>
+          <div className="relative min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+            {threads.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-fg-faint">No earlier conversations yet.</p>
+            ) : (
+              threads.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => openThread(t.id)}
+                  className={`mise-press block w-full truncate rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-glass/5 ${
+                    t.id === threadId ? "text-brand-300" : "text-fg-soft"
+                  }`}
+                >
+                  {t.title}
+                </button>
+              ))
+            )}
+          </div>
+        </aside>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Closing the rail must not be a one-way door. */}
+        {!railOpen && (
+          <button
+            type="button"
+            onClick={() => setRailOpen(true)}
+            title="Show conversations"
+            className="mise-press mb-2 hidden w-fit items-center gap-1.5 rounded-xl border border-line px-2.5 py-1.5 text-[12px] text-fg-soft hover:text-fg lg:flex"
+          >
+            › Conversations
+          </button>
+        )}
 
       {/* Header modelled on the recipe sheet: an identity block, a progress
           RING, and stat tiles with big legible numbers. The old version buried
@@ -755,16 +838,7 @@ export default function AiScanPage() {
         </div>
         <button
           type="button"
-          onClick={async () => {
-            try {
-              const d = await api.post<{ thread_id: string }>("/assistant/history/new", {});
-              setThreadId(d.thread_id);
-            } catch {
-              setThreadId(null);
-            }
-            setMsgs([{ id: nid(), who: "ai", kind: "text", text: GREETING }]);
-            loadThreads();
-          }}
+          onClick={newChat}
           title="New chat — your old conversations are kept"
           className="mise-press flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
         >
@@ -815,7 +889,19 @@ export default function AiScanPage() {
       )}
 
       {/* the thread */}
-      <div className="mise-chat-log flex-1 space-y-8 overflow-y-auto rounded-3xl p-5 sm:p-8">
+      <div className="mise-chat-shell relative flex min-h-0 flex-1 overflow-hidden rounded-3xl">
+        {/* "we need aurora effect for the entire chat ui interface."
+            It sits on the SHELL, not inside the scroller: an absolutely
+            positioned layer inside an overflow-y-auto box sizes to the content
+            rather than the visible area, so it would scroll away — and a
+            `fixed` one would pin itself to the whole window instead. */}
+        <span aria-hidden className="mise-voice-aurora" data-phase="idle">
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        <div className="mise-chat-log relative z-[1] flex-1 space-y-8 overflow-y-auto p-5 sm:p-8">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];
@@ -937,6 +1023,8 @@ export default function AiScanPage() {
         <div ref={endRef} />
       </div>
 
+      </div>
+
       {/* composer */}
       <div className="pt-3">
         <input
@@ -992,6 +1080,7 @@ export default function AiScanPage() {
         <p className="px-2 pt-1.5 text-[11px] text-fg-faint">
           Nothing is written to your books until you tap Save.
         </p>
+        </div>
       </div>
     </div>
   );
