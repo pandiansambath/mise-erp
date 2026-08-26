@@ -156,9 +156,8 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
 
   let loudness = 0;
   let closed = false;
-  //: resultId -> what that segment currently says. Ordered by insertion, which
-  //: is the order he said them.
-  const segments = new Map<string, { text: string; final: boolean }>();
+  //: Closed segments, plus the one still being spoken.
+  const utterance: Utterance = { finals: [], partial: "" };
 
   const shutdown = () => {
     if (closed) return;
@@ -196,7 +195,7 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
     // REPLACES rather than appends, so a re-send costs nothing and a genuinely
     // new segment gets its own slot.
     const folded = foldSegments(
-      segments,
+      utterance,
       results as {
         ResultId?: string;
         IsPartial: boolean;
@@ -244,7 +243,14 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
     ws.addEventListener("error", failed, { once: true });
   });
 
-  return { stop: shutdown, reset: () => segments.clear(), level: () => loudness };
+  return {
+    stop: shutdown,
+    reset: () => {
+      utterance.finals = [];
+      utterance.partial = "";
+    },
+    level: () => loudness,
+  };
 }
 
 /** Exposed for tests only.
@@ -258,20 +264,41 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
 export const __testing = { audioEvent, toPcm16, crc32, downsample };
 
 /** The segment bookkeeping, extracted so it can be tested without a socket. */
+export type Utterance = { finals: string[]; partial: string };
+
+/**
+ * Fold what Transcribe sends into the sentence he is actually saying.
+ *
+ * KEYING BY ResultId WAS NOT ENOUGH. It looked right and it failed in his
+ * kitchen: the same sentence came back as a growing prefix repeated a dozen
+ * times — "...Rota forgo to road up a Jana add Rota for onego to road up a...".
+ * Each partial had arrived under a NEW id, so every one of them was stored
+ * alongside the last instead of replacing it.
+ *
+ * So this no longer trusts the id at all. It uses the one thing the protocol
+ * guarantees: a PARTIAL is the whole of the current segment so far, and a FINAL
+ * closes that segment. Partials replace; finals append once. There is no id to
+ * be wrong about, and the shape of the bug is unreachable.
+ */
 export function foldSegments(
-  segments: Map<string, { text: string; final: boolean }>,
+  u: Utterance,
   results: { ResultId?: string; IsPartial: boolean; Alternatives: { Transcript: string }[] }[],
 ): { whole: string; allFinal: boolean } | null {
   let touched = false;
   for (const r of results) {
-    const text = r.Alternatives?.[0]?.Transcript ?? "";
+    const text = (r.Alternatives?.[0]?.Transcript ?? "").trim();
     if (!text) continue;
-    segments.set(r.ResultId ?? "only", { text, final: !r.IsPartial });
     touched = true;
+    if (r.IsPartial) {
+      u.partial = text;
+    } else {
+      // A re-sent final must not be counted twice, and a final that merely
+      // repeats what the partial already said must not be added on top of it.
+      if (u.finals[u.finals.length - 1] !== text) u.finals.push(text);
+      u.partial = "";
+    }
   }
   if (!touched) return null;
-  return {
-    whole: [...segments.values()].map((v) => v.text).join(" ").trim(),
-    allFinal: [...segments.values()].every((v) => v.final),
-  };
+  const whole = [...u.finals, u.partial].filter(Boolean).join(" ").trim();
+  return { whole, allFinal: u.partial === "" };
 }

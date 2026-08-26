@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { __testing, foldSegments } from "../lib/transcribe";
+import { __testing, foldSegments, type Utterance } from "../lib/transcribe";
 
 // Transcribe speaks AWS's binary event-stream framing, not JSON: every message
 // is a length-prefixed envelope carrying two CRC32s. A byte wrong in either one
@@ -52,41 +52,53 @@ test("48k from the microphone becomes the 16k Transcribe was told about", () => 
   expect(out[0]).toBeCloseTo(0.5, 5);
 });
 
-// ── The bug that filled his screen ────────────────────────────────────────
+// ── The bug that filled his screen, twice ────────────────────────────────
 //
-// Transcribe re-sends the SAME result as it firms up (the id stays, the text
-// grows) and re-sends a finished one more than once. My first version appended
-// each arrival to what came before, so one sentence became "I want to see the
-// staff's list I don't start all theI want to see the staff's list..." down the
-// whole phone screen. Storing by id replaces instead of appending.
+// First version appended every arrival, so one sentence repeated down the page.
+// Second version keyed by ResultId — which LOOKED right and failed in his
+// kitchen anyway: the partials arrived under new ids each time, so every one
+// was stored beside the last instead of replacing it. His screenshot read
+// "...Rota forgo to road up a Jana add Rota for onego to road up a...".
+//
+// So this trusts no id. A PARTIAL is the whole of the current segment; a FINAL
+// closes it. Partials replace, finals append once.
 
 const seg = (ResultId: string, Transcript: string, IsPartial = true) => ({
   ResultId,
   IsPartial,
   Alternatives: [{ Transcript }],
 });
+const fresh = (): Utterance => ({ finals: [], partial: "" });
 
-test("a segment that firms up replaces itself instead of repeating", () => {
-  const m = new Map<string, { text: string; final: boolean }>();
-  foldSegments(m, [seg("a", "I want to")]);
-  foldSegments(m, [seg("a", "I want to see the")]);
-  const out = foldSegments(m, [seg("a", "I want to see the staff list", false)]);
-  expect(out?.whole).toBe("I want to see the staff list");
-  expect(out?.allFinal).toBe(true);
+test("a growing partial replaces itself, however its id changes", () => {
+  const u = fresh();
+  // Deliberately a DIFFERENT id every time — the exact condition that broke it.
+  foldSegments(u, [seg("a", "go to road up a Jana add Rota for")]);
+  foldSegments(u, [seg("b", "go to road up a Jana add Rota for one")]);
+  const out = foldSegments(u, [seg("c", "go to road up a Jana add Rota for one employee Balaji")]);
+  expect(out?.whole).toBe("go to road up a Jana add Rota for one employee Balaji");
 });
 
 test("a finished segment re-sent twice is not counted twice", () => {
-  const m = new Map<string, { text: string; final: boolean }>();
-  foldSegments(m, [seg("a", "show me the staff", false)]);
-  const out = foldSegments(m, [seg("a", "show me the staff", false)]);
+  const u = fresh();
+  foldSegments(u, [seg("a", "show me the staff", false)]);
+  const out = foldSegments(u, [seg("a", "show me the staff", false)]);
   expect(out?.whole).toBe("show me the staff");
 });
 
 test("two real segments are joined, in the order they were said", () => {
-  const m = new Map<string, { text: string; final: boolean }>();
-  foldSegments(m, [seg("a", "hey hi how", false)]);
-  const out = foldSegments(m, [seg("b", "was your day")]);
+  const u = fresh();
+  foldSegments(u, [seg("a", "hey hi how", false)]);
+  const out = foldSegments(u, [seg("b", "was your day")]);
   // The complaint this fixes: "hey hi how was ur day" arriving as "was ur day".
   expect(out?.whole).toBe("hey hi how was your day");
   expect(out?.allFinal).toBe(false);
+});
+
+test("a final that repeats the partial does not double it", () => {
+  const u = fresh();
+  foldSegments(u, [seg("a", "open the rota")]);
+  const out = foldSegments(u, [seg("a", "open the rota", false)]);
+  expect(out?.whole).toBe("open the rota");
+  expect(out?.allFinal).toBe(true);
 });
