@@ -3634,8 +3634,11 @@ body.mise-voice-open .mise-launcher-in {
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-/* A conversation is easier to read in a column than across a whole desk. */
+/* I had centred every row in a 60rem column, which is the OPPOSITE of what he
+   asked for: "keep everything left or right and make the chat text fully take
+   over any one side so that it won't look tight". A centred column with air on
+   both flanks is exactly the pinched look he keeps pointing at. Rows now span
+   the full width and the bubbles pick a side. */
 .mise-chat-log > * {
-  max-width: 60rem;
-  margin-inline: auto;
+  max-width: none;
 }

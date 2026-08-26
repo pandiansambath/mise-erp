@@ -177,7 +177,7 @@ function Bubble({
           </div>
         ))}
       <div
-        className={`max-w-[min(48rem,84%)] rounded-2xl ${
+        className={`max-w-[min(54rem,78%)] rounded-2xl ${
           tight ? "p-2" : "px-5 py-4"
         } text-[15px] leading-[1.65] ${
           mine
@@ -659,7 +659,7 @@ export default function AiScanPage() {
       {/* Header modelled on the recipe sheet: an identity block, a progress
           RING, and stat tiles with big legible numbers. The old version buried
           the same facts in 11px grey text nobody reads. */}
-      <header className="mise-neo-raised relative mb-4 overflow-hidden rounded-3xl px-5 py-4">
+      <header className="mise-neo-raised relative mb-3 overflow-hidden rounded-2xl px-4 py-3">
         {/* The same aurora as the voice bubble - one assistant, heard or read. */}
         <span aria-hidden className="mise-voice-aurora" data-phase="idle">
           <i />
@@ -668,11 +668,11 @@ export default function AiScanPage() {
           <i />
         </span>
         <div className="relative flex items-center gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-sky-400 text-lg text-white shadow-lg shadow-brand-500/25">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-sky-400 text-base text-white shadow-lg shadow-brand-500/25">
             ✦
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-semibold leading-tight text-fg">DineAI Copilot</h1>
+            <h1 className="text-base font-semibold leading-tight text-fg">DineAI Copilot</h1>
             <p className="truncate text-xs text-fg-faint">
               {offline ? "AI is switched off" : "Ask anything, or send any file"}
             </p>
@@ -815,7 +815,7 @@ export default function AiScanPage() {
       )}
 
       {/* the thread */}
-      <div className="mise-chat-log flex-1 space-y-7 overflow-y-auto rounded-3xl p-6 sm:p-9">
+      <div className="mise-chat-log flex-1 space-y-8 overflow-y-auto rounded-3xl p-5 sm:p-8">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];
