@@ -518,6 +518,12 @@ class VoiceTurnIn(BaseModel):
     history: list[dict] = Field(default_factory=list)
     #: Which page he is looking at, so "put it in here" means something.
     route: str | None = None
+    #: Which conversation this belongs to. Spoken turns were held in React
+    #: state and nowhere else, so a conversation on his phone did not exist on
+    #: his laptop - and closing the panel lost it entirely. It is the same
+    #: thread store the written chat uses; there was never a reason for the
+    #: voice to have its own memory, or none.
+    thread_id: str | None = None
     #: Which of the six voices to answer in. The browser has always sent this
     #: and the schema did not declare it, so pydantic dropped it on the floor
     #: and `payload.voice` raised on every single streamed turn. Same family of
@@ -711,6 +717,18 @@ async def voice_stream(
     await guard.enforce(db, user, "chat", feature="ai_assistant")
     hotel = await db.get(Hotel, user.hotel_id)
     system = await voice.system_for(db, user, hotel, payload.route)
+
+    # The conversation lives on the server, like the written one.
+    from app.assistant import memory as mem
+
+    try:
+        thread_id = uuid.UUID(payload.thread_id) if payload.thread_id else None
+    except ValueError:
+        thread_id = None
+    if thread_id is None:
+        thread_id = await mem.latest_thread(db, user) or uuid.uuid4()
+    await mem.touch_thread(db, user, thread_id, payload.text)
+    await mem.remember(db, user, thread_id, "user", payload.text)
     model = await guard.model_for(db, user)
     chosen_voice = payload.voice or voice.DEFAULT_VOICE
 
@@ -892,7 +910,12 @@ async def voice_stream(
             actions_sent,
             seq,
         )
-        yield _sse({"type": "done", "text": full})
+        try:
+            await mem.remember(db, user, thread_id, "assistant", full)
+        except Exception:  # noqa: BLE001 - a lost log line must not lose the reply
+            log.exception("could not store the spoken turn")
+
+        yield _sse({"type": "done", "text": full, "thread_id": str(thread_id)})
 
     return StreamingResponse(
         events(),

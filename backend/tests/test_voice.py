@@ -965,3 +965,47 @@ def test_the_persona_forbids_the_lecture_rather_than_hoping():
     assert "misheard" in PERSONA.lower()
     assert "READ HIS MIND" in PERSONA, "it must offer the next thing, not just answer"
     assert "JARVIS" in PERSONA
+
+
+@pytest.mark.asyncio
+async def test_a_spoken_turn_is_remembered_like_a_typed_one(
+    client, make_user, auth_header, monkeypatch
+):
+    """"that chat information needs to be persistent... i said something in
+    mobile and when i come to laptop and check that history i can't see it."
+
+    Spoken turns lived in React state and nowhere else, so a conversation on his
+    phone did not exist on his laptop and closing the panel threw it away. There
+    was never a reason for the voice to have its own memory, or none — it uses
+    the same thread store the written chat has always used.
+    """
+    from app.assistant import brain, voice
+
+    async def fake_stream(**kw):
+        yield {"type": "draft", "text": "Six staff, none marked in yet."}
+        yield {"type": "draft_end", "kept": True}
+        yield {"type": "done", "text": "Six staff, none marked in yet."}
+
+    monkeypatch.setattr(brain, "generate_stream", fake_stream)
+    monkeypatch.setattr(voice, "speak", lambda text, v=None, engine=None: b"ID3fake-mp3")
+
+    owner = await make_user("owner-memory@x.com", Role.SUPER_ADMIN.value)
+    r = await client.post(
+        "/api/assistant/voice/stream",
+        json={"text": "who is on today", "history": []},
+        headers=auth_header(owner),
+    )
+    done = [e for e in _frames(r.text) if e["type"] == "done"][-1]
+    thread_id = done.get("thread_id")
+    assert thread_id, "the turn did not say which conversation it belongs to"
+
+    # Now read it back the way the OTHER DEVICE would — same user, same
+    # thread, a fresh request that shares nothing with the one above.
+    r2 = await client.get(
+        f"/api/assistant/history?thread={thread_id}",
+        headers=auth_header(owner),
+    )
+    assert r2.status_code == 200
+    said = [m["content"] for m in r2.json()["messages"]]
+    assert "who is on today" in said, "his question was not stored"
+    assert any("Six staff" in m for m in said), "the answer was not stored"
