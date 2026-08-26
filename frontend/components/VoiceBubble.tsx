@@ -344,10 +344,14 @@ export function VoiceBubble() {
     for (const [name, value] of Object.entries(fields)) {
       const el = findField(name);
       if (!el) {
+        // Not a real input — it may be one of the app's own dropdowns, which
+        // have to be clicked rather than assigned to.
+        if (await setCustomSelect(name, value)) continue;
         missed.push(name);
         continue;
       }
       if (!setNativeValue(el, value)) {
+        if (await setCustomSelect(name, value)) continue;
         // The box exists but will not take that value — a dropdown with no
         // matching option. Say so rather than leaving the old one showing.
         missed.push(`${name} (no "${value}" to choose)`);
@@ -1387,6 +1391,75 @@ function remember(key: string, value: string) {
   } catch {
     /* private mode — it lasts the session, which is better than an error */
   }
+}
+
+
+/** The label a person reads next to a control, wherever it happens to live. */
+function labelNear(el: HTMLElement): string {
+  const bits: (string | null | undefined)[] = [
+    el.getAttribute("aria-label"),
+    el.getAttribute("name"),
+    el.closest("label")?.textContent,
+  ];
+  // Walk up a few levels looking for the <label> that titles this group. The
+  // Select renders as a div inside a wrapper whose first child is the label.
+  let node: HTMLElement | null = el;
+  for (let i = 0; i < 4 && node; i += 1) {
+    node = node.parentElement;
+    const lab = node?.querySelector(":scope > label");
+    if (lab?.textContent) {
+      bits.push(lab.textContent);
+      break;
+    }
+  }
+  return bits.filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Set one of the app's OWN dropdowns — the ones that are not `<select>` at all.
+ *
+ * The Method box on Sales is a custom component: a button that opens a portaled
+ * listbox. Nothing reachable through `el.value` can touch it, so the fill said
+ * "cash", changed nothing, and left CARD selected — a card sale one tap from
+ * his books. This drives it the way a finger does, which is also the only way
+ * that stays true when the component changes.
+ *
+ * Returns false if it could not be done, so the caller can SAY so.
+ */
+async function setCustomSelect(name: string, value: string): Promise<boolean> {
+  const want = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const alts = [want, ...(SYNONYMS[want] ?? [])];
+  const triggers = [
+    ...document.querySelectorAll<HTMLElement>('button[aria-haspopup="listbox"]'),
+  ].filter((el) => el.offsetParent !== null);
+
+  const trigger = triggers.find((el) => {
+    const near = labelNear(el);
+    return alts.some((a) => near.includes(a));
+  });
+  if (!trigger) return false;
+
+  const before = trigger.textContent ?? "";
+  trigger.click();
+  await new Promise((r) => setTimeout(r, 140));
+
+  const target = value.trim().toLowerCase();
+  const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  const match =
+    options.find((o) => (o.textContent ?? "").trim().toLowerCase() === target) ??
+    options.find((o) => (o.textContent ?? "").trim().toLowerCase().includes(target));
+
+  if (!match) {
+    trigger.click(); // put it back the way we found it
+    return false;
+  }
+  match.click();
+  await new Promise((r) => setTimeout(r, 140));
+
+  // VERIFY. The whole failure this fixes was a fill that reported success and
+  // changed nothing, so the one thing that must not be assumed is that it took.
+  const after = trigger.textContent ?? "";
+  return after !== before && after.toLowerCase().includes(target);
 }
 
 /** Find an input by what a person calls it, not by an id nobody knows. */
