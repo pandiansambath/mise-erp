@@ -132,6 +132,13 @@ resource "aws_iam_role_policy" "transcribe" {
       Action = [
         "transcribe:StartStreamTranscriptionWebSocket",
         "transcribe:StartStreamTranscription",
+        # Read-only, and load-bearing: the app checks the custom vocabulary is
+        # READY before naming it, because naming a PENDING one makes Transcribe
+        # refuse the whole connection. Without this permission that check fails
+        # closed and the vocabulary is silently never used — which is exactly
+        # what was happening: I granted it with the CLI and never put it HERE,
+        # so the next deploy's terraform run quietly took it away again.
+        "transcribe:GetVocabulary",
       ]
       Resource = "*"
     }]
