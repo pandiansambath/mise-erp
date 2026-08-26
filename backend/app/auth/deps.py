@@ -3,7 +3,7 @@ from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import Depends, HTTPException, Response, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ _CREDENTIALS_EXC = HTTPException(
 
 
 async def get_current_user(
+    request: Request,
     response: Response,
     creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
@@ -44,6 +45,12 @@ async def get_current_user(
     # cannot filter to one customer. Uses the id here because the handle would
     # cost a query on every authenticated call; require() upgrades it below.
     logging_setup.bind(hotel=str(user.hotel_id), user=user.email)
+    # Also on request.state, because Starlette's BaseHTTPMiddleware runs the
+    # endpoint in a SEPARATE task: ContextVars set in here never propagate back
+    # out to the middleware, so the access line was the one log line with no
+    # identity on it. State crosses that boundary; ContextVars do not.
+    request.state.log_hotel = str(user.hotel_id)
+    request.state.log_user = user.email
     monitoring.note_hotel(user.hotel_id)
     _maybe_renew(response, payload, user)
     return user
