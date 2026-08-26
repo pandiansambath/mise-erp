@@ -195,10 +195,18 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
     let peak = 0;
     for (let i = 0; i < raw.length; i += 64) peak = Math.max(peak, Math.abs(raw[i]));
     loudness = peak;
-    // Deaf while we are talking, or it hears the reply through the speakers
-    // and answers itself.
-    if (opts.muted()) return;
-    ws.send(audioEvent(toPcm16(downsample(raw, ctx.sampleRate))));
+    // Deaf while we are talking, or it hears the reply through the speakers and
+    // answers itself. But deaf means sending SILENCE, not sending nothing:
+    // Transcribe closes a stream that has received no audio for fifteen
+    // seconds, which is exactly "it goes offline after a few seconds and I have
+    // to touch it again". The socket has to keep breathing while we are not
+    // listening.
+    const pcm = downsample(raw, ctx.sampleRate);
+    if (opts.muted()) {
+      ws.send(audioEvent(new Uint8Array(pcm.length * 2)));
+      return;
+    }
+    ws.send(audioEvent(toPcm16(pcm)));
   };
 
   source.connect(node);

@@ -88,6 +88,25 @@ function worthAnswering(text: string): boolean {
   return true;
 }
 
+// "if i enabled... that if i say hey dine ai / hi dineai, for these words it
+//  needs to wake and answer me, like google assistant it needs to be awake and
+//  keep watching waiting for me."
+//
+// Off by default, because a wake word makes every other sentence be ignored and
+// that is a surprise if you did not ask for it. On, it is the difference
+// between an assistant in the room and one listening to the room.
+const WAKE = new RegExp(
+  "\\b(hey|hi|hello|ok|okay)\\s+(dine\\s*ai|dinei|nirai|jarvis)\\b",
+  "i",
+);
+
+/** What is left after the wake word — the actual request. */
+function afterWake(text: string): string | null {
+  const m = WAKE.exec(text);
+  if (!m) return null;
+  return text.slice(m.index + m[0].length).replace(/^[,.\s]+/, "").trim();
+}
+
 function needsAsking(mode: Ask, fields: Record<string, string>): boolean {
   if (mode === "never") return false;
   if (mode === "always") return true;
@@ -154,7 +173,16 @@ export function VoiceBubble() {
   } | null>(null);
   const [askMode, setAskMode] = useState<Ask>("money");
   const [closeOnOutside, setCloseOnOutside] = useState(false);
-  const [level, setLevel] = useState(0);
+  const [wakeWord, setWakeWord] = useState(false);
+  // NOT state. This was `useState`, updated eight to ten times a second while
+  // the mic was open or Amy was talking — so the entire panel, conversation and
+  // all, re-rendered on every tick. On a phone that is the flicker he sees
+  // whenever it replies. The ring is one CSS variable; it does not need React
+  // to know about it.
+  const orbRef = useRef<HTMLButtonElement | null>(null);
+  const setLevel = useCallback((v: number) => {
+    orbRef.current?.style.setProperty("--level", String(v));
+  }, []);
   const [typed, setTyped] = useState("");
   // What it is doing while it is not yet answering — the model's own words for
   // it, which beat a spinner and beat a lie.
@@ -221,6 +249,10 @@ export function VoiceBubble() {
   const [needsTap, setNeedsTap] = useState(false);
 
   useEffect(() => {
+    wakeRef.current = wakeWord;
+  }, [wakeWord]);
+
+  useEffect(() => {
     phaseRef.current = phase;
     // Thinking counts as deaf too: a reply is coming, and anything picked up
     // in the meantime is either the room or our own last sentence.
@@ -245,6 +277,11 @@ export function VoiceBubble() {
   const greetedRef = useRef(false);
   const heardRef = useRef("");
   const silenceRef = useRef<number | null>(null);
+  // Segments Transcribe has already closed, waiting for him to finish.
+  const doneRef = useRef("");
+  // Read inside the recogniser callbacks, which are created once.
+  const wakeRef = useRef(false);
+  const lastAskRef = useRef({ text: "", at: 0 });
   const awsRef = useRef<Listener | null>(null);
   const queueRef = useRef<string[]>([]);
   const drainingRef = useRef(false);
@@ -282,6 +319,7 @@ export function VoiceBubble() {
       const a = localStorage.getItem("mise.voice.ask");
       if (a === "always" || a === "money" || a === "never") setAskMode(a);
       setCloseOnOutside(localStorage.getItem("mise.voice.closeOutside") === "1");
+      setWakeWord(localStorage.getItem("mise.voice.wake") === "1");
     } catch {
       /* private mode — the defaults are fine */
     }
@@ -390,6 +428,10 @@ export function VoiceBubble() {
   // same tools, same answers — only the order changed.
   const ask = useCallback(
     async (text: string) => {
+      // Even with one stream, a stray repeat is worth swallowing: he asked once.
+      const now = Date.now();
+      if (text === lastAskRef.current.text && now - lastAskRef.current.at < 6000) return;
+      lastAskRef.current = { text, at: now };
       setPhase("thinking");
       setErr(null);
       setHeard("");
@@ -538,6 +580,20 @@ export function VoiceBubble() {
     silenceRef.current = window.setTimeout(() => {
       const said = heardRef.current.trim();
       heardRef.current = "";
+      doneRef.current = "";
+
+      // With the wake word on, everything before "hey DineAI" is the room
+      // talking. What follows it is the request.
+      if (wakeRef.current) {
+        const asked = afterWake(said);
+        if (asked === null) {
+          setHeard("");
+          return;
+        }
+        if (worthAnswering(asked)) void askRef.current(asked);
+        else setHeard("");
+        return;
+      }
       if (worthAnswering(said)) void askRef.current(said);
       else setHeard("");
     }, SILENCE_MS);
@@ -551,6 +607,14 @@ export function VoiceBubble() {
 
   /** Plan B, and for Brave the only plan: stream to Transcribe ourselves. */
   const startAws = useCallback(async () => {
+    // CLOSE THE OLD ONE FIRST. Every restart opened a new socket and left the
+    // last one running, so they piled up until AWS said "you have reached your
+    // limit of concurrent streams, 25" — and until then, every live stream was
+    // delivering the same transcript, which is why one sentence came back as
+    // three near-identical answers. The duplicates and the limit were the same
+    // leak seen from two ends.
+    awsRef.current?.stop();
+    awsRef.current = null;
     try {
       const { url } = await api.get<{ url: string }>("/assistant/voice/listen-url");
       const handle = await awsListen({
@@ -561,21 +625,21 @@ export function VoiceBubble() {
           // Belt and braces: audio already in flight when we went deaf still
           // comes back as a transcript a moment later.
           if (isDeaf()) return;
-          heardRef.current = text;
-          setHeard(text);
-          setLevel(0.3 + Math.min(0.6, text.length / 60));
-          // Transcribe tells us when an utterance ended, which is a better
-          // signal than any timer — but the timer stays as a backstop for a
-          // sentence it never closes.
-          if (final) {
-            if (silenceRef.current) window.clearTimeout(silenceRef.current);
-            const said = text.trim();
-            heardRef.current = "";
-            if (worthAnswering(said)) void askRef.current(said);
-            else setHeard("");
-          } else {
-            armSilence();
-          }
+
+          // Transcribe streams SEGMENTS, not one growing string. Assigning each
+          // one over the last is why "hey hi how was ur day" arrived as "was ur
+          // day": it never heard less, it overwrote what it had already heard.
+          // Finished segments accumulate; the live one is shown on the end.
+          const whole = (doneRef.current + " " + text).trim();
+          heardRef.current = whole;
+          setHeard(whole);
+          setLevel(0.3 + Math.min(0.6, whole.length / 60));
+
+          // A finished segment is NOT the end of what he is saying — people
+          // pause mid-sentence. The silence timer decides the turn is over,
+          // which is the whole point of listening patiently.
+          if (final) doneRef.current = whole;
+          armSilence();
         },
       });
       awsRef.current = handle;
@@ -621,6 +685,7 @@ export function VoiceBubble() {
     setErr(null);
     setHeard("");
     heardRef.current = "";
+    doneRef.current = "";
     setPhase("listening");
 
     rec.onresult = (e) => {
@@ -934,7 +999,14 @@ export function VoiceBubble() {
 
           {/* ── Settings sheets ────────────────────────────────────────── */}
           {panel === "voice" && (
-            <div className="relative grid gap-1 border-b border-line/70 px-3 py-2.5">
+            // "that setting feature in chat ui, if i open it, it's hitting
+            //  bottom or top.. even in mobile view too."
+            //
+            // It was an unbounded block inside a panel already anchored to the
+            // bottom of the screen, so the taller it got the further it pushed
+            // past the edge. It scrolls within its own height now, sized off
+            // the viewport so it fits a phone and a desktop by the same rule.
+            <div className="relative grid max-h-[min(26rem,52dvh)] gap-1 overflow-y-auto overscroll-contain border-b border-line/70 px-3 py-2.5">
               <p className="px-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
                 Whose voice
               </p>
@@ -1022,6 +1094,25 @@ export function VoiceBubble() {
                   </span>
                 </span>
               </label>
+              <label className="mise-card-inset mise-press mt-1 flex cursor-pointer items-start gap-2.5 rounded-xl px-2.5 py-2">
+                <input
+                  type="checkbox"
+                  checked={wakeWord}
+                  onChange={(e) => {
+                    setWakeWord(e.target.checked);
+                    remember("mise.voice.wake", e.target.checked ? "1" : "0");
+                  }}
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand-500"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-medium text-fg">
+                    Wait for “hey DineAI”
+                  </span>
+                  <span className="block text-[10px] leading-tight text-fg-faint">
+                    On, I ignore the room until you call me by name.
+                  </span>
+                </span>
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -1056,11 +1147,12 @@ export function VoiceBubble() {
               onClick={live ? stop : startLive}
               disabled={!supported}
               aria-label={live ? "Stop listening" : "Start listening"}
+              ref={orbRef}
               className={`mise-voice-orb grid shrink-0 place-items-center rounded-full ${
                 turns.length ? "h-11 w-11" : "h-20 w-20"
               }`}
               data-phase={phase}
-              style={{ ...paint, "--level": level } as React.CSSProperties}
+              style={paint as React.CSSProperties}
             >
               {phase === "idle" ? (
                 <MicIcon className={turns.length ? "h-5 w-5" : "h-7 w-7"} />
