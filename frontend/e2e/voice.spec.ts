@@ -340,6 +340,32 @@ test("hands free: it opens Sales and types the number into the real form", async
   // button that opens a portaled listbox. An earlier version of this test only
   // queried <select> and therefore could not see the very control it existed to
   // check: it reported null and I read that as a failure of the fix.
+  // WAIT for it, do not glance at it. `fillIn` types the amount first, waits,
+  // then drives the dropdown — so reading the moment the number lands checks a
+  // state that has not happened yet. My previous version did exactly that and
+  // reported CARD three times while the code may well have been working.
+  await page
+    .waitForFunction(
+      () => {
+        const labelNear = (el: Element) => {
+          let node: Element | null = el;
+          for (let i = 0; i < 4 && node; i += 1) {
+            node = node.parentElement;
+            const lab = node?.querySelector(":scope > label");
+            if (lab?.textContent) return lab.textContent.toLowerCase();
+          }
+          return "";
+        };
+        const t = [...document.querySelectorAll('button[aria-haspopup="listbox"]')].find((el) =>
+          labelNear(el).includes("method"),
+        );
+        return Boolean(t && /cash/i.test(t.textContent || ""));
+      },
+      undefined,
+      { timeout: 15_000 },
+    )
+    .catch(() => {});
+
   const method = await page.evaluate(() => {
     const labelNear = (el: HTMLElement) => {
       let node: HTMLElement | null = el;
