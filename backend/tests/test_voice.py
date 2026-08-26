@@ -919,3 +919,49 @@ def test_the_vocabulary_is_never_named_unless_aws_says_it_is_ready(monkeypatch):
     reload(mod)
     fake.client = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no"))
     assert mod._vocabulary_name() == ""
+
+
+def test_it_cannot_talk_for_thirty_seconds():
+    """It misheard "money page" as "money pin" and then lectured him about
+    security for half a minute. "Be brief" in a prompt is a wish; this is the
+    limit. Two of them, actually: a token ceiling so it cannot generate the
+    monologue, and a character cap on the way to Polly so a within-budget reply
+    still cannot run long."""
+    from app.assistant.voice import MAX_SPOKEN_CHARS, MAX_SPOKEN_TOKENS, spoken_form
+
+    assert MAX_SPOKEN_TOKENS <= 400, "the model has room to ramble again"
+
+    out = spoken_form("This is a security matter. " * 40)
+    assert len(out) <= MAX_SPOKEN_CHARS + 60, f"still {len(out)} characters"
+    # Roughly 2.5 words a second: the ceiling has to be seconds, not characters.
+    assert len(out.split()) / 2.5 < 25, "over twenty-five seconds of speech"
+
+
+def test_a_cut_reply_never_stops_mid_word():
+    """A spoken answer that stops in the middle of a number is worse than one
+    that stops early — you cannot re-read speech."""
+    from app.assistant.voice import trim_to_sentence
+
+    ended = trim_to_sentence("We took twelve hundred. It is up on yesterday. " * 20, 260)
+    assert ended.endswith("."), f"cut mid-sentence: {ended[-40:]!r}"
+
+    # One enormous sentence with nothing to cut on.
+    no_stop = trim_to_sentence("word " * 300, 260)
+    assert no_stop.split()[-1] == "word", "sliced a word in half"
+
+    # And a short reply is left completely alone.
+    short = "We took twelve hundred today. Want me to open sales?"
+    assert trim_to_sentence(short, 260) == short
+
+
+def test_the_persona_forbids_the_lecture_rather_than_hoping():
+    """The 30-second speech was about "security risk" and "violation" after a
+    MISHEARING. In his own restaurant, a request that sounds forbidden is
+    almost always a word misheard — the answer is a short question, never a
+    policy statement."""
+    from app.assistant.voice import PERSONA
+
+    assert "NEVER LECTURE" in PERSONA
+    assert "misheard" in PERSONA.lower()
+    assert "READ HIS MIND" in PERSONA, "it must offer the next thing, not just answer"
+    assert "JARVIS" in PERSONA
