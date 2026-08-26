@@ -780,6 +780,8 @@ async def voice_stream(
                 model=model,
                 meter=meter,
                 live=True,
+                # Roughly four short sentences. He is standing in a kitchen.
+                max_tokens=voice.MAX_SPOKEN_TOKENS,
             ):
                 # The page moves NOW, not after the sentence describing it.
                 while ui_queue:

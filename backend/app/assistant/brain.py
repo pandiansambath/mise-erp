@@ -236,6 +236,12 @@ async def generate_stream(
     execute: ExecuteFn,
     attachment: dict | None = None,
     model: str = "",
+    # The voice needs two sentences. It once spoke for THIRTY SECONDS about a
+    # security policy, having misheard "money page" as "money pin" - and no
+    # amount of "be brief" in a prompt is a substitute for not having the room
+    # to ramble. This is the ceiling that makes it impossible rather than
+    # discouraged.
+    max_tokens: int = 1600,
     meter: dict[str, Any] | None = None,
     live: bool = False,
 ) -> AsyncIterator[dict]:
@@ -270,7 +276,7 @@ async def generate_stream(
     for lap in range(MAX_LAPS):
         body: dict[str, Any] = {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1600,
+            "max_tokens": max_tokens,
             "system": bedrock._cached_system(system),
             "messages": messages,
         }
