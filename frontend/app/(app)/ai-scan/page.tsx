@@ -178,8 +178,8 @@ function Bubble({
         ))}
       <div
         className={`max-w-[min(54rem,78%)] rounded-2xl ${
-          tight ? "p-2" : "px-5 py-4"
-        } text-[15px] leading-[1.65] ${
+          tight ? "p-2" : "px-6 py-4.5"
+        } text-[15px] leading-[1.75] ${
           mine
             ? "mise-press rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20"
             : "mise-card-inset rounded-bl-md text-fg"
@@ -846,7 +846,7 @@ export default function AiScanPage() {
             screenshotted. They are the same three facts, now a line of chips
             in the header, and the conversation gets the room back.  */}
         {usage?.model && (
-          <div className="relative mt-2 flex flex-wrap items-center gap-1.5">
+          <div className="relative mt-2 flex flex-wrap items-center gap-1.5 lg:absolute lg:right-4 lg:top-3 lg:mt-0">
             {(
               [
                 ["Model", usage.model.includes("haiku") ? "Haiku" : "Sonnet"],
@@ -877,7 +877,7 @@ export default function AiScanPage() {
 
       {/* the thread */}
       <div className="mise-chat-shell relative flex min-h-0 flex-1 overflow-hidden rounded-3xl">
-        <div className="mise-chat-log relative z-[1] flex-1 space-y-8 overflow-y-auto p-5 sm:p-8">
+        <div className="mise-chat-log relative z-[1] flex-1 space-y-9 overflow-y-auto p-5 sm:p-10">
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];

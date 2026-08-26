@@ -277,8 +277,6 @@ export function VoiceBubble() {
   const greetedRef = useRef(false);
   const heardRef = useRef("");
   const silenceRef = useRef<number | null>(null);
-  // Segments Transcribe has already closed, waiting for him to finish.
-  const doneRef = useRef("");
   // Read inside the recogniser callbacks, which are created once.
   const wakeRef = useRef(false);
   const lastAskRef = useRef({ text: "", at: 0 });
@@ -369,7 +367,7 @@ export function VoiceBubble() {
       // Back to listening, because the microphone never actually left.
       setPhase(liveRef.current ? "listening" : "idle");
     }
-  }, [playChunk]);
+  }, [playChunk, setLevel]);
 
 
   /** Type the values into the real form on the real page. */
@@ -580,7 +578,7 @@ export function VoiceBubble() {
     silenceRef.current = window.setTimeout(() => {
       const said = heardRef.current.trim();
       heardRef.current = "";
-      doneRef.current = "";
+      awsRef.current?.reset();
 
       // With the wake word on, everything before "hey DineAI" is the room
       // talking. What follows it is the request.
@@ -626,19 +624,18 @@ export function VoiceBubble() {
           // comes back as a transcript a moment later.
           if (isDeaf()) return;
 
-          // Transcribe streams SEGMENTS, not one growing string. Assigning each
-          // one over the last is why "hey hi how was ur day" arrived as "was ur
-          // day": it never heard less, it overwrote what it had already heard.
-          // Finished segments accumulate; the live one is shown on the end.
-          const whole = (doneRef.current + " " + text).trim();
-          heardRef.current = whole;
-          setHeard(whole);
-          setLevel(0.3 + Math.min(0.6, whole.length / 60));
+          // `text` is now the WHOLE utterance so far — transcribe.ts keys
+          // segments by their id, so a re-sent segment replaces itself instead
+          // of being added again. My previous version appended here, which is
+          // why one sentence repeated down the entire screen.
+          heardRef.current = text;
+          setHeard(text);
+          setLevel(0.3 + Math.min(0.6, text.length / 60));
 
           // A finished segment is NOT the end of what he is saying — people
           // pause mid-sentence. The silence timer decides the turn is over,
           // which is the whole point of listening patiently.
-          if (final) doneRef.current = whole;
+          void final;
           armSilence();
         },
       });
@@ -665,7 +662,7 @@ export function VoiceBubble() {
           : "I couldn't open the microphone just then. Try again?",
       );
     }
-  }, [armSilence, isDeaf]);
+  }, [armSilence, isDeaf, setLevel]);
 
   const startLive = useCallback(() => {
     const rec = recognition();
@@ -685,7 +682,7 @@ export function VoiceBubble() {
     setErr(null);
     setHeard("");
     heardRef.current = "";
-    doneRef.current = "";
+    awsRef.current?.reset();
     setPhase("listening");
 
     rec.onresult = (e) => {
@@ -745,7 +742,7 @@ export function VoiceBubble() {
       setPhase("idle");
       setErr("The microphone is already in use.");
     }
-  }, [armSilence, startAws, isDeaf]);
+  }, [armSilence, startAws, isDeaf, setLevel]);
 
   // It speaks first. "once user click the voice model that model need to start
   // the conversation... it need to guide and initiate conversation." An
@@ -806,7 +803,7 @@ export function VoiceBubble() {
     audioRef.current?.pause();
     setPhase("idle");
     setLevel(0);
-  }, []);
+  }, [setLevel]);
 
   /** Pass a file to the page that can read it.
    *

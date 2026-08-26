@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { __testing } from "../lib/transcribe";
+import { __testing, foldSegments } from "../lib/transcribe";
 
 // Transcribe speaks AWS's binary event-stream framing, not JSON: every message
 // is a length-prefixed envelope carrying two CRC32s. A byte wrong in either one
@@ -50,4 +50,43 @@ test("48k from the microphone becomes the 16k Transcribe was told about", () => 
   const out = __testing.downsample(input, 48000);
   expect(out.length).toBe(1600);
   expect(out[0]).toBeCloseTo(0.5, 5);
+});
+
+// ── The bug that filled his screen ────────────────────────────────────────
+//
+// Transcribe re-sends the SAME result as it firms up (the id stays, the text
+// grows) and re-sends a finished one more than once. My first version appended
+// each arrival to what came before, so one sentence became "I want to see the
+// staff's list I don't start all theI want to see the staff's list..." down the
+// whole phone screen. Storing by id replaces instead of appending.
+
+const seg = (ResultId: string, Transcript: string, IsPartial = true) => ({
+  ResultId,
+  IsPartial,
+  Alternatives: [{ Transcript }],
+});
+
+test("a segment that firms up replaces itself instead of repeating", () => {
+  const m = new Map<string, { text: string; final: boolean }>();
+  foldSegments(m, [seg("a", "I want to")]);
+  foldSegments(m, [seg("a", "I want to see the")]);
+  const out = foldSegments(m, [seg("a", "I want to see the staff list", false)]);
+  expect(out?.whole).toBe("I want to see the staff list");
+  expect(out?.allFinal).toBe(true);
+});
+
+test("a finished segment re-sent twice is not counted twice", () => {
+  const m = new Map<string, { text: string; final: boolean }>();
+  foldSegments(m, [seg("a", "show me the staff", false)]);
+  const out = foldSegments(m, [seg("a", "show me the staff", false)]);
+  expect(out?.whole).toBe("show me the staff");
+});
+
+test("two real segments are joined, in the order they were said", () => {
+  const m = new Map<string, { text: string; final: boolean }>();
+  foldSegments(m, [seg("a", "hey hi how", false)]);
+  const out = foldSegments(m, [seg("b", "was your day")]);
+  // The complaint this fixes: "hey hi how was ur day" arriving as "was ur day".
+  expect(out?.whole).toBe("hey hi how was your day");
+  expect(out?.allFinal).toBe(false);
 });

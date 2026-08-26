@@ -121,6 +121,8 @@ function downsample(input: Float32Array, from: number): Float32Array {
 
 export type Listener = {
   stop: () => void;
+  /** Forget this turn. Called once a question has been sent to the assistant. */
+  reset: () => void;
   /** Signal strength, 0–1, for the ring to breathe with. */
   level: () => number;
 };
@@ -154,6 +156,9 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
 
   let loudness = 0;
   let closed = false;
+  //: resultId -> what that segment currently says. Ordered by insertion, which
+  //: is the order he said them.
+  const segments = new Map<string, { text: string; final: boolean }>();
 
   const shutdown = () => {
     if (closed) return;
@@ -181,10 +186,24 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
       ((msg as Record<string, { Transcript?: { Results?: unknown[] } }>).TranscriptEvent
         ?.Transcript?.Results ??
         []);
-    for (const r of results as { IsPartial: boolean; Alternatives: { Transcript: string }[] }[]) {
-      const text = r.Alternatives?.[0]?.Transcript ?? "";
-      if (text) opts.onText(text, !r.IsPartial);
-    }
+    // KEYED BY ResultId, and this is the whole trick.
+    //
+    // Transcribe re-sends the SAME result as it firms up — the id stays put and
+    // the text grows — and it re-sends a finished one more than once. Treating
+    // each arrival as new text appended to what came before is why one sentence
+    // turned into "I want to see the staff's list I don't start all theI want to
+    // see the staff's list..." repeating down the whole screen. Storing by id
+    // REPLACES rather than appends, so a re-send costs nothing and a genuinely
+    // new segment gets its own slot.
+    const folded = foldSegments(
+      segments,
+      results as {
+        ResultId?: string;
+        IsPartial: boolean;
+        Alternatives: { Transcript: string }[];
+      }[],
+    );
+    if (folded) opts.onText(folded.whole, folded.allFinal);
   };
   ws.onerror = () => opts.onError("The transcription connection dropped.");
   ws.onclose = () => shutdown();
@@ -225,7 +244,7 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
     ws.addEventListener("error", failed, { once: true });
   });
 
-  return { stop: shutdown, level: () => loudness };
+  return { stop: shutdown, reset: () => segments.clear(), level: () => loudness };
 }
 
 /** Exposed for tests only.
@@ -237,3 +256,22 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
  * So it is pinned to the bytes that are known to work.
  */
 export const __testing = { audioEvent, toPcm16, crc32, downsample };
+
+/** The segment bookkeeping, extracted so it can be tested without a socket. */
+export function foldSegments(
+  segments: Map<string, { text: string; final: boolean }>,
+  results: { ResultId?: string; IsPartial: boolean; Alternatives: { Transcript: string }[] }[],
+): { whole: string; allFinal: boolean } | null {
+  let touched = false;
+  for (const r of results) {
+    const text = r.Alternatives?.[0]?.Transcript ?? "";
+    if (!text) continue;
+    segments.set(r.ResultId ?? "only", { text, final: !r.IsPartial });
+    touched = true;
+  }
+  if (!touched) return null;
+  return {
+    whole: [...segments.values()].map((v) => v.text).join(" ").trim(),
+    allFinal: [...segments.values()].every((v) => v.final),
+  };
+}
