@@ -465,11 +465,21 @@ export function VoiceBubble() {
 
 
   /** Type the values into the real form on the real page. */
-  const fillIn = useCallback(async (fields: Record<string, string>) => {
-    await new Promise((r) => setTimeout(r, 400));
-    // Anything we could not place. Saying "filled it in" over an empty box is
-    // the worst outcome available: he walks away believing a number is in his
-    // books. If a field cannot be found he has to be TOLD, in the same breath.
+  const reportMissing = useCallback((names: string[]) => {
+    setErr(
+      `I couldn't find a box for ${names.join(" or ")} on this page — you'll need to ` +
+        `put that one in yourself.`,
+    );
+  }, []);
+
+  /** One pass over the page. Returns the field names it could not place. */
+  /** One pass over the page. Returns the field names it could not place.
+   *
+   *  Nothing is assumed: a box that is not there, or will not take the value,
+   *  comes back named. Saying "filled it in" over an empty box is the worst
+   *  outcome available — he walks away believing a number is in his books.
+   */
+  const placeFields = useCallback(async (fields: Record<string, string>) => {
     const missed: string[] = [];
     for (const [name, value] of Object.entries(fields)) {
       const el = findField(name);
@@ -494,13 +504,30 @@ export function VoiceBubble() {
       window.setTimeout(() => el.classList.remove("mise-voice-filled"), 2400);
       await new Promise((r) => setTimeout(r, 220));
     }
-    if (missed.length) {
-      setErr(
-        `I couldn't find a box for ${missed.join(" or ")} on this page — you'll need to put ` +
-          `that one in yourself.`,
-      );
-    }
+    return missed;
   }, []);
+
+  const fillIn = useCallback(async (fields: Record<string, string>) => {
+    await new Promise((r) => setTimeout(r, 400));
+
+    // First pass. Anything it cannot place is probably behind a closed form.
+    const missing = await placeFields(fields);
+    if (!missing.length) return;
+
+    const opener = findOpener(Object.keys(fields));
+    if (opener) {
+      setDoing(`Opening ${(opener.textContent || "the form").trim().toLowerCase()}…`);
+      opener.click();
+      await new Promise((r) => setTimeout(r, 900));
+      const stillMissing = await placeFields(
+        Object.fromEntries(missing.map((k) => [k, fields[k]])),
+      );
+      setDoing("");
+      if (stillMissing.length) reportMissing(stillMissing);
+      return;
+    }
+    reportMissing(missing);
+  }, [placeFields, reportMissing]);
 
   const goTo = useCallback(
     async (actions: Action[]) => {
@@ -1796,6 +1823,45 @@ async function setCustomSelect(name: string, value: string): Promise<boolean> {
   // changed nothing, so the one thing that must not be assumed is that it took.
   const after = trigger.textContent ?? "";
   return after !== before && after.toLowerCase().includes(target);
+}
+
+
+// ── Opening the form before trying to fill it ──────────────────────────────
+//
+// "I guess it's not only for rota — this kind of issue will come on all pages."
+// He was right, and a survey of every page the voice can be sent to says how
+// right: purchasing, vendors and employees have ZERO reachable inputs until you
+// press something; inventory, recipes and attendance have only a search box;
+// rota has three fields, none of them the shift you asked for. Every one of
+// them keeps its real form behind its own button — "Add shift", "New order",
+// "Add someone", "Log waste".
+//
+// So a fill that finds nothing is usually not a missing field. It is a closed
+// form. This presses the page's own opener, exactly as a finger would, and
+// tries again.
+const OPENER = new RegExp(
+  "^(\\+|(?:add|new|create|record|log|enter)\\b)",
+  "i",
+);
+
+function findOpener(fields: string[]): HTMLElement | null {
+  const buttons = [...document.querySelectorAll<HTMLElement>("button, a")].filter(
+    (el) =>
+      el.offsetParent !== null &&
+      !el.closest(".mise-voice-card") &&
+      !el.closest("[data-mise-assistant]") &&
+      OPENER.test((el.textContent || "").trim()),
+  );
+  if (!buttons.length) return null;
+
+  // Prefer an opener that mentions what he is trying to add — "Add an expense"
+  // over a bare "+" — so a page with several does not open the wrong drawer.
+  const words = fields.join(" ").toLowerCase();
+  const relevant = buttons.find((b) => {
+    const t = (b.textContent || "").toLowerCase();
+    return t.split(/\s+/).some((w) => w.length > 3 && words.includes(w));
+  });
+  return relevant ?? buttons[0];
 }
 
 /** Find an input by what a person calls it, not by an id nobody knows. */
