@@ -669,7 +669,7 @@ export default function AiScanPage() {
     // It WAS a rectangle: a 64rem column centred in a 1440px window, with the
     // history hidden in a dropdown. Now the room is used — a rail on the left
     // that opens and closes, and the conversation taking everything else.
-    <div className="mise-page-grow -mb-28 flex h-[calc(100dvh-12rem)] w-full gap-4 lg:h-[calc(100dvh-7rem)]">
+    <div className="mise-page-grow -mb-28 -mt-2 flex h-[calc(100dvh-9rem)] w-full gap-4 lg:h-[calc(100dvh-5.5rem)]">
       <style>{`
         @keyframes aiRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         .ai-rise { animation: aiRise .32s cubic-bezier(.22,1,.36,1) both; }
@@ -742,17 +742,33 @@ export default function AiScanPage() {
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-sky-400 text-sm text-white shadow-lg shadow-brand-500/25">
             ✦
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             <h1 className="text-sm font-semibold leading-tight text-fg">DineAI Copilot</h1>
-            <p className="truncate text-xs text-fg-faint">
-              {offline ? "AI is switched off" : "Ask anything, or send any file"}
-            </p>
+            {/* The subtitle said "Ask anything, or send any file" — true, and
+                worth about eighty pixels of the thing he is trying to read.
+                The composer already says it, in the box where it matters. */}
+            {offline && (
+              <span className="text-[11px] text-amber-400">AI is switched off</span>
+            )}
+            {usage?.model && (
+              <span className="hidden items-center gap-1.5 text-[11px] text-fg-faint sm:flex">
+                <span>{usage.model.includes("haiku") ? "Haiku" : "Sonnet"}</span>
+                <span aria-hidden>·</span>
+                <span>{usage.plan ?? "—"}</span>
+                {usage.daily_limit ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className="tabular-nums">{left} left today</span>
+                  </>
+                ) : null}
+              </span>
+            )}
           </div>
           {/* Allowance as a ring, the way the recipe sheet shows margin:
               a shape you read in a glance beats a number you have to parse. */}
           {usage?.daily_limit ? (
-            <div className="relative hidden h-12 w-12 shrink-0 sm:block" title="AI questions left today">
-              <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90">
+            <div className="relative hidden h-9 w-9 shrink-0 lg:block" title="AI questions left today">
+              <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
                 <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" className="stroke-line" />
                 <circle
                   cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" strokeLinecap="round"
@@ -846,25 +862,6 @@ export default function AiScanPage() {
             chat, and the chat itself got what was left — which is the band he
             screenshotted. They are the same three facts, now a line of chips
             in the header, and the conversation gets the room back.  */}
-        {usage?.model && (
-          <div className="relative mt-1.5 flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                ["Model", usage.model.includes("haiku") ? "Haiku" : "Sonnet"],
-                ["Plan", usage.plan ?? "—"],
-                ["Left today", usage.daily_limit ? String(left) : "—"],
-              ] as const
-            ).map(([label, value]) => (
-              <span
-                key={label}
-                className="mise-card-inset rounded-full px-2.5 py-1 text-[11px] text-fg-soft"
-              >
-                <span className="text-fg-faint">{label}</span>{" "}
-                <span className="font-semibold text-fg">{value}</span>
-              </span>
-            ))}
-          </div>
-        )}
       </header>
 
       {offline && (
