@@ -1,4 +1,5 @@
 """DineAI API — FastAPI application entrypoint."""
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -73,12 +74,36 @@ def create_app() -> FastAPI:
         call just to be searchable. The handle (not the UUID) is what support
         can read off a customer's URL.
         """
+        import time as _time
         import uuid as _uuid
 
         rid = _uuid.uuid4().hex[:8]
         logging_setup.bind(request_id=rid)
+        started = _time.monotonic()
         try:
             response = await call_next(request)
+            # Our OWN access line, written here rather than left to uvicorn.
+            #
+            # Uvicorn logs the request after this middleware has finished, in a
+            # context where our ContextVars are already cleared - which is why
+            # every access line in CloudWatch read `hotel=- user=- req=-` and
+            # could not be tied to a customer or to each other. That made the
+            # logs almost useless for the thing they exist for.
+            # Identity resolved inside the endpoint's task; see deps.py.
+            logging_setup.bind(
+                hotel=getattr(request.state, "log_hotel", None),
+                user=getattr(request.state, "log_user", None),
+            )
+            ms = int((_time.monotonic() - started) * 1000)
+            path = request.url.path
+            if not path.startswith(("/health", "/static", "/_next")):
+                log.info(
+                    "%s %s -> %s in %dms",
+                    request.method,
+                    path,
+                    response.status_code,
+                    ms,
+                )
         finally:
             logging_setup.clear()
         response.headers["X-Request-Id"] = rid
@@ -136,5 +161,7 @@ def create_app() -> FastAPI:
 
     return app
 
+
+log = logging.getLogger("mise.http")
 
 app = create_app()

@@ -758,6 +758,12 @@ async def voice_stream(
         seq = 0
         full = ""
         draft = ""
+        # One line per turn, so the questions he actually asks about the voice
+        # are answerable from CloudWatch instead of by reproduction: how long
+        # did it take, how much did it say, what did it do, did it loop.
+        t0 = time.monotonic()
+        tools_used: list[str] = []
+        first_word_ms: int | None = None
 
         async def say(chunk: str) -> str | None:
             """Synthesise one chunk. Never lets a voice failure end the turn."""
@@ -789,6 +795,7 @@ async def voice_stream(
 
                 kind = ev.get("type")
                 if kind == "tool":
+                    tools_used.append(str(ev.get("name", "?")))
                     # The tool fires about a second in; the first word of the
                     # reply lands nearer three, because the model has to decide,
                     # run it, and only then start writing. Saying what it is
@@ -800,6 +807,8 @@ async def voice_stream(
                     # to a tool call, and "let me check the sales" said aloud
                     # as if it were the answer is worse than a short wait.
                     piece = ev.get("text", "")
+                    if first_word_ms is None:
+                        first_word_ms = int((time.monotonic() - t0) * 1000)
                     draft += piece
                     yield _sse({"type": "draft", "text": piece})
                 elif kind == "draft_end":
@@ -866,6 +875,20 @@ async def voice_stream(
             if b64:
                 yield _sse({"type": "audio", "b64": b64, "seq": seq})
 
+        spoken = voice.spoken_form(full)
+        log.info(
+            "voice turn: heard=%r words=%d spoken_words=%d trimmed=%s "
+            "first_word=%sms total=%dms tools=%s actions=%d chunks=%d",
+            payload.text[:80],
+            len(full.split()),
+            len(spoken.split()),
+            len(spoken) < len(full),
+            first_word_ms if first_word_ms is not None else "-",
+            int((time.monotonic() - t0) * 1000),
+            ",".join(tools_used) or "-",
+            seq,
+            seq,
+        )
         yield _sse({"type": "done", "text": full})
 
     return StreamingResponse(
