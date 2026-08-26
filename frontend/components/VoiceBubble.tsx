@@ -165,7 +165,7 @@ export function VoiceBubble() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voice, setVoice] = useState("Amy");
-  const [panel, setPanel] = useState<"none" | "voice" | "ask">("none");
+  const [panel, setPanel] = useState<"none" | "voice" | "ask" | "history">("none");
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState<{
     fields: Record<string, string>;
@@ -174,6 +174,11 @@ export function VoiceBubble() {
   const [askMode, setAskMode] = useState<Ask>("money");
   const [closeOnOutside, setCloseOnOutside] = useState(false);
   const [wakeWord, setWakeWord] = useState(false);
+  // The conversation lives on the SERVER now. It was React state and nothing
+  // else, so what he said on his phone did not exist on his laptop and closing
+  // the panel threw it away. Same thread store as the written chat.
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
   // NOT state. This was `useState`, updated eight to ten times a second while
   // the mic was open or Amy was talking — so the entire panel, conversation and
   // all, re-rendered on every tick. On a phone that is the flicker he sees
@@ -249,6 +254,10 @@ export function VoiceBubble() {
   const [needsTap, setNeedsTap] = useState(false);
 
   useEffect(() => {
+    turnsRef.current = turns;
+  }, [turns]);
+
+  useEffect(() => {
     wakeRef.current = wakeWord;
   }, [wakeWord]);
 
@@ -275,6 +284,8 @@ export function VoiceBubble() {
   // Once a browser has proved it will not do speech, stop asking it.
   const preferAwsRef = useRef(false);
   const greetedRef = useRef(false);
+  const loadedRef = useRef(false);
+  const turnsRef = useRef<Turn[]>([]);
   const heardRef = useRef("");
   const silenceRef = useRef<number | null>(null);
   // Read inside the recogniser callbacks, which are created once.
@@ -307,6 +318,55 @@ export function VoiceBubble() {
       .then((d) => setVoices(d.voices ?? []))
       .catch(() => {});
   }, [open, voices.length]);
+
+  /** Load a conversation from the server — his, on any device. */
+  const openThread = useCallback(async (id?: string) => {
+    try {
+      const d = await api.get<{ thread_id: string; messages: { role: string; content: string }[] }>(
+        `/assistant/history${id ? `?thread=${id}` : ""}`,
+      );
+      setThreadId(d.thread_id);
+      setTurns(
+        (d.messages ?? [])
+          .filter((m) => m.content?.trim())
+          .map((m) => ({
+            role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: m.content,
+          })),
+      );
+      setPanel("none");
+    } catch {
+      /* an unreachable history is not worth an error over a live panel */
+    }
+  }, []);
+
+  const listThreads = useCallback(async () => {
+    try {
+      const d = await api.get<{ threads: { id: string; title: string }[] }>("/assistant/threads");
+      setThreads(d.threads ?? []);
+    } catch {
+      setThreads([]);
+    }
+  }, []);
+
+  const newChat = useCallback(async () => {
+    try {
+      const d = await api.post<{ thread_id: string }>("/assistant/history/new", {});
+      setThreadId(d.thread_id);
+    } catch {
+      setThreadId(null);
+    }
+    setTurns([]);
+    setPanel("none");
+    greetedRef.current = false;
+  }, []);
+
+  // On open, pick up wherever he left off — including from another device.
+  useEffect(() => {
+    if (!open || loadedRef.current) return;
+    loadedRef.current = true;
+    void openThread();
+  }, [open, openThread]);
 
   // A person picks a voice once; asking again every session is the app
   // forgetting something it was told.
@@ -450,6 +510,7 @@ export function VoiceBubble() {
             history: turns.slice(-8),
             route: pathname,
             voice,
+            thread_id: threadId,
           }),
         });
         if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
@@ -523,6 +584,8 @@ export function VoiceBubble() {
               // LOOK behind a dialog just teaches people to click yes.
               if (a?.kind === "navigate") await goTo([a]);
               else if (a?.kind === "fill") fills.push(a);
+            } else if (ev.type === "done") {
+              if (typeof ev.thread_id === "string") setThreadId(ev.thread_id);
             } else if (ev.type === "error") {
               throw new Error(String(ev.message ?? "the assistant stopped"));
             }
@@ -555,7 +618,7 @@ export function VoiceBubble() {
         setPhase(liveRef.current ? "listening" : "idle");
       }
     },
-    [turns, pathname, voice, goTo, fillIn, askMode, drain],
+    [turns, pathname, voice, threadId, goTo, fillIn, askMode, drain],
   );
 
   // ── The ear: on until he turns it off ────────────────────────────────────
@@ -753,7 +816,9 @@ export function VoiceBubble() {
     api
       .get<{ text: string; audio: string }>(`/assistant/voice/hello?voice_id=${voice}`)
       .then((d) => {
-        if (!d.text) return;
+        // If his last conversation came back from the server, saying hello over
+        // the top of it is the app forgetting a thing it just remembered.
+        if (!d.text || turnsRef.current.length) return;
         setTurns((t) => (t.length ? t : [{ role: "assistant", content: d.text }]));
         if (d.audio) {
           queueRef.current.push(d.audio);
@@ -961,6 +1026,34 @@ export function VoiceBubble() {
               >
                 <GearIcon className="h-4 w-4" />
               </button>
+              {/* "new chat PLUS icon... its missing... if i want i can click plus
+                  icon and open new chat or can go to history and go to previous
+                  chat, all in this same bubble chat ui itself, instead of going
+                  to expanded view... both place we need."
+
+                  Right: the expanded view is where you go to work with FILES,
+                  not where you should have to go to start a sentence over. */}
+              <button
+                type="button"
+                onClick={() => void newChat()}
+                aria-label="New chat"
+                title="New chat"
+                className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint hover:text-fg"
+              >
+                <PlusIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPanel((p) => (p === "history" ? "none" : "history"));
+                  void listThreads();
+                }}
+                aria-label="Past conversations"
+                title="Past conversations"
+                className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-faint hover:text-fg"
+              >
+                <ClockIcon className="h-4 w-4" />
+              </button>
               {/* This is the only assistant button on the page now, so the
                   way through to files and history has to live here — or
                   combining the two launchers would have quietly removed
@@ -995,6 +1088,34 @@ export function VoiceBubble() {
           </div>
 
           {/* ── Settings sheets ────────────────────────────────────────── */}
+          {panel === "history" && (
+            <div className="relative max-h-[min(22rem,44dvh)] overflow-y-auto overscroll-contain border-b border-line/70 px-3 py-2.5">
+              <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                Past conversations
+              </p>
+              {threads.length === 0 ? (
+                <p className="px-1 py-2 text-[11px] text-fg-faint">
+                  Nothing yet — this is the first.
+                </p>
+              ) : (
+                <div className="grid gap-1">
+                  {threads.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => void openThread(t.id)}
+                      className={`mise-press mise-card-inset truncate rounded-xl px-2.5 py-1.5 text-left text-[12px] ${
+                        t.id === threadId ? "text-brand-300" : "text-fg-soft"
+                      }`}
+                    >
+                      {t.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {panel === "voice" && (
             // "that setting feature in chat ui, if i open it, it's hitting
             //  bottom or top.. even in mobile view too."
@@ -1438,6 +1559,22 @@ function ClipIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a1.5 1.5 0 0 1-2.12-2.12l7.78-7.78" />
+    </svg>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 8v4l3 2M3 12a9 9 0 1 0 9-9 9 9 0 0 0-7.5 4" />
     </svg>
   );
 }
