@@ -484,6 +484,27 @@ export function VoiceBubble() {
   // Text arrives as it is written and audio a sentence at a time, so the reply
   // starts appearing in well under a second instead of after eight. Same model,
   // same tools, same answers — only the order changed.
+  // Coalesce streamed text onto the next animation frame.
+  const paintPending = useRef<string | null>(null);
+  const paintFrame = useRef(0);
+  const paintReply = useCallback((text: string) => {
+    paintPending.current = text;
+    if (paintFrame.current) return;
+    paintFrame.current = requestAnimationFrame(() => {
+      paintFrame.current = 0;
+      const latest = paintPending.current;
+      if (latest === null) return;
+      setTurns((t) => {
+        if (!t.length) return t;
+        const copy = [...t];
+        copy[copy.length - 1] = { role: "assistant", content: latest };
+        return copy;
+      });
+    });
+  }, []);
+
+  useEffect(() => () => cancelAnimationFrame(paintFrame.current), []);
+
   const ask = useCallback(
     async (text: string) => {
       // Even with one stream, a stray repeat is worth swallowing: he asked once.
@@ -552,11 +573,16 @@ export function VoiceBubble() {
               // says it was the answer rather than a thought.
               reply += String(ev.text ?? "");
               if (reply) setDoing("");
-              setTurns((t) => {
-                const copy = [...t];
-                copy[copy.length - 1] = { role: "assistant", content: reply };
-                return copy;
-              });
+              // ONE RE-RENDER PER FRAME, not one per token.
+              //
+              // This called setTurns on every delta — so the whole conversation
+              // re-rendered for each word as it arrived, sixty or more times a
+              // reply. A laptop absorbs that; a phone shows it as the screen
+              // flickering while it answers, which is the complaint that
+              // survived the other two fixes. The text still appears just as
+              // fast; it is painted on the frame boundary instead of between
+              // them.
+              paintReply(reply);
             } else if (ev.type === "draft_drop") {
               // That text was the model thinking out loud on its way to
               // looking something up. Say so, honestly, instead of leaving a
@@ -618,7 +644,7 @@ export function VoiceBubble() {
         setPhase(liveRef.current ? "listening" : "idle");
       }
     },
-    [turns, pathname, voice, threadId, goTo, fillIn, askMode, drain],
+    [turns, pathname, voice, threadId, goTo, fillIn, askMode, drain, paintReply],
   );
 
   // ── The ear: on until he turns it off ────────────────────────────────────

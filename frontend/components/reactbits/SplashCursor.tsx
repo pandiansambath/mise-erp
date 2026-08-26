@@ -69,18 +69,20 @@ function pointerPrototype(): Pointer {
 
 export default function SplashCursor({
   SIM_RESOLUTION = 128,
-  // 1440 was the library default and it is aimed at a full-screen showpiece.
-  // Ours sits behind a hero as atmosphere: at 720 the smoke is the same smoke
-  // and the fragment work is quartered. He asked to KEEP this effect, so the
-  // cost had to come out of resolution rather than out of the effect.
-  DYE_RESOLUTION = 720,
+  // Back up from the 720 I dropped to. He was right that it thinned the smoke,
+  // and I had taken the cost out of the wrong place: what actually fixed the
+  // scroll was the frame gating below, not this number. 1024 with the pixel
+  // ratio capped is still well under the original 1440 at full DPR.
+  DYE_RESOLUTION = 1024,
   CAPTURE_RESOLUTION = 512,
-  DENSITY_DISSIPATION = 3.5,
+  // 3.5 fades the dye almost as fast as it is laid down, which is what makes
+  // it read as "very little small smoke". Lower means it lingers and billows.
+  DENSITY_DISSIPATION = 2.2,
   VELOCITY_DISSIPATION = 2,
   PRESSURE = 0.1,
   PRESSURE_ITERATIONS = 20,
   CURL = 3,
-  SPLAT_RADIUS = 0.2,
+  SPLAT_RADIUS = 0.28,
   SPLAT_FORCE = 6000,
   SHADING = true,
   COLOR_UPDATE_SPEED = 10,
@@ -903,7 +905,7 @@ export default function SplashCursor({
     let frame = 0;
 
     const wake = () => {
-      idleUntil = Date.now() + 2500;
+      idleUntil = Date.now() + 4500;
     };
     const onScroll = () => {
       scrollingUntil = Date.now() + 140;
