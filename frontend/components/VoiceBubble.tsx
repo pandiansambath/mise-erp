@@ -295,6 +295,7 @@ export function VoiceBubble() {
   const liveRef = useRef(false);
   // Once a browser has proved it will not do speech, stop asking it.
   const preferAwsRef = useRef(false);
+  const startingRef = useRef(false);
   const greetedRef = useRef(false);
   const loadedRef = useRef(false);
   const turnsRef = useRef<Turn[]>([]);
@@ -804,6 +805,11 @@ export function VoiceBubble() {
     // delivering the same transcript, which is why one sentence came back as
     // three near-identical answers. The duplicates and the limit were the same
     // leak seen from two ends.
+    // ONE AT A TIME. Even with the loop above closed, two callers arriving
+    // together would open two sockets — and concurrent streams are what turned
+    // one sentence into twenty.
+    if (startingRef.current) return;
+    startingRef.current = true;
     awsRef.current?.stop();
     awsRef.current = null;
     try {
@@ -833,6 +839,7 @@ export function VoiceBubble() {
         },
       });
       awsRef.current = handle;
+      startingRef.current = false;
       liveRef.current = true;
       setLive(true);
       setErr(null);
@@ -846,6 +853,7 @@ export function VoiceBubble() {
         if (!drainingRef.current) setLevel(Math.min(1, handle.level() * 3));
       }, 120);
     } catch (e) {
+      startingRef.current = false;
       setPhase("idle");
       setLive(false);
       liveRef.current = false;
@@ -900,11 +908,17 @@ export function VoiceBubble() {
         // this is exactly the case our own ears exist for.
         preferAwsRef.current = true;
         setErr(null);
+        // Detach BEFORE aborting. abort() fires onend synchronously, and a
+        // handler that is still attached is a handler that will restart it.
+        rec.onend = null;
+        rec.onerror = null;
+        rec.onresult = null;
         try {
           rec.abort();
         } catch {
           /* already stopped */
         }
+        recRef.current = null;
         void startAws();
         return;
       }
@@ -922,6 +936,16 @@ export function VoiceBubble() {
         setPhase("idle");
         return;
       }
+      // ...but NEVER once we have handed over to our own ears.
+      //
+      // THE LOOP HE COULD HEAR. `rec.abort()` fires this handler, which
+      // restarted the browser recogniser, which failed again on Brave with the
+      // same network error, which called startAws() again — a new microphone
+      // session and a new Transcribe stream every time round. That is the
+      // "ting ting" (the mic restarting), the earthquake (a re-render per
+      // cycle) and the twenty copies of one sentence (twenty live streams, all
+      // transcribing him at once). Three symptoms, one loop.
+      if (preferAwsRef.current) return;
       try {
         rec.start();
       } catch {
@@ -989,6 +1013,7 @@ export function VoiceBubble() {
 
   const stop = useCallback(() => {
     liveRef.current = false;
+    startingRef.current = false;
     setLive(false);
     if (silenceRef.current) window.clearTimeout(silenceRef.current);
     queueRef.current = [];
