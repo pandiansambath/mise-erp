@@ -17,6 +17,10 @@ import { expect, test } from "@playwright/test";
 const BASE = "https://nirai1.dineai.cloud";
 
 test("going live opens exactly one transcription stream", async ({ page }) => {
+  // Signing in takes ~20s against prod and the observation window is 12s, so
+  // the default 30s budget expired before the assertion was ever reached — a
+  // "failure" that said nothing about the thing under test.
+  test.setTimeout(120_000);
   const opened: string[] = [];
   page.on("websocket", (ws) => {
     if (ws.url().includes("transcribestreaming")) opened.push(ws.url().slice(0, 60));
