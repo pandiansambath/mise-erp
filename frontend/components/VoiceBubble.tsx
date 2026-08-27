@@ -540,6 +540,13 @@ export function VoiceBubble() {
       // Right — the whole point of watching it navigate is watching it, and a
       // panel sitting over the page you were sent to defeats the trip. It steps
       // out of the way, lets him see where he landed, and comes back.
+      // "that voice model needs to tell us — let me close this bubble chat UI
+      //  which will be a struggle for you to view the screen, I'll auto open,
+      //  don't worry. Like this I want our friendly neighbour AI."
+      //
+      // A panel that vanishes without a word is a glitch; the same panel that
+      // says why is a colleague stepping aside.
+      setDoing("Stepping out of your way — back in a second…");
       setPeeking(true);
       try {
         for (const a of hops) {
@@ -550,6 +557,7 @@ export function VoiceBubble() {
         await new Promise((r) => setTimeout(r, 700));
       } finally {
         setPeeking(false);
+        setDoing("");
       }
     },
     [router],

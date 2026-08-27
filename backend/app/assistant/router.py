@@ -755,12 +755,26 @@ async def voice_stream(
     # budget spent, and the turn ended having said NOTHING - which is the
     # silence he reported in the first place.
     seen_calls: dict[str, dict] = {}
+    #: Tools that have already errored this turn, so we stop feeding it a rake.
+    failed_tools: list[str] = []
 
     async def execute(name: str, args: dict) -> dict:
         ui = voice.action_from(name, args)
         if ui is not None:
             ui_queue.append(ui)
             return {"ok": True, "note": "The page is doing that now."}
+        # A tool that has already FAILED will fail the same way again. Three
+        # identical ProgrammingErrors from query_data is how a turn spent its
+        # whole lap budget and answered nothing — which he heard as "Sorry, I
+        # got tangled up and lost my thread", over and over.
+        if failed_tools.count(name) >= 2:
+            return {
+                "error": f"{name} has failed twice already.",
+                "_note": (
+                    "Stop using this tool. Answer him now with what you have, or "
+                    "say plainly that you cannot look it up - do NOT try again."
+                ),
+            }
         signature = f"{name}:{json.dumps(args, sort_keys=True, default=str)[:400]}"
         if signature in seen_calls:
             prior = seen_calls[signature]
@@ -780,6 +794,8 @@ async def voice_stream(
         except Exception:  # noqa: BLE001 - one bad tool must not end the answer
             log.exception("voice tool %s failed", name)
             out = {"error": f"The {name} lookup failed just then."}
+        if isinstance(out, dict) and out.get("error"):
+            failed_tools.append(name)
         seen_calls[signature] = out if isinstance(out, dict) else {"result": out}
         return out
 
