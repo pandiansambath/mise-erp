@@ -287,10 +287,32 @@ function sameUtterance(a: string, b: string): boolean {
   const wa = a.split(" ").filter(Boolean);
   const wb = b.split(" ").filter(Boolean);
   if (!wa.length || !wb.length) return false;
-  let same = 0;
-  while (same < wa.length && same < wb.length && wa[same] === wb[same]) same += 1;
-  const shorter = Math.min(wa.length, wb.length);
-  return same >= 3 || (shorter <= 3 && same === shorter);
+
+  // HOW MANY WORDS DO THEY SHARE, not how many line up from the front.
+  //
+  // My first attempt walked the shorter through the longer in order — which
+  // anchors on the first word, and the first word is precisely the one
+  // Transcribe corrupted in his screenshot: "want you to go..." came back as
+  // "ant you to go...". One dropped letter at the start and every subsequent
+  // word was ignored, so a sentence sharing eight words out of nine was filed
+  // as brand new speech.
+  //
+  // Counting shared words survives a corruption anywhere, including the front.
+  const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  const pool = new Map<string, number>();
+  for (const w of long) pool.set(w, (pool.get(w) ?? 0) + 1);
+  let hits = 0;
+  for (const w of short) {
+    const n = pool.get(w) ?? 0;
+    if (n > 0) {
+      hits += 1;
+      pool.set(w, n - 1);
+    }
+  }
+  // Three words to be sure of anything, and two thirds of the shorter — a
+  // genuinely different sentence shares almost nothing, which the tests check
+  // in both directions.
+  return hits >= 3 && hits / short.length >= 0.66;
 }
 
 /**
