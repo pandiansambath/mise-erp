@@ -225,7 +225,18 @@ export function VoiceBubble() {
 
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [heard, setHeard] = useState("");
+  // NOT state. Transcribe sends a partial five to ten times a second while he
+  // is speaking, and every one of them re-rendered the panel AND the whole
+  // conversation list underneath it. That is the last of the flicker: the level
+  // meter and the streamed reply were fixed the same way, and this was the
+  // third writer nobody had looked at. The live transcript is one line of text
+  // that only it cares about, so it writes itself directly.
+  const heardElRef = useRef<HTMLParagraphElement | null>(null);
+  const heardTextRef = useRef("");
+  const setHeard = useCallback((t: string) => {
+    heardTextRef.current = t;
+    if (heardElRef.current) heardElRef.current.textContent = t ? `"${t}"` : "";
+  }, []);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voice, setVoice] = useState("Amy");
@@ -650,7 +661,7 @@ export function VoiceBubble() {
       heardFrame.current = 0;
       if (heardPending.current !== null) setHeard(heardPending.current);
     });
-  }, []);
+  }, [setHeard]);
 
   useEffect(() => () => cancelAnimationFrame(heardFrame.current), []);
 
@@ -824,7 +835,7 @@ export function VoiceBubble() {
         setPhase(liveRef.current ? "listening" : "idle");
       }
     },
-    [turns, pathname, voice, threadId, goTo, fillIn, askMode, drain, paintReply],
+    [turns, pathname, voice, threadId, goTo, fillIn, askMode, drain, paintReply, setHeard],
   );
 
   // ── The ear: on until he turns it off ────────────────────────────────────
@@ -871,7 +882,7 @@ export function VoiceBubble() {
       if (worthAnswering(said)) void askRef.current(said);
       else setHeard("");
     }, SILENCE_MS);
-  }, []);
+  }, [setHeard]);
 
   /** Deaf while we are talking, thinking, or still echoing. */
   const isDeaf = useCallback(
@@ -1041,7 +1052,7 @@ export function VoiceBubble() {
       setPhase("idle");
       setErr("The microphone is already in use.");
     }
-  }, [armSilence, startAws, isDeaf, setLevel, paintHeard]);
+  }, [armSilence, startAws, isDeaf, setLevel, paintHeard, setHeard]);
 
   // It speaks first. "once user click the voice model that model need to start
   // the conversation... it need to guide and initiate conversation." An
@@ -1177,9 +1188,7 @@ export function VoiceBubble() {
   // something that never stopped.
   const label =
     phase === "listening"
-      ? heard
-        ? "…go on"
-        : "Listening — just talk"
+      ? "Listening — just talk"
       : phase === "thinking"
         ? "Thinking…"
         : phase === "speaking"
@@ -1539,18 +1548,18 @@ export function VoiceBubble() {
               >
                 {label}
               </p>
-              {heard && (
-                <p
-                  className={`text-[11px] text-fg-soft ${
-                    turns.length ? "truncate" : "mt-0.5 text-center"
-                  }`}
-                >
-                  “{heard}”
-                </p>
-              )}
+              {/* Always rendered, written to directly. Conditioning it on the
+                  text would put it back under React's control and reintroduce
+                  the re-render this exists to avoid. */}
+              <p
+                ref={heardElRef}
+                className={`text-[11px] text-fg-soft empty:hidden ${
+                  turns.length ? "truncate" : "mt-0.5 text-center"
+                }`}
+              />
             </div>
 
-            {turns.length === 0 && phase === "idle" && !heard && (
+            {turns.length === 0 && phase === "idle" && (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
                 {STARTERS.map((q) => (
                   <button

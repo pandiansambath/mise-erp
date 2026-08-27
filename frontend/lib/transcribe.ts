@@ -276,6 +276,23 @@ export const __testing = { audioEvent, toPcm16, crc32, downsample };
 /** The segment bookkeeping, extracted so it can be tested without a socket. */
 export type Utterance = { finals: string[]; partial: string };
 
+/** Do these two look like the same sentence, one of them revised?
+ *
+ *  Transcribe corrects earlier words as later context arrives, so a strict
+ *  prefix test rejects text that is obviously a continuation. Comparing the
+ *  first few WORDS survives a revision in the middle, and requiring three of
+ *  them stops genuinely new speech being swallowed into the last sentence.
+ */
+function sameUtterance(a: string, b: string): boolean {
+  const wa = a.split(" ").filter(Boolean);
+  const wb = b.split(" ").filter(Boolean);
+  if (!wa.length || !wb.length) return false;
+  let same = 0;
+  while (same < wa.length && same < wb.length && wa[same] === wb[same]) same += 1;
+  const shorter = Math.min(wa.length, wb.length);
+  return same >= 3 || (shorter <= 3 && same === shorter);
+}
+
 /**
  * Fold what Transcribe sends into the sentence he is actually saying.
  *
@@ -320,10 +337,16 @@ export function foldSegments(
     const current = u.partial;
     const a = bare(current);
     const b = bare(text);
-    if (!current || b.startsWith(a)) {
-      u.partial = text;               // it grew, or it is the first
-    } else if (a.startsWith(b)) {
-      // A shorter re-send of what we already have. Keep the longer version.
+    if (!current || b.startsWith(a) || sameUtterance(a, b)) {
+      // It grew, it is the first, or Transcribe REVISED a word it had already
+      // sent. That last case is why one prompt in five still duplicated: as
+      // later context arrives it corrects earlier words, so "show me" becomes
+      // "show me a" and a strict prefix test rejects text that is plainly the
+      // same sentence. Compare the opening WORDS, not the characters.
+      u.partial = text;
+    } else if (a.startsWith(b) || sameUtterance(b, a)) {
+      // A shorter or revised re-send. Keep whichever says more.
+      if (b.length > a.length) u.partial = text;
     } else {
       // A real new segment: close the last one and start again.
       if (u.finals[u.finals.length - 1] !== current) u.finals.push(current);
