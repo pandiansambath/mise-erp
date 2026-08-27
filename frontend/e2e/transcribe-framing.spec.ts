@@ -137,3 +137,23 @@ test("a partial that gains punctuation is still the same sentence", () => {
   ]);
   expect(out?.whole).toBe("I want to take list, table format — show me.");
 });
+
+test("a revised word does not start a new sentence", () => {
+  // One prompt in five still duplicated after the last fix, and this is why:
+  // Transcribe corrects earlier words as context arrives. His screenshot read
+  // "...show meI want to take list table format show me employees..." — a
+  // revision that a strict prefix test read as brand new speech.
+  const u = fresh();
+  foldSegments(u, [seg("a", "I want to take list table format show me")]);
+  const out = foldSegments(u, [
+    seg("b", "I want to take a list table format show me employees"),
+  ]);
+  expect(out?.whole).toBe("I want to take a list table format show me employees");
+});
+
+test("but a different sentence is still a different sentence", () => {
+  const u = fresh();
+  foldSegments(u, [seg("a", "open the rota please")]);
+  const out = foldSegments(u, [seg("b", "add Balaji to tomorrow")]);
+  expect(out?.whole).toBe("open the rota please add Balaji to tomorrow");
+});
