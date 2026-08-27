@@ -503,6 +503,374 @@ async def team_and_access(db: AsyncSession, user: User, args: dict) -> dict:
     }
 
 
+
+async def rota_shifts(db: AsyncSession, user: User, args: dict) -> dict:
+    """Who is rota'd on, by name, for a day or a range.
+
+    There was NO rota tool at all. So "is there a rota for Balaji today" left the
+    model only `query_data` — raw SQL — which failed with a ProgrammingError,
+    was retried three times, spent the whole lap budget, and produced no answer.
+    That is the "Sorry, I got tangled up and lost my thread" he kept hearing: not
+    a model that could not think, a model with no way to look.
+    """
+    from sqlalchemy import select as _select
+
+    from app.core.timezones import hotel_today
+    from app.employees.models import Employee
+    from app.hotels.models import Hotel as _Hotel
+    from app.rota.models import Shift
+
+    if not has_permission(user.role, "employees:read"):
+        return {"error": "You don't have access to the rota."}
+
+    hotel = await db.get(_Hotel, user.hotel_id)
+    start = _d(args.get("date_from") or args.get("date"), hotel_today(hotel))
+    end = _d(args.get("date_to") or args.get("date"), start)
+    if end < start:
+        start, end = end, start
+
+    rows = (
+        await db.execute(
+            _select(Shift, Employee.full_name)
+            .join(Employee, Employee.id == Shift.employee_id)
+            .where(
+                Shift.hotel_id == user.hotel_id,
+                Shift.date >= start,
+                Shift.date <= end,
+            )
+            .order_by(Shift.date, Shift.start_time)
+        )
+    ).all()
+
+    who = (args.get("employee") or "").strip().lower()
+    shifts = [
+        {
+            "date": str(sh.date),
+            "who": name,
+            "from": sh.start_time.strftime("%H:%M"),
+            "to": sh.end_time.strftime("%H:%M"),
+            "break_minutes": sh.break_minutes,
+            "notes": sh.notes,
+        }
+        for sh, name in rows
+        # A spoken name is rarely spelled the way it is stored, so match loosely
+        # in both directions rather than demanding equality.
+        if not who or who in (name or "").lower() or (name or "").lower() in who
+    ]
+    return {
+        "from": str(start),
+        "to": str(end),
+        "asked_about": args.get("employee") or None,
+        "shifts": shifts,
+        "count": len(shifts),
+        "note": (
+            "No shifts rota'd on for that." if not shifts else None
+        ),
+    }
+
+
+
+async def attendance_summary(db: AsyncSession, user: User, args: dict) -> dict:
+    """Hours worked and who was in, over a range rather than just today.
+
+    `staff_today` answers "who is in right now". This answers "how many hours
+    did Balaji do this week" - a different question, and one with no tool.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import select as _select
+
+    from app.core.timezones import hotel_today
+    from app.employees.models import Attendance, Employee
+    from app.hotels.models import Hotel as _Hotel
+
+    if not has_permission(user.role, "employees:read"):
+        return {"error": "You don't have access to attendance."}
+
+    hotel = await db.get(_Hotel, user.hotel_id)
+    today = hotel_today(hotel)
+    start = _d(args.get("date_from") or args.get("date"), today - timedelta(days=7))
+    end = _d(args.get("date_to") or args.get("date"), today)
+    if end < start:
+        start, end = end, start
+
+    rows = (
+        await db.execute(
+            _select(Attendance, Employee.full_name)
+            .join(Employee, Employee.id == Attendance.employee_id)
+            .where(
+                Attendance.hotel_id == user.hotel_id,
+                Attendance.date >= start,
+                Attendance.date <= end,
+            )
+            .order_by(Attendance.date)
+        )
+    ).all()
+
+    who = (args.get("employee") or "").strip().lower()
+    days = []
+    for att, name in rows:
+        low = (name or "").lower()
+        if who and who not in low and low not in who:
+            continue
+        hours = getattr(att, "worked_hours", None)
+        days.append(
+            {
+                "date": str(att.date),
+                "who": name,
+                "status": getattr(att.status, "value", att.status),
+                "in": att.clock_in.strftime("%H:%M") if att.clock_in else None,
+                "out": att.clock_out.strftime("%H:%M") if att.clock_out else None,
+                "hours": float(hours) if hours is not None else None,
+            }
+        )
+    return {
+        "from": str(start),
+        "to": str(end),
+        "days": days[:60],
+        "total_hours": round(sum(d["hours"] or 0 for d in days), 2),
+        "note": "Nothing recorded for that range." if not days else None,
+    }
+
+
+async def payroll_summary(db: AsyncSession, user: User, args: dict) -> dict:
+    """What was paid, for which period, and any advances still to come back."""
+    from sqlalchemy import select as _select
+
+    from app.employees.models import Employee
+    from app.payroll.models import Payroll, SalaryAdvance
+
+    if not has_permission(user.role, "payroll:read"):
+        return {"error": "You don't have access to payroll."}
+
+    runs = (
+        await db.execute(
+            _select(Payroll, Employee.full_name)
+            .join(Employee, Employee.id == Payroll.employee_id)
+            .where(Payroll.hotel_id == user.hotel_id)
+            .order_by(Payroll.period_start.desc())
+            .limit(40)
+        )
+    ).all()
+    advances = (
+        await db.execute(
+            _select(SalaryAdvance, Employee.full_name)
+            .join(Employee, Employee.id == SalaryAdvance.employee_id)
+            .where(
+                SalaryAdvance.hotel_id == user.hotel_id,
+                SalaryAdvance.is_deducted.is_(False),
+            )
+            .order_by(SalaryAdvance.given_date.desc())
+            .limit(25)
+        )
+    ).all()
+
+    return {
+        "runs": [
+            {
+                "who": name,
+                "period": pr.pay_period,
+                "status": pr.status,
+                "gross": float(pr.gross_pay or 0),
+                "net": float(pr.net_pay or 0),
+                "days_present": pr.days_present,
+            }
+            for pr, name in runs
+        ],
+        "advances_outstanding": [
+            {
+                "who": name,
+                "amount": float(a.amount or 0),
+                "given": str(a.given_date),
+                "reason": a.reason,
+            }
+            for a, name in advances
+        ],
+        "advances_total": round(sum(float(a.amount or 0) for a, _ in advances), 2),
+    }
+
+
+async def purchase_orders(db: AsyncSession, user: User, args: dict) -> dict:
+    """Orders placed with suppliers - what is on its way and what it costs."""
+    from sqlalchemy import select as _select
+
+    from app.purchasing.models import PurchaseOrder
+    from app.vendors.models import Vendor
+
+    if not has_permission(user.role, "purchasing:read"):
+        return {"error": "You don't have access to purchasing."}
+
+    rows = (
+        await db.execute(
+            _select(PurchaseOrder, Vendor.name)
+            .join(Vendor, Vendor.id == PurchaseOrder.vendor_id, isouter=True)
+            .where(PurchaseOrder.hotel_id == user.hotel_id)
+            .order_by(PurchaseOrder.created_at.desc())
+            .limit(30)
+        )
+    ).all()
+
+    want = (args.get("status") or "").strip().upper()
+    orders = [
+        {
+            "number": po.po_number,
+            "vendor": vname,
+            "status": po.status,
+            "total": float(po.total_amount or 0),
+            "expected": str(po.expected_delivery) if po.expected_delivery else None,
+        }
+        for po, vname in rows
+        if not want or (po.status or "").upper() == want
+    ]
+    return {"orders": orders, "count": len(orders)}
+
+
+async def waste_summary(db: AsyncSession, user: User, args: dict) -> dict:
+    """What has been thrown away, and what it cost.
+
+    Waste is a stock MOVEMENT rather than a table of its own - exactly the sort
+    of thing the model cannot guess and kept writing broken SQL for.
+    """
+    from datetime import datetime, time, timedelta
+
+    from sqlalchemy import select as _select
+
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel as _Hotel
+    from app.inventory.models import Item, MovementType, StockMovement
+
+    if not has_permission(user.role, "inventory:read"):
+        return {"error": "You don't have access to stock."}
+
+    hotel = await db.get(_Hotel, user.hotel_id)
+    today = hotel_today(hotel)
+    start = _d(args.get("date_from") or args.get("date"), today - timedelta(days=30))
+    end = _d(args.get("date_to") or args.get("date"), today)
+
+    rows = (
+        await db.execute(
+            _select(StockMovement, Item.name, Item.unit)
+            .join(Item, Item.id == StockMovement.item_id)
+            .where(
+                Item.hotel_id == user.hotel_id,
+                StockMovement.movement_type == MovementType.WASTE.value,
+                StockMovement.created_at >= datetime.combine(start, time.min),
+                StockMovement.created_at <= datetime.combine(end, time.max),
+            )
+            .order_by(StockMovement.created_at.desc())
+            .limit(60)
+        )
+    ).all()
+
+    entries = [
+        {
+            "item": name,
+            "quantity": float(mv.quantity or 0),
+            "unit": unit,
+            "cost": round(float(mv.quantity or 0) * float(mv.unit_cost or 0), 2),
+            "when": str(mv.created_at.date()),
+            "notes": mv.notes,
+        }
+        for mv, name, unit in rows
+    ]
+    return {
+        "from": str(start),
+        "to": str(end),
+        "entries": entries,
+        "total_cost": round(sum(e["cost"] for e in entries), 2),
+        "note": "Nothing thrown away in that period." if not entries else None,
+    }
+
+
+async def online_orders(db: AsyncSession, user: User, args: dict) -> dict:
+    """Delivery and collection orders - how many, and what they came to."""
+    from datetime import datetime, time
+
+    from sqlalchemy import select as _select
+
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel as _Hotel
+    from app.ordering.models import Order
+
+    hotel = await db.get(_Hotel, user.hotel_id)
+    today = hotel_today(hotel)
+    start = _d(args.get("date_from") or args.get("date"), today)
+    end = _d(args.get("date_to") or args.get("date"), today)
+
+    rows = (
+        (
+            await db.execute(
+                _select(Order)
+                .where(
+                    Order.hotel_id == user.hotel_id,
+                    Order.created_at >= datetime.combine(start, time.min),
+                    Order.created_at <= datetime.combine(end, time.max),
+                )
+                .order_by(Order.created_at.desc())
+                .limit(50)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    orders = [
+        {
+            "code": o.code,
+            "customer": o.customer_name,
+            "how": getattr(o.fulfilment, "value", o.fulfilment),
+            "status": getattr(o.status, "value", o.status),
+            "total": float(getattr(o, "total", 0) or 0),
+        }
+        for o in rows
+    ]
+    return {
+        "from": str(start),
+        "to": str(end),
+        "orders": orders,
+        "count": len(orders),
+        "takings": round(sum(o["total"] for o in orders), 2),
+    }
+
+
+async def safety_checks(db: AsyncSession, user: User, args: dict) -> dict:
+    """Fridge temperatures and the rest of the daily safety log."""
+    from sqlalchemy import select as _select
+
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel as _Hotel
+    from app.safety.models import SafetyLog
+
+    hotel = await db.get(_Hotel, user.hotel_id)
+    day = _d(args.get("date"), hotel_today(hotel))
+    rows = (
+        (
+            await db.execute(
+                _select(SafetyLog)
+                .where(SafetyLog.hotel_id == user.hotel_id, SafetyLog.date == day)
+                .order_by(SafetyLog.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "date": str(day),
+        "checks": [
+            {
+                "what": lg.label,
+                "kind": lg.kind,
+                "reading": lg.reading,
+                "status": lg.status,
+                "notes": lg.notes,
+            }
+            for lg in rows
+        ],
+        "logged": len(rows),
+        "note": "Nothing logged today yet." if not rows else None,
+    }
+
+
 async def staff_today(db: AsyncSession, user: User, args: dict) -> dict:
     """The actual people, by name, with today's attendance.
 
@@ -673,6 +1041,113 @@ TOOLS: list[dict] = [
                 "sql": {"type": "string", "description": "A single SELECT over ai_* views"}
             },
             "required": ["sql"],
+        },
+    },
+    {
+        "name": "rota_shifts",
+        "description": (
+            "Who is rota'd on to work, BY NAME, for a day or a date range. Use for "
+            "'is there a rota for Balaji today', 'who is working tomorrow', "
+            "'check the rota', 'what shifts are on this week'. This is the ONLY "
+            "way to read the rota - never write SQL for it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "YYYY-MM-DD; today if omitted"},
+                "date_from": {"type": "string", "description": "YYYY-MM-DD, for a range"},
+                "date_to": {"type": "string", "description": "YYYY-MM-DD, for a range"},
+                "employee": {
+                    "type": "string",
+                    "description": "Only this person's shifts, matched loosely by name",
+                },
+            },
+        },
+    },
+    {
+        "name": "attendance_summary",
+        "description": (
+            "Hours worked and who was in, over a DATE RANGE. Use for 'how many "
+            "hours did Balaji do this week', 'who was late', 'attendance last "
+            "month'. For just today, staff_today is quicker."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "YYYY-MM-DD, one day"},
+                "date_from": {"type": "string"},
+                "date_to": {"type": "string"},
+                "employee": {"type": "string", "description": "One person, matched loosely"},
+            },
+        },
+    },
+    {
+        "name": "payroll_summary",
+        "description": (
+            "Wages: what each person was paid, for which period, and any salary "
+            "advances still to be deducted. Use for 'what is the wage bill', "
+            "'has payroll been run', 'who has taken an advance'."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "purchase_orders",
+        "description": (
+            "Orders placed with suppliers - number, vendor, status, total and "
+            "expected delivery. Use for 'what is on order', 'what is arriving', "
+            "'any open purchase orders'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "description": "e.g. DRAFT, SENT, RECEIVED"}
+            },
+        },
+    },
+    {
+        "name": "waste_summary",
+        "description": (
+            "What has been thrown away and what it cost, over a range. Use for "
+            "'how much waste this month', 'what are we throwing away'. Waste is "
+            "a stock movement, not a table - never write SQL for it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string"},
+                "date_from": {"type": "string"},
+                "date_to": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "online_orders",
+        "description": (
+            "Delivery and collection orders for a day or range: how many, who "
+            "for, and what they came to. Use for 'how many online orders "
+            "today', 'what did delivery take'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string"},
+                "date_from": {"type": "string"},
+                "date_to": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "safety_checks",
+        "description": (
+            "The daily safety log - fridge temperatures, cleaning, and what is "
+            "still outstanding. Use for 'have the safety checks been done', "
+            "'what is the fridge temperature'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "YYYY-MM-DD; today if omitted"}
+            },
         },
     },
     {
@@ -1121,6 +1596,13 @@ EXECUTORS: dict[str, Executor] = {
     "navigate": navigate,
     "team_and_access": team_and_access,
     "staff_today": staff_today,
+    "rota_shifts": rota_shifts,
+    "attendance_summary": attendance_summary,
+    "payroll_summary": payroll_summary,
+    "purchase_orders": purchase_orders,
+    "waste_summary": waste_summary,
+    "online_orders": online_orders,
+    "safety_checks": safety_checks,
     "query_data": query_data,
     "web_lookup": web_lookup,
     "explain_term": explain_term,
@@ -1142,6 +1624,13 @@ EXECUTORS: dict[str, Executor] = {
 # model is never even offered an action the user can't take.
 TOOL_PERMS: dict[str, str] = {
     "staff_today": "employees:read",
+    "rota_shifts": "employees:read",
+    "attendance_summary": "employees:read",
+    "payroll_summary": "payroll:read",
+    "purchase_orders": "purchasing:read",
+    "waste_summary": "inventory:read",
+    "online_orders": "orders:read",
+    "safety_checks": "inventory:read",
     "propose_expense": "expenses:write",
     "propose_sale": "sales:write",
     "propose_item": "inventory:write",
