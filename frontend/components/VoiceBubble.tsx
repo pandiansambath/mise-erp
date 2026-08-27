@@ -189,6 +189,15 @@ export function VoiceBubble() {
   // the panel threw it away. Same thread store as the written chat.
   const [threadId, setThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<{ id: string; title: string }[]>([]);
+  // Next stamps a fresh id into every build, so this changes the moment a
+  // deploy actually reaches him — and stays the same when it has not.
+  const [buildId, setBuildId] = useState("…");
+  useEffect(() => {
+    const w = window as unknown as { __NEXT_DATA__?: { buildId?: string } };
+    const id = w.__NEXT_DATA__?.buildId ?? "";
+    setBuildId(id ? id.slice(0, 8) : "unknown");
+    if (id) console.info(`[DineAI] voice build ${id}`);
+  }, []);
   // NOT state. This was `useState`, updated eight to ten times a second while
   // the mic was open or Amy was talking — so the entire panel, conversation and
   // all, re-rendered on every tick. On a phone that is the flicker he sees
@@ -1387,6 +1396,14 @@ export function VoiceBubble() {
                   </span>
                 </span>
               </label>
+              {/* WHICH BUILD IS HE ON.
+                  We have both spent time on "I fixed that" / "it is still
+                  happening" when the honest answer was that his browser had not
+                  picked up the deploy yet. A build id he can read ends that
+                  argument in one message. */}
+              <p className="mt-2 px-1 text-[10px] text-fg-faint">
+                Build <span className="font-mono">{buildId}</span>
+              </p>
               <button
                 type="button"
                 onClick={() => {
