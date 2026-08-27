@@ -123,3 +123,17 @@ test("genuinely new speech still gets added, not swallowed", () => {
   const out = foldSegments(u, [{ IsPartial: true, Alternatives: [{ Transcript: "add Balaji" }] }]);
   expect(out?.whole).toBe("open the rota add Balaji");
 });
+
+test("a partial that gains punctuation is still the same sentence", () => {
+  // The one-in-five he still saw. Transcribe firms a partial up by adding
+  // commas and capitals, so "i want to take list table format show me" becomes
+  // "I want to take list table format, show me employees" — which a strict
+  // prefix test reads as a brand new segment and appends.
+  const u = fresh();
+  foldSegments(u, [{ IsPartial: true, Alternatives: [{ Transcript: "i want to take list" }] }]);
+  foldSegments(u, [{ IsPartial: true, Alternatives: [{ Transcript: "I want to take list, table" }] }]);
+  const out = foldSegments(u, [
+    { IsPartial: false, Alternatives: [{ Transcript: "I want to take list, table format — show me." }] },
+  ]);
+  expect(out?.whole).toBe("I want to take list, table format — show me.");
+});
