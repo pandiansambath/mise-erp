@@ -205,6 +205,10 @@ UI_ACTIONS = [
     },
     {
         "name": "fill_form",
+        # Emitted ALONGSIDE go_to in the same response wherever possible. Each
+        # extra lap is another full round trip to the model, and an action turn
+        # doing go_to, then fill_form, then the answer costs three of them -
+        # which is most of the fifteen seconds he waits for a spoken reply.
         "description": (
             "Type values into the form on the page that is already open, and show "
             "them to the owner WITHOUT saving. Always used after go_to. The owner "
@@ -299,6 +303,10 @@ PERSONA = (
     "2. go_to that page FIRST. Always. Filling a form on a page that is not "
     "open puts the numbers nowhere.\n"
     "3. Then fill_form, using the plainest field names you can.\n"
+    "DO 2 AND 3 IN ONE GO. Emit go_to and fill_form together in the SAME "
+    "reply rather than waiting for the page to open first - the page will be "
+    "there by the time the form is filled. Each extra round trip is roughly "
+    "two seconds he spends standing in a kitchen waiting for you.\n"
     "NEVER SAY IT IS DONE. You cannot see whether the box was there. Say what "
     "you TRIED - 'putting Balaji on tomorrow, have a look' - never 'it is "
     "ready, just confirm'. He acted on 'ready to save' once when nothing had "

@@ -879,11 +879,20 @@ async def voice_stream(
                     yield _sse({"type": "draft", "text": piece})
 
                     speech_buffer += piece
-                    while True:
-                        chunk, speech_buffer = voice.next_sentence(speech_buffer)
-                        if not chunk:
-                            break
-                        ahead.append(asyncio.create_task(say(chunk)))
+                    # Only speculate on text that looks like an ANSWER.
+                    #
+                    # A lap on its way to a tool call says something short —
+                    # "Let me check the sales." — and that draft is then thrown
+                    # away. Synthesising it costs a Polly call of 1.4 to 3
+                    # seconds that competes with the real reply's, which is part
+                    # of why an action turn made him wait so long to hear
+                    # anything. Thoughts are short; answers are not.
+                    if len(draft) >= 40:
+                        while True:
+                            chunk, speech_buffer = voice.next_sentence(speech_buffer)
+                            if not chunk:
+                                break
+                            ahead.append(asyncio.create_task(say(chunk)))
                 elif kind == "draft_end":
                     if ev.get("kept"):
                         full += draft
