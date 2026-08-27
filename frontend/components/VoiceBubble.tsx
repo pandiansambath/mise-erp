@@ -28,7 +28,7 @@
 // THE HONEST BIT: it fills forms, it does not submit them. The model can ask
 // the page to open Sales and type 120 into the amount; the save button is his.
 // A spoken instruction is a request, exactly like a click — not a password.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -164,6 +164,60 @@ function explain(err: string): string {
   if (err === "no-speech") return "I didn't hear anything that time.";
   return "I didn't catch that — try again, or type it below.";
 }
+
+
+/** The conversation, isolated so a transcript in progress cannot repaint it.
+ *
+ * "flickering... when we speak or when the voice model gives voice responses."
+ *
+ * Every partial transcript called setHeard, five to ten times a second while he
+ * talks — and `heard` lives in the same component as the messages, so the whole
+ * conversation re-rendered with it. On a phone that is the shake. The messages
+ * do not care what he is halfway through saying, so they are memoised on the
+ * only two things they actually depend on.
+ */
+const Conversation = memo(function Conversation({
+  logRef,
+  turns,
+  doing,
+}: {
+  logRef: React.RefObject<HTMLDivElement | null>;
+  turns: Turn[];
+  doing: string;
+}) {
+  return (
+    <div
+      ref={logRef}
+      className="relative max-h-[44vh] min-h-[8rem] space-y-2.5 overflow-y-auto border-t border-line/70 px-3.5 py-3.5"
+    >
+      {turns.map((t, i) =>
+        t.role === "user" ? (
+          <div key={i} className="flex justify-end">
+            <p className="mise-voice-said max-w-[85%] rounded-2xl rounded-br-md px-3 py-2 text-[12.5px] leading-relaxed">
+              {t.content}
+            </p>
+          </div>
+        ) : (
+          <div key={i} className="flex justify-start">
+            <div className="mise-card-inset max-w-[92%] rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[12.5px] leading-relaxed text-fg">
+              {t.content ? (
+                <ChatMarkdown text={t.content} />
+              ) : i === turns.length - 1 && doing ? (
+                <span className="text-fg-faint">{doing}</span>
+              ) : (
+                <span className="mise-voice-dots" aria-label="thinking">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              )}
+            </div>
+          </div>
+        ),
+      )}
+    </div>
+  );
+});
 
 export function VoiceBubble() {
   const router = useRouter();
@@ -581,6 +635,25 @@ export function VoiceBubble() {
   // Coalesce streamed text onto the next animation frame.
   const paintPending = useRef<string | null>(null);
   const paintFrame = useRef(0);
+  const heardPending = useRef<string | null>(null);
+  const heardFrame = useRef(0);
+  /** Show what he is saying, at most once a frame.
+   *
+   *  Transcribe sends partials five to ten times a second; each one was a React
+   *  state write, and on a phone that is the shake he keeps describing. The
+   *  words appear just as fast — they are just painted on the frame boundary
+   *  instead of between them. */
+  const paintHeard = useCallback((text: string) => {
+    heardPending.current = text;
+    if (heardFrame.current) return;
+    heardFrame.current = requestAnimationFrame(() => {
+      heardFrame.current = 0;
+      if (heardPending.current !== null) setHeard(heardPending.current);
+    });
+  }, []);
+
+  useEffect(() => () => cancelAnimationFrame(heardFrame.current), []);
+
   const paintReply = useCallback((text: string) => {
     paintPending.current = text;
     if (paintFrame.current) return;
@@ -837,7 +910,7 @@ export function VoiceBubble() {
           // of being added again. My previous version appended here, which is
           // why one sentence repeated down the entire screen.
           heardRef.current = text;
-          setHeard(text);
+          paintHeard(text);
           setLevel(0.3 + Math.min(0.6, text.length / 60));
 
           // A finished segment is NOT the end of what he is saying — people
@@ -872,7 +945,7 @@ export function VoiceBubble() {
           : "I couldn't open the microphone just then. Try again?",
       );
     }
-  }, [armSilence, isDeaf, setLevel]);
+  }, [armSilence, isDeaf, setLevel, paintHeard]);
 
   const startLive = useCallback(() => {
     const rec = recognition();
@@ -901,7 +974,7 @@ export function VoiceBubble() {
       let text = "";
       for (let i = 0; i < e.results.length; i += 1) text += e.results[i][0].transcript;
       heardRef.current = text;
-      setHeard(text);
+      paintHeard(text);
       setLevel(0.3 + Math.min(0.6, text.length / 60));
       armSilence();
     };
@@ -968,7 +1041,7 @@ export function VoiceBubble() {
       setPhase("idle");
       setErr("The microphone is already in use.");
     }
-  }, [armSilence, startAws, isDeaf, setLevel]);
+  }, [armSilence, startAws, isDeaf, setLevel, paintHeard]);
 
   // It speaks first. "once user click the voice model that model need to start
   // the conversation... it need to guide and initiate conversation." An
@@ -1500,44 +1573,7 @@ export function VoiceBubble() {
               than the last six lines, and the two speakers actually look
               different from each other.  */}
           {turns.length > 0 && (
-            <div
-              ref={logRef}
-              className="relative max-h-[44vh] min-h-[8rem] space-y-2.5 overflow-y-auto border-t border-line/70 px-3.5 py-3.5"
-            >
-              {turns.map((t, i) =>
-                t.role === "user" ? (
-                  <div key={i} className="flex justify-end">
-                    <p className="mise-voice-said max-w-[85%] rounded-2xl rounded-br-md px-3 py-2 text-[12.5px] leading-relaxed">
-                      {t.content}
-                    </p>
-                  </div>
-                ) : (
-                  <div key={i} className="flex justify-start">
-                    <div className="mise-card-inset max-w-[92%] rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[12.5px] leading-relaxed text-fg">
-                      {t.content ? (
-                        // It was rendering the reply as PLAIN TEXT, so a table
-                        // arrived as a wall of pipes and "**Dragon Fruit**"
-                        // kept its asterisks. The written chat has had a proper
-                        // renderer all along — the voice panel simply never
-                        // used it, which is the kind of gap that only shows up
-                        // the first time the model answers something detailed.
-                        <ChatMarkdown text={t.content} />
-                      ) : (
-                        i === turns.length - 1 && doing ? (
-                          <span className="text-fg-faint">{doing}</span>
-                        ) : (
-                          <span className="mise-voice-dots" aria-label="thinking">
-                            <i />
-                            <i />
-                            <i />
-                          </span>
-                        )
-                      )}
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
+            <Conversation logRef={logRef} turns={turns} doing={doing} />
           )}
 
           {err && (

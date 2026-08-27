@@ -310,10 +310,19 @@ export function foldSegments(
     // partial GROWS — each one starts with the last — so a growing prefix is
     // the same sentence and replaces itself. Only text that is not a
     // continuation is genuinely new, and only that gets added.
+    // COMPARE LOOSELY. Transcribe re-punctuates and re-capitalises a partial as
+    // it firms up: "show me" becomes "show me," and "i want" becomes "I want".
+    // A strict prefix test then fails, the growing sentence looks like a new
+    // segment, and it gets appended — which is the one-in-five duplication he
+    // still sees. The comparison ignores case and punctuation; the DISPLAYED
+    // text is always the newest, best-punctuated version.
+    const bare = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     const current = u.partial;
-    if (!current || text.startsWith(current)) {
+    const a = bare(current);
+    const b = bare(text);
+    if (!current || b.startsWith(a)) {
       u.partial = text;               // it grew, or it is the first
-    } else if (current.startsWith(text)) {
+    } else if (a.startsWith(b)) {
       // A shorter re-send of what we already have. Keep the longer version.
     } else {
       // A real new segment: close the last one and start again.
