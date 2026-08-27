@@ -1847,6 +1847,29 @@ function remember(key: string, value: string) {
 }
 
 
+/** The ways a date might be WRITTEN on a control that stores it as ISO.
+ *
+ *  "2026-08-27" can appear as "27/8", "27/08", "27 Aug", or "Thu 27/8". None of
+ *  those contain the string we were handed, which is why a perfectly correct
+ *  date matched no option at all.
+ */
+function dateForms(value: string): string[] {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return [];
+  const [, y, mo, d] = m;
+  const day = String(Number(d));
+  const mon = String(Number(mo));
+  const name = new Date(Number(y), Number(mo) - 1, Number(d)).toLocaleString("en-GB", {
+    month: "short",
+  });
+  return [
+    `${day}/${mon}`,
+    `${d}/${mo}`,
+    `${day} ${name}`.toLowerCase(),
+    `${day}/${mon}/${y.slice(2)}`,
+  ];
+}
+
 /** The label a person reads next to a control, wherever it happens to live. */
 function labelNear(el: HTMLElement): string {
   const bits: (string | null | undefined)[] = [
@@ -1903,9 +1926,23 @@ async function setCustomSelect(name: string, value: string): Promise<boolean> {
 
   const target = value.trim().toLowerCase();
   const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  const text = (o: HTMLElement) => (o.textContent ?? "").trim().toLowerCase();
+
+  // A DATE IS RARELY SHOWN THE WAY IT IS STORED.
+  //
+  // The rota's day picker is labelled "Day", holds ISO values, and shows
+  // "Mon 24/8". Asked for 2026-08-27 it matched nothing, so the form kept its
+  // default — Monday — and he confirmed a shift onto the wrong day three days
+  // before the one he asked for. Silently wrong about a date, in the same way
+  // the payment method was silently wrong about cash.
+  const forms = dateForms(value);
+
   const match =
-    options.find((o) => (o.textContent ?? "").trim().toLowerCase() === target) ??
-    options.find((o) => (o.textContent ?? "").trim().toLowerCase().includes(target));
+    options.find((o) => text(o) === target) ??
+    options.find((o) => text(o).includes(target)) ??
+    (forms.length
+      ? options.find((o) => forms.some((f) => text(o).includes(f)))
+      : undefined);
 
   if (!match) {
     trigger.click(); // put it back the way we found it

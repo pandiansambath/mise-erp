@@ -157,3 +157,20 @@ test("but a different sentence is still a different sentence", () => {
   const out = foldSegments(u, [seg("b", "add Balaji to tomorrow")]);
   expect(out?.whole).toBe("open the rota please add Balaji to tomorrow");
 });
+
+test("a dropped leading letter does not start a new sentence", () => {
+  // Straight from his rota screenshot: "...and I wrote" then "ant you to go to
+  // Rota section and I wrote of" — Transcribe lost the "w" from "want", so the
+  // opening words disagreed and a prefix test called it brand new speech.
+  const u = fresh();
+  foldSegments(u, [seg("a", "want you to go to Rota section and I wrote")]);
+  const out = foldSegments(u, [seg("b", "ant you to go to Rota section and I wrote of")]);
+  expect(out?.whole).toBe("ant you to go to Rota section and I wrote of");
+});
+
+test("and a sentence sharing a couple of common words is still new", () => {
+  const u = fresh();
+  foldSegments(u, [seg("a", "open the rota for me")]);
+  const out = foldSegments(u, [seg("b", "what did we take today")]);
+  expect(out?.whole).toBe("open the rota for me what did we take today");
+});
