@@ -207,8 +207,18 @@ export async function listen(opts: ListenOpts): Promise<Listener> {
   ws.onerror = () => opts.onError("The transcription connection dropped.");
   ws.onclose = () => shutdown();
 
+  // A socket that outlives its listener keeps transcribing him into a panel
+  // that is no longer listening — which is how twenty of these ended up
+  // running at once. Anything that closes one closes all of it.
+  ws.addEventListener("close", shutdown, { once: true });
+
   node.onaudioprocess = (e) => {
-    if (ws.readyState !== WebSocket.OPEN) return;
+    if (closed) return;
+    if (ws.readyState !== WebSocket.OPEN) {
+      // The socket has gone; stop feeding a dead pipe and let go of the mic.
+      if (ws.readyState === WebSocket.CLOSED) shutdown();
+      return;
+    }
     const raw = e.inputBuffer.getChannelData(0);
     let peak = 0;
     for (let i = 0; i < raw.length; i += 64) peak = Math.max(peak, Math.abs(raw[i]));
