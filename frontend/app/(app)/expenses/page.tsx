@@ -518,7 +518,27 @@ export default function ExpensesPage() {
                     </tr>
                   ) : (
                     sortedExpenses.map((x) => (
-                      <tr key={x.id} className="border-b border-line">
+                      /* The whole row edits. "keep edit features everywhere
+                         possible" — and the ✏️ button was a small target beside
+                         a Remove button, on a page where the two do very
+                         different things. The buttons stay; the row is just no
+                         longer dead space between them. */
+                      <tr
+                        key={x.id}
+                        onClick={canWrite && !x.from_payroll ? () => startEdit(x) : undefined}
+                        title={
+                          canWrite && !x.from_payroll
+                            ? "Edit this entry"
+                            : x.from_payroll
+                              ? "This came from payroll — edit it there"
+                              : undefined
+                        }
+                        className={`border-b border-line transition ${
+                          canWrite && !x.from_payroll
+                            ? "cursor-pointer hover:bg-paper-2/60"
+                            : ""
+                        }`}
+                      >
                         <td className="px-5 py-3 text-fg-faint">{x.date}</td>
                         <td className="px-5 py-3">
                           <span className="font-medium text-fg">{x.category_name}</span>
@@ -542,12 +562,15 @@ export default function ExpensesPage() {
                         <td className="px-5 py-3 text-right font-mono font-medium text-fg">{format(x.amount)}</td>
                         <td className="px-5 py-3 text-right">
                           {canWrite && !x.from_payroll && (
-                            <Button size="sm" variant="ghost" onClick={() => startEdit(x)} title="Edit this entry in the form">
+                            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); startEdit(x); }} title="Edit this entry in the form">
                               ✏️ Edit
                             </Button>
                           )}
                           {canWrite && (
-                            <Button size="sm" variant="ghost" onClick={() => remove(x.id)}>
+                            /* Without this, removing an entry would ALSO load it
+                               into the form behind the confirm — deleting the
+                               row you are being asked about. */
+                            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); remove(x.id); }}>
                               Remove
                             </Button>
                           )}
