@@ -2035,29 +2035,46 @@ function findField(name: string): HTMLInputElement | HTMLSelectElement | null {
   );
 
   const score = (el: HTMLElement) => {
-    const bits = [
+    // EACH DESCRIPTION SCORED ON ITS OWN, never joined into one string.
+    //
+    // This used to concatenate every clue about a field. On the rota, the
+    // wrapping <label> and the <span> inside it BOTH say "Start", so the joined
+    // descriptor came out as "startstart" — which contains neither "starttime"
+    // nor is contained by it. A field sitting in plain sight matched nothing,
+    // and he got "I couldn't find a box for start_time" on a page that has one.
+    //
+    // Scoring the parts separately means an extra clue can only ever help.
+    const parts = [
       el.getAttribute("name"),
       el.getAttribute("id"),
       el.getAttribute("placeholder"),
       el.getAttribute("aria-label"),
       el.closest("label")?.textContent,
       el.previousElementSibling?.textContent,
+      // The label of the group this control sits in, which is where several of
+      // our forms put it.
+      el.parentElement?.querySelector(":scope > span, :scope > label")?.textContent,
     ]
       .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
-    if (!bits) return 0;
-    if (bits === want) return 5;
-    if (bits.includes(want)) return 4;
-    if (want.length > 3 && want.includes(bits)) return 3;
-    // A synonym is a weaker match than the real name, never a stronger one:
-    // "total" must not beat a field actually called "amount".
-    for (const alt of alsoTry) {
-      if (bits === alt) return 2;
-      if (bits.includes(alt)) return 1;
+      .map((t) => String(t).toLowerCase().replace(/[^a-z0-9]/g, ""))
+      .filter(Boolean);
+
+    let best = 0;
+    for (const bits of parts) {
+      if (bits === want) best = Math.max(best, 5);
+      else if (bits.includes(want)) best = Math.max(best, 4);
+      else if (want.length > 3 && want.includes(bits) && bits.length >= 3)
+        best = Math.max(best, 3);
+      else {
+        // A synonym is a weaker match than the real name, never a stronger one:
+        // "total" must not beat a field actually called "amount".
+        for (const alt of alsoTry) {
+          if (bits === alt) best = Math.max(best, 2);
+          else if (bits.includes(alt)) best = Math.max(best, 1);
+        }
+      }
     }
-    return 0;
+    return best;
   };
 
   let best: (HTMLInputElement | HTMLSelectElement) | null = null;

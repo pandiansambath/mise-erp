@@ -174,3 +174,26 @@ test("and a sentence sharing a couple of common words is still new", () => {
   const out = foldSegments(u, [seg("b", "what did we take today")]);
   expect(out?.whole).toBe("open the rota for me what did we take today");
 });
+
+test("the first two words of a sentence are not duplicated", () => {
+  // From his CloudWatch line, verbatim:
+  //   heard='heelheelheel finishheel finish byheel finish by 3'
+  // One-word and two-word partials never reached the three-word threshold, so
+  // the START of every sentence was appended instead of replaced. The opening
+  // is exactly where partials are shortest.
+  const u = fresh();
+  for (const t of ["heel", "heel finish", "heel finish by", "heel finish by 3"]) {
+    foldSegments(u, [seg("x", t)]);
+  }
+  expect(u.finals.length, `it filed ${u.finals.length} finished segments`).toBe(0);
+  const out = foldSegments(u, [seg("x", "heel finish by 3 pm")]);
+  expect(out?.whole).toBe("heel finish by 3 pm");
+});
+
+test("a one-word start still gives way to the real sentence", () => {
+  const u = fresh();
+  foldSegments(u, [seg("a", "he")]);
+  foldSegments(u, [seg("a", "he will")]);
+  const out = foldSegments(u, [seg("a", "he will start by 9")]);
+  expect(out?.whole).toBe("he will start by 9");
+});

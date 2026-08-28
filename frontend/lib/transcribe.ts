@@ -309,9 +309,18 @@ function sameUtterance(a: string, b: string): boolean {
       pool.set(w, n - 1);
     }
   }
-  // Three words to be sure of anything, and two thirds of the shorter — a
-  // genuinely different sentence shares almost nothing, which the tests check
-  // in both directions.
+  // FULL CONTAINMENT COUNTS, however short.
+  //
+  // The threshold used to be three matching words, which is fine mid-sentence
+  // and wrong at the start of one. His log: "heel", then "heel finish", then
+  // "heel finish by". The first has ONE word, so it never reached three, and
+  // every early fragment was appended instead of replaced —
+  // "heelheelheel finishheel finish by". The opening of every sentence was
+  // duplicated, which is why this kept coming back however I tuned the middle.
+  //
+  // If everything the shorter says is already in the longer, it IS the shorter
+  // one growing. Length has nothing to do with it.
+  if (hits === short.length) return true;
   return hits >= 3 && hits / short.length >= 0.66;
 }
 
