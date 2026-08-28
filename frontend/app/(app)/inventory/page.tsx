@@ -177,24 +177,37 @@ export default function InventoryPage() {
   const editingItem = editingId ? items.find((i) => i.id === editingId) ?? null : null;
   const pickedSupplier = formSuppliers.find((v) => v.vendor_id === formVendor) ?? null;
 
-  async function chooseSupplier(vendorId: string) {
-    setFormVendor(vendorId);
+  /** Set an item's chosen supplier. `itemId` is explicit because this is no
+   *  longer only the edit form's job — "in inventory I need to change the
+   *  vendor of an item from the inventory screen itself", so the detail sheet
+   *  calls it too and the two must not drift into two different rules. */
+  async function setChosenSupplier(itemId: string, vendorId: string) {
     setVendorMsg(null);
-    if (!editingId || !vendorId) return;
+    if (!itemId || !vendorId) return;
     try {
       // picking here IS the decision — recipe costing follows the chosen supplier
-      await api.post(`/vendors/items/${editingId}/preferred`, { vendor_id: vendorId });
+      await api.post(`/vendors/items/${itemId}/preferred`, { vendor_id: vendorId });
       setItemSuppliers((prev) => ({
         ...prev,
-        [editingId]: (prev[editingId] ?? []).map((v) => ({
+        [itemId]: (prev[itemId] ?? []).map((v) => ({
           ...v,
           is_preferred: v.vendor_id === vendorId,
         })),
       }));
+      // The row shows the chosen supplier's price, so leaving the list alone
+      // would show the old one until a reload — the change would look like it
+      // had not happened.
+      await load();
       setVendorMsg("Chosen supplier saved — costing now uses this price.");
     } catch (err) {
       setVendorMsg(err instanceof ApiError ? err.message : "Could not save that supplier");
     }
+  }
+
+  async function chooseSupplier(vendorId: string) {
+    setFormVendor(vendorId);
+    if (!editingId) return;
+    await setChosenSupplier(editingId, vendorId);
   }
 
   // ── Strict template import (Excel/CSV only — no AI) ─────────────────────────
@@ -1840,6 +1853,87 @@ export default function InventoryPage() {
                 { label: "Suppliers", value: String(openItem.vendor_count ?? 0) },
               ]}
             />
+
+            {/* Change the supplier from HERE.
+                "in inventory I need to change the vendor of an item from the
+                inventory screen itself." It was only possible inside the edit
+                form, which meant opening a whole item to change one field —
+                and the sheet was already showing you the number of suppliers
+                while giving you no way to act on it.
+
+                Prices are per BASE unit, which is what makes them comparable:
+                one supplier's £50 is a 5 kg box and another's is 100 kg. */}
+            {(() => {
+              const sups = itemSuppliers[openItem.id] ?? [];
+              if (sups.length === 0) return null;
+              const chosen = sups.find((v) => v.is_preferred);
+              return (
+                <div className="mise-panel-in mt-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                      🚚 Chosen supplier
+                    </p>
+                    {chosen && (
+                      <span className="text-[11px] text-fg-faint">
+                        costing uses this price
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    {sups.map((v) => {
+                      const on = v.is_preferred;
+                      const each = pricePerBase(openItem, v);
+                      return (
+                        <button
+                          key={v.vendor_id}
+                          type="button"
+                          data-testid="inv-supplier-pick"
+                          disabled={!canWrite || on}
+                          onClick={() => setChosenSupplier(openItem.id, v.vendor_id)}
+                          title={
+                            canWrite
+                              ? on
+                                ? `${v.vendor_name} is already the chosen supplier`
+                                : `Buy ${openItem.name} from ${v.vendor_name} instead`
+                              : "You do not have permission to change this"
+                          }
+                          className={`mise-press flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
+                            on
+                              ? "border-brand-400/50 bg-brand-400/10"
+                              : "border-line hover:border-brand-400/40 disabled:opacity-60"
+                          }`}
+                        >
+                          <span aria-hidden className={on ? "text-brand-300" : "text-fg-faint"}>
+                            {on ? "★" : "☆"}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-fg">
+                              {v.vendor_name}
+                            </span>
+                            <span className="block truncate text-[11px] text-fg-faint">
+                              {supplierPackSize(openItem, v)
+                                ? `${format(String(v.price_per_unit))} per ${levelName(openItem, v.pack_level_id)}`
+                                : "no price yet"}
+                            </span>
+                          </span>
+                          {each > 0 && (
+                            <span className="shrink-0 text-right text-xs tabular-nums text-fg-soft">
+                              {format(each.toFixed(2))}
+                              <span className="block text-[10px] text-fg-faint">
+                                per {openItem.unit}
+                              </span>
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {vendorMsg && (
+                    <p className="mt-2 text-[11px] text-brand-300">{vendorMsg}</p>
+                  )}
+                </div>
+              );
+            })()}
             <div className="mt-5">
                               <div className="mise-panel-in">
                                 <div className="flex items-center justify-between">

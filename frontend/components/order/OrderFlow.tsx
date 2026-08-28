@@ -460,6 +460,134 @@ function ItemSheet({
   );
 }
 
+/** The item tiles.
+ *
+ * Pulled out of the category popup because there are three ways to reach a list
+ * of items now — by category, by supplier, and dearest-first — and a tile that
+ * looked different depending on how you arrived would make the same item read
+ * as three different things.
+ */
+function ItemGrid({
+  shown,
+  supplierFor,
+  picked,
+  onOpen,
+}: {
+  shown: Item[];
+  supplierFor: (id: string) => SupplierOption | undefined;
+  picked: Set<string>;
+  onOpen: (it: Item) => void;
+}) {
+  const { format } = useCurrency();
+  return (
+  <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
+    <div
+      className="mise-sheet-cascade grid gap-2.5"
+      /* auto-fit, not a fixed count. Four columns of 11rem cannot fit a
+         390px screen, so the popup scrolled SIDEWAYS — "in mobile it's
+         showing sideways, we need to scroll horizontal to see the
+         items; please have a vertical way". Now the row holds as many
+         as fit and wraps down, which is the direction a phone scrolls. */
+      style={{
+        gridTemplateColumns: `repeat(auto-fit, minmax(min(9.5rem, 100%), 1fr))`,
+        maxWidth: shown.length < 4 ? `${shown.length * 12}rem` : undefined,
+      }}
+    >
+      {shown.map((it, i) => {
+        const sup = supplierFor(it.id);
+        const on = picked.has(it.id);
+        const st = stockState(it);
+        return (
+          <SpotlightCard
+            key={it.id}
+            // The ramp caps so the fortieth card is not still waiting a
+            // second later — a cascade that outlasts your patience is
+            // just a slow screen.
+            style={{ "--i": Math.min(i, 14) } as React.CSSProperties}
+            className="!rounded-2xl !border-0 !bg-transparent !p-0"
+            spotlightColor="rgba(52, 211, 153, 0.14)"
+          >
+            <button
+              type="button"
+              data-testid="item-tile"
+              onClick={() => onOpen(it)}
+              className={`mise-card3d mise-press relative flex w-full flex-col items-start gap-1 overflow-hidden p-3 pl-3.5 text-left ${
+                on ? "!bg-brand-400/15 ring-2 ring-brand-500" : ""
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`absolute inset-y-0 left-0 w-1 ${categoryTint(groupOf(it))}`}
+              />
+              <span className="flex w-full items-start justify-between gap-2">
+                <span aria-hidden className="text-2xl">{categoryEmoji(groupOf(it))}</span>
+                {/* Stock as a dot + word, top right, so the card is
+                    scannable before it is read. */}
+                <span className={`flex items-center gap-1 text-[10px] ${st.cls}`}>
+                  {st.dot}
+                  {st.label}
+                </span>
+              </span>
+              <span className="line-clamp-2 text-sm font-semibold leading-snug text-fg">
+                {it.name}
+              </span>
+              {/* The dead space in the middle of these cards was doing
+                  nothing — "every place is information, every click is
+                  a feature". It now carries what you need to decide
+                  WITHOUT opening it: what you have, what one costs, and
+                  what a pack costs when it comes in packs. */}
+              <span className="mt-auto w-full space-y-0.5 pt-1.5 text-[11px]">
+                <span className="flex justify-between gap-2 text-fg-soft">
+                  <span className="text-fg-faint">have</span>
+                  <span className="tabular-nums">{fmtQty(it.current_stock, it.unit)}</span>
+                </span>
+                {sup ? (
+                  priceLines(it, sup).map((l) => (
+                    <span key={l.label} className="flex justify-between gap-2 text-fg-soft">
+                      <span className="truncate text-fg-faint">1 {l.label}</span>
+                      <span className="shrink-0 tabular-nums">
+                        {format(l.price.toFixed(2))}
+                      </span>
+                    </span>
+                  ))
+                ) : (
+                  <span className="block text-amber-300">no supplier yet</span>
+                )}
+                {sup && (
+                  <span className="block truncate pt-0.5 text-[10px] text-fg-faint">
+                    {sup.vendor_name}
+                  </span>
+                )}
+              </span>
+              {/* "that tick mark is hiding the details." It was — a
+                  disc dropped on top of the corner where the stock
+                  label lives. It sits in the corner of the card now,
+                  clipped by the rounded edge, so it marks the card
+                  without landing on anything. */}
+              {on && (
+                <span
+                  aria-hidden
+                  className="absolute -right-5 -top-5 h-10 w-10 rotate-45 bg-brand-500"
+                />
+              )}
+              {on && (
+                <span
+                  aria-hidden
+                  className="absolute right-0.5 top-0.5 text-[10px] font-bold leading-none text-white"
+                >
+                  ✓
+                </span>
+              )}
+            </button>
+          </SpotlightCard>
+        );
+      })}
+    </div>
+  </ClickSpark>
+  );
+}
+
+
 export function OrderFlow({
   items,
   suppliers,
@@ -488,6 +616,14 @@ export function OrderFlow({
 }) {
   const { format } = useCurrency();
   const [cat, setCat] = useState<string | null>(null);
+  // "in purchasing we need show by option — category, vendor, price high to low."
+  //
+  // Category is what the pad has always been, and it stays the default: it is
+  // how a kitchen thinks about a shopping list. The other two answer questions
+  // category cannot — "what am I buying from Rudra" and "what is costing me
+  // the most" — and the second one has no groups at all, because a price
+  // ranking that is broken into buckets is not a ranking.
+  const [showBy, setShowBy] = useState<"category" | "vendor" | "price">("category");
   // ONE SUPPLIER FOR THIS POPUP, for this sitting only.
   //
   //   "I also want the same in categories (the items showing popup) — so that
@@ -654,6 +790,40 @@ export function OrderFlow({
     );
   }, [items]);
 
+  /** Every supplier who prices anything on this pad, and what they cover.
+   *
+   * Keyed by id rather than name: two suppliers can share a name, and merging
+   * them here would put one vendor's items into another's basket. */
+  const vendors = useMemo(() => {
+    const m = new Map<string, { name: string; items: Item[] }>();
+    for (const it of items) {
+      for (const v of suppliers[it.id] ?? []) {
+        const row = m.get(v.vendor_id) ?? { name: v.vendor_name, items: [] };
+        // A supplier can price the same item twice (two pack forms). The tile
+        // counts ITEMS, so it must not count that item twice.
+        if (!row.items.some((x) => x.id === it.id)) row.items.push(it);
+        m.set(v.vendor_id, row);
+      }
+    }
+    return [...m.entries()]
+      .map(([id, r]) => ({ id, ...r }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [items, suppliers]);
+
+  /** Dearest first, per BASE unit.
+   *
+   * Per base unit and not per pack, for the reason the comparison page exists:
+   * one supplier's £50 is a 5 kg box and another's is 100 kg, so ranking on the
+   * sticker price puts the cheapest thing you buy at the top of the list. */
+  const dearest = useMemo(
+    () =>
+      [...items]
+        .map((it) => ({ it, each: pricePerBase(it, supplierFor(it.id)) || 0 }))
+        .sort((a, b) => b.each - a.each)
+        .map((r) => r.it),
+    [items, supplierFor],
+  );
+
   const low = useMemo(
     () =>
       items.filter((i) => {
@@ -704,7 +874,43 @@ export function OrderFlow({
     window.setTimeout(() => setBump(false), 420);
   };
 
-  const shown = cat ? items.filter((i) => groupOf(i) === cat) : [];
+  const shown = !cat
+    ? []
+    : showBy === "vendor"
+      ? (vendors.find((v) => v.id === cat)?.items ?? [])
+      : items.filter((i) => groupOf(i) === cat);
+
+  /** Everything this supplier sells, straight into the basket.
+   *
+   * "when showing by vendor, move that vendor's whole list into the basket."
+   *
+   * Quantity is what the item is SHORT by, topped up to its minimum — an empty
+   * line is not an order, and a pad full of zeroes is worse than an empty one.
+   * The vendor travels on every line, because the whole point of arriving here
+   * by supplier is that this is the supplier you meant. */
+  const addWholeVendor = (vendorId: string) => {
+    const v = vendors.find((x) => x.id === vendorId);
+    if (!v) return;
+    const next = [...lines];
+    for (const it of v.items) {
+      const mine: OrderLine = { item_id: it.id, qty: "0", vendor_id: vendorId };
+      const short = Math.max(
+        0,
+        parseFloat(it.min_stock_level ?? "0") - parseFloat(it.current_stock ?? "0"),
+      );
+      // Nothing short still gets a line — he is looking at this supplier's list
+      // because he intends to buy from them — but it starts at one unit rather
+      // than at zero, which submits as nothing.
+      mine.qty = String(short > 0 ? exact(short) : 1);
+      const k = lineKey(mine);
+      const at = next.findIndex((l) => lineKey(l) === k);
+      if (at >= 0) next[at] = { ...next[at], qty: mine.qty };
+      else next.push(mine);
+    }
+    onChange(next);
+    setBump(true);
+    window.setTimeout(() => setBump(false), 420);
+  };
 
   return (
     <div className="min-w-0">
@@ -731,7 +937,108 @@ export function OrderFlow({
         </div>
       )}
 
+      {/* "show by" — category, vendor, or dearest first.
+          Three buttons rather than a dropdown: the whole pad is built on
+          tapping rather than scrolling, and a select would be the one control
+          on the page that hides its own options. */}
+      <div className="mb-3 flex items-center gap-2 overflow-x-auto">
+        <span className="shrink-0 text-xs text-fg-faint">Show by</span>
+        <div className="mise-well flex shrink-0 gap-1 rounded-xl p-1">
+          {(
+            [
+              ["category", "Category"],
+              ["vendor", "Supplier"],
+              ["price", "Price high–low"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              data-testid={`showby-${key}`}
+              aria-pressed={showBy === key}
+              onClick={() => {
+                // Leaving a grouping must close whatever it had open, or the
+                // popup outlives the list it belongs to.
+                setShowBy(key);
+                setCat(null);
+                setCatVendor("");
+                setCatDraft("");
+              }}
+              className={`mise-press rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                showBy === key
+                  ? "bg-brand-600 text-white"
+                  : "text-fg-soft hover:text-fg"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Dearest first has no groups: a price ranking split into buckets is not
+          a ranking. Straight to the items, most expensive at the top. */}
+      {showBy === "price" && (
+        <ItemGrid
+          shown={dearest}
+          supplierFor={supplierFor}
+          picked={picked}
+          onOpen={setOpenItem}
+        />
+      )}
+
+      {/* Layer one, by supplier: tap to see their list, or send the whole list
+          to the basket without opening it. */}
+      {showBy === "vendor" && (
+        <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
+          <div className="mise-stagger grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {vendors.length === 0 && (
+              <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">
+                No supplier prices yet — add one on the <b>Vendors</b> page.
+              </p>
+            )}
+            {vendors.map((v) => (
+              <div
+                key={v.id}
+                className="mise-card3d relative flex items-center gap-3 overflow-hidden px-3.5 py-4 pl-4"
+              >
+                <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-sky-400" />
+                <button
+                  type="button"
+                  data-testid="vendor-tile"
+                  onClick={() => setCat(v.id)}
+                  className="mise-press flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <span aria-hidden className="text-2xl">🚚</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display text-sm font-semibold text-fg">
+                      {v.name}
+                    </span>
+                    <span className="block truncate text-[11px] text-fg-faint">
+                      {v.items.length} item{v.items.length === 1 ? "" : "s"} priced
+                    </span>
+                  </span>
+                </button>
+                {/* His item 5. Separate button, not the tile itself: filling a
+                    basket and looking at a list are different intentions, and
+                    one tap must not do the other by accident. */}
+                <button
+                  type="button"
+                  data-testid="vendor-add-all"
+                  onClick={() => addWholeVendor(v.id)}
+                  title={`Put all ${v.items.length} of ${v.name}'s items in the basket`}
+                  className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-semibold text-brand-300"
+                >
+                  Add all
+                </button>
+              </div>
+            ))}
+          </div>
+        </ClickSpark>
+      )}
+
       {/* Layer one: the categories. Nothing else on screen. */}
+      {showBy === "category" && (
       <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
         <div className="mise-stagger grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {cats.map(([name, n]) => (
@@ -774,12 +1081,13 @@ export function OrderFlow({
           ))}
         </div>
       </ClickSpark>
+      )}
 
       {/* Layer two: that category's items. */}
       {cat && (
         <Sheet
           onClose={() => { setCat(null); setCatVendor(""); setCatDraft(""); }}
-          title={cat}
+          title={showBy === "vendor" ? (vendors.find((v) => v.id === cat)?.name ?? cat) : cat}
           subtitle={`${shown.length} items`}
           // Two items stay square; nine spread out rather than scrolling.
           columns={shown.length >= 9 ? 4 : shown.length >= 5 ? 3 : shown.length >= 3 ? 2 : 1}
@@ -849,110 +1157,12 @@ export function OrderFlow({
             );
           })()}
 
-          <ClickSpark sparkColor="#34d399" sparkCount={8} sparkRadius={16} duration={380}>
-            <div
-              className="mise-sheet-cascade grid gap-2.5"
-              /* auto-fit, not a fixed count. Four columns of 11rem cannot fit a
-                 390px screen, so the popup scrolled SIDEWAYS — "in mobile it's
-                 showing sideways, we need to scroll horizontal to see the
-                 items; please have a vertical way". Now the row holds as many
-                 as fit and wraps down, which is the direction a phone scrolls. */
-              style={{
-                gridTemplateColumns: `repeat(auto-fit, minmax(min(9.5rem, 100%), 1fr))`,
-                maxWidth: shown.length < 4 ? `${shown.length * 12}rem` : undefined,
-              }}
-            >
-              {shown.map((it, i) => {
-                const sup = supplierFor(it.id);
-                const on = picked.has(it.id);
-                const st = stockState(it);
-                return (
-                  <SpotlightCard
-                    key={it.id}
-                    // The ramp caps so the fortieth card is not still waiting a
-                    // second later — a cascade that outlasts your patience is
-                    // just a slow screen.
-                    style={{ "--i": Math.min(i, 14) } as React.CSSProperties}
-                    className="!rounded-2xl !border-0 !bg-transparent !p-0"
-                    spotlightColor="rgba(52, 211, 153, 0.14)"
-                  >
-                    <button
-                      type="button"
-                      data-testid="item-tile"
-                      onClick={() => setOpenItem(it)}
-                      className={`mise-card3d mise-press relative flex w-full flex-col items-start gap-1 overflow-hidden p-3 pl-3.5 text-left ${
-                        on ? "!bg-brand-400/15 ring-2 ring-brand-500" : ""
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className={`absolute inset-y-0 left-0 w-1 ${categoryTint(groupOf(it))}`}
-                      />
-                      <span className="flex w-full items-start justify-between gap-2">
-                        <span aria-hidden className="text-2xl">{categoryEmoji(groupOf(it))}</span>
-                        {/* Stock as a dot + word, top right, so the card is
-                            scannable before it is read. */}
-                        <span className={`flex items-center gap-1 text-[10px] ${st.cls}`}>
-                          {st.dot}
-                          {st.label}
-                        </span>
-                      </span>
-                      <span className="line-clamp-2 text-sm font-semibold leading-snug text-fg">
-                        {it.name}
-                      </span>
-                      {/* The dead space in the middle of these cards was doing
-                          nothing — "every place is information, every click is
-                          a feature". It now carries what you need to decide
-                          WITHOUT opening it: what you have, what one costs, and
-                          what a pack costs when it comes in packs. */}
-                      <span className="mt-auto w-full space-y-0.5 pt-1.5 text-[11px]">
-                        <span className="flex justify-between gap-2 text-fg-soft">
-                          <span className="text-fg-faint">have</span>
-                          <span className="tabular-nums">{fmtQty(it.current_stock, it.unit)}</span>
-                        </span>
-                        {sup ? (
-                          priceLines(it, sup).map((l) => (
-                            <span key={l.label} className="flex justify-between gap-2 text-fg-soft">
-                              <span className="truncate text-fg-faint">1 {l.label}</span>
-                              <span className="shrink-0 tabular-nums">
-                                {format(l.price.toFixed(2))}
-                              </span>
-                            </span>
-                          ))
-                        ) : (
-                          <span className="block text-amber-300">no supplier yet</span>
-                        )}
-                        {sup && (
-                          <span className="block truncate pt-0.5 text-[10px] text-fg-faint">
-                            {sup.vendor_name}
-                          </span>
-                        )}
-                      </span>
-                      {/* "that tick mark is hiding the details." It was — a
-                          disc dropped on top of the corner where the stock
-                          label lives. It sits in the corner of the card now,
-                          clipped by the rounded edge, so it marks the card
-                          without landing on anything. */}
-                      {on && (
-                        <span
-                          aria-hidden
-                          className="absolute -right-5 -top-5 h-10 w-10 rotate-45 bg-brand-500"
-                        />
-                      )}
-                      {on && (
-                        <span
-                          aria-hidden
-                          className="absolute right-0.5 top-0.5 text-[10px] font-bold leading-none text-white"
-                        >
-                          ✓
-                        </span>
-                      )}
-                    </button>
-                  </SpotlightCard>
-                );
-              })}
-            </div>
-          </ClickSpark>
+          <ItemGrid
+            shown={shown}
+            supplierFor={supplierFor}
+            picked={picked}
+            onOpen={setOpenItem}
+          />
         </Sheet>
       )}
 
