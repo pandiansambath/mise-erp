@@ -35,6 +35,38 @@ async def create_vendor(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Vend
     return vendor
 
 
+async def vendor_price_rows(
+    db: AsyncSession, vendor_id: uuid.UUID, hotel_id: uuid.UUID
+) -> list[dict]:
+    """What this supplier sells us, with prices — for the download.
+
+    Scoped by hotel on the ITEM as well as the vendor: a vendor id from another
+    tenant must not be able to read an item list through this.
+    """
+    from app.inventory.models import Item
+
+    rows = (
+        await db.execute(
+            select(VendorItem, Item)
+            .join(Item, Item.id == VendorItem.item_id)
+            .where(VendorItem.vendor_id == vendor_id, Item.hotel_id == hotel_id)
+            .order_by(Item.category.nulls_last(), Item.name)
+        )
+    ).all()
+    return [
+        {
+            "item": it.name,
+            "category": (it.category or "").strip() or "Other",
+            "unit": it.unit,
+            "price": vi.price_per_unit,
+            "preferred": bool(vi.is_preferred),
+            "updated": str(vi.last_updated),
+            "notes": vi.notes,
+        }
+        for vi, it in rows
+    ]
+
+
 async def get_vendor(db: AsyncSession, vendor_id: uuid.UUID, hotel_id: uuid.UUID) -> Vendor | None:
     vendor = await db.get(Vendor, vendor_id)
     if vendor is None or vendor.hotel_id != hotel_id:
