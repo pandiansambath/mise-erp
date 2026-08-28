@@ -504,6 +504,291 @@ async def team_and_access(db: AsyncSession, user: User, args: dict) -> dict:
 
 
 
+
+async def vendor_detail(db: AsyncSession, user: User, args: dict) -> dict:
+    """One supplier in full: how to reach them, terms, and what they supply."""
+    from sqlalchemy import func as _func
+    from sqlalchemy import select as _select
+
+    from app.inventory.models import Item
+    from app.vendors.models import Vendor, VendorItem
+
+    if not has_permission(user.role, "vendors:read"):
+        return {"error": "You don't have access to suppliers."}
+
+    name = (args.get("vendor") or "").strip()
+    if not name:
+        return {"error": "Which supplier?"}
+
+    vendor = (
+        await db.execute(
+            _select(Vendor)
+            .where(
+                Vendor.hotel_id == user.hotel_id,
+                _func.lower(Vendor.name).like(f"%{name.lower()}%"),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if vendor is None:
+        return {"error": f"No supplier matching {name!r}."}
+
+    rows = (
+        await db.execute(
+            _select(VendorItem, Item.name, Item.unit)
+            .join(Item, Item.id == VendorItem.item_id)
+            .where(VendorItem.vendor_id == vendor.id)
+            .order_by(Item.name)
+            .limit(80)
+        )
+    ).all()
+
+    return {
+        "name": vendor.name,
+        "category": vendor.category,
+        "contact": vendor.contact_person,
+        "mobile": vendor.mobile,
+        "email": vendor.email,
+        "address": vendor.address,
+        "payment_type": vendor.payment_type,
+        "payment_frequency": vendor.payment_frequency,
+        "supplies": [
+            {
+                "item": iname,
+                "price": float(vi.price_per_unit or 0),
+                "unit": unit,
+                "preferred": bool(vi.is_preferred),
+                "updated": str(vi.last_updated),
+            }
+            for vi, iname, unit in rows
+        ],
+        "items_count": len(rows),
+    }
+
+
+async def price_comparison(db: AsyncSession, user: User, args: dict) -> dict:
+    """Who sells this item, at what price, cheapest first.
+
+    "which vendor is cheapest for guava" had no tool at all — it was answered by
+    guessing at SQL, which is how the assistant once said an item had no
+    suppliers when five of them stocked it.
+    """
+    from sqlalchemy import func as _func
+    from sqlalchemy import select as _select
+
+    from app.inventory.models import Item
+    from app.vendors.models import Vendor, VendorItem
+
+    if not has_permission(user.role, "vendors:read"):
+        return {"error": "You don't have access to supplier prices."}
+
+    name = (args.get("item") or "").strip()
+    if not name:
+        return {"error": "Which item?"}
+
+    item = (
+        await db.execute(
+            _select(Item)
+            .where(
+                Item.hotel_id == user.hotel_id,
+                _func.lower(Item.name).like(f"%{name.lower()}%"),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        return {"error": f"No item matching {name!r}."}
+
+    rows = (
+        await db.execute(
+            _select(VendorItem, Vendor.name)
+            .join(Vendor, Vendor.id == VendorItem.vendor_id)
+            .where(VendorItem.item_id == item.id, Vendor.hotel_id == user.hotel_id)
+            .order_by(VendorItem.price_per_unit)
+        )
+    ).all()
+
+    offers = [
+        {
+            "vendor": vname,
+            "price": float(vi.price_per_unit or 0),
+            "preferred": bool(vi.is_preferred),
+            "updated": str(vi.last_updated),
+            "notes": vi.notes,
+        }
+        for vi, vname in rows
+    ]
+    cheapest = offers[0] if offers else None
+    chosen = next((o for o in offers if o["preferred"]), None)
+    saving = None
+    if cheapest and chosen and chosen["price"] > cheapest["price"]:
+        saving = round(chosen["price"] - cheapest["price"], 2)
+
+    return {
+        "item": item.name,
+        "unit": item.unit,
+        "offers": offers,
+        "cheapest": cheapest,
+        "currently_chosen": chosen,
+        "saving_per_unit_if_switched": saving,
+        "note": "Nobody is listed as supplying this yet." if not offers else None,
+    }
+
+
+async def price_changes(db: AsyncSession, user: User, args: dict) -> dict:
+    """What suppliers have changed their prices to, and when."""
+    from datetime import datetime, time, timedelta
+
+    from sqlalchemy import select as _select
+
+    from app.core.timezones import hotel_today
+    from app.hotels.models import Hotel as _Hotel
+    from app.inventory.models import Item
+    from app.vendors.models import PriceHistory, Vendor
+
+    if not has_permission(user.role, "vendors:read"):
+        return {"error": "You don't have access to supplier prices."}
+
+    hotel = await db.get(_Hotel, user.hotel_id)
+    today = hotel_today(hotel)
+    start = _d(args.get("date_from"), today - timedelta(days=60))
+
+    rows = (
+        await db.execute(
+            _select(PriceHistory, Item.name, Vendor.name)
+            .join(Item, Item.id == PriceHistory.item_id)
+            .join(Vendor, Vendor.id == PriceHistory.vendor_id, isouter=True)
+            .where(
+                PriceHistory.hotel_id == user.hotel_id,
+                PriceHistory.created_at >= datetime.combine(start, time.min),
+            )
+            .order_by(PriceHistory.created_at.desc())
+            .limit(50)
+        )
+    ).all()
+
+    changes = [
+        {
+            "item": iname,
+            "vendor": vname,
+            "from": float(ph.old_price) if ph.old_price is not None else None,
+            "to": float(ph.new_price or 0),
+            "when": str(ph.created_at.date()),
+            "how": ph.source,
+        }
+        for ph, iname, vname in rows
+    ]
+    risen = [c for c in changes if c["from"] is not None and c["to"] > c["from"]]
+    return {
+        "since": str(start),
+        "changes": changes,
+        "gone_up": len(risen),
+        "note": "No price changes recorded in that period." if not changes else None,
+    }
+
+
+async def indents(db: AsyncSession, user: User, args: dict) -> dict:
+    """Purchase requests — what the kitchen has asked to be bought."""
+    from sqlalchemy import select as _select
+
+    from app.inventory.models import Item
+    from app.purchasing.models import Indent, IndentItem
+
+    if not has_permission(user.role, "purchasing:read"):
+        return {"error": "You don't have access to purchasing."}
+
+    heads = (
+        (
+            await db.execute(
+                _select(Indent)
+                .where(Indent.hotel_id == user.hotel_id)
+                .order_by(Indent.date.desc())
+                .limit(10)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    out = []
+    for ind in heads:
+        lines = (
+            await db.execute(
+                _select(IndentItem, Item.name, Item.unit)
+                .join(Item, Item.id == IndentItem.item_id)
+                .where(IndentItem.indent_id == ind.id)
+                .limit(40)
+            )
+        ).all()
+        out.append(
+            {
+                "date": str(ind.date),
+                "status": ind.status,
+                "notes": ind.notes,
+                "items": [
+                    {"item": nm, "qty": float(li.required_qty or 0), "unit": un}
+                    for li, nm, un in lines
+                ],
+            }
+        )
+    return {"indents": out, "count": len(out)}
+
+
+async def stock_history(db: AsyncSession, user: User, args: dict) -> dict:
+    """Everything that moved one item: deliveries, usage, waste, corrections."""
+    from sqlalchemy import func as _func
+    from sqlalchemy import select as _select
+
+    from app.inventory.models import Item, StockMovement
+    from app.vendors.models import Vendor
+
+    if not has_permission(user.role, "inventory:read"):
+        return {"error": "You don't have access to stock."}
+
+    name = (args.get("item") or "").strip()
+    if not name:
+        return {"error": "Which item?"}
+
+    item = (
+        await db.execute(
+            _select(Item)
+            .where(
+                Item.hotel_id == user.hotel_id,
+                _func.lower(Item.name).like(f"%{name.lower()}%"),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        return {"error": f"No item matching {name!r}."}
+
+    rows = (
+        await db.execute(
+            _select(StockMovement, Vendor.name)
+            .join(Vendor, Vendor.id == StockMovement.vendor_id, isouter=True)
+            .where(StockMovement.item_id == item.id)
+            .order_by(StockMovement.created_at.desc())
+            .limit(40)
+        )
+    ).all()
+
+    return {
+        "item": item.name,
+        "unit": item.unit,
+        "in_stock": float(item.current_stock or 0),
+        "movements": [
+            {
+                "what": mv.movement_type,
+                "quantity": float(mv.quantity or 0),
+                "unit_cost": float(mv.unit_cost) if mv.unit_cost is not None else None,
+                "vendor": vname,
+                "when": str(mv.created_at.date()),
+                "notes": mv.notes,
+            }
+            for mv, vname in rows
+        ],
+    }
+
+
 async def rota_shifts(db: AsyncSession, user: User, args: dict) -> dict:
     """Who is rota'd on, by name, for a day or a range.
 
@@ -1041,6 +1326,75 @@ TOOLS: list[dict] = [
                 "sql": {"type": "string", "description": "A single SELECT over ai_* views"}
             },
             "required": ["sql"],
+        },
+    },
+    {
+        "name": "vendor_detail",
+        "description": (
+            "ONE supplier in full: phone, email, contact, payment terms, and "
+            "every item they supply with the price. Use for 'what is Farm2Land's "
+            "number', 'what does RUDRA supply', 'when do we pay them'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "vendor": {"type": "string", "description": "Supplier name, matched loosely"}
+            },
+            "required": ["vendor"],
+        },
+    },
+    {
+        "name": "price_comparison",
+        "description": (
+            "Who sells an item and at what price, CHEAPEST FIRST, plus which one "
+            "is currently chosen and what switching would save. Use for 'which "
+            "vendor is cheapest for guava', 'who should I buy tomatoes from', "
+            "'am I overpaying for onions'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item": {"type": "string", "description": "Item name, matched loosely"}
+            },
+            "required": ["item"],
+        },
+    },
+    {
+        "name": "price_changes",
+        "description": (
+            "Supplier prices that have moved, newest first, with what they were "
+            "before. Use for 'what has gone up', 'have prices changed', 'why is "
+            "my food cost up'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"date_from": {"type": "string", "description": "YYYY-MM-DD"}},
+        },
+    },
+    {
+        "name": "indents",
+        "description": (
+            "Purchase requests raised by the kitchen, with their lines. Use for "
+            "'what has been requested', 'any indents waiting', 'what did the "
+            "kitchen ask for'. Different from purchase_orders, which is what has "
+            "actually been ordered from a supplier."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "stock_history",
+        "description": (
+            "Everything that moved one item - deliveries in, usage out, waste, "
+            "corrections - with dates, costs and which supplier. Use for 'where "
+            "did the onions go', 'when did we last get rice', 'why is this "
+            "item's cost different'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item": {"type": "string", "description": "Item name, matched loosely"}
+            },
+            "required": ["item"],
         },
     },
     {
@@ -1597,6 +1951,11 @@ EXECUTORS: dict[str, Executor] = {
     "team_and_access": team_and_access,
     "staff_today": staff_today,
     "rota_shifts": rota_shifts,
+    "vendor_detail": vendor_detail,
+    "price_comparison": price_comparison,
+    "price_changes": price_changes,
+    "indents": indents,
+    "stock_history": stock_history,
     "attendance_summary": attendance_summary,
     "payroll_summary": payroll_summary,
     "purchase_orders": purchase_orders,
@@ -1625,6 +1984,11 @@ EXECUTORS: dict[str, Executor] = {
 TOOL_PERMS: dict[str, str] = {
     "staff_today": "employees:read",
     "rota_shifts": "employees:read",
+    "vendor_detail": "vendors:read",
+    "price_comparison": "vendors:read",
+    "price_changes": "vendors:read",
+    "indents": "purchasing:read",
+    "stock_history": "inventory:read",
     "attendance_summary": "employees:read",
     "payroll_summary": "payroll:read",
     "purchase_orders": "purchasing:read",
