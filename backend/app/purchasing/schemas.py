@@ -55,7 +55,15 @@ class POItemOut(BaseModel):
     #: "a bottle holds 30 piece" — only when the item comes in packs.
     pack_note: str | None = None
     ordered_qty: Decimal
+    #: The quantity said as the PACK he ordered — "2 boxes" rather than "20 kg".
+    #
+    # Declared here because a field this schema does not name is DROPPED from
+    # the response without a word: the service was already returning these and
+    # the screen could never see them, so the PDF said "2 boxes" while the page
+    # behind it said "20 kg". Two numbers for one order is worse than either.
+    ordered_as: str | None = None
     received_qty: Decimal
+    received_as: str | None = None
     unit_price: Decimal
     line_total: Decimal
 

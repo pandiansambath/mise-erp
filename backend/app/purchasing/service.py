@@ -440,6 +440,28 @@ async def generate_pos(db: AsyncSession, indent: Indent) -> dict:
     return {"purchase_orders": created, "skipped_items": skipped}
 
 
+def _plural(name: str, one: bool) -> str:
+    """"box" -> "boxes", not "boxs".
+
+    The first cut appended an "s" and printed "2 boxs" on a document that goes
+    to a supplier. Sloppy spelling on the one page that leaves the building
+    reads as carelessness about the order itself.
+
+    Names a restaurant actually uses are regular: box, case, crate, punnet,
+    tray, bunch, jar. The two English rules that cover them are enough, and a
+    name already ending in "s" is left alone rather than guessed at.
+    """
+    name = (name or "").strip()
+    if one or not name:
+        return name
+    low = name.lower()
+    if low.endswith(("s", "x", "z", "ch", "sh")):
+        return name + "es"
+    if low.endswith("y") and len(low) > 1 and low[-2] not in "aeiou":
+        return name[:-1] + "ies"
+    return name + "s"
+
+
 # ── Purchase orders ───────────────────────────────────────────────────────────
 async def get_po(db: AsyncSession, po_id: uuid.UUID, hotel_id: uuid.UUID) -> PurchaseOrder | None:
     po = await db.get(PurchaseOrder, po_id)
@@ -490,7 +512,7 @@ async def po_items(db: AsyncSession, po_id: uuid.UUID) -> list[dict]:
             size = packs.base_size(levels, lv.position)
             if size and size > 1 and q % size == 0:
                 count = q / size
-                return f"{packs.tidy(count)} {lv.name}{'' if count == 1 else 's'}"
+                return f"{packs.tidy(count)} {_plural(lv.name, count == 1)}"
         return None
 
     def note(item: Item) -> str | None:

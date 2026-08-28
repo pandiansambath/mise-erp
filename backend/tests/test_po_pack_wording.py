@@ -105,3 +105,40 @@ async def test_the_pdf_carries_the_pack_and_none_of_the_money(db, hotel):
     from app.purchasing.pdf import _qty
 
     assert _qty(rows[0], "ordered_qty") == "2 packs"
+
+
+@pytest.mark.parametrize(
+    "name,count,want",
+    [
+        ("box", 2, "boxes"),      # "2 boxs" went out on a real PO
+        ("case", 2, "cases"),
+        ("bunch", 3, "bunches"),
+        ("caddy", 2, "caddies"),
+        ("tray", 2, "trays"),     # vowel + y stays a plain "s"
+        ("pack", 1, "pack"),      # one of anything is not pluralised
+        ("dish", 4, "dishes"),
+    ],
+)
+def test_pack_names_are_pluralised_like_english(name, count, want):
+    """The PDF goes to the supplier. "2 boxs" reads as carelessness."""
+    from app.purchasing.service import _plural
+
+    assert _plural(name, count == 1) == want
+
+
+@pytest.mark.asyncio
+async def test_the_api_carries_the_pack_wording_too(client, db, hotel, make_user, auth_header):
+    """The PDF said "2 boxes" while the screen behind it said "20 kg".
+
+    `POItemOut` never declared `ordered_as`, and a field a response_model does
+    not name is dropped without a word — so the service had been returning it
+    and nothing could see it. Two numbers for one order is worse than either.
+    """
+    po, _, _ = await _ordered(db, hotel, Decimal("20"))
+    owner = await make_user("buyer2@x.com", "SUPER_ADMIN")
+
+    r = await client.get(f"/api/purchasing/purchase-orders/{po.id}", headers=auth_header(owner))
+
+    assert r.status_code == 200, r.text
+    line = r.json()["items"][0]
+    assert line["ordered_as"] == "2 packs", "the screen cannot see what the PDF prints"
