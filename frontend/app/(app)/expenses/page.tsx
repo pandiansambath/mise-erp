@@ -360,48 +360,6 @@ export default function ExpensesPage() {
             while the form stays pinned beside it. */}
         <div className="order-2 min-w-0 space-y-6 lg:order-1 lg:col-span-2">
 
-        {donutSegs.length > 0 && (
-          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card className="mise-feel">
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-sm font-semibold text-fg">Where it went</h2>
-                <span className="text-xs text-fg-faint">{rangeCaption({ from, to })}</span>
-              </div>
-              <Donut
-                segments={donutSegs}
-                centerValue={format(summary.grand_total)}
-                centerLabel="total spend"
-                className="mt-4"
-                formatValue={(v) => format(String(v))}
-              />
-            </Card>
-            <Card className="mise-feel">
-              <div className="mise-well mb-4 rounded-xl p-4">
-                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                  Fixed bills vs variable costs — each square is 1%
-                </p>
-                <Waffle
-                  formatValue={(v) => format(String(v))}
-                  segments={[
-                    { label: "Variable (moves with sales)", value: parseFloat(summary.variable_total) || 0, color: "#f59e0b" },
-                    { label: "Fixed (arrives regardless)", value: parseFloat(summary.fixed_total) || 0, color: "#94a3b8" },
-                  ].filter((x) => x.value > 0)}
-                />
-              </div>
-              <h2 className="text-sm font-semibold text-fg">The expense map</h2>
-              <p className="text-xs text-fg-faint">bigger box = more money — spot the heavy categories in one glance</p>
-              <Treemap
-                className="mt-4"
-                items={summary.by_category.map((c) => ({
-                  label: c.category_name,
-                  value: parseFloat(c.total) || 0,
-                }))}
-                formatValue={(v) => format(String(v))}
-              />
-            </Card>
-          </div>
-        )}
-
         {recurring.length > 0 && (
           <Card id="recurring-hint" className="mise-feel mt-6 scroll-mt-24 border-copper-500/25">
             <h2 className="text-sm font-semibold text-fg">🔁 These look like standing bills</h2>
@@ -601,6 +559,53 @@ export default function ExpensesPage() {
               </table>
             </div>
           </Card>
+
+        {/* The breakdown charts sit at the BOTTOM of this column.
+            "core numbers first, pie charts last." The totals answer "what did
+            we spend"; the entries are what you came to read or correct. A pie
+            of the split is worth having and worth having LAST. */}
+        {donutSegs.length > 0 && (
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card className="mise-feel">
+              <div className="flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold text-fg">Where it went</h2>
+                <span className="text-xs text-fg-faint">{rangeCaption({ from, to })}</span>
+              </div>
+              <Donut
+                segments={donutSegs}
+                centerValue={format(summary.grand_total)}
+                centerLabel="total spend"
+                className="mt-4"
+                formatValue={(v) => format(String(v))}
+              />
+            </Card>
+            <Card className="mise-feel">
+              <div className="mise-well mb-4 rounded-xl p-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Fixed bills vs variable costs — each square is 1%
+                </p>
+                <Waffle
+                  formatValue={(v) => format(String(v))}
+                  segments={[
+                    { label: "Variable (moves with sales)", value: parseFloat(summary.variable_total) || 0, color: "#f59e0b" },
+                    { label: "Fixed (arrives regardless)", value: parseFloat(summary.fixed_total) || 0, color: "#94a3b8" },
+                  ].filter((x) => x.value > 0)}
+                />
+              </div>
+              <h2 className="text-sm font-semibold text-fg">The expense map</h2>
+              <p className="text-xs text-fg-faint">bigger box = more money — spot the heavy categories in one glance</p>
+              <Treemap
+                className="mt-4"
+                items={summary.by_category.map((c) => ({
+                  label: c.category_name,
+                  value: parseFloat(c.total) || 0,
+                }))}
+                formatValue={(v) => format(String(v))}
+              />
+            </Card>
+          </div>
+        )}
+
         </div>
 
         {/* RIGHT — the form. Pinned, and level with the top of the page:

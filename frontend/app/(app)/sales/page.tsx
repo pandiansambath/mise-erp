@@ -424,72 +424,6 @@ export default function SalesPage() {
         />
       </div>
 
-      {channelSegs.length > 0 && (
-        <Card className="mise-feel mt-6">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-fg">Takings by channel</h2>
-            <span className="text-xs text-fg-faint">{day}</span>
-          </div>
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-            <Donut
-              segments={channelSegs}
-              centerValue={format(summary.totals.gross)}
-              centerLabel="gross today"
-              className="mt-4"
-              formatValue={(v) => format(String(v))}
-            />
-            {methodSegs.length > 0 && (
-              <div className="mise-well mt-4 rounded-xl p-4">
-                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                  How it was paid — each square is 1%
-                </p>
-                <Waffle segments={methodSegs} formatValue={(v) => format(String(v))} />
-              </div>
-            )}
-          </div>
-          {chanTrend && Object.keys(chanTrend).length > 0 && (
-            <div className="mt-5 border-t border-line pt-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                Each channel&apos;s week — last 7 days
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(chanTrend)
-                  .sort((a, b) => b[1][6] - a[1][6])
-                  .slice(0, 6)
-                  .map(([name, data]) => (
-                    <div key={name} className="mise-well mise-feel rounded-xl p-3">
-                      <div className="flex items-baseline gap-2">
-                        <span className="truncate text-sm font-medium text-fg">{name}</span>
-                        <span className="mb-1 flex-1 border-b border-dotted border-line" />
-                        <span className="font-mono text-sm text-fg-soft">{format(String(data[6]))}</span>
-                      </div>
-                      <Sparkline
-                        data={data}
-                        labels={trendLabels}
-                        formatValue={(v) => format(String(v))}
-                        height={26}
-                        className="mt-2 h-[26px] w-full"
-                      />
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {heatDays.length > 1 && (
-        <Card className="mise-feel mt-6">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-fg">Takings rhythm — last 10 weeks</h2>
-            <span className="text-xs text-fg-faint">darker = bigger day · hover for the figure</span>
-          </div>
-          <div className="mise-well mt-4 overflow-x-auto rounded-xl p-4">
-            <CalendarHeat days={heatDays} formatValue={(v) => format(String(v))} />
-          </div>
-        </Card>
-      )}
-
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Add + lines */}
         <div className="min-w-0 lg:col-span-2">
@@ -785,6 +719,77 @@ export default function SalesPage() {
           </div>
         </Card>
       </div>
+
+      {/* The charts come AFTER the day's takings, not before them.
+          "core numbers first, pie charts last." A donut is how the day looked
+          once it is over; entering and checking the lines is what someone is
+          on this page to DO, and it was sitting below two charts and a heat
+          map before you could reach it. */}
+      {channelSegs.length > 0 && (
+        <Card className="mise-feel mt-6">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-fg">Takings by channel</h2>
+            <span className="text-xs text-fg-faint">{day}</span>
+          </div>
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <Donut
+              segments={channelSegs}
+              centerValue={format(summary.totals.gross)}
+              centerLabel="gross today"
+              className="mt-4"
+              formatValue={(v) => format(String(v))}
+            />
+            {methodSegs.length > 0 && (
+              <div className="mise-well mt-4 rounded-xl p-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  How it was paid — each square is 1%
+                </p>
+                <Waffle segments={methodSegs} formatValue={(v) => format(String(v))} />
+              </div>
+            )}
+          </div>
+          {chanTrend && Object.keys(chanTrend).length > 0 && (
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                Each channel&apos;s week — last 7 days
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(chanTrend)
+                  .sort((a, b) => b[1][6] - a[1][6])
+                  .slice(0, 6)
+                  .map(([name, data]) => (
+                    <div key={name} className="mise-well mise-feel rounded-xl p-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate text-sm font-medium text-fg">{name}</span>
+                        <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                        <span className="font-mono text-sm text-fg-soft">{format(String(data[6]))}</span>
+                      </div>
+                      <Sparkline
+                        data={data}
+                        labels={trendLabels}
+                        formatValue={(v) => format(String(v))}
+                        height={26}
+                        className="mt-2 h-[26px] w-full"
+                      />
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {heatDays.length > 1 && (
+        <Card className="mise-feel mt-6">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-fg">Takings rhythm — last 10 weeks</h2>
+            <span className="text-xs text-fg-faint">darker = bigger day · hover for the figure</span>
+          </div>
+          <div className="mise-well mt-4 overflow-x-auto rounded-xl p-4">
+            <CalendarHeat days={heatDays} formatValue={(v) => format(String(v))} />
+          </div>
+        </Card>
+      )}
 
       {isSuper && (
         <ListManager
