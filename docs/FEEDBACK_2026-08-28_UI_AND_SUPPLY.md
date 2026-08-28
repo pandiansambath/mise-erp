@@ -2,13 +2,13 @@
 
 | # | What he asked for | State |
 |---|---|---|
-| 1 | Every page to follow the **Roles & Access / Purchasing** UI. Sales + Expenses: core numbers FIRST, pie charts LAST | ◑ built — Sales & Expenses reordered (totals → work → charts). The wider style sweep is still open |
-| 2 | Change an item's vendor **from the Inventory screen** | ✅ built — supplier list in the item's detail sheet, per-base price, one tap to switch |
-| 3 | Purchasing: **show by** category / vendor / price high-low | ✅ built — three buttons above the pad; price mode ranks per BASE unit |
+| 1 | Every page to follow the **Roles & Access / Purchasing** UI. Sales + Expenses: core numbers FIRST, pie charts LAST | ◑ **verified live** — Sales & Expenses reordered (totals → work → charts). The wider style sweep is still open |
+| 2 | Change an item's vendor **from the Inventory screen** | ✅ **verified live** — 4 suppliers listed cheapest-first in the sheet, ★ on the chosen one |
+| 3 | Purchasing: **show by** category / vendor / price high-low | ✅ **verified live** — 5 supplier tiles, 66 items ranked Saffron £1,728/kg down |
 | 4 | Keep edit-in-place everywhere it makes sense | ◑ inventory supplier switch is in place; nothing removed anywhere |
-| 5 | Purchasing: showing by vendor → move that vendor's **whole list into the basket** | ✅ built — "Add all" on each supplier tile, quantities topped up to minimum |
-| 6 | Vendors: **download** a vendor's items with prices | ✅ built — `GET /vendors/{id}/price-list.xlsx`, hotel-scoped on the item |
-| 7 | PO / indent PDF: **no prices**; and show the PACK he ordered ("1 pack"), not "1 litre" | ✅ built — 10 kg → "1 pack", 20 → "2 packs", 15 → stays "15 kg" |
+| 5 | Purchasing: showing by vendor → move that vendor's **whole list into the basket** | ✅ **verified live** — basket went 1 → 49 on one tap |
+| 6 | Vendors: **download** a vendor's items with prices | ✅ **verified live** — real xlsx off his tenant, 48 items with prices |
+| 7 | PO / indent PDF: **no prices**; and show the PACK he ordered ("1 pack"), not "1 litre" | ✅ **verified live** — read PO-2026-066's PDF: "2 boxes", no prices |
 
 ## 7 is a correctness bug, not a preference
 
@@ -40,6 +40,27 @@ Fixed by writing the tests that were missing rather than by moving the floor:
   since that id travels in the URL.
 
 **Rule for me:** watch every deploy to green before saying a thing shipped.
+
+## Two bugs the tests missed and the live site showed
+
+1. **"2 boxs".** PO-2026-066 really printed that. My pluraliser appended an "s".
+   Fixed with the two English rules that cover every pack name a kitchen uses.
+2. **The screen could not see the packs.** `POItemOut` never declared
+   `ordered_as`, and a field a response_model does not name is dropped in
+   silence — the PDF said "2 boxes" while the page behind it said "20 kg".
+   Fourth time this trap has cost a bug. The new test asserts through the
+   ENDPOINT, because the service was right both times.
+
+## And the test itself lied twice
+
+The layout check passed while verifying nothing: it looked for a chart, found
+none (the donut is not rendered on a quiet day), skipped its own assertion and
+reported green. Then it measured `body.scrollHeight`, which is always the
+viewport here because the app scrolls an inner container.
+
+Now it compares DOM order — which is what "comes first on the page" means —
+and fails loudly if either marker is missing. Same class of mistake as
+"page scrolls 0px" reading the same for *must not* and *cannot*.
 
 ## Still open
 
