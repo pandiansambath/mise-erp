@@ -464,6 +464,35 @@ async def po_items(db: AsyncSession, po_id: uuid.UUID) -> list[dict]:
     # without the reader having to know the chain.
     chains = await packs_svc.levels_for(db, [it.id for _, it in pairs])
 
+    def in_packs(item: Item, qty) -> str | None:
+        """The quantity as the PACK he ordered, not as base units.
+
+        "suppose if we order 1 pack (which is 10kg) means in the PDF we need to
+        see 1 pack". The order is stored in base units, so a pack of ten kilos
+        is kept as 10 and printed as "10 kg" — which is the same amount and the
+        wrong instruction. The supplier reads this document and fills it.
+
+        Only exact multiples are converted: 15 kg against a 10 kg pack is one
+        and a half packs, and "1.5 pack" is a worse thing to hand a supplier
+        than "15 kg".
+        """
+        from decimal import Decimal as _D
+
+        levels = packs_svc.as_levels(chains.get(item.id, []))
+        if not levels or qty in (None, ""):
+            return None
+        try:
+            q = _D(str(qty))
+        except Exception:  # noqa: BLE001 - a malformed quantity is not worth a 500
+            return None
+        # Biggest pack first: a case reads better than twelve boxes.
+        for lv in sorted(levels, key=lambda x: x.position, reverse=True):
+            size = packs.base_size(levels, lv.position)
+            if size and size > 1 and q % size == 0:
+                count = q / size
+                return f"{packs.tidy(count)} {lv.name}{'' if count == 1 else 's'}"
+        return None
+
     def note(item: Item) -> str | None:
         levels = packs_svc.as_levels(chains.get(item.id, []))
         if not levels:
@@ -480,6 +509,10 @@ async def po_items(db: AsyncSession, po_id: uuid.UUID) -> list[dict]:
             "category": (it.category or "").strip() or "Other",
             "unit": it.unit,
             "pack_note": note(it),
+            # What to PRINT for the quantity: "1 pack" when it divides evenly,
+            # otherwise the base units it is actually stored in.
+            "ordered_as": in_packs(it, pi.ordered_qty),
+            "received_as": in_packs(it, pi.received_qty),
             "ordered_qty": pi.ordered_qty,
             "received_qty": pi.received_qty,
             "unit_price": pi.unit_price,

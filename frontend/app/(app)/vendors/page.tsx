@@ -740,8 +740,26 @@ export default function VendorsPage() {
           else setSheetTab(k as typeof sheetTab);
         }}
         actions={
-          canWrite && selectedVendor ? (
+          selectedVendor ? (
             <>
+            {/* "for each vendor I need one download feature — I can download
+                vendor items or items with price details." Available to anyone
+                who can READ suppliers: taking a price list to a negotiation is
+                not an edit. */}
+            <button
+              onClick={() =>
+                downloadFile(
+                  `/vendors/${selectedVendor.id}/price-list.xlsx`,
+                  `${selectedVendor.name} price list.xlsx`,
+                )
+              }
+              title="Download this supplier's items and prices"
+              className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+            >
+              ⬇ Price list
+            </button>
+            {canWrite && (
+              <>
             <button
               onClick={() => editHere(selectedVendor)}
               className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
@@ -754,6 +772,8 @@ export default function VendorsPage() {
             >
               {selectedVendor.is_active ? "Deactivate" : "Reactivate"}
             </button>
+              </>
+            )}
             </>
           ) : null
         }

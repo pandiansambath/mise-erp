@@ -11,6 +11,22 @@ MUTED = (100, 116, 139)
 LIGHT = (241, 245, 249)
 
 
+def _qty(it: dict, key: str) -> str:
+    """What to print in a quantity column.
+
+    "if we order 1 pack (which is 10kg) then in the PDF we need to see 1 pack."
+    The order is STORED in base units, so a ten-kilo pack is kept as 10 and was
+    printed as "10 kg" — the same amount, and the wrong instruction for the
+    person filling it. `ordered_as` carries the pack wording when the quantity
+    divides evenly into one; otherwise we fall back to the base units, which is
+    honest rather than rounded.
+    """
+    packed = it.get(f"{key.split('_')[0]}_as")
+    if packed:
+        return str(packed)
+    return _q(it.get(key), it.get("unit", ""))
+
+
 def _q(value, unit: str = "") -> str:
     """A quantity as a person writes it. Numeric(12,3) hands over "5.000", and
     a real user said it plainly: "no need like 1.5000, want like 1.5 kilo"."""
@@ -37,7 +53,8 @@ def generate_po_pdf(
     """The purchase order. `received=True` renders the GOODS RECEIVED NOTE instead: an
     extra 'Received' column beside 'Ordered' (short/over qty in red) + the receive note,
     so what was ordered vs what actually arrived stays on record."""
-    cur = hotel.base_currency
+    # No currency on this document any more: the PO carries what to bring,
+    # not what it costs.
     pdf = FPDF()
     pdf.add_page()
 
@@ -66,21 +83,20 @@ def generate_po_pdf(
     pdf.set_fill_color(*DARK)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 10)
+    # NO PRICES. His instruction, and it is the right one for a document that
+    # goes to a supplier to be FILLED: what they need is what to bring. The
+    # money lives in the app, where it can be checked against the invoice.
     if received:
-        pdf.cell(72, 9, text="  Item", fill=True)
-        pdf.cell(24, 9, text="Ordered", align="R", fill=True)
-        pdf.cell(24, 9, text="Received", align="R", fill=True)
-        pdf.cell(30, 9, text="Unit price", align="R", fill=True)
+        pdf.cell(110, 9, text="  Item", fill=True)
+        pdf.cell(36, 9, text="Ordered", align="R", fill=True)
         pdf.cell(
-            32, 9, text="Line total  ", align="R", fill=True,
+            36, 9, text="Received  ", align="R", fill=True,
             new_x=XPos.LMARGIN, new_y=YPos.NEXT,
         )
     else:
-        pdf.cell(86, 9, text="  Item", fill=True)
-        pdf.cell(28, 9, text="Qty", align="R", fill=True)
-        pdf.cell(34, 9, text="Unit price", align="R", fill=True)
+        pdf.cell(140, 9, text="  Item", fill=True)
         pdf.cell(
-            34, 9, text="Line total  ", align="R", fill=True,
+            42, 9, text="Quantity  ", align="R", fill=True,
             new_x=XPos.LMARGIN, new_y=YPos.NEXT,
         )
 
@@ -108,35 +124,32 @@ def generate_po_pdf(
         fill = i % 2 == 1
         pdf.set_fill_color(*LIGHT)
         if received:
-            pdf.cell(72, 8, text=_s(f"  {it['item_name']}"), fill=fill)
-            pdf.cell(24, 8, text=_q(it["ordered_qty"], it.get("unit", "")), align="R", fill=fill)
+            pdf.cell(110, 8, text=_s(f"  {it['item_name']}"), fill=fill)
+            pdf.cell(36, 8, text=_s(_qty(it, "ordered_qty")), align="R", fill=fill)
             if str(it["received_qty"]) != str(it["ordered_qty"]):
                 pdf.set_text_color(200, 50, 50)  # short/over delivery stands out
-            pdf.cell(24, 8, text=_q(it["received_qty"], it.get("unit", "")), align="R", fill=fill)
-            pdf.set_text_color(*DARK)
-            pdf.cell(30, 8, text=f"{cur} {it['unit_price']}", align="R", fill=fill)
             pdf.cell(
-                32, 8, text=f"{cur} {it['line_total']}  ", align="R", fill=fill,
+                36, 8, text=_s(_qty(it, "received_qty") + "  "), align="R", fill=fill,
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT,
             )
+            pdf.set_text_color(*DARK)
         else:
-            pdf.cell(86, 8, text=_s(f"  {it['item_name']}"), fill=fill)
-            pdf.cell(28, 8, text=_q(it["ordered_qty"], it.get("unit", "")), align="R", fill=fill)
-            pdf.cell(34, 8, text=f"{cur} {it['unit_price']}", align="R", fill=fill)
+            pdf.cell(140, 8, text=_s(f"  {it['item_name']}"), fill=fill)
             pdf.cell(
-                34, 8, text=f"{cur} {it['line_total']}  ", align="R", fill=fill,
+                42, 8, text=_s(_qty(it, "ordered_qty") + "  "), align="R", fill=fill,
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT,
             )
 
+    # A line count rather than a money total. The prices are deliberately not on
+    # this document, so a total would be the only figure on it and the most
+    # confusing one — a number with nothing to add up to.
     pdf.set_x(14)
     pdf.set_fill_color(*BRAND)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 11)
-    total_label_w = 150 if received else 148
-    total_val_w = 32 if received else 34
-    pdf.cell(total_label_w, 10, text="  Total (as ordered)" if received else "  Total", fill=True)
+    pdf.cell(140 if not received else 110, 10, text=f"  {len(items)} items", fill=True)
     pdf.cell(
-        total_val_w, 10, text=f"{cur} {po.total_amount}  ", align="R", fill=True,
+        42 if not received else 72, 10, text="  ", align="R", fill=True,
         new_x=XPos.LMARGIN, new_y=YPos.NEXT,
     )
 

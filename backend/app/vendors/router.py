@@ -95,6 +95,69 @@ def _pl_file(content: bytes, media_type: str, ext: str) -> Response:
     )
 
 
+@router.get("/{vendor_id}/price-list.xlsx")
+async def vendor_price_list(
+    vendor_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> Response:
+    """Everything this supplier sells us, with prices, as a spreadsheet.
+
+    "for each vendor I need one download feature — I can download vendor items
+     or items with price details."
+
+    He tried to get this through the voice first and was told it could not be
+    seen, which was true: there was no way to get it out of the app at all.
+    """
+    from openpyxl import Workbook
+
+    from app.core.template_io import style_table
+
+    vendor = await service.get_vendor(db, vendor_id, user.hotel_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Supplier not found")
+
+    rows = await service.vendor_price_rows(db, vendor_id, user.hotel_id)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Price list"
+    headers = ["Item", "Category", "Unit", "Price", "Chosen", "Last updated", "Notes"]
+    for i, r in enumerate(rows):
+        for c, val in enumerate(
+            [
+                r["item"],
+                r["category"],
+                r["unit"],
+                float(r["price"] or 0),
+                "yes" if r["preferred"] else "",
+                r["updated"],
+                r["notes"] or "",
+            ],
+            start=1,
+        ):
+            ws.cell(row=4 + i, column=c, value=val)
+    style_table(
+        ws,
+        title=f"{vendor.name} — price list",
+        subtitle=f"{len(rows)} items - exported from DineAI",
+        headers=headers,
+        n_rows=max(len(rows), 1),
+        widths=[34, 18, 10, 12, 10, 14, 30],
+        right_cols={4},
+    )
+    from io import BytesIO
+
+    buf = BytesIO()
+    wb.save(buf)
+    safe = "".join(ch for ch in vendor.name if ch.isalnum() or ch in " -_").strip() or "vendor"
+    return Response(
+        content=buf.getvalue(),
+        media_type=XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{safe} price list.xlsx"'},
+    )
+
+
 @router.get("/price-list-template.xlsx")
 async def price_list_template(user: User = Depends(require("vendors:read"))) -> Response:
     return _pl_file(template_io.template_xlsx(PRICE_LIST_TEMPLATE), XLSX_MIME, "xlsx")
