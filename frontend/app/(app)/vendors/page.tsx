@@ -659,13 +659,23 @@ export default function VendorsPage() {
               <button
                 key={v.id}
                 type="button"
+                data-testid="vendor-card"
                 onClick={() => selectVendor(v.id)}
-                className={`mise-feel rounded-2xl border p-4 text-left transition duration-200 ${
-                  sel
-                    ? "border-brand-500 bg-brand-400/10 shadow-lg shadow-brand-600/20"
-                    : "mise-raised border-line"
+                /* The reference card. These wore `mise-raised` plus a coloured
+                   drop shadow when selected — light thrown ON them from
+                   outside, where /staff and /purchasing press theirs INTO the
+                   page. The stripe carries active-vs-inactive so the badge is
+                   not the only thing saying it. */
+                className={`mise-card-inset mise-press relative overflow-hidden p-4 pl-5 text-left ${
+                  sel ? "ring-1 ring-brand-400/50" : ""
                 }`}
               >
+                <span
+                  aria-hidden
+                  className={`absolute inset-y-0 left-0 w-1 ${
+                    v.is_active ? "bg-emerald-400/60" : "bg-fg-faint/25"
+                  }`}
+                />
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-fg">
