@@ -96,27 +96,35 @@ test("a sentence that grows in Chrome's ear arrives once, not stuck to itself", 
     ear.emit(1, "could you please add", false);
     ear.emit(1, "could you please add a rota", false);
   });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(350);
 
-  // Read the LIVE TRANSCRIPT itself, not the whole panel. The first version of
-  // this test grepped the panel for /couldcould/ and passed — while its own
-  // console line showed "could you pleasecould you please add a rota" sitting
-  // on screen. The doubling joins the END of one copy to the START of the next,
-  // so a pattern built from a doubled first word cannot see it. Assert on the
-  // exact string instead: there is only one right answer.
+  // Read the transcript WHILE it is still on screen. An earlier version waited
+  // long enough for the silence timer to submit the turn and clear the line,
+  // then reported "nothing was transcribed" — a real fix, failed by the clock.
+  // Both places are checked, so whichever side of the submit we land on, the
+  // words themselves are what gets asserted.
   const shown = await page.evaluate(() => {
-    const el = document.querySelector(".mise-voice-heard, .mise-voice-card");
-    const t = (el?.textContent || "").trim();
-    const quoted = t.match(/[""]([^""]+)[""]/);
-    return { quoted: quoted ? quoted[1] : "", panel: t.slice(0, 240) };
+    const panel = (document.querySelector(".mise-voice-card")?.textContent || "").trim();
+    const quoted = panel.match(/[“”"]([^“”"]+)[“”"]/);
+    const said = [...document.querySelectorAll(".mise-voice-said")]
+      .map((b) => (b.textContent || "").trim())
+      .filter(Boolean);
+    return { live: quoted ? quoted[1] : "", said, panel: panel.slice(0, 240) };
   });
-  console.log("live transcript:", JSON.stringify(shown.quoted));
-  console.log("panel:", JSON.stringify(shown.panel));
+  console.log("live transcript:", JSON.stringify(shown.live));
+  console.log("submitted turns:", JSON.stringify(shown.said));
   await page.screenshot({ path: "e2e/__screens__/chrome-ear.png" });
 
-  expect(shown.quoted, "nothing was transcribed at all").not.toBe("");
-  expect(
-    shown.quoted,
-    `the sentence came through doubled: ${JSON.stringify(shown.quoted)}`,
-  ).toBe("could you please add a rota");
+  const heard = [shown.live, ...shown.said].filter(Boolean);
+  expect(heard.length, `nothing was transcribed — panel was ${shown.panel}`).toBeGreaterThan(0);
+
+  for (const line of heard) {
+    // The exact fault from his logs. It joins the END of one copy to the START
+    // of the next, so a pattern built from a doubled first word cannot see it —
+    // which is how an earlier version of this test passed while its own output
+    // showed "could you pleasecould you please add a rota" on screen.
+    expect(line, `the sentence came through doubled: ${JSON.stringify(line)}`).toBe(
+      "could you please add a rota",
+    );
+  }
 });
