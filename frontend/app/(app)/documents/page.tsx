@@ -59,6 +59,10 @@ export default function DocumentsPage() {
   const [reqEmpId, setReqEmpId] = useState("");
   const [reqType, setReqType] = useState("EMPLOYEE_DOC");
   const [reqTitle, setReqTitle] = useState("");
+  // Frozen at mount. Reading the clock during render is impure — the same list
+  // would draw differently on two renders with no state change, which is
+  // exactly the kind of thing that makes a UI flicker for no visible reason.
+  const [nowMs] = useState(() => Date.now());
 
   function load() {
     return Promise.all([
@@ -380,39 +384,99 @@ export default function DocumentsPage() {
             </div>
           );
         })()}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                <th className="px-5 py-3 font-medium">Title</th>
-                <th className="px-5 py-3 font-medium">Type</th>
-                <th className="px-5 py-3 font-medium">Expiry</th>
-                <th className="px-5 py-3 text-right font-medium">Size</th>
-                <th className="px-5 py-3 text-right font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.filter((d) => d.related_entity_type !== "EMPLOYEE" && (typeFilter === "all" || d.doc_type === typeFilter)).length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-fg-faint">No restaurant documents{typeFilter !== "all" ? " of this type" : " yet"}.</td></tr>
-              ) : docs.filter((d) => d.related_entity_type !== "EMPLOYEE" && (typeFilter === "all" || d.doc_type === typeFilter)).map((d) => (
-                <tr key={d.id} className="border-b border-line">
-                  <td className="px-5 py-3 font-medium text-fg">{d.title}</td>
-                  <td className="px-5 py-3 text-fg-faint">{typeLabel(d.doc_type)}</td>
-                  <td className="px-5 py-3 text-fg-faint">{d.expiry_date || "—"}</td>
-                  <td className="px-5 py-3 text-right text-fg-faint">{fmtSize(d.file_size)}</td>
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button onClick={() => downloadFile(`/documents/${d.id}/download`, d.filename)} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">Download</button>
+        {/* Cards, per /staff and /purchasing.
+            A document is a THING with a deadline, not a row of five columns —
+            and the deadline was the third of them, in the same grey as the
+            file size. The stripe carries it: red once expired, amber inside
+            thirty days, quiet when there is nothing to chase. Same rule as the
+            visa stripe on Employees, because it is the same question. */}
+        {(() => {
+          const shown = docs.filter(
+            (d) =>
+              d.related_entity_type !== "EMPLOYEE" &&
+              (typeFilter === "all" || d.doc_type === typeFilter),
+          );
+          if (shown.length === 0) {
+            return (
+              <p className="px-5 py-8 text-center text-fg-faint">
+                No restaurant documents{typeFilter !== "all" ? " of this type" : " yet"}.
+              </p>
+            );
+          }
+          const daysTo = (iso?: string | null) => {
+            if (!iso) return null;
+            const t = new Date(`${iso}T00:00:00`).getTime();
+            if (Number.isNaN(t)) return null;
+            return Math.round((t - nowMs) / 86_400_000);
+          };
+          return (
+            <div className="mise-stagger grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+              {shown.map((d) => {
+                const left = daysTo(d.expiry_date);
+                const stripe =
+                  left == null
+                    ? "bg-fg-faint/25"
+                    : left < 0
+                      ? "bg-rose-400/80"
+                      : left <= 30
+                        ? "bg-amber-400/80"
+                        : "bg-emerald-400/60";
+                return (
+                  <div
+                    key={d.id}
+                    className="mise-card-inset relative flex flex-col overflow-hidden p-3.5 pl-4"
+                  >
+                    <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${stripe}`} />
+                    <span className="truncate font-display text-sm font-semibold text-fg">
+                      {d.title}
+                    </span>
+                    <span className="mt-0.5 truncate text-[11px] text-fg-faint">
+                      {typeLabel(d.doc_type)} · {fmtSize(d.file_size)}
+                    </span>
+                    <dl className="mt-2.5 border-t border-line/50 pt-2 text-[11px]">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">Expires</dt>
+                        <dd
+                          className={
+                            left == null
+                              ? "text-fg-faint"
+                              : left < 0
+                                ? "font-medium text-rose-300"
+                                : left <= 30
+                                  ? "font-medium text-amber-300"
+                                  : "text-fg-soft"
+                          }
+                        >
+                          {d.expiry_date
+                            ? left != null && left < 0
+                              ? `expired ${d.expiry_date}`
+                              : `${d.expiry_date}${left != null && left <= 30 ? ` · ${left}d` : ""}`
+                            : "no expiry"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="mt-2.5 flex gap-1.5">
+                      <button
+                        onClick={() => downloadFile(`/documents/${d.id}/download`, d.filename)}
+                        className="mise-press flex-1 rounded-md border border-line px-2 py-1.5 text-xs text-brand-300 hover:bg-brand-400/10"
+                      >
+                        Download
+                      </button>
                       {canWrite && (
-                        <button onClick={() => remove(d.id)} className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2">Delete</button>
+                        <button
+                          onClick={() => remove(d.id)}
+                          className="mise-press rounded-md border border-line px-2 py-1.5 text-xs text-fg-faint hover:bg-paper-2"
+                        >
+                          Delete
+                        </button>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </Card>
     </div>
   );
