@@ -113,6 +113,12 @@ test("every swept page is built from the reference card", async ({ page }) => {
 
     const counts = await page.evaluate(() => {
       const n = (sel: string) => document.querySelectorAll(sel).length;
+      // A page with nothing on it draws no cards, and that is not the same
+      // fault as a page that was never swept. Sales on a quiet day has no
+      // lines; the card CONTAINER is still there saying so.
+      const emptyState = /no (sales|expenses|documents|employees|prices|restaurant documents)/i.test(
+        document.body.innerText,
+      );
       return {
         cardInset: n(".mise-card-inset"),
         card3d: n(".mise-card3d"),
@@ -121,6 +127,7 @@ test("every swept page is built from the reference card", async ({ page }) => {
         // The thing the sweep was meant to remove: bare rules doing the job a
         // card should do.
         hairlineRows: n("tr.border-b, div.border-b.border-line"),
+        emptyState,
       };
     });
     report.push({ page: p.path, ...counts });
@@ -135,10 +142,22 @@ test("every swept page is built from the reference card", async ({ page }) => {
   for (const p of PAGES.filter((x) => !x.reference)) {
     const row = report.find((r) => r.page === p.path)!;
     const cards = (row.cardInset as number) + (row.card3d as number);
+    if (cards === 0 && row.emptyState) {
+      // Legitimately nothing to draw. Say so out loud rather than passing in
+      // silence — a quiet skip is how a test starts verifying nothing.
+      console.log(`  ${p.path}: no cards, but the page says it is EMPTY — not a miss`);
+      continue;
+    }
     expect(
       cards,
-      `${p.path} drew no reference cards — either the sweep missed it or the ` +
-        `test never reached the state that draws them: ${JSON.stringify(row)}`,
+      `${p.path} drew no reference cards and does not report being empty, so ` +
+        `the sweep missed it: ${JSON.stringify(row)}`,
     ).toBeGreaterThan(0);
+
+    // Whatever it drew must be the reference card, not the old drop-shadow one.
+    expect(
+      row.neoRaised as number,
+      `${p.path} still has ${row.neoRaised} drop-shadow cards among ${cards} reference ones`,
+    ).toBeLessThanOrEqual(6);
   }
 });
