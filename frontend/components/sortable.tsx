@@ -73,3 +73,57 @@ export function SortTh<K extends string>({
     </th>
   );
 }
+
+
+/** The same sorting, without a table.
+ *
+ * "take /staff and /purchasing as reference — the cards, shadow, popup."
+ * Those pages are built from cards, and a card list still needs to be sortable,
+ * but `<SortTh>` only works inside a `<thead>`. This is the same `Sort` object
+ * driving a row of chips, so converting a table to cards does not cost the
+ * reader the ability to order it.
+ *
+ * Deliberately the same shape as the purchasing "show by" control — one idiom
+ * for "change what this list is doing", not two that look almost alike.
+ */
+export function SortBar<K extends string>({
+  sort,
+  options,
+  className = "",
+}: {
+  sort: Sort<K>;
+  options: { k: K; label: string }[];
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center gap-2 overflow-x-auto ${className}`}>
+      <span className="shrink-0 text-xs text-fg-faint">Sort by</span>
+      <div className="mise-well flex shrink-0 gap-1 rounded-xl p-1">
+        {options.map((o) => {
+          const active = sort.key === o.k;
+          return (
+            <button
+              key={o.k}
+              type="button"
+              onClick={() => sort.toggle(o.k)}
+              aria-pressed={active}
+              title={
+                active
+                  ? `Sorted by ${o.label.toLowerCase()} — tap to reverse`
+                  : `Sort by ${o.label.toLowerCase()}`
+              }
+              className={`mise-press inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                active ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
+              }`}
+            >
+              {o.label}
+              <span aria-hidden className={`text-[9px] ${active ? "" : "text-fg-faint/50"}`}>
+                {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
