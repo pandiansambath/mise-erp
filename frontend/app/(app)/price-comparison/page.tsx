@@ -712,7 +712,7 @@ export default function PriceComparisonPage() {
             return (
               <li
                 key={id}
-                className="mise-neo-raised flex flex-wrap items-center gap-3 rounded-xl px-3.5 py-3"
+                className="mise-card-inset relative flex flex-wrap items-center gap-3 overflow-hidden px-3.5 py-3 pl-4"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-fg">{it.name}</span>
@@ -812,7 +812,7 @@ export default function PriceComparisonPage() {
                 // when the real cards land.
                 <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
                   {[0, 1, 2].map((k) => (
-                    <div key={k} className="mise-neo-raised rounded-2xl p-4">
+                    <div key={k} className="mise-card-inset p-4">
                       <div className="h-3 w-24 animate-pulse rounded bg-fg/10" />
                       <div className="mt-3 h-7 w-28 animate-pulse rounded bg-fg/10" />
                       <div className="mt-3 h-4 w-20 animate-pulse rounded bg-fg/5" />
@@ -899,14 +899,33 @@ export default function PriceComparisonPage() {
                                 onClick={() => {
                                   setOpenRow(row.vendor_id);
                                 }}
-                                className={`mise-feel mise-neo-raised cursor-pointer rounded-2xl border p-4 transition hover:-translate-y-px hover:border-brand-400/50 ${
+                                /* The card from /staff and /purchasing, which is
+                                   what he asked every page to follow. It wore a
+                                   drop shadow before — light falling ON the card
+                                   from outside — while his two reference pages
+                                   press theirs INTO the page. Side by side the
+                                   two read as different apps.
+
+                                   The stripe says which supplier this is at a
+                                   glance: chosen, cheapest, or neither. */
+                                className={`mise-card-inset mise-press relative cursor-pointer overflow-hidden p-4 pl-5 transition ${
                                   row.is_preferred
-                                    ? "border-brand-400/45 bg-brand-400/[0.09]"
+                                    ? "ring-1 ring-brand-400/45"
                                     : idx === 0
-                                      ? "border-emerald-400/30 bg-emerald-400/[0.06]"
-                                      : "border-line bg-glass/5"
+                                      ? "ring-1 ring-emerald-400/30"
+                                      : ""
                                 }`}
                               >
+                                <span
+                                  aria-hidden
+                                  className={`absolute inset-y-0 left-0 w-1 ${
+                                    row.is_preferred
+                                      ? "bg-brand-400/80"
+                                      : idx === 0
+                                        ? "bg-emerald-400/70"
+                                        : "bg-fg-faint/25"
+                                  }`}
+                                />
                                 {/* The price is the point, so it is the biggest
                                     thing on the card — not a number tucked at
                                     the end of a row the same size as the name. */}
