@@ -15,7 +15,7 @@ import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/component
 import { SubNav } from "@/components/SubNav";
 import { Bars, Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
 import { Select } from "@/components/Select";
-import { SortTh, useSort } from "@/components/sortable";
+import { SortBar, useSort } from "@/components/sortable";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
@@ -419,7 +419,7 @@ export default function ExpensesPage() {
                 <h2 className="text-sm font-semibold text-fg">By category</h2>
                 <p className="text-xs text-fg-faint">Click a category to see its entries and the stock items it covers.</p>
               </div>
-              <div>
+              <div className="mise-stagger space-y-2 p-3">
                 {summary.by_category.map((c) => {
                   const open = expanded.has(c.category_id);
                   const entries = expenses.filter((e) => e.category_id === c.category_id);
@@ -427,15 +427,30 @@ export default function ExpensesPage() {
                     (i) => (i.category || "").toLowerCase() === c.category_name.toLowerCase()
                   );
                   return (
-                    <div key={c.category_id} className="border-b border-line last:border-0">
+                    /* The Roles & Access card, verbatim: inset shadow, a tinted
+                       stripe down the left, and press feedback. "please take
+                       /staff and /purchasing as reference for the UI — the
+                       cards, shadow, popup." These were flat rows divided by
+                       hairlines, which is the one thing those two pages never
+                       do. The stripe carries fixed-vs-variable, so the badge is
+                       no longer the only thing saying it. */
+                    <div key={c.category_id}>
                       <button
                         type="button"
                         onClick={() => toggleCat(c.category_id)}
-                        className="w-full px-5 py-3 text-left transition hover:bg-paper-2"
+                        className={`mise-card-inset mise-press relative w-full overflow-hidden px-4 py-3 pl-5 text-left ${
+                          open ? "ring-1 ring-brand-400/40" : ""
+                        }`}
                       >
+                        <span
+                          aria-hidden
+                          className={`absolute inset-y-0 left-0 w-1 ${
+                            c.kind === "FIXED" ? "bg-slate-400/70" : "bg-amber-400/80"
+                          }`}
+                        />
                         <span className="flex items-center gap-3">
                           <span className={`text-fg-faint transition-transform duration-200 ${open ? "rotate-90" : ""}`}>▸</span>
-                          <span className="font-medium text-fg">{c.category_name}</span>
+                          <span className="font-display font-semibold text-fg">{c.category_name}</span>
                           <Badge tone={c.kind === "FIXED" ? "slate" : "amber"}>
                             {c.kind === "FIXED" ? "Fixed" : "Variable"}
                           </Badge>
@@ -498,89 +513,115 @@ export default function ExpensesPage() {
             </Card>
           )}
 
+          {/* THE ENTRIES, AS CARDS.
+              "take /staff and /purchasing as reference for the UI — the cards,
+              shadow, popup." This was a bare table: hairline rules, no depth,
+              nothing you could press. It is the same card those two pages use —
+              inset shadow, a stripe carrying fixed-vs-variable, press feedback —
+              and the whole card still opens the entry for editing.
+
+              The sort did not go with the table. `SortBar` is the same `Sort`
+              object the column headers were driving, as chips, so ordering a
+              ledger by date or amount survives the change of clothes. */}
           <Card className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                    <SortTh k="date" label="Date" sort={sort} />
-                    <SortTh k="category" label="Category" sort={sort} />
-                    <SortTh k="amount" label="Amount" sort={sort} right />
-                    <th className="px-5 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expenses.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-5 py-8 text-center text-fg-faint">
-                        No expenses in this range.
-                      </td>
-                    </tr>
-                  ) : (
-                    sortedExpenses.map((x) => (
-                      /* The whole row edits. "keep edit features everywhere
-                         possible" — and the ✏️ button was a small target beside
-                         a Remove button, on a page where the two do very
-                         different things. The buttons stay; the row is just no
-                         longer dead space between them. */
-                      <tr
-                        key={x.id}
-                        onClick={canWrite && !x.from_payroll ? () => startEdit(x) : undefined}
-                        title={
-                          canWrite && !x.from_payroll
-                            ? "Edit this entry"
-                            : x.from_payroll
-                              ? "This came from payroll — edit it there"
-                              : undefined
-                        }
-                        className={`border-b border-line transition ${
-                          canWrite && !x.from_payroll
-                            ? "cursor-pointer hover:bg-paper-2/60"
-                            : ""
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
+              <h2 className="text-sm font-semibold text-fg">Entries</h2>
+              <SortBar
+                sort={sort}
+                options={[
+                  { k: "date", label: "Date" },
+                  { k: "category", label: "Category" },
+                  { k: "amount", label: "Amount" },
+                ]}
+              />
+            </div>
+            {expenses.length === 0 ? (
+              <p className="px-5 py-8 text-center text-fg-faint">No expenses in this range.</p>
+            ) : (
+              <div className="mise-stagger space-y-2 p-3">
+                {sortedExpenses.map((x) => {
+                  const editable = canWrite && !x.from_payroll;
+                  return (
+                    <div
+                      key={x.id}
+                      role={editable ? "button" : undefined}
+                      tabIndex={editable ? 0 : undefined}
+                      onClick={editable ? () => startEdit(x) : undefined}
+                      onKeyDown={
+                        editable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                startEdit(x);
+                              }
+                            }
+                          : undefined
+                      }
+                      title={
+                        editable
+                          ? "Edit this entry"
+                          : x.from_payroll
+                            ? "This came from payroll — edit it there"
+                            : undefined
+                      }
+                      className={`mise-card-inset relative flex items-center gap-3 overflow-hidden px-4 py-3 pl-5 ${
+                        editable ? "mise-press cursor-pointer" : ""
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`absolute inset-y-0 left-0 w-1 ${
+                          x.kind === "FIXED" ? "bg-slate-400/70" : "bg-amber-400/80"
                         }`}
-                      >
-                        <td className="px-5 py-3 text-fg-faint">{x.date}</td>
-                        <td className="px-5 py-3">
-                          <span className="font-medium text-fg">{x.category_name}</span>
-                          {x.description && <span className="ml-2 text-fg-faint">{x.description}</span>}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-display font-semibold text-fg">
+                            {x.category_name}
+                          </span>
                           <Badge tone={x.kind === "FIXED" ? "slate" : "amber"}>
                             {x.kind === "FIXED" ? "Fixed" : "Variable"}
                           </Badge>
                           {x.payment_method && (
-                            <Badge tone="slate">{METHOD_LABEL[x.payment_method] ?? x.payment_method}</Badge>
+                            <Badge tone="slate">
+                              {METHOD_LABEL[x.payment_method] ?? x.payment_method}
+                            </Badge>
                           )}
-                          {x.from_payroll && (
-                            <Badge tone="green">💷 from payroll</Badge>
-                          )}
-                          {x.auto_added && (
-                            <Badge tone="green">🔁 auto-added</Badge>
-                          )}
+                          {x.from_payroll && <Badge tone="green">💷 from payroll</Badge>}
+                          {x.auto_added && <Badge tone="green">🔁 auto-added</Badge>}
                           {x.is_recurring && !x.auto_added && (
                             <Badge tone="amber">🔁 repeats monthly</Badge>
                           )}
-                        </td>
-                        <td className="px-5 py-3 text-right font-mono font-medium text-fg">{format(x.amount)}</td>
-                        <td className="px-5 py-3 text-right">
-                          {canWrite && !x.from_payroll && (
-                            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); startEdit(x); }} title="Edit this entry in the form">
-                              ✏️ Edit
-                            </Button>
-                          )}
-                          {canWrite && (
-                            /* Without this, removing an entry would ALSO load it
-                               into the form behind the confirm — deleting the
-                               row you are being asked about. */
-                            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); remove(x.id); }}>
-                              Remove
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                        <p className="mt-0.5 truncate text-[11px] text-fg-faint">
+                          {x.date}
+                          {x.description ? ` · ${x.description}` : ""}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono font-semibold tabular-nums text-fg">
+                        {format(x.amount)}
+                      </span>
+                      {canWrite && (
+                        /* Without stopPropagation, removing would ALSO open the
+                           entry for editing behind the confirm — editing the
+                           thing you are being asked whether to destroy. */
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            remove(x.id);
+                          }}
+                          title="Remove this entry"
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
         {/* The breakdown charts sit at the BOTTOM of this column.
