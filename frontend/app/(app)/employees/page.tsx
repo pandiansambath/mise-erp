@@ -7,7 +7,7 @@ import { FormShell } from "@/components/EditModal";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
-import { SortTh, useSort } from "@/components/sortable";
+import { SortBar, useSort } from "@/components/sortable";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -330,72 +330,120 @@ export default function EmployeesPage() {
         </Card>
       )}
 
+      {/* THE TEAM, AS CARDS — the same card /staff uses, which is the page
+          right next door and about the same people. A person on one screen and
+          a row on the other was the plainest version of what he was pointing
+          at.
+
+          The stripe carries the visa state, because that is the one thing on
+          this page with a deadline: red when it has expired, amber when it is
+          close. It was a badge in the fifth column, which is where you look
+          last. */}
       <Card id="team-list" className="scroll-mt-24 p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                <SortTh k="code" label="Code" sort={sort} />
-                <SortTh k="name" label="Name" sort={sort} />
-                <SortTh k="title" label="Job title" sort={sort} />
-                <SortTh k="pay" label="Pay" sort={sort} right />
-                <th className="px-5 py-3 font-medium">Visa</th>
-                <th className="px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-fg-faint">No employees yet.</td></tr>
-              ) : (
-                sortedEmployees.map((e) => {
-                  const alert = alerts.find((a) => a.employee_id === e.id);
-                  return (
-                    <tr key={e.id} className="border-b border-line">
-                      <td className="px-5 py-3 text-fg-faint">{e.employee_code}</td>
-                      <td className="px-5 py-3 font-medium text-fg">
-                        <span aria-hidden className="mise-raised mr-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold uppercase text-brand-300">
-                          {e.full_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("")}
-                        </span>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
+          <h2 className="text-sm font-semibold text-fg">Your team</h2>
+          <SortBar
+            sort={sort}
+            options={[
+              { k: "code", label: "Code" },
+              { k: "name", label: "Name" },
+              { k: "title", label: "Job title" },
+              { k: "pay", label: "Pay" },
+            ]}
+          />
+        </div>
+        {employees.length === 0 ? (
+          <p className="px-5 py-8 text-center text-fg-faint">No employees yet.</p>
+        ) : (
+          <div className="mise-stagger grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+            {sortedEmployees.map((e) => {
+              const alert = alerts.find((a) => a.employee_id === e.id);
+              const days = alert?.days_left;
+              const stripe =
+                days == null
+                  ? "bg-fg-faint/25"
+                  : days < 0
+                    ? "bg-rose-400/80"
+                    : days <= 30
+                      ? "bg-amber-400/80"
+                      : "bg-emerald-400/60";
+              return (
+                <div
+                  key={e.id}
+                  className="mise-card-inset relative flex flex-col overflow-hidden p-3.5 pl-4"
+                >
+                  <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${stripe}`} />
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      aria-hidden
+                      className="mise-raised inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold uppercase text-brand-300"
+                    >
+                      {e.full_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("")}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-display text-base font-semibold text-fg">
                         {e.full_name}
-                      </td>
-                      <td className="px-5 py-3 text-fg-faint">{e.job_title || "—"}</td>
-                      <td className="px-5 py-3 text-right text-fg-soft">
+                      </span>
+                      <span className="block truncate text-[11px] text-fg-faint">
+                        {e.employee_code}
+                        {e.job_title ? ` · ${e.job_title}` : ""}
+                      </span>
+                    </span>
+                  </div>
+
+                  <dl className="mt-2.5 space-y-0.5 border-t border-line/50 pt-2 text-[11px]">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-fg-faint">Pay</dt>
+                      <dd className="tabular-nums text-fg">
                         {e.salary_type === "MONTHLY"
-                          ? e.monthly_salary ? `${format(e.monthly_salary)}/mo` : "—"
-                          : e.hourly_rate ? `${format(e.hourly_rate)}/hr` : "—"}
-                      </td>
-                      <td className="px-5 py-3">
+                          ? e.monthly_salary
+                            ? `${format(e.monthly_salary)}/mo`
+                            : "—"
+                          : e.hourly_rate
+                            ? `${format(e.hourly_rate)}/hr`
+                            : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-fg-faint">Visa</dt>
+                      <dd>
                         {e.visa_expiry_date ? (
                           alert ? (
                             <Badge tone={visaTone(alert.days_left)}>
                               {alert.days_left < 0 ? "Expired" : `${alert.days_left}d`}
                             </Badge>
                           ) : (
-                            <span className="text-fg-faint">{e.visa_expiry_date}</span>
+                            <span className="text-fg-soft">{e.visa_expiry_date}</span>
                           )
                         ) : (
                           <span className="text-fg-faint">—</span>
                         )}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        {canWrite && (
-                          <span className="inline-flex gap-1.5">
-                            <button onClick={() => setLoginFor(e)} className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2" title="Login, email verification & history">
-                              🔐 Login
-                            </button>
-                            <button onClick={() => startEdit(e)} className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-fg-soft hover:bg-paper-2">
-                              Edit
-                            </button>
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {canWrite && (
+                    <div className="mt-2.5 flex gap-1.5">
+                      <button
+                        onClick={() => setLoginFor(e)}
+                        className="mise-press flex-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                        title="Login, email verification & history"
+                      >
+                        🔐 Login
+                      </button>
+                      <button
+                        onClick={() => startEdit(e)}
+                        className="mise-press flex-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       {loginFor && (
