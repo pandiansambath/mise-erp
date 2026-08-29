@@ -862,24 +862,16 @@ export default function VendorsPage() {
             {/* What they supply */}
             <div className={`min-w-0 ${sheetTab === "supply" ? "" : "hidden"}`}>
               <p className="text-sm font-medium text-fg-soft">What they supply ({vendorItems.length})</p>
-              <div className="mt-2 overflow-x-auto rounded-xl border border-line">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-paper">
-                    <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                      <th className="px-4 py-2 font-medium">Item</th>
-                      {/* "Price / unit" is the phrase that started all of this — it never
-                          said WHICH unit, so £3 could have been a lemon or a bottle of
-                          thirty. Every cell now names its own size, and the header says
-                          what the column is rather than implying a unit it does not know. */}
-                      <th className="px-4 py-2 text-right font-medium">What it costs</th>
-                      <th className="px-4 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              {/* Cards, per his reference pages, not a table.
+                  "Price / unit" is the phrase that started all of this — it
+                  never said WHICH unit, so £3 could have been a lemon or a
+                  bottle of thirty. Every card names its own size instead of a
+                  column header implying a unit it does not know. */}
+              <div className="mise-stagger mt-2 space-y-2">
                     {vendorItems.length === 0 ? (
-                      <tr><td colSpan={3} className="px-4 py-6 text-center text-fg-faint">No prices yet — use “Add a price” above.</td></tr>
+                      <p className="px-4 py-6 text-center text-fg-faint">No prices yet — use “Add a price” above.</p>
                     ) : vendorItems.map((vi) => (
-                      <tr
+                      <div
                         key={vi.id}
                         // Click anything, do anything: the row opens the price
                         // itself rather than making you find the form for it.
@@ -893,9 +885,23 @@ export default function VendorsPage() {
                           );
                           setSheetLevel(lv?.name ?? "");
                         }}
-                        className="cursor-pointer border-b border-line transition hover:bg-glass/[0.03]"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            (e.currentTarget as HTMLElement).click();
+                          }
+                        }}
+                        className="mise-card-inset mise-press relative flex cursor-pointer items-start gap-3 overflow-hidden px-4 py-3 pl-5"
                       >
-                        <td className="px-4 py-2 font-medium text-fg">
+                        <span
+                          aria-hidden
+                          className={`absolute inset-y-0 left-0 w-1 ${
+                            vi.is_preferred ? "bg-amber-400/80" : "bg-sky-400/50"
+                          }`}
+                        />
+                        <div className="min-w-0 flex-1 font-medium text-fg">
                           {itemName(vi.item_id)}
                           {/* WHICH WAY they sell it. A supplier may now quote a
                               box AND a loose kilo, so the same item appears
@@ -913,9 +919,9 @@ export default function VendorsPage() {
                               </span>
                             );
                           })()}
-                        </td>
-                        <td
-                          className={`px-4 py-2 text-right ${
+                        </div>
+                        <div
+                          className={`shrink-0 rounded-lg px-2 py-1 text-right ${
                             (() => {
                               // Cheapest by what a BASE unit costs, never the
                               // sticker: a £20 box of 10 kg is not cheaper than
@@ -967,8 +973,8 @@ export default function VendorsPage() {
                               </span>
                             );
                           })()}
-                        </td>
-                        <td className="px-4 py-2 text-right">
+                        </div>
+                        <div className="shrink-0 text-right">
                           <span className="flex items-center justify-end gap-2">
                             {vi.is_preferred && <Badge tone="amber">★ chosen</Badge>}
                             {canWrite && (
@@ -983,11 +989,9 @@ export default function VendorsPage() {
                               </button>
                             )}
                           </span>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
               </div>
             </div>
 
