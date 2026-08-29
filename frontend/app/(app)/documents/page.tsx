@@ -206,7 +206,12 @@ export default function DocumentsPage() {
         <div className="border-b border-line px-5 pt-4">
           <h3 className="font-semibold text-fg">Restaurant documents</h3>
           <p className="mb-3 mt-0.5 text-xs text-fg-faint">
-            Your venue&apos;s own files — licences, insurance, contracts, bills. Staff documents live under their request above, not here.
+            {/* "above" was true until the list moved above the forms. A
+                direction word is a fact about the layout, and it goes stale
+                the moment the layout changes — so this one names the section
+                instead of pointing at where it used to be. */}
+            Your venue&apos;s own files — licences, insurance, contracts, bills. Staff
+            documents live under <b>Request a document from staff</b>, not here.
           </p>
         </div>
         {(() => {

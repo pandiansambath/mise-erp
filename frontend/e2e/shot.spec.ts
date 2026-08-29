@@ -14,10 +14,8 @@ test("shoot the swept pages", async ({ page }) => {
 
   // Reference first, so the comparison is in the same run and same theme.
   for (const [path, name] of [
-    ["/staff", "A-ref-staff"],
     ["/employees", "B-employees"],
     ["/documents", "C-documents"],
-    ["/sales", "D-sales"],
   ] as const) {
     await page.goto(`${BASE}${path}`);
     await page.waitForTimeout(5000);
