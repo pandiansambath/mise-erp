@@ -2,7 +2,7 @@
 
 | # | What he asked for | State |
 |---|---|---|
-| 1 | Every page to follow the **Roles & Access / Purchasing** UI. Sales + Expenses: core numbers FIRST, pie charts LAST | ◑ **verified live** — Sales & Expenses reordered (totals → work → charts). The wider style sweep is still open |
+| 1 | Every page to follow the **Roles & Access / Purchasing** UI. Sales + Expenses: core numbers FIRST, pie charts LAST | ✅ ordering verified live; **7 pages swept** to the reference card |
 | 2 | Change an item's vendor **from the Inventory screen** | ✅ **verified live** — 4 suppliers listed cheapest-first in the sheet, ★ on the chosen one |
 | 3 | Purchasing: **show by** category / vendor / price high-low | ✅ **verified live** — 5 supplier tiles, 66 items ranked Saffron £1,728/kg down |
 | 4 | Keep edit-in-place everywhere it makes sense | ◑ inventory supplier switch is in place; nothing removed anywhere |
@@ -67,3 +67,69 @@ and fails loudly if either marker is missing. Same class of mistake as
 - The wider style sweep for item 1 (vendors, price-comparison, expenses tables
   are still plain where purchasing is tactile).
 - Live verification of everything above on his tenant, with screenshots.
+
+
+## The UI sweep — /staff and /purchasing as the reference
+
+*"please take /staff and /purchasing as reference for UI/UX — I mean the cards,
+shadow, popup."*
+
+The vocabulary those two pages are built from:
+
+| class | what it does | where |
+|---|---|---|
+| `mise-card-inset` | shadow pressed INTO the page | /staff |
+| `mise-card3d` | the raised tile | /purchasing |
+| `mise-press` | squash on tap | both |
+| a tinted stripe down the left | says what kind of thing this is | both |
+
+### Swept
+
+| page | the stripe carries |
+|---|---|
+| Expenses — categories + entries | fixed vs variable |
+| Sales — the day's lines | (net leads instead) |
+| Vendors — supplier tiles + their price list | active / ★ chosen |
+| Price comparison — the quote cards | chosen / cheapest / neither |
+| Employees | **visa** — red expired, amber ≤30d |
+| Documents | **expiry** — same rule, same colours |
+
+On Employees and Documents the stripe is not decoration: it carries the one
+fact with a deadline attached, which was a badge in the third or fifth column,
+in the same grey as the file size, on pages whose whole job is stopping a visa
+or a licence lapsing.
+
+Two content decisions came with the paint:
+
+- **Sales** leads with NET, because net is what reaches the bank. Gross and
+  commission sit under it in words instead of as unlabelled money columns you
+  count across on a phone.
+- **Price comparison** was the real mismatch — `mise-neo-raised` throws light
+  ON the card from outside while both reference pages press theirs IN. Side by
+  side they read as two different applications.
+
+### Deliberately NOT swept
+
+Attendance, payroll, reports, stock-take, recipes, party-order, `my`, and
+inventory's import preview. Those are timesheets, a P&L, a variance sheet and
+costing breakdowns — reading DOWN an aligned column is the entire point, and
+inventory's import preview mirrors the spreadsheet being imported. Cards would
+make them prettier and harder to use.
+
+### Sorting nearly went with the tables
+
+`SortTh` only works inside a `<thead>`, so turning a ledger into cards would
+have quietly cost the reader the ability to order it. `SortBar` drives the SAME
+`Sort` object as chips, shaped like the purchasing "show by" control so there is
+one idiom for "change what this list is doing" rather than two that look almost
+alike.
+
+### The audit counted empty pages
+
+First version reported zero cards everywhere and I nearly believed it. Expenses
+opens on TODAY and is blank on a quiet day, the vendor price cards live inside
+a detail sheet, and the comparison cards need an item chosen — it was measuring
+three empty screens. It drives each page to the state that draws them now.
+
+Fourth time this session a test measured the wrong thing, and the fourth time
+reading the NUMBERS rather than the pass/fail is what caught it.

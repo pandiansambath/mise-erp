@@ -202,6 +202,131 @@ export default function DocumentsPage() {
         </div>
       )}
 
+      <Card className="p-0">
+        <div className="border-b border-line px-5 pt-4">
+          <h3 className="font-semibold text-fg">Restaurant documents</h3>
+          <p className="mb-3 mt-0.5 text-xs text-fg-faint">
+            Your venue&apos;s own files — licences, insurance, contracts, bills. Staff documents live under their request above, not here.
+          </p>
+        </div>
+        {(() => {
+          const venue = docs.filter((d) => d.related_entity_type !== "EMPLOYEE");
+          const types = [...new Set(venue.map((d) => d.doc_type))];
+          if (types.length < 2) return null;
+          return (
+            <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+              <button type="button" onClick={() => setTypeFilter("all")} className={`mise-press rounded-full px-3 py-1 text-xs font-medium ${typeFilter === "all" ? "bg-brand-600 text-white" : "mise-raised text-fg-soft"}`}>
+                All ({venue.length})
+              </button>
+              {types.map((t) => (
+                <button key={t} type="button" onClick={() => setTypeFilter(t)} className={`mise-press rounded-full px-3 py-1 text-xs font-medium ${typeFilter === t ? "bg-brand-600 text-white" : "mise-raised text-fg-soft"}`}>
+                  {typeLabel(t)} ({venue.filter((d) => d.doc_type === t).length})
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+        {/* Cards, per /staff and /purchasing.
+            A document is a THING with a deadline, not a row of five columns —
+            and the deadline was the third of them, in the same grey as the
+            file size. The stripe carries it: red once expired, amber inside
+            thirty days, quiet when there is nothing to chase. Same rule as the
+            visa stripe on Employees, because it is the same question. */}
+        {(() => {
+          const shown = docs.filter(
+            (d) =>
+              d.related_entity_type !== "EMPLOYEE" &&
+              (typeFilter === "all" || d.doc_type === typeFilter),
+          );
+          if (shown.length === 0) {
+            return (
+              <p className="px-5 py-8 text-center text-fg-faint">
+                No restaurant documents{typeFilter !== "all" ? " of this type" : " yet"}.
+              </p>
+            );
+          }
+          const daysTo = (iso?: string | null) => {
+            if (!iso) return null;
+            const t = new Date(`${iso}T00:00:00`).getTime();
+            if (Number.isNaN(t)) return null;
+            return Math.round((t - nowMs) / 86_400_000);
+          };
+          return (
+            <div className="mise-stagger grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+              {shown.map((d) => {
+                const left = daysTo(d.expiry_date);
+                const stripe =
+                  left == null
+                    ? "bg-fg-faint/25"
+                    : left < 0
+                      ? "bg-rose-400/80"
+                      : left <= 30
+                        ? "bg-amber-400/80"
+                        : "bg-emerald-400/60";
+                return (
+                  <div
+                    key={d.id}
+                    className="mise-card-inset relative flex flex-col overflow-hidden p-3.5 pl-4"
+                  >
+                    <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${stripe}`} />
+                    <span className="truncate font-display text-sm font-semibold text-fg">
+                      {d.title}
+                    </span>
+                    <span className="mt-0.5 truncate text-[11px] text-fg-faint">
+                      {typeLabel(d.doc_type)} · {fmtSize(d.file_size)}
+                    </span>
+                    <dl className="mt-2.5 border-t border-line/50 pt-2 text-[11px]">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-fg-faint">Expires</dt>
+                        <dd
+                          className={
+                            left == null
+                              ? "text-fg-faint"
+                              : left < 0
+                                ? "font-medium text-rose-300"
+                                : left <= 30
+                                  ? "font-medium text-amber-300"
+                                  : "text-fg-soft"
+                          }
+                        >
+                          {d.expiry_date
+                            ? left != null && left < 0
+                              ? `expired ${d.expiry_date}`
+                              : `${d.expiry_date}${left != null && left <= 30 ? ` · ${left}d` : ""}`
+                            : "no expiry"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="mt-2.5 flex gap-1.5">
+                      <button
+                        onClick={() => downloadFile(`/documents/${d.id}/download`, d.filename)}
+                        className="mise-press flex-1 rounded-md border border-line px-2 py-1.5 text-xs text-brand-300 hover:bg-brand-400/10"
+                      >
+                        Download
+                      </button>
+                      {canWrite && (
+                        <button
+                          onClick={() => remove(d.id)}
+                          className="mise-press rounded-md border border-line px-2 py-1.5 text-xs text-fg-faint hover:bg-paper-2"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </Card>
+
+      {/* The forms come AFTER the documents.
+          "never make the user scroll to reach what the page is FOR" — his own
+          rule, and this page broke it plainly: two forms stood between the
+          title and the list of licences the page exists to keep an eye on.
+          Uploading is occasional; checking what is about to expire is why you
+          open Documents at all. */}
       {canWrite && (
         <Card className="mb-6">
           <p className="mb-3 text-sm font-medium text-fg-soft">Upload a document</p>
@@ -359,125 +484,6 @@ export default function DocumentsPage() {
           )}
         </Card>
       )}
-
-      <Card className="p-0">
-        <div className="border-b border-line px-5 pt-4">
-          <h3 className="font-semibold text-fg">Restaurant documents</h3>
-          <p className="mb-3 mt-0.5 text-xs text-fg-faint">
-            Your venue&apos;s own files — licences, insurance, contracts, bills. Staff documents live under their request above, not here.
-          </p>
-        </div>
-        {(() => {
-          const venue = docs.filter((d) => d.related_entity_type !== "EMPLOYEE");
-          const types = [...new Set(venue.map((d) => d.doc_type))];
-          if (types.length < 2) return null;
-          return (
-            <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
-              <button type="button" onClick={() => setTypeFilter("all")} className={`mise-press rounded-full px-3 py-1 text-xs font-medium ${typeFilter === "all" ? "bg-brand-600 text-white" : "mise-raised text-fg-soft"}`}>
-                All ({venue.length})
-              </button>
-              {types.map((t) => (
-                <button key={t} type="button" onClick={() => setTypeFilter(t)} className={`mise-press rounded-full px-3 py-1 text-xs font-medium ${typeFilter === t ? "bg-brand-600 text-white" : "mise-raised text-fg-soft"}`}>
-                  {typeLabel(t)} ({venue.filter((d) => d.doc_type === t).length})
-                </button>
-              ))}
-            </div>
-          );
-        })()}
-        {/* Cards, per /staff and /purchasing.
-            A document is a THING with a deadline, not a row of five columns —
-            and the deadline was the third of them, in the same grey as the
-            file size. The stripe carries it: red once expired, amber inside
-            thirty days, quiet when there is nothing to chase. Same rule as the
-            visa stripe on Employees, because it is the same question. */}
-        {(() => {
-          const shown = docs.filter(
-            (d) =>
-              d.related_entity_type !== "EMPLOYEE" &&
-              (typeFilter === "all" || d.doc_type === typeFilter),
-          );
-          if (shown.length === 0) {
-            return (
-              <p className="px-5 py-8 text-center text-fg-faint">
-                No restaurant documents{typeFilter !== "all" ? " of this type" : " yet"}.
-              </p>
-            );
-          }
-          const daysTo = (iso?: string | null) => {
-            if (!iso) return null;
-            const t = new Date(`${iso}T00:00:00`).getTime();
-            if (Number.isNaN(t)) return null;
-            return Math.round((t - nowMs) / 86_400_000);
-          };
-          return (
-            <div className="mise-stagger grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
-              {shown.map((d) => {
-                const left = daysTo(d.expiry_date);
-                const stripe =
-                  left == null
-                    ? "bg-fg-faint/25"
-                    : left < 0
-                      ? "bg-rose-400/80"
-                      : left <= 30
-                        ? "bg-amber-400/80"
-                        : "bg-emerald-400/60";
-                return (
-                  <div
-                    key={d.id}
-                    className="mise-card-inset relative flex flex-col overflow-hidden p-3.5 pl-4"
-                  >
-                    <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${stripe}`} />
-                    <span className="truncate font-display text-sm font-semibold text-fg">
-                      {d.title}
-                    </span>
-                    <span className="mt-0.5 truncate text-[11px] text-fg-faint">
-                      {typeLabel(d.doc_type)} · {fmtSize(d.file_size)}
-                    </span>
-                    <dl className="mt-2.5 border-t border-line/50 pt-2 text-[11px]">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <dt className="text-fg-faint">Expires</dt>
-                        <dd
-                          className={
-                            left == null
-                              ? "text-fg-faint"
-                              : left < 0
-                                ? "font-medium text-rose-300"
-                                : left <= 30
-                                  ? "font-medium text-amber-300"
-                                  : "text-fg-soft"
-                          }
-                        >
-                          {d.expiry_date
-                            ? left != null && left < 0
-                              ? `expired ${d.expiry_date}`
-                              : `${d.expiry_date}${left != null && left <= 30 ? ` · ${left}d` : ""}`
-                            : "no expiry"}
-                        </dd>
-                      </div>
-                    </dl>
-                    <div className="mt-2.5 flex gap-1.5">
-                      <button
-                        onClick={() => downloadFile(`/documents/${d.id}/download`, d.filename)}
-                        className="mise-press flex-1 rounded-md border border-line px-2 py-1.5 text-xs text-brand-300 hover:bg-brand-400/10"
-                      >
-                        Download
-                      </button>
-                      {canWrite && (
-                        <button
-                          onClick={() => remove(d.id)}
-                          className="mise-press rounded-md border border-line px-2 py-1.5 text-xs text-fg-faint hover:bg-paper-2"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </Card>
     </div>
   );
 }

@@ -313,23 +313,6 @@ export default function EmployeesPage() {
         </FormShell>
       )}
 
-      {employees.length > 1 && (
-        <Card id="pay-mix" className="mise-feel mb-6 scroll-mt-24">
-          <h3 className="font-semibold text-fg">How the team is paid</h3>
-          <p className="text-xs text-fg-faint">hourly staff go on WEEKLY payroll runs; salaried on monthly</p>
-          <div className="mt-4">
-            <Donut
-              centerLabel="people"
-              centerValue={String(employees.length)}
-              segments={[
-                { label: "Hourly (weekly-paid)", value: employees.filter((e) => e.salary_type === "HOURLY").length, color: "#38bdf8" },
-                { label: "Monthly salary", value: employees.filter((e) => e.salary_type === "MONTHLY").length, color: "#10b981" },
-              ].filter((s) => s.value > 0)}
-            />
-          </div>
-        </Card>
-      )}
-
       {/* THE TEAM, AS CARDS — the same card /staff uses, which is the page
           right next door and about the same people. A person on one screen and
           a row on the other was the plainest version of what he was pointing
@@ -445,6 +428,27 @@ export default function EmployeesPage() {
           </div>
         )}
       </Card>
+
+      {/* The pay split sits BELOW the team, by the rule he already gave for
+          Sales and Expenses: the numbers and the work first, the pie last.
+          A donut of hourly-vs-salaried is worth having and is not what anyone
+          opens this page to find. */}
+      {employees.length > 1 && (
+        <Card id="pay-mix" className="mise-feel mb-6 scroll-mt-24">
+          <h3 className="font-semibold text-fg">How the team is paid</h3>
+          <p className="text-xs text-fg-faint">hourly staff go on WEEKLY payroll runs; salaried on monthly</p>
+          <div className="mt-4">
+            <Donut
+              centerLabel="people"
+              centerValue={String(employees.length)}
+              segments={[
+                { label: "Hourly (weekly-paid)", value: employees.filter((e) => e.salary_type === "HOURLY").length, color: "#38bdf8" },
+                { label: "Monthly salary", value: employees.filter((e) => e.salary_type === "MONTHLY").length, color: "#10b981" },
+              ].filter((s) => s.value > 0)}
+            />
+          </div>
+        </Card>
+      )}
 
       {loginFor && (
         <StaffLoginModal employee={loginFor} onClose={() => setLoginFor(null)} />
