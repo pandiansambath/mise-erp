@@ -487,50 +487,59 @@ export default function SalesPage() {
             </Card>
           )}
 
+          {/* THE DAY'S TAKINGS, AS CARDS — his reference pages have no tables.
+              Four money columns squeezed onto a phone is what "overflow" meant
+              here: gross, commission and net all fought for the same row. On a
+              card the channel leads, the NET is the big number because that is
+              what actually arrives, and the two that explain it sit under it in
+              words rather than in unlabelled columns. */}
           <Card className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                    <th className="px-5 py-3 font-medium">Channel</th>
-                    <th className="px-5 py-3 font-medium">Method</th>
-                    <th className="px-5 py-3 text-right font-medium">Gross</th>
-                    <th className="px-5 py-3 text-right font-medium">Commission</th>
-                    <th className="px-5 py-3 text-right font-medium">Net</th>
-                    <th className="px-5 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.lines.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-5 py-8 text-center text-fg-faint">
-                        No sales entered for this day yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    summary.lines.map((l) => (
-                      <tr key={l.id} className="border-b border-line">
-                        <td className="px-5 py-3 font-medium text-fg">{l.channel_name}</td>
-                        <td className="px-5 py-3 text-fg-faint">{l.payment_method}</td>
-                        <td className="px-5 py-3 text-right text-fg-soft">{format(l.gross_amount)}</td>
-                        <td className="px-5 py-3 text-right text-rose-400">{format(l.commission)}</td>
-                        <td className="px-5 py-3 text-right font-medium text-fg">{format(l.net_amount)}</td>
-                        <td className="px-5 py-3 text-right">
-                          {canWrite && (
-                            <button
-                              onClick={() => removeLine(l.id)}
-                              className="mise-press rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-paper-2"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="border-b border-line px-5 py-3">
+              <h2 className="text-sm font-semibold text-fg">Today&apos;s lines</h2>
             </div>
+            {summary.lines.length === 0 ? (
+              <p className="px-5 py-8 text-center text-fg-faint">
+                No sales entered for this day yet.
+              </p>
+            ) : (
+              <div className="mise-stagger space-y-2 p-3">
+                {summary.lines.map((l) => (
+                  <div
+                    key={l.id}
+                    className="mise-card-inset relative flex items-center gap-3 overflow-hidden px-4 py-3 pl-5"
+                  >
+                    <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400/70" />
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-display font-semibold text-fg">
+                        {l.channel_name}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-fg-faint">
+                        {l.payment_method}
+                        {" · "}
+                        {format(l.gross_amount)} gross
+                        {parseFloat(l.commission) > 0
+                          ? ` · ${format(l.commission)} commission`
+                          : ""}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-right">
+                      <span className="block font-mono font-semibold tabular-nums text-fg">
+                        {format(l.net_amount)}
+                      </span>
+                      <span className="block text-[10px] text-fg-faint">net</span>
+                    </span>
+                    {canWrite && (
+                      <button
+                        onClick={() => removeLine(l.id)}
+                        className="mise-press shrink-0 rounded-md border border-line px-2 py-1 text-xs text-fg-faint transition hover:border-rose-400/50 hover:text-rose-300"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
 
