@@ -33,7 +33,12 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 
 import { API_BASE, api, ApiError, getToken } from "@/lib/api";
-import { listen as awsListen, type Listener } from "@/lib/transcribe";
+import {
+  foldSegments,
+  listen as awsListen,
+  type Listener,
+  type Utterance,
+} from "@/lib/transcribe";
 import { useDraggable } from "@/components/useDraggable";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
 
@@ -129,7 +134,9 @@ function needsAsking(mode: Ask, fields: Record<string, string>): boolean {
 type SpeechAlt = { transcript: string };
 type SpeechResult = { isFinal: boolean; 0: SpeechAlt; length: number };
 type SpeechResults = { length: number; [i: number]: SpeechResult };
-type SpeechEvent = { results: SpeechResults };
+// `resultIndex` is where THIS event's news starts. Reading from 0 instead was
+// the duplication: it re-read entries that had already been folded in.
+type SpeechEvent = { results: SpeechResults; resultIndex?: number };
 type SpeechErrorEvent = { error: string };
 interface Recognizer {
   lang: string;
@@ -853,12 +860,21 @@ export function VoiceBubble() {
   const askRef = useRef(ask);
   askRef.current = ask;
 
+  /** What the BROWSER recogniser has heard so far, folded the same way the
+   *  Transcribe stream is.
+   *
+   * There were two transcript paths and only one of them had ever been fixed.
+   * Chrome uses this one, so every duplication report was about code the fold
+   * never touched. */
+  const liveUtterRef = useRef<Utterance>({ finals: [], partial: "" });
+
   const armSilence = useCallback(() => {
     if (silenceRef.current) window.clearTimeout(silenceRef.current);
     silenceRef.current = window.setTimeout(() => {
       const said = heardRef.current.trim();
       heardRef.current = "";
       awsRef.current?.reset();
+      liveUtterRef.current = { finals: [], partial: "" };
 
       // With the wake word on, everything before "hey DineAI" is the room
       // talking. What follows it is the request.
@@ -977,13 +993,45 @@ export function VoiceBubble() {
     setHeard("");
     heardRef.current = "";
     awsRef.current?.reset();
+    liveUtterRef.current = { finals: [], partial: "" };
     setPhase("listening");
 
     rec.onresult = (e) => {
       // Same loop, same deafness — the browser's own ears hear the speakers too.
       if (isDeaf()) return;
-      let text = "";
-      for (let i = 0; i < e.results.length; i += 1) text += e.results[i][0].transcript;
+
+      // THIS LOOP WAS THE DUPLICATION, and it survived three fixes aimed at the
+      // wrong file. It read:
+      //
+      //     for (let i = 0; i < e.results.length; i += 1)
+      //       text += e.results[i][0].transcript;
+      //
+      // Every entry concatenated, with NO separator, on every event — so a
+      // sentence that grew across two results came out "areare you there" and
+      // "couldcould you please". His CloudWatch turns are full of it.
+      //
+      // `e.results` is CUMULATIVE and INDEXED: the same sentence firming up
+      // keeps its index, and a genuinely new one gets the next. Both of those
+      // are exactly what `foldSegments` already decides correctly for the
+      // Transcribe stream — a growing prefix replaces itself, unrelated text is
+      // a new segment. There were two transcript paths and only one had ever
+      // been fixed; Chrome uses this one, which is why every report was about
+      // code the fold never saw. One fold now, for both ears.
+      const seen: {
+        IsPartial: boolean;
+        Alternatives: { Transcript: string }[];
+      }[] = [];
+      // Older engines omit `resultIndex`; re-folding from 0 is safe because the
+      // fold replaces a growing prefix rather than appending it.
+      for (let i = e.resultIndex ?? 0; i < e.results.length; i += 1) {
+        seen.push({
+          IsPartial: !e.results[i].isFinal,
+          Alternatives: [{ Transcript: e.results[i][0]?.transcript ?? "" }],
+        });
+      }
+      const folded = foldSegments(liveUtterRef.current, seen);
+      if (!folded) return;
+      const text = folded.whole;
       heardRef.current = text;
       paintHeard(text);
       setLevel(0.3 + Math.min(0.6, text.length / 60));
