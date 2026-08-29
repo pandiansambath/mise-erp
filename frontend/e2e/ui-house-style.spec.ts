@@ -16,12 +16,72 @@ import { expect, test } from "@playwright/test";
 
 const BASE = "https://nirai1.dineai.cloud";
 
-const PAGES = [
+/**
+ * Each page has to be DRIVEN to the state where its cards exist. The first
+ * version of this audit counted them at rest and reported zero everywhere —
+ * expenses opens on today and is empty on a quiet day, the vendor cards live
+ * inside a detail sheet, and the comparison cards need an item chosen. It was
+ * measuring three blank pages and calling the sweep missing.
+ */
+const PAGES: {
+  path: string;
+  name: string;
+  reference: boolean;
+  reach?: (page: import("@playwright/test").Page) => Promise<void>;
+}[] = [
   { path: "/staff", name: "ref-staff", reference: true },
   { path: "/purchasing", name: "ref-purchasing", reference: true },
-  { path: "/expenses", name: "swept-expenses", reference: false },
-  { path: "/vendors", name: "swept-vendors", reference: false },
-  { path: "/price-comparison", name: "swept-price-comparison", reference: false },
+  {
+    path: "/expenses",
+    name: "swept-expenses",
+    reference: false,
+    // Widen off "today", or there is nothing to draw.
+    reach: async (page) => {
+      await page.locator('button[aria-haspopup="dialog"]').first().click();
+      await page.waitForTimeout(500);
+      await page.getByRole("button", { name: /^This year/ }).first().click();
+      await page.waitForTimeout(2500);
+    },
+  },
+  {
+    path: "/vendors",
+    name: "swept-vendors",
+    reference: false,
+    // The supply list is inside the sheet a vendor opens.
+    reach: async (page) => {
+      await page.getByRole("button", { name: /supplies|items priced|^\d+ items/i }).first()
+        .click()
+        .catch(async () => {
+          await page.locator("[data-testid='vendor-row'], tbody tr, li button").first().click();
+        });
+      await page.waitForTimeout(2000);
+      await page.getByRole("button", { name: /what they supply|supply/i }).first().click().catch(() => {});
+      await page.waitForTimeout(1500);
+    },
+  },
+  {
+    path: "/price-comparison",
+    name: "swept-price-comparison",
+    reference: false,
+    // The quote cards need an item chosen.
+    reach: async (page) => {
+      await page.locator("li button, [data-testid='item-tile'], button").filter({ hasText: /./ })
+        .nth(6)
+        .click()
+        .catch(() => {});
+      await page.waitForTimeout(2500);
+    },
+  },
+  {
+    path: "/employees",
+    name: "swept-employees",
+    reference: false,
+  },
+  {
+    path: "/sales",
+    name: "swept-sales",
+    reference: false,
+  },
 ];
 
 test("every swept page is built from the reference card", async ({ page }) => {
@@ -51,7 +111,9 @@ test("every swept page is built from the reference card", async ({ page }) => {
         message: `${p.path} never rendered`,
       })
       .toBeGreaterThan(40);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2000);
+    if (p.reach) await p.reach(page);
+    await page.waitForTimeout(1200);
 
     const counts = await page.evaluate(() => {
       const n = (sel: string) => document.querySelectorAll(sel).length;
@@ -77,6 +139,10 @@ test("every swept page is built from the reference card", async ({ page }) => {
   for (const p of PAGES.filter((x) => !x.reference)) {
     const row = report.find((r) => r.page === p.path)!;
     const cards = (row.cardInset as number) + (row.card3d as number);
-    expect(cards, `${p.path} has no reference cards at all`).toBeGreaterThan(0);
+    expect(
+      cards,
+      `${p.path} drew no reference cards — either the sweep missed it or the ` +
+        `test never reached the state that draws them: ${JSON.stringify(row)}`,
+    ).toBeGreaterThan(0);
   }
 });
