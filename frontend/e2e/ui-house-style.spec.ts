@@ -49,14 +49,10 @@ const PAGES: {
     reference: false,
     // The supply list is inside the sheet a vendor opens.
     reach: async (page) => {
-      await page.getByRole("button", { name: /supplies|items priced|^\d+ items/i }).first()
-        .click()
-        .catch(async () => {
-          await page.locator("[data-testid='vendor-row'], tbody tr, li button").first().click();
-        });
-      await page.waitForTimeout(2000);
-      await page.getByRole("button", { name: /what they supply|supply/i }).first().click().catch(() => {});
-      await page.waitForTimeout(1500);
+      // A stable handle beats guessing at accessible names: this list is
+      // supplier NAMES, so any name-based selector is really matching his data.
+      await page.getByTestId("vendor-card").first().click();
+      await page.waitForTimeout(2500);
     },
   },
   {
