@@ -8,6 +8,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { API_BASE, api, postForm } from "@/lib/api";
 import { PageHeader } from "@/components/ui";
+import { SheetPopup } from "@/components/SheetPopup";
 
 type ChatSummary = {
   chat_id: string;
@@ -330,14 +331,12 @@ function MessagesInner() {
       </div>
 
       {searchOpen && (
-        <div className="fixed inset-0 z-[150] flex items-start justify-center p-4 pt-24" role="dialog" aria-modal="true">
-          <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSearchOpen(false)} aria-hidden />
-          <div className="mise-pop-lg relative w-full max-w-md overflow-hidden rounded-3xl border border-line bg-paper-2 shadow-2xl shadow-black/40">
-            <div className="border-b border-line px-4 py-3">
-              <p className="text-sm font-semibold text-fg">Find a hotel to message</p>
-              <p className="text-xs text-fg-faint">Search by their @username or name.</p>
-            </div>
-            <div className="p-3">
+        <SheetPopup
+          onClose={() => setSearchOpen(false)}
+          title="Find a hotel to message"
+          subtitle="Search by their @username or name"
+        >
+            <div>
               <input
                 autoFocus
                 value={sq}
@@ -370,8 +369,7 @@ function MessagesInner() {
                 ))}
               </div>
             </div>
-          </div>
-        </div>
+        </SheetPopup>
       )}
     </div>
   );

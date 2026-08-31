@@ -8,6 +8,7 @@ import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { Donut } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { SortBar, useSort } from "@/components/sortable";
+import { SheetPopup } from "@/components/SheetPopup";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -498,18 +499,8 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
   }
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
-      <div className="mise-pop-lg relative flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line bg-paper-2 shadow-2xl shadow-black/40">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-400">🔐 Login & access</p>
-            <h3 className="font-display text-xl text-fg">{employee.full_name}</h3>
-          </div>
-          <button onClick={onClose} aria-label="Close" className="mise-press grid h-9 w-9 place-items-center rounded-xl text-fg-faint hover:bg-fg/5">✕</button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+    <SheetPopup onClose={onClose} title={employee.full_name} subtitle="🔐 Login & access" columns={2}>
+        <div>
           {!loaded ? (
             <p className="text-sm text-fg-faint">Loading…</p>
           ) : !status ? (
@@ -612,7 +603,6 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
             </>
           )}
         </div>
-      </div>
-    </div>
+    </SheetPopup>
   );
 }
