@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
 import { DetailSheet, DetailStats, SheetRing } from "@/components/DetailSheet";
+import { SheetPopup } from "@/components/SheetPopup";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -1745,19 +1746,12 @@ export default function InventoryPage() {
       )}
 
       {templateModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setTemplateModal(false)} aria-hidden />
-          <div className="mise-pop-lg relative w-full max-w-sm rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-fg">Download import template</h3>
-                <p className="mt-0.5 text-xs text-fg-faint">
-                  Fill the Excel or CSV, then use <b className="text-fg-soft">⬆ Import (template)</b>. PDF is a printable reference.
-                </p>
-              </div>
-              <button onClick={() => setTemplateModal(false)} className="shrink-0 text-fg-faint hover:text-fg" aria-label="Close">✕</button>
-            </div>
-            <div className="mt-4 grid gap-2">
+        <SheetPopup
+          onClose={() => setTemplateModal(false)}
+          title="Download import template"
+          subtitle="Fill the Excel or CSV, then use ⬆ Import (template). PDF is a printable reference."
+        >
+            <div className="grid gap-2">
               {[
                 { ext: "xlsx", label: "Excel (.xlsx)", desc: "Best for filling on a computer", icon: "📊" },
                 { ext: "csv", label: "CSV (.csv)", desc: "Universal — opens anywhere", icon: "📄" },
@@ -1777,8 +1771,7 @@ export default function InventoryPage() {
                 </button>
               ))}
             </div>
-          </div>
-        </div>
+        </SheetPopup>
       )}
 
       {/* Item detail — opens in place, with room for the full story */}

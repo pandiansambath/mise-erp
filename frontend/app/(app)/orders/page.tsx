@@ -65,15 +65,22 @@ const FLOW: Record<string, string[]> = {
   READY: ["OUT_FOR_DELIVERY", "COMPLETED"],
   OUT_FOR_DELIVERY: ["COMPLETED"],
 };
-const STATUS_META: Record<string, { label: string; tone: string; emoji: string }> = {
-  NEW: { label: "New", tone: "bg-amber-500/15 text-amber-500", emoji: "🛎️" },
-  CONFIRMED: { label: "Confirmed", tone: "bg-sky-500/15 text-sky-400", emoji: "👍" },
-  PREPARING: { label: "Preparing", tone: "bg-violet-500/15 text-violet-400", emoji: "🔥" },
-  READY: { label: "Ready", tone: "bg-emerald-500/15 text-emerald-400", emoji: "✅" },
-  OUT_FOR_DELIVERY: { label: "Out for delivery", tone: "bg-cyan-500/15 text-cyan-400", emoji: "🛵" },
-  COMPLETED: { label: "Completed", tone: "bg-line/40 text-fg-soft", emoji: "🏁" },
-  REJECTED: { label: "Rejected", tone: "bg-rose-500/15 text-rose-400", emoji: "🚫" },
-  CANCELLED: { label: "Cancelled", tone: "bg-line/40 text-fg-faint", emoji: "—" },
+// `stripe` is the bar down the left of the card. On a live board it answers
+// "which of these needs me RIGHT NOW" before you have read a single word —
+// amber is waiting on you, the cool colours are in flight, grey is finished.
+// That is the whole reason the reference pages have a stripe at all.
+const STATUS_META: Record<
+  string,
+  { label: string; tone: string; emoji: string; stripe: string }
+> = {
+  NEW: { label: "New", tone: "bg-amber-500/15 text-amber-500", emoji: "🛎️", stripe: "bg-amber-400" },
+  CONFIRMED: { label: "Confirmed", tone: "bg-sky-500/15 text-sky-400", emoji: "👍", stripe: "bg-sky-400/80" },
+  PREPARING: { label: "Preparing", tone: "bg-violet-500/15 text-violet-400", emoji: "🔥", stripe: "bg-violet-400/80" },
+  READY: { label: "Ready", tone: "bg-emerald-500/15 text-emerald-400", emoji: "✅", stripe: "bg-emerald-400" },
+  OUT_FOR_DELIVERY: { label: "Out for delivery", tone: "bg-cyan-500/15 text-cyan-400", emoji: "🛵", stripe: "bg-cyan-400/80" },
+  COMPLETED: { label: "Completed", tone: "bg-line/40 text-fg-soft", emoji: "🏁", stripe: "bg-fg-faint/25" },
+  REJECTED: { label: "Rejected", tone: "bg-rose-500/15 text-rose-400", emoji: "🚫", stripe: "bg-rose-400/80" },
+  CANCELLED: { label: "Cancelled", tone: "bg-line/40 text-fg-faint", emoji: "—", stripe: "bg-fg-faint/25" },
 };
 const ADVANCE_LABEL: Record<string, string> = {
   CONFIRMED: "Accept 👍",
@@ -105,10 +112,13 @@ function OrderCard({ o, onMove, riders, onAssign, forceOpen = false }: {
   const nexts = FLOW[o.status] ?? [];
   return (
     <div
-      className={`mise-feel rounded-2xl border border-line bg-paper p-4 transition ${
+      /* The reference card, per /staff and /purchasing: the shadow is pressed
+         INTO the page rather than thrown on top of it. */
+      className={`mise-card-inset relative overflow-hidden p-4 pl-5 transition ${
         o.status === "NEW" ? "mise-moved-glow" : ""
       }`}
     >
+      <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${meta.stripe}`} />
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
