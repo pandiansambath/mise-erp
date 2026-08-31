@@ -6,6 +6,7 @@ import SpotlightCard from "@/components/reactbits/SpotlightCard";
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 import { Sparkline } from "@/components/charts";
+import { AnimatedNumber } from "@/components/fx";
 import ChefMascot from "@/components/auth/ChefMascot";
 
 export function Card({
@@ -37,6 +38,46 @@ const SPARK_TONES: Record<string, string> = {
   rose: "#f43f5e",
   copper: "#eab78a",
 };
+
+/** A headline figure that rolls to its new value, keeping its formatting.
+ *
+ * Every page hands StatCard a string that has already been through the currency
+ * formatter — "£3,848.96", "12 items", "6.5h". Rather than make thirty call
+ * sites pass a raw number AND a formatter, this pulls the number back out,
+ * animates it, and puts the original's prefix and suffix back around it. So one
+ * change here gives every headline number in the app the same roll, and no page
+ * had to be edited to get it.
+ *
+ * It deliberately does nothing to a value with no number in it ("—", "Off"),
+ * and nothing when the digits are unchanged — a card that re-renders for an
+ * unrelated reason should not replay its animation. `AnimatedNumber` already
+ * honours prefers-reduced-motion.
+ */
+function StatValue({ value }: { value: ReactNode }) {
+  if (typeof value !== "string" && typeof value !== "number") return <>{value}</>;
+  const text = String(value);
+  // prefix (currency, sign), the number itself, then whatever trails it.
+  const m = text.match(/^([^\d-]*)(-?[\d,]*\.?\d+)(.*)$/);
+  if (!m) return <>{text}</>;
+  const [, prefix, digits, suffix] = m;
+  const n = parseFloat(digits.replace(/,/g, ""));
+  if (!Number.isFinite(n)) return <>{text}</>;
+
+  // Match the ORIGINAL's shape: if it showed two decimals and thousands
+  // separators, every frame of the count must too, or the number changes width
+  // as it rolls and the whole row twitches.
+  const dot = digits.indexOf(".");
+  const decimals = dot < 0 ? 0 : digits.length - dot - 1;
+  const grouped = digits.includes(",");
+  const shape = (v: number) =>
+    `${prefix}${v.toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+      useGrouping: grouped,
+    })}${suffix}`;
+
+  return <AnimatedNumber value={n} format={shape} from="previous" duration={520} />;
+}
 
 export function StatCard({
   label,
@@ -88,7 +129,9 @@ export function StatCard({
         )}
       </p>
       <p className={`mt-2 flex items-baseline gap-2 text-2xl font-semibold ${accents[accent]}`}>
-        <span className="font-mono tracking-tight">{value}</span>
+        <span className="font-mono tracking-tight">
+          <StatValue value={value} />
+        </span>
         {delta && (
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
