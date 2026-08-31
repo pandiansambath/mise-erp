@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import Link from "next/link";
 import { Badge, Card, Spinner } from "@/components/ui";
+import { SheetPopup } from "@/components/SheetPopup";
 import { Workbench } from "@/components/Workbench";
 import { OrderFlow } from "@/components/order/OrderFlow";
 import type { ListFilter } from "@/components/ListControls";
@@ -1766,27 +1767,34 @@ export default function PurchasingPage() {
       </div>
 
       {recvPo && (
-        <div
-          /* z-[150]: this opens FROM the purchase-order sheet, so it has to sit
-             above it. At z-50 it tied with the sheet (DetailSheet is 50 +
-             depth*10) and lost on document order — which is why pressing
-             "Receive into stock" looked like it did nothing and he had to close
-             the sheet to find the dialog waiting underneath. Third time he has
-             reported this shape of bug; the confirm dialog had it too. */
-          className="fixed inset-0 z-[150] flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRecvPo(null)} aria-hidden />
-          <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
-            <div className="mb-1 flex items-start justify-between">
-              <h3 className="text-lg font-semibold text-fg">Receive {recvPo.po_number}</h3>
-              <button onClick={() => setRecvPo(null)} className="-mr-1 -mt-1 rounded-lg p-1 text-fg-faint hover:bg-paper hover:text-fg" aria-label="Close">✕</button>
+        <SheetPopup
+          /* depth 2, because this opens FROM the purchase-order sheet. It used
+             to hand-roll z-[150] to win that fight; the shared popup already
+             knows how to stack, so the rule lives in one place instead of in a
+             number chosen on this page. */
+          depth={2}
+          columns={2}
+          onClose={() => setRecvPo(null)}
+          title={`Receive ${recvPo.po_number}`}
+          subtitle="Enter what actually arrived — short or over, add a reason and both documents stay downloadable"
+          footer={
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setRecvPo(null)}
+                className="mise-press rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitReceive}
+                disabled={recvBusy}
+                className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              >
+                {recvBusy ? "Receiving…" : "✓ Receive into stock"}
+              </button>
             </div>
-            <p className="mb-3 text-sm text-fg-faint">
-              Enter what actually arrived. If a line is short or over, edit its received qty and add a reason —
-              the ordered PO and this received note both stay downloadable.
-            </p>
+          }
+        >
 
             {/* Scan the vendor bill → auto-fill received qty + new prices. */}
             <div className="mb-4 rounded-xl border border-brand-500/30 bg-brand-500/[0.05] p-3">
@@ -1878,14 +1886,7 @@ export default function PurchasingPage() {
                 />
               </label>
             )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setRecvPo(null)} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper">Cancel</button>
-              <button onClick={submitReceive} disabled={recvBusy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-                {recvBusy ? "Receiving…" : "✓ Receive into stock"}
-              </button>
-            </div>
-          </div>
-        </div>
+        </SheetPopup>
       )}
 
       {/* Indent detail — opens in place */}

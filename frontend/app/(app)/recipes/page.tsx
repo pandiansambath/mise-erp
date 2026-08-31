@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtQty } from "@/lib/quantity";
 import { api, ApiError, postForm, type Item, type Recipe, type RecipeCostBreakdown } from "@/lib/api";
 import { Badge, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { SheetPopup } from "@/components/SheetPopup";
 import { Bars, Donut, Treemap } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { ALLERGENS, parseAllergens } from "@/lib/allergens";
@@ -987,17 +988,32 @@ export default function RecipesPage() {
 
       {/* Handwritten-note OCR preview — review/fix each line, then add to ingredients. */}
       {notePreview && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setNotePreview(null)} aria-hidden />
-          <div className="mise-pop-lg relative max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-paper-2 p-5 shadow-2xl shadow-black/50">
-            <div className="mb-1 flex items-start justify-between">
-              <h3 className="text-lg font-semibold text-fg">Review the scanned note</h3>
-              <button onClick={() => setNotePreview(null)} className="-mr-1 -mt-1 rounded-lg p-1 text-fg-faint hover:bg-paper hover:text-fg" aria-label="Close">✕</button>
+        <SheetPopup
+          onClose={() => setNotePreview(null)}
+          title="Review the scanned note"
+          subtitle="Fix any mismatches, then add them — lines with no item are skipped. Handwriting varies, so always double-check."
+          columns={3}
+          /* The actions live in the popup's FOOTER now rather than after the
+             list. With twenty scanned lines the Add button was below all of
+             them, so confirming meant scrolling past the thing you had just
+             finished checking. */
+          footer={
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setNotePreview(null)}
+                className="mise-press rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmNote}
+                className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              >
+                Add {notePreview.filter((l) => l.item_id).length} to ingredients
+              </button>
             </div>
-            <p className="mb-4 text-sm text-fg-faint">
-              We matched each line to an inventory item. Fix any mismatches, set quantities, then add
-              them. Lines with no item selected are skipped. Handwriting varies — always double-check.
-            </p>
+          }
+        >
             <div className="space-y-2">
               {notePreview.map((l, i) => (
                 <div key={i} className="rounded-lg border border-line px-3 py-2">
@@ -1031,14 +1047,7 @@ export default function RecipesPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setNotePreview(null)} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper">Cancel</button>
-              <button onClick={confirmNote} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                Add {notePreview.filter((l) => l.item_id).length} to ingredients
-              </button>
-            </div>
-          </div>
-        </div>
+        </SheetPopup>
       )}
     </div>
   );
