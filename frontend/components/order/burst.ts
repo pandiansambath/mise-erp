@@ -32,6 +32,24 @@ const SHARDS = 10;
  * on the click — a catch that happens before the throw arrives reads as two
  * unrelated twitches.
  */
+/**
+ * The burst, for anything that moves from A to B.
+ *
+ * It was written for the order pad, so it was named for a basket — but nothing
+ * in it is about baskets: it flies a shrinking copy of one element into
+ * another. Waste going into a bin, a document into a folder, a shift onto a
+ * day all deserve the same "that went in there".
+ *
+ * The name is the whole change. `burstToBasket(el, "mise-waste-bin")` reads as
+ * a lie on a page with no basket, and a lie in a call site is how the next
+ * person decides not to use it.
+ */
+export const burstToTarget = (
+  from: HTMLElement | null,
+  targetId: string,
+  label?: string,
+): Promise<void> => burstToBasket(from, targetId, label);
+
 export function burstToBasket(
   from: HTMLElement | null,
   basketId = "mise-basket",
