@@ -30,7 +30,7 @@ import ClickSpark from "@/components/reactbits/ClickSpark";
 import GlareHover from "@/components/reactbits/GlareHover";
 import SpotlightCard from "@/components/reactbits/SpotlightCard";
 import Magnet from "@/components/reactbits/Magnet";
-import { overlayOpened } from "@/lib/overlay";
+import { SheetPopup as Sheet } from "@/components/SheetPopup";
 import { useConfirm } from "@/components/confirm";
 
 export type OrderLine = {
@@ -141,107 +141,6 @@ const groupOf = (it: Item) => it.category?.trim() || OTHER;
 
 /** A popup. Escape closes, the backdrop closes, and it traps nothing it should
  *  not — these stack, so each one only ever closes itself. */
-function Sheet({
-  onClose,
-  title,
-  subtitle,
-  depth = 1,
-  panelId,
-  columns = 1,
-  children,
-  footer,
-}: {
-  onClose: () => void;
-  title: string;
-  subtitle?: string;
-  /** 1 = over the page, 2 = over another sheet. Only the depth changes. */
-  depth?: 1 | 2;
-  /** So anything on the page can find this panel and animate it. */
-  panelId?: string;
-  /** A depth-2 sheet that has outgrown a single column — the basket, once it
-   *  holds more than a few lines. */
-  /** How many card columns this sheet should be able to hold. The panel is
-   *  sized to fit them; more items means a wider panel, not a longer scroll. */
-  columns?: 1 | 2 | 3 | 4;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    // The page behind must not scroll under a popup, and the floating launcher
-    // must not sit on top of one.
-    const release = overlayOpened();
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      release();
-    };
-  }, [onClose]);
-
-  const z = depth === 1 ? "z-[70]" : "z-[80]";
-  // Centred, both axes, at every size. It used to be pinned to the top with
-  // side insets, so it sat high and off-centre — "this popup is not centred".
-  // No -translate-x-1/2 here: .mise-pop-centre carries the centring inside its
-  // keyframes, because an animation's transform replaces the class's.
-  // Width follows the CONTENT, at both depths. A popup that stays one size while
-  // its list grows is a popup you scroll instead of read.
-  const box =
-    depth === 1
-      ? columns >= 4
-        ? "left-1/2 top-1/2 w-[min(72rem,95vw)]"
-        : columns === 3
-          ? "left-1/2 top-1/2 w-[min(56rem,94vw)]"
-          : columns === 2
-            ? "left-1/2 top-1/2 w-[min(40rem,94vw)]"
-            : "left-1/2 top-1/2 w-fit min-w-[min(22rem,92vw)] max-w-[min(30rem,94vw)]"
-      : columns >= 4
-        ? "left-1/2 top-1/2 w-[min(72rem,95vw)]"
-        : columns === 3
-          ? "left-1/2 top-1/2 w-[min(58rem,94vw)]"
-          : columns === 2
-            ? "left-1/2 top-1/2 w-[min(42rem,94vw)]"
-            : "left-1/2 top-1/2 w-[min(26rem,94vw)]";
-
-  return (
-    <>
-      <div
-        data-sheet-backdrop
-        className={`mise-fade fixed inset-0 ${z} bg-black/50 backdrop-blur-sm`}
-        onClick={onClose}
-        aria-hidden
-      />
-      <div
-        id={panelId}
-        role="dialog"
-        aria-label={title}
-        className={`mise-pop-centre mise-sheet-sheen fixed ${box} ${z} flex max-h-[86dvh] flex-col overflow-hidden rounded-3xl border border-line bg-paper shadow-2xl`}
-      >
-        <div className="relative flex shrink-0 items-start justify-between gap-3 border-b border-line bg-gradient-to-b from-brand-500/10 to-transparent px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate font-display text-lg font-semibold text-fg">{title}</p>
-            {subtitle && <p className="truncate text-xs text-fg-faint">{subtitle}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line-2 text-fg-soft transition hover:border-brand-400/50"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">{children}</div>
-        {footer && <div className="shrink-0 border-t border-line p-3">{footer}</div>}
-      </div>
-    </>
-  );
-}
-
 /** How much, and in which size. The whole point of the second popup. */
 function ItemSheet({
   item,
