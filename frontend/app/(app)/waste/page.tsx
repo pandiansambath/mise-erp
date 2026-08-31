@@ -11,6 +11,8 @@ import {
   type WasteRow,
 } from "@/lib/api";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
+import { TileCard, TileRow, type StripeTone } from "@/components/TileCard";
+import { burstToTarget } from "@/components/order/burst";
 import { Bars, Donut, Sparkline } from "@/components/charts";
 import { ItemPickerSingle, QtyInput } from "@/components/ItemPicker";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +34,20 @@ const REASONS = [
   { label: "Customer return", emoji: "↩️" },
   { label: "Other", emoji: "🏷️" },
 ];
+
+/** The stripe, by reason — and it is not decoration.
+ *
+ * Spoilage and breakage are money that went in the bin and could have been
+ * stopped; a staff meal is food that fed someone. Colouring them the same
+ * would be the app telling him they are the same problem. */
+const REASON_TONE: Record<string, StripeTone> = {
+  "Spoiled / expired": "overdue",
+  "Spillage / breakage": "overdue",
+  "Over-preparation": "soon",
+  "Customer return": "soon",
+  "Staff meal": "ok",
+  Other: "none",
+};
 
 export default function WastePage() {
   const { user } = useAuth();
@@ -81,6 +97,11 @@ export default function WastePage() {
     setBusy(true);
     try {
       await api.post<WasteRow>("/inventory/waste", { item_id: itemId, quantity: qty, reason });
+      // The purchasing burst, on the one page where the metaphor is literal:
+      // the thing you just logged flies into the bin. It fires AFTER the server
+      // said yes, so the animation never tells him something happened that did
+      // not.
+      await burstToTarget(document.getElementById("waste-form"), "mise-waste-bin", chosen?.name);
       setItemId("");
       setQty("");
       setReason(REASONS[0].label);
@@ -177,16 +198,20 @@ export default function WastePage() {
               </label>
               <div className="block">
                 <span className="block text-xs font-medium text-fg-faint">Reason</span>
-                <div className="mt-1 flex flex-wrap gap-2">
+                <div className="mise-well mt-1 flex flex-wrap gap-1 rounded-xl p-1">
                   {REASONS.map((r) => (
                     <button
                       key={r.label}
                       type="button"
                       onClick={() => setReason(r.label)}
-                      className={`mise-press rounded-xl px-3 py-2 text-xs font-medium transition ${
+                      aria-pressed={reason === r.label}
+                      /* The same chip the order pad's "show by" uses — one
+                         idiom for "pick one of these", rather than two that
+                         look almost alike. */
+                      className={`mise-press rounded-lg px-3 py-2 text-xs font-semibold transition ${
                         reason === r.label
-                          ? "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
-                          : "mise-raised text-fg-soft"
+                          ? "bg-brand-600 text-white"
+                          : "text-fg-soft hover:text-fg"
                       }`}
                     >
                       <span aria-hidden className="mr-1 text-sm">{r.emoji}</span>
@@ -209,6 +234,70 @@ export default function WastePage() {
         </Card>
       )}
 
+      <Card className="p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+          <h3 className="font-semibold text-fg">
+            {/* The bin the burst flies INTO. It has to be a real element on the
+                page with a real position, or the bubble has nowhere to land. */}
+            <span
+              id="mise-waste-bin"
+              aria-hidden
+              className="mr-2 inline-block text-lg"
+              title="Logged waste lands here"
+            >
+              🗑
+            </span>
+            Recent waste
+          </h3>
+          <div className="flex items-center gap-3">
+            {data && (
+              <span className="text-sm text-fg-soft">
+                {format(data.total_value)} · {data.entry_count} entr{data.entry_count === 1 ? "y" : "ies"}
+              </span>
+            )}
+            {data && data.rows.length > 0 && (
+              <div className="flex gap-2">
+                <Button size="sm" variant="soft" onClick={() => downloadFile("/inventory/waste.xlsx", "mise-waste-log.xlsx")} title="Download waste log (Excel)">
+                  ⬇ Excel
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => downloadFile("/inventory/waste.csv", "mise-waste-log.csv")} title="Download waste log (CSV)">
+                  CSV
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+        {!data || data.rows.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-fg-faint">
+            No waste logged yet — that&apos;s the goal. 🎯
+          </p>
+        ) : (
+          <div className="mise-stagger grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.rows.map((w) => (
+              <TileCard key={w.id} tone={REASON_TONE[w.reason || "Other"] ?? "none"}>
+                <span className="flex items-start justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="block truncate font-display text-sm font-semibold text-fg">
+                      {w.item_name}
+                    </span>
+                    <span className="block truncate text-[11px] text-fg-faint">
+                      {w.reason || "Other"} · {w.created_at.slice(0, 10)}
+                    </span>
+                  </span>
+                  <Badge tone="red">−{format(w.value)}</Badge>
+                </span>
+                <dl className="mt-2.5 border-t border-line/50 pt-2 text-[11px]">
+                  <TileRow label="Binned" value={fmtQty(w.quantity, w.unit)} />
+                </dl>
+              </TileCard>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Charts last, per the rule already applied to Sales and Expenses.
+          What was binned today is the record; the split by reason is how the
+          month looked once it is over. */}
       {reasonSegs.length > 0 && (
         <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card className="mise-feel">
@@ -240,49 +329,6 @@ export default function WastePage() {
           </Card>
         </div>
       )}
-
-      <Card className="p-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
-          <h3 className="font-semibold text-fg">Recent waste</h3>
-          <div className="flex items-center gap-3">
-            {data && (
-              <span className="text-sm text-fg-soft">
-                {format(data.total_value)} · {data.entry_count} entr{data.entry_count === 1 ? "y" : "ies"}
-              </span>
-            )}
-            {data && data.rows.length > 0 && (
-              <div className="flex gap-2">
-                <Button size="sm" variant="soft" onClick={() => downloadFile("/inventory/waste.xlsx", "mise-waste-log.xlsx")} title="Download waste log (Excel)">
-                  ⬇ Excel
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => downloadFile("/inventory/waste.csv", "mise-waste-log.csv")} title="Download waste log (CSV)">
-                  CSV
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-        {!data || data.rows.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-fg-faint">
-            No waste logged yet — that&apos;s the goal. 🎯
-          </p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {data.rows.map((w) => (
-              <li key={w.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-fg">{w.item_name}</span>
-                  <span className="block text-xs text-fg-faint">
-                    {fmtQty(w.quantity, w.unit)}
-                    {w.reason ? ` · ${w.reason}` : ""} · {w.created_at.slice(0, 10)}
-                  </span>
-                </span>
-                <Badge tone="red">−{format(w.value)}</Badge>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
     </div>
   );
 }
