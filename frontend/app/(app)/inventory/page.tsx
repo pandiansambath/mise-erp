@@ -2,8 +2,9 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
-import { DetailSheet, DetailStats, SheetRing } from "@/components/DetailSheet";
+import { DetailSheet, SheetRing } from "@/components/DetailSheet";
 import { SheetPopup } from "@/components/SheetPopup";
+import { InlineEdit } from "@/components/InlineEdit";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -1839,13 +1840,66 @@ export default function InventoryPage() {
       >
         {openItem && (
           <>
-            <DetailStats
-              stats={[
-                { label: "Min level", value: openItem.min_stock_level ?? "—" },
-                { label: "Category", value: openItem.category || "—" },
-                { label: "Suppliers", value: String(openItem.vendor_count ?? 0) },
-              ]}
-            />
+            {/* EDIT IT WHERE IT IS WRITTEN.
+                "in inventory I want useful UI UX bro... like in-place edit."
+                These three were read-only, so changing a minimum level meant
+                opening a form that asked about eight fields — seven of which
+                you did not come to change. Click the value, change it, Enter.
+                The full form still exists for creating an item and for the
+                fields that genuinely travel together. */}
+            <div className="mise-card-inset grid grid-cols-2 gap-3 p-3.5 sm:grid-cols-3">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Min level
+                </p>
+                <div className="mt-0.5 text-sm">
+                  <InlineEdit
+                    label="Minimum stock level"
+                    type="number"
+                    value={openItem.min_stock_level ?? ""}
+                    suffix={openItem.unit}
+                    disabled={!canWrite}
+                    onSave={async (v) => {
+                      await api.patch(`/inventory/items/${openItem.id}`, {
+                        min_stock_level: v === "" ? null : v,
+                      });
+                      await load();
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Category
+                </p>
+                <div className="mt-0.5 text-sm">
+                  <InlineEdit
+                    label="Category"
+                    value={openItem.category ?? ""}
+                    disabled={!canWrite}
+                    /* The categories already in use, so this stays a small set
+                       rather than becoming free text that spawns "Veg",
+                       "veg" and "Vegetables" as three different things. */
+                    options={[
+                      { value: "", label: "— none —" },
+                      ...[...new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))]
+                        .sort()
+                        .map((c) => ({ value: c, label: c })),
+                    ]}
+                    onSave={async (v) => {
+                      await api.patch(`/inventory/items/${openItem.id}`, { category: v || null });
+                      await load();
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  Suppliers
+                </p>
+                <p className="mt-0.5 text-sm text-fg">{openItem.vendor_count ?? 0}</p>
+              </div>
+            </div>
 
             {/* Change the supplier from HERE.
                 "in inventory I need to change the vendor of an item from the
