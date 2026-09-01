@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SubNav } from "@/components/SubNav";
 import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
 import { Card, PageHeader, Spinner } from "@/components/ui";
+import { SheetPopup } from "@/components/SheetPopup";
 import { LeavePanel } from "@/components/LeavePanel";
 import { LEAVE_CHANGED } from "@/components/QuickLeave";
 import { RotaLegend } from "@/components/RotaLegend";
@@ -885,13 +886,31 @@ export default function RotaPage() {
 
       {/* ✏️ shift editor — a proper centered modal (nothing clips, nothing hides) */}
       {editId && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <div className="mise-fade absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditId(null)} aria-hidden />
-          <div className="mise-pop-lg relative w-full max-w-sm rounded-3xl border border-line bg-paper-2 p-6 shadow-2xl shadow-black/40">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-400">✏️ edit shift</p>
-            <h3 className="mt-1 font-display text-xl text-fg">{editName}</h3>
-            <p className="text-xs text-fg-faint">{editDay}</p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+        <SheetPopup
+          onClose={() => setEditId(null)}
+          title={editName}
+          subtitle={`✏️ edit shift · ${editDay}`}
+          footer={
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={eBusy || !eStart || !eEnd || eEnd <= eStart}
+                onClick={() => saveEdit(editId)}
+                className="mise-press flex-1 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {eBusy ? "Saving…" : "Save changes ✓"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditId(null)}
+                className="mise-raised mise-press rounded-xl px-4 py-3 text-sm text-fg-soft"
+              >
+                Cancel
+              </button>
+            </div>
+          }
+        >
+            <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-xs font-medium text-fg-faint">Starts</span>
                 <input type="time" value={eStart} onChange={(e) => setEStart(e.target.value)} className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-base text-fg outline-none" />
@@ -909,22 +928,8 @@ export default function RotaPage() {
             {eEnd && eStart && eEnd <= eStart && (
               <p className="mt-2 rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-400">end must be after start</p>
             )}
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                disabled={eBusy || !eStart || !eEnd || eEnd <= eStart}
-                onClick={() => saveEdit(editId)}
-                className="mise-press flex-1 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
-              >
-                {eBusy ? "Saving…" : "Save changes ✓"}
-              </button>
-              <button type="button" onClick={() => setEditId(null)} className="mise-raised mise-press rounded-xl px-4 py-3 text-sm text-fg-soft">
-                Cancel
-              </button>
-            </div>
-            <p className="mt-2 text-center text-[10px] text-fg-faint">hours &amp; cost recompute automatically on save</p>
-          </div>
-        </div>
+            <p className="mt-3 text-center text-[10px] text-fg-faint">hours &amp; cost recompute automatically on save</p>
+        </SheetPopup>
       )}
     </div>
   );
