@@ -240,7 +240,10 @@ export default function PurchasingPage() {
   const [tab, setTab] = useState<"new" | "indents" | "orders">("new");
 
   // ⌘K "Start a purchase order" (?new=1) → spotlight the indent composer
-  useDeepLink({ new: () => spotlight("indent-form") }, !loading);
+  // The form lives behind the "New order" tab, so pointing at it from Orders
+  // found nothing and apologised. Put the page in the state where the target
+  // exists, THEN point at it.
+  useDeepLink({ new: () => { setTab("new"); spotlight("indent-form"); } }, !loading);
   // Tap-to-expand: which indent / PO row is open, plus a cache of fetched PO lines.
   const [openIndent, setOpenIndent] = useState<string | null>(null);
   const [openPo, setOpenPo] = useState<string | null>(null);
@@ -384,7 +387,11 @@ export default function PurchasingPage() {
     setPeekItem(itemId);
     setPeekPane("suppliers");
     setPeekQty("");
-    setTimeout(() => spotlight(`picked-${itemId}`), 60);
+    // NOT spotlight(`picked-…`). That pointed at a row id from the order pad's
+    // LIST era; the pad is tiles-in-popups now and nothing carries it, so every
+    // arrival from Inventory ended in "that part isn't on this page yet" — the
+    // toast he saw again and again. The peek sheet opening IS the answer, and a
+    // row underneath an open sheet was never going to be seen anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
@@ -1070,7 +1077,6 @@ export default function PurchasingPage() {
                       prev.some((l) => l.item_id === it.id) ? prev : [...prev, { item_id: it.id, qty: "" }],
                     );
                     setPeekItem(null);
-                    setTimeout(() => spotlight(`picked-${it.id}`), 60);
                   }}
                   className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white"
                 >
@@ -1147,7 +1153,6 @@ export default function PurchasingPage() {
                           : [...prev, { item_id: it.id, qty: peekQty }],
                       );
                       setPeekItem(null);
-                      setTimeout(() => spotlight(`picked-${it.id}`), 60);
                     }}
                     disabled={!peekQty}
                     className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
