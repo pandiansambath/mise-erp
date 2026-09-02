@@ -1505,9 +1505,18 @@ export default function PurchasingPage() {
                           const names = [
                             ...new Set(ind.items.map((i) => i.vendor_name).filter(Boolean)),
                           ] as string[];
-                          if (names.length === 0) return " · no supplier yet";
                           if (names.length === 1) return ` · ${names[0]}`;
-                          return ` · ${names.length} suppliers`;
+                          if (names.length > 1) return ` · ${names.length} suppliers`;
+                          // `vendor_name` is only the per-line OVERRIDE, and it
+                          // is usually null — the supplier is normally decided
+                          // when the indent becomes purchase orders. Saying "no
+                          // supplier yet" on a row stamped ORDERED was me
+                          // reading an empty override as an empty answer, which
+                          // is a flat contradiction of the badge beside it.
+                          // Say nothing rather than something false.
+                          return ind.status === "PENDING" || ind.status === "APPROVED"
+                            ? " · supplier not chosen yet"
+                            : "";
                         })()}
                       </span>
                     </span>
