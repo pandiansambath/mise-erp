@@ -1456,41 +1456,58 @@ export default function PurchasingPage() {
                     type="button"
                     onClick={() => toggleIndent(ind)}
                     aria-expanded={open}
-                    className={`mise-card3d mise-press flex w-full items-center gap-3 border px-4 py-3 text-left ${
-                      ind.status === "PENDING"
-                        ? "border-amber-400/30 !bg-amber-400/[0.07]"
-                        : "border-line hover:border-line-2"
+                    /* THE ROWS ALL LOOKED THE SAME, which is why the list was
+                       hard to read: sixty-four of "2026-08-18 · 1 item" tells
+                       you nothing about which one you want. It now names what is
+                       IN it and who it is going to — the only two facts that
+                       tell one purchase request from another.
+
+                       The 44px status tile went with it. Status is the stripe
+                       now, the same as every other list in the app, which gives
+                       the width back to the words. */
+                    className={`mise-card-inset mise-press relative flex w-full items-center gap-3 overflow-hidden px-4 py-3 pl-5 text-left ${
+                      open ? "ring-1 ring-brand-400/40" : ""
                     }`}
                   >
-                    {/* A tile rather than a chevron: status is the first thing
-                        you need, and colour reads faster than a word. */}
                     <span
                       aria-hidden
-                      className={`mise-neo-raised grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg ${
-                        ind.status === "PENDING" ? "text-amber-300"
-                        : ind.status === "APPROVED" ? "text-emerald-300"
-                        : ind.status === "REJECTED" ? "text-rose-300"
-                        : "text-fg-faint"
+                      className={`absolute inset-y-0 left-0 w-1 ${
+                        ind.status === "PENDING"
+                          ? "bg-amber-400"
+                          : ind.status === "APPROVED"
+                            ? "bg-emerald-400"
+                            : ind.status === "REJECTED"
+                              ? "bg-rose-400"
+                              : "bg-fg-faint/30"
                       }`}
-                    >
-                      {ind.status === "ORDERED" ? "🚚" : ind.status === "APPROVED" ? "✓" : ind.status === "REJECTED" ? "✕" : "📋"}
-                    </span>
+                    />
                     <span className="min-w-0 flex-1">
-                      <span className="block font-display text-sm font-semibold text-fg">
-                        {ind.date}
-                        <span className="ml-2 font-sans text-[11px] font-normal text-fg-faint">
-                          {relativeDay(ind.date)}
+                      <span className="flex items-baseline gap-2">
+                        <span className="truncate font-display text-sm font-semibold text-fg">
+                          {/* What is actually in it. Three names and a count
+                              beats "1 item" on every row of a long list. */}
+                          {ind.items.length === 0
+                            ? "Empty request"
+                            : ind.items
+                                .slice(0, 3)
+                                .map((i) => i.item_name)
+                                .join(", ")}
+                          {ind.items.length > 3 && (
+                            <span className="font-sans font-normal text-fg-faint">
+                              {" "}+{ind.items.length - 3} more
+                            </span>
+                          )}
                         </span>
                       </span>
-                      <span className="block text-xs text-fg-faint">
-                        {ind.items.length} item{ind.items.length === 1 ? "" : "s"}
+                      <span className="mt-0.5 block truncate text-[11px] text-fg-faint">
+                        {ind.date} · {relativeDay(ind.date)}
                         {(() => {
-                          // Suppliers involved, from lines we already have — no
-                          // extra request just to count them.
-                          const vendors = new Set(
-                            ind.items.map((i) => i.vendor_name).filter(Boolean),
-                          ).size;
-                          return vendors > 0 ? ` · ${vendors} supplier${vendors === 1 ? "" : "s"}` : "";
+                          const names = [
+                            ...new Set(ind.items.map((i) => i.vendor_name).filter(Boolean)),
+                          ] as string[];
+                          if (names.length === 0) return " · no supplier yet";
+                          if (names.length === 1) return ` · ${names[0]}`;
+                          return ` · ${names.length} suppliers`;
                         })()}
                       </span>
                     </span>
@@ -1628,19 +1645,30 @@ export default function PurchasingPage() {
                           the part that gets cut. On a phone "Purchase · 2026-08-11"
                           truncated to "Purchase…", which named nothing. The word
                           wraps away instead; the date stays whole. */}
-                      <span className="block font-display text-base font-semibold leading-tight text-fg">
-                        {g.runDate ? (
-                          <>
-                            <span className="hidden sm:inline">Purchase · </span>
-                            <span className="tabular-nums">{g.runDate}</span>
-                          </>
-                        ) : (
-                          "Orders with no indent"
-                        )}
+                      {/* WHO it went to, not just when it happened.
+                          Twenty runs headed "Purchase · 2026-08-18" are twenty
+                          rows you cannot tell apart — the date is the one thing
+                          they all share. The supplier is what makes a run
+                          findable ("the Farm2Land one"), so the supplier leads
+                          and the date explains it underneath. */}
+                      <span className="block truncate font-display text-base font-semibold leading-tight text-fg">
+                        {(() => {
+                          const names = [...new Set(g.pos.map((p) => p.vendor_name))].filter(
+                            Boolean,
+                          );
+                          if (names.length === 0) return "Orders with no supplier";
+                          if (names.length === 1) return names[0];
+                          if (names.length === 2) return `${names[0]} + ${names[1]}`;
+                          return `${names[0]} +${names.length - 1} more`;
+                        })()}
                       </span>
                       <span className="block text-[11px] text-fg-faint">
-                        {g.pos.length} order{g.pos.length === 1 ? "" : "s"} ·{" "}
-                        {g.vendorCount} supplier{g.vendorCount === 1 ? "" : "s"} ·{" "}
+                        {g.runDate ? (
+                          <span className="tabular-nums">{g.runDate}</span>
+                        ) : (
+                          "no indent"
+                        )}{" "}
+                        · {g.pos.length} order{g.pos.length === 1 ? "" : "s"} ·{" "}
                         {(() => {
                           const arrived = g.pos.filter((p) => p.status === "RECEIVED").length;
                           return arrived === g.pos.length
