@@ -80,6 +80,36 @@ const STARTERS = ["What did we take today?", "What's running low?", "Open expens
 // nobody can predict, which is why the turn is ended here instead.
 const SILENCE_MS = 1300;
 
+/** A second grace period when the sentence is plainly not finished.
+ *
+ * His CloudWatch has "no no no need to open Rota I just want you to open" —
+ * submitted while he was still speaking, so the model answered half a thought.
+ * A flat 1300ms is too short for a sentence with a pause in it and too long for
+ * "yes"; the answer is not a bigger number, it is noticing.
+ *
+ * A trailing preposition, conjunction or bare verb means the object has not
+ * arrived yet: "open", "to", "add a" — nobody ends a request there. Those get
+ * another beat. Everything else submits at the normal pace, so the fast case
+ * stays fast. */
+const HANGING = new Set([
+  // the object is missing
+  "open", "add", "show", "give", "make", "put", "set", "book", "order", "find",
+  // the sentence is mid-clause
+  "to", "and", "or", "but", "for", "with", "from", "of", "in", "on", "at",
+  "the", "a", "an", "my", "our", "is", "was", "are", "want", "need", "like",
+  "that", "this", "it", "me", "him", "her", "them", "about", "into", "than",
+]);
+const GRACE_MS = 1100;
+
+function looksUnfinished(text: string): boolean {
+  const words = text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/);
+  const last = words[words.length - 1];
+  if (!last) return false;
+  // A single word is an answer ("yes", "cancel"), not a hanging sentence.
+  if (words.length < 2) return false;
+  return HANGING.has(last);
+}
+
 // "my.", "the money thing.", "money pin." — the debris of a feedback loop, and
 // also what a noisy kitchen produces on its own. Acting on two words of it
 // wastes a model call and puts a wrong answer on screen; more importantly it
@@ -110,8 +140,17 @@ function worthAnswering(text: string): boolean {
 // first version of this demanded whitespace immediately after the greeting,
 // so the one phrase he actually tried was the one it could not match. The
 // name on its own counts too: by the second sentence nobody says "hey".
+// WHAT TRANSCRIPTION ACTUALLY HEARS.
+//
+// "DineAI" is not a word, so no recogniser returns it cleanly: a kitchen
+// produces "dine eye", "dying I", "diner", "the night". Matching only the
+// spelling we chose is matching the one string nobody ever says, which is why
+// he tried three greetings and none of them woke it. Each variant below is a
+// homophone of the name; they cost nothing, and each is a wake that would
+// otherwise have failed in silence.
 const WAKE = new RegExp(
-  "\\b(?:(?:hey|hi|hello|ok|okay)[\\s,.!-]+)?(dine\\s*ai|dinei|nirai|jarvis)\\b",
+  "\\b(?:(?:hey|hi|hello|ok|okay|yo)[\\s,.!-]+)?" +
+    "(dine\\s*ai|dine\\s*eye|dying\\s*i|diner|dinah|dinei|the\\s*night|nirai|jarvis)\\b",
   "i",
 );
 
@@ -226,6 +265,28 @@ const Conversation = memo(function Conversation({
   );
 });
 
+/** Must this answer be LOOKED at, rather than just heard?
+ *
+ * A table or a list has shape, and shape is the thing speech cannot carry — you
+ * cannot hear a column. Long prose has the same problem for a different reason:
+ * by the third sentence the first one is gone.
+ *
+ * Deliberately generous. Opening the panel for something he could have just
+ * heard costs him one glance; NOT opening it for a table he asked to see means
+ * the answer effectively never arrived. */
+function worthShowing(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  // A markdown table — the case he actually described.
+  if (/^\s*\|.*\|/m.test(t)) return true;
+  // Two or more list items: bullets or numbers.
+  if ((t.match(/^\s*(?:[-*•]|\d+[.)])\s+/gm) ?? []).length >= 2) return true;
+  // Several lines of anything is already a shape.
+  if (t.split("\n").filter((l) => l.trim()).length >= 3) return true;
+  // Too long to hold in your head while it is being read out.
+  return t.length > 260;
+}
+
 export function VoiceBubble() {
   const router = useRouter();
   const pathname = usePathname();
@@ -282,6 +343,25 @@ export function VoiceBubble() {
   const [typed, setTyped] = useState("");
   // Momentarily out of the way while the page it just opened is revealed.
   const [peeking, setPeeking] = useState(false);
+  /** THE STAGE.
+   *
+   *   "when i click and turn on voice model, it needs to close that bubble chat
+   *    UI and the voice model alone with animated transition needs to glow and
+   *    come to the centre top... here is the twist: suppose i ask show me a
+   *    table which will show items starting with F — for this we need chat
+   *    place, so now the voice model needs to open that chat bubble
+   *    automatically to show the table it created."
+   *
+   * So the panel stops being furniture and becomes something that ARRIVES when
+   * there is something to look at. Talking to it needs no panel at all: the orb
+   * goes to the top of the screen, out of the way of the page you are working
+   * on, and the answer is spoken.
+   *
+   * The judgement is "can this be heard, or does it have to be SEEN". A table,
+   * a list, or an answer too long to hold in your head has to be seen. "Three
+   * hundred and twelve pounds" does not. Getting this wrong in the shy
+   * direction is much worse than the other way, so anything structured counts. */
+  const [showing, setShowing] = useState(false);
   // What it is doing while it is not yet answering — the model's own words for
   // it, which beat a spinner and beat a lie.
   const [doing, setDoing] = useState("");
@@ -342,6 +422,12 @@ export function VoiceBubble() {
   }, []);
 
   const [live, setLive] = useState(false);
+  /** On stage: listening, with nothing on screen that has to be READ.
+   *
+   * Not simply "live and empty" — a question waiting for confirmation, an error,
+   * or an answer with a shape all need the panel, and any of them appearing
+   * takes it off the stage on its own. */
+  const staged = live && !showing && !pending && !err && !peeking;
   // A browser that refused to autoplay has to be tapped once before it will
   // ever make a sound. Saying so is the difference between "broken" and "tap".
   const [needsTap, setNeedsTap] = useState(false);
@@ -491,6 +577,32 @@ export function VoiceBubble() {
   // written. So playback is a QUEUE that drains in order — the first sentence
   // is already being spoken while the model is still thinking of the second.
   // That is where the eight seconds went.
+  /** The real amplitude of what is being SPOKEN, 0..1.
+   *
+   * The core of the orb shakes to this. It used to shake to
+   * `0.35 + Math.random() * 0.5` on a 110ms timer — a mouth moving on a loop,
+   * which is the uncanny thing every talking avatar gets wrong: it is busiest
+   * during silences and calm through the loud parts.
+   *
+   * Everything here is wrapped so that a browser which dislikes any of it falls
+   * back to the old jitter rather than losing the VOICE. Being unable to
+   * animate is a blemish; being unable to speak is the feature gone. */
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const speechLevel = useCallback((): number | null => {
+    const an = analyserRef.current;
+    if (!an) return null;
+    const buf = new Uint8Array(an.frequencyBinCount);
+    an.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i += 1) {
+      const v = (buf[i] - 128) / 128;
+      sum += v * v;
+    }
+    // RMS, lifted into a range the eye can see. Speech rarely exceeds ~0.3 RMS.
+    return Math.min(1, Math.sqrt(sum / buf.length) * 3.2);
+  }, []);
+
   const playChunk = useCallback((b64: string) => {
     return new Promise<void>((resolve) => {
       const a = new Audio(`data:audio/mpeg;base64,${b64}`);
@@ -498,6 +610,32 @@ export function VoiceBubble() {
       const done = () => resolve();
       a.onended = done;
       a.onerror = done;
+
+      // Tap the stream so the orb can react to it. If ANY of this throws the
+      // element still plays normally — it is simply not analysed.
+      try {
+        type Ctor = typeof AudioContext;
+        const W = window as unknown as { AudioContext?: Ctor; webkitAudioContext?: Ctor };
+        const Ctx = W.AudioContext || W.webkitAudioContext;
+        if (Ctx) {
+          const ctx = audioCtxRef.current ?? new Ctx();
+          audioCtxRef.current = ctx;
+          void ctx.resume?.();
+          const an = analyserRef.current ?? ctx.createAnalyser();
+          an.fftSize = 256;
+          analyserRef.current = an;
+          // A fresh element each chunk, so createMediaElementSource is only
+          // ever called once per element — calling it twice throws.
+          const src = ctx.createMediaElementSource(a);
+          src.connect(an);
+          // MUST still reach the speakers: routing through a context and not
+          // connecting to the destination is how you make a page go silent.
+          an.connect(ctx.destination);
+        }
+      } catch {
+        analyserRef.current = null;
+      }
+
       a.play().catch(() => {
         // A browser that refuses autoplay must not leave the queue hanging.
         setNeedsTap(true);
@@ -510,7 +648,12 @@ export function VoiceBubble() {
     if (drainingRef.current) return;
     drainingRef.current = true;
     setPhase("speaking");
-    const tick = window.setInterval(() => setLevel(0.35 + Math.random() * 0.5), 110);
+    // 60ms, and from the AUDIO where we can get it. The fallback keeps the old
+    // jitter so an orb that cannot be measured still looks alive.
+    const tick = window.setInterval(() => {
+      const real = speechLevel();
+      setLevel(real ?? 0.35 + Math.random() * 0.5);
+    }, 60);
     try {
       // "while speaking itself it's stopping in between and after a few it's
       //  continuing."
@@ -543,7 +686,7 @@ export function VoiceBubble() {
       // Back to listening, because the microphone never actually left.
       setPhase(liveRef.current ? "listening" : "idle");
     }
-  }, [playChunk, setLevel]);
+  }, [playChunk, setLevel, speechLevel]);
 
 
   /** Type the values into the real form on the real page. */
@@ -776,6 +919,11 @@ export function VoiceBubble() {
               // fast; it is painted on the frame boundary instead of between
               // them.
               paintReply(reply);
+              // The moment the answer takes a SHAPE — a table, a list, more
+              // than a few lines — the panel is needed and comes back on its
+              // own. Checked as it streams so it opens while the table is
+              // still arriving rather than after it has finished.
+              if (!showing && worthShowing(reply)) setShowing(true);
             } else if (ev.type === "draft_drop") {
               // That text was the model thinking out loud on its way to
               // looking something up. Say so, honestly, instead of leaving a
@@ -812,6 +960,12 @@ export function VoiceBubble() {
         }
 
         if (fills.length) {
+          // FILLING A FORM IS AN ACTION TOO, and the panel has to get out of
+          // the way for it. He asked for this about "any action", not only
+          // navigation — and watching a form fill itself is the case where a
+          // panel over the screen is most in the way, because the form is the
+          // thing he wants to see.
+          setPeeking(true);
           // Several fills are one intention: "a 120 pound cash sale" is one
           // thing to agree to, not three. Merge them into a single question.
           const fields = Object.assign({}, ...fills.map((f) => f.fields)) as Record<
@@ -822,8 +976,20 @@ export function VoiceBubble() {
             .map((f) => f.summary)
             .filter(Boolean)
             .join(" ");
-          if (needsAsking(askMode, fields)) setPending({ fields, summary });
-          else await fillIn(fields);
+          if (needsAsking(askMode, fields)) {
+            // A question needs the panel BACK — he has to read it to answer it.
+            setPeeking(false);
+            setPending({ fields, summary });
+          } else {
+            try {
+              await fillIn(fields);
+              // A beat with a clear view of what it just filled in, then the
+              // panel returns of its own accord. Same rhythm as navigation.
+              await new Promise((r) => setTimeout(r, 900));
+            } finally {
+              setPeeking(false);
+            }
+          }
         }
       } catch (e) {
         streamingRef.current = false;
@@ -868,9 +1034,39 @@ export function VoiceBubble() {
    * never touched. */
   const liveUtterRef = useRef<Utterance>({ finals: [], partial: "" });
 
+  /** True once we have already extended this turn, so a sentence that keeps
+   *  ending on "and" cannot hold the microphone open indefinitely. */
+  const gracedRef = useRef(false);
+
+  /** Each new question starts from the stage: the last answer's table should
+   *  not keep the panel open over the page he has moved on to. */
+  const clearStage = useCallback(() => setShowing(false), []);
+
   const armSilence = useCallback(() => {
     if (silenceRef.current) window.clearTimeout(silenceRef.current);
     silenceRef.current = window.setTimeout(() => {
+      const said = heardRef.current.trim();
+
+      // STILL MID-SENTENCE? Give him one more beat.
+      //
+      // "no no no need to open Rota I just want you to open" went to the model
+      // exactly like that — submitted while he was still speaking, so it
+      // answered half a thought. Nobody ends a request on "open" or "to"; the
+      // object has not arrived yet. Extended ONCE per turn, so the opposite
+      // failure — a turn that never ends — cannot happen either.
+      if (!gracedRef.current && looksUnfinished(said)) {
+        gracedRef.current = true;
+        silenceRef.current = window.setTimeout(() => {
+          gracedRef.current = false;
+          finishTurn();
+        }, GRACE_MS);
+        return;
+      }
+      gracedRef.current = false;
+      finishTurn();
+    }, SILENCE_MS);
+
+    function finishTurn() {
       const said = heardRef.current.trim();
       heardRef.current = "";
       awsRef.current?.reset();
@@ -895,10 +1091,14 @@ export function VoiceBubble() {
         return;
       }
       if (wakeRef.current) awakeUntilRef.current = Date.now() + AWAKE_MS;
-      if (worthAnswering(said)) void askRef.current(said);
-      else setHeard("");
-    }, SILENCE_MS);
-  }, [setHeard]);
+      if (worthAnswering(said)) {
+        // Back to the stage for the new question — the last answer's table must
+        // not keep the panel sitting over the page he has since moved to.
+        clearStage();
+        void askRef.current(said);
+      } else setHeard("");
+    }
+  }, [setHeard, clearStage]);
 
   /** Deaf while we are talking, thinking, or still echoing. */
   const isDeaf = useCallback(
@@ -1264,6 +1464,10 @@ export function VoiceBubble() {
       <div
         style={panelDrag.style}
         data-peeking={peeking || undefined}
+        /* STAGED: live, with nothing that has to be looked at. The orb flies to
+           the top of the screen and the panel is not drawn at all, so the page
+           he is working on is completely clear while he talks to it. */
+        data-staged={staged || undefined}
         className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6"
       >
         <div
@@ -1575,10 +1779,34 @@ export function VoiceBubble() {
               data-phase={phase}
               style={paint as React.CSSProperties}
             >
+              {/* THE RINGS.
+                  "like JARVIS — so many infinite circles, and inside one circle
+                   another kind of circle which shakes whenever it talks."
+
+                  Four rings, each turning at its own speed and in alternating
+                  directions, so they never line up and the whole thing reads as
+                  something running rather than something spinning. They tighten
+                  with `--level`, which is the real microphone amplitude, so the
+                  orb reacts to HIS voice and to its own — not to a timer
+                  pretending to listen.
+
+                  Only drawn while it is awake: four rotating rings on an idle
+                  button is decoration, and this app runs on tills. */}
+              {phase !== "idle" && (
+                <span aria-hidden className="mise-voice-rings">
+                  <i style={{ "--r": "1" } as React.CSSProperties} />
+                  <i style={{ "--r": "2" } as React.CSSProperties} />
+                  <i style={{ "--r": "3" } as React.CSSProperties} />
+                  <i style={{ "--r": "4" } as React.CSSProperties} />
+                </span>
+              )}
               {phase === "idle" ? (
                 <MicIcon className={turns.length ? "h-5 w-5" : "h-7 w-7"} />
               ) : phase === "speaking" ? (
-                <WaveIcon className={turns.length ? "h-5 w-5" : "h-7 w-7"} />
+                /* The core, and it is the part that shakes. It rides `--level`
+                   directly, so the shudder IS the speech rather than a loop
+                   timed to look like it. */
+                <span aria-hidden className="mise-voice-core" />
               ) : (
                 <span
                   aria-hidden
@@ -1630,7 +1858,9 @@ export function VoiceBubble() {
               than the last six lines, and the two speakers actually look
               different from each other.  */}
           {turns.length > 0 && (
-            <Conversation logRef={logRef} turns={turns} doing={doing} />
+            <div className="mise-voice-hide-on-stage">
+              <Conversation logRef={logRef} turns={turns} doing={doing} />
+            </div>
           )}
 
           {err && (
@@ -1878,6 +2108,7 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 function ArrowIcon({ className }: { className?: string }) {
+
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M5 12h13M12 5l7 7-7 7" />
