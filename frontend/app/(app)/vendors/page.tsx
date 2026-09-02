@@ -158,7 +158,10 @@ export default function VendorsPage() {
   // ON the add-vendor form, scrolled in, ringed, first field focused.
   useDeepLink(
     {
-      new: () => spotlight("vendor-form"),
+      // The form lives INSIDE the add-vendor sheet, so spotlighting it while no
+      // sheet is open found nothing and said the data was missing. Open the
+      // sheet first — same fault as purchasing's tab.
+      new: () => { clearVendorForm(); setAddingVendor(true); spotlight("vendor-form"); },
       // /vendors?vendor=<id> opens that supplier's sheet. Price Comparison links
       // here so "who are they, what else do they sell, what do I owe them" is
       // one tap from the price that raised the question.

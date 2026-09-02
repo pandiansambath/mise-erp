@@ -62,7 +62,18 @@ export function useTick(n: number, ms = 2200) {
  * (usually !loading) so the target UI exists. window.location, not
  * useSearchParams — no Suspense boundary needed at build time.
  */
-export function useDeepLink(handlers: Record<string, () => void>, ready = true) {
+/**
+ * Act on `?key=value` when a page loads.
+ *
+ * The handler receives the VALUE, so a link can point at a particular thing
+ * rather than only at a section — "open Aluminium Containers", not "open the
+ * order pad and go and find it". Handlers that do not care simply ignore the
+ * argument, which is why every existing call site still reads the same.
+ */
+export function useDeepLink(
+  handlers: Record<string, (value: string) => void>,
+  ready = true,
+) {
   const fired = useRef(false);
   const ref = useRef(handlers);
   useEffect(() => {
@@ -74,7 +85,7 @@ export function useDeepLink(handlers: Record<string, () => void>, ready = true) 
     const sp = new URLSearchParams(window.location.search);
     for (const key of Object.keys(ref.current)) {
       if (sp.has(key)) {
-        ref.current[key]();
+        ref.current[key](sp.get(key) ?? "");
         return;
       }
     }
@@ -113,7 +124,16 @@ export function spotlight(id: string, attempt = 0) {
       // "didn't work": the click was real, the target simply was not there,
       // and nothing said so. A click that does nothing is the exact thing he
       // told us never to ship. Say it plainly instead.
-      else say("That part isn't on this page yet — it appears once there is data for it.");
+      else {
+        // Out of retries. Before blaming the data, check whether the page is
+        // simply in the wrong STATE: most of these targets live behind a tab or
+        // inside a sheet, so "not found" usually meant "you are on the Orders
+        // tab and this lives on New order" — and the message said the data was
+        // missing, which was rarely true and never actionable.
+        say(
+          "Couldn't jump there — that section isn't open on this page right now.",
+        );
+      }
       return;
     }
     el.scrollIntoView({ behavior: "smooth", block: "center" });
