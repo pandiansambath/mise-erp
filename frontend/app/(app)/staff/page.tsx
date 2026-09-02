@@ -126,6 +126,26 @@ export default function StaffPage() {
     load().finally(() => setLoading(false));
   }, [canRead]);
 
+  /** Arriving from the Employees popup's "Create a login on Staff" link.
+   *
+   * It opens the PEOPLE door rather than a particular person, and deliberately:
+   * the link exists because that employee has NO login yet, so there is no user
+   * account to open — sending you to a person's sheet would be sending you to
+   * something that does not exist. What it can do is put you on the door where
+   * logins are made instead of the jobs list, which is where /staff otherwise
+   * lands.
+   *
+   * The parameter is cleared afterwards so Back and refresh behave. */
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("view") !== "people") return;
+    setView("people");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("view");
+    window.history.replaceState({}, "", url.toString());
+  }, [loading]);
+
   /** What this person can reach, as "3 of 11 pages" — the headline the list
    *  exists to give. Computed from their job's defaults plus their designed
    *  role, so the card never disagrees with the sheet it opens. */

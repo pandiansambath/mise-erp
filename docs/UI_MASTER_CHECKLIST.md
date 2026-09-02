@@ -109,3 +109,46 @@ rows.
 4. **The burst only fires when something moves.** A to B, or not at all.
 5. **Verify on the deployed site, with a screenshot I actually open.** Three
    real bugs this week came from looking at a screenshot and none from a test.
+
+
+---
+
+# Batch 2026-09-02 — his screenshots
+
+| # | What he said | Kind | State |
+|---|---|---|---|
+| 1 | A running **HH:MM:SS clock** in the corner, in the HOTEL's timezone, on literally every page | feature | ☐ |
+| 2 | "No login yet" popup has **no redirect link** to Staff, and its UI is not nice | bug + UI | ☐ |
+| 3 | Purchasing supplier tiles — **card shadow not nice**, use /staff | UI | ☐ |
+| 4 | **Show by supplier → tapping one still shows every supplier's items** | 🔴 BUG | ☐ |
+| 5 | It lists items regardless of whether that supplier prices them | 🔴 BUG | ☐ |
+| 6 | **Card UI differs between the three screens** — be consistent | UI | ☐ |
+| 7 | Price high–low cards "over too much enhanced" | UI | ☐ |
+| 8 | ⭐ **REBUILD THE INVENTORY PAGE** | big | ☐ |
+
+## 4 and 5 are the same bug and it is a real one
+
+Tapping **Exotic** opens a popup headed "Exotic · 48 items" and then lists
+Aluminium Containers priced **£4.77 from SK**, Bell Pepper **from Farm2Land**,
+Carry Bags **from Rudra**.
+
+The LIST is right — those are the 48 items Exotic prices. The PRICES are not:
+each card asks `supplierFor(item)`, which answers with the item's globally
+chosen supplier, not the vendor whose tile you just pressed. So "show by
+supplier" shows you a supplier's catalogue at somebody else's prices, and
+"Add all" would build an Exotic order out of other people's numbers.
+
+The machinery to fix it already exists — `catVendor` pins a popup to one
+supplier for one sitting. Arriving via a supplier tile should set it.
+
+## 8 — why inventory is the big one
+
+> "we gave this project to 1 hotel, they are using it, their staff feel so tired
+>  when they come to the inventory section... add vendor, add item, then go to
+>  vendor and choose that vendor for that item, then come back to inventory and
+>  check — it's like a cycle, going here and there"
+
+That is a three-page round trip to do one thing: **stock an item you can buy.**
+The fix is not paint. It is that adding an item should be able to finish the
+job — item, its supplier, and that supplier's price, in one place — with the
+Vendors page still there for people who think supplier-first.
