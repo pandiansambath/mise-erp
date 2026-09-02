@@ -13,6 +13,7 @@ import { Logo } from "@/components/Logo";
 import CommandPalette from "@/components/CommandPalette";
 import { VoiceBubble } from "@/components/VoiceBubble";
 import NotificationBell from "@/components/NotificationBell";
+import { HotelClock } from "@/components/HotelClock";
 import { Select } from "@/components/Select";
 import { Tour, shouldAutoStartTour } from "@/components/Tour";
 import { THEMES, themeVars, useTheme, type ThemeKey } from "@/lib/theme";
@@ -786,6 +787,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ⌕
           </button>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
+            {/* The restaurant's own clock, on every page — it lives in the shell
+                so no page has to remember to carry it. The hotel's zone, not the
+                device's: everything beside it (the sales day, the rota, the
+                attendance cut-off) is already reckoned in the hotel's zone, so a
+                clock showing the tablet's time would quietly disagree with every
+                number on the screen. */}
+            <HotelClock className="text-fg-soft" />
             <NotificationBell />
             <ThemeSwitcher />
             <div className="hidden sm:block">

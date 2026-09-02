@@ -410,7 +410,7 @@ function ItemGrid({
               type="button"
               data-testid="item-tile"
               onClick={() => onOpen(it)}
-              className={`mise-card3d mise-press relative flex w-full flex-col items-start gap-1 overflow-hidden p-3 pl-3.5 text-left ${
+              className={`mise-card-inset mise-press relative flex w-full flex-col items-start gap-1 overflow-hidden p-3 pl-3.5 text-left ${
                 on ? "!bg-brand-400/15 ring-2 ring-brand-500" : ""
               }`}
             >
@@ -899,13 +899,29 @@ export function OrderFlow({
             {vendors.map((v) => (
               <div
                 key={v.id}
-                className="mise-card3d relative flex items-center gap-3 overflow-hidden px-3.5 py-4 pl-4"
+                className="mise-card-inset relative flex items-center gap-3 overflow-hidden px-3.5 py-4 pl-4"
               >
                 <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-sky-400" />
                 <button
                   type="button"
                   data-testid="vendor-tile"
-                  onClick={() => setCat(v.id)}
+                  /* PIN THE POPUP TO THIS SUPPLIER.
+                     Without this, tapping "Exotic" opened a sheet headed
+                     "Exotic · 48 items" that priced Aluminium Containers from
+                     SK and Bell Pepper from Farm2Land — the LIST was Exotic's,
+                     the PRICES were whoever happened to be each item's chosen
+                     supplier. "if i touch means it need only show its own
+                     supplier item alone and i can order from that."
+
+                     `catVendor` already existed for exactly this: it outranks
+                     the ★ while a sheet is open and is never written down.
+                     Arriving by supplier tile simply means arriving with it
+                     already set. */
+                  onClick={() => {
+                    setCatVendor(v.id);
+                    setCatDraft(v.id);
+                    setCat(v.id);
+                  }}
                   className="mise-press flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
                   <span aria-hidden className="text-2xl">🚚</span>
@@ -961,7 +977,7 @@ export function OrderFlow({
                 /* The stripe is what he said made the basket cards readable at
                    a glance — "all cards are looking same once I see suddenly".
                    Same idiom here, so the page is one design rather than three. */
-                className="mise-card3d mise-press relative flex w-full items-center gap-3 overflow-hidden px-3.5 py-4 pl-4 text-left"
+                className="mise-card-inset mise-press relative flex w-full items-center gap-3 overflow-hidden px-3.5 py-4 pl-4 text-left"
               >
                 <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${categoryTint(name)}`} />
                 <span aria-hidden className="text-2xl">{categoryEmoji(name)}</span>

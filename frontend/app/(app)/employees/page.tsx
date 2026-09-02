@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SubNav } from "@/components/SubNav";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
@@ -508,9 +509,22 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
               <p className="text-3xl" aria-hidden>🔓</p>
               <p className="mt-2 text-sm font-medium text-fg">No login yet</p>
               <p className="mt-1 text-xs text-fg-faint">
-                Create one from the <b className="text-fg-soft">Staff</b> page. The moment you do,
-                DineAI emails them a verification link — they can&apos;t sign in until they confirm it.
+                DineAI emails them a verification link the moment you create one — they
+                can&apos;t sign in until they confirm it.
               </p>
+              {/* "why no redirect link — please add one."
+                  It named the Staff page and then left you to go and find it,
+                  which is the exact dead end the copy was describing. It lands
+                  on the People door, where logins are made — not on a person,
+                  because the whole reason you are reading this is that this one
+                  has no account to open yet. */}
+              <Link
+                href="/staff?view=people"
+                className="mise-press mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+              >
+                Create a login on Staff
+                <span aria-hidden>→</span>
+              </Link>
             </div>
           ) : (
             <>
