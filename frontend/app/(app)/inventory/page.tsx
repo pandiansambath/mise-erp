@@ -96,6 +96,24 @@ export default function InventoryPage() {
   const [seeding, setSeeding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
+  /** Supplier and price, given while ADDING an item.
+   *
+   *   "their staff feel so tired when they come to the inventory section — add
+   *    vendor, add item, then go to vendor and choose that vendor for that
+   *    item, then come back to inventory and check. it's like a cycle."
+   *
+   * The price genuinely belongs to (vendor × item), and that stays true — this
+   * writes to the same `/vendors/{id}/items` endpoint the Vendors page uses.
+   * What changes is only WHERE you are standing when you write it. The old
+   * comment here said "price/supplier live on Vendors — not set here", and that
+   * sentence is the round trip his staff are tired of.
+   *
+   * `newVendorName` covers the other half: a brand-new supplier used to mean
+   * leaving the half-typed item to go and create one. */
+  const [addVendor, setAddVendor] = useState("");
+  const [addPrice, setAddPrice] = useState("");
+  const [newVendorName, setNewVendorName] = useState("");
+  const [vendorList, setVendorList] = useState<{ id: string; name: string }[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   // Adding used to happen in a 180-line form nailed to the top of the page,
   // so reaching your own stock meant scrolling past it. Now it opens where
@@ -168,6 +186,11 @@ export default function InventoryPage() {
       .then((rows) =>
         setItemSuppliers(Object.fromEntries(rows.map((r) => [r.item_id, r.vendors]))),
       )
+      .catch(() => {});
+    // The supplier list, so the add form can offer one without a page change.
+    api
+      .get<{ id: string; name: string; is_active?: boolean }[]>("/vendors")
+      .then((vs) => setVendorList(vs.filter((v) => v.is_active !== false)))
       .catch(() => {});
     return api.get<Item[]>("/inventory/items").then(setItems);
   }
@@ -325,6 +348,9 @@ export default function InventoryPage() {
     setAdding(false);
     setFormVendor("");
     setVendorMsg(null);
+    setAddVendor("");
+    setAddPrice("");
+    setNewVendorName("");
     setForm(EMPTY);
     setAllergensTouched(false);
     setError(null);
@@ -363,8 +389,30 @@ export default function InventoryPage() {
       if (editingId) {
         await api.patch<Item>(`/inventory/items/${editingId}`, payload);
       } else {
-        // Price/supplier live on Vendors (single source of truth) — not set here.
-        await api.post<Item>("/inventory/items", payload);
+        const created = await api.post<Item>("/inventory/items", payload);
+
+        // FINISH THE JOB. The price still belongs to (vendor × item) and is
+        // still written through the Vendors endpoint — the single source of
+        // truth is unchanged. Only the round trip is gone.
+        const price = parseFloat(addPrice);
+        if ((addVendor || newVendorName.trim()) && price > 0) {
+          let vendorId = addVendor;
+          if (!vendorId && newVendorName.trim()) {
+            const v = await api.post<{ id: string }>("/vendors", {
+              name: newVendorName.trim(),
+            });
+            vendorId = v.id;
+          }
+          if (vendorId) {
+            await api.post(`/vendors/${vendorId}/items`, {
+              item_id: created.id,
+              price_per_unit: addPrice,
+            });
+            // One supplier is unambiguously THE supplier, so choosing it here
+            // saves a second trip to do the obvious thing.
+            await api.post(`/vendors/items/${created.id}/preferred`, { vendor_id: vendorId });
+          }
+        }
       }
       cancelEdit();
       await load();
@@ -1262,6 +1310,68 @@ export default function InventoryPage() {
               <p className="mt-2 text-xs text-fg-faint">
                 None selected + saved = &ldquo;contains none&rdquo; (marks it reviewed).
               </p>
+            </div>
+          )}
+
+          {/* WHO SELLS IT, AND FOR HOW MUCH — while you are still here.
+              The round trip his hotel's staff are tired of was: add the item,
+              leave for Vendors, find it again, set a price, come back to check.
+              This writes to the same place the Vendors page writes to; the only
+              thing that changed is where you are standing when you do it.
+              Optional on purpose — a name and a unit are still enough to start,
+              and an item you have not priced yet is a real thing. */}
+          {!editingId && (
+            <div className="mise-card-inset p-3.5">
+              <p className="text-sm font-medium text-fg">
+                Who supplies it? <span className="text-fg-faint">(optional)</span>
+              </p>
+              <p className="mt-0.5 text-xs text-fg-faint">
+                Add the price here and you will not have to go to Vendors and come back.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_9rem]">
+                <select
+                  value={addVendor}
+                  onChange={(e) => {
+                    setAddVendor(e.target.value);
+                    if (e.target.value) setNewVendorName("");
+                  }}
+                  aria-label="Supplier"
+                  className={inputCls}
+                >
+                  <option value="">— pick one, or type a new name below —</option>
+                  {vendorList.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+                <label className="block">
+                  <span className="sr-only">Price</span>
+                  <input
+                    value={addPrice}
+                    onChange={(e) => setAddPrice(e.target.value.replace(/[^\d.]/g, ""))}
+                    inputMode="decimal"
+                    placeholder={`price per ${form.unit || "unit"}`}
+                    aria-label={`Price per ${form.unit || "unit"}`}
+                    className={inputCls}
+                  />
+                </label>
+              </div>
+              {!addVendor && (
+                <input
+                  value={newVendorName}
+                  onChange={(e) => setNewVendorName(e.target.value)}
+                  placeholder="…or type a new supplier's name"
+                  aria-label="New supplier name"
+                  className={`${inputCls} mt-2`}
+                />
+              )}
+              {(addVendor || newVendorName.trim()) && parseFloat(addPrice) > 0 && (
+                <p className="mt-2 text-[11px] text-brand-300">
+                  Saved together — and this becomes the ★ chosen supplier, since it is the
+                  only one.
+                </p>
+              )}
             </div>
           )}
 
