@@ -671,6 +671,58 @@ export default function VendorsPage() {
         </EditModal>
       )}
 
+      {/* SAME EXCEPTION AS EMPLOYEES, for the same reason.
+
+          "supplier count increases means scroll will be larger, which will
+           make this to be waste."
+
+          Core-first assumes the core is a fixed height. A supplier list is
+          not, so a spend summary placed under it gets further away with every
+           supplier added — until nobody sees it. THE RULE:
+
+            core first when the core is BOUNDED (tiles, a form, a fixed set)
+            summary/alert first when the core is an UNBOUNDED LIST
+
+          Purchasing's categories are bounded, so the pad leads there. A list
+          of people or suppliers is not, so the thing that must be SEEN leads
+          here. */}
+      {spend.length > 0 && (
+        <Card className="mise-feel mb-6 scroll-mt-24" id="vendor-spend">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-semibold text-fg">Who gets your money</h3>
+            <span className="text-xs text-fg-faint">received orders · last 90 days</span>
+          </div>
+          <div className="mise-well mt-4 rounded-xl p-3">
+            <Bars
+              formatValue={(v) => format(String(v))}
+              items={spend.slice(0, 8).map((x) => ({
+                label: x.vendor_name,
+                value: parseFloat(x.total) || 0,
+                color: "#d97742",
+              }))}
+            />
+          </div>
+          {/* the scorecard: how often you order them, how often they raise prices */}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {spend.slice(0, 6).map((x) => (
+              <div key={x.vendor_name} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-xs">
+                <span className="truncate font-medium text-fg">{x.vendor_name}</span>
+                <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                <span className="shrink-0 text-fg-soft">{x.orders ?? 0} order{(x.orders ?? 0) === 1 ? "" : "s"}</span>
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 font-medium ${
+                    (x.price_rises ?? 0) > 0 ? "bg-rose-500/15 text-rose-300" : "bg-brand-500/15 text-brand-300"
+                  }`}
+                  title="times this vendor moved a price UP in the last 90 days"
+                >
+                  {(x.price_rises ?? 0) > 0 ? `▲ ${x.price_rises} rise${x.price_rises === 1 ? "" : "s"}` : "no rises ✓"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Vendor cards */}
       <p className="mb-2 text-sm font-medium text-fg-soft">All vendors ({vendors.length})</p>
       {vendors.length === 0 ? (
@@ -731,43 +783,6 @@ export default function VendorsPage() {
            expenses, sales etc." On this page a bar chart and six scorecards
            stood between the title and the list of suppliers, which is what
            anyone opens Vendors to reach. Who gets your money is worth knowing
-           and is not what you came for. */}
-      {spend.length > 0 && (
-        <Card className="mise-feel mb-6 scroll-mt-24" id="vendor-spend">
-          <div className="flex items-baseline justify-between">
-            <h3 className="font-semibold text-fg">Who gets your money</h3>
-            <span className="text-xs text-fg-faint">received orders · last 90 days</span>
-          </div>
-          <div className="mise-well mt-4 rounded-xl p-3">
-            <Bars
-              formatValue={(v) => format(String(v))}
-              items={spend.slice(0, 8).map((x) => ({
-                label: x.vendor_name,
-                value: parseFloat(x.total) || 0,
-                color: "#d97742",
-              }))}
-            />
-          </div>
-          {/* the scorecard: how often you order them, how often they raise prices */}
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {spend.slice(0, 6).map((x) => (
-              <div key={x.vendor_name} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-xs">
-                <span className="truncate font-medium text-fg">{x.vendor_name}</span>
-                <span className="mb-1 flex-1 border-b border-dotted border-line" />
-                <span className="shrink-0 text-fg-soft">{x.orders ?? 0} order{(x.orders ?? 0) === 1 ? "" : "s"}</span>
-                <span
-                  className={`shrink-0 rounded-full px-1.5 py-0.5 font-medium ${
-                    (x.price_rises ?? 0) > 0 ? "bg-rose-500/15 text-rose-300" : "bg-brand-500/15 text-brand-300"
-                  }`}
-                  title="times this vendor moved a price UP in the last 90 days"
-                >
-                  {(x.price_rises ?? 0) > 0 ? `▲ ${x.price_rises} rise${x.price_rises === 1 ? "" : "s"}` : "no rises ✓"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
 
       {/* Selected vendor — opens in place, so you never scroll to the bottom */}
 

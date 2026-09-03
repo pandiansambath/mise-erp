@@ -288,7 +288,56 @@ export default function EmployeesPage() {
           The stripe carries the visa state, because that is the one thing on
           this page with a deadline: red when it has expired, amber when it is
           close. It was a badge in the fifth column, which is where you look
-          last. */}
+      {/* THE ONE PAGE WHERE THE ALERT GOES FIRST.
+
+          His correction, and it is a better rule than the one it bends:
+          "this page alone we can keep the core below — because we may have so
+           many employees, which makes the alerts be very bottom, which makes
+           the alerts' use nil."
+
+          Core-first assumes the core is a fixed height. A staff list is not:
+          at sixty people an expiring visa would sit a screen and a half down,
+          and an alert nobody scrolls to is not an alert. The rule is really
+          "put first what the page is FOR", and on this page, on the day a visa
+          expires, that is the visa. */}
+      {alerts.length > 0 && (
+        <Card id="visa-runway" className="mise-feel mb-6 scroll-mt-24 border-amber-400/30">
+          <p className="text-sm font-semibold text-amber-200">⚠️ Visa runway — who needs action, and when</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { label: "Expired", test: (d: number) => d < 0, tone: "border-rose-500/40 text-rose-300" },
+              { label: "≤ 30 days", test: (d: number) => d >= 0 && d <= 30, tone: "border-amber-400/40 text-amber-300" },
+              { label: "31–60 days", test: (d: number) => d > 30 && d <= 60, tone: "border-amber-400/25 text-amber-200" },
+              { label: "61–90 days", test: (d: number) => d > 60, tone: "border-line text-fg-soft" },
+            ].map((bucket) => {
+              const people = alerts.filter((a) => bucket.test(a.days_left));
+              return (
+                <div key={bucket.label} className={`mise-well rounded-xl border p-3 ${bucket.tone}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide">{bucket.label}</p>
+                  {people.length === 0 ? (
+                    <p className="mt-1 text-xs opacity-60">nobody 🎉</p>
+                  ) : (
+                    <ul className="mt-1.5 space-y-1">
+                      {people.map((a) => (
+                        <li key={a.employee_id} className="truncate text-xs" title={`${a.full_name} · ${a.visa_expiry_date}`}>
+                          {a.full_name}
+                          <span className="ml-1 opacity-70">
+                            {a.days_left < 0 ? `${-a.days_left}d ago` : `${a.days_left}d`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* The team. Cards, per /staff — the page next door about the same
+          people. The stripe carries the visa state, so a card that needs
+          action says so before it is read. */}
       <Card id="team-list" className="scroll-mt-24 p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
           <h2 className="text-sm font-semibold text-fg">Your team</h2>
@@ -398,41 +447,6 @@ export default function EmployeesPage() {
 
       {/* Visa alerts sit BELOW the team, by his rule for every page: the core
           first, the indicators kept but passed on the way rather than waded
-          through. Anyone opening Employees came for the people. */}
-      {alerts.length > 0 && (
-        <Card id="visa-runway" className="mise-feel mb-6 scroll-mt-24 border-amber-400/30">
-          <p className="text-sm font-semibold text-amber-200">⚠️ Visa runway — who needs action, and when</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              { label: "Expired", test: (d: number) => d < 0, tone: "border-rose-500/40 text-rose-300" },
-              { label: "≤ 30 days", test: (d: number) => d >= 0 && d <= 30, tone: "border-amber-400/40 text-amber-300" },
-              { label: "31–60 days", test: (d: number) => d > 30 && d <= 60, tone: "border-amber-400/25 text-amber-200" },
-              { label: "61–90 days", test: (d: number) => d > 60, tone: "border-line text-fg-soft" },
-            ].map((bucket) => {
-              const people = alerts.filter((a) => bucket.test(a.days_left));
-              return (
-                <div key={bucket.label} className={`mise-well rounded-xl border p-3 ${bucket.tone}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide">{bucket.label}</p>
-                  {people.length === 0 ? (
-                    <p className="mt-1 text-xs opacity-60">nobody 🎉</p>
-                  ) : (
-                    <ul className="mt-1.5 space-y-1">
-                      {people.map((a) => (
-                        <li key={a.employee_id} className="truncate text-xs" title={`${a.full_name} · ${a.visa_expiry_date}`}>
-                          {a.full_name}
-                          <span className="ml-1 opacity-70">
-                            {a.days_left < 0 ? `${-a.days_left}d ago` : `${a.days_left}d`}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
 
       {/* The pay split sits BELOW the team, by the rule he already gave for
           Sales and Expenses: the numbers and the work first, the pie last.
