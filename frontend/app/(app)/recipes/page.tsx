@@ -924,6 +924,27 @@ export default function RecipesPage() {
         </label>
       </div>
 
+      {activeGroups.size === 0 && archivedGroups.size === 0 ? (
+        <Card>
+          <p className="py-6 text-center text-sm text-fg-faint">No recipes yet.</p>
+        </Card>
+      ) : (
+        <div className="gap-4 [column-fill:_balance] sm:columns-2 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid">
+          {sortEntries([...activeGroups.entries()]).map(([dishName, variants]) => dishCard(dishName, variants))}
+          {activeGroups.size === 0 && (
+            <Card>
+              <p className="py-6 text-center text-sm text-fg-faint">
+                No active recipes{showArchived ? " — your archived ones are below." : "."}
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* The margin ladder sits BELOW the menu.
+          Same rule as everywhere else: the recipes are what you came for; how
+          their margins rank is worth seeing once you are here. It was a chart
+          of the whole menu standing between the filters and the menu. */}
       {/* Margin ladder — the whole menu's health, best to thinnest */}
       {(() => {
         const priced = recipes
@@ -954,23 +975,6 @@ export default function RecipesPage() {
           </Card>
         );
       })()}
-
-      {activeGroups.size === 0 && archivedGroups.size === 0 ? (
-        <Card>
-          <p className="py-6 text-center text-sm text-fg-faint">No recipes yet.</p>
-        </Card>
-      ) : (
-        <div className="gap-4 [column-fill:_balance] sm:columns-2 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid">
-          {sortEntries([...activeGroups.entries()]).map(([dishName, variants]) => dishCard(dishName, variants))}
-          {activeGroups.size === 0 && (
-            <Card>
-              <p className="py-6 text-center text-sm text-fg-faint">
-                No active recipes{showArchived ? " — your archived ones are below." : "."}
-              </p>
-            </Card>
-          )}
-        </div>
-      )}
 
       {showArchived && archivedGroups.size > 0 && (
         <div className="mt-8">
