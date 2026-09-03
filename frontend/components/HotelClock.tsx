@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import Link from "next/link";
+
 import { AnalogClock, type ClockFace } from "@/components/AnalogClock";
 import { SheetPopup } from "@/components/SheetPopup";
 import { useAuth } from "@/lib/auth";
@@ -63,12 +65,18 @@ export function HotelClock({ className = "" }: { className?: string }) {
     return () => window.clearInterval(id);
   }, []);
 
+  // `hour12` is in the dependency list implicitly by being read during render;
+  // the interval only replaces `now`, so a format change repaints on the next
+  // tick at the latest and immediately via the state update that set it.
   const time = now
     ? new Intl.DateTimeFormat("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
-        hour12: false,
+        // HIS CHOICE, not a constant. The popup let him pick 12-hour and the
+        // header carried on showing 24 — the setting appeared to do nothing,
+        // which is worse than not offering it.
+        hour12,
         timeZone: zone,
       }).format(now)
     : "--:--:--";
@@ -177,6 +185,18 @@ export function HotelClock({ className = "" }: { className?: string }) {
               </button>
             ))}
           </div>
+
+          {/* Where the zone is actually changed. The popup names the zone and
+              then left him to go and find the setting — the same dead end the
+              login popup had. */}
+          <Link
+            href="/settings#timezone"
+            onClick={() => setOpen(false)}
+            className="mise-press inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11px] font-medium text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
+          >
+            Change the restaurant&apos;s timezone
+            <span aria-hidden>→</span>
+          </Link>
 
           <div className="w-full">
             <p className="mb-1.5 text-center text-[10px] uppercase tracking-wide text-fg-faint">
