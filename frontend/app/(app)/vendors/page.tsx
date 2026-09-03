@@ -24,7 +24,8 @@ import { Bars } from "@/components/charts";
 import { spotlight, useDeepLink } from "@/components/fx";
 import { SubNav } from "@/components/SubNav";
 import { VendorLedger } from "@/components/VendorLedger";
-import { ItemPickerSingle } from "@/components/ItemPicker";
+import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
+import { SheetPopup } from "@/components/SheetPopup";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -105,6 +106,17 @@ export default function VendorsPage() {
   // the form, because the "1 bottle holds ___" line has to appear and vanish
   // as the size changes — a pack has a size, loose does not.
   const [sheetLevel, setSheetLevel] = useState("");
+  /** Which of this supplier's categories is open, as a popup over the sheet.
+   *
+   *   "in vendor page I need to scroll down to do something — please create a
+   *    popup inside popup kinda UI like purchase page. current vendor page is
+   *    really tough to handle."
+   *
+   * Fifty-four priced items in one column is a scroll, not a list. Purchasing
+   * already solved this: categories you can see at once, tap one, its items
+   * arrive as a popup over the top. Same idiom here, so the two pages stop
+   * being two different ways of doing the same thing. */
+  const [supplyCat, setSupplyCat] = useState<string | null>(null);
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [piPrice, setPiPrice] = useState("");
   // The supplier NAMES what they sell in, right next to the price, rather than
@@ -421,6 +433,27 @@ export default function VendorsPage() {
   })();
   const pricedCount = (vid: string) => (vid === selected ? vendorItems.length : null);
 
+  /** This supplier's priced items, grouped by category — the layer that turns a
+   *  fifty-four line scroll into something you can see all of at once.
+   *
+   *  Plain, not memoised: this component returns early above, so a hook here
+   *  would not run in the same order on every render. Grouping a few dozen rows
+   *  costs nothing, and a correct render beats a saved microsecond. */
+  const supplyGroups = (() => {
+    const m = new Map<string, VendorItem[]>();
+    for (const vi of vendorItems) {
+      const cat = (items.find((i) => i.id === vi.item_id)?.category || "").trim() || "Other";
+      m.set(cat, [...(m.get(cat) ?? []), vi]);
+    }
+    return [...m.entries()].sort((a, b) =>
+      a[0] === "Other" ? 1 : b[0] === "Other" ? -1 : a[0].localeCompare(b[0]),
+    );
+  })();
+
+  const shownSupply = supplyCat
+    ? (supplyGroups.find(([c]: [string, VendorItem[]]) => c === supplyCat)?.[1] ?? [])
+    : [];
+
   // Built-in types + any custom ones already used by vendors + ones added this
   // session — so superadmins aren't limited to the six built-ins.
   const usedCats = vendors
@@ -704,6 +737,145 @@ export default function VendorsPage() {
       )}
 
       {/* Selected vendor — opens in place, so you never scroll to the bottom */}
+
+      {/* Layer two: that category's items, over the supplier sheet. Depth 2,
+          the same as the order pad's item popup — the stacking rule lives in
+          SheetPopup, so this page does not have to invent one. */}
+      {supplyCat && (
+        <SheetPopup
+          depth={2}
+          columns={2}
+          onClose={() => setSupplyCat(null)}
+          title={supplyCat}
+          subtitle={`${shownSupply.length} priced by ${selectedVendor?.name ?? "this supplier"}`}
+        >
+          <div className="mise-stagger space-y-2">
+            {shownSupply.map((vi: VendorItem) => (
+                      <div
+                        key={vi.id}
+                        // Click anything, do anything: the row opens the price
+                        // itself rather than making you find the form for it.
+                        onClick={() => {
+                          setPriceRow(vi);
+                          // The NAME they sell by, not its id — the field is
+                          // typed now, so a supplier can name a pack nobody has
+                          // created yet.
+                          const lv = (items.find((i) => i.id === vi.item_id)?.pack_levels ?? []).find(
+                            (l) => l.id === vi.pack_level_id,
+                          );
+                          setSheetLevel(lv?.name ?? "");
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            (e.currentTarget as HTMLElement).click();
+                          }
+                        }}
+                        className="mise-card-inset mise-press relative flex cursor-pointer items-start gap-3 overflow-hidden px-4 py-3 pl-5"
+                      >
+                        <span
+                          aria-hidden
+                          className={`absolute inset-y-0 left-0 w-1 ${
+                            vi.is_preferred ? "bg-amber-400/80" : "bg-sky-400/50"
+                          }`}
+                        />
+                        <div className="min-w-0 flex-1 font-medium text-fg">
+                          {itemName(vi.item_id)}
+                          {/* WHICH WAY they sell it. A supplier may now quote a
+                              box AND a loose kilo, so the same item appears
+                              twice — without naming the form the two rows read
+                              as a duplicate with two different prices. */}
+                          {(() => {
+                            const it0 = items.find((i) => i.id === vi.item_id);
+                            if (!it0) return null;
+                            const size = supplierPackSize(it0, vi as unknown as SupplierOption);
+                            return (
+                              <span className="mt-0.5 block text-[11px] font-normal text-fg-faint">
+                                {vi.pack_level_id
+                                  ? `by the ${levelName(it0, vi.pack_level_id)}${size > 0 ? ` (${size} ${it0.unit})` : ""}`
+                                  : `loose, per ${it0.unit}`}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div
+                          className={`shrink-0 rounded-lg px-2 py-1 text-right ${
+                            (() => {
+                              // Cheapest by what a BASE unit costs, never the
+                              // sticker: a £20 box of 10 kg is not cheaper than
+                              // a £50 box of 50 kg.
+                              const it0 = items.find((i) => i.id === vi.item_id);
+                              const mine = it0 ? pricePerBase(it0, vi as unknown as SupplierOption) : 0;
+                              return cheapest[vi.item_id] != null && mine > 0 && mine <= cheapest[vi.item_id] + 1e-9;
+                            })()
+                              ? "bg-emerald-500/10 font-medium text-emerald-300"
+                              : "text-fg-soft"
+                          }`}
+                          title={
+                            cheapest[vi.item_id] != null && (parseFloat(vi.price_per_unit) || 0) <= cheapest[vi.item_id]
+                              ? "Cheapest quote for this item across all your vendors"
+                              : undefined
+                          }
+                        >
+                          {(() => {
+                            const it = items.find((i) => i.id === vi.item_id);
+                            if (!it) return format(vi.price_per_unit);
+                            const sup = {
+                              price_per_unit: vi.price_per_unit,
+                              pack_level_id: vi.pack_level_id,
+                              // THIS supplier's own pack size. Leaving it out is
+                              // what made "1 box = 100 kg" display as 50: the
+                              // maths fell back to the item's size every time,
+                              // and the `as SupplierOption` cast below hid the
+                              // missing field from the compiler.
+                              pack_size_override: vi.pack_size_override,
+                            } as SupplierOption;
+                            // The quote, and every size it works out to. A £30
+                            // bottle of thirty is £1 a piece, and the old line
+                            // multiplied UP from a price it assumed was already
+                            // per-unit — so a pack price came out thirty times
+                            // too big.
+                            return (
+                              <span className="block text-right">
+                                <span className="block whitespace-nowrap">
+                                  {format(vi.price_per_unit)}
+                                  <span className="ml-1 text-[11px] font-normal text-fg-faint">
+                                    /{levelName(it, vi.pack_level_id)}
+                                  </span>
+                                </span>
+                                {vi.pack_level_id && (
+                                  <span className="block whitespace-nowrap text-[11px] text-indigo-300">
+                                    {format(pricePerBase(it, sup).toFixed(2))}/{it.unit}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="flex items-center justify-end gap-2">
+                            {vi.is_preferred && <Badge tone="amber">★ chosen</Badge>}
+                            {canWrite && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); removeVendorItem(vi); }}
+                                title="Remove this vendor's price for this item"
+                                aria-label={`Remove price for ${itemName(vi.item_id)}`}
+                                className="rounded-md border border-line px-1.5 py-0.5 text-xs text-fg-faint transition hover:border-rose-400/50 hover:bg-rose-400/10 hover:text-rose-300"
+                              >
+                                🗑
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+            ))}
+          </div>
+        </SheetPopup>
+      )}
+
       <DetailSheet
         open={!!selectedVendor}
         onClose={() => setSelected("")}
@@ -880,132 +1052,37 @@ export default function VendorsPage() {
                   never said WHICH unit, so £3 could have been a lemon or a
                   bottle of thirty. Every card names its own size instead of a
                   column header implying a unit it does not know. */}
-              <div className="mise-stagger mt-2 space-y-2">
-                    {vendorItems.length === 0 ? (
-                      <p className="px-4 py-6 text-center text-fg-faint">No prices yet — use “Add a price” above.</p>
-                    ) : vendorItems.map((vi) => (
-                      <div
-                        key={vi.id}
-                        // Click anything, do anything: the row opens the price
-                        // itself rather than making you find the form for it.
-                        onClick={() => {
-                          setPriceRow(vi);
-                          // The NAME they sell by, not its id — the field is
-                          // typed now, so a supplier can name a pack nobody has
-                          // created yet.
-                          const lv = (items.find((i) => i.id === vi.item_id)?.pack_levels ?? []).find(
-                            (l) => l.id === vi.pack_level_id,
-                          );
-                          setSheetLevel(lv?.name ?? "");
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            (e.currentTarget as HTMLElement).click();
-                          }
-                        }}
-                        className="mise-card-inset mise-press relative flex cursor-pointer items-start gap-3 overflow-hidden px-4 py-3 pl-5"
-                      >
-                        <span
-                          aria-hidden
-                          className={`absolute inset-y-0 left-0 w-1 ${
-                            vi.is_preferred ? "bg-amber-400/80" : "bg-sky-400/50"
-                          }`}
-                        />
-                        <div className="min-w-0 flex-1 font-medium text-fg">
-                          {itemName(vi.item_id)}
-                          {/* WHICH WAY they sell it. A supplier may now quote a
-                              box AND a loose kilo, so the same item appears
-                              twice — without naming the form the two rows read
-                              as a duplicate with two different prices. */}
-                          {(() => {
-                            const it0 = items.find((i) => i.id === vi.item_id);
-                            if (!it0) return null;
-                            const size = supplierPackSize(it0, vi as unknown as SupplierOption);
-                            return (
-                              <span className="mt-0.5 block text-[11px] font-normal text-fg-faint">
-                                {vi.pack_level_id
-                                  ? `by the ${levelName(it0, vi.pack_level_id)}${size > 0 ? ` (${size} ${it0.unit})` : ""}`
-                                  : `loose, per ${it0.unit}`}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <div
-                          className={`shrink-0 rounded-lg px-2 py-1 text-right ${
-                            (() => {
-                              // Cheapest by what a BASE unit costs, never the
-                              // sticker: a £20 box of 10 kg is not cheaper than
-                              // a £50 box of 50 kg.
-                              const it0 = items.find((i) => i.id === vi.item_id);
-                              const mine = it0 ? pricePerBase(it0, vi as unknown as SupplierOption) : 0;
-                              return cheapest[vi.item_id] != null && mine > 0 && mine <= cheapest[vi.item_id] + 1e-9;
-                            })()
-                              ? "bg-emerald-500/10 font-medium text-emerald-300"
-                              : "text-fg-soft"
-                          }`}
-                          title={
-                            cheapest[vi.item_id] != null && (parseFloat(vi.price_per_unit) || 0) <= cheapest[vi.item_id]
-                              ? "Cheapest quote for this item across all your vendors"
-                              : undefined
-                          }
-                        >
-                          {(() => {
-                            const it = items.find((i) => i.id === vi.item_id);
-                            if (!it) return format(vi.price_per_unit);
-                            const sup = {
-                              price_per_unit: vi.price_per_unit,
-                              pack_level_id: vi.pack_level_id,
-                              // THIS supplier's own pack size. Leaving it out is
-                              // what made "1 box = 100 kg" display as 50: the
-                              // maths fell back to the item's size every time,
-                              // and the `as SupplierOption` cast below hid the
-                              // missing field from the compiler.
-                              pack_size_override: vi.pack_size_override,
-                            } as SupplierOption;
-                            // The quote, and every size it works out to. A £30
-                            // bottle of thirty is £1 a piece, and the old line
-                            // multiplied UP from a price it assumed was already
-                            // per-unit — so a pack price came out thirty times
-                            // too big.
-                            return (
-                              <span className="block text-right">
-                                <span className="block whitespace-nowrap">
-                                  {format(vi.price_per_unit)}
-                                  <span className="ml-1 text-[11px] font-normal text-fg-faint">
-                                    /{levelName(it, vi.pack_level_id)}
-                                  </span>
-                                </span>
-                                {vi.pack_level_id && (
-                                  <span className="block whitespace-nowrap text-[11px] text-indigo-300">
-                                    {format(pricePerBase(it, sup).toFixed(2))}/{it.unit}
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <span className="flex items-center justify-end gap-2">
-                            {vi.is_preferred && <Badge tone="amber">★ chosen</Badge>}
-                            {canWrite && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); removeVendorItem(vi); }}
-                                title="Remove this vendor's price for this item"
-                                aria-label={`Remove price for ${itemName(vi.item_id)}`}
-                                className="rounded-md border border-line px-1.5 py-0.5 text-xs text-fg-faint transition hover:border-rose-400/50 hover:bg-rose-400/10 hover:text-rose-300"
-                              >
-                                🗑
-                              </button>
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-              </div>
+              {/* CATEGORIES FIRST, ITEMS IN A POPUP — the order pad's idiom.
+                  Fifty-four priced items in one column is a scroll, not a list,
+                  and it was the whole of "current vendor page is really tough
+                  to handle". You can see every category at once now; tapping
+                  one brings its items over the top, exactly as Purchasing does,
+                  so the two pages stop being two ways of doing one thing. */}
+              {vendorItems.length === 0 ? (
+                <p className="px-4 py-6 text-center text-fg-faint">
+                  No prices yet — use &ldquo;Add a price&rdquo; above.
+                </p>
+              ) : (
+                <div className="mise-stagger mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {supplyGroups.map(([cat, rows]: [string, VendorItem[]]) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSupplyCat(cat)}
+                      className="mise-card-inset mise-press relative flex items-center gap-2.5 overflow-hidden p-3 pl-4 text-left"
+                    >
+                      <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-sky-400/60" />
+                      <span aria-hidden className="text-xl">{categoryEmoji(cat)}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-fg">{cat}</span>
+                        <span className="block text-[11px] text-fg-faint">
+                          {rows.length} priced
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Add / update a price + bulk import */}
