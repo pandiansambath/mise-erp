@@ -117,11 +117,21 @@ export function HotelClock({ className = "" }: { className?: string }) {
         onClose={() => setOpen(false)}
         title={hotel?.name ? `${hotel.name} — local time` : "Local time"}
         subtitle={elsewhere ? `${zone} · your device is on ${deviceZone}` : zone}
-        columns={2}
       >
-        <div className="flex flex-col items-center gap-4">
-          <AnalogClock size={230} tz={zone} face={face} numerals={hour12} digital={false} />
-          <p className="font-mono text-2xl font-semibold tabular-nums text-fg">
+        {/* IT MUST FIT.
+            First attempt asked for a two-column popup and a 230px dial, then a
+            digital readout, a date, a format switch and eight face buttons. The
+            stack was taller than the popup could be, so it centred itself with
+            its head off the top of the screen and its FACE row hanging out of
+            the bottom of its own box.
+
+            Everything here is sized so the whole thing fits on a phone without
+            scrolling: a smaller dial, tighter gaps, and the faces in two rows
+            of four. A popup you have to scroll to see a clock in is not worth
+            opening. */}
+        <div className="flex flex-col items-center gap-3">
+          <AnalogClock size={172} tz={zone} face={face} numerals={hour12} digital={false} />
+          <p className="font-mono text-xl font-semibold tabular-nums text-fg">
             {now
               ? new Intl.DateTimeFormat("en-GB", {
                   hour: "2-digit",
@@ -169,10 +179,10 @@ export function HotelClock({ className = "" }: { className?: string }) {
           </div>
 
           <div className="w-full">
-            <p className="mb-2 text-center text-[11px] uppercase tracking-wide text-fg-faint">
+            <p className="mb-1.5 text-center text-[10px] uppercase tracking-wide text-fg-faint">
               Face
             </p>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-4 gap-1">
               {FACES.map((f) => (
                 <button
                   key={f.key}

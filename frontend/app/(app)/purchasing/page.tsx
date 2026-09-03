@@ -983,21 +983,30 @@ export default function PurchasingPage() {
                 type="button"
                 onClick={() => setTab(go)}
                 title={label}
-                className="mise-press flex shrink-0 items-baseline gap-1.5 rounded-lg px-1.5 py-1 hover:bg-glass/5"
+                className="mise-press flex shrink-0 flex-col items-start gap-0.5 rounded-lg px-2.5 py-1.5 text-left hover:bg-glass/5"
               >
-                <b className={`font-display text-base leading-none ${tone}`}>{n}</b>
-                <span className="whitespace-nowrap text-[11px] text-fg-faint">{label}</span>
-                {badge && (
-                  <span className="rounded-full bg-rose-500/15 px-1.5 text-[10px] font-semibold text-rose-300">
-                    {badge}
-                  </span>
-                )}
+                <span className="flex items-baseline gap-1.5">
+                  <b className={`font-display text-lg leading-none ${tone}`}>{n}</b>
+                  {badge && (
+                    <span className="rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-200">
+                      {badge}
+                    </span>
+                  )}
+                </span>
+                <span className="whitespace-nowrap text-[10px] uppercase tracking-wide text-fg-faint">
+                  {label}
+                </span>
               </button>
             );
             return (
-              <div className="flex min-w-0 shrink items-center gap-1 overflow-x-auto">
+              /* A CARD, not three loose numbers.
+                 Dropped into the rail as bare text it read as something that
+                 had not been styled yet — "that indication alert you kept at
+                 top is not nice to look". It is the reference card now, so it
+                 belongs to the row rather than floating in it. */
+              <div className="mise-card-inset mise-purchase-funnel flex shrink-0 items-center gap-1 overflow-hidden px-1 py-0.5">
                 {step(awaiting, "to approve", awaiting ? "text-amber-300" : "text-fg-soft", "indents")}
-                <span aria-hidden className="text-fg-faint/40">→</span>
+                <span aria-hidden className="text-fg-faint/30">→</span>
                 {step(
                   openPos.length,
                   "on order",
@@ -1005,7 +1014,7 @@ export default function PurchasingPage() {
                   "orders",
                   late ? `${late} late` : undefined,
                 )}
-                <span aria-hidden className="text-fg-faint/40">→</span>
+                <span aria-hidden className="text-fg-faint/30">→</span>
                 {step(arrived, "arrived", "text-emerald-300", "orders")}
               </div>
             );
@@ -1051,7 +1060,7 @@ export default function PurchasingPage() {
           nice to see, it's very plain text UI." It was a tinted paragraph.
           Something just HAPPENED — the message should arrive like it. */}
       {msg && (
-        <div className="mise-card3d mise-card3d-wide mise-say relative mb-4 flex items-start gap-3 overflow-hidden px-4 py-3" id="mise-indent-said">
+        <div className="mise-card-inset mise-say relative mb-4 flex items-start gap-3 overflow-hidden px-4 py-3" id="mise-indent-said">
           <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400" />
           <span
             aria-hidden
@@ -1723,7 +1732,7 @@ export default function PurchasingPage() {
                 const detail = poDetail[po.id];
                 const busy = poBusy === po.id;
                 return (
-                  <div key={po.id} className={`mise-card3d overflow-hidden border transition ${
+                  <div key={po.id} className={`mise-card-inset overflow-hidden transition ${
                     po.status !== "RECEIVED" && po.expected_delivery && po.expected_delivery < todayStr
                       ? "border-rose-400/30 !bg-rose-400/[0.06]"
                       : "border-line hover:border-line-2"
@@ -1732,19 +1741,24 @@ export default function PurchasingPage() {
                       type="button"
                       onClick={() => togglePo(po.id)}
                       aria-expanded={open}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                      /* THE REFERENCE CARD, like everything else on this page.
+                         This one was missed: still `mise-neo-raised` with a 40px
+                         status tile, sitting inside a run that had already been
+                         converted — "that inner card still has old UI". Status
+                         is the stripe now, matching the row it lives in. */
+                      className="mise-card-inset mise-press relative flex w-full items-center gap-3 overflow-hidden px-4 py-3 pl-5 text-left"
                     >
-                      {/* A status tile, matching the indent rows. Colour reads
-                          faster than a word, and an order that has ARRIVED is a
-                          different thing from one still out. */}
                       <span
                         aria-hidden
-                        className={`mise-neo-raised grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base ${
-                          po.status === "RECEIVED" ? "text-emerald-300"
-                          : po.expected_delivery && po.expected_delivery < todayStr ? "text-rose-300"
-                          : "text-fg-faint"
+                        className={`absolute inset-y-0 left-0 w-1 ${
+                          po.status === "RECEIVED"
+                            ? "bg-emerald-400/70"
+                            : po.expected_delivery && po.expected_delivery < todayStr
+                              ? "bg-rose-400"
+                              : "bg-sky-400/70"
                         }`}
-                      >
+                      />
+                      <span aria-hidden className="shrink-0 text-base">
                         {po.status === "RECEIVED" ? "✓" : "🚚"}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -1970,7 +1984,7 @@ export default function PurchasingPage() {
                         {/* A stuck indent has to say WHY it is stuck and offer
                             the way out, or the status is just a word. */}
                         {openIndentObj.status === "APPROVED" && (
-                          <div className="mise-card3d relative overflow-hidden p-3 pl-4">
+                          <div className="mise-card-inset relative overflow-hidden p-3 pl-4">
                             <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-rose-400" />
                             <p className="text-sm font-semibold text-fg">
                               Approved, but nothing could be ordered
@@ -2158,7 +2172,7 @@ export default function PurchasingPage() {
 
                 <ul className="space-y-1.5">
                   {shown.map((l, i) => (
-                    <li key={`${l.po}-${l.item_name}-${i}`} className="mise-card3d flex items-center gap-3 px-3 py-2">
+                    <li key={`${l.po}-${l.item_name}-${i}`} className="mise-card-inset flex items-center gap-3 px-3 py-2">
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium text-fg">{l.item_name}</span>
                         <span className="block truncate text-[11px] text-fg-faint">
@@ -2231,7 +2245,7 @@ export default function PurchasingPage() {
             ) : openPoDetail && openPoDetail.items.length > 0 ? (
               <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                 {openPoDetail.items.map((it) => (
-                  <li key={it.item_id} className="mise-card3d p-2.5">
+                  <li key={it.item_id} className="mise-card-inset p-2.5">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="min-w-0 flex-1 truncate font-medium text-fg">
                         {it.item_name}

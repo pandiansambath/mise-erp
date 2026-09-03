@@ -3934,6 +3934,24 @@ body.mise-voice-open .mise-launcher-in {
   }
 }
 
+
+/* The purchase funnel in the rail.
+   It HIDES when the rail condenses rather than shrinking with it. A row of
+   numbers squeezed into a collapsing bar is unreadable and looks broken — "when
+   scroll it shrink nah, that UI is not nice". Once he has scrolled he is
+   reading the list, not the summary, so the honest move is to get out of the
+   way entirely and come back when the rail opens. */
+.mise-bench-rail[data-condensed="true"] .mise-purchase-funnel {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.96);
+  pointer-events: none;
+}
+.mise-purchase-funnel {
+  transition:
+    opacity 200ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* ── THE STAGE ───────────────────────────────────────────────────────────
    "when i turn on voice model it needs to close that bubble chat UI, and the
     voice model alone with animated transition needs to glow and come to the
