@@ -361,27 +361,6 @@ export default function ExpensesPage() {
             while the form stays pinned beside it. */}
         <div className="order-2 min-w-0 space-y-6 lg:order-1 lg:col-span-2">
 
-        {recurring.length > 0 && (
-          <Card id="recurring-hint" className="mise-feel mt-6 scroll-mt-24 border-copper-500/25">
-            <h2 className="text-sm font-semibold text-fg">🔁 These look like standing bills</h2>
-            <p className="text-xs text-fg-faint">
-              Same category, near-same amount, seen in more than one of the last 3 months. Put them in{" "}
-              <Link href="/profile" className="text-brand-400 underline">Profile → Monthly overheads</Link> and they post
-              themselves — no more remembering the rent.
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {recurring.map((r) => (
-                <div key={r.name + r.amount} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-sm">
-                  <span className="text-fg">{r.name}</span>
-                  <span className="mb-1 flex-1 border-b border-dotted border-line" />
-                  <span className="font-mono text-fg-soft">~{format(String(r.amount))}</span>
-                  <span className="text-[10px] text-fg-faint">× {r.months} months</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
         {(() => {
           // The petty-cash drawer: every small cash spend in this range, largest first.
           const petty = expenses.filter((e) => e.category_name.toLowerCase() === "petty cash");
@@ -513,6 +492,29 @@ export default function ExpensesPage() {
               </div>
             </Card>
           )}
+
+          {/* Standing-bill suggestions come AFTER the entries, not before them.
+              Same rule as every other page: the thing you came for leads. */}
+        {recurring.length > 0 && (
+          <Card id="recurring-hint" className="mise-feel mt-6 scroll-mt-24 border-copper-500/25">
+            <h2 className="text-sm font-semibold text-fg">🔁 These look like standing bills</h2>
+            <p className="text-xs text-fg-faint">
+              Same category, near-same amount, seen in more than one of the last 3 months. Put them in{" "}
+              <Link href="/profile" className="text-brand-400 underline">Profile → Monthly overheads</Link> and they post
+              themselves — no more remembering the rent.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {recurring.map((r) => (
+                <div key={r.name + r.amount} className="mise-well mise-feel flex items-baseline gap-2 rounded-lg px-3 py-2 text-sm">
+                  <span className="text-fg">{r.name}</span>
+                  <span className="mb-1 flex-1 border-b border-dotted border-line" />
+                  <span className="font-mono text-fg-soft">~{format(String(r.amount))}</span>
+                  <span className="text-[10px] text-fg-faint">× {r.months} months</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
           {/* THE ENTRIES, AS CARDS.
               "take /staff and /purchasing as reference for the UI — the cards,

@@ -4,7 +4,7 @@ import { chainSummary, levelName, priceLines, pricePerBase, stockInPacks, suppli
 
 import { useEffect, useRef, useState } from "react";
 import { Select } from "@/components/Select";
-import { DetailSheet, DetailRow, SheetRing } from "@/components/DetailSheet";
+import { DetailSheet, DetailRow } from "@/components/DetailSheet";
 import {
   api,
   ApiError,
@@ -882,61 +882,23 @@ export default function VendorsPage() {
         </SheetPopup>
       )}
 
-      <DetailSheet
-        open={!!selectedVendor}
+      {/* A CENTRED POPUP, NOT A SIDE DRAWER.
+          "first of all this whole side draw I hate this — we need popup inside
+           popup kinda UI... build from scratch that I should not feel I need to
+           scroll to reach anything to pick anything."
+
+          The drawer put a tall column of tabs and lists down one edge of the
+          screen, so everything past the first two was below the fold. This is
+          the same popup the order pad uses: what you can do with a supplier is
+          four TILES you can see at once, and each one opens over the top. */}
+      {selectedVendor && (
+      <SheetPopup
         onClose={() => setSelected("")}
-        width="lg"
-        icon={TYPE_EMOJI[selectedVendor?.category ?? ""] ?? "🤝"}
-        title={selectedVendor?.name ?? ""}
-        subtitle={selectedVendor ? `${(selectedVendor.category || "—").toLowerCase()} supplier · ${vendorItems.length} item${vendorItems.length === 1 ? "" : "s"} priced` : ""}
-        ring={
-          vendorStats.sharePct !== null ? (
-            <SheetRing
-              pct={vendorStats.sharePct}
-              invert
-              label={`${Math.round(vendorStats.sharePct)}% of your 90-day spend goes to this supplier`}
-            />
-          ) : undefined
-        }
-        stats={
-          selectedVendor
-            ? [
-                { label: "Spend · 90d", value: format(vendorStats.spend), hint: vendorStats.orders ? `${vendorStats.orders} order${vendorStats.orders === 1 ? "" : "s"}` : "no orders yet" },
-                {
-                  label: "Best price on",
-                  value: `${vendorStats.bestCount}/${vendorItems.length || 0}`,
-                  hint: "items vs other suppliers",
-                  tone: vendorItems.length === 0 ? "plain" : vendorStats.bestCount === 0 ? "bad" : vendorStats.bestCount === vendorItems.length ? "good" : "warn",
-                },
-                {
-                  label: "Price rises",
-                  value: vendorStats.rises,
-                  hint: "last 90 days",
-                  tone: vendorStats.rises > 2 ? "bad" : vendorStats.rises > 0 ? "warn" : "good",
-                },
-              ]
-            : undefined
-        }
-        sections={[
-          { key: "supply", label: "Supplies", icon: "📦", count: vendorItems.length },
-          ...(canWrite ? [{ key: "price", label: "Add a price", icon: "＋" }] : []),
-          { key: "money", label: "Money", icon: "💷" },
-          ...(canWrite ? [{ key: "details", label: "Details", icon: "✎" }] : []),
-        ]}
-        active={sheetTab}
-        onSection={(k) => {
-          // Opening Details loads the current values, so the section is
-          // immediately editable rather than showing a blank form.
-          if (k === "details" && selectedVendor) editHere(selectedVendor);
-          else setSheetTab(k as typeof sheetTab);
-        }}
-        actions={
-          selectedVendor ? (
-            <>
-            {/* "for each vendor I need one download feature — I can download
-                vendor items or items with price details." Available to anyone
-                who can READ suppliers: taking a price list to a negotiation is
-                not an edit. */}
+        title={selectedVendor.name}
+        subtitle={`${(selectedVendor.category || "—").toLowerCase()} supplier · ${vendorItems.length} item${vendorItems.length === 1 ? "" : "s"} priced`}
+        columns={3}
+        footer={
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               onClick={() =>
                 downloadFile(
@@ -944,33 +906,120 @@ export default function VendorsPage() {
                   `${selectedVendor.name} price list.xlsx`,
                 )
               }
-              title="Download this supplier's items and prices"
               className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
             >
-              ⬇ Price list
+              ⭳ Price list
             </button>
             {canWrite && (
               <>
-            <button
-              onClick={() => editHere(selectedVendor)}
-              className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
-            >
-              Edit details
-            </button>
-            <button
-              onClick={() => toggleActive(selectedVendor)}
-              className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
-            >
-              {selectedVendor.is_active ? "Deactivate" : "Reactivate"}
-            </button>
+                <button
+                  onClick={() => editHere(selectedVendor)}
+                  className="mise-press rounded-lg border border-brand-400/40 bg-brand-400/10 px-3 py-1.5 text-sm font-medium text-brand-300"
+                >
+                  Edit details
+                </button>
+                <button
+                  onClick={() => toggleActive(selectedVendor)}
+                  className="mise-press rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-soft hover:bg-paper-2"
+                >
+                  {selectedVendor.is_active ? "Deactivate" : "Reactivate"}
+                </button>
               </>
             )}
-            </>
-          ) : null
+          </div>
         }
       >
-        {selectedVendor && (
         <div ref={detailRef}>
+          {/* The three numbers that decide whether this supplier is worth
+              keeping — visible without opening anything. */}
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            {[
+              {
+                label: "Spend · 90d",
+                value: format(vendorStats.spend),
+                hint: vendorStats.orders
+                  ? `${vendorStats.orders} order${vendorStats.orders === 1 ? "" : "s"}`
+                  : "no orders yet",
+                tone: "bg-fg-faint/25",
+              },
+              {
+                label: "Best price on",
+                value: `${vendorStats.bestCount}/${vendorItems.length || 0}`,
+                hint: "vs other suppliers",
+                tone:
+                  vendorItems.length === 0
+                    ? "bg-fg-faint/25"
+                    : vendorStats.bestCount === 0
+                      ? "bg-rose-400/80"
+                      : vendorStats.bestCount === vendorItems.length
+                        ? "bg-emerald-400/70"
+                        : "bg-amber-400/80",
+              },
+              {
+                label: "Price rises",
+                value: String(vendorStats.rises),
+                hint: "last 90 days",
+                tone:
+                  vendorStats.rises > 2
+                    ? "bg-rose-400/80"
+                    : vendorStats.rises > 0
+                      ? "bg-amber-400/80"
+                      : "bg-emerald-400/70",
+              },
+            ].map((k) => (
+              <div
+                key={k.label}
+                className="mise-card-inset relative overflow-hidden p-2.5 pl-3.5"
+              >
+                <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${k.tone}`} />
+                <p className="text-[10px] uppercase tracking-wide text-fg-faint">{k.label}</p>
+                <p className="mt-0.5 font-display text-base font-semibold tabular-nums text-fg">
+                  {k.value}
+                </p>
+                <p className="truncate text-[10px] text-fg-faint">{k.hint}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* WHAT YOU CAN DO, as tiles you can see at once. This was a vertical
+              tab rail down the side of a drawer, which is the shape that made
+              him scroll to reach anything. */}
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(
+              [
+                { key: "supply", label: "Supplies", icon: "📦", n: vendorItems.length },
+                ...(canWrite ? [{ key: "price", label: "Add a price", icon: "＋" }] : []),
+                { key: "money", label: "Money", icon: "💷" },
+                ...(canWrite ? [{ key: "details", label: "Details", icon: "✎" }] : []),
+              ] as { key: string; label: string; icon: string; n?: number }[]
+            ).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => {
+                  if (t.key === "details" && selectedVendor) editHere(selectedVendor);
+                  else setSheetTab(t.key as typeof sheetTab);
+                }}
+                className={`mise-press relative flex items-center gap-2 overflow-hidden rounded-xl px-3 py-2.5 text-left transition ${
+                  sheetTab === t.key
+                    ? "bg-brand-600 text-white"
+                    : "mise-card-inset text-fg-soft hover:text-fg"
+                }`}
+              >
+                <span aria-hidden className="text-base">{t.icon}</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-semibold">{t.label}</span>
+                {t.n != null && (
+                  <span
+                    className={`shrink-0 rounded-full px-1.5 text-[10px] font-bold ${
+                      sheetTab === t.key ? "bg-white/20" : "bg-fg/10 text-fg-soft"
+                    }`}
+                  >
+                    {t.n}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
 
           <div className="grid grid-cols-1 gap-6">
             {/* Who they are — editable right here.
@@ -1594,8 +1643,8 @@ export default function VendorsPage() {
             })()}
           </DetailSheet>
         </div>
-        )}
-      </DetailSheet>
+      </SheetPopup>
+      )}
     </Workbench>
   );
 }
