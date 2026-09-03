@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useBackToClose } from "@/components/useBackToClose";
 import { overlayOpened } from "@/lib/overlay";
@@ -87,7 +88,22 @@ export function SheetPopup({
   };
   const box = `left-1/2 top-1/2 ${width[Math.min(4, Math.max(1, columns))]}`;
 
-  return (
+  // RENDERED INTO <body>, ALWAYS.
+  //
+  // `position: fixed` is only relative to the viewport when no ancestor has a
+  // transform, a filter, or a BACKDROP-FILTER — any of those makes the ancestor
+  // the containing block instead. The header bar is `backdrop-blur`, so a popup
+  // opened from the clock inside it was being centred in a 62px-tall strip:
+  // measured `top: -214px` with the dial cut off above the screen, on a popup
+  // only 491px tall that had all the room it needed.
+  //
+  // A portal takes it out of that ancestor entirely, which fixes the clock and
+  // every future popup opened from anywhere blurred or transformed — a class of
+  // bug rather than one instance of it.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const ui = (
     <>
       <div
         data-sheet-backdrop
@@ -121,4 +137,9 @@ export function SheetPopup({
       </div>
     </>
   );
+
+  // Before hydration there is no document to portal into; rendering nothing for
+  // one frame is right, because a popup is always opened by a click that has
+  // not happened yet on the server.
+  return mounted ? createPortal(ui, document.body) : null;
 }
