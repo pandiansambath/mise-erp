@@ -813,33 +813,14 @@ export function OrderFlow({
 
   return (
     <div className="min-w-0">
-      {low.length > 0 && (
-        <div className="mise-card3d mise-card3d-wide relative mb-3 flex items-center gap-2.5 overflow-hidden py-2 pl-3.5 pr-2">
-          <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-amber-400" />
-          <span aria-hidden className="shrink-0 text-base leading-none">⚠</span>
-          {/* One line that fits. It used to wrap and hang out of its own box —
-              "this section also handing like it's not fitting in that place". */}
-          <span className="min-w-0 flex-1 truncate text-sm text-fg">
-            <b className="text-amber-300">{low.length}</b> item
-            {low.length === 1 ? " is" : "s are"} low
-          </span>
-          {onAddAllLow && (
-            <button
-              type="button"
-              onClick={onAddAllLow}
-              title="Pull every low-stock item into this order, topped up to its minimum"
-              className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-semibold text-amber-300"
-            >
-              Add them all
-            </button>
-          )}
-        </div>
-      )}
-
       {/* "show by" — category, vendor, or dearest first.
           Three buttons rather than a dropdown: the whole pad is built on
           tapping rather than scrolling, and a select would be the one control
           on the page that hides its own options. */}
+      {/* ONE BAND, NOT TWO. The low-stock warning had a whole row of its own
+          above this one, so the categories — the thing the page is FOR — sat
+          two bands further down. It is the same sentence and the same button,
+          riding along with the control it belongs beside. */}
       <div className="mb-3 flex items-center gap-2 overflow-x-auto">
         <span className="shrink-0 text-xs text-fg-faint">Show by</span>
         <div className="mise-well flex shrink-0 gap-1 rounded-xl p-1">
@@ -873,6 +854,24 @@ export function OrderFlow({
             </button>
           ))}
         </div>
+        {low.length > 0 && (
+          <span className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-amber-400/35 bg-amber-400/10 px-2.5 py-1.5">
+            <span aria-hidden className="text-sm leading-none">⚠</span>
+            <span className="whitespace-nowrap text-xs text-amber-200">
+              <b>{low.length}</b> low
+            </span>
+            {onAddAllLow && (
+              <button
+                type="button"
+                onClick={onAddAllLow}
+                title="Pull every low-stock item into this order, topped up to its minimum"
+                className="mise-press whitespace-nowrap rounded-lg bg-amber-400/20 px-2 py-1 text-[11px] font-semibold text-amber-100"
+              >
+                Add all
+              </button>
+            )}
+          </span>
+        )}
       </div>
 
       {/* Dearest first has no groups: a price ranking split into buckets is not

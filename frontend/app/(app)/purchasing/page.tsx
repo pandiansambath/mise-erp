@@ -1253,6 +1253,103 @@ export default function PurchasingPage() {
           phone it becomes a 2x2 grid rather than something you drag sideways —
           "this status in mobile is showing horizontal scroll because of no
           space". A status you have to scroll to read is not a status. */}
+      {/* THE CORE, FIRST.
+
+          "the core job of the page is to show items I mean categories, but the
+           full page is occupied by indications and alerts and the core is very
+           bottom that I need to scroll to see."
+
+          Purchasing opened with a title, a tab bar, a four-stage funnel and a
+          low-stock banner — four bands of furniture before the first thing you
+          can tap. Someone opening this page has come to order something.
+
+          The funnel and the alerts still exist and still matter; they have
+          moved BELOW the pad, where you pass them on the way to the orders
+          rather than through them on the way to the categories. He was
+          specific that they should stay. */}
+      {canWrite && tab === "new" && (
+        <Card className="mb-4 p-3 sm:p-4" id="indent-form">
+          {orderable.length === 0 ? (
+            <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">
+              No orderable items yet — add a vendor price for at least one item on the <b>Vendors</b> page.
+            </p>
+          ) : (
+          <form onSubmit={submitIndent} className="space-y-3">
+            {/* Submit lives INSIDE the tray. It used to sit under the whole
+                picker, so the more you ordered the further away it got. */}
+            {/* The order pad. See docs/PURCHASING_REDESIGN.md.
+                What this replaces was a catalogue: search, category chips, and
+                sixty rows to scroll and scan — for someone who already knows
+                they need onions. Ordering is not shopping, it is writing a
+                list, and his constraint was that picking must never scroll.
+
+                So: type "onion 25" and it is done, or tap one level into a
+                category whose items fit the panel as tiles. The order builds
+                beside you, grouped by the supplier it will actually be sent
+                to, with the money live. */}
+            {/* The flow he described, layer by layer:
+                  categories -> a category's items as a POPUP
+                             -> an item as a POPUP ON TOP
+                                -> how many, and in which size
+                                   -> "Add to basket" BURSTS it into a bubble
+                                      that shrinks across into the basket
+                  and the basket opens on tap with the full detail.
+                See docs/PURCHASING_REDESIGN.md. */}
+            <OrderFlow
+              items={orderable}
+              suppliers={suppliers}
+              lines={lines}
+              onChange={setLines}
+              onAddAllLow={orderAllLow}
+              vendorPick={vendorPick}
+              formPick={formPick}
+              // For THIS order only — `is_preferred` is never written, so the
+              // ★ chosen supplier survives untouched. The server applies the
+              // same precedence when it splits the indent: picked, then chosen,
+              // then cheapest.
+              onVendorPick={(itemId, vendorId, packLevelId) => {
+                setVendorPick((p) => {
+                  const next = { ...p };
+                  if (vendorId) next[itemId] = vendorId;
+                  else delete next[itemId];
+                  return next;
+                });
+                setFormPick((p) => {
+                  const next = { ...p };
+                  if (vendorId) next[itemId] = packLevelId;
+                  else delete next[itemId];
+                  return next;
+                });
+              }}
+              footer={
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    disabled={lines.length === 0}
+                    // The form still submits; this only makes the basket come
+                    // apart as it goes, so you land back on the page having SEEN
+                    // the order leave rather than finding the panel gone.
+                    onClick={() => { if (lines.length) void burstBasket(); }}
+                    className="mise-btn-key mise-press flex-1 px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
+                  >
+                    Submit indent · {lines.length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetIndent}
+                    className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
+                  >
+                    Clear
+                  </button>
+                </div>
+              }
+            />
+          </form>
+          )}
+        </Card>
+      )}
+
+      {/* The state of play — worth seeing, not worth scrolling past to begin. */}
       {(indents.length > 0 || pos.length > 0) && (() => {
         const today = localISODate();
         const openPos = pos.filter((x) => x.status !== "RECEIVED");
@@ -1344,88 +1441,6 @@ export default function PurchasingPage() {
           </div>
         );
       })()}
-
-      {canWrite && tab === "new" && (
-        <Card className="mb-4 p-3 sm:p-4" id="indent-form">
-          {orderable.length === 0 ? (
-            <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">
-              No orderable items yet — add a vendor price for at least one item on the <b>Vendors</b> page.
-            </p>
-          ) : (
-          <form onSubmit={submitIndent} className="space-y-3">
-            {/* Submit lives INSIDE the tray. It used to sit under the whole
-                picker, so the more you ordered the further away it got. */}
-            {/* The order pad. See docs/PURCHASING_REDESIGN.md.
-                What this replaces was a catalogue: search, category chips, and
-                sixty rows to scroll and scan — for someone who already knows
-                they need onions. Ordering is not shopping, it is writing a
-                list, and his constraint was that picking must never scroll.
-
-                So: type "onion 25" and it is done, or tap one level into a
-                category whose items fit the panel as tiles. The order builds
-                beside you, grouped by the supplier it will actually be sent
-                to, with the money live. */}
-            {/* The flow he described, layer by layer:
-                  categories -> a category's items as a POPUP
-                             -> an item as a POPUP ON TOP
-                                -> how many, and in which size
-                                   -> "Add to basket" BURSTS it into a bubble
-                                      that shrinks across into the basket
-                  and the basket opens on tap with the full detail.
-                See docs/PURCHASING_REDESIGN.md. */}
-            <OrderFlow
-              items={orderable}
-              suppliers={suppliers}
-              lines={lines}
-              onChange={setLines}
-              onAddAllLow={orderAllLow}
-              vendorPick={vendorPick}
-              formPick={formPick}
-              // For THIS order only — `is_preferred` is never written, so the
-              // ★ chosen supplier survives untouched. The server applies the
-              // same precedence when it splits the indent: picked, then chosen,
-              // then cheapest.
-              onVendorPick={(itemId, vendorId, packLevelId) => {
-                setVendorPick((p) => {
-                  const next = { ...p };
-                  if (vendorId) next[itemId] = vendorId;
-                  else delete next[itemId];
-                  return next;
-                });
-                setFormPick((p) => {
-                  const next = { ...p };
-                  if (vendorId) next[itemId] = packLevelId;
-                  else delete next[itemId];
-                  return next;
-                });
-              }}
-              footer={
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="submit"
-                    disabled={lines.length === 0}
-                    // The form still submits; this only makes the basket come
-                    // apart as it goes, so you land back on the page having SEEN
-                    // the order leave rather than finding the panel gone.
-                    onClick={() => { if (lines.length) void burstBasket(); }}
-                    className="mise-btn-key mise-press flex-1 px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
-                  >
-                    Submit indent · {lines.length}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetIndent}
-                    className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
-                  >
-                    Clear
-                  </button>
-                </div>
-              }
-            />
-          </form>
-          )}
-        </Card>
-      )}
 
       <div className="grid grid-cols-1 gap-6">
         {/* Indents — tap a row to see its items, suppliers and the approve action. */}

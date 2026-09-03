@@ -152,3 +152,32 @@ That is a three-page round trip to do one thing: **stock an item you can buy.**
 The fix is not paint. It is that adding an item should be able to finish the
 job — item, its supplier, and that supplier's price, in one place — with the
 Vendors page still there for people who think supplier-first.
+
+
+---
+
+# Batch 2026-09-03
+
+| # | What he said | State |
+|---|---|---|
+| 1 | Changing a supplier on one click must CONFIRM — a misclick changes what costing uses | ☐ |
+| 2 | Purchasing: 4 screens whose card UI he does not like (indent list, PO runs, PO sheet, indent sheet) | ☐ |
+| 3 | Vendors: needs the purchasing popup-in-popup; today it is all scrolling | ☐ |
+| 4 | Price comparison: change the UI completely | ☐ |
+| 5 | ⭐ **CORE FIRST ON EVERY PAGE** | ☐ |
+
+## 5 is the one that matters most
+
+> "the core job of the page is done and I need to scroll. eg purchase page core
+>  job is to show items I mean categories, but the full page is occupied by
+>  indications and alerts and the core is very bottom that I need to scroll to
+>  see. likewise inventory, vendor, all pages. please show core at top — but
+>  this doesn't mean you should not show the indication/navigation bars."
+
+Purchasing opens with: a page title, a tab bar, a four-stage funnel, a
+low-stock banner — and only THEN the categories, which are the thing the page
+is for. Four bands of furniture before the first thing you can tap.
+
+The instruction is precise and worth keeping: not "remove the alerts". Move the
+core above them. An alert is worth seeing on the way past; it is not worth
+making someone scroll before they can start.
