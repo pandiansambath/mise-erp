@@ -291,13 +291,27 @@ export default function HiringPage() {
       ) : (
         <div className="space-y-3">
           {postings.map((p) => (
+            /* The reference card, and the stripe says whether this role still
+               needs you: amber while applications are waiting to be read, green
+               for open-and-clear, grey once closed. That was a chip three items
+               into a wrapping row. */
             <Card key={p.id} className={`mise-feel p-0 ${p.status === "CLOSED" ? "opacity-70" : ""}`}>
               <button
                 type="button"
                 onClick={() => openPipeline(p)}
                 aria-expanded={openId === p.id}
-                className="flex w-full flex-wrap items-center gap-3 px-5 py-4 text-left"
+                className="mise-card-inset mise-press relative flex w-full flex-wrap items-center gap-3 overflow-hidden px-5 py-4 pl-6 text-left"
               >
+                <span
+                  aria-hidden
+                  className={`absolute inset-y-0 left-0 w-1 ${
+                    p.status === "CLOSED"
+                      ? "bg-fg-faint/25"
+                      : p.new_applications > 0
+                        ? "bg-amber-400"
+                        : "bg-emerald-400/60"
+                  }`}
+                />
                 <span aria-hidden className={`text-fg-faint transition-transform duration-200 ${openId === p.id ? "rotate-90" : ""}`}>›</span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
