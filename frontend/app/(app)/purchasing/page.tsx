@@ -1457,7 +1457,13 @@ export default function PurchasingPage() {
             total={indentGrand}
             shown={indentTotal}
           />
-          <div className="mise-sheet-cascade space-y-2 p-3">
+          {/* A GRID, not a stack of full-width rows.
+              Each row carried its content at the far left and far right with a
+              hand's width of nothing in between — sixty-four of them, all the
+              same shape. The category tiles on the New order tab are the ones
+              he said he likes, and they work because they are card-sized: the
+              text and the number are close enough to read as one thing. */}
+          <div className="mise-sheet-cascade grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
             {shownIndents.length === 0 ? (
               <p className="py-10 text-center text-sm text-fg-faint">
                 {indentTotal === 0 ? "Nothing matches that." : "No indents yet."}
@@ -1623,7 +1629,7 @@ export default function PurchasingPage() {
               </div>
             ) : (
               poGroups.map((g) => (
-              <div key={g.key} className="mise-card3d relative overflow-hidden p-3 pl-4">
+              <div key={g.key} className="mise-card-inset relative overflow-hidden p-3 pl-4">
                 {(() => {
                   const late = g.pos.filter(
                     (p) => p.status !== "RECEIVED" && p.expected_delivery && p.expected_delivery < todayStr,
