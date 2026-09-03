@@ -105,7 +105,7 @@ export function ListControls({
             control. The menu is still the real, native, accessible one — it
             opens on click, works with a keyboard, and behaves the way a phone
             expects — but nothing of its appearance survives. */}
-        <span className="mise-btn mise-press relative inline-flex shrink-0 items-center gap-2 rounded-xl py-2 pl-3 pr-2.5 text-sm font-medium text-fg-soft">
+        <span className="mise-btn-flat mise-press relative inline-flex shrink-0 items-center gap-2 rounded-xl py-2 pl-3 pr-2.5 text-sm font-medium text-fg-soft">
           <span className="whitespace-nowrap">
             {value.sort === "oldest"
               ? "Oldest date first"
@@ -230,7 +230,7 @@ export function Pager({
           type="button"
           disabled={page <= 1}
           onClick={() => onChange({ ...value, page: page - 1 })}
-          className="mise-btn mise-press px-2.5 py-1.5 text-xs font-medium text-fg-soft disabled:opacity-35"
+          className="mise-btn-flat mise-press px-2.5 py-1.5 text-xs font-medium text-fg-soft disabled:opacity-35"
         >
           ‹ Back
         </button>

@@ -1389,7 +1389,7 @@ export default function PurchasingPage() {
                   <button
                     type="button"
                     onClick={resetIndent}
-                    className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
+                    className="mise-btn-flat mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
                   >
                     Clear
                   </button>
@@ -1579,7 +1579,7 @@ export default function PurchasingPage() {
                         setPoFilter(EMPTY_FILTER);
                         setRunSize("all");
                       }}
-                      className="mise-btn mise-press mt-3 px-3 py-1.5 text-xs font-semibold text-brand-300"
+                      className="mise-btn-flat mise-press mt-3 px-3 py-1.5 text-xs font-semibold text-brand-300"
                     >
                       Show me every order
                     </button>
@@ -1691,7 +1691,7 @@ export default function PurchasingPage() {
                         }}
                         title="Every supplier and every line on this purchase, in one list"
                         aria-label="See every line on this purchase"
-                        className="mise-btn mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-fg-soft"
+                        className="mise-btn-flat mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-fg-soft"
                       >
                         ☰
                       </button>
@@ -1701,7 +1701,7 @@ export default function PurchasingPage() {
                         title="One PDF for this whole purchase — every supplier, every item"
                         aria-label="Download one PDF for this whole purchase"
                         onClickCapture={(e) => e.stopPropagation()}
-                        className="mise-btn mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-brand-300"
+                        className="mise-btn-flat mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-brand-300"
                       >
                         ⤓
                       </button>
@@ -1716,7 +1716,7 @@ export default function PurchasingPage() {
                           }}
                           title="Mark every order in this purchase as arrived"
                           aria-label="Receive this whole purchase into stock"
-                          className="mise-btn mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-emerald-300"
+                          className="mise-btn-flat mise-press grid h-8 w-8 shrink-0 place-items-center text-sm text-emerald-300"
                         >
                           ✓
                         </button>
@@ -2067,7 +2067,8 @@ export default function PurchasingPage() {
                             </div>
                             <button
                               onClick={() => downloadFile(`/purchasing/indents/${openIndentObj.id}/consolidated.pdf`, `consolidated-${openIndentObj.date}.pdf`)}
-                              className="mise-btn mise-press mt-2.5 w-full px-3 py-2 text-sm font-semibold text-brand-300"
+                              data-tone="brand"
+                              className="mise-btn-flat mise-press mt-2.5 w-full px-3 py-2 text-sm font-semibold text-brand-300"
                             >
                               🧾 Download consolidated PDF (all vendors)
                             </button>
@@ -2336,7 +2337,7 @@ export default function PurchasingPage() {
               <button
                 type="button"
                 onClick={() => downloadFile(`/purchasing/purchase-orders/${openPoObj.id}/pdf`, `${openPoObj.po_number}.pdf`)}
-                className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
+                className="mise-btn-flat mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
               >
                 Download PDF
               </button>
@@ -2345,7 +2346,7 @@ export default function PurchasingPage() {
                   type="button"
                   onClick={() => revertPo(openPoObj)}
                   title="Cancel this order and put its items back on the indent"
-                  className="mise-btn mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
+                  className="mise-btn-flat mise-press px-4 py-2.5 text-sm font-medium text-fg-soft"
                 >
                   Back to indent
                 </button>

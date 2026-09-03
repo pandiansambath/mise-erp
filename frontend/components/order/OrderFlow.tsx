@@ -957,7 +957,7 @@ export function OrderFlow({
                   data-testid="vendor-add-all"
                   onClick={() => addWholeVendor(v.id)}
                   title={`Put all ${v.items.length} of ${v.name}'s items in the basket`}
-                  className="mise-btn mise-press shrink-0 px-2.5 py-1.5 text-xs font-semibold text-brand-300"
+                  className="mise-btn-flat mise-press shrink-0 px-2.5 py-1.5 text-xs font-semibold text-brand-300"
                 >
                   Add all
                 </button>
