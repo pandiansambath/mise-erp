@@ -377,7 +377,7 @@ export default function AttendancePage() {
 
       <Card className="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="mise-stack w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                 <th className="px-5 py-3 font-medium">Employee</th>
@@ -458,9 +458,9 @@ export default function AttendancePage() {
                           <span className="text-fg-faint" title="No shift on the rota today">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_in ?? null)}</td>
-                      <td className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_out ?? null)}</td>
-                      <td className="px-5 py-3 text-right text-fg-soft">
+                      <td data-label="In" className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_in ?? null)}</td>
+                      <td data-label="Out" className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_out ?? null)}</td>
+                      <td data-label="Break" className="px-5 py-3 text-right text-fg-soft">
                         {onBreak ? (
                           <span className="text-amber-400">on break…</span>
                         ) : r && r.break_minutes > 0 ? (
@@ -470,7 +470,7 @@ export default function AttendancePage() {
                           "—"
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right text-fg-soft" title={r?.working_hours ? `${fmtHours(r.working_hours)} — the unpaid break is already taken out` : undefined}>
+                      <td data-label="Hours" className="px-5 py-3 text-right text-fg-soft" title={r?.working_hours ? `${fmtHours(r.working_hours)} — the unpaid break is already taken out` : undefined}>
                         {fmtHours(r?.working_hours)}
                         {r?.clock_in && (() => {
                           // the day as a strip: 06:00→24:00, shift filled in
@@ -490,7 +490,7 @@ export default function AttendancePage() {
                           );
                         })()}
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td data-label="Penalty" className="px-5 py-3 text-right">
                         {r && parseFloat(r.break_penalty) > 0 ? (
                           <span className="text-rose-400">{format(r.break_penalty)}</span>
                         ) : (
