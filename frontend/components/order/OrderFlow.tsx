@@ -410,7 +410,14 @@ function ItemGrid({
               type="button"
               data-testid="item-tile"
               onClick={() => onOpen(it)}
-              className={`mise-card-inset mise-press relative flex w-full flex-col items-start gap-1 overflow-hidden p-3 pl-3.5 text-left ${
+              /* ONE HEIGHT FOR ALL OF THEM.
+                 "some cards are same size but that 1 card alone is a bit big in
+                  size which is making the UI bad." Two causes: a long name
+                 wrapping to a second line, and an item quoted in two pack sizes
+                 adding a second price row. The tile fills its grid cell now and
+                 the price block is pinned to the bottom, so a name that wraps
+                 takes the space from the gap rather than from the whole row. */
+              className={`mise-card-inset mise-press relative flex h-full min-h-[10.5rem] w-full flex-col items-start gap-1 overflow-hidden p-3 pl-3.5 text-left ${
                 on ? "!bg-brand-400/15 ring-2 ring-brand-500" : ""
               }`}
             >
@@ -441,7 +448,10 @@ function ItemGrid({
                   <span className="tabular-nums">{fmtQty(it.current_stock, it.unit)}</span>
                 </span>
                 {sup ? (
-                  priceLines(it, sup).map((l) => (
+                  // Two at most: a supplier quoting three pack sizes gave that
+                  // one tile three price rows and made its whole grid row
+                  // taller than every other.
+                  priceLines(it, sup).slice(0, 2).map((l) => (
                     <span key={l.label} className="flex justify-between gap-2 text-fg-soft">
                       <span className="truncate text-fg-faint">1 {l.label}</span>
                       <span className="shrink-0 tabular-nums">

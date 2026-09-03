@@ -729,20 +729,8 @@ export default function PurchasingPage() {
   const [indentFilter, setIndentFilter] = useListFilter("indents");
   const [poFilter, setPoFilter] = useListFilter("pos");
 
-  const matchedIndents = useMemo(
-    () =>
-      applyFilter(indents, { ...indentFilter, q: "", status: "all" }, (i) => ({
-        // Searchable by date, status AND what is in it — "the one with the
-        // lemons" is how people actually remember an order.
-        text: `${i.date} ${i.status} ${i.items.map((x) => `${x.item_name} ${x.vendor_name ?? ""}`).join(" ")}`,
-        status: i.status,
-        date: i.date,
-        value: indentConsol[i.id]?.grand_total
-          ? parseFloat(indentConsol[i.id].grand_total)
-          : 0,
-      })),
-    [indents, indentFilter, indentConsol],
-  );
+  // (Client-side indent matching used to live here. The server filters now —
+  //  see the note below — so it was computing a list nothing rendered.)
   // The server did the filtering, so what came back IS the page.
   const shownIndents = indents;
 
@@ -940,6 +928,15 @@ export default function PurchasingPage() {
       // does, one inch away from it — "remove it, it's a dead button".
       action={undefined}
       tools={
+        /* THE STATE OF PLAY, IN THE SAME ROW AS THE TABS.
+           "is it possible to keep this card near the + New order / Indents /
+            Orders — here right side we have some place, all in same 1 row."
+           Right: that row was half empty and the funnel had a whole band of its
+           own. It rides in the rail now, which also means it CONDENSES on
+           scroll for free — the rail already shrinks as the page moves, so the
+           numbers get out of the way exactly when he is reading something
+           else. */
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <SubNav
             active={tab}
             items={[
@@ -968,6 +965,52 @@ export default function PurchasingPage() {
               },
             ]}
           />
+          {(indents.length > 0 || pos.length > 0) && (() => {
+            const openPos = pos.filter((x) => x.status !== "RECEIVED");
+            const late = openPos.filter(
+              (x) => x.expected_delivery && x.expected_delivery < todayStr,
+            ).length;
+            const awaiting = indents.filter((x) => x.status === "PENDING").length;
+            const arrived = pos.filter((x) => x.status === "RECEIVED").length;
+            const step = (
+              n: number,
+              label: string,
+              tone: string,
+              go: "indents" | "orders",
+              badge?: string,
+            ) => (
+              <button
+                type="button"
+                onClick={() => setTab(go)}
+                title={label}
+                className="mise-press flex shrink-0 items-baseline gap-1.5 rounded-lg px-1.5 py-1 hover:bg-glass/5"
+              >
+                <b className={`font-display text-base leading-none ${tone}`}>{n}</b>
+                <span className="whitespace-nowrap text-[11px] text-fg-faint">{label}</span>
+                {badge && (
+                  <span className="rounded-full bg-rose-500/15 px-1.5 text-[10px] font-semibold text-rose-300">
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+            return (
+              <div className="flex min-w-0 shrink items-center gap-1 overflow-x-auto">
+                {step(awaiting, "to approve", awaiting ? "text-amber-300" : "text-fg-soft", "indents")}
+                <span aria-hidden className="text-fg-faint/40">→</span>
+                {step(
+                  openPos.length,
+                  "on order",
+                  openPos.length ? "text-sky-300" : "text-fg-soft",
+                  "orders",
+                  late ? `${late} late` : undefined,
+                )}
+                <span aria-hidden className="text-fg-faint/40">→</span>
+                {step(arrived, "arrived", "text-emerald-300", "orders")}
+              </div>
+            );
+          })()}
+        </div>
       }
       tally={(() => {
         // The money committed but not yet received. This app exists to answer
@@ -1348,99 +1391,6 @@ export default function PurchasingPage() {
           )}
         </Card>
       )}
-
-      {/* The state of play — worth seeing, not worth scrolling past to begin. */}
-      {(indents.length > 0 || pos.length > 0) && (() => {
-        const today = localISODate();
-        const openPos = pos.filter((x) => x.status !== "RECEIVED");
-        const overdue = openPos.filter(
-          (x) => x.expected_delivery && x.expected_delivery < today,
-        ).length;
-        const committed = openPos.reduce((sum, x) => sum + (parseFloat(x.total_amount) || 0), 0);
-        const stages: {
-          icon: string; n: number; label: string; tone: string;
-          go: "indents" | "orders"; alert?: string; why: string;
-        }[] = [
-          {
-            icon: "📝",
-            n: indents.filter((x) => x.status === "PENDING").length,
-            label: "waiting for you to approve",
-            tone: "text-amber-300",
-            go: "indents",
-            why: "Someone in the kitchen asked for these. Nothing has been ordered yet — they are waiting for you to say yes.",
-          },
-          {
-            icon: "✅",
-            n: indents.filter((x) => x.status === "APPROVED").length,
-            label: "approved, nothing ordered",
-            tone: "text-rose-300",
-            go: "indents",
-            why: "You approved these, but no purchase order could be raised — no active vendor prices those items. Set a price on Vendors and try again. Normally this is zero.",
-          },
-          {
-            icon: "🚚",
-            n: openPos.length,
-            label: "ordered, not arrived",
-            tone: "text-sky-300",
-            go: "orders",
-            alert: overdue > 0 ? `${overdue} late` : undefined,
-            why: "Purchase orders are with your suppliers and the goods have not come in yet. 'Late' means the date they promised has passed.",
-          },
-          {
-            icon: "🏠",
-            n: pos.filter((x) => x.status === "RECEIVED").length,
-            label: "arrived, in your stock",
-            tone: "text-emerald-300",
-            go: "orders",
-            why: "Received. Stock levels and average costs have been updated from these.",
-          },
-        ];
-        return (
-          <div className="mise-card3d mise-card3d-wide mb-4 p-2.5">
-            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-stretch sm:gap-0">
-              {stages.map((st, i) => (
-                <div key={st.label} className="flex min-w-0 flex-1 items-center">
-                  <button
-                    type="button"
-                    onClick={() => setTab(st.go)}
-                    title={st.why}
-                    className="mise-press group min-w-0 flex-1 rounded-xl px-2.5 py-2 text-left transition hover:bg-glass/[0.06]"
-                  >
-                    <span className="flex items-baseline gap-1.5">
-                      <span aria-hidden className="text-sm">{st.icon}</span>
-                      <span className={`font-display text-xl font-semibold leading-none tabular-nums ${st.tone}`}>
-                        {st.n}
-                      </span>
-                      {st.alert && (
-                        <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">
-                          {st.alert}
-                        </span>
-                      )}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-fg-faint">
-                      {st.label}
-                    </span>
-                  </button>
-                  {/* The flow, drawn — it is a pipeline, so it should look like
-                      one. Hidden on the phone grid, where the arrows would
-                      point at the wrong neighbours. */}
-                  {i < stages.length - 1 && (
-                    <span aria-hidden className="hidden shrink-0 px-1 text-fg-faint/50 sm:block">
-                      →
-                    </span>
-                  )}
-                </div>
-              ))}
-              <div className="col-span-2 mt-1 flex items-center justify-between gap-2 border-t border-line/60 px-2.5 pt-2 sm:col-auto sm:mt-0 sm:flex-col sm:items-end sm:justify-center sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
-                <span className="text-[11px] text-fg-faint">committed</span>
-                <span className="font-display text-lg font-semibold tabular-nums text-fg">
-                  {format(String(committed))}
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       <div className="grid grid-cols-1 gap-6">
         {/* Indents — tap a row to see its items, suppliers and the approve action. */}
