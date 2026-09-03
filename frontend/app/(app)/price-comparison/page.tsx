@@ -56,7 +56,8 @@ import { Badge, Button, Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
 import { AreaChart } from "@/components/charts";
 import { Select } from "@/components/Select";
-import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
+import { SheetPopup } from "@/components/SheetPopup";
+import { categoryEmoji } from "@/components/ItemPicker";
 import { DetailSheet, DetailRow } from "@/components/DetailSheet";
 import { Pocket, flyToPocket } from "@/components/Pocket";
 import Link from "next/link";
@@ -201,6 +202,8 @@ export default function PriceComparisonPage() {
   // costs nothing. Two separate ideas — what you picked, and what you are
   // looking at.
   const [stage, setStage] = useState<"list" | "item">("list");
+  /** Which category is open as a popup while browsing. */
+  const [browseCat, setBrowseCat] = useState<string | null>(null);
   const listScroll = useRef(0);
 
   // A shortlist you build up, which this page had no concept of.
@@ -313,6 +316,32 @@ export default function PriceComparisonPage() {
   const rankedItems = [...items].sort(
     (a, b) => (savingByItem[b.id] ?? -1) - (savingByItem[a.id] ?? -1),
   );
+
+  /** THE ITEMS WHERE HE IS ACTUALLY LOSING MONEY.
+   *
+   * This page exists to answer one question — "where am I overpaying" — and it
+   * was answering it with a picker holding sixty-one items. A picker is a
+   * filing cabinet: it can give you any item, which is not the same as telling
+   * you WHICH item. The answer was computed and then buried in a sort order.
+   *
+   * These are the ones with a cheaper supplier available, worst first. Six,
+   * because a list you can act on today beats a list that is complete. */
+  const overpaying = rankedItems
+    .filter((i) => (savingByItem[i.id] ?? 0) > 0.001)
+    .slice(0, 6);
+
+  /** Everything else, by category — the same tiles Purchasing and Vendors use,
+   *  so browsing works the same way on all three. */
+  const itemGroups = (() => {
+    const m = new Map<string, typeof items>();
+    for (const i of rankedItems) {
+      const cat = (i.category || "").trim() || "Other";
+      m.set(cat, [...(m.get(cat) ?? []), i]);
+    }
+    return [...m.entries()].sort((a, b) =>
+      a[0] === "Other" ? 1 : b[0] === "Other" ? -1 : a[0].localeCompare(b[0]),
+    );
+  })();
 
   async function setPreferred(vendorId: string | null) {
     const res = await api.post<PriceComparison>(`/vendors/items/${selected}/preferred`, {
@@ -773,26 +802,161 @@ export default function PriceComparisonPage() {
               right one — "kill the split". Pick an item and the comparison
               TAKES OVER; go back and the list does. */}
           <div className={stage === "list" ? "block" : "hidden"}>
+            {/* THE ANSWER FIRST, THE CATALOGUE SECOND.
+                This page exists to say where he is overpaying, and it opened
+                with a picker holding sixty-one items. A picker can give you any
+                item, which is not the same as telling you WHICH item — the
+                answer was already computed and then buried in a sort order.
+                "core at the top", applied to the thing this page is for. */}
+            {overpaying.length > 0 && (
+              <div className="mb-4">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-display text-sm font-semibold text-fg">
+                    💸 You are paying more than you need to
+                  </p>
+                  <p className="text-[11px] text-fg-faint">
+                    per {overpaying[0]?.unit ?? "unit"} · tap to see the quotes
+                  </p>
+                </div>
+                <div className="mise-stagger grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {overpaying.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => openItem(it.id)}
+                      className="mise-card-inset mise-press relative flex items-center gap-3 overflow-hidden p-3 pl-4 text-left"
+                    >
+                      <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-rose-400/80" />
+                      <span aria-hidden className="text-xl">{categoryEmoji(it.category ?? "")}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-fg">
+                          {it.name}
+                        </span>
+                        <span className="block text-[11px] text-fg-faint">
+                          a cheaper supplier is available
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block font-display text-sm font-semibold tabular-nums text-rose-300">
+                          +{format((savingByItem[it.id] ?? 0).toFixed(2))}
+                        </span>
+                        <span className="block text-[10px] text-fg-faint">per {it.unit}</span>
+                      </span>
+                      {/* GATHER, from the list where it belongs. The shortlist
+                          used to be filled from the old picker, and replacing
+                          that picker would have left the pocket on screen with
+                          no way to put anything in it — a feature you can see
+                          and cannot use. These are the items worth gathering,
+                          so this is where the button should have been. */}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Add ${it.name} to the review list`}
+                        title="Add to the review list"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          gather(it.id, e.currentTarget as HTMLElement);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            gather(it.id, e.currentTarget as HTMLElement);
+                          }
+                        }}
+                        className={`mise-press grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg border text-xs ${
+                          shortlist.includes(it.id)
+                            ? "border-brand-400/50 bg-brand-400/15 text-brand-300"
+                            : "border-line text-fg-faint hover:border-brand-400/40"
+                        }`}
+                      >
+                        {shortlist.includes(it.id) ? "✓" : "+"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Browsing everything else: categories, then a popup — the same
+                two steps as Purchasing and Vendors, so all three pages are one
+                habit rather than three. */}
             <div className="min-w-0 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Pick an item</p>
+                <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Or check any item</p>
                 <p className="text-[11px] text-fg-faint">★ = its current supplier</p>
               </div>
-              {/* Rows, not cards. Sixty-one items as 240px cards is a wall you
-                  scroll past; the same information as rows is a list you scan.
-                  And no sheet from here — the panel on the right already IS
-                  the detail, so opening a modal over it showed the same thing
-                  twice and hid the page underneath. */}
-              <ItemPickerSingle
-                items={rankedItems}
-                value={selected}
-                onChange={openItem}
-                onGather={gather}
-                dense
-                suppliers={supplierMap}
-              />
+              <div className="mise-stagger grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {itemGroups.map(([cat, rows]) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setBrowseCat(cat)}
+                    className="mise-card-inset mise-press relative flex items-center gap-2.5 overflow-hidden p-3 pl-4 text-left"
+                  >
+                    <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-sky-400/60" />
+                    <span aria-hidden className="text-xl">{categoryEmoji(cat)}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-fg">{cat}</span>
+                      <span className="block text-[11px] text-fg-faint">{rows.length} items</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+
+          {/* That category's items, over the page. */}
+          {browseCat && (
+            <SheetPopup
+              onClose={() => setBrowseCat(null)}
+              title={browseCat}
+              subtitle={`${itemGroups.find(([c]) => c === browseCat)?.[1].length ?? 0} items`}
+              columns={2}
+            >
+              <div className="mise-stagger space-y-2">
+                {(itemGroups.find(([c]) => c === browseCat)?.[1] ?? []).map((it) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => {
+                      setBrowseCat(null);
+                      openItem(it.id);
+                    }}
+                    className="mise-card-inset mise-press relative flex w-full items-center gap-3 overflow-hidden p-3 pl-4 text-left"
+                  >
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-1 ${
+                        (savingByItem[it.id] ?? 0) > 0.001 ? "bg-rose-400/80" : "bg-fg-faint/25"
+                      }`}
+                    />
+                    <span aria-hidden className="text-lg">{categoryEmoji(it.category ?? "")}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-fg">{it.name}</span>
+                      {/* HOW MANY QUOTES IT HAS. An item with one supplier
+                          cannot be compared at all, and tapping it to find that
+                          out is a wasted trip on a page whose whole job is
+                          comparing. Say it before the tap. */}
+                      <span className="block text-[11px] text-fg-faint">
+                        {(() => {
+                          const n = supplierMap[it.id]?.length ?? 0;
+                          if (n === 0) return "no supplier priced yet";
+                          if (n === 1) return "only one supplier — nothing to compare";
+                          return `${n} suppliers quote it`;
+                        })()}
+                      </span>
+                    </span>
+                    {(savingByItem[it.id] ?? 0) > 0.001 && (
+                      <span className="shrink-0 text-xs font-semibold tabular-nums text-rose-300">
+                        +{format((savingByItem[it.id] ?? 0).toFixed(2))}/{it.unit}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </SheetPopup>
+          )}
 
           <div className={stage === "item" ? "block" : "hidden"}>
             {/* Out, and back to where they were. The only navigation on this
