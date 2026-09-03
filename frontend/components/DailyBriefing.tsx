@@ -113,7 +113,10 @@ export function DailyBriefing() {
                 {i.href && (
                   <Link
                     href={i.href}
-                    className="mt-1.5 inline-block text-xs font-medium text-brand-400 hover:underline"
+                    /* A 16px-tall link is a link you miss. The text stays the
+                       same size; the TARGET grows around it, which is the part
+                       a thumb actually needs. */
+                    className="mt-1 -mx-1 inline-flex min-h-[36px] items-center px-1 text-xs font-medium text-brand-400 hover:underline"
                   >
                     Take a look →
                   </Link>

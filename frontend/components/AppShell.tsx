@@ -760,7 +760,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             aria-label="Open menu"
             onClick={() => setOpen(true)}
-            className="rounded-lg p-2 text-fg-soft hover:bg-glass/5 lg:hidden"
+            /* 44px minimum, and this one is worth spelling out: these two
+               buttons live in the SHELL, so they were the smallest tap target
+               on all thirty-three pages at once. 36x30 and 25x40 measured on a
+               390px screen. This app is used with wet hands in a kitchen; a
+               control you miss twice is a control people stop trusting. */
+            className="grid h-11 w-11 place-items-center rounded-lg text-fg-soft hover:bg-glass/5 lg:hidden"
           >
             <span className="block h-0.5 w-5 bg-current" />
             <span className="mt-1 block h-0.5 w-5 bg-current" />
@@ -781,7 +786,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="mise-press rounded-lg p-2 text-fg-soft hover:bg-glass/5 sm:hidden"
+            className="mise-press grid h-11 w-11 place-items-center rounded-lg text-fg-soft hover:bg-glass/5 sm:hidden"
             aria-label="Search"
           >
             ⌕
