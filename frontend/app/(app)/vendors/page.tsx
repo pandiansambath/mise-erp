@@ -117,6 +117,13 @@ export default function VendorsPage() {
    * arrive as a popup over the top. Same idiom here, so the two pages stop
    * being two different ways of doing the same thing. */
   const [supplyCat, setSupplyCat] = useState<string | null>(null);
+  /** Which category the "Add a price" picker has open.
+   *
+   * Same idiom as Supplies, and for the same reason: sixty-eight items behind a
+   * search box is still sixty-eight items you scroll. "here still I need scroll
+   * to select — I should not feel scroll, or shall we use popup inside popup
+   * here also." Yes. */
+  const [priceCat, setPriceCat] = useState<string | null>(null);
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [piPrice, setPiPrice] = useState("");
   // The supplier NAMES what they sell in, right next to the price, rather than
@@ -450,6 +457,21 @@ export default function VendorsPage() {
     );
   })();
 
+  /** Every item, by category — the picker for adding a price. Carries whether
+   *  this supplier already quotes it, so you can see at a glance what is left
+   *  to price rather than discovering it one tap at a time. */
+  const priceGroups = (() => {
+    const m = new Map<string, typeof items>();
+    for (const i of items) {
+      const cat = (i.category || "").trim() || "Other";
+      m.set(cat, [...(m.get(cat) ?? []), i]);
+    }
+    return [...m.entries()].sort((a, b) =>
+      a[0] === "Other" ? 1 : b[0] === "Other" ? -1 : a[0].localeCompare(b[0]),
+    );
+  })();
+  const pricedIds = new Set(vendorItems.map((v) => v.item_id));
+
   const shownSupply = supplyCat
     ? (supplyGroups.find(([c]: [string, VendorItem[]]) => c === supplyCat)?.[1] ?? [])
     : [];
@@ -743,6 +765,55 @@ export default function VendorsPage() {
       )}
 
       {/* Selected vendor — opens in place, so you never scroll to the bottom */}
+
+      {/* Picking an item to price: that category's items, over the sheet.
+          Each row says what this supplier already charges, so re-pricing an
+          item you already quote is a visible act rather than a surprise. */}
+      {priceCat && (
+        <SheetPopup
+          depth={2}
+          columns={2}
+          onClose={() => setPriceCat(null)}
+          title={priceCat}
+          subtitle={`pick what ${selectedVendor?.name ?? "this supplier"} sells`}
+        >
+          <div className="mise-stagger space-y-2">
+            {(priceGroups.find(([c]: [string, typeof items]) => c === priceCat)?.[1] ?? []).map(
+              (it) => {
+                const already = vendorItems.find((v) => v.item_id === it.id);
+                return (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => {
+                      setPiItem(it.id);
+                      setPriceCat(null);
+                      window.setTimeout(() => priceRef.current?.focus(), 120);
+                    }}
+                    className="mise-card-inset mise-press relative flex w-full items-center gap-3 overflow-hidden p-3 pl-4 text-left"
+                  >
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-1 ${
+                        already ? "bg-emerald-400/60" : "bg-amber-400/80"
+                      }`}
+                    />
+                    <span aria-hidden className="text-lg">{categoryEmoji(it.category ?? "")}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-fg">{it.name}</span>
+                      <span className="block text-[11px] text-fg-faint">
+                        {already
+                          ? `you pay ${format(already.price_per_unit)} today`
+                          : "not priced with this supplier"}
+                      </span>
+                    </span>
+                  </button>
+                );
+              },
+            )}
+          </div>
+        </SheetPopup>
+      )}
 
       {/* Layer two: that category's items, over the supplier sheet. Depth 2,
           the same as the order pad's item popup — the stacking rule lives in
@@ -1145,34 +1216,65 @@ export default function VendorsPage() {
               <div className="min-w-0">
                 <form onSubmit={addPrice}>
                   <p className="text-sm font-medium text-fg-soft">Add / update a price</p>
+                  {/* CATEGORIES, THEN A POPUP — not a search box over sixty-eight
+                      items. The picker had a field, a row of chips and a grid,
+                      and picking still meant scrolling: "here still I need
+                      scroll to select, I should not feel scroll — or shall we
+                      use popup inside popup here also." Same two steps as
+                      Supplies, so the two halves of this sheet work alike.
+
+                      Each tile says how many of its items this supplier does
+                      NOT price yet, which is the thing you are here to fix. */}
                   <div className="mt-2">
-                    <ItemPickerSingle
-                      items={items}
-                      value={piItem}
-                      onChange={(v) => {
-                        setPiItem(v);
-                        // straight to the only remaining step
-                        if (v) window.setTimeout(() => priceRef.current?.focus(), 60);
-                      }}
-                      // A supplier selling something you have not stocked yet
-                      // used to mean leaving for Inventory and finding your way
-                      // back — by which time the price you came to enter is gone.
-                      onCreate={(name) => setNewItem({ name, unit: "kg" })}
-                      // This supplier's own numbers on this supplier's page.
-                      ownVendorName={selectedVendor?.name}
-                      ownQuote={(id) => {
-                        const row = vendorItems.find((r) => r.item_id === id);
-                        if (!row) return null;
-                        return {
-                          vendor_id: row.vendor_id,
-                          vendor_name: selectedVendor?.name ?? "",
-                          price_per_unit: row.price_per_unit,
-                          pack_level_id: row.pack_level_id,
-                          pack_size_override: row.pack_size_override,
-                          is_preferred: row.is_preferred,
-                        };
-                      }}
-                    />
+                    {piItem ? (
+                      <button
+                        type="button"
+                        onClick={() => setPiItem("")}
+                        className="mise-card-inset mise-press relative flex w-full items-center gap-3 overflow-hidden p-3 pl-4 text-left"
+                      >
+                        <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brand-400/70" />
+                        <span aria-hidden className="text-xl">
+                          {categoryEmoji(items.find((i) => i.id === piItem)?.category ?? "")}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-fg">
+                            {items.find((i) => i.id === piItem)?.name ?? "—"}
+                          </span>
+                          <span className="block text-[11px] text-fg-faint">tap to pick another</span>
+                        </span>
+                        <span aria-hidden className="shrink-0 text-fg-faint">✕</span>
+                      </button>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {priceGroups.map(([cat, rows]) => {
+                          const left = rows.filter((r) => !pricedIds.has(r.id)).length;
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setPriceCat(cat)}
+                              className="mise-card-inset mise-press relative flex items-center gap-2.5 overflow-hidden p-3 pl-4 text-left"
+                            >
+                              <span
+                                aria-hidden
+                                className={`absolute inset-y-0 left-0 w-1 ${
+                                  left > 0 ? "bg-amber-400/80" : "bg-emerald-400/60"
+                                }`}
+                              />
+                              <span aria-hidden className="text-xl">{categoryEmoji(cat)}</span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-fg">
+                                  {cat}
+                                </span>
+                                <span className="block text-[11px] text-fg-faint">
+                                  {left > 0 ? `${left} not priced` : "all priced"}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     {newItem && (
                       <div className="mise-pop mt-2 rounded-xl border border-brand-400/40 bg-brand-400/[0.06] p-3">
                         <p className="text-xs font-medium text-fg">
@@ -1186,21 +1288,14 @@ export default function VendorsPage() {
                           <input
                             value={newItem.name}
                             onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                            className="mise-well min-w-0 flex-1 rounded-lg px-3 py-2 text-sm outline-none"
                             placeholder="Item name"
+                            className="mise-well min-w-0 flex-1 rounded-lg px-3 py-2 text-sm outline-none"
                           />
-                          <Select
+                          <input
                             value={newItem.unit}
-                            onChange={(u: string) => setNewItem({ ...newItem, unit: u })}
-                            options={[
-                              { value: "kg", label: "kg" },
-                              { value: "g", label: "g" },
-                              { value: "litre", label: "litre" },
-                              { value: "ml", label: "ml" },
-                              { value: "each", label: "each" },
-                              { value: "pack", label: "pack" },
-                              { value: "bottle", label: "bottle" },
-                                            ]}
+                            onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                            placeholder="unit (kg, litre, piece)"
+                            className="mise-well w-40 rounded-lg px-3 py-2 text-sm outline-none"
                           />
                         </div>
                         <div className="mt-2 flex gap-2">
