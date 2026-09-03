@@ -21,40 +21,136 @@ Rules:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime, time, tzinfo
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 log = logging.getLogger("mise.timezones")
 
 DEFAULT = "Europe/London"
 
-# Offered in Settings. A short, curated list beats 600 IANA names nobody can
-# scroll — these cover where the product is actually sold, plus the obvious
-# expansion markets. `value` is the IANA id; the label is what a human recognises.
-CHOICES: list[dict[str, str]] = [
-    {"value": "Europe/London", "label": "United Kingdom (London)"},
-    {"value": "Europe/Dublin", "label": "Ireland (Dublin)"},
-    {"value": "Asia/Kolkata", "label": "India (IST)"},
-    {"value": "Asia/Colombo", "label": "Sri Lanka (Colombo)"},
-    {"value": "Asia/Dubai", "label": "UAE (Dubai)"},
-    {"value": "Asia/Singapore", "label": "Singapore"},
-    {"value": "Asia/Kuala_Lumpur", "label": "Malaysia (Kuala Lumpur)"},
-    {"value": "Europe/Paris", "label": "France (Paris)"},
-    {"value": "Europe/Berlin", "label": "Germany (Berlin)"},
-    {"value": "Europe/Madrid", "label": "Spain (Madrid)"},
-    {"value": "America/New_York", "label": "US Eastern (New York)"},
-    {"value": "America/Chicago", "label": "US Central (Chicago)"},
-    {"value": "America/Los_Angeles", "label": "US Pacific (Los Angeles)"},
-    {"value": "Australia/Sydney", "label": "Australia (Sydney)"},
-    {"value": "Pacific/Auckland", "label": "New Zealand (Auckland)"},
+# EVERY zone, not sixteen of them.
+#
+#   "here we can only [choose from] limited bro — please don't show like this,
+#    show professionally and show all, like india (kolkata +5:30) like this."
+#
+# The old list was hand-written and covered the markets we happened to think of.
+# A restaurant in a country nobody listed simply could not say where it was, and
+# the zone decides which DAY a sale belongs to — so the consequence of a missing
+# entry is wrong numbers, not a missing convenience.
+#
+# Built from the system's IANA database, so it stays right as zones change
+# without anyone remembering to edit a list.
+#
+# The offset is in the LABEL because that is how people recognise a zone:
+# "+5:30" is the thing an Indian owner is looking for, and "Asia/Kolkata" is not
+# a phrase most people have ever typed.
+def _offset_label(name: str) -> str:
+    """"Asia/Kolkata" -> "Kolkata (UTC+5:30)". Uses TODAY's offset, so a zone on
+    summer time reads as the clock on their wall reads right now."""
+    try:
+        now = datetime.now(ZoneInfo(name))
+    except Exception:  # noqa: BLE001 - a zone the platform lacks is simply skipped
+        return ""
+    off = now.utcoffset() or _ZERO
+    total = int(off.total_seconds())
+    sign = "-" if total < 0 else "+"
+    hours, rem = divmod(abs(total), 3600)
+    mins = rem // 60
+    city = name.split("/")[-1].replace("_", " ")
+    region = name.split("/")[0] if "/" in name else ""
+    where = f"{city}, {region}" if region and region not in {"Etc"} else city
+    return f"{where} (UTC{sign}{hours}:{mins:02d})"
+
+
+def _build_choices() -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    for name in sorted(available_timezones()):
+        # Legacy aliases ("US/Eastern") and the Etc/GMT+N family duplicate real
+        # zones with confusing names — the Etc ones have their SIGN REVERSED by
+        # the standard, so "Etc/GMT+5" is UTC-5 and would mislead anyone who
+        # picked it.
+        if name.startswith("Etc/") or "/" not in name:
+            continue
+        label = _offset_label(name)
+        if label:
+            out.append({"value": name, "label": label})
+    # Sorted by offset, then by name: a picker you scroll should walk around the
+    # world rather than jumping between continents alphabetically.
+    out.sort(key=lambda c: (_sort_offset(c["value"]), c["label"]))
+    out.append({"value": "UTC", "label": "UTC (no local time)"})
+    return out
+
+
+def _sort_offset(name: str) -> int:
+    try:
+        off = datetime.now(ZoneInfo(name)).utcoffset() or _ZERO
+        return int(off.total_seconds())
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+_ZERO = timedelta(0)
+
+# The markets we know about, as a FLOOR.
+#
+# `available_timezones()` reads the platform's IANA database, and on a system
+# without `tzdata` it returns NOTHING — which would leave this list as "UTC" and
+# only "UTC", strictly worse than the hand-written list it replaces. tzdata is
+# pinned in requirements so this should never fire; it exists because the
+# failure it guards is silent, and the guard costs fifteen lines.
+_FALLBACK: list[dict[str, str]] = [
+    {"value": "Europe/London", "label": "London, Europe (UTC+0:00)"},
+    {"value": "Europe/Dublin", "label": "Dublin, Europe (UTC+0:00)"},
+    {"value": "Europe/Paris", "label": "Paris, Europe (UTC+1:00)"},
+    {"value": "Europe/Berlin", "label": "Berlin, Europe (UTC+1:00)"},
+    {"value": "Europe/Madrid", "label": "Madrid, Europe (UTC+1:00)"},
+    {"value": "Asia/Dubai", "label": "Dubai, Asia (UTC+4:00)"},
+    {"value": "Asia/Kolkata", "label": "Kolkata, Asia (UTC+5:30)"},
+    {"value": "Asia/Colombo", "label": "Colombo, Asia (UTC+5:30)"},
+    {"value": "Asia/Singapore", "label": "Singapore, Asia (UTC+8:00)"},
+    {"value": "Asia/Kuala_Lumpur", "label": "Kuala Lumpur, Asia (UTC+8:00)"},
+    {"value": "Australia/Sydney", "label": "Sydney, Australia (UTC+10:00)"},
+    {"value": "Pacific/Auckland", "label": "Auckland, Pacific (UTC+12:00)"},
+    {"value": "America/Los_Angeles", "label": "Los Angeles, America (UTC-8:00)"},
+    {"value": "America/Chicago", "label": "Chicago, America (UTC-6:00)"},
+    {"value": "America/New_York", "label": "New York, America (UTC-5:00)"},
     {"value": "UTC", "label": "UTC (no local time)"},
 ]
+
+
+def _choices() -> list[dict[str, str]]:
+    built = _build_choices()
+    # Fewer than fifty means the loop found nothing but its own hard-coded UTC.
+    if len(built) < 50:
+        log.warning(
+            "timezone database looks empty (%d zones) - falling back to the "
+            "curated list. Is tzdata installed?",
+            len(built),
+        )
+        return _FALLBACK
+    return built
+
+
+CHOICES: list[dict[str, str]] = _choices()
 
 _VALID = {c["value"] for c in CHOICES}
 
 
 def is_valid(name: str) -> bool:
-    return name in _VALID
+    """Any zone the platform can actually resolve.
+
+    This used to ask "is it one of our sixteen". Now that the list is generated,
+    membership and validity are different questions: a zone can be perfectly
+    real and simply not offered — a legacy alias, or one added to the database
+    after this server booted. Rejecting those would refuse a value that works.
+    """
+    if name in _VALID:
+        return True
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        return False
+    return True
 
 
 def zone_of(hotel) -> tzinfo:
