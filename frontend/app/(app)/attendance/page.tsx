@@ -373,8 +373,6 @@ export default function AttendancePage() {
       {/* Turn this device into the screen by the door. */}
       <AttendanceLock />
 
-      <div id="att-legend" className="scroll-mt-24"><AttendanceLegend /></div>
-
       <Card className="p-0">
         <div className="overflow-x-auto">
           <table className="mise-stack w-full text-sm">
@@ -536,6 +534,9 @@ export default function AttendancePage() {
           </table>
         </div>
       </Card>
+
+      {/* The legend explains the sheet; it goes after it. */}
+      <div id="att-legend" className="scroll-mt-24"><AttendanceLegend /></div>
 
       <p className="mt-4 text-xs text-fg-faint">
         Flow: <b>Clock in</b> → optionally <b>Start break</b> then <b>End break</b> → <b>Clock out</b>.

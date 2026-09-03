@@ -179,41 +179,6 @@ export default function EmployeesPage() {
         ]}
       />
 
-      {alerts.length > 0 && (
-        <Card id="visa-runway" className="mise-feel mb-6 scroll-mt-24 border-amber-400/30">
-          <p className="text-sm font-semibold text-amber-200">⚠️ Visa runway — who needs action, and when</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              { label: "Expired", test: (d: number) => d < 0, tone: "border-rose-500/40 text-rose-300" },
-              { label: "≤ 30 days", test: (d: number) => d >= 0 && d <= 30, tone: "border-amber-400/40 text-amber-300" },
-              { label: "31–60 days", test: (d: number) => d > 30 && d <= 60, tone: "border-amber-400/25 text-amber-200" },
-              { label: "61–90 days", test: (d: number) => d > 60, tone: "border-line text-fg-soft" },
-            ].map((bucket) => {
-              const people = alerts.filter((a) => bucket.test(a.days_left));
-              return (
-                <div key={bucket.label} className={`mise-well rounded-xl border p-3 ${bucket.tone}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide">{bucket.label}</p>
-                  {people.length === 0 ? (
-                    <p className="mt-1 text-xs opacity-60">nobody 🎉</p>
-                  ) : (
-                    <ul className="mt-1.5 space-y-1">
-                      {people.map((a) => (
-                        <li key={a.employee_id} className="truncate text-xs" title={`${a.full_name} · ${a.visa_expiry_date}`}>
-                          {a.full_name}
-                          <span className="ml-1 opacity-70">
-                            {a.days_left < 0 ? `${-a.days_left}d ago` : `${a.days_left}d`}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
       {canWrite && (
         <FormShell
           editing={!!editingId || adding}
@@ -430,6 +395,44 @@ export default function EmployeesPage() {
           </div>
         )}
       </Card>
+
+      {/* Visa alerts sit BELOW the team, by his rule for every page: the core
+          first, the indicators kept but passed on the way rather than waded
+          through. Anyone opening Employees came for the people. */}
+      {alerts.length > 0 && (
+        <Card id="visa-runway" className="mise-feel mb-6 scroll-mt-24 border-amber-400/30">
+          <p className="text-sm font-semibold text-amber-200">⚠️ Visa runway — who needs action, and when</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { label: "Expired", test: (d: number) => d < 0, tone: "border-rose-500/40 text-rose-300" },
+              { label: "≤ 30 days", test: (d: number) => d >= 0 && d <= 30, tone: "border-amber-400/40 text-amber-300" },
+              { label: "31–60 days", test: (d: number) => d > 30 && d <= 60, tone: "border-amber-400/25 text-amber-200" },
+              { label: "61–90 days", test: (d: number) => d > 60, tone: "border-line text-fg-soft" },
+            ].map((bucket) => {
+              const people = alerts.filter((a) => bucket.test(a.days_left));
+              return (
+                <div key={bucket.label} className={`mise-well rounded-xl border p-3 ${bucket.tone}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide">{bucket.label}</p>
+                  {people.length === 0 ? (
+                    <p className="mt-1 text-xs opacity-60">nobody 🎉</p>
+                  ) : (
+                    <ul className="mt-1.5 space-y-1">
+                      {people.map((a) => (
+                        <li key={a.employee_id} className="truncate text-xs" title={`${a.full_name} · ${a.visa_expiry_date}`}>
+                          {a.full_name}
+                          <span className="ml-1 opacity-70">
+                            {a.days_left < 0 ? `${-a.days_left}d ago` : `${a.days_left}d`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* The pay split sits BELOW the team, by the rule he already gave for
           Sales and Expenses: the numbers and the work first, the pie last.
