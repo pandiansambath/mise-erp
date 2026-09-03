@@ -3885,14 +3885,19 @@ body.mise-voice-open .mise-launcher-in {
 .mise-voice[data-staged] {
   top: 0.9rem;
   bottom: auto;
-  left: 50%;
-  right: auto;
-  width: auto;
-  transform: translateX(-50%);
+  /* CENTRED BY MARGIN, NOT BY TRANSFORM.
+     `.mise-voice` carries `animation: mise-voice-in … both`, and a filled
+     animation's final keyframe — `transform: none` — beats a transform set in
+     a class. So `translateX(-50%)` never applied and the orb sat exactly half
+     its own width off centre. Auto margins between left:0 and right:0 centre it
+     without touching the property the animation owns. */
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
   transition:
     top 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    left 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .mise-voice[data-staged] .mise-voice-card {
   border-color: transparent;
