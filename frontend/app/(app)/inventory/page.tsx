@@ -2046,7 +2046,37 @@ export default function InventoryPage() {
                           type="button"
                           data-testid="inv-supplier-pick"
                           disabled={!canWrite || on}
-                          onClick={() => setChosenSupplier(openItem.id, v.vendor_id)}
+                          onClick={async () => {
+                            // ASK FIRST. One tap here changes which price every
+                            // recipe cost, every margin and every report is
+                            // worked out from — and the taps sit in a list you
+                            // are scrolling. "else it will create miss click to
+                            // change supplier." A confirm is two seconds; a
+                            // silent switch is a month of wrong costings nobody
+                            // knows to look for.
+                            const each = pricePerBase(openItem, v);
+                            const now = sups.find((x) => x.is_preferred);
+                            const ok = await confirm({
+                              title: `Buy ${openItem.name} from ${v.vendor_name}?`,
+                              message: (
+                                <>
+                                  Costing, margins and reports will use{" "}
+                                  <b>{format(each.toFixed(2))} per {openItem.unit}</b>
+                                  {now ? (
+                                    <>
+                                      {" "}instead of {now.vendor_name}&apos;s{" "}
+                                      <b>
+                                        {format(pricePerBase(openItem, now).toFixed(2))}
+                                      </b>
+                                    </>
+                                  ) : null}
+                                  .
+                                </>
+                              ),
+                              confirmText: "Yes, use this supplier",
+                            });
+                            if (ok) await setChosenSupplier(openItem.id, v.vendor_id);
+                          }}
                           title={
                             canWrite
                               ? on
