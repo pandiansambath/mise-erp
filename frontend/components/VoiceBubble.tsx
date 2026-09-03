@@ -1488,7 +1488,7 @@ export function VoiceBubble() {
           {/* ── Header ─────────────────────────────────────────────────── */}
           <div
             {...panelDrag.handlers}
-            className={`relative flex touch-none items-center gap-2 border-b border-line/70 px-3.5 py-2.5 ${
+            className={`mise-voice-hide-on-stage relative flex touch-none items-center gap-2 border-b border-line/70 px-3.5 py-2.5 ${
               panelDrag.dragging ? "cursor-grabbing" : "cursor-grab"
             }`}
           >
@@ -1892,7 +1892,7 @@ export function VoiceBubble() {
               Typed or spoken, the same brain answers and the same page moves —
               so the feature is never dead, it only changes how it starts.  */}
           <form
-            className="relative flex items-center gap-2 border-t border-line/70 px-3 py-2.5"
+            className="mise-voice-hide-on-stage relative flex items-center gap-2 border-t border-line/70 px-3 py-2.5"
             onSubmit={(e) => {
               e.preventDefault();
               const t = typed.trim();
