@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useConfirm } from "@/components/confirm";
+import { SheetPopup } from "@/components/SheetPopup";
 import { api, ApiError, type HotelLanding, type LandingConfig } from "@/lib/api";
 import HotelSite, { DEFAULT_LANDING, HERO_STYLES, LANDING_THEMES, PALETTES } from "@/components/site/HotelSite";
 import { SITE_FONTS } from "@/components/site/fonts";
@@ -101,6 +103,28 @@ export default function SettingsPage() {
     }
   }
 
+  /** CONFIRM BEFORE CHANGING. This setting decides which DAY a sale belongs to
+   *  — moving it re-groups today's takings, shifts and reports onto a different
+   *  local day. A mis-tap in a list of four hundred moves money between days,
+   *  and the reload afterwards makes it look like the app did it. */
+  async function askThenSaveTimezone(next: string) {
+    if (next === tz) return;
+    const from = tzList.find((z) => z.value === tz)?.label ?? tz;
+    const to = tzList.find((z) => z.value === next)?.label ?? next;
+    const ok = await confirm({
+      title: "Change the restaurant's timezone?",
+      message: (
+        <>
+          From <b>{from}</b> to <b>{to}</b>. Today&apos;s sales, shifts and
+          reports will re-group onto the new local day, and the page will
+          reload.
+        </>
+      ),
+      confirmText: "Yes, change it",
+    });
+    if (ok) await saveTimezone(next);
+  }
+
   async function saveTimezone(next: string) {
     setTz(next);
     setSavingTz(true);
@@ -119,6 +143,9 @@ export default function SettingsPage() {
     }
   }
 
+  const confirm = useConfirm();
+  const [tzOpen, setTzOpen] = useState(false);
+  const [tzQuery, setTzQuery] = useState("");
   const [penalty, setPenalty] = useState("0");
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [savedPolicy, setSavedPolicy] = useState(false);
@@ -612,18 +639,85 @@ export default function SettingsPage() {
               follow it — change it and today&apos;s figures re-group to the new local day.
             </p>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <select
-                value={tz}
-                onChange={(e) => saveTimezone(e.target.value)}
+              {/* A SEARCHABLE PICKER, not a select with four hundred options.
+                  The list went from sixteen entries to the whole IANA database,
+                  which made a native dropdown useless: you cannot scroll to
+                  Kolkata past three hundred others. Tap it, type "kol", pick. */}
+              <button
+                type="button"
+                onClick={() => { setTzOpen(true); setTzQuery(""); }}
                 disabled={savingTz}
-                className={`${inputCls} sm:w-80`}
+                className={`${inputCls} sm:w-80 flex items-center justify-between gap-2 text-left`}
               >
-                {tzList.map((z) => (
-                  <option key={z.value} value={z.value}>
-                    {z.label}
-                  </option>
-                ))}
-              </select>
+                <span className="truncate">
+                  {tzList.find((z) => z.value === tz)?.label ?? tz}
+                </span>
+                <span aria-hidden className="shrink-0 text-fg-faint">▾</span>
+              </button>
+              {tzOpen && (
+                <SheetPopup
+                  onClose={() => setTzOpen(false)}
+                  title="Where is this restaurant?"
+                  subtitle="It decides which day a sale belongs to"
+                  columns={2}
+                >
+                  <input
+                    autoFocus
+                    value={tzQuery}
+                    onChange={(e) => setTzQuery(e.target.value)}
+                    placeholder="Search a city or country…"
+                    aria-label="Search timezones"
+                    className="mise-well w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
+                  />
+                  <div className="mise-stagger mt-3 space-y-1.5">
+                    {(() => {
+                      const q = tzQuery.trim().toLowerCase();
+                      const hits = q
+                        ? tzList.filter(
+                            (z) =>
+                              z.label.toLowerCase().includes(q) ||
+                              z.value.toLowerCase().includes(q),
+                          )
+                        : tzList;
+                      if (hits.length === 0) {
+                        return (
+                          <p className="py-6 text-center text-sm text-fg-faint">
+                            Nothing matches &ldquo;{tzQuery}&rdquo;.
+                          </p>
+                        );
+                      }
+                      // Capped: four hundred rows in a popup is the scroll this
+                      // replaced. Typing narrows it, which is the point.
+                      return hits.slice(0, 60).map((z) => (
+                        <button
+                          key={z.value}
+                          type="button"
+                          onClick={async () => {
+                            setTzOpen(false);
+                            await askThenSaveTimezone(z.value);
+                          }}
+                          className={`mise-card-inset mise-press relative flex w-full items-center gap-2 overflow-hidden px-3 py-2.5 pl-4 text-left ${
+                            z.value === tz ? "ring-1 ring-brand-400/50" : ""
+                          }`}
+                        >
+                          <span
+                            aria-hidden
+                            className={`absolute inset-y-0 left-0 w-1 ${
+                              z.value === tz ? "bg-brand-400/70" : "bg-fg-faint/20"
+                            }`}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-sm text-fg">
+                            {z.label}
+                          </span>
+                          {z.value === tz && (
+                            <span className="shrink-0 text-[11px] text-brand-300">current</span>
+                          )}
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                </SheetPopup>
+              )}
               {savingTz && <span className="text-sm text-fg-faint">Saving…</span>}
               {savedTz && <span className="text-sm text-brand-400">Saved ✓</span>}
             </div>
