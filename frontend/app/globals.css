@@ -3905,9 +3905,20 @@ body.mise-voice-open .mise-launcher-in {
   box-shadow: none;
   padding: 0;
 }
-/* Everything except the orb row folds away. */
+/* Everything except the orb folds away — header, composer, conversation. What
+   is left is the orb and the one line telling him it is listening, which is the
+   whole of "the voice model alone". */
 .mise-voice[data-staged] .mise-voice-hide-on-stage {
   display: none;
+}
+/* The aurora is the panel's personality; with no panel it is a coloured smear
+   behind a floating orb. */
+.mise-voice[data-staged] .mise-voice-aurora {
+  opacity: 0;
+}
+.mise-voice[data-staged] .mise-voice-card {
+  border: 0;
+  backdrop-filter: none;
 }
 /* On stage it glows, because it is now the only thing on screen saying that
    something is listening. */
