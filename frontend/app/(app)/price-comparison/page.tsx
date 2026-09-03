@@ -204,6 +204,10 @@ export default function PriceComparisonPage() {
   const [stage, setStage] = useState<"list" | "item">("list");
   /** Which category is open as a popup while browsing. */
   const [browseCat, setBrowseCat] = useState<string | null>(null);
+  /** How to group the browse tiles. Same control as the order pad's, because
+   *  the question is the same one: "show me these arranged the way I am
+   *  thinking about them right now." */
+  const [showBy, setShowBy] = useState<"category" | "supplier" | "saving">("category");
   const listScroll = useRef(0);
 
   // A shortlist you build up, which this page had no concept of.
@@ -330,18 +334,7 @@ export default function PriceComparisonPage() {
     .filter((i) => (savingByItem[i.id] ?? 0) > 0.001)
     .slice(0, 6);
 
-  /** Everything else, by category — the same tiles Purchasing and Vendors use,
-   *  so browsing works the same way on all three. */
-  const itemGroups = (() => {
-    const m = new Map<string, typeof items>();
-    for (const i of rankedItems) {
-      const cat = (i.category || "").trim() || "Other";
-      m.set(cat, [...(m.get(cat) ?? []), i]);
-    }
-    return [...m.entries()].sort((a, b) =>
-      a[0] === "Other" ? 1 : b[0] === "Other" ? -1 : a[0].localeCompare(b[0]),
-    );
-  })();
+
 
   async function setPreferred(vendorId: string | null) {
     const res = await api.post<PriceComparison>(`/vendors/items/${selected}/preferred`, {
@@ -450,6 +443,34 @@ export default function PriceComparisonPage() {
       );
     }
     return m;
+  })();
+
+  /** Everything else, grouped the way he asked for it — the same tiles
+   *  Purchasing and Vendors use, so browsing works the same on all three.
+   *
+   * BY SUPPLIER answers a different question from BY CATEGORY, and it is the
+   * one this page is really for: "what am I buying from Rudra, and is any of
+   * it cheaper elsewhere". Grouping by the CHOSEN supplier, because that is
+   * the one whose prices you are actually paying. */
+  const itemGroups = (() => {
+    const m = new Map<string, typeof items>();
+    for (const i of rankedItems) {
+      let key: string;
+      if (showBy === "supplier") {
+        const chosen = (supplierMap[i.id] ?? []).find((v) => v.is_preferred);
+        key = chosen?.vendor_name || "No supplier chosen";
+      } else if (showBy === "saving") {
+        const gap = savingByItem[i.id] ?? 0;
+        key = gap > 0.001 ? "Cheaper elsewhere" : "On the best price";
+      } else {
+        key = (i.category || "").trim() || "Other";
+      }
+      m.set(key, [...(m.get(key) ?? []), i]);
+    }
+    const last = new Set(["Other", "No supplier chosen", "On the best price"]);
+    return [...m.entries()].sort((a, b) =>
+      last.has(a[0]) ? 1 : last.has(b[0]) ? -1 : a[0].localeCompare(b[0]),
+    );
   })();
 
   return (
@@ -884,7 +905,37 @@ export default function PriceComparisonPage() {
             <div className="min-w-0 rounded-2xl border border-brand-400/20 bg-gradient-to-b from-brand-400/[0.06] via-paper/90 to-paper/90 p-4 shadow-lg shadow-black/20">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <p className="font-display text-sm font-semibold text-fg">🧑‍🍳 Or check any item</p>
-                <p className="text-[11px] text-fg-faint">★ = its current supplier</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-fg-faint">Show by</span>
+                  <div className="mise-well flex gap-1 rounded-xl p-1">
+                    {(
+                      [
+                        ["category", "Category"],
+                        ["supplier", "Supplier"],
+                        ["saving", "Saving"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        aria-pressed={showBy === key}
+                        onClick={() => {
+                          setShowBy(key);
+                          // Leaving a grouping must close whatever it had open,
+                          // or the popup outlives the tile it came from.
+                          setBrowseCat(null);
+                        }}
+                        className={`mise-press rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                          showBy === key
+                            ? "bg-brand-600 text-white"
+                            : "text-fg-soft hover:text-fg"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="mise-stagger grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {itemGroups.map(([cat, rows]) => (
