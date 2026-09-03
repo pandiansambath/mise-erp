@@ -133,7 +133,10 @@ function BudgetCard() {
         </div>
       )}
 
-      <ul className="mt-3 divide-y divide-line">
+      {/* Cards, per /staff — and the stripe carries the only thing this list is
+          FOR: whether each number is where it should be. It was a badge at the
+          end of a hairline row, which is the last place the eye goes. */}
+      <div className="mise-stagger mt-3 grid gap-2 sm:grid-cols-2">
         {ROWS.map((r) => {
           const target = b.targets[r.key];
           const actual = b.actual[r.key];
@@ -141,21 +144,38 @@ function BudgetCard() {
           const t = target == null ? null : parseFloat(target);
           const onTrack = t == null ? null : r.higherBetter ? a >= t : a <= t;
           return (
-            <li key={r.key} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="text-fg-soft">{r.label}</span>
-              <span className="flex items-center gap-3">
-                <span className="text-fg">{show(actual, r.money)}</span>
-                <span className="text-xs text-fg-faint">target {show(target, r.money)}</span>
-                {onTrack == null ? (
-                  <span className="text-xs text-fg-faint">set a target</span>
-                ) : (
-                  <Badge tone={onTrack ? "green" : "red"}>{onTrack ? "✓ on track" : "off track"}</Badge>
-                )}
+            <div
+              key={r.key}
+              className="mise-card-inset relative flex items-center gap-3 overflow-hidden p-3 pl-4"
+            >
+              <span
+                aria-hidden
+                className={`absolute inset-y-0 left-0 w-1 ${
+                  onTrack == null
+                    ? "bg-fg-faint/25"
+                    : onTrack
+                      ? "bg-emerald-400/70"
+                      : "bg-rose-400/80"
+                }`}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs text-fg-faint">{r.label}</span>
+                <span className="mt-0.5 block font-display text-lg font-semibold tabular-nums text-fg">
+                  {show(actual, r.money)}
+                </span>
+                <span className="block text-[11px] text-fg-faint">
+                  target {show(target, r.money)}
+                </span>
               </span>
-            </li>
+              {onTrack == null ? (
+                <span className="shrink-0 text-[11px] text-fg-faint">set a target</span>
+              ) : (
+                <Badge tone={onTrack ? "green" : "red"}>{onTrack ? "✓ on track" : "off track"}</Badge>
+              )}
+            </div>
           );
         })}
-      </ul>
+      </div>
     </Card>
   );
 }
@@ -888,9 +908,25 @@ export default function MoneyPage() {
         {data.price_alerts.length === 0 ? (
           <p className="mt-3 text-sm text-fg-faint">No price rises detected. 👍</p>
         ) : (
-          <ul className="mt-3 divide-y divide-line">
+          /* The stripe is how steep the rise is, so the worst ones announce
+             themselves before you read a number. A 40% jump and a 3% one were
+             the same grey row with a red badge at the end. */
+          <div className="mise-stagger mt-3 grid gap-2 sm:grid-cols-2">
             {data.price_alerts.map((a) => (
-              <li key={a.item_id} className="flex items-center justify-between gap-3 py-2.5">
+              <div
+                key={a.item_id}
+                className="mise-card-inset relative flex items-center justify-between gap-3 overflow-hidden p-3 pl-4"
+              >
+                <span
+                  aria-hidden
+                  className={`absolute inset-y-0 left-0 w-1 ${
+                    parseFloat(String(a.change_pct)) >= 20
+                      ? "bg-rose-400"
+                      : parseFloat(String(a.change_pct)) >= 8
+                        ? "bg-amber-400/80"
+                        : "bg-fg-faint/30"
+                  }`}
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-fg">{a.item_name}</span>
                   <span className="block text-xs text-fg-faint">
@@ -909,9 +945,9 @@ export default function MoneyPage() {
                   </span>
                 )}
                 <Badge tone="red">▲ {a.change_pct}%</Badge>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </Card>
 
