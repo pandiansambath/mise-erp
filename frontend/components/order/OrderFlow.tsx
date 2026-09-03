@@ -865,9 +865,15 @@ export function OrderFlow({
           ))}
         </div>
         {low.length > 0 && (
-          <span className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-amber-400/35 bg-amber-400/10 px-2.5 py-1.5">
+          /* SOLID, not a wash.
+             This was amber text on a 10% amber tint — "that low indication
+             yellow colour is not visible". On the light theme that is pale ink
+             on pale paper, and it is the one thing on this row that is trying
+             to warn him about money. A warning you cannot read is not a
+             warning, so it gets a filled chip and dark text on it. */
+          <span className="ml-auto flex shrink-0 items-center gap-2 rounded-xl bg-amber-400 px-2.5 py-1.5 shadow-sm">
             <span aria-hidden className="text-sm leading-none">⚠</span>
-            <span className="whitespace-nowrap text-xs text-amber-200">
+            <span className="whitespace-nowrap text-xs font-semibold text-amber-950">
               <b>{low.length}</b> low
             </span>
             {onAddAllLow && (
@@ -875,7 +881,7 @@ export function OrderFlow({
                 type="button"
                 onClick={onAddAllLow}
                 title="Pull every low-stock item into this order, topped up to its minimum"
-                className="mise-press whitespace-nowrap rounded-lg bg-amber-400/20 px-2 py-1 text-[11px] font-semibold text-amber-100"
+                className="mise-press whitespace-nowrap rounded-lg bg-amber-950/85 px-2 py-1 text-[11px] font-semibold text-amber-50"
               >
                 Add all
               </button>
