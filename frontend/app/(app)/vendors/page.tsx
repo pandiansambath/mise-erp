@@ -124,6 +124,9 @@ export default function VendorsPage() {
    * to select — I should not feel scroll, or shall we use popup inside popup
    * here also." Yes. */
   const [priceCat, setPriceCat] = useState<string | null>(null);
+  /** Categories, or the lot. A supplier with eight priced items does not need
+   *  a category step; one with fifty-four does. */
+  const [supplyView, setSupplyView] = useState<"category" | "all">("category");
   const [expenseCats, setExpenseCats] = useState<ExpenseCategory[]>([]);
   const [piPrice, setPiPrice] = useState("");
   // The supplier NAMES what they sell in, right next to the price, rather than
@@ -472,9 +475,11 @@ export default function VendorsPage() {
   })();
   const pricedIds = new Set(vendorItems.map((v) => v.item_id));
 
-  const shownSupply = supplyCat
-    ? (supplyGroups.find(([c]: [string, VendorItem[]]) => c === supplyCat)?.[1] ?? [])
-    : [];
+  const shownSupply = !supplyCat
+    ? []
+    : supplyCat === "All items"
+      ? vendorItems
+      : (supplyGroups.find(([c]: [string, VendorItem[]]) => c === supplyCat)?.[1] ?? []);
 
   // Built-in types + any custom ones already used by vendors + ones added this
   // session — so superadmins aren't limited to the six built-ins.
@@ -834,6 +839,12 @@ export default function VendorsPage() {
                         // itself rather than making you find the form for it.
                         onClick={() => {
                           setPriceRow(vi);
+                          // CLOSE THE CATEGORY POPUP BEHIND IT. Two panels at
+                          // the same level were covering each other — "there is
+                          // a popup fight going on I guess, hiding one
+                          // another". You came from this category to look at
+                          // one price; the list has done its job.
+                          setSupplyCat(null);
                           // The NAME they sell by, not its id — the field is
                           // typed now, so a supplier can name a pack nobody has
                           // created yet.
@@ -1184,13 +1195,51 @@ export default function VendorsPage() {
                   to handle". You can see every category at once now; tapping
                   one brings its items over the top, exactly as Purchasing does,
                   so the two pages stop being two ways of doing one thing. */}
+              {/* SHOW ALL, as well as by category.
+                  "here I want one more filter called show all items." Categories
+                  answer "what do they sell me in dairy"; all-items answers "what
+                  do they sell me", and on a supplier with eight priced items the
+                  category step is a hop for nothing. */}
+              {vendorItems.length > 0 && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-[11px] text-fg-faint">Show</span>
+                  <div className="mise-well flex gap-1 rounded-xl p-1">
+                    {(
+                      [
+                        ["category", "By category"],
+                        ["all", `All ${vendorItems.length}`],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        aria-pressed={supplyView === key}
+                        onClick={() => {
+                          setSupplyView(key);
+                          setSupplyCat(null);
+                        }}
+                        className={`mise-press rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                          supplyView === key
+                            ? "bg-brand-600 text-white"
+                            : "text-fg-soft hover:text-fg"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {vendorItems.length === 0 ? (
                 <p className="px-4 py-6 text-center text-fg-faint">
                   No prices yet — use &ldquo;Add a price&rdquo; above.
                 </p>
               ) : (
                 <div className="mise-stagger mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {supplyGroups.map(([cat, rows]: [string, VendorItem[]]) => (
+                  {(supplyView === "all"
+                    ? ([["All items", vendorItems]] as [string, VendorItem[]][])
+                    : supplyGroups
+                  ).map(([cat, rows]: [string, VendorItem[]]) => (
                     <button
                       key={cat}
                       type="button"
@@ -1466,11 +1515,12 @@ export default function VendorsPage() {
               above its parent, inset, with the vendor still visible at the
               rim. Rendered as a sibling it would be depth 1 and land level
               with the thing that opened it. */}
-          <DetailSheet
-            open={!!priceRow}
+          {priceRow && (
+          <SheetPopup
+            depth={2}
+            columns={2}
             onClose={() => setPriceRow(null)}
-            icon="🏷"
-            title={priceRow ? itemName(priceRow.item_id) : ""}
+            title={itemName(priceRow.item_id)}
             subtitle={(() => {
               // "price per unit" is the phrase that caused the confusion in the
               // first place — it never said WHICH unit. Name the size.
@@ -1479,7 +1529,6 @@ export default function VendorsPage() {
                 ? `${selectedVendor.name} · priced per ${levelName(it, priceRow.pack_level_id)}`
                 : selectedVendor.name;
             })()}
-            badge={priceRow?.is_preferred ? <Badge tone="amber">★ chosen</Badge> : undefined}
           >
             {priceRow && (() => {
               const it = items.find((i) => i.id === priceRow.item_id);
@@ -1736,7 +1785,8 @@ export default function VendorsPage() {
                 </>
               );
             })()}
-          </DetailSheet>
+          </SheetPopup>
+          )}
         </div>
       </SheetPopup>
       )}

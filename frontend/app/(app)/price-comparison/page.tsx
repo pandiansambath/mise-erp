@@ -207,7 +207,7 @@ export default function PriceComparisonPage() {
   /** How to group the browse tiles. Same control as the order pad's, because
    *  the question is the same one: "show me these arranged the way I am
    *  thinking about them right now." */
-  const [showBy, setShowBy] = useState<"category" | "supplier" | "saving">("category");
+  const [showBy, setShowBy] = useState<"category" | "supplier" | "saving" | "all">("category");
   const listScroll = useRef(0);
 
   // A shortlist you build up, which this page had no concept of.
@@ -456,7 +456,12 @@ export default function PriceComparisonPage() {
     const m = new Map<string, typeof items>();
     for (const i of rankedItems) {
       let key: string;
-      if (showBy === "supplier") {
+      if (showBy === "all") {
+        // One tile holding everything — "here also I need the same feature".
+        // Sixty-eight items is a long popup, but it is ONE tap, and sometimes
+        // you just want the list.
+        key = "All items";
+      } else if (showBy === "supplier") {
         const chosen = (supplierMap[i.id] ?? []).find((v) => v.is_preferred);
         key = chosen?.vendor_name || "No supplier chosen";
       } else if (showBy === "saving") {
@@ -913,6 +918,7 @@ export default function PriceComparisonPage() {
                         ["category", "Category"],
                         ["supplier", "Supplier"],
                         ["saving", "Saving"],
+                        ["all", "All items"],
                       ] as const
                     ).map(([key, label]) => (
                       <button
