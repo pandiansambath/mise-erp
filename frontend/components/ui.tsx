@@ -21,9 +21,20 @@ export function Card({
   id?: string;
 } & React.HTMLAttributes<HTMLDivElement>) {
   return (
+    /* THE BASE CARD IS PRESSED IN, like /staff and /purchasing.
+     *
+     * It carried `shadow-lg shadow-black/20` — an outer drop shadow, light
+     * thrown ON it from above. Every page in the app is built from this
+     * component, so while it was raised, every page I "converted" was a page
+     * with inset cards sitting inside a raised one. That is the drift he kept
+     * seeing and I kept fixing one page at a time.
+     *
+     * Same radius, same padding, same border: only where the light comes from
+     * changes. A page that wants the old lift can still ask for it in
+     * `className`. */
     <div
       id={id}
-      className={`rounded-2xl border border-line bg-paper/90 p-5 shadow-lg shadow-black/20 ${className}`}
+      className={`mise-card-inset rounded-2xl p-5 ${className}`}
       {...rest}
     >
       {children}

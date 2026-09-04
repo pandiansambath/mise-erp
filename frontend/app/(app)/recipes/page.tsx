@@ -639,13 +639,30 @@ export default function RecipesPage() {
   const dishCard = (dishName: string, variants: Recipe[]) => {
     const sorted = [...variants].sort((a, b) => a.servings_default - b.servings_default);
     return (
-      <Card key={dishName} className="mise-feel group relative overflow-hidden">
+      /* The reference card, and the stripe carries MARGIN — the one number a
+         recipe exists to tell you. Green where the dish pays for itself, amber
+         where it is thin, red where you are selling it at a loss. That was a
+         percentage inside the card, which is where you find it only after
+         deciding to look. */
+      <div
+        key={dishName}
+        className="mise-card-inset group relative flex flex-col overflow-hidden p-3.5 pl-4"
+      >
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-brand-400/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          className={`absolute inset-y-0 left-0 w-1 ${(() => {
+            const m = sorted
+              .map((r) => (r.profit_margin == null ? null : parseFloat(r.profit_margin)))
+              .filter((x): x is number => x != null && Number.isFinite(x));
+            if (!m.length) return "bg-fg-faint/25";
+            const worst = Math.min(...m);
+            if (worst < 0) return "bg-rose-400";
+            if (worst < 60) return "bg-amber-400/80";
+            return "bg-emerald-400/60";
+          })()}`}
         />
         <div className="mb-2 flex items-center gap-3">
-          <span aria-hidden className="mise-well grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl">
+          <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xl">
             {dishEmoji(sorted[0].category)}
           </span>
           <div className="min-w-0 flex-1">
@@ -713,7 +730,7 @@ export default function RecipesPage() {
             );
           })}
         </div>
-      </Card>
+      </div>
     );
   };
 
