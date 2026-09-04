@@ -69,13 +69,13 @@ export default function SettingsPage() {
 
   const [allowance, setAllowance] = useState("0");
   const [tz, setTz] = useState("Europe/London");
-  const [tzList, setTzList] = useState<{ value: string; label: string }[]>([]);
+  const [tzList, setTzList] = useState<{ value: string; label: string; search?: string }[]>([]);
   const [savingTz, setSavingTz] = useState(false);
   const [savedTz, setSavedTz] = useState(false);
 
   useEffect(() => {
     api
-      .get<{ timezones: { value: string; label: string }[] }>("/hotels/timezones")
+      .get<{ timezones: { value: string; label: string; search?: string }[] }>("/hotels/timezones")
       .then((d) => setTzList(d.timezones))
       .catch(() => {});
   }, []);
@@ -632,7 +632,10 @@ export default function SettingsPage() {
           {/* Timezone. Not cosmetic: it decides which DAY a sale, a shift or a
               P&L belongs to, so it sits with the policy settings rather than
               buried under display preferences. */}
-          <div className="mt-6 border-t border-line pt-5">
+          {/* THE ANCHOR THE CLOCK LINKS TO. `/settings#timezone` pointed at an
+              id that did not exist, so the link scrolled nowhere — the same
+              dead end it was added to remove. */}
+          <div id="timezone" className="mt-6 scroll-mt-24 border-t border-line pt-5">
             <label className="block text-sm font-medium text-fg-soft">Time zone</label>
             <p className="mt-1 text-sm text-fg-faint">
               Decides when your day starts and ends. Sales, shifts, reports and PDFs all
@@ -672,9 +675,16 @@ export default function SettingsPage() {
                   <div className="mise-stagger mt-3 space-y-1.5">
                     {(() => {
                       const q = tzQuery.trim().toLowerCase();
+                      // MATCH THE COUNTRY TOO. "why is India not showing? if I
+                      // search kolkata then it's showing." An IANA zone is
+                      // named for a CITY, so "Asia/Kolkata" contains the word
+                      // India nowhere — and nobody thinks in cities. The server
+                      // sends `search` carrying the country alongside the city
+                      // and the id.
                       const hits = q
                         ? tzList.filter(
                             (z) =>
+                              (z.search ?? "").toLowerCase().includes(q) ||
                               z.label.toLowerCase().includes(q) ||
                               z.value.toLowerCase().includes(q),
                           )

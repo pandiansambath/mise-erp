@@ -841,12 +841,13 @@ export default function VendorsPage() {
       {supplyCat && (
         <SheetPopup
           depth={2}
-          columns={2}
+          columns={4}
           onClose={() => setSupplyCat(null)}
           title={supplyCat}
           subtitle={`${shownSupply.length} priced by ${selectedVendor?.name ?? "this supplier"}`}
         >
-          <div className="mise-stagger space-y-2">
+          {/* Columns, so fifty-four items are a page rather than a scroll. */}
+          <div className="mise-stagger grid gap-2 lg:grid-cols-2">
             {shownSupply.map((vi: VendorItem) => (
                       <div
                         key={vi.id}
@@ -1231,7 +1232,10 @@ export default function VendorsPage() {
                         aria-pressed={supplyView === key}
                         onClick={() => {
                           setSupplyView(key);
-                          setSupplyCat(null);
+                          // One click. "All" made a single tile called "All
+                          // items" that you then had to tap — a grouping step
+                          // for a grouping of one.
+                          setSupplyCat(key === "all" ? "All items" : null);
                         }}
                         className={`mise-press rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                           supplyView === key
