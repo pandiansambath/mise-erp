@@ -146,10 +146,10 @@ export function ListControls({
                   on
                     ? "mise-btn-key font-semibold"
                     : s.tone === "bad"
-                      ? "mise-btn text-rose-300"
+                      ? "mise-btn-flat text-rose-300"
                       : s.tone === "warn"
-                        ? "mise-btn text-amber-300"
-                        : "mise-btn text-fg-soft"
+                        ? "mise-btn-flat text-amber-300"
+                        : "mise-btn-flat text-fg-soft"
                 }`}
               >
                 {s.label}
@@ -186,7 +186,7 @@ export function ListControls({
               className={`mise-press rounded-lg px-2 py-1 text-[11px] tabular-nums transition ${
                 value.size === n
                   ? "mise-btn-key font-semibold"
-                  : "mise-btn text-fg-soft"
+                  : "mise-btn-flat text-fg-soft"
               }`}
             >
               {n === 0 ? "all" : n}
