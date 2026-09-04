@@ -688,8 +688,47 @@ export default function ExpensesPage() {
                 </p>
               )}
               <form onSubmit={addExpense} className="grid grid-cols-2 gap-3">
+                {/* CATEGORY AS TILES, not a dropdown.
+                    It is the first decision and the one with a shape — "rent"
+                    and "gas" are different KINDS of thing, and a select hides
+                    all of them behind one line of text. Tapping is faster and
+                    it shows what you spend on without opening anything.
+
+                    Fixed costs get the slate stripe, variable the amber, so the
+                    split this page reports on is visible while you are creating
+                    the entry rather than only afterwards. */}
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-fg-soft">Category</label>
+                  <label className="mb-1.5 block text-sm font-medium text-fg-soft">Category</label>
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                    {categories
+                      .filter((c) => c.is_active)
+                      .map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setCategoryId(c.id)}
+                          className={`mise-press relative overflow-hidden rounded-lg px-2.5 py-2 text-left text-xs font-medium transition ${
+                            categoryId === c.id
+                              ? "bg-brand-600 text-white"
+                              : "mise-card-inset text-fg-soft hover:text-fg"
+                          }`}
+                        >
+                          <span
+                            aria-hidden
+                            className={`absolute inset-y-0 left-0 w-0.5 ${
+                              categoryId === c.id
+                                ? "bg-white/40"
+                                : c.kind === "FIXED"
+                                  ? "bg-slate-400/60"
+                                  : "bg-amber-400/70"
+                            }`}
+                          />
+                          <span className="block truncate pl-1">{c.name}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+                <div className="hidden">
                   <Select
                     value={categoryId}
                     onChange={setCategoryId}
