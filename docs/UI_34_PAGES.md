@@ -90,3 +90,46 @@ the raised idiom still to be replaced, `popup` counts SheetPopup usage.
 - Timezone picker: **search** + **confirm before changing** (it decides which
   day a sale belongs to, so a mis-tap moves money between days)
 - The remaining `mise-btn` → `mise-btn-flat` sweep beyond the three files done
+
+---
+
+# 2026-09-05 — what he said, in his order
+
+> "first complete the previous tasks... all task... then come to this."
+
+## Still owed from before (do these FIRST)
+
+| # | task | state |
+|---|---|---|
+| A | **Inventory rebuilt from scratch** — asked twice. Still five bands before the list; he does not like the row design | ☐ |
+| B | The remaining 34-page sweep: reports, dashboard, party-order, stock-take, plan, profile, food-safety, allergens, audit, how-it-works, messages | ☐ |
+
+## Then: expenses, sales, money — FROM SCRATCH
+
+> "tear down all and think in a unique way and do from scratch."
+
+### What is actually wrong (his words + what the screenshots show)
+
+**Expenses** — "I need to scrollllll till down to reach that expense entering
+card." The form is a right-hand column that on his screen sits BELOW the
+entries, so adding a spend means scrolling past everything already spent. The
+category tiles I added made that column TALLER, so I made the thing he is
+complaining about worse.
+
+**Sales** — three separate faults:
+- "I need to click each to enter which is hard job" — one tile per channel
+  means one popup per channel. Entering a day's takings across five channels is
+  five popups. The old single row was faster for that job.
+- "same I need to scroll down to reach the entry area."
+- "what the hell tight UI is this" — the takings popup has an INNER SCROLL: the
+  keypad, the method chips and the Add button do not fit, so you scroll inside a
+  popup whose whole job is one number. That is worse than the form it replaced.
+
+**Money** — same treatment, not yet started.
+
+### The lesson to carry into the rebuild
+
+I applied the purchasing idiom (tiles → popup) to a page whose job is DIFFERENT.
+Purchasing is "pick a few things from many". Sales is "type five numbers I
+already know". Tiles are right for choosing and wrong for entering — the shape
+has to follow the job, not the reference page.
