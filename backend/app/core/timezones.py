@@ -44,6 +44,87 @@ DEFAULT = "Europe/London"
 # The offset is in the LABEL because that is how people recognise a zone:
 # "+5:30" is the thing an Indian owner is looking for, and "Asia/Kolkata" is not
 # a phrase most people have ever typed.
+
+# WHAT PEOPLE ACTUALLY TYPE.
+#
+#   "why is India not showing? if I search kolkata then it's showing — if I
+#    search india it needs to show all from India, I mean Kolkata."
+#
+# Right, and the cause is in the data rather than the search: an IANA zone is
+# named for a CITY, so "Asia/Kolkata" contains the word India nowhere at all.
+# Nobody thinks "which city is my timezone named after" — they think of their
+# country. Every zone therefore carries its country as a searchable term.
+#
+# Not generated: `zoneinfo` has no country table, and pulling a dependency in
+# for one column is not worth it. This covers the countries with more than one
+# zone or a city whose name gives no clue — which is exactly the set where
+# searching by city fails.
+_COUNTRY: dict[str, str] = {
+    "Asia/Kolkata": "India", "Asia/Calcutta": "India",
+    "Europe/London": "United Kingdom UK Britain England",
+    "Europe/Belfast": "United Kingdom UK Northern Ireland",
+    "Europe/Dublin": "Ireland", "Europe/Paris": "France",
+    "Europe/Berlin": "Germany", "Europe/Madrid": "Spain",
+    "Europe/Rome": "Italy", "Europe/Lisbon": "Portugal",
+    "Europe/Amsterdam": "Netherlands Holland", "Europe/Brussels": "Belgium",
+    "Europe/Zurich": "Switzerland", "Europe/Vienna": "Austria",
+    "Europe/Stockholm": "Sweden", "Europe/Oslo": "Norway",
+    "Europe/Copenhagen": "Denmark", "Europe/Helsinki": "Finland",
+    "Europe/Warsaw": "Poland", "Europe/Prague": "Czechia Czech Republic",
+    "Europe/Athens": "Greece", "Europe/Istanbul": "Turkey Turkiye",
+    "Europe/Moscow": "Russia", "Europe/Kyiv": "Ukraine", "Europe/Kiev": "Ukraine",
+    "Asia/Colombo": "Sri Lanka", "Asia/Dhaka": "Bangladesh",
+    "Asia/Karachi": "Pakistan", "Asia/Kathmandu": "Nepal",
+    "Asia/Dubai": "United Arab Emirates UAE", "Asia/Qatar": "Qatar",
+    "Asia/Riyadh": "Saudi Arabia", "Asia/Kuwait": "Kuwait",
+    "Asia/Muscat": "Oman", "Asia/Bahrain": "Bahrain",
+    "Asia/Singapore": "Singapore", "Asia/Kuala_Lumpur": "Malaysia",
+    "Asia/Jakarta": "Indonesia", "Asia/Manila": "Philippines",
+    "Asia/Bangkok": "Thailand", "Asia/Ho_Chi_Minh": "Vietnam",
+    "Asia/Saigon": "Vietnam", "Asia/Hong_Kong": "Hong Kong",
+    "Asia/Shanghai": "China", "Asia/Tokyo": "Japan", "Asia/Seoul": "South Korea",
+    "Asia/Taipei": "Taiwan", "Asia/Jerusalem": "Israel",
+    "Africa/Cairo": "Egypt", "Africa/Lagos": "Nigeria",
+    "Africa/Nairobi": "Kenya", "Africa/Johannesburg": "South Africa",
+    "Africa/Casablanca": "Morocco", "Africa/Accra": "Ghana",
+    "Australia/Sydney": "Australia", "Australia/Melbourne": "Australia",
+    "Australia/Brisbane": "Australia", "Australia/Perth": "Australia",
+    "Australia/Adelaide": "Australia", "Australia/Darwin": "Australia",
+    "Australia/Hobart": "Australia",
+    "Pacific/Auckland": "New Zealand",
+    "America/Toronto": "Canada", "America/Vancouver": "Canada",
+    "America/Edmonton": "Canada", "America/Winnipeg": "Canada",
+    "America/Halifax": "Canada", "America/Montreal": "Canada",
+    "America/Mexico_City": "Mexico", "America/Sao_Paulo": "Brazil",
+    "America/Buenos_Aires": "Argentina",
+    "America/Argentina/Buenos_Aires": "Argentina",
+    "America/Bogota": "Colombia", "America/Lima": "Peru",
+    "America/Santiago": "Chile",
+}
+
+
+def _country_of(name: str) -> str:
+    """The country a zone is in, for searching. Falls back to the US/Canada
+    guess for the America/* zones nobody lists individually."""
+    if name in _COUNTRY:
+        return _COUNTRY[name]
+    if name.startswith("US/") or name.startswith("America/Indiana/") or name.startswith(
+        "America/Kentucky/"
+    ):
+        return "United States USA US"
+    if name.startswith("Australia/"):
+        return "Australia"
+    if name.startswith("Europe/"):
+        return ""
+    return ""
+
+def _search_terms(name: str) -> str:
+    """Everything worth typing at this zone: country, city, and the IANA id,
+    so "india", "kolkata" and "asia/kolkata" all land on the same row."""
+    readable = name.replace("_", " ").replace("/", " ")
+    return f"{_country_of(name)} {readable}".strip()
+
+
 def _offset_label(name: str) -> str:
     """"Asia/Kolkata" -> "Kolkata (UTC+5:30)". Uses TODAY's offset, so a zone on
     summer time reads as the clock on their wall reads right now."""
@@ -58,7 +139,10 @@ def _offset_label(name: str) -> str:
     mins = rem // 60
     city = name.split("/")[-1].replace("_", " ")
     region = name.split("/")[0] if "/" in name else ""
-    where = f"{city}, {region}" if region and region not in {"Etc"} else city
+    country = _country_of(name).split(" ")[0] if _country_of(name) else ""
+    # The country leads when we know it, because that is what people look for:
+    # "India - Kolkata" is found by someone who has never typed "Asia/Kolkata".
+    where = f"{country} - {city}" if country else (f"{city}, {region}" if region else city)
     return f"{where} (UTC{sign}{hours}:{mins:02d})"
 
 
@@ -73,7 +157,16 @@ def _build_choices() -> list[dict[str, str]]:
             continue
         label = _offset_label(name)
         if label:
-            out.append({"value": name, "label": label})
+            # `search` is everything worth typing: the country, the city, and
+            # the IANA id. The UI matches on it so "india", "kolkata" and
+            # "asia/kolkata" all land on the same row.
+            out.append(
+                {
+                    "value": name,
+                    "label": label,
+                    "search": _search_terms(name),
+                }
+            )
     # Sorted by offset, then by name: a picker you scroll should walk around the
     # world rather than jumping between continents alphabetically.
     out.sort(key=lambda c: (_sort_offset(c["value"]), c["label"]))
@@ -98,24 +191,22 @@ _ZERO = timedelta(0)
 # only "UTC", strictly worse than the hand-written list it replaces. tzdata is
 # pinned in requirements so this should never fire; it exists because the
 # failure it guards is silent, and the guard costs fifteen lines.
-_FALLBACK: list[dict[str, str]] = [
-    {"value": "Europe/London", "label": "London, Europe (UTC+0:00)"},
-    {"value": "Europe/Dublin", "label": "Dublin, Europe (UTC+0:00)"},
-    {"value": "Europe/Paris", "label": "Paris, Europe (UTC+1:00)"},
-    {"value": "Europe/Berlin", "label": "Berlin, Europe (UTC+1:00)"},
-    {"value": "Europe/Madrid", "label": "Madrid, Europe (UTC+1:00)"},
-    {"value": "Asia/Dubai", "label": "Dubai, Asia (UTC+4:00)"},
-    {"value": "Asia/Kolkata", "label": "Kolkata, Asia (UTC+5:30)"},
-    {"value": "Asia/Colombo", "label": "Colombo, Asia (UTC+5:30)"},
-    {"value": "Asia/Singapore", "label": "Singapore, Asia (UTC+8:00)"},
-    {"value": "Asia/Kuala_Lumpur", "label": "Kuala Lumpur, Asia (UTC+8:00)"},
-    {"value": "Australia/Sydney", "label": "Sydney, Australia (UTC+10:00)"},
-    {"value": "Pacific/Auckland", "label": "Auckland, Pacific (UTC+12:00)"},
-    {"value": "America/Los_Angeles", "label": "Los Angeles, America (UTC-8:00)"},
-    {"value": "America/Chicago", "label": "Chicago, America (UTC-6:00)"},
-    {"value": "America/New_York", "label": "New York, America (UTC-5:00)"},
-    {"value": "UTC", "label": "UTC (no local time)"},
+_FALLBACK_ZONES = [
+    "Europe/London", "Europe/Dublin", "Europe/Paris", "Europe/Berlin",
+    "Europe/Madrid", "Asia/Dubai", "Asia/Kolkata", "Asia/Colombo",
+    "Asia/Singapore", "Asia/Kuala_Lumpur", "Australia/Sydney",
+    "Pacific/Auckland", "America/Los_Angeles", "America/Chicago",
+    "America/New_York",
 ]
+
+
+# Built from the same functions as the real list, so the fallback cannot drift
+# into having different labels or missing the search terms — which is exactly
+# the sort of difference nobody notices until the fallback is the live path.
+_FALLBACK: list[dict[str, str]] = [
+    {"value": z, "label": _offset_label(z) or z, "search": _search_terms(z)}
+    for z in _FALLBACK_ZONES
+] + [{"value": "UTC", "label": "UTC (no local time)", "search": "UTC"}]
 
 
 def _choices() -> list[dict[str, str]]:

@@ -927,9 +927,11 @@ export default function PriceComparisonPage() {
                         aria-pressed={showBy === key}
                         onClick={() => {
                           setShowBy(key);
-                          // Leaving a grouping must close whatever it had open,
-                          // or the popup outlives the tile it came from.
-                          setBrowseCat(null);
+                          // ONE CLICK, NOT TWO. "All items" produced a single
+                          // tile labelled "All items" that you then had to tap
+                          // to open — a grouping step for a grouping of one.
+                          // Choosing it IS the request, so it opens.
+                          setBrowseCat(key === "all" ? "All items" : null);
                         }}
                         className={`mise-press rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                           showBy === key
@@ -969,9 +971,12 @@ export default function PriceComparisonPage() {
               onClose={() => setBrowseCat(null)}
               title={browseCat}
               subtitle={`${itemGroups.find(([c]) => c === browseCat)?.[1].length ?? 0} items`}
-              columns={2}
+              columns={4}
             >
-              <div className="mise-stagger space-y-2">
+              {/* COLUMNS, not one tall column. Sixty-eight items stacked is a
+                  scroll; the same sixty-eight in three columns is a page you
+                  read. "we can reduce scroll effort by keeping items sides." */}
+              <div className="mise-stagger grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {(itemGroups.find(([c]) => c === browseCat)?.[1] ?? []).map((it) => (
                   <button
                     key={it.id}
@@ -1004,8 +1009,11 @@ export default function PriceComparisonPage() {
                         })()}
                       </span>
                     </span>
+                    {/* Was rose-300 on a rose-tinted card: "some colors like red
+                        are not visible to eyes". A filled chip instead — this is
+                        the number the whole page exists to show. */}
                     {(savingByItem[it.id] ?? 0) > 0.001 && (
-                      <span className="shrink-0 text-xs font-semibold tabular-nums text-rose-300">
+                      <span className="shrink-0 rounded-lg bg-rose-500/90 px-2 py-1 text-xs font-semibold tabular-nums text-white">
                         +{format((savingByItem[it.id] ?? 0).toFixed(2))}/{it.unit}
                       </span>
                     )}
