@@ -22,7 +22,6 @@ import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
 import { chainSummary, levelName, packDisagreement, packSizes, pricePerBase, stockInPacks, supplierPackSize } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
-import { Select } from "@/components/Select";
 import { SubNav } from "@/components/SubNav";
 import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
@@ -141,6 +140,9 @@ export default function InventoryPage() {
   // review a single supplier before calling them.
   const [vendorFocus, setVendorFocus] = useState<string>("all");
   const [catMgr, setCatMgr] = useState(false);
+  /** The filter popup. Filters are occasional; they do not deserve permanent
+   *  residence above the list they filter. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [catFrom, setCatFrom] = useState("");
   const [catTo, setCatTo] = useState("");
   const [allergensTouched, setAllergensTouched] = useState(false);
@@ -1489,158 +1491,235 @@ export default function InventoryPage() {
             );
           })()}
 
-          {/* ONE TOOLBAR, NOT SEVEN BANDS.
-              "core area is down that I need to scroll to see... too many are
-               there in top area rather than the core functionality."
+          {/* ONE ROW. THE FILTERS LIVE IN A POPUP.
 
-              Counted before touching it: page title, sub-nav, a money panel
-              toggle, a search row, a stock-chip row, a category-chip row, a
-              rename link and a colour legend — eight things between arriving
-              and seeing a single item, on the page he says everyone opens
-              first.
+              Rebuilt because he asked twice and the second attempt was still
+              five bands deep: a search row, stock chips, category chips, a
+              rename link and a colour legend — all before the first item, on the
+              page he says every user opens first.
 
-              Nothing was removed. The money panel and the category renamer
-              became buttons in this row instead of owning rows of their own,
-              and the legend became the ⓘ it always should have been. */}
-          <div className="mb-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div id="inventory-search" className="relative min-w-0 flex-1 scroll-mt-24 sm:max-w-md">
-                <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint">🔍</span>
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search items…"
-                  aria-label="Search items"
-                  className="mise-well w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-fg outline-none"
-                />
-              </div>
-              {/* Every supplier that prices at least one item. Built from the
-                  data rather than the vendor list, so it never offers a
-                  supplier with nothing to show. */}
-              {(() => {
-                const seen = new Map<string, string>();
-                Object.values(itemSuppliers).forEach((opts) =>
-                  opts.forEach((o) => seen.set(o.vendor_id, o.vendor_name)),
-                );
-                if (seen.size === 0) return null;
-                return (
-                  <Select
-                    value={vendorFocus}
-                    onChange={setVendorFocus}
-                    className="w-56"
-                    options={[
-                      { value: "all", label: "All suppliers" },
-                      ...[...seen.entries()]
-                        .sort((a, b) => a[1].localeCompare(b[1]))
-                        .map(([id, name]) => ({ value: id, label: name })),
-                    ]}
-                  />
-                );
-              })()}
-              {/* The two things that used to own rows of their own. */}
-              {items.length > 0 && (
+              A filter is something you reach for occasionally and then stop
+              thinking about. It does not deserve permanent residence above the
+              thing it filters. It is one button now, carrying a COUNT — because
+              the only real risk of hiding filters is filtering without knowing
+              it, which is why that count is not optional. */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div id="inventory-search" className="relative min-w-0 flex-1 scroll-mt-24 sm:max-w-sm">
+              <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint">🔍</span>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search items…"
+                aria-label="Search items"
+                className="mise-well w-full rounded-xl py-2.5 pl-9 pr-3 text-sm text-fg outline-none"
+              />
+            </div>
+            {(() => {
+              const on =
+                (statusFilter !== "all" ? 1 : 0) +
+                (catFilter !== "all" ? 1 : 0) +
+                (vendorFocus !== "all" ? 1 : 0);
+              return (
                 <button
                   type="button"
-                  onClick={() => setShowMoney((v) => !v)}
-                  aria-expanded={showMoney}
-                  title="Where your stock money sits"
+                  onClick={() => setFiltersOpen(true)}
+                  data-tone={on ? "brand" : undefined}
                   className={`mise-btn-flat mise-press shrink-0 px-3 py-2 text-sm ${
-                    showMoney ? "text-brand-300" : "text-fg-soft"
+                    on ? "text-brand-300" : "text-fg-soft"
                   }`}
                 >
-                  📊 <span className="hidden sm:inline">Stock value</span>
+                  ⚙ Filters
+                  {on > 0 && (
+                    <span className="ml-1.5 rounded-full bg-brand-500 px-1.5 text-[10px] font-bold text-white">
+                      {on}
+                    </span>
+                  )}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setCatMgr((v) => !v)}
-                title="Rename or merge a category"
-                className={`mise-btn-flat mise-press shrink-0 px-3 py-2 text-sm ${
-                  catMgr ? "text-brand-300" : "text-fg-soft"
-                }`}
-              >
-                ✎ <span className="hidden sm:inline">Categories</span>
-              </button>
-            </div>
-            {/* Two SEPARATE filters that combine (AND). Kept on their own labelled
-                rows + different colours so picking a stock status and a category
-                doesn't look like one list (which surprised people with 0 results). */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-fg-faint">Stock</span>
-                {statusChips.map((s) => (
-                  <button key={s.key} type="button" onClick={() => setStatusFilter(s.key)} className={chip(statusFilter === s.key)}>
-                    {s.dot && <span aria-hidden className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${s.dot}`} />}
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-fg-faint">Category</span>
-                <button type="button" onClick={() => setCatFilter("all")} className={catChip(catFilter === "all")}>
-                  All categories
-                </button>
-                {categories.map((c) => {
-                  const n = items.filter((i) => i.is_active && (i.category?.trim() || "Other") === c).length;
-                  return (
-                    <button key={c} type="button" onClick={() => setCatFilter(c)} className={catChip(catFilter === c)}>
-                      {categoryEmoji(c)} {c}
-                      <span className="ml-1.5 rounded-full bg-glass/10 px-1.5 text-[10px] text-fg-faint">{n}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {(statusFilter !== "all" || catFilter !== "all") && (
-                <p className="text-xs text-fg-faint">
-                  Showing <b className="text-fg-soft">{filtered.length}</b> item{filtered.length === 1 ? "" : "s"}
-                  {statusFilter !== "all" && catFilter !== "all"
-                    ? " — the stock filter and the category filter are combined."
-                    : "."}
-                  <button
-                    type="button"
-                    onClick={() => { setStatusFilter("all"); setCatFilter("all"); }}
-                    className="ml-2 font-medium text-brand-400 underline hover:text-brand-300"
-                  >
-                    Clear filters
-                  </button>
-                </p>
-              )}
-            </div>
-            {/* The renamer itself, opened from the toolbar above. */}
-            <div className={catMgr ? "mt-2" : "hidden"}>
-              {catMgr && (
-                <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-paper-2/60 p-3">
-                  <div>
-                    <label className="block text-xs font-medium text-fg-faint">Rename</label>
-                    <select value={catFrom} onChange={(e) => setCatFrom(e.target.value)} className={inputCls}>
-                      <option value="">Pick category…</option>
-                      {categories.filter((c) => c !== "Other").map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-fg-faint">to</label>
-                    <div className="mt-1">
-                      <ComboBox value={catTo} onChange={setCatTo} options={categoryOptions} placeholder="New or existing…" className="w-48" />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={renameCategory}
-                    disabled={!catFrom || !catTo.trim()}
-                    className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-                  >
-                    Apply
-                  </button>
-                  <button type="button" onClick={() => setCatMgr(false)} className="rounded-lg border border-line-2 px-3 py-2 text-sm text-fg-soft hover:bg-paper-2">
-                    Cancel
-                  </button>
-                  <span className="text-xs text-fg-faint">Renaming into an existing category merges them.</span>
-                </div>
-              )}
-            </div>
+              );
+            })()}
+            <button
+              type="button"
+              onClick={() => setShowMoney((v) => !v)}
+              className={`mise-btn-flat mise-press shrink-0 px-3 py-2 text-sm ${showMoney ? "text-brand-300" : "text-fg-soft"}`}
+            >
+              📊 <span className="hidden sm:inline">Stock value</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCatMgr((v) => !v)}
+              className={`mise-btn-flat mise-press shrink-0 px-3 py-2 text-sm ${catMgr ? "text-brand-300" : "text-fg-soft"}`}
+            >
+              ✎ <span className="hidden sm:inline">Categories</span>
+            </button>
+            <span className="ml-auto shrink-0 text-xs text-fg-faint">
+              {visible.length} of {items.length}
+            </span>
           </div>
+
+          {/* The renamer, opened from the toolbar rather than owning a row. */}
+          <div className={catMgr ? "mb-3" : "hidden"}>
+            {catMgr && (
+              <div className="mise-card-inset flex flex-wrap items-end gap-2 p-3">
+                <div>
+                  <label className="block text-xs font-medium text-fg-faint">Rename</label>
+                  <select value={catFrom} onChange={(e) => setCatFrom(e.target.value)} className={inputCls}>
+                    <option value="">Pick category…</option>
+                    {categories.filter((c) => c !== "Other").map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-fg-faint">to</label>
+                  <input
+                    value={catTo}
+                    onChange={(e) => setCatTo(e.target.value)}
+                    placeholder="new name"
+                    className={inputCls}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={renameCategory}
+                  disabled={!catFrom || !catTo.trim()}
+                  data-tone="brand"
+                  className="mise-btn-flat mise-press px-3 py-2 text-sm font-semibold text-brand-300 disabled:opacity-40"
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCatMgr(false); setCatFrom(""); setCatTo(""); }}
+                  className="mise-btn-flat mise-press px-3 py-2 text-sm text-fg-soft"
+                >
+                  Cancel
+                </button>
+                <span className="w-full text-xs text-fg-faint">
+                  Renaming into an existing category merges them.
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Everything that used to be a band, in a popup you open when you
+              actually want it. */}
+          {filtersOpen && (
+            <SheetPopup
+              onClose={() => setFiltersOpen(false)}
+              title="Narrow the list"
+              subtitle={`${visible.length} of ${items.length} items showing`}
+              columns={2}
+              footer={
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setCatFilter("all");
+                    setVendorFocus("all");
+                  }}
+                  className="mise-btn-flat mise-press w-full px-4 py-2.5 text-sm text-fg-soft"
+                >
+                  Clear all filters
+                </button>
+              }
+            >
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-fg-faint">Stock</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {statusChips.map((sc) => (
+                      <button
+                        key={sc.key}
+                        type="button"
+                        onClick={() => setStatusFilter(sc.key)}
+                        className={`mise-press rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                          statusFilter === sc.key
+                            ? "bg-brand-600 text-white"
+                            : "mise-card-inset text-fg-soft hover:text-fg"
+                        }`}
+                      >
+                        {sc.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-fg-faint">Category</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCatFilter("all")}
+                      className={`mise-press rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                        catFilter === "all"
+                          ? "bg-brand-600 text-white"
+                          : "mise-card-inset text-fg-soft hover:text-fg"
+                      }`}
+                    >
+                      All categories
+                    </button>
+                    {categories.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCatFilter(c)}
+                        className={`mise-press rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                          catFilter === c
+                            ? "bg-brand-600 text-white"
+                            : "mise-card-inset text-fg-soft hover:text-fg"
+                        }`}
+                      >
+                        {categoryEmoji(c)} {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {(() => {
+                  const seen = new Map<string, string>();
+                  Object.values(itemSuppliers).forEach((opts) =>
+                    opts.forEach((o) => seen.set(o.vendor_id, o.vendor_name)),
+                  );
+                  if (seen.size === 0) return null;
+                  return (
+                    <div>
+                      <p className="mb-1.5 text-[11px] uppercase tracking-wide text-fg-faint">
+                        Supplier
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setVendorFocus("all")}
+                          className={`mise-press rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                            vendorFocus === "all"
+                              ? "bg-brand-600 text-white"
+                              : "mise-card-inset text-fg-soft hover:text-fg"
+                          }`}
+                        >
+                          All suppliers
+                        </button>
+                        {[...seen.entries()].map(([id, name]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setVendorFocus(id)}
+                            className={`mise-press rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                              vendorFocus === id
+                                ? "bg-brand-600 text-white"
+                                : "mise-card-inset text-fg-soft hover:text-fg"
+                            }`}
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </SheetPopup>
+          )}
+
 
           {/* The shelf-bar legend was a whole BAND above the list explaining
               three colours. It is the same sentence on the ⓘ beside the Stock
