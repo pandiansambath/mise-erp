@@ -236,32 +236,46 @@ export default function MySpacePage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-0">
           <h3 className="px-5 pt-4 font-semibold text-fg">My payslips</h3>
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
-                  <th className="px-5 py-2 font-medium">Period</th>
-                  <th className="px-5 py-2 text-right font-medium">Net pay</th>
-                  <th className="px-5 py-2 font-medium">Status</th>
-                  <th className="px-5 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {payslips.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-6 text-center text-fg-faint">No payslips yet.</td></tr>
-                ) : payslips.map((p) => (
-                  <tr key={p.id} className="border-b border-line">
-                    <td className="px-5 py-2 font-medium text-fg">{p.pay_period}</td>
-                    <td className="px-5 py-2 text-right text-fg-soft">{format(p.net_pay)}</td>
-                    <td className="px-5 py-2"><Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge></td>
-                    <td className="px-5 py-2 text-right">
-                      <button onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">PDF</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* CARDS, per /staff. This is the page an employee opens about their
+              own money, on their own phone — a four-column table is the wrong
+              shape for that, and the pay was the second column rather than the
+              thing you came to read. The stripe says whether it has been paid. */}
+          {payslips.length === 0 ? (
+            <p className="px-5 py-6 text-center text-fg-faint">No payslips yet.</p>
+          ) : (
+            <div className="mise-stagger grid gap-2 p-3 sm:grid-cols-2">
+              {payslips.map((p) => (
+                <div
+                  key={p.id}
+                  className="mise-card-inset relative flex items-center gap-3 overflow-hidden p-3 pl-4"
+                >
+                  <span
+                    aria-hidden
+                    className={`absolute inset-y-0 left-0 w-1 ${
+                      p.status === "PAID" ? "bg-emerald-400/70" : "bg-amber-400/80"
+                    }`}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-display text-lg font-semibold tabular-nums text-fg">
+                      {format(p.net_pay)}
+                    </span>
+                    <span className="block truncate text-[11px] text-fg-faint">
+                      {p.pay_period}
+                    </span>
+                  </span>
+                  <Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge>
+                  <button
+                    onClick={() =>
+                      downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)
+                    }
+                    className="mise-btn-flat mise-press shrink-0 px-2.5 py-1.5 text-xs text-brand-300"
+                  >
+                    PDF
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         <Card className="p-0">
@@ -287,8 +301,11 @@ export default function MySpacePage() {
               );
             })()}
           </div>
+          {/* The timesheet STAYS a table: reading down the Hours column is how
+              you check a week, and no card grid does that. `mise-stack` gives
+              the phone a card layout from the same markup. */}
           <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="mise-stack w-full text-sm">
               <thead>
                 <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
                   <th className="px-5 py-2 font-medium">Date</th>
@@ -303,9 +320,9 @@ export default function MySpacePage() {
                 ) : attendance.map((a) => (
                   <tr key={a.date} className="border-b border-line">
                     <td className="px-5 py-2 text-fg-soft">{a.date}</td>
-                    <td className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_in)}</td>
-                    <td className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_out)}</td>
-                    <td className="px-5 py-2 text-right text-fg-soft">{fmtHours(a.working_hours)}</td>
+                    <td data-label="In" className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_in)}</td>
+                    <td data-label="Out" className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_out)}</td>
+                    <td data-label="Hours" className="px-5 py-2 text-right text-fg-soft">{fmtHours(a.working_hours)}</td>
                   </tr>
                 ))}
               </tbody>
