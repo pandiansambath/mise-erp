@@ -854,20 +854,33 @@ export default function VendorsPage() {
                         // Click anything, do anything: the row opens the price
                         // itself rather than making you find the form for it.
                         onClick={() => {
-                          setPriceRow(vi);
-                          // CLOSE THE CATEGORY POPUP BEHIND IT. Two panels at
-                          // the same level were covering each other — "there is
-                          // a popup fight going on I guess, hiding one
-                          // another". You came from this category to look at
-                          // one price; the list has done its job.
-                          setSupplyCat(null);
                           // The NAME they sell by, not its id — the field is
                           // typed now, so a supplier can name a pack nobody has
                           // created yet.
                           const lv = (items.find((i) => i.id === vi.item_id)?.pack_levels ?? []).find(
                             (l) => l.id === vi.pack_level_id,
                           );
-                          setSheetLevel(lv?.name ?? "");
+
+                          // CLOSE THE LIST, THEN OPEN THE PRICE — IN THAT ORDER,
+                          // AND IN SEPARATE TICKS.
+                          //
+                          // Both popups are depth 2, so they cannot be shown at
+                          // once (that was the "popup fight"). But closing one
+                          // and opening the other in the SAME commit made the
+                          // click appear to do nothing: each popup pushes a
+                          // history entry so Back can dismiss it, and the
+                          // closing one calls history.back() while the opening
+                          // one is pushing. The pop then lands on the new
+                          // popup and dismisses it — "it's closing and going
+                          // back", which is precisely what he saw.
+                          //
+                          // A tick apart, the cleanup finishes before the new
+                          // entry exists, and there is nothing to race.
+                          setSupplyCat(null);
+                          window.setTimeout(() => {
+                            setPriceRow(vi);
+                            setSheetLevel(lv?.name ?? "");
+                          }, 0);
                         }}
                         role="button"
                         tabIndex={0}

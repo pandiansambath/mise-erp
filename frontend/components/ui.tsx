@@ -215,14 +215,11 @@ export function Badge({
   children: ReactNode;
   tone?: "slate" | "green" | "red" | "amber";
 }) {
-  const tones: Record<string, string> = {
-    slate: "bg-glass/10 text-fg-soft",
-    green: "bg-brand-400/15 text-brand-300",
-    red: "bg-rose-400/15 text-rose-300",
-    amber: "bg-amber-400/15 text-amber-200",
-  };
+  // The colours live in CSS now (`.mise-chip`), mixed against the FOREGROUND so
+  // they hold contrast in both themes. These were fixed pale shades on a 15%
+  // tint: right on the dark theme, near-white on near-white in the light one.
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>
+    <span className="mise-chip" data-tone={tone === "slate" ? "slate" : tone}>
       {children}
     </span>
   );
