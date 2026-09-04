@@ -1411,18 +1411,7 @@ export default function InventoryPage() {
               of your money to reach your money.
               The numbers it leads with are already on the pinned tally at the
               bottom, always visible. So it opens on request instead. */}
-          {items.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowMoney((v) => !v)}
-              aria-expanded={showMoney}
-              className="mise-press mb-3 flex w-full items-center gap-2 rounded-xl border border-line px-3.5 py-2 text-left text-sm text-fg-soft transition hover:border-brand-400/40"
-            >
-              <span aria-hidden>📊</span>
-              <span className="flex-1">Where your stock money sits</span>
-              <span aria-hidden className="text-fg-faint">{showMoney ? "▲" : "▼"}</span>
-            </button>
-          )}
+
           {showMoney && items.length > 0 && (() => {
             const active = items.filter((i) => i.is_active);
             const valued = active
@@ -1500,7 +1489,19 @@ export default function InventoryPage() {
             );
           })()}
 
-          {/* Search + filters */}
+          {/* ONE TOOLBAR, NOT SEVEN BANDS.
+              "core area is down that I need to scroll to see... too many are
+               there in top area rather than the core functionality."
+
+              Counted before touching it: page title, sub-nav, a money panel
+              toggle, a search row, a stock-chip row, a category-chip row, a
+              rename link and a colour legend — eight things between arriving
+              and seeing a single item, on the page he says everyone opens
+              first.
+
+              Nothing was removed. The money panel and the category renamer
+              became buttons in this row instead of owning rows of their own,
+              and the legend became the ⓘ it always should have been. */}
           <div className="mb-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <div id="inventory-search" className="relative min-w-0 flex-1 scroll-mt-24 sm:max-w-md">
@@ -1536,6 +1537,30 @@ export default function InventoryPage() {
                   />
                 );
               })()}
+              {/* The two things that used to own rows of their own. */}
+              {items.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowMoney((v) => !v)}
+                  aria-expanded={showMoney}
+                  title="Where your stock money sits"
+                  className={`mise-btn-flat mise-press shrink-0 px-3 py-2 text-sm ${
+                    showMoney ? "text-brand-300" : "text-fg-soft"
+                  }`}
+                >
+                  📊 <span className="hidden sm:inline">Stock value</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setCatMgr((v) => !v)}
+                title="Rename or merge a category"
+                className={`mise-btn-flat mise-press shrink-0 px-3 py-2 text-sm ${
+                  catMgr ? "text-brand-300" : "text-fg-soft"
+                }`}
+              >
+                ✎ <span className="hidden sm:inline">Categories</span>
+              </button>
             </div>
             {/* Two SEPARATE filters that combine (AND). Kept on their own labelled
                 rows + different colours so picking a stock status and a category
@@ -1581,13 +1606,9 @@ export default function InventoryPage() {
                 </p>
               )}
             </div>
-            {/* Rename / merge a category across all its items */}
-            <div className="mt-2">
-              {!catMgr ? (
-                <button type="button" onClick={() => setCatMgr(true)} className="text-xs text-fg-faint hover:text-fg-soft">
-                  ✎ Rename / merge a category
-                </button>
-              ) : (
+            {/* The renamer itself, opened from the toolbar above. */}
+            <div className={catMgr ? "mt-2" : "hidden"}>
+              {catMgr && (
                 <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-paper-2/60 p-3">
                   <div>
                     <label className="block text-xs font-medium text-fg-faint">Rename</label>
@@ -1621,18 +1642,10 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          <p className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-faint">
-            <span
-              className="mise-press inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-line text-[10px] font-bold"
-              title="The bar under each stock figure = how full the shelf is vs its reorder line. Red: below minimum — order now. Amber: within 1.5× of minimum — getting close. Green: healthy."
-            >
-              i
-            </span>
-            Shelf bar:
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-rose-400" /> below min</span>
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-amber-400" /> near min</span>
-            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-brand-500" /> healthy</span>
-          </p>
+          {/* The shelf-bar legend was a whole BAND above the list explaining
+              three colours. It is the same sentence on the ⓘ beside the Stock
+              column now — read once, then never needed again, which is exactly
+              what a legend is. */}
           {/* phones: the shelf as cards — thumb-sized, no sideways table */}
           <div className="space-y-2.5 lg:hidden">
             {visible.length === 0 ? (
@@ -1720,7 +1733,32 @@ export default function InventoryPage() {
                     {sortTh("name", "Item")}
                     {sortTh("status", "Status")}
                     {sortTh("supplier", "Supplier")}
-                    {sortTh("stock", "Stock", true)}
+                    {/* The colour legend lives here now — one ⓘ on the column
+                        it explains, instead of a band above the whole list. */}
+                    <th className="px-5 py-3 text-right font-medium">
+                      <button
+                        type="button"
+                        onClick={() => toggleSort("stock")}
+                        className={`inline-flex flex-row-reverse items-center gap-1 transition hover:text-fg ${
+                          sortKey === "stock" ? "text-fg" : ""
+                        }`}
+                        title="Sort by stock"
+                      >
+                        Stock
+                        <span
+                          aria-hidden
+                          className={`text-[9px] ${sortKey === "stock" ? "text-brand-300" : "text-fg-faint/50"}`}
+                        >
+                          {sortKey === "stock" ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </button>
+                      <span
+                        className="mise-press ml-1 inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-line align-middle text-[10px] font-bold normal-case"
+                        title="The bar under each figure shows how full the shelf is against its reorder line. Red: below minimum — order now. Amber: within 1.5× of minimum. Green: healthy."
+                      >
+                        i
+                      </span>
+                    </th>
                     {sortTh("cost", "Avg cost", true)}
                     <th className="px-5 py-3 text-right font-medium">Actions</th>
                   </tr>
@@ -1823,13 +1861,20 @@ export default function InventoryPage() {
                                 onClick={(e) => { e.stopPropagation(); orderItem(item); }}
                                 disabled={(item.vendor_count ?? 0) === 0}
                                 title={(item.vendor_count ?? 0) === 0 ? "Add a vendor price first (Vendors page)" : "Order this item — opens Purchasing with it picked"}
-                                className="mise-press rounded-md border border-brand-400/30 bg-brand-400/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                /* ONE FAMILY OF BUTTONS. These were three
+                                   different things: a tinted brand pill, a
+                                   RAISED slab, and a plain outline — sitting
+                                   side by side in the same cell, on a page
+                                   whose cards are pressed in. Same shape now,
+                                   with colour saying which is which. */
+                                data-tone="brand"
+                                className="mise-btn-flat mise-press px-2.5 py-1.5 text-xs font-medium text-brand-300 disabled:cursor-not-allowed"
                               >
                                 🛒 Order
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); startEdit(item); }}
-                                className="mise-raised mise-press rounded-md px-2.5 py-1 text-xs font-medium text-fg-soft"
+                                className="mise-btn-flat mise-press px-2.5 py-1.5 text-xs font-medium text-fg-soft"
                               >
                                 Edit
                               </button>
@@ -1837,7 +1882,8 @@ export default function InventoryPage() {
                                 <button
                                   onClick={(e) => { e.stopPropagation(); removeItem(item); }}
                                   title="Remove from inventory (Super Admin)"
-                                  className="rounded-md border border-line px-2 py-1 text-xs text-fg-faint hover:bg-rose-400/10 hover:text-rose-300"
+                                  data-tone="danger"
+                                  className="mise-btn-flat mise-press px-2 py-1.5 text-xs text-fg-faint hover:text-rose-300"
                                 >
                                   ✕
                                 </button>
