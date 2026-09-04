@@ -3994,6 +3994,37 @@ body.mise-voice-open .mise-launcher-in {
   background: color-mix(in srgb, #f43f5e 10%, transparent);
 }
 
+
+/* ── Badges that stay readable in BOTH themes ────────────────────────────
+   They were a 15% tint with a pale text colour: `bg-amber-400/15
+   text-amber-200`. On the dark theme that is fine. On the LIGHT theme it is
+   near-white ink on near-white paper — "the yellow green colour are making the
+   text to be blur", which is exactly what insufficient contrast looks like
+   before you know the word for it.
+
+   The fix is to mix the hue with the FOREGROUND rather than pick a fixed
+   shade. `--color-fg` is dark on light themes and light on dark ones, so the
+   text lands on the right side of its background automatically and neither
+   theme has to be tuned by hand. The tint goes up too, so the chip is a chip
+   rather than a smudge. */
+.mise-chip {
+  --chip: var(--color-fg);
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--chip) 20%, transparent);
+  color: color-mix(in srgb, var(--chip) 62%, var(--color-fg));
+  border: 1px solid color-mix(in srgb, var(--chip) 32%, transparent);
+}
+.mise-chip[data-tone="green"]  { --chip: #10b981; }
+.mise-chip[data-tone="amber"]  { --chip: #f59e0b; }
+.mise-chip[data-tone="red"]    { --chip: #f43f5e; }
+.mise-chip[data-tone="sky"]    { --chip: #0ea5e9; }
+.mise-chip[data-tone="slate"]  { --chip: var(--color-fg-faint); }
+
 /* ── THE STAGE ───────────────────────────────────────────────────────────
    "when i turn on voice model it needs to close that bubble chat UI, and the
     voice model alone with animated transition needs to glow and come to the
