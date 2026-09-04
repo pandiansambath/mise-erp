@@ -6,8 +6,8 @@ import { PettyCash } from "@/components/PettyCash";
 import { SubNav } from "@/components/SubNav";
 import { recall, remember } from "@/lib/rangeMemory";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { SheetPopup } from "@/components/SheetPopup";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
-import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
@@ -51,6 +51,8 @@ export default function SalesPage() {
   const [gross, setGross] = useState("");
   // 🧮 big-key till pad — which field it types into
   const [pad, setPad] = useState<null | "gross" | "counted">(null);
+  /** The takings popup — one channel, one amount. */
+  const [entryOpen, setEntryOpen] = useState(false);
   // per-channel gross over the trailing 7 days (for the channel tiles)
   const [chanTrend, setChanTrend] = useState<Record<string, number[]> | null>(null);
   const [trendLabels, setTrendLabels] = useState<string[]>([]);
@@ -427,64 +429,108 @@ export default function SalesPage() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Add + lines */}
         <div className="min-w-0 lg:col-span-2">
+          {/* TAKING MONEY IS TAPPING, NOT FILLING IN A FORM.
+              Built from /purchasing: tiles you can hit with a thumb, then a
+              popup for the one number. The old row was a channel dropdown, a
+              text field and a method dropdown — three controls that each hide
+              their own options, on a screen someone uses standing at a till
+              with a queue in front of them.
+
+              Each tile carries what that channel has ALREADY taken today, so
+              the thing you tap to add to is also the thing telling you where
+              you are. That figure had to be counted off the lines list. */}
           {canWrite && (
-            <Card className="mb-4" id="sales-form">
-              <form onSubmit={addLine} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-fg-soft">Channel</label>
-                  <Select
-                    value={channelId}
-                    onChange={setChannelId}
-                    className="mt-1"
-                    options={channels
-                      .filter((c) => c.is_active)
-                      .map((c) => ({
-                        value: c.id,
-                        label: `${c.name} (${c.commission_pct}%)`,
-                      }))}
-                  />
-                </div>
-                <div className="w-full sm:w-32">
-                  <label className="flex items-center justify-between text-sm font-medium text-fg-soft">
-                    Gross
-                    <button
-                      type="button"
-                      onClick={() => setPad((c) => (c === "gross" ? null : "gross"))}
-                      className={`mise-press rounded-md px-1.5 text-base leading-none ${pad === "gross" ? "text-brand-300" : "text-fg-faint"}`}
-                      title="Big-key till pad"
-                      aria-label="Toggle keypad"
-                    >
-                      🧮
-                    </button>
-                  </label>
-                  <input
-                    value={gross}
-                    onChange={(e) => setGross(numeric(e.target.value))}
-                    inputMode="decimal"
-                    required
-                    placeholder="0.00"
-                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  />
-                </div>
-                <div className="w-full sm:w-32">
-                  <label className="block text-sm font-medium text-fg-soft">Method</label>
-                  <Select
-                    value={method}
-                    onChange={setMethod}
-                    className="mt-1"
-                    options={METHODS.map((m) => ({ value: m, label: m }))}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-                >
-                  Add
-                </button>
-              </form>
-              {pad === "gross" && <TillKeypad value={gross} onChange={setGross} onClose={() => setPad(null)} />}
+            <div className="mb-4" id="sales-form">
+              <p className="mb-2 text-sm font-medium text-fg-soft">
+                Add today&apos;s takings
+              </p>
+              <div className="mise-stagger grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                {channels
+                  .filter((c) => c.is_active)
+                  .map((c) => {
+                    const taken = summary.lines
+                      .filter((l) => l.channel_name === c.name)
+                      .reduce((t, l) => t + (parseFloat(l.net_amount) || 0), 0);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setChannelId(c.id);
+                          setGross("");
+                          setEntryOpen(true);
+                        }}
+                        className="mise-card-inset mise-press relative flex flex-col items-start gap-0.5 overflow-hidden p-3 pl-4 text-left"
+                      >
+                        <span
+                          aria-hidden
+                          className={`absolute inset-y-0 left-0 w-1 ${
+                            taken > 0 ? "bg-emerald-400/60" : "bg-fg-faint/25"
+                          }`}
+                        />
+                        <span className="truncate text-sm font-semibold text-fg">{c.name}</span>
+                        <span className="font-display text-lg font-semibold tabular-nums text-fg">
+                          {taken > 0 ? format(String(taken.toFixed(2))) : "—"}
+                        </span>
+                        <span className="text-[10px] text-fg-faint">
+                          {c.commission_pct}% commission
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
               {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-            </Card>
+            </div>
+          )}
+
+          {/* One channel, one number. The keypad is always open here rather
+              than behind a toggle — this popup exists to take an amount, and a
+              till pad you have to ask for is a till pad nobody uses. */}
+          {entryOpen && (
+            <SheetPopup
+              onClose={() => setEntryOpen(false)}
+              title={channels.find((c) => c.id === channelId)?.name ?? "Takings"}
+              subtitle="what came in through this channel"
+              footer={
+                <button
+                  type="button"
+                  disabled={!(parseFloat(gross) > 0)}
+                  onClick={(e) => {
+                    void addLine(e as unknown as React.FormEvent);
+                    setEntryOpen(false);
+                  }}
+                  className="mise-press w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  Add {parseFloat(gross) > 0 ? format(gross) : ""}
+                </button>
+              }
+            >
+              <div className="flex flex-col items-center gap-3">
+                <p className="font-mono text-3xl font-bold tabular-nums text-fg">
+                  {gross ? format(gross) : format("0")}
+                </p>
+                <TillKeypad value={gross} onChange={setGross} onClose={() => undefined} />
+                <div className="w-full">
+                  <p className="mb-1.5 text-center text-[10px] uppercase tracking-wide text-fg-faint">
+                    How was it paid
+                  </p>
+                  <div className="mise-well flex justify-center gap-1 rounded-xl p-1">
+                    {METHODS.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMethod(m)}
+                        className={`mise-press flex-1 rounded-lg px-2 py-2 text-xs font-semibold transition ${
+                          method === m ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </SheetPopup>
           )}
 
           {/* THE DAY'S TAKINGS, AS CARDS — his reference pages have no tables.
