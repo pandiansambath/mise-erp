@@ -118,13 +118,30 @@ test("a sentence that grows in Chrome's ear arrives once, not stuck to itself", 
   const heard = [shown.live, ...shown.said].filter(Boolean);
   expect(heard.length, `nothing was transcribed — panel was ${shown.panel}`).toBeGreaterThan(0);
 
+  // ASSERT THE SENTENCE WE DROVE, not every line on the panel.
+  //
+  // The previous version demanded that EVERY line equal the test phrase, and
+  // then failed on "hey hi shall we talk for a minute" — a perfectly good line
+  // from an earlier turn still on screen. Its own message called that sentence
+  // "doubled", which it plainly was not. A test that reports a false failure
+  // costs exactly what a false pass costs: you stop believing it.
+  const target = "could you please add a rota";
+  const mine = heard.find((l) => l.toLowerCase().includes("could"));
+  expect(mine, `the sentence never arrived. panel: ${shown.panel}`).toBeTruthy();
+  expect(mine, `it came through doubled: ${JSON.stringify(mine)}`).toBe(target);
+
+  // And nothing anywhere may carry the concatenation signature — a word joined
+  // to the start of its own repeat, with no space. That is the exact shape from
+  // his CloudWatch ("couldcould", "pleasecould", "areare you there"), and it is
+  // invisible to a pattern built from a doubled FIRST word, which is how an
+  // earlier version of this test passed while its own output showed
+  // "could you pleasecould you please add a rota" on screen.
   for (const line of heard) {
-    // The exact fault from his logs. It joins the END of one copy to the START
-    // of the next, so a pattern built from a doubled first word cannot see it —
-    // which is how an earlier version of this test passed while its own output
-    // showed "could you pleasecould you please add a rota" on screen.
-    expect(line, `the sentence came through doubled: ${JSON.stringify(line)}`).toBe(
-      "could you please add a rota",
-    );
+    for (const w of target.split(" ")) {
+      expect(
+        line.toLowerCase(),
+        `"${w}" is joined to a repeat in ${JSON.stringify(line)}`,
+      ).not.toContain(`${w}could`);
+    }
   }
 });
