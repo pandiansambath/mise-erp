@@ -126,25 +126,87 @@ test("the item popup is sections, not one long scroll", async ({ page }) => {
     .toBeVisible({ timeout: 10_000 });
 });
 
-test("my space shows this person's own attendance history and rota", async ({ page }) => {
+test("my space renders that person's own attendance history and rota", async ({ page }) => {
   test.setTimeout(180_000);
+
+  // WHY THIS ONE IS STUBBED, WHEN NOTHING ELSE HERE IS.
+  //
+  // /my needs a login LINKED to an employee record. The superadmin is not
+  // linked — /me/employee returns 404 on his tenant and the page correctly says
+  // so — and a new staff account cannot sign in until its email is verified,
+  // which needs an inbox I do not have. Creating a half-working login on his
+  // live tenant to satisfy a test is not a trade worth making.
+  //
+  // So the SERVER side is covered by backend/tests/test_selfservice_rota.py
+  // (scoping, the range filter, the totals), and this checks the other half:
+  // that the deployed page renders those payloads. The bundle is the real one
+  // from prod; only the three /me responses are supplied.
+  const day = (o: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + o);
+    return d.toISOString().slice(0, 10);
+  };
+  const json = (body: unknown) => ({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+  });
+
+  await page.route("**/api/me/employee", (r) =>
+    r.fulfill(json({ id: "e1", full_name: "Selvi Kumar", employee_code: "EMP-001", salary_type: "HOURLY" })),
+  );
+  await page.route("**/api/me/attendance/history*", (r) =>
+    r.fulfill(
+      json({
+        date_from: day(-30),
+        date_to: day(0),
+        totals: {
+          present: 12, half_days: 1, absent: 2, recorded_days: 15,
+          total_hours: "96.5", indicative_pay: "965.00", basis: "96.5h x £10/h",
+        },
+        days: [
+          {
+            employee_id: "e1", employee_name: "Selvi Kumar", date: day(-1),
+            clock_in: null, clock_out: null, break_minutes: 0,
+            working_hours: "8.00", status: "PRESENT",
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route("**/api/me/rota*", (r) =>
+    r.fulfill(
+      json([
+        {
+          id: "s1", employee_id: "e1", employee_name: "Selvi Kumar", date: day(0),
+          start_time: "09:00:00", end_time: "17:00:00", break_minutes: 30,
+          hours: "7.50", cost: "75.00", notes: null,
+        },
+      ]),
+    ),
+  );
+  await page.route("**/api/me/attendance", (r) => r.fulfill(json([])));
+  await page.route("**/api/me/payslips", (r) => r.fulfill(json([])));
+  await page.route("**/api/me/documents", (r) => r.fulfill(json([])));
+  await page.route("**/api/me/document-requests", (r) => r.fulfill(json([])));
+
   await signIn(page);
   await page.goto(`${BASE}/my`);
-
-  // A superadmin may not be linked to an employee record; that page states so
-  // plainly and there is nothing else to check on this tenant.
-  const notLinked = page.getByText(/isn't linked to an employee record/i);
-  if (await notLinked.isVisible({ timeout: 15_000 }).catch(() => false)) {
-    test.skip(true, "this login has no employee record linked - nothing to assert");
-  }
 
   await expect(page.getByRole("heading", { name: /My attendance/i })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("heading", { name: /My rota/i })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("heading", { name: /My documents/i })).toBeVisible({ timeout: 20_000 });
 
-  // The history filter is the ask ("he can use filter to go back"), so the
-  // totals have to be present, not just the table.
-  await expect(page.getByText(/Hours worked/i).first()).toBeVisible({ timeout: 15_000 });
+  // The figures have to ARRIVE, not just the headings — response_model has
+  // silently dropped declared-looking fields four times in this project, and a
+  // heading over an empty box would look identical to a working page.
+  // "96.5" is never on the screen: fmtHours turns it into "96h 30m", which is
+  // the string a person actually reads. Asserting the raw decimal was my test
+  // describing the payload rather than the page.
+  await expect(page.getByText("96h 30m").first(), "the hours total never rendered")
+    .toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/rostered/i).first(), "the rota shift never rendered")
+    .toBeVisible({ timeout: 15_000 });
 });
 
 test("the money pages put their core on the first screen", async ({ page }) => {
