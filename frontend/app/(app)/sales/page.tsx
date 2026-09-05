@@ -612,7 +612,6 @@ export default function SalesPage() {
                   Save {draftCount} unsaved
                 </button>
               </ReachBar>
-              {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
             </div>
           )}
 
