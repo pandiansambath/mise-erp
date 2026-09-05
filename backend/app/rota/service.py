@@ -79,13 +79,21 @@ async def clear_employee_shifts(
 
 
 async def list_shifts(
-    db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
+    db: AsyncSession,
+    hotel_id: uuid.UUID,
+    date_from: date_type,
+    date_to: date_type,
+    employee_id: uuid.UUID | None = None,
 ) -> list[dict]:
+    """Shifts in a range. `employee_id` narrows it to one person, which is what
+    self-service needs: the filter belongs in the query so a staff login can
+    never be handed a row it then has to be trusted to drop."""
     emps = await _employees(db, hotel_id)
+    conds = [Shift.hotel_id == hotel_id, Shift.date >= date_from, Shift.date <= date_to]
+    if employee_id is not None:
+        conds.append(Shift.employee_id == employee_id)
     rows = await db.execute(
-        select(Shift)
-        .where(Shift.hotel_id == hotel_id, Shift.date >= date_from, Shift.date <= date_to)
-        .order_by(Shift.date, Shift.start_time)
+        select(Shift).where(*conds).order_by(Shift.date, Shift.start_time)
     )
     out: list[dict] = []
     for sh in rows.scalars():

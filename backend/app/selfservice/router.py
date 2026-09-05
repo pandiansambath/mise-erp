@@ -2,15 +2,19 @@
 attendance, payslips, and documents. Resolves the Employee linked to the user."""
 import uuid
 
+from datetime import date as date_type, timedelta
+
 from fastapi import (
     APIRouter,
     Depends,
     File,
     HTTPException,
+    Query,
     Response,
     UploadFile,
     status,
 )
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
@@ -27,6 +31,8 @@ from app.hotels.models import Hotel
 from app.payroll import payslip
 from app.payroll import service as payroll_service
 from app.payroll.schemas import PayrollRow
+from app.rota import service as rota_service
+from app.rota.schemas import ShiftOut
 
 router = APIRouter(prefix="/me", tags=["self-service"])
 
@@ -56,6 +62,88 @@ async def my_attendance(
 ) -> list[AttendanceRow]:
     rows = await emp_service.list_attendance_for_employee(db, emp.id)
     return [AttendanceRow.model_validate(r) for r in rows]
+
+
+class MyAttendanceTotals(BaseModel):
+    present: int
+    half_days: int
+    absent: int
+    recorded_days: int
+    total_hours: str
+    indicative_pay: str
+    basis: str
+
+
+class MyAttendanceHistory(BaseModel):
+    """DECLARED IN FULL, deliberately. `response_model` silently drops any field
+    the schema does not mention — this project has been bitten by that four
+    times, most recently a PO PDF that printed a quantity the screen never
+    showed. If a figure is meant to reach the page, it is named here."""
+
+    date_from: str
+    date_to: str
+    totals: MyAttendanceTotals
+    days: list[AttendanceRow]
+
+
+@router.get("/attendance/history", response_model=MyAttendanceHistory)
+async def my_attendance_history(
+    date_from: date_type | None = Query(None),
+    date_to: date_type | None = Query(None),
+    emp: Employee = Depends(_my_employee),
+    db: AsyncSession = Depends(get_db),
+) -> MyAttendanceHistory:
+    """Their own attendance over ANY range, with the hours totalled.
+
+    "attendance we need historical data too. i mean he can use filter to go back
+     and check attendance and hours etc."
+
+    The plain /me/attendance is the last 90 rows and no totals, which answers
+    "was I in yesterday" and nothing else. This answers "how many hours did I do
+    last month". Scoped by _my_employee, so the range is the only thing the
+    caller controls — never whose data comes back.
+    """
+    today = date_type.today()
+    d_to = date_to or today
+    d_from = date_from or (d_to - timedelta(days=30))
+    data = await emp_service.attendance_history(db, emp.hotel_id, emp.id, d_from, d_to)
+    if not data:
+        return MyAttendanceHistory(
+            date_from=d_from.isoformat(),
+            date_to=d_to.isoformat(),
+            totals=MyAttendanceTotals(
+                present=0, half_days=0, absent=0, recorded_days=0,
+                total_hours="0", indicative_pay="0", basis="no records",
+            ),
+            days=[],
+        )
+    return MyAttendanceHistory(
+        date_from=data["date_from"],
+        date_to=data["date_to"],
+        totals=MyAttendanceTotals(**data["totals"]),
+        days=[AttendanceRow.model_validate(d) for d in data["days"]],
+    )
+
+
+@router.get("/rota", response_model=list[ShiftOut])
+async def my_rota(
+    date_from: date_type | None = Query(None),
+    date_to: date_type | None = Query(None),
+    emp: Employee = Depends(_my_employee),
+    db: AsyncSession = Depends(get_db),
+) -> list[ShiftOut]:
+    """Their own shifts, past and future.
+
+    "likewise rota too" — the rota page shows the whole team and needs a
+    manager's permission to see. A member of staff wanting to know when they are
+    next on should not need either. The employee filter is applied in the QUERY,
+    so no other person's shift is ever loaded, let alone returned.
+    """
+    today = date_type.today()
+    d_from = date_from or (today - timedelta(days=7))
+    d_to = date_to or (today + timedelta(days=28))
+    rows = await rota_service.list_shifts(db, emp.hotel_id, d_from, d_to, employee_id=emp.id)
+    return [ShiftOut.model_validate(r) for r in rows]
 
 
 @router.get("/payslips", response_model=list[PayrollRow])

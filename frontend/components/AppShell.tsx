@@ -32,7 +32,14 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "▦", group: "Overview", keywords: "home overview" },
-  { href: "/my", label: "My Space", icon: "🙋", perm: "attendance:self", hideIfPerm: "attendance:read", group: "Overview", keywords: "self service" },
+  // NO `perm`. "i want staff login to have these default pages need to show in
+  // login rather than specifying in roles." It was gated on attendance:self,
+  // which is in the STAFF fallback list but need not be in a role invented at
+  // runtime — so a hotel could build a role and its holder would lose their own
+  // attendance, rota and documents. Nothing here needs guarding: every /me
+  // endpoint resolves the employee from the token and can only ever return that
+  // person's own rows.
+  { href: "/my", label: "My Space", icon: "🙋", hideIfPerm: "attendance:read", group: "Overview", keywords: "self service my attendance rota shifts documents payslip" },
   { href: "/how-it-works", label: "How it works", icon: "📘", group: "Overview", keywords: "help guide formulas" },
   { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read", feature: "reports", group: "Money", keywords: "profit loss pnl food cost" },
   { href: "/money", label: "Money", icon: "💰", perm: "reports:read", group: "Money", keywords: "cash in out" },

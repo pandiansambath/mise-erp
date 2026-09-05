@@ -270,12 +270,25 @@ export default function DashboardPage() {
           </span>
         )}
         </div>
-        <p className="leading-relaxed">
-        Time windows: <b className="text-fg-soft">Today</b> = since midnight ·{" "}
-        <b className="text-fg-soft">Month</b> = 1st → today · <b className="text-fg-soft">This week vs last</b> ={" "}
-        rolling last 7 days vs the 7 before. For any custom period, open{" "}
-        <Link href="/reports" className="text-brand-400 underline">Reports</Link>.
-        </p>
+        {/* FOUR LINES OF GLOSSARY, ON TOP OF THE NUMBERS.
+            What "Today" and "Month" mean is worth writing down once and worth
+            reading roughly never — but it sat permanently above the KPIs,
+            pushing them down on every visit for every user forever. It is a
+            summary line you can open now, which costs one line instead of
+            four and loses nothing. */}
+        <details className="group">
+          <summary className="mise-press inline-flex min-h-[28px] cursor-pointer list-none items-center gap-1.5 rounded-lg px-1.5 text-fg-faint transition hover:text-fg-soft">
+            <span aria-hidden className="transition-transform group-open:rotate-90">▸</span>
+            What do Today, Month and This week mean?
+          </summary>
+          <p className="mt-1.5 pl-5 leading-relaxed">
+            <b className="text-fg-soft">Today</b> = since midnight ·{" "}
+            <b className="text-fg-soft">Month</b> = 1st → today ·{" "}
+            <b className="text-fg-soft">This week vs last</b> = rolling last 7 days vs the 7
+            before. For any custom period, open{" "}
+            <Link href="/reports" className="text-brand-400 underline">Reports</Link>.
+          </p>
+        </details>
       </div>
 
       {!setupDone && kpis && kpis.recipe_count === 0 && Number(kpis.month_net_sales) === 0 && Number(kpis.month_expenses) === 0 && (
