@@ -160,6 +160,12 @@ export default function InventoryPage() {
   const [countValue, setCountValue] = useState("");
   const [countBusy, setCountBusy] = useState(false);
   const [countMsg, setCountMsg] = useState<string | null>(null);
+  // Waste, logged where the stock number is — a different event from a
+  // miscount, and the only one that shows up as a cost.
+  const [wasting, setWasting] = useState(false);
+  const [wasteQty, setWasteQty] = useState("");
+  const [wasteReason, setWasteReason] = useState("Spoiled");
+  const [wasteBusy, setWasteBusy] = useState(false);
   const [breakdown, setBreakdown] = useState<Record<string, PurchaseByVendorRow[]>>({});
   const [bdLoading, setBdLoading] = useState<string | null>(null);
   // The "chain": open a purchase into the full delivery it came on (shared reference).
@@ -687,6 +693,8 @@ export default function InventoryPage() {
     setDetailTab("item");
     setCountValue("");
     setCountMsg(null);
+    setWasting(false);
+    setWasteQty("");
     if (!breakdown[item.id]) {
       setBdLoading(item.id);
       try {
@@ -2390,6 +2398,112 @@ export default function InventoryPage() {
                     </p>
                   )}
                   {countMsg && <p className="mt-2 text-[11px] text-brand-300">{countMsg}</p>}
+
+                  {/* WASTE IS A DIFFERENT EVENT FROM A MISCOUNT.
+                      Both take stock down, and only one of them is a cost you
+                      can do anything about. Logging spoilage as an adjustment
+                      leaves the waste report empty while the money leaks, so
+                      the choice is offered here rather than left to whoever
+                      happens to know the difference. */}
+                  <div className="mt-3 border-t border-line/60 pt-3">
+                    {wasting ? (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                          Log waste — this comes off stock and shows as a cost
+                        </p>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className="shrink-0">
+                            <span className="sr-only">Quantity wasted</span>
+                            <input
+                              value={wasteQty}
+                              onChange={(e) => { setWasteQty(numeric(e.target.value)); setCountMsg(null); }}
+                              inputMode="decimal"
+                              placeholder={`qty in ${openItem.unit}`}
+                              aria-label={`Quantity of ${openItem.name} wasted`}
+                              className="mise-well min-h-[40px] w-28 rounded-lg px-2.5 py-2 text-right text-sm tabular-nums outline-none"
+                            />
+                          </label>
+                          <label className="min-w-0 flex-1">
+                            <span className="sr-only">Why</span>
+                            <select
+                              value={wasteReason}
+                              onChange={(e) => setWasteReason(e.target.value)}
+                              aria-label="Reason for the waste"
+                              className="mise-well min-h-[40px] w-full rounded-lg px-2.5 py-2 text-sm outline-none"
+                            >
+                              {["Spoiled", "Spillage", "Over-prep", "Damaged in delivery", "Expired", "Other"].map((r) => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            disabled={wasteBusy || !(parseFloat(wasteQty) > 0)}
+                            onClick={async () => {
+                              const qty = parseFloat(wasteQty);
+                              if (!(qty > 0)) return;
+                              const worth = qty * (parseFloat(openItem.average_cost) || 0);
+                              const ok = await confirm({
+                                title: `Log ${qty} ${openItem.unit} of ${openItem.name} as waste?`,
+                                message: (
+                                  <>
+                                    It comes off stock and is recorded as a cost of about{" "}
+                                    <b>{format(String(worth.toFixed(2)))}</b> ({wasteReason.toLowerCase()}).
+                                  </>
+                                ),
+                                confirmText: "Log the waste",
+                                tone: "danger",
+                              });
+                              if (!ok) return;
+                              setWasteBusy(true);
+                              try {
+                                await api.post("/inventory/waste", {
+                                  item_id: openItem.id,
+                                  quantity: wasteQty,
+                                  reason: wasteReason,
+                                });
+                                await load();
+                                setWasteQty("");
+                                setWasting(false);
+                                setCountMsg("Waste logged — it is off stock and on the waste report.");
+                              } catch (e) {
+                                setCountMsg(e instanceof ApiError ? e.message : "Could not log that waste");
+                              } finally {
+                                setWasteBusy(false);
+                              }
+                            }}
+                            data-tone="danger"
+                            className="mise-btn-flat mise-press min-h-[40px] shrink-0 px-4 py-2 text-sm font-bold text-rose-300 disabled:opacity-40"
+                          >
+                            {wasteBusy ? "Saving…" : "Log waste"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setWasting(false); setWasteQty(""); }}
+                            className="mise-btn-flat mise-press min-h-[40px] shrink-0 px-3 py-2 text-sm font-medium text-fg-soft"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {parseFloat(wasteQty) > 0 && (
+                          <p className="text-[11px] text-fg-faint">
+                            Worth about{" "}
+                            {format(String((parseFloat(wasteQty) * (parseFloat(openItem.average_cost) || 0)).toFixed(2)))}{" "}
+                            at average cost.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setWasting(true); setCountMsg(null); }}
+                        data-testid="inv-log-waste"
+                        className="mise-press text-[11px] text-fg-faint underline decoration-dotted underline-offset-2 transition hover:text-rose-300"
+                      >
+                        Gone off or spilled instead? Log it as waste →
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               </>
