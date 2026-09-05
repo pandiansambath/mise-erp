@@ -1761,6 +1761,7 @@ export default function InventoryPage() {
                       type="button"
                       onClick={() => toggleBreakdown(item)}
                       aria-expanded={expanded === item.id}
+                      data-testid="inv-row"
                       className="mise-press flex w-full items-center gap-3 text-left"
                     >
                       <span aria-hidden className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg">
@@ -1788,11 +1789,45 @@ export default function InventoryPage() {
                     </button>
                     <StockBar item={item} />
                     <div className="mt-2.5 flex items-center gap-2">
-                      {item.best_vendor ? (
-                        <span className="min-w-0 truncate text-xs text-fg-soft"><span className="text-brand-400">★</span> {item.best_vendor}</span>
-                      ) : (
-                        <Link href="/vendors?new=1" className="text-xs text-amber-300">+ add supplier</Link>
-                      )}
+                      {/* THE SAME CONTROL AS THE DESKTOP ROW — see the note
+                          there. It was a dead <span> and a <Link> to the
+                          Vendors page, in the amber he cannot read. */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setSupplierFor(item); }}
+                        data-testid={
+                          item.best_vendor
+                            ? "inv-chosen-supplier"
+                            : (item.vendor_count ?? 0) > 0
+                              ? "inv-choose-supplier"
+                              : "inv-add-supplier"
+                        }
+                        title={
+                          item.best_vendor
+                            ? `Costed at ${item.best_vendor}'s price — tap to change`
+                            : (item.vendor_count ?? 0) > 0
+                              ? "Pick which supplier this item is costed at"
+                              : "Nobody sells this yet — add the first price, here"
+                        }
+                        className={
+                          item.best_vendor
+                            ? "mise-press inline-flex min-h-[32px] min-w-0 items-center gap-1 truncate rounded-lg px-1.5 text-xs text-fg-soft"
+                            : (item.vendor_count ?? 0) > 0
+                              ? "mise-chip-warn mise-press inline-flex min-h-[32px] items-center gap-1 whitespace-nowrap px-2.5 py-1"
+                              : "mise-btn-flat mise-press inline-flex min-h-[32px] items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium text-fg-soft"
+                        }
+                      >
+                        {item.best_vendor ? (
+                          <>
+                            <span className="text-brand-400">★</span>
+                            <span className="truncate">{item.best_vendor}</span>
+                          </>
+                        ) : (item.vendor_count ?? 0) > 0 ? (
+                          <>★ choose{(item.vendor_count ?? 0) > 1 ? ` · ${item.vendor_count}` : ""}</>
+                        ) : (
+                          <>＋ supplier</>
+                        )}
+                      </button>
                       <span className="flex-1" />
                       {canWrite && (
                         <>
@@ -1901,6 +1936,7 @@ export default function InventoryPage() {
                           // to open it.
                           onClick={() => toggleBreakdown(item)}
                           aria-expanded={isOpen}
+                          data-testid="inv-row"
                         >
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2.5">
@@ -1920,9 +1956,20 @@ export default function InventoryPage() {
                           </td>
                           <td className="px-5 py-3">
                             {item.best_vendor ? (
-                              <span className="text-fg-soft" title="Chosen supplier — recipes & purchase orders use this one">
+                              // TAPPABLE EVEN WHEN IT IS SET. It was a dead
+                              // <span>, so an item that already had a chosen
+                              // supplier gave you no way to change it from the
+                              // list — the one case where you most often want
+                              // to. "all the functionality to be 1 place."
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setSupplierFor(item); }}
+                                data-testid="inv-chosen-supplier"
+                                title={`Costed at ${item.best_vendor}'s price — click to change`}
+                                className="mise-press inline-flex min-h-[32px] items-center gap-1 rounded-lg px-1.5 text-fg-soft transition hover:text-fg"
+                              >
                                 <span className="text-brand-400">★</span> {item.best_vendor}
-                              </span>
+                              </button>
                             ) : (item.vendor_count ?? 0) > 0 ? (
                               // WAS A LINK TO /price-comparison, AND UNREADABLE.
                               //
