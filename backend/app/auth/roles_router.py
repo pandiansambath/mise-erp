@@ -243,6 +243,10 @@ class AccessIn(BaseModel):
     base_role: str | None = None
     #: Permission -> on/off, relative to those defaults.
     overrides: dict[str, bool] = Field(default_factory=dict)
+    #: What their AI may do once ai:use is on — model, voice, and the ceiling.
+    #: Omitted leaves whatever is already stored; {} clears it back to the
+    #: hotel's defaults.
+    ai: dict | None = None
 
 
 class AssignIn(BaseModel):
@@ -356,6 +360,38 @@ async def set_user_access(
     # Their job may change as part of the same action; the ceiling follows it.
     if payload.base_role and payload.base_role != target.role:
         target.role = payload.base_role
+
+    # WHAT THEIR AI MAY DO, once ai:use is on.
+    #
+    # Validated rather than stored as sent: these numbers are a spend ceiling on
+    # the only surface in the product with no natural upper bound, so a typo
+    # here is a bill. Unknown keys are dropped instead of rejected, so a newer
+    # screen talking to an older server degrades quietly.
+    if payload.ai is not None:
+        clean: dict = {}
+        model = payload.ai.get("model")
+        if model in ("haiku", "sonnet"):
+            clean["model"] = model
+        if "voice" in payload.ai:
+            clean["voice"] = bool(payload.ai["voice"])
+        for key, cap in (("max_tokens", 32000), ("max_messages", 1000)):
+            raw = payload.ai.get(key)
+            if raw is None or raw == "":
+                continue
+            try:
+                n = int(raw)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"{key.replace('_', ' ')} must be a whole number.",
+                ) from None
+            if n < 0 or n > cap:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"{key.replace('_', ' ')} must be between 0 and {cap}.",
+                )
+            clean[key] = n
+        target.ai_settings = clean
 
     # The same for ONE person: "even though if we give manager role to someone,
     # super admin can edit permission for that particular user alone."

@@ -109,6 +109,19 @@ class User(Base):
     # Optional hotel-defined job title. When set, `role` still holds the base
     # archetype, so every existing permission check keeps working untouched —
     # the custom role only ever narrows or widens WITHIN that archetype.
+    #: What this person's AI may do, once ai:use has been granted.
+    #:
+    #: WHETHER they get AI is a permission like any other and lives with the
+    #: rest. This is everything under that yes — which model their questions
+    #: cost money on, whether voice is included, and the ceiling:
+    #:   model         "haiku" | "sonnet"
+    #:   voice         bool
+    #:   max_tokens    per answer
+    #:   max_messages  per day
+    #: Empty {} = the hotel's defaults, so nobody is capped by surprise.
+    ai_settings: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict, server_default="{}"
+    )
     custom_role_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("custom_roles.id", ondelete="SET NULL"), index=True
     )
