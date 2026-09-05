@@ -1084,6 +1084,69 @@ export default function SettingsPage() {
                 <p className="mt-1 text-[11px] text-fg-faint">Leave any of these blank to hide that card.</p>
               </div>
 
+              {/* ── BOOK · FOLLOW · FIND ──────────────────────────────────
+                  "i want more customisable features and design for hotel's
+                   landing page too."
+
+                  Chosen from what a restaurant is actually asked for rather
+                  than adding controls for their own sake. Every one is
+                  optional and renders nothing when blank, so a page that
+                  predates this looks exactly as it did. */}
+              <div className="border-t border-line pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                  Book, follow, find
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <input
+                    value={land.booking_url || ""}
+                    maxLength={300}
+                    onChange={(e) => setL("booking_url", e.target.value)}
+                    placeholder="Booking link (OpenTable, ResDiary, your own…)"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                  <input
+                    value={land.booking_label || ""}
+                    maxLength={26}
+                    onChange={(e) => setL("booking_label", e.target.value)}
+                    placeholder="Book a table"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                  <input
+                    value={land.map_url || ""}
+                    maxLength={300}
+                    onChange={(e) => setL("map_url", e.target.value)}
+                    placeholder="Directions link (Google Maps…)"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:col-span-2"
+                  />
+                  <input
+                    value={land.instagram || ""}
+                    maxLength={300}
+                    onChange={(e) => setL("instagram", e.target.value)}
+                    placeholder="Instagram link"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                  <input
+                    value={land.facebook || ""}
+                    maxLength={300}
+                    onChange={(e) => setL("facebook", e.target.value)}
+                    placeholder="Facebook link"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  />
+                  <input
+                    value={land.whatsapp || ""}
+                    maxLength={300}
+                    onChange={(e) => setL("whatsapp", e.target.value)}
+                    placeholder="WhatsApp link (wa.me/…)"
+                    className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:col-span-2"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-fg-faint">
+                  Directions is a LINK, not an embedded map — every phone already has a
+                  maps app that does it better, and a third-party iframe costs this page
+                  more than it gives.
+                </p>
+              </div>
+
               {/* switches */}
               <div className="space-y-2 border-t border-line pt-4">
                 <label className="flex items-center gap-2 text-sm text-fg-soft">

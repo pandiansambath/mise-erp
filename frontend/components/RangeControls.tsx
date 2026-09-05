@@ -167,18 +167,54 @@ export function TimeRangePicker({
 
   useEffect(() => setMounted(true), []);
 
-  // Measure when opening: place it under the trigger, and pull it back on-screen
-  // if it would run off the right edge (which it did on the attendance page).
+  // Measure when opening: keep it on screen in BOTH axes.
+  //
+  // The right edge was already handled. The bottom was not, and on a control
+  // that sits low in a card — My Space's attendance range — the panel opened
+  // downward into nothing and its presets were unreachable: "this box is
+  // hitting bottom and not fitting to that card."
+  //
+  // Two passes on purpose. The first places it under the trigger so it can
+  // render and be measured; the second reads its real height and flips it above
+  // the trigger when there is more room there, then clamps. Guessing a height
+  // would be wrong the moment a tab changes the panel's contents.
   useEffect(() => {
     if (!open || !wrap.current) return;
-    const r = wrap.current.getBoundingClientRect();
-    const width = Math.min(420, window.innerWidth - 24);
-    const left =
-      align === "right"
-        ? Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12))
-        : Math.max(12, Math.min(r.left, window.innerWidth - width - 12));
-    setPos({ top: r.bottom + 8, left, width });
-  }, [open, align]);
+    const place = () => {
+      const w = wrap.current;
+      if (!w) return;
+      const r = w.getBoundingClientRect();
+      const width = Math.min(420, window.innerWidth - 24);
+      const left =
+        align === "right"
+          ? Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12))
+          : Math.max(12, Math.min(r.left, window.innerWidth - width - 12));
+
+      const h = panel.current?.getBoundingClientRect().height ?? 0;
+      const GAP = 8;
+      const EDGE = 12;
+      const below = window.innerHeight - r.bottom - GAP - EDGE;
+      const above = r.top - GAP - EDGE;
+
+      let top = r.bottom + GAP;
+      if (h > 0 && below < h && above > below) {
+        // More room overhead: hang it above the trigger instead.
+        top = Math.max(EDGE, r.top - GAP - h);
+      } else if (h > 0) {
+        top = Math.min(top, Math.max(EDGE, window.innerHeight - h - EDGE));
+      }
+      setPos({ top, left, width });
+    };
+
+    place();
+    // Once it has rendered we know how tall it actually is.
+    const id = requestAnimationFrame(place);
+    window.addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, align, tab]);
   const [n, setN] = useState(7);
   const [unit, setUnit] = useState<Unit>("days");
   const [from, setFrom] = useState(range.from);
@@ -281,7 +317,14 @@ export function TimeRangePicker({
           // opacity anywhere up the tree), which is why bumping z-index alone
           // never lifted it above the toast — the toast was in a different
           // context entirely. Position is measured from the trigger below.
-          style={{ top: pos.top, left: pos.left, width: pos.width }}
+          style={{
+            top: pos.top,
+            left: pos.left,
+            width: pos.width,
+            // Even flipped, a very short window can be shorter than the panel.
+            maxHeight: "calc(100svh - 24px)",
+            overflowY: "auto",
+          }}
           className="mise-pop fixed z-[100] overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/60 ring-1 ring-black/5"
         >
           <div className="flex items-center gap-1 border-b border-line bg-paper-2/40 p-1.5">

@@ -48,6 +48,12 @@ export const DEFAULT_LANDING: Required<LandingConfig> = {
   title_gradient: true,
   show_order: false,
   show_gallery: true,
+  booking_url: "",
+  booking_label: "Book a table",
+  instagram: "",
+  facebook: "",
+  whatsapp: "",
+  map_url: "",
 };
 
 type Skin = {
@@ -610,6 +616,59 @@ export default function HotelSite({
       </section>
 
       {/* ── FOOTER ─────────────────────────────────────────────────────── */}
+      {/* ── BOOK · FOLLOW · FIND ────────────────────────────────────────
+          Three things a restaurant is asked for constantly and had no way to
+          put on their own page. Every one is optional and renders nothing when
+          blank, so a page that predates this looks exactly as it did. */}
+      {(L.booking_url || L.instagram || L.facebook || L.whatsapp || L.map_url) && (
+        <section className="relative z-10 px-6 pb-24">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-3">
+            {L.booking_url && (
+              <a
+                href={L.booking_url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full px-7 py-3 text-sm font-semibold text-white transition-transform duration-300 hover:-translate-y-0.5"
+                style={{ backgroundImage: grad }}
+              >
+                {L.booking_label || "Book a table"}
+              </a>
+            )}
+            {L.map_url && (
+              <a
+                href={L.map_url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border px-6 py-3 text-sm font-medium transition-transform duration-300 hover:-translate-y-0.5"
+                style={{ borderColor: t.line, color: t.fg }}
+              >
+                📍 Get directions
+              </a>
+            )}
+            {([
+              ["Instagram", L.instagram, "\u25c9"],
+              ["Facebook", L.facebook, "f"],
+              ["WhatsApp", L.whatsapp, "\u2706"],
+            ] as const)
+              .filter(([, v]) => Boolean(v))
+              .map(([label, href, glyph]) => (
+                <a
+                  key={label}
+                  href={href as string}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={label}
+                  title={label}
+                  className="grid h-12 w-12 place-items-center rounded-full border text-base transition-transform duration-300 hover:-translate-y-0.5"
+                  style={{ borderColor: t.line, color: t.fg }}
+                >
+                  {glyph}
+                </a>
+              ))}
+          </div>
+        </section>
+      )}
+
       <footer className="relative z-10 border-t px-6 py-8 text-center" style={{ borderColor: t.line }}>
         <p className="text-xs" style={{ color: t.sub }}>
           {data.username && <span className="mr-2 font-semibold">@{data.username}</span>}

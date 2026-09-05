@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { SECTIONS } from "@/lib/sections";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { API_BASE, api, featureOn, getToken, clearToken } from "@/lib/api";
@@ -515,7 +515,10 @@ function MobileTabBar({ onSearch, items }: { onSearch: () => void; items: NavIte
     { href: "/sales", icon: "🧾", label: "Sales" },
     { href: "/inventory", icon: "📦", label: "Stock" },
     { href: "/money", icon: "💰", label: "Money" },
-  ].filter((t) => t.href === "/dashboard" || has.has(t.href));
+    // "/dashboard" was force-kept so there is always a Home. For a login whose
+    // only page IS My Space that put a permanent tab on a page that greets them
+    // with access errors, so it is only forced when they can actually open it.
+  ].filter((t) => has.has(t.href) || (t.href === "/dashboard" && has.has("/dashboard")));
   for (const n of items) {
     if (tabs.length >= 4) break;
     if (!tabs.some((t) => t.href === n.href)) tabs.push({ href: n.href, icon: n.icon, label: n.label.split(" ")[0] });
@@ -639,6 +642,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [tourOpen, setTourOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   // ⌘K / Ctrl+K from anywhere; "g then <letter>" jumps (g d = dashboard,
   // g i = inventory, g s = sales, g m = money, g r = reports); "?" opens ⌘K.
@@ -722,6 +726,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       canOpenPage(item.href, held)
   );
 
+  // THEIR OWN SPACE, AND NOTHING ELSE.
+  //
+  // Dashboard and How it works carry no `perm`, so every login got them —
+  // including one that can reach nothing else. The Dashboard then renders
+  // "No data available: all three data areas returned access errors", which is
+  // a page apologising for being shown to someone who was never meant to see
+  // it. If My Space is the only real destination, it is the whole app.
+  const selfServiceOnly =
+    navItems.some((i) => i.href === "/my") &&
+    navItems.every((i) => ["/my", "/dashboard", "/how-it-works"].includes(i.href));
+  const finalNav = selfServiceOnly
+    ? navItems.filter((i) => i.href === "/my")
+    : navItems;
+
+  // Sign-in always lands on /dashboard, so hiding the link is not enough — they
+  // would still start on the page that cannot show them anything. My Space IS
+  // their home.
+  useEffect(() => {
+    if (selfServiceOnly && (pathname === "/dashboard" || pathname === "/how-it-works")) {
+      router.replace("/my");
+    }
+  }, [selfServiceOnly, pathname, router]);
+
   return (
     <div
       data-mode={THEMES[theme].light ? "light" : "dark"}
@@ -733,7 +760,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
       <aside className="relative hidden border-r border-glass/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
         <Brand />
-        <NavLinks items={navItems} pathname={pathname} />
+        <NavLinks items={finalNav} pathname={pathname} />
         <div className="mt-auto p-3" />
       </aside>
 
@@ -748,7 +775,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <aside className="mise-drawer absolute left-0 top-0 flex h-full w-64 flex-col overflow-hidden border-r border-glass/10 bg-shell/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <Brand />
             <div className="flex-1 overflow-y-auto overscroll-contain pb-6">
-              <NavLinks items={navItems} pathname={pathname} onClick={() => setOpen(false)} />
+              <NavLinks items={finalNav} pathname={pathname} onClick={() => setOpen(false)} />
             </div>
           </aside>
         </div>
@@ -838,7 +865,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Guided tour (walks through pages) + project-aware AI assistant. Both float
           on every page. The Copilot only appears when the hotel has AI enabled. */}
-      <MobileTabBar onSearch={() => setPaletteOpen(true)} items={navItems} />
+      <MobileTabBar onSearch={() => setPaletteOpen(true)} items={finalNav} />
       <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
       {/* ONE assistant, one button.
           "why we have 2 bubbles... it feels awkward to look... better combine
@@ -849,11 +876,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           voice panel IS the assistant now — it types as well as it talks, and
           the same brain answers either way. The Copilot still powers the full
           page at /ai-scan, where files and history live. */}
-      {featureOn(hotel, "ai_copilot") && <VoiceBubble />}
+      {/* TWO GATES, NOT ONE.
+          "i can see ai feature is enabled coming by default for staff login,
+           why? only superadmin allowed to give ai feature, then only it need to
+           show nah."
+          It checked the HOTEL's feature flag and stopped there, so every login
+          in an AI-enabled hotel got the assistant — including a member of staff
+          whose role has never been granted ai:use. The permission already
+          existed and was simply not being asked. */}
+      {featureOn(hotel, "ai_copilot") && can(user?.role, "ai:use") && <VoiceBubble />}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        items={navItems.map((n) => ({ href: n.href, label: n.label, icon: n.icon, keywords: n.keywords, group: n.group }))}
+        items={finalNav.map((n) => ({ href: n.href, label: n.label, icon: n.icon, keywords: n.keywords, group: n.group }))}
       />
     </div>
   );
