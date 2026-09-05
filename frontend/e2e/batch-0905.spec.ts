@@ -34,15 +34,17 @@ test("every inventory row opens, not only the ones with purchase history", async
   test.setTimeout(180_000);
   await signIn(page);
   await page.goto(`${BASE}/inventory`);
-  // NOT "Stock value": that label is `hidden sm:inline`, so on a 390px screen it
-  // is in the DOM and never visible, and the mobile run sat waiting 30s on it
-  // and called the page broken. The rows are what the page is; wait for those.
-  await page.locator("tbody tr[aria-expanded]").first().waitFor({ timeout: 30_000 });
+  // ONE MARKER, BOTH LAYOUTS. The phone list is separate markup (`lg:hidden`
+  // cards, because a six-column table on a 390px screen is not a table), so
+  // naming the <tr> tested nothing at mobile width — it resolved to a hidden
+  // element and sat there for 30s. `:visible` picks whichever list is actually
+  // on screen, which is the only honest way to check parity.
+  await page.locator('[data-testid="inv-row"]:visible').first().waitFor({ timeout: 30_000 });
 
   // The bug was per-ROW, so one row is not a test. Take several and require all
   // of them to open: Bay Leaves (has purchases) opened before, Brinjal (has
   // suppliers, never bought) did not, and nothing on screen said why.
-  const rows = page.locator("tbody tr[aria-expanded]");
+  const rows = page.locator('[data-testid="inv-row"]:visible');
   const total = await rows.count();
   expect(total, "no inventory rows rendered at all").toBeGreaterThan(3);
 
@@ -69,10 +71,12 @@ test("choosing a supplier happens in place, not on another page", async ({ page 
   test.setTimeout(180_000);
   await signIn(page);
   await page.goto(`${BASE}/inventory`);
-  // NOT "Stock value": that label is `hidden sm:inline`, so on a 390px screen it
-  // is in the DOM and never visible, and the mobile run sat waiting 30s on it
-  // and called the page broken. The rows are what the page is; wait for those.
-  await page.locator("tbody tr[aria-expanded]").first().waitFor({ timeout: 30_000 });
+  // ONE MARKER, BOTH LAYOUTS. The phone list is separate markup (`lg:hidden`
+  // cards, because a six-column table on a 390px screen is not a table), so
+  // naming the <tr> tested nothing at mobile width — it resolved to a hidden
+  // element and sat there for 30s. `:visible` picks whichever list is actually
+  // on screen, which is the only honest way to check parity.
+  await page.locator('[data-testid="inv-row"]:visible').first().waitFor({ timeout: 30_000 });
 
   const chip = page
     .getByTestId("inv-choose-supplier")
@@ -96,12 +100,14 @@ test("the item popup is sections, not one long scroll", async ({ page }) => {
   test.setTimeout(180_000);
   await signIn(page);
   await page.goto(`${BASE}/inventory`);
-  // NOT "Stock value": that label is `hidden sm:inline`, so on a 390px screen it
-  // is in the DOM and never visible, and the mobile run sat waiting 30s on it
-  // and called the page broken. The rows are what the page is; wait for those.
-  await page.locator("tbody tr[aria-expanded]").first().waitFor({ timeout: 30_000 });
+  // ONE MARKER, BOTH LAYOUTS. The phone list is separate markup (`lg:hidden`
+  // cards, because a six-column table on a 390px screen is not a table), so
+  // naming the <tr> tested nothing at mobile width — it resolved to a hidden
+  // element and sat there for 30s. `:visible` picks whichever list is actually
+  // on screen, which is the only honest way to check parity.
+  await page.locator('[data-testid="inv-row"]:visible').first().waitFor({ timeout: 30_000 });
 
-  await page.locator("tbody tr[aria-expanded]").first().click();
+  await page.locator('[data-testid="inv-row"]:visible').first().click();
   const sheet = page.getByRole("dialog").first();
   await expect(sheet).toBeVisible({ timeout: 15_000 });
 

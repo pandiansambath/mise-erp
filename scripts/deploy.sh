@@ -17,6 +17,28 @@ if [ -n "$(git status --porcelain)" ]; then
   echo "WARNING: uncommitted changes will NOT ship:"
   git status --short
 fi
+# THE SAME LINT CI RUNS, BEFORE BURNING A CYCLE ON IT.
+# A deploy of mine died on ONE auto-fixable ruff I001 in an import block. The
+# deploy job needs the backend tests, so nothing shipped, and the round trip
+# cost ~25 minutes to learn something ruff says in two seconds. tsc, next lint
+# and pytest all passed locally — none of them is ruff.
+if command -v ruff >/dev/null 2>&1; then
+  RUFF="ruff"
+elif python -m ruff --version >/dev/null 2>&1; then
+  RUFF="python -m ruff"
+else
+  RUFF=""
+fi
+if [ -n "$RUFF" ]; then
+  if ! (cd backend && $RUFF check .); then
+    echo "ruff failed - fix it (ruff check --fix backend/) before deploying."
+    exit 1
+  fi
+  echo "ruff clean"
+else
+  echo "NOTE: ruff not installed here, so CI is the first thing that will lint this."
+fi
+
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
   echo "on branch '$branch', not main - deploy.yml always builds main. Aborting."
