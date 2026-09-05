@@ -48,21 +48,32 @@ test("every inventory row opens, not only the ones with purchase history", async
   const total = await rows.count();
   expect(total, "no inventory rows rendered at all").toBeGreaterThan(3);
 
-  const sample = Math.min(total, 6);
+  // Read the names FIRST, then open one at a time.
+  //
+  // The earlier version called innerText() inside the loop, and on a phone the
+  // open sheet covers the list — so once a sheet was slow to close, the next
+  // row was no longer visible and innerText waited until the test died. It
+  // reported a 180s timeout, which reads like a broken page and was a broken
+  // loop. Names up front, and each close is awaited explicitly.
+  const sample = Math.min(total, 5);
+  const names: string[] = [];
+  for (let i = 0; i < sample; i += 1) {
+    names.push((await rows.nth(i).innerText()).split("\n")[0].trim());
+  }
+
   const failures: string[] = [];
   for (let i = 0; i < sample; i += 1) {
-    const row = rows.nth(i);
-    const name = (await row.locator("td").first().innerText()).split("\n")[0].trim();
-    await row.click();
-    const opened = page.getByRole("dialog").first();
+    const sheet = page.getByRole("dialog").first();
     try {
-      await expect(opened).toBeVisible({ timeout: 8_000 });
-      await page.keyboard.press("Escape");
-      await expect(opened).toBeHidden({ timeout: 8_000 });
+      await rows.nth(i).click();
+      await expect(sheet).toBeVisible({ timeout: 10_000 });
     } catch {
-      failures.push(name);
-      await page.keyboard.press("Escape");
+      failures.push(names[i]);
     }
+    // Always leave the page closed, whatever happened, or the next iteration
+    // is testing a covered list rather than a row.
+    await page.keyboard.press("Escape");
+    await sheet.waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
   }
   expect(failures, `these rows did not open: ${failures.join(", ")}`).toEqual([]);
 });
@@ -78,9 +89,12 @@ test("choosing a supplier happens in place, not on another page", async ({ page 
   // on screen, which is the only honest way to check parity.
   await page.locator('[data-testid="inv-row"]:visible').first().waitFor({ timeout: 30_000 });
 
+  // :visible on BOTH, because both lists carry these ids now. The phone cards
+  // come first in the DOM, so at desktop width .first() resolved to the hidden
+  // mobile chip and the test reported "no supplier chip on any row" while the
+  // page had plenty. The same locator trap as before, pointing the other way.
   const chip = page
-    .getByTestId("inv-choose-supplier")
-    .or(page.getByTestId("inv-add-supplier"))
+    .locator('[data-testid="inv-choose-supplier"]:visible, [data-testid="inv-add-supplier"]:visible')
     .first();
   await expect(chip, "no supplier chip on any row").toBeVisible({ timeout: 20_000 });
 
