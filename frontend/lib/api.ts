@@ -294,6 +294,18 @@ export interface LandingConfig {
   title_gradient?: boolean; // gradient-filled hotel name
   show_order?: boolean; // show the ordering button
   show_gallery?: boolean; // show the dish gallery strip
+  /** Book a table — the request restaurants make more than any other. Blank
+   *  hides the button entirely, so an existing page is unchanged. */
+  booking_url?: string;
+  booking_label?: string;
+  /** Where to follow them. Each blank one simply does not render. */
+  instagram?: string;
+  facebook?: string;
+  whatsapp?: string;
+  /** Directions. A link rather than an embedded map: an iframe from a third
+   *  party on a page this small costs more than it gives, and every phone
+   *  already has a maps app that does it better. */
+  map_url?: string;
 }
 
 export interface Hotel {
