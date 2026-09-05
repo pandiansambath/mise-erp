@@ -1947,13 +1947,13 @@ export default function InventoryPage() {
                                    whose cards are pressed in. Same shape now,
                                    with colour saying which is which. */
                                 data-tone="brand"
-                                className="mise-btn-flat mise-press px-2.5 py-1.5 text-xs font-medium text-brand-300 disabled:cursor-not-allowed"
+                                className="mise-btn-flat mise-press min-h-[34px] px-2.5 py-2 text-xs font-medium text-brand-300 disabled:cursor-not-allowed"
                               >
                                 🛒 Order
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); startEdit(item); }}
-                                className="mise-btn-flat mise-press px-2.5 py-1.5 text-xs font-medium text-fg-soft"
+                                className="mise-btn-flat mise-press min-h-[34px] px-2.5 py-2 text-xs font-medium text-fg-soft"
                               >
                                 Edit
                               </button>
@@ -1962,7 +1962,7 @@ export default function InventoryPage() {
                                   onClick={(e) => { e.stopPropagation(); removeItem(item); }}
                                   title="Remove from inventory (Super Admin)"
                                   data-tone="danger"
-                                  className="mise-btn-flat mise-press px-2 py-1.5 text-xs text-fg-faint hover:text-rose-300"
+                                  className="mise-btn-flat mise-press min-h-[34px] px-2.5 py-2 text-xs text-fg-faint hover:text-rose-300"
                                 >
                                   ✕
                                 </button>
