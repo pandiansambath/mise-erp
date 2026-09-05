@@ -458,29 +458,61 @@ export default function MoneyPage() {
         ]}
       />
 
-      {/* Headline KPIs */}
-      <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          label="Stock on hand"
-          value={format(data.stock_value.total)}
-          hint={`${data.stock_value.item_count} items at avg cost`}
-          accent="copper"
-          href="/inventory"
-        />
-        <StatCard
-          label="Food cost"
-          value={`${data.food_cost_pct}%`}
-          hint="target 25–35%"
-          accent="amber"
-        />
-        <StatCard label="Gross margin" value={`${data.gross_margin_pct}%`} accent="brand" />
-        <StatCard
-          label="Net profit (MTD)"
-          value={format(data.net_profit)}
-          hint={`${data.net_margin_pct}% margin`}
-          accent={parseFloat(data.net_profit) >= 0 ? "brand" : "rose"}
-        />
-      </div>
+      {/* THE ANSWER FIRST, THEN THE WORKINGS.
+          This page had four equal cards — stock on hand, food cost, gross
+          margin, and net profit LAST. Net profit is the one an owner opens this
+          page to find; the other three are how it got there. Four cards of the
+          same size say they matter the same amount, and they do not.
+
+          So the money he actually kept is the headline, at the size of the fact
+          it is, and it says plainly whether that is a profit or a loss rather
+          than leaving a minus sign to carry the news. */}
+      {(() => {
+        const net = parseFloat(data.net_profit) || 0;
+        const up = net >= 0;
+        return (
+          <div className="mise-stagger grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            <div className="mise-card-inset relative overflow-hidden p-4 pl-5">
+              <span
+                aria-hidden
+                className={`absolute inset-y-0 left-0 w-1 ${up ? "bg-emerald-400/70" : "bg-rose-400"}`}
+              />
+              <p className="text-xs font-medium uppercase tracking-wide text-fg-faint">
+                {up ? "Kept this month" : "Lost this month"}
+              </p>
+              <p
+                className={`mt-1 font-display text-3xl font-semibold tabular-nums ${
+                  up ? "text-fg" : "text-rose-300"
+                }`}
+              >
+                {format(data.net_profit)}
+              </p>
+              <p className="mt-0.5 text-xs text-fg-faint">
+                {data.net_margin_pct}% of what came in
+              </p>
+            </div>
+            <StatCard
+              label="Gross margin"
+              value={`${data.gross_margin_pct}%`}
+              hint="before overheads"
+              accent="brand"
+            />
+            <StatCard
+              label="Food cost"
+              value={`${data.food_cost_pct}%`}
+              hint="target 25–35%"
+              accent="amber"
+            />
+            <StatCard
+              label="Stock on hand"
+              value={format(data.stock_value.total)}
+              hint={`${data.stock_value.item_count} items at avg cost`}
+              accent="copper"
+              href="/inventory"
+            />
+          </div>
+        );
+      })()}
 
       {/* Profit after everything — the plain in − out = profit picture */}
       {pnl && (
