@@ -330,6 +330,9 @@ export interface Hotel {
   features?: Record<string, boolean>; // per-hotel entitlements (missing = enabled)
   landing?: LandingConfig; // customizable public-page config
   login_page?: Record<string, unknown>; // customizable staff sign-in door
+  /** Display taste for the whole restaurant — PDF grouping, decimals, and the
+   *  clock's format and face. Set by the owner, inherited by every login. */
+  prefs?: Record<string, unknown>;
 }
 
 /** A live dish from the hotel's real DineAI menu, shown on their public site. */

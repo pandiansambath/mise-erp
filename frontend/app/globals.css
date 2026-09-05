@@ -4135,7 +4135,13 @@ body.mise-voice-open .mise-launcher-in {
    kitchen should be allowed to stop moving. */
 .mise-door {
   position: relative;
-  min-height: 100svh;
+  /* IT FITS THE SCREEN. "the screen is not fitting, i can see scroll bar in
+     side which means it not fit to screen, please fit it to screen."
+     A fixed height rather than a minimum: the two split sections each asked
+     for 100svh and stacked, so the page was twice the screen tall on a phone.
+     Anything that genuinely cannot fit scrolls INSIDE its own section, so the
+     door itself never does. */
+  height: 100svh;
   overflow: hidden;
   background: var(--door-bg);
   color: var(--door-fg);
@@ -4227,18 +4233,38 @@ body.mise-voice-open .mise-launcher-in {
   position: relative;
   z-index: 1;
   display: flex;
+  min-height: 0;
   flex-direction: column;
   justify-content: center;
   gap: 1.25rem;
-  padding: clamp(1.5rem, 5vw, 3.5rem);
+  overflow-y: auto;
+  padding: clamp(1.25rem, 4vw, 3rem);
 }
 .mise-door-centre {
   align-items: center;
   text-align: center;
-  min-height: 100svh;
+  height: 100%;
+}
+/* On a phone the split becomes one column, and a greeting that eats half the
+   screen above the fields helps nobody trying to clock in. The brand shrinks
+   and the form gets the room. */
+@media (max-width: 899px) {
+  .mise-door-split .mise-door-side {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    padding-bottom: 0;
+  }
+  .mise-door-split .mise-door-form {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    padding-top: 1rem;
+  }
+  .mise-door-headline {
+    font-size: clamp(1.4rem, 7vw, 2rem);
+  }
 }
 .mise-door-preview .mise-door-centre {
-  min-height: 0;
+  height: auto;
 }
 /* The "card" layout is the centred one on a plainer ground. */
 .mise-door-card .mise-door-art .mise-door-aurora,
@@ -4301,4 +4327,37 @@ body.mise-voice-open .mise-launcher-in {
   .mise-door-spot {
     transition: none;
   }
+}
+
+/* THE FIELDS FOLLOW THE DOOR'S THEME.
+   The shared sign-in form styles its inputs for DineAI's dark page —
+   text-white on white/[0.04]. Dropped onto a "Daylight" or "Parchment" door
+   that is white text on a pale card: a customisation that breaks the one thing
+   on the page that has to work. The form is not restyled per hotel (it is the
+   same audited component everywhere); its COLOURS are inherited from the room
+   it is standing in. */
+.mise-door-panel input,
+.mise-door-panel textarea {
+  color: var(--door-fg);
+  border-color: var(--door-line);
+  background: color-mix(in srgb, var(--door-fg) 6%, transparent);
+}
+.mise-door-panel input::placeholder {
+  color: color-mix(in srgb, var(--door-fg) 45%, transparent);
+}
+.mise-door-panel input:focus {
+  border-color: color-mix(in srgb, var(--door-a) 60%, transparent);
+  background: color-mix(in srgb, var(--door-fg) 9%, transparent);
+}
+.mise-door-panel label {
+  color: var(--door-soft);
+}
+/* The one button on the page wears the hotel's own colours. */
+.mise-door-panel button[type="submit"] {
+  background-image: linear-gradient(100deg, var(--door-a), var(--door-b));
+  border-color: transparent;
+  color: #fff;
+}
+.mise-door-panel a {
+  color: color-mix(in srgb, var(--door-a) 75%, var(--door-fg));
 }

@@ -19,10 +19,27 @@ DEFAULTS: dict = {
     # anyone who buys through Purchasing. Off for kitchens that key their
     # supplier invoices in by hand — posting both would double their food cost.
     "post_purchases_to_expenses": True,
+    # How the clock reads, for the WHOLE restaurant.
+    #
+    # These were remembered in localStorage, so the owner's choice died with
+    # the browser window and could never reach the team — "both are same
+    # superadmin but 1 is from incognito". A restaurant that reads times in
+    # 12-hour reads them that way on every screen in the building, including
+    # the wall tablet nobody signs into.
+    "clock_12h": False,
+    "clock_face": "classic",
 }
 
 _ALLOWED = {
     "pdf_group_by": {"category", "none"},
+    # Copied from FACES in components/HotelClock.tsx, not guessed. My first
+    # pass invented three names that do not exist, so Railway, Skeleton and
+    # Regulator would have been silently rejected and snapped back to Classic —
+    # which he would rightly have reported as "still not persisting".
+    "clock_face": {
+        "classic", "minimal", "roman", "braun",
+        "railway", "bauhaus", "skeleton", "regulator",
+    },
 }
 
 
