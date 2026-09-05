@@ -574,14 +574,54 @@ export function OrderFlow({
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
 
+  /** Keep a remembered spot ON the screen that exists NOW.
+   *
+   *  "you can notice that basket is missing in 2nd pic... if i move cursor that
+   *   basket is flickering and hidden."
+   *
+   *  Two things put it there. The clamp below used `window.innerWidth`, which
+   *  INCLUDES the vertical scrollbar, so the basket could be parked in the
+   *  ~15px strip underneath it; a `position: fixed` element sticking out there
+   *  overflows the page, which is the horizontal scrollbar visible in his 2nd
+   *  and 3rd screenshots and absent from the 1st. And the stored position was
+   *  applied blind on load — a spot that fitted a wide window is off the edge
+   *  of a narrower one, and it would stay wrong forever because nothing ever
+   *  re-checked it.
+   *
+   *  So there is ONE clamp, it measures the client width (no scrollbar), and it
+   *  runs on load and on every resize. A remembered position is a suggestion,
+   *  not an instruction. */
+  const clamp = useCallback((p: { x: number; y: number } | null) => {
+    if (!p) return null;
+    // documentElement.clientWidth excludes the scrollbar; innerWidth does not.
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const box = basketRef.current?.getBoundingClientRect();
+    const w = box?.width || 170;
+    const h = box?.height || 56;
+    const M = 8; // never flush to the edge — that is where it clipped
+    return {
+      x: Math.min(Math.max(M, p.x), Math.max(M, vw - w - M)),
+      y: Math.min(Math.max(M, p.y), Math.max(M, vh - h - M)),
+    };
+  }, []);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("mise.basket.pos");
-      if (raw) setPos(JSON.parse(raw));
+      if (raw) setPos(clamp(JSON.parse(raw)));
     } catch {
       /* a basket in the default corner is fine */
     }
-  }, []);
+  }, [clamp]);
+
+  // The window can change size after the basket has been placed. Re-clamping
+  // here is what stops a good position from silently becoming an off-screen one.
+  useEffect(() => {
+    const onResize = () => setPos((p) => clamp(p));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clamp]);
 
   const startDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
     const el = basketRef.current;
@@ -600,9 +640,7 @@ export function OrderFlow({
       )
         return;
       draggedRef.current = true;
-      const x = Math.min(Math.max(0, ev.clientX - offX), window.innerWidth - box.width);
-      const y = Math.min(Math.max(0, ev.clientY - offY), window.innerHeight - box.height);
-      setPos({ x, y });
+      setPos(clamp({ x: ev.clientX - offX, y: ev.clientY - offY }));
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -610,7 +648,8 @@ export function OrderFlow({
       if (draggedRef.current) {
         try {
           const b = basketRef.current?.getBoundingClientRect();
-          if (b) localStorage.setItem("mise.basket.pos", JSON.stringify({ x: b.left, y: b.top }));
+          const safe = b ? clamp({ x: b.left, y: b.top }) : null;
+          if (safe) localStorage.setItem("mise.basket.pos", JSON.stringify(safe));
         } catch {
           /* not worth failing a drag over */
         }

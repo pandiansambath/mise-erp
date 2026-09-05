@@ -1326,7 +1326,14 @@ export default function PurchasingPage() {
               No orderable items yet — add a vendor price for at least one item on the <b>Vendors</b> page.
             </p>
           ) : (
-          <form onSubmit={submitIndent} className="space-y-3">
+          <form
+            // The id is load-bearing: the Submit button is portalled out of
+            // this form's DOM subtree and finds it again by name. See the
+            // note on that button.
+            id="indent-form"
+            onSubmit={submitIndent}
+            className="space-y-3"
+          >
             {/* Submit lives INSIDE the tray. It used to sit under the whole
                 picker, so the more you ordered the further away it got. */}
             {/* The order pad. See docs/PURCHASING_REDESIGN.md.
@@ -1377,11 +1384,31 @@ export default function PurchasingPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="submit"
+                    // WHY form="indent-form" AND NOT JUST type="submit".
+                    //
+                    // "somehow i tried and clicked basket, now when i click
+                    //  submit indent nothing is happening."
+                    //
+                    // This button is passed as `footer` down through OrderFlow
+                    // into BasketSheet into SheetPopup — and SheetPopup renders
+                    // through createPortal(ui, document.body). A portal keeps
+                    // the REACT tree but not the DOM tree, so in the document
+                    // this button is a child of <body> with no <form> ancestor
+                    // at all. A submit button with no form owner does nothing,
+                    // silently, forever. No error, no console warning.
+                    //
+                    // The form-owner attribute is the HTML answer: it names the
+                    // form by id and works across any ancestry, portal or not.
+                    // It broke the day SheetPopup became a portal and nothing
+                    // was watching, which is why there is now a Playwright test
+                    // that presses this button for real.
+                    form="indent-form"
                     disabled={lines.length === 0}
                     // The form still submits; this only makes the basket come
                     // apart as it goes, so you land back on the page having SEEN
                     // the order leave rather than finding the panel gone.
                     onClick={() => { if (lines.length) void burstBasket(); }}
+                    data-testid="submit-indent"
                     className="mise-btn-key mise-press flex-1 px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
                   >
                     Submit indent · {lines.length}

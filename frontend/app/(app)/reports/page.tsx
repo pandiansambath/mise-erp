@@ -5,11 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import { SubNav } from "@/components/SubNav";
 import { spotlight } from "@/components/fx";
 import { api, downloadFile, type PnL } from "@/lib/api";
-import { Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
 import { recall, remember } from "@/lib/rangeMemory";
 import { Bars, Donut, Meter } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
+import { PageMore } from "@/components/PageKit";
 import { localISODate } from "@/lib/date";
 import { CURRENCIES, useCurrency } from "@/lib/currency";
 
@@ -142,72 +143,70 @@ export default function ReportsPage() {
         ]}
       />
 
-      <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
-        <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} />
-        <div className="flex gap-2">
-          <Button
-            variant="primary"
-            onClick={() => downloadFile(`/reports/pnl.xlsx?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.xlsx`)}
-          >
-            ⬇ Excel
-          </Button>
-          <Button
-            variant="soft"
-            onClick={() => downloadFile(`/reports/pnl.csv?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.csv`)}
-          >
-            ⬇ CSV
-          </Button>
-          <Button
-            variant="soft"
-            onClick={() => downloadFile(`/reports/pnl.pdf?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.pdf`)}
-            title="One-page branded P&L snapshot"
-          >
-            ⬇ PDF
-          </Button>
-          <Button
-            variant={compare ? "primary" : "ghost"}
-            onClick={toggleCompare}
-            title="Put this period next to the equal-length period straight before it"
-          >
-            ⇄ Compare
-          </Button>
-          <Button variant="ghost" onClick={() => window.print()} title="Print this report">
-            🖨 Print
-          </Button>
-        </div>
-      </div>
-      <p className="mb-6 text-sm text-fg-faint">
-        Showing <b className="text-fg-soft">{rangeCaption({ from, to })}</b> — every figure below is the
-        total for this period. Pick a quick preset or set exact From/To dates.{" "}
-        <Link href="/how-it-works" className="text-brand-400 underline">How is this worked out?</Link>
-      </p>
+      {/* The range, Compare, and everything else behind the ⋯.
 
-      {/* the snapshot archive: any past month's P&L, one tap, straight to PDF */}
-      <Card className="mise-feel mb-6">
-        <div className="flex items-baseline justify-between">
-          <h3 id="snapshots" className="scroll-mt-24 text-sm font-semibold text-fg">📂 Monthly snapshot archive</h3>
-          <span className="text-xs text-fg-faint">each opens that whole month as a one-page PDF</span>
-        </div>
-        <div className="mise-noscrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
-          {Array.from({ length: 12 }, (_, i) => {
-            const now = new Date();
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const f = localISODate(d);
-            const t = localISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-            const label = d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
-            return (
-              <button
-                key={f}
-                type="button"
-                onClick={() => downloadFile(`/reports/pnl.pdf?date_from=${f}&date_to=${t}`, `mise-pnl-${f.slice(0, 7)}.pdf`)}
-                className="mise-raised mise-press shrink-0 rounded-xl px-3 py-2 text-xs font-medium text-fg-soft"
-              >
-                {label} <span aria-hidden className="ml-1 text-fg-faint">⬇</span>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
+          Five buttons sat here in a row — Excel, CSV, PDF, Compare, Print —
+          followed by a three-line paragraph, followed by a whole card of twelve
+          monthly snapshots. About 320px of page above the four figures that
+          answer the only question this page exists to answer.
+
+          Compare stays out here because it CHANGES the figures. The three
+          downloads and Print do not, so they go in the popup, which is what
+          purchasing does with everything that is not the job. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} />
+        <button
+          type="button"
+          onClick={toggleCompare}
+          data-tone={compare ? "brand" : undefined}
+          title="Put this period next to the equal-length period straight before it"
+          className={`mise-btn-flat mise-press min-h-[40px] px-3 py-2 text-sm font-medium ${
+            compare ? "text-brand-300" : "text-fg-soft"
+          }`}
+        >
+          ⇄ Compare
+        </button>
+        <PageMore
+          title="This report"
+          subtitle="Take the P&L away with you"
+          actions={[
+            {
+              key: "xlsx",
+              label: "Excel",
+              icon: "⬇",
+              hint: "every line, as a spreadsheet",
+              onSelect: () => downloadFile(`/reports/pnl.xlsx?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.xlsx`),
+            },
+            {
+              key: "csv",
+              label: "CSV",
+              icon: "⬇",
+              hint: "plain text, for anything else",
+              onSelect: () => downloadFile(`/reports/pnl.csv?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.csv`),
+            },
+            {
+              key: "pdf",
+              label: "PDF",
+              icon: "🧾",
+              hint: "one-page branded snapshot",
+              onSelect: () => downloadFile(`/reports/pnl.pdf?date_from=${from}&date_to=${to}`, `mise-pnl-${from}-to-${to}.pdf`),
+            },
+            {
+              key: "print",
+              label: "Print",
+              icon: "🖨",
+              hint: "this page, on paper",
+              onSelect: () => window.print(),
+            },
+          ]}
+        />
+        <span className="text-[11px] text-fg-faint">
+          every figure below is the total for {rangeCaption({ from, to }).toLowerCase()} ·{" "}
+          <Link href="/how-it-works" className="text-brand-400 underline">
+            how is this worked out?
+          </Link>
+        </span>
+      </div>
 
       {loading ? (
         <Spinner />
@@ -391,6 +390,32 @@ export default function ReportsPage() {
               )}
             </Card>
           </div>
+        {/* the snapshot archive: any past month's P&L, one tap, straight to PDF */}
+        <Card className="mise-feel mt-6">
+          <div className="flex items-baseline justify-between">
+            <h3 id="snapshots" className="scroll-mt-24 text-sm font-semibold text-fg">📂 Monthly snapshot archive</h3>
+            <span className="text-xs text-fg-faint">each opens that whole month as a one-page PDF</span>
+          </div>
+          <div className="mise-noscrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
+            {Array.from({ length: 12 }, (_, i) => {
+              const now = new Date();
+              const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+              const f = localISODate(d);
+              const t = localISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+              const label = d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => downloadFile(`/reports/pnl.pdf?date_from=${f}&date_to=${t}`, `mise-pnl-${f.slice(0, 7)}.pdf`)}
+                  className="mise-btn-flat mise-press min-h-[40px] shrink-0 px-3 py-2 text-xs font-medium text-fg-soft"
+                >
+                  {label} <span aria-hidden className="ml-1 text-fg-faint">⬇</span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
         </>
       )}
     </div>

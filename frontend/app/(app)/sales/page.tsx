@@ -5,7 +5,8 @@ import { api, ApiError, downloadFile, postForm, type CashEvent, type DaySummary,
 import { PettyCash } from "@/components/PettyCash";
 import { SubNav } from "@/components/SubNav";
 import { recall, remember } from "@/lib/rangeMemory";
-import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Card, PageHeader, Spinner } from "@/components/ui";
+import { DayStepper, PageMore, ReachBar, TotalsStrip } from "@/components/PageKit";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
@@ -66,6 +67,8 @@ export default function SalesPage() {
   const [carried, setCarried] = useState(false); // opening auto-filled from yesterday's close
 
   const fileRef = useRef<HTMLInputElement>(null);
+  // The real Save, so ReachBar knows whether it is on screen.
+  const saveRef = useRef<HTMLButtonElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [heatDays, setHeatDays] = useState<{ date: string; value: number }[]>([]);
 
@@ -248,6 +251,16 @@ export default function SalesPage() {
     }
   }
 
+  // What is typed but not yet saved. Worked out once rather than three times
+  // inline: the footer, the pill and the button label all have to agree, and
+  // three copies of the same sum is three chances to disagree.
+  const draftEntries = Object.entries(draft).filter(([, v]) => parseFloat(v) > 0);
+  const draftCount = draftEntries.length;
+  const draftNet = draftEntries.reduce((t, [id, v]) => {
+    const pct = parseFloat(channels.find((c) => c.id === id)?.commission_pct ?? "0") || 0;
+    return t + (parseFloat(v) || 0) * (1 - pct / 100);
+  }, 0);
+
   if (loading || !summary) return <Spinner />;
 
   const variance = summary.cash_variance;
@@ -307,39 +320,6 @@ export default function SalesPage() {
         subtitle="One day at a time — takings by channel, commissions and the till for the date you pick."
       />
 
-      {/* Just the number, pinned. The whole header was sticky before, which
-          pinned a title and a subtitle nobody needs to keep reading and left a
-          tall translucent band sitting over the page. */}
-      <div
-        // Full-bleed and OPAQUE. Inset with rounded corners and a translucent
-        // background, the page scrolled through the strip above it and through
-        // the bar itself — the "gap" that looked broken. A pinned toolbar has
-        // to be a solid lid: it spans the content width exactly (matching
-        // AppShell's px-4 lg:px-8) and nothing passes behind it.
-        className="mise-cash-lid sticky top-0 z-30 -mx-4 mb-5 flex items-center justify-end gap-3 border-b border-line bg-paper px-4 py-2.5 lg:-mx-8 lg:px-8"
-      >
-        <span className="mr-auto text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-          <span aria-hidden className="mr-1">🪙</span> In the cash box
-        </span>
-        <button
-          type="button"
-          onClick={() => spotlight("cash-drawer")}
-          title="Open the cash drawer"
-          className="mise-press flex items-baseline gap-2 rounded-xl px-2 py-1 text-right transition hover:bg-glass/5"
-        >
-          <span className="font-display text-xl font-semibold tabular-nums text-fg">
-            {format(expectedNow)}
-          </span>
-          <span className="text-[10px] text-fg-faint">
-            {summary.cash_counted
-              ? varianceNum === 0
-                ? "counted \u00b7 balanced \u2713"
-                : `${(varianceNum ?? 0) > 0 ? "over" : "short"} ${format(String(Math.abs(varianceNum ?? 0).toFixed(2)))}`
-              : "expected"}
-          </span>
-        </button>
-      </div>
-
       {/* The three jobs of this page. Closing the till and settling petty cash
           were both below the fold, and they are the ones with a deadline. */}
       <SubNav
@@ -365,84 +345,42 @@ export default function SalesPage() {
         ]}
       />
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium text-fg-soft">Date</label>
-        <input
-          type="date"
-          value={day}
-          // Takings cannot be recorded for a day that has not happened.
-          max={localISODate()}
-          onChange={(e) => changeDay(e.target.value)}
-          className="mise-well rounded-lg px-3 py-2 text-sm outline-none"
-        />
-        {(() => {
-          // vs the same weekday last week — instant context for the day you're on
-          const get = (d: string) => heatDays.find((x) => x.date === d)?.value;
-          const cur = get(day);
-          const prev = new Date(day + "T00:00:00");
-          prev.setDate(prev.getDate() - 7);
-          const prevVal = get(localISODate(prev));
-          if (cur == null || prevVal == null || prevVal <= 0) return null;
-          const pct = ((cur - prevVal) / prevVal) * 100;
-          const up = pct >= 0;
-          return (
-            <span
-              className={`mise-well rounded-full px-2.5 py-1 text-xs font-medium ${up ? "text-brand-400" : "text-rose-400"}`}
-              title={`vs the same weekday last week (${format(String(prevVal))})`}
-            >
-              {up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}% vs last week
-            </span>
-          );
-        })()}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {canWrite && (
-            <>
-              <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportFile} />
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
-                title="Upload a day's sales (Excel/CSV) — checked strictly with exact errors"
-              >
-                ⬆ Import
-              </button>
-              <button
-                onClick={() => downloadFile("/sales/sales-template.xlsx", "mise-sales-template.xlsx")}
-                className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
-              >
-                ⬇ Template (Excel)
-              </button>
-              <button
-                onClick={() => downloadFile("/sales/sales-template.csv", "mise-sales-template.csv")}
-                className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
-              >
-                CSV
-              </button>
-            </>
-          )}
-          <button
-            onClick={() => downloadFile(`/sales/days/${day}/sheet.pdf`, `sales-${day}.pdf`)}
-            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
-          >
-            ⬇ PDF
-          </button>
-        </div>
-      </div>
       {notice && <p className="mb-4 rounded-lg bg-brand-400/10 px-3 py-2 text-sm text-brand-300">{notice}</p>}
       {error && <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
-      <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Gross sales" value={format(summary.totals.gross)} />
-        <StatCard label="Commission" value={format(summary.totals.commission)} accent="rose" />
-        <StatCard label="Net received" value={format(summary.totals.net)} accent="brand" />
-        <StatCard
-          label="Cash variance"
-          value={varianceNum == null ? "—" : format(variance)}
-          accent={varianceNum == null ? "slate" : varianceNum === 0 ? "brand" : "amber"}
-          hint={varianceNum == null ? "Count cash to check" : varianceNum === 0 ? "Balanced" : "Off"}
-        />
-      </div>
+      {/* THE DAY, ON ONE LINE.
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          This was four StatCards and, above them, a whole pinned band that said
+          "IN THE CASH BOX" and one figure. Together they cost about 290px of
+          the top of the page — the reason the boxes you came here to fill in
+          started below the fold.
+
+          "so many unwanted are taking so many space rather than core."
+
+          Nothing has been dropped: gross, commission and net are all here, the
+          drawer figure that had its own pinned bar is the fourth cell, and the
+          variance it used to spell out is this cell's hint. Four facts, 80px,
+          and the takings sheet starts on the first screen. */}
+      <TotalsStrip
+        className="mb-5"
+        items={[
+          { label: "Gross sales", value: format(summary.totals.gross) },
+          { label: "Commission", value: format(summary.totals.commission), tone: "bad" },
+          { label: "Net received", value: format(summary.totals.net), tone: "good", strong: true },
+          {
+            label: "In the cash box",
+            value: format(expectedNow),
+            tone: varianceNum == null ? "plain" : varianceNum === 0 ? "good" : "warn",
+            hint: summary.cash_counted
+              ? varianceNum === 0
+                ? "counted \u00b7 balanced \u2713"
+                : `${(varianceNum ?? 0) > 0 ? "over" : "short"} by ${format(String(Math.abs(varianceNum ?? 0).toFixed(2)))}`
+              : "expected \u2014 count it to check",
+          },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Add + lines */}
         <div className="min-w-0 lg:col-span-2">
           {/* THE DAY SHEET.
@@ -465,123 +403,215 @@ export default function SalesPage() {
               worked out live beside each figure, because the number you type is
               gross and the number that matters is what lands. */}
           {canWrite && (
-            <div className="mb-4" id="sales-form">
-              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-sm font-medium text-fg-soft">Today&apos;s takings</p>
-                <p className="text-[11px] text-fg-faint">
-                  type the gross — commission comes off automatically
-                </p>
-              </div>
+            <div className="mb-5" id="sales-form">
+              {/* ONE CARD, FOUR BANDS: which day, how it was paid, the numbers,
+                  and the button that commits them. Everything the sheet needs is
+                  inside the sheet.
 
-              <div className="mise-card-inset divide-y divide-line/60 p-0">
-                {channels
-                  .filter((c) => c.is_active)
-                  .map((c) => {
-                    const typed = parseFloat(draft[c.id] ?? "");
-                    const pct = parseFloat(c.commission_pct) || 0;
-                    const net = Number.isFinite(typed) ? typed * (1 - pct / 100) : 0;
-                    const already = summary.lines
-                      .filter((l) => l.channel_name === c.name)
-                      .reduce((t, l) => t + (parseFloat(l.net_amount) || 0), 0);
+                  The date and the four export buttons used to be a separate row
+                  above the totals — 150px of page for one control used daily and
+                  four used monthly. The day picker belongs to this card because
+                  it says which day these boxes are FOR; the exports sit behind
+                  the ⋯, which is the move the purchasing page makes with
+                  everything that is not the job. */}
+              <div className="mise-card-inset overflow-hidden p-0">
+                <div className="flex flex-wrap items-center gap-2 border-b border-line/60 px-3 py-2.5">
+                  <div className="mr-auto min-w-0">
+                    <p className="text-sm font-semibold text-fg">Takings</p>
+                    <p className="text-[11px] text-fg-faint">
+                      type the gross — commission comes off automatically
+                    </p>
+                  </div>
+                  {(() => {
+                    // vs the same weekday last week — the one piece of context
+                    // worth having while you type, so it stays on the card.
+                    const get = (d: string) => heatDays.find((x) => x.date === d)?.value;
+                    const cur = get(day);
+                    const prev = new Date(day + "T00:00:00");
+                    prev.setDate(prev.getDate() - 7);
+                    const prevVal = get(localISODate(prev));
+                    if (cur == null || prevVal == null || prevVal <= 0) return null;
+                    const pct = ((cur - prevVal) / prevVal) * 100;
+                    const up = pct >= 0;
                     return (
-                      <div key={c.id} className="flex items-center gap-3 px-3 py-2.5">
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-fg">
-                            {c.name}
-                          </span>
-                          <span className="block text-[11px] text-fg-faint">
-                            {pct > 0 ? `${pct}% commission` : "no commission"}
-                            {already > 0 ? ` · ${format(String(already.toFixed(2)))} in already` : ""}
-                          </span>
-                        </span>
-
-                        {/* What it will actually net, live. A figure you can see
-                            before you commit is worth more than one you check
-                            afterwards. */}
-                        {Number.isFinite(typed) && typed > 0 && (
-                          <span className="hidden shrink-0 text-right sm:block">
-                            <span className="block font-display text-sm font-semibold tabular-nums text-brand-300">
-                              {format(String(net.toFixed(2)))}
-                            </span>
-                            <span className="block text-[10px] text-fg-faint">nets</span>
-                          </span>
-                        )}
-
-                        <input
-                          value={draft[c.id] ?? ""}
-                          onChange={(e) =>
-                            setDraft((d) => ({ ...d, [c.id]: numeric(e.target.value) }))
-                          }
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          aria-label={`Gross takings for ${c.name}`}
-                          className="mise-well w-24 shrink-0 rounded-lg px-2.5 py-2 text-right text-sm tabular-nums outline-none sm:w-28"
-                        />
-                      </div>
+                      <span
+                        className={`mise-well rounded-full px-2.5 py-1 text-xs font-medium ${up ? "text-brand-400" : "text-rose-400"}`}
+                        title={`vs the same weekday last week (${format(String(prevVal))})`}
+                      >
+                        {up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}%
+                      </span>
                     );
-                  })}
+                  })()}
+                  <DayStepper value={day} onChange={changeDay} max={localISODate()} />
+                  <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportFile} />
+                  <PageMore
+                    title="This day"
+                    subtitle="Bringing takings in, and taking them out"
+                    actions={[
+                      {
+                        key: "import",
+                        label: "Import a day",
+                        icon: "⬆",
+                        hint: "Excel or CSV — checked strictly",
+                        onSelect: () => fileRef.current?.click(),
+                      },
+                      {
+                        key: "template",
+                        label: "Template (Excel)",
+                        icon: "⬇",
+                        hint: "the shape the import expects",
+                        onSelect: () => downloadFile("/sales/sales-template.xlsx", "mise-sales-template.xlsx"),
+                      },
+                      {
+                        key: "csv",
+                        label: "Template (CSV)",
+                        icon: "⬇",
+                        hint: "same thing, plain text",
+                        onSelect: () => downloadFile("/sales/sales-template.csv", "mise-sales-template.csv"),
+                      },
+                      {
+                        key: "pdf",
+                        label: "Day sheet (PDF)",
+                        icon: "🧾",
+                        hint: `print ${day}`,
+                        onSelect: () => downloadFile(`/sales/days/${day}/sheet.pdf`, `sales-${day}.pdf`),
+                      },
+                    ]}
+                  />
+                </div>
+
+                {/* How the money arrived. It was down in the action bar BELOW
+                    the boxes, which is backwards: the method is chosen before
+                    you type, and a control you meet afterwards is one you
+                    forget to set. */}
+                <div className="flex flex-wrap items-center gap-2 border-b border-line/60 px-3 py-2">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Paid by
+                  </span>
+                  <div className="mise-well flex gap-1 rounded-xl p-1">
+                    {METHODS.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMethod(m)}
+                        className={`mise-press min-h-[34px] rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                          method === m ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="divide-y divide-line/60">
+                  {channels
+                    .filter((c) => c.is_active)
+                    .map((c) => {
+                      const typed = parseFloat(draft[c.id] ?? "");
+                      const pct = parseFloat(c.commission_pct) || 0;
+                      const net = Number.isFinite(typed) ? typed * (1 - pct / 100) : 0;
+                      const already = summary.lines
+                        .filter((l) => l.channel_name === c.name)
+                        .reduce((t, l) => t + (parseFloat(l.net_amount) || 0), 0);
+                      return (
+                        <div key={c.id} className="flex items-center gap-3 px-3 py-2">
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-fg">
+                              {c.name}
+                            </span>
+                            <span className="block truncate text-[11px] text-fg-faint">
+                              {pct > 0 ? `${pct}% commission` : "no commission"}
+                              {already > 0 ? ` · ${format(String(already.toFixed(2)))} in already` : ""}
+                            </span>
+                          </span>
+
+                          {/* What it will actually net, live. A figure you can
+                              see before you commit is worth more than one you
+                              check afterwards. */}
+                          {Number.isFinite(typed) && typed > 0 && (
+                            <span className="hidden shrink-0 text-right sm:block">
+                              <span className="block font-display text-sm font-semibold tabular-nums text-brand-300">
+                                {format(String(net.toFixed(2)))}
+                              </span>
+                              <span className="block text-[10px] text-fg-faint">nets</span>
+                            </span>
+                          )}
+
+                          <input
+                            value={draft[c.id] ?? ""}
+                            onChange={(e) =>
+                              setDraft((d) => ({ ...d, [c.id]: numeric(e.target.value) }))
+                            }
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            aria-label={`Gross takings for ${c.name}`}
+                            className="mise-well min-h-[38px] w-24 shrink-0 rounded-lg px-2.5 py-2 text-right text-sm tabular-nums outline-none sm:w-28"
+                          />
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* THE SAVE, IN NORMAL FLOW.
+
+                    It was `sticky bottom-2` on a sibling under the list, and
+                    that is not what it looks like: when the container runs past
+                    the bottom of the viewport, a bottom-stuck element is lifted
+                    UP out of its slot and painted OVER the rows above it. His
+                    screenshot is exactly that — a CARD/CASH/ONLINE/BANK bar
+                    floating across the middle of the channel list with a row
+                    hidden behind it. My own fix for an out-of-reach button,
+                    which traded it for something worse.
+
+                    So the button sits in the card's footer, where it cannot
+                    cover anything; the rows are tighter so the footer is on
+                    screen for a normal number of channels; and when it is not,
+                    ReachBar puts a fixed pill at the bottom of the WINDOW.
+                    Fixed has no container to overlap, so it can never land in
+                    the middle of a list. */}
+                <div className="flex flex-wrap items-center gap-2 border-t border-line/60 bg-paper-2/30 px-3 py-2.5">
+                  <span className="text-xs text-fg-faint">
+                    {draftCount === 0 ? (
+                      "fill in what you took"
+                    ) : (
+                      <>
+                        {draftCount} channel{draftCount === 1 ? "" : "s"} · nets{" "}
+                        <b className="font-display text-sm text-brand-300">
+                          {format(String(draftNet.toFixed(2)))}
+                        </b>
+                      </>
+                    )}
+                  </span>
+                  <button
+                    ref={saveRef}
+                    type="button"
+                    onClick={saveDraft}
+                    disabled={savingDraft || draftCount === 0}
+                    data-tone="brand"
+                    className="mise-btn-flat mise-press ml-auto min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+                  >
+                    {savingDraft ? "Saving…" : draftCount > 1 ? `Save ${draftCount} takings` : "Save takings"}
+                  </button>
+                </div>
               </div>
 
-              {/* THE ACTION BAR STICKS.
-                  Measured, not guessed: with eight channels the save button sat
-                  at 1035px on an 800px screen — the exact fault he reported on
-                  Expenses, which I had just fixed there and then recreated
-                  here. A sheet whose whole point is "fill several boxes" cannot
-                  put the button that commits them past the bottom of the
-                  screen.
-
-                  Sticky rather than moved to the top: the natural order is
-                  still type-then-save, and this keeps that while guaranteeing
-                  the button is always in reach. */}
-              <div className="sticky bottom-2 z-10 mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper/95 p-2 backdrop-blur">
-                <div className="mise-well flex gap-1 rounded-xl p-1">
-                  {METHODS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMethod(m)}
-                      className={`mise-press rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        method === m ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-                {(() => {
-                  const total = Object.entries(draft).reduce((t, [id, v]) => {
-                    const n = parseFloat(v);
-                    if (!(n > 0)) return t;
-                    const pct = parseFloat(
-                      channels.find((c) => c.id === id)?.commission_pct ?? "0",
-                    ) || 0;
-                    return t + n * (1 - pct / 100);
-                  }, 0);
-                  if (total <= 0) return null;
-                  return (
-                    <span className="text-xs text-fg-faint">
-                      nets{" "}
-                      <b className="font-display text-sm text-brand-300">
-                        {format(String(total.toFixed(2)))}
-                      </b>
-                    </span>
-                  );
-                })()}
+              <ReachBar watch={saveRef} show={draftCount > 0 && !savingDraft}>
+                <span className="text-xs text-fg-faint">
+                  nets{" "}
+                  <b className="font-display text-sm text-brand-300">
+                    {format(String(draftNet.toFixed(2)))}
+                  </b>
+                </span>
                 <button
                   type="button"
                   onClick={saveDraft}
-                  disabled={savingDraft || !Object.values(draft).some((v) => parseFloat(v) > 0)}
                   data-tone="brand"
-                  className="mise-btn-flat mise-press ml-auto px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+                  className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
                 >
-                  {savingDraft
-                    ? "Saving…"
-                    : (() => {
-                        const n = Object.values(draft).filter((v) => parseFloat(v) > 0).length;
-                        return n > 1 ? `Save ${n} takings` : "Save takings";
-                      })()}
+                  Save {draftCount} unsaved
                 </button>
-              </div>
+              </ReachBar>
               {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
             </div>
           )}

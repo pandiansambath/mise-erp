@@ -11,7 +11,8 @@ import {
   type ExpenseSummary,
   type Item,
 } from "@/lib/api";
-import { Badge, Button, Card, PageHeader, Skeleton, StatCard } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Skeleton } from "@/components/ui";
+import { TotalsStrip } from "@/components/PageKit";
 import { SheetPopup } from "@/components/SheetPopup";
 import { SubNav } from "@/components/SubNav";
 import { Bars, Donut, Treemap, Waffle, type DonutSegment } from "@/components/charts";
@@ -348,20 +349,31 @@ export default function ExpensesPage() {
         ]}
       />
 
-      <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} className="mb-2" />
-      <p className="mb-6 text-sm text-fg-faint">
-        Showing spends for <b className="text-fg-soft">{rangeCaption({ from, to })}</b>. The totals and list
-        below are just this period — switch the range to compare months.
-      </p>
+      {/* The range, and what it means, on ONE line.
 
-      <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Fixed costs" value={format(summary.fixed_total)} />
-        <StatCard label="Variable costs" value={format(summary.variable_total)} />
-        <StatCard label="VAT" value={format(summary.vat_total)} hint="reclaimable if VAT-registered" />
-        <StatCard label="Total spend" value={format(summary.grand_total)} accent="rose" />
+          It was a control, then a two-line paragraph explaining that the
+          figures below cover the range you just picked — which the control
+          already says. That paragraph plus four full-height StatCards was
+          around 280px sitting directly on top of the form, and the form is
+          what this page is for. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <RangeControls range={{ from, to }} onChange={(r) => applyRange(r.from, r.to)} />
+        <span className="text-[11px] text-fg-faint">
+          totals and entries below are {rangeCaption({ from, to }).toLowerCase()} only
+        </span>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <TotalsStrip
+        className="mb-5"
+        items={[
+          { label: "Fixed costs", value: format(summary.fixed_total) },
+          { label: "Variable costs", value: format(summary.variable_total) },
+          { label: "VAT", value: format(summary.vat_total), hint: "reclaimable if registered" },
+          { label: "Total spend", value: format(summary.grand_total), tone: "bad", strong: true },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* LEFT — the analysis, then the entries. All of it reads top-down
             while the form stays pinned beside it. */}
         <div className="order-2 min-w-0 space-y-6 lg:order-1 lg:col-span-2">
@@ -856,7 +868,7 @@ export default function ExpensesPage() {
           {isSuper && (
             <button
               onClick={() => setCatModal(true)}
-              className="mise-raised mise-press flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm text-fg-soft"
+              className="mise-btn-flat mise-press flex min-h-[44px] w-full items-center justify-between rounded-xl px-4 py-3 text-sm text-fg-soft"
             >
               <span className="flex items-center gap-2"><span aria-hidden>⚙</span> Manage categories</span>
               <span className="text-fg-faint">{categories.length} →</span>

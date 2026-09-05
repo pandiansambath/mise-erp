@@ -846,7 +846,7 @@ export default function MoneyPage() {
           </div>
           <Link
             href="/waste"
-            className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
+            className="mise-btn-flat mise-press inline-flex min-h-[40px] items-center rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
           >
             Log waste →
           </Link>
