@@ -752,7 +752,13 @@ export default function ExpensesPage() {
                     data-tone="brand"
                     className="mise-btn-flat mise-press flex-1 px-4 py-3 text-sm font-bold text-brand-300 disabled:opacity-40"
                   >
-                    {editingId ? "Save changes" : "Add expense"}
+                    {/* "Save expense", not "Add expense" — the SubNav already
+                        has an "＋ Add expense" that TAKES YOU HERE. Two controls
+                        with the same words doing different things is ambiguous
+                        for a person, and it silently picked the wrong one for a
+                        selector: a test reported this form broken when it had
+                        clicked the navigation shortcut and submitted nothing. */}
+                    {editingId ? "Save changes" : "Save expense"}
                   </button>
                   <button
                     type="button"
