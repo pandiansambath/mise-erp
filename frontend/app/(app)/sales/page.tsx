@@ -6,7 +6,6 @@ import { PettyCash } from "@/components/PettyCash";
 import { SubNav } from "@/components/SubNav";
 import { recall, remember } from "@/lib/rangeMemory";
 import { Card, PageHeader, Spinner, StatCard } from "@/components/ui";
-import { SheetPopup } from "@/components/SheetPopup";
 import { CalendarHeat, Donut, Waffle, type DonutSegment, Sparkline } from "@/components/charts";
 import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
@@ -47,12 +46,15 @@ export default function SalesPage() {
   const [error, setError] = useState<string | null>(null);
 
   // add-line form
-  const [channelId, setChannelId] = useState("");
-  const [gross, setGross] = useState("");
+  // (The single-channel `channelId`/`gross` pair went with the old one-line
+  //  form. The sheet keeps one draft per channel in `draft` instead.)
   // 🧮 big-key till pad — which field it types into
   const [pad, setPad] = useState<null | "gross" | "counted">(null);
   /** The takings popup — one channel, one amount. */
-  const [entryOpen, setEntryOpen] = useState(false);
+  /** channel id -> what he has typed for it today. One object rather than one
+   *  state per channel: the sheet is filled in as a whole and saved as a whole. */
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [savingDraft, setSavingDraft] = useState(false);
   // per-channel gross over the trailing 7 days (for the channel tiles)
   const [chanTrend, setChanTrend] = useState<Record<string, number[]> | null>(null);
   const [trendLabels, setTrendLabels] = useState<string[]>([]);
@@ -106,10 +108,9 @@ export default function SalesPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get<SalesChannel[]>("/sales/channels").then((c) => {
-        setChannels(c);
-        if (c.length) setChannelId(c[0].id);
-      }),
+      // No "first channel" to preselect any more — the sheet shows every
+      // channel at once, so there is nothing to choose before typing.
+      api.get<SalesChannel[]>("/sales/channels").then(setChannels),
       api.get<ExpenseCategory[]>("/expenses/categories").then(setExpenseCats).catch(() => {}),
       loadDay(day),
     ]).finally(() => setLoading(false));
@@ -175,19 +176,34 @@ export default function SalesPage() {
     }
   }
 
-  async function addLine(e: React.FormEvent) {
-    e.preventDefault();
+
+  /** Save every box that has a number in it.
+   *
+   * Sequential rather than parallel, deliberately: each call returns the whole
+   * day's summary, and firing them together means the last response wins and
+   * the others' lines vanish from the screen until a reload. A day's takings is
+   * five requests at most.
+   */
+  async function saveDraft() {
     setError(null);
+    setSavingDraft(true);
     try {
-      const s = await api.post<DaySummary>(`/sales/days/${day}/lines`, {
-        channel_id: channelId,
-        gross_amount: gross || "0",
-        payment_method: method,
-      });
-      setSummary(s);
-      setGross("");
+      let latest: DaySummary | null = null;
+      for (const [channel_id, value] of Object.entries(draft)) {
+        const amount = parseFloat(value);
+        if (!(amount > 0)) continue;
+        latest = await api.post<DaySummary>(`/sales/days/${day}/lines`, {
+          channel_id,
+          gross_amount: value,
+          payment_method: method,
+        });
+      }
+      if (latest) setSummary(latest);
+      setDraft({});
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not add sale");
+      setError(err instanceof ApiError ? err.message : "Could not save the takings");
+    } finally {
+      setSavingDraft(false);
     }
   }
 
@@ -429,108 +445,115 @@ export default function SalesPage() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Add + lines */}
         <div className="min-w-0 lg:col-span-2">
-          {/* TAKING MONEY IS TAPPING, NOT FILLING IN A FORM.
-              Built from /purchasing: tiles you can hit with a thumb, then a
-              popup for the one number. The old row was a channel dropdown, a
-              text field and a method dropdown — three controls that each hide
-              their own options, on a screen someone uses standing at a till
-              with a queue in front of them.
+          {/* THE DAY SHEET.
+              Rebuilt from the job rather than from another page's idiom.
 
-              Each tile carries what that channel has ALREADY taken today, so
-              the thing you tap to add to is also the thing telling you where
-              you are. That figure had to be counted off the lines list. */}
+              "I need to click each to enter which is hard job... same I need to
+               scroll down to reach the entry area... what the hell tight UI is
+               this."
+
+              All three were mine. I had put channel TILES here, borrowed from
+              the order pad — and the order pad's job is "pick a few things out
+              of many", where a tile is exactly right. Sales is the opposite
+              job: at close you already know five numbers and want to type them.
+              Tiles turned that into five popups, and the popup was so cramped
+              that the keypad scrolled inside it.
+
+              So: every channel is a ROW with a box, all on screen at once, no
+              popup and nothing to open. Type down the column the way you read a
+              till report, then save once. The commission and what it nets are
+              worked out live beside each figure, because the number you type is
+              gross and the number that matters is what lands. */}
           {canWrite && (
             <div className="mb-4" id="sales-form">
-              <p className="mb-2 text-sm font-medium text-fg-soft">
-                Add today&apos;s takings
-              </p>
-              <div className="mise-stagger grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-sm font-medium text-fg-soft">Today&apos;s takings</p>
+                <p className="text-[11px] text-fg-faint">
+                  type the gross — commission comes off automatically
+                </p>
+              </div>
+
+              <div className="mise-card-inset divide-y divide-line/60 p-0">
                 {channels
                   .filter((c) => c.is_active)
                   .map((c) => {
-                    const taken = summary.lines
+                    const typed = parseFloat(draft[c.id] ?? "");
+                    const pct = parseFloat(c.commission_pct) || 0;
+                    const net = Number.isFinite(typed) ? typed * (1 - pct / 100) : 0;
+                    const already = summary.lines
                       .filter((l) => l.channel_name === c.name)
                       .reduce((t, l) => t + (parseFloat(l.net_amount) || 0), 0);
                     return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setChannelId(c.id);
-                          setGross("");
-                          setEntryOpen(true);
-                        }}
-                        className="mise-card-inset mise-press relative flex flex-col items-start gap-0.5 overflow-hidden p-3 pl-4 text-left"
-                      >
-                        <span
-                          aria-hidden
-                          className={`absolute inset-y-0 left-0 w-1 ${
-                            taken > 0 ? "bg-emerald-400/60" : "bg-fg-faint/25"
-                          }`}
+                      <div key={c.id} className="flex items-center gap-3 px-3 py-2.5">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-fg">
+                            {c.name}
+                          </span>
+                          <span className="block text-[11px] text-fg-faint">
+                            {pct > 0 ? `${pct}% commission` : "no commission"}
+                            {already > 0 ? ` · ${format(String(already.toFixed(2)))} in already` : ""}
+                          </span>
+                        </span>
+
+                        {/* What it will actually net, live. A figure you can see
+                            before you commit is worth more than one you check
+                            afterwards. */}
+                        {Number.isFinite(typed) && typed > 0 && (
+                          <span className="hidden shrink-0 text-right sm:block">
+                            <span className="block font-display text-sm font-semibold tabular-nums text-brand-300">
+                              {format(String(net.toFixed(2)))}
+                            </span>
+                            <span className="block text-[10px] text-fg-faint">nets</span>
+                          </span>
+                        )}
+
+                        <input
+                          value={draft[c.id] ?? ""}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, [c.id]: numeric(e.target.value) }))
+                          }
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          aria-label={`Gross takings for ${c.name}`}
+                          className="mise-well w-24 shrink-0 rounded-lg px-2.5 py-2 text-right text-sm tabular-nums outline-none sm:w-28"
                         />
-                        <span className="truncate text-sm font-semibold text-fg">{c.name}</span>
-                        <span className="font-display text-lg font-semibold tabular-nums text-fg">
-                          {taken > 0 ? format(String(taken.toFixed(2))) : "—"}
-                        </span>
-                        <span className="text-[10px] text-fg-faint">
-                          {c.commission_pct}% commission
-                        </span>
-                      </button>
+                      </div>
                     );
                   })}
               </div>
-              {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-            </div>
-          )}
 
-          {/* One channel, one number. The keypad is always open here rather
-              than behind a toggle — this popup exists to take an amount, and a
-              till pad you have to ask for is a till pad nobody uses. */}
-          {entryOpen && (
-            <SheetPopup
-              onClose={() => setEntryOpen(false)}
-              title={channels.find((c) => c.id === channelId)?.name ?? "Takings"}
-              subtitle="what came in through this channel"
-              footer={
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="mise-well flex gap-1 rounded-xl p-1">
+                  {METHODS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMethod(m)}
+                      className={`mise-press rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        method === m ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
-                  disabled={!(parseFloat(gross) > 0)}
-                  onClick={(e) => {
-                    void addLine(e as unknown as React.FormEvent);
-                    setEntryOpen(false);
-                  }}
-                  className="mise-press w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+                  onClick={saveDraft}
+                  disabled={savingDraft || !Object.values(draft).some((v) => parseFloat(v) > 0)}
+                  data-tone="brand"
+                  className="mise-btn-flat mise-press ml-auto px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
                 >
-                  Add {parseFloat(gross) > 0 ? format(gross) : ""}
+                  {savingDraft
+                    ? "Saving…"
+                    : (() => {
+                        const n = Object.values(draft).filter((v) => parseFloat(v) > 0).length;
+                        return n > 1 ? `Save ${n} takings` : "Save takings";
+                      })()}
                 </button>
-              }
-            >
-              <div className="flex flex-col items-center gap-3">
-                <p className="font-mono text-3xl font-bold tabular-nums text-fg">
-                  {gross ? format(gross) : format("0")}
-                </p>
-                <TillKeypad value={gross} onChange={setGross} onClose={() => undefined} />
-                <div className="w-full">
-                  <p className="mb-1.5 text-center text-[10px] uppercase tracking-wide text-fg-faint">
-                    How was it paid
-                  </p>
-                  <div className="mise-well flex justify-center gap-1 rounded-xl p-1">
-                    {METHODS.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMethod(m)}
-                        className={`mise-press flex-1 rounded-lg px-2 py-2 text-xs font-semibold transition ${
-                          method === m ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
-            </SheetPopup>
+              {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+            </div>
           )}
 
           {/* THE DAY'S TAKINGS, AS CARDS — his reference pages have no tables.
