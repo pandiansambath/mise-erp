@@ -753,16 +753,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div
       data-mode={THEMES[theme].light ? "light" : "dark"}
       style={{ ...themeVars(theme), colorScheme: THEMES[theme].light ? "light" : "dark" }}
-      className="mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:grid-cols-[16rem_1fr] lg:overflow-hidden"
+      // NO RAIL WHEN THERE IS NOWHERE TO GO.
+      // "this whole page is for that particular user, then why we need that my
+      //  space as side bar? its waste of space nah."
+      // A one-item sidebar is a signpost pointing at the room you are standing
+      // in, and it was taking 16rem to do it.
+      className={`mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:overflow-hidden ${
+        selfServiceOnly ? "lg:grid-cols-1" : "lg:grid-cols-[16rem_1fr]"
+      }`}
     >
       <ShellAurora />
 
       {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
-      <aside className="relative hidden border-r border-glass/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
-        <Brand />
-        <NavLinks items={finalNav} pathname={pathname} />
-        <div className="mt-auto p-3" />
-      </aside>
+      {!selfServiceOnly && (
+        <aside className="relative hidden border-r border-glass/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
+          <Brand />
+          <NavLinks items={finalNav} pathname={pathname} />
+          <div className="mt-auto p-3" />
+        </aside>
+      )}
 
       {/* Mobile slide-over */}
       {open && (
@@ -800,7 +809,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                on all thirty-three pages at once. 36x30 and 25x40 measured on a
                390px screen. This app is used with wet hands in a kitchen; a
                control you miss twice is a control people stop trusting. */
-            className="grid h-11 w-11 place-items-center rounded-lg text-fg-soft hover:bg-glass/5 lg:hidden"
+            /* And hidden entirely when the drawer it opens holds one link to
+               the page you are already on. */
+            className={`h-11 w-11 place-items-center rounded-lg text-fg-soft hover:bg-glass/5 lg:hidden ${
+              selfServiceOnly ? "hidden" : "grid"
+            }`}
           >
             <span className="block h-0.5 w-5 bg-current" />
             <span className="mt-1 block h-0.5 w-5 bg-current" />

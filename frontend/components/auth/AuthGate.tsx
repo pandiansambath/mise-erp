@@ -67,7 +67,7 @@ function useChefMood(typedLen: number) {
 
 /* ─────────────────────────── forms ─────────────────────────── */
 
-function LoginForm({ active }: { active: boolean }) {
+function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }) {
   const { login, loginOtp } = useAuth();
   const [email, setEmail] = useState("owner@nirai.com");
   const [password, setPassword] = useState("");
@@ -177,17 +177,28 @@ function LoginForm({ active }: { active: boolean }) {
     <form
       onSubmit={onSubmit}
       onAnimationEnd={() => setShake(false)}
-      className={`mise-glass mise-liquid relative space-y-4 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`}
+      className={
+        bare
+          ? // On a hotel's own door the surface, the greeting and the character
+            // all belong to THEM. Wearing our card and our chef inside their
+            // page is what made it read as a copy.
+            `relative space-y-4 ${shake ? "mise-shake" : ""}`
+          : `mise-glass mise-liquid relative space-y-4 rounded-3xl p-6 sm:p-7 ${shake ? "mise-shake" : ""}`
+      }
     >
-      {/* the maître — watches your email, covers his eyes for the password.
-          In-flow (not absolute) so no container ever crops his toque. */}
-      <div className="mx-auto -mt-1 w-24 sm:w-28">
-        <ChefMascot mood={chef.mood} look={chef.look} />
-      </div>
-      <div>
-        <h2 className="font-display text-2xl text-white">Welcome back</h2>
-        <p className="mt-1 text-sm text-slate-300">Sign in to your workspace.</p>
-      </div>
+      {!bare && (
+        <>
+          {/* the maître — watches your email, covers his eyes for the password.
+              In-flow (not absolute) so no container ever crops his toque. */}
+          <div className="mx-auto -mt-1 w-24 sm:w-28">
+            <ChefMascot mood={chef.mood} look={chef.look} />
+          </div>
+          <div>
+            <h2 className="font-display text-2xl text-white">Welcome back</h2>
+            <p className="mt-1 text-sm text-slate-300">Sign in to your workspace.</p>
+          </div>
+        </>
+      )}
       <div>
         <label htmlFor="li-email" className={authLabel}>Email</label>
         <input
@@ -674,7 +685,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   if (door) {
     return (
       <HotelDoor cfg={door.cfg} hotelName={door.name} logoUrl={door.logo}>
-        <LoginForm active />
+        <LoginForm active bare />
       </HotelDoor>
     );
   }

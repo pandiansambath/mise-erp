@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { api } from "@/lib/api";
+import { can } from "@/lib/permissions";
+
 import Link from "next/link";
 
 import { AnalogClock, type ClockFace } from "@/components/AnalogClock";
@@ -21,16 +24,18 @@ const FACES: { key: ClockFace; label: string }[] = [
   { key: "regulator", label: "Regulator" },
 ];
 
-/** Remembered per browser: a face and a format are a preference, not data, and
- *  they should survive a reload without troubling the server. */
-function remembered<T extends string>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    return (window.localStorage.getItem(key) as T) || fallback;
-  } catch {
-    return fallback;
-  }
-}
+/* This used to be localStorage, and that was wrong twice over.
+ *
+ *   "here i made as 12 hr format but this is not persisting... both are same
+ *    superadmin but 1 is from incognito. make whatever superadmin setting as
+ *    persistent. also this need to show in all lower logins too."
+ *   "store in db and make it persistent"
+ *
+ * A browser preference dies with the window, and it can never reach anybody
+ * else — so the owner's choice was invisible to their own team and to the wall
+ * tablet nobody signs into. A restaurant that reads times in 12-hour reads them
+ * that way on every screen in the building. It lives in hotels.prefs now, which
+ * is already the home for exactly this kind of setting. */
 
 /**
  * The time, in the restaurant's own timezone, on every page.
@@ -52,12 +57,34 @@ function remembered<T extends string>(key: string, fallback: T): T {
  * cosmetic second.
  */
 export function HotelClock({ className = "" }: { className?: string }) {
-  const { hotel } = useAuth();
+  const { hotel, user, refreshHotel } = useAuth();
   const zone = hotel?.timezone || undefined;
   const [now, setNow] = useState<Date | null>(null);
   const [open, setOpen] = useState(false);
-  const [face, setFace] = useState<ClockFace>(() => remembered<ClockFace>("mise.clock.face", "classic"));
-  const [hour12, setHour12] = useState(() => remembered<string>("mise.clock.h12", "0") === "1");
+  const [saving, setSaving] = useState(false);
+
+  // Straight from the hotel, so every login sees the same clock and a new
+  // browser starts where the last one left off.
+  const prefs = (hotel?.prefs ?? {}) as { clock_12h?: boolean; clock_face?: string };
+  const face = (prefs.clock_face as ClockFace) || "classic";
+  const hour12 = Boolean(prefs.clock_12h);
+
+  // Only whoever can configure the hotel may change it — for everyone else the
+  // clock is something they read, not something they set.
+  const canSet = can(user?.role, "settings:write");
+
+  async function saveClock(patch: { clock_12h?: boolean; clock_face?: string }) {
+    if (!canSet) return;
+    setSaving(true);
+    try {
+      await api.patch("/hotels/me", { prefs: patch });
+      await refreshHotel();
+    } catch {
+      /* a clock that will not save is not worth an error dialog over the app */
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     setNow(new Date());
@@ -173,15 +200,10 @@ export function HotelClock({ className = "" }: { className?: string }) {
               <button
                 key={label}
                 type="button"
-                onClick={() => {
-                  setHour12(v);
-                  try {
-                    window.localStorage.setItem("mise.clock.h12", v ? "1" : "0");
-                  } catch {
-                    /* a browser refusing storage must not break the clock */
-                  }
-                }}
-                className={`mise-press rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                onClick={() => saveClock({ clock_12h: v })}
+                disabled={!canSet || saving}
+                title={canSet ? undefined : "Your manager sets the clock for the whole restaurant"}
+                className={`mise-press min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                   hour12 === v ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
                 }`}
               >
@@ -211,15 +233,10 @@ export function HotelClock({ className = "" }: { className?: string }) {
                 <button
                   key={f.key}
                   type="button"
-                  onClick={() => {
-                    setFace(f.key);
-                    try {
-                      window.localStorage.setItem("mise.clock.face", f.key);
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                  className={`mise-press rounded-lg px-2 py-1.5 text-[11px] font-medium transition ${
+                  onClick={() => saveClock({ clock_face: f.key })}
+                  disabled={!canSet || saving}
+                  title={canSet ? undefined : "Your manager sets the clock for the whole restaurant"}
+                  className={`mise-press min-h-[34px] rounded-lg px-2 py-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
                     face === f.key
                       ? "bg-brand-600 text-white"
                       : "mise-card-inset text-fg-soft hover:text-fg"
