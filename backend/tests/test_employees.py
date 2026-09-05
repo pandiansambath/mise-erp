@@ -185,13 +185,21 @@ async def test_create_login_for_employee(client, make_user, auth_header):
     assert resp.status_code == 200
     assert resp.json()["user_id"] is not None
 
-    # STRICT EMAIL: a brand-new staff login is UNVERIFIED — sign-in is blocked
-    # until they click the verification link the account creation emailed.
-    blocked = await client.post(
+    # LOOSE EMAIL (changed 2026-09-05): a brand-new staff login is still
+    # UNVERIFIED, but it signs in. "let them enter, then verify the mail id."
+    # A member of staff who mistyped their address used to be locked out of a
+    # system their manager had already set up for them, with nobody able to let
+    # them in.
+    #
+    # What being unverified costs is asserted in tests/test_loose_verification.py:
+    # password reset and alerts stay paused, and a new HOTEL still has to verify
+    # on the spot. Here we only care that the door opens and the account is
+    # honest about its state.
+    ok = await client.post(
         "/api/auth/login", json={"email": "selvi@nirai.com", "password": "StaffPass123"}
     )
-    assert blocked.status_code == 403
-    assert "verify" in blocked.json()["detail"].lower()
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["user"]["email_verified"] is False
 
     # duplicate email is rejected
     dup = await client.post(

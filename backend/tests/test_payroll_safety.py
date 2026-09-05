@@ -282,7 +282,7 @@ async def test_attendance_history_range_and_export(client, make_user, auth_heade
 
 
 @pytest.mark.asyncio
-async def test_strict_staff_email_verification_and_admin_controls(
+async def test_staff_email_verification_and_admin_controls(
     client, make_user, auth_header, db, hotel
 ):
     """New staff logins must verify before entering; the admin can see status,
@@ -303,11 +303,22 @@ async def test_strict_staff_email_verification_and_admin_controls(
     )
     assert made.status_code == 200
 
-    # unverified → login blocked
-    blocked = await client.post(
+    # unverified → gets IN (loosened 2026-09-05), but the recovery route stays
+    # shut. That pairing is the whole design: an address nobody has proved they
+    # own must never become a way back into the account, or a typo becomes a
+    # way into someone else's.
+    ok = await client.post(
         "/api/auth/login", json={"email": "priya@staff.com", "password": "StaffPass123"}
     )
-    assert blocked.status_code == 403
+    assert ok.status_code == 200, ok.text
+
+    reset = await client.post("/api/auth/forgot-password", json={"email": "priya@staff.com"})
+    assert reset.status_code == 200, "the response must not reveal who exists"
+    db.expire_all()
+    unproven = (
+        await db.execute(_select(User).where(User.email == "priya@staff.com"))
+    ).scalar_one()
+    assert unproven.reset_token is None, "an unverified address must not get a reset link"
 
     # admin sees the unverified chip
     login_status = await client.get(f"/api/employees/{emp_id}/login", headers=h)
