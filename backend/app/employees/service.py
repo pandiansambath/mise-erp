@@ -5,7 +5,7 @@ from datetime import date as date_type
 from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.employees.models import (
@@ -188,6 +188,89 @@ async def set_staff_active(db, emp: Employee, active: bool) -> None:
         raise AccountError("This employee has no login yet")
     u = await db.get(User, emp.user_id)
     u.is_active = active
+    await db.commit()
+
+
+async def removal_impact(db, emp: Employee) -> dict:
+    """Everything a permanent removal would take with it, counted.
+
+    Every foreign key pointing at employees is ON DELETE CASCADE — attendance,
+    payslips, documents and rota shifts. Behind a one-word button that is a lot
+    of history to destroy silently, so the numbers are fetched before the
+    question is asked and the confirmation reads them out.
+    """
+    from app.auth.models import User
+
+    async def _count(table: str) -> int:
+        row = await db.execute(
+            text(f"SELECT COUNT(*) FROM {table} WHERE employee_id = :eid"), {"eid": emp.id}
+        )
+        return int(row.scalar() or 0)
+
+    # Documents are the odd one out: no employee_id column and no foreign key,
+    # just (related_entity_type, related_entity_id). So they neither cascade nor
+    # count like the rest, and they are the thing that would be left orphaned.
+    docs = await db.execute(
+        text(
+            "SELECT COUNT(*) FROM documents "
+            "WHERE related_entity_type = 'EMPLOYEE' AND related_entity_id = :eid"
+        ),
+        {"eid": emp.id},
+    )
+
+    email = None
+    if emp.user_id:
+        u = await db.get(User, emp.user_id)
+        if u is not None and u.deleted_at is None:
+            email = u.email
+
+    return {
+        "attendance": await _count("attendance"),
+        "payslips": await _count("payroll"),
+        "documents": int(docs.scalar() or 0),
+        "shifts": await _count("shifts"),
+        "leaves": await _count("leaves"),
+        "advances": await _count("salary_advances"),
+        "requests": await _count("document_requests"),
+        "login_email": email,
+    }
+
+
+async def remove_employee_permanently(db, emp: Employee) -> None:
+    """Remove the employee, and the login with them.
+
+    The direction is the point. "if we remove from employee then role's page
+    need to catch that, but if we remove from staff, employee don't catch." A
+    person can exist without an account; an account cannot exist without a
+    person — so this cascades outward to the login, while purging a login
+    deliberately leaves the employment record standing.
+
+    The login is anonymised rather than deleted (the same purge the Roles page
+    uses), so past actions still resolve to "Removed user" instead of dangling.
+    """
+    from app.auth.models import User
+    from app.auth.service import purge_user
+
+    if emp.user_id:
+        u = await db.get(User, emp.user_id)
+        if u is not None and u.deleted_at is None:
+            await purge_user(db, u)
+
+    # Documents have no foreign key to employees — they link by
+    # (related_entity_type, related_entity_id) — so nothing would cascade and
+    # they would sit there pointing at a person who no longer exists. Removed
+    # explicitly, or "permanently remove" quietly means "mostly remove".
+    await db.execute(
+        text(
+            "DELETE FROM documents "
+            "WHERE related_entity_type = 'EMPLOYEE' AND related_entity_id = :eid"
+        ),
+        {"eid": emp.id},
+    )
+
+    # Everything else IS ON DELETE CASCADE (attendance, payroll, shifts, leaves,
+    # salary advances, document requests), so the database takes them with it.
+    await db.delete(emp)
     await db.commit()
 
 

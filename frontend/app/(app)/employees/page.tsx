@@ -11,6 +11,7 @@ import { Select } from "@/components/Select";
 import { SortBar, useSort } from "@/components/sortable";
 import { SheetPopup } from "@/components/SheetPopup";
 import { useAuth } from "@/lib/auth";
+import { useConfirm } from "@/components/confirm";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { numeric } from "@/lib/sanitize";
@@ -38,6 +39,10 @@ function visaTone(days: number): "red" | "amber" {
 
 export default function EmployeesPage() {
   const [loginFor, setLoginFor] = useState<Employee | null>(null);
+  const confirm = useConfirm();
+  // Suspended people are off the roster, not gone. Without this the only
+  // screen that can bring them back is the one they vanish from.
+  const [showSuspended, setShowSuspended] = useState(false);
   const { user } = useAuth();
   const { format } = useCurrency();
   const canWrite = can(user?.role, "employees:write");
@@ -59,14 +64,99 @@ export default function EmployeesPage() {
 
   function load() {
     return Promise.all([
-      api.get<Employee[]>("/employees").then(setEmployees),
+      api
+        .get<Employee[]>(`/employees${showSuspended ? "?include_suspended=true" : ""}`)
+        .then(setEmployees),
       api.get<VisaAlert[]>("/employees/visa-alerts?within_days=60").then(setAlerts).catch(() => {}),
     ]);
   }
 
   useEffect(() => {
     load().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSuspended]);
+
+  /** Suspend / bring back — reversible, and it acts on the EMPLOYEE. */
+  async function suspendEmployee(e: Employee) {
+    const suspending = e.is_active !== false;
+    const ok = await confirm({
+      title: suspending ? `Suspend ${e.full_name}?` : `Bring ${e.full_name} back?`,
+      message: suspending
+        ? "They come off the roster and out of new rotas. Their history, payslips and documents stay exactly as they are, and you can bring them back at any time."
+        : "They go back on the roster and can be rostered again.",
+      confirmText: suspending ? "Suspend" : "Bring back",
+      tone: suspending ? "danger" : "default",
+    });
+    if (!ok) return;
+    try {
+      await api.patch(`/employees/${e.id}`, { is_active: !suspending });
+      await load();
+      setLoginFor(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not change that");
+    }
+  }
+
+  /** PERMANENT, and it takes the login with it.
+   *
+   *  "if we remove from employee then role's page need to catch that, but if we
+   *   remove from staff, employee don't catch." A person can exist without an
+   *  account; an account cannot exist without a person.
+   *
+   *  The confirmation reads out what is about to be destroyed, because every
+   *  foreign key pointing at an employee cascades — attendance, payslips,
+   *  documents, shifts. A one-word button should not quietly take a year of
+   *  payroll with it, so the numbers are fetched first and said out loud. */
+  async function removeEmployee(e: Employee) {
+    let impact: {
+      attendance: number; payslips: number; documents: number; shifts: number;
+      leaves: number; advances: number; requests: number; login_email: string | null;
+    } | null = null;
+    try {
+      impact = await api.get(`/employees/${e.id}/impact`);
+    } catch {
+      /* if we cannot count it, we still name what kind of thing goes */
+    }
+    const ok = await confirm({
+      title: `Permanently remove ${e.full_name}?`,
+      message: (
+        <>
+          This cannot be undone.
+          {impact ? (
+            <>
+              {" "}It also deletes{" "}
+              <b>
+                {impact.attendance} attendance record{impact.attendance === 1 ? "" : "s"},{" "}
+                {impact.payslips} payslip{impact.payslips === 1 ? "" : "s"},{" "}
+                {impact.documents} document{impact.documents === 1 ? "" : "s"} and{" "}
+                {impact.shifts} rostered shift{impact.shifts === 1 ? "" : "s"}
+              </b>
+              {impact.login_email ? (
+                <>
+                  , and closes the login <b>{impact.login_email}</b>
+                </>
+              ) : null}
+              .
+            </>
+          ) : (
+            " It also deletes their attendance, payslips, documents and shifts, and closes their login."
+          )}{" "}
+          If you only want them off the roster, <b>Suspend</b> does that and keeps everything.
+        </>
+      ),
+      confirmText: "Remove permanently",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/employees/${e.id}`);
+      await load();
+      setLoginFor(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove that employee");
+    }
+  }
+
 
   function startEdit(e: Employee) {
     setEditingId(e.id);
@@ -340,7 +430,21 @@ export default function EmployeesPage() {
           action says so before it is read. */}
       <Card id="team-list" className="scroll-mt-24 p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
-          <h2 className="text-sm font-semibold text-fg">Your team</h2>
+          <h2 className="mr-auto text-sm font-semibold text-fg">Your team</h2>
+          {/* Suspended people are OFF the roster, not gone. Without this the
+              only screen that can bring someone back is the one they disappear
+              from — a one-way door wearing a two-way label. */}
+          <button
+            type="button"
+            onClick={() => setShowSuspended((v) => !v)}
+            data-tone={showSuspended ? "brand" : undefined}
+            data-testid="show-suspended"
+            className={`mise-btn-flat mise-press min-h-[36px] px-3 py-1.5 text-xs font-medium ${
+              showSuspended ? "text-brand-300" : "text-fg-soft"
+            }`}
+          >
+            {showSuspended ? "Hiding none" : "Show suspended"}
+          </button>
           <SortBar
             sort={sort}
             options={[
@@ -369,7 +473,9 @@ export default function EmployeesPage() {
               return (
                 <div
                   key={e.id}
-                  className="mise-card-inset relative flex flex-col overflow-hidden p-3.5 pl-4"
+                  className={`mise-card-inset relative flex flex-col overflow-hidden p-3.5 pl-4 ${
+                    e.is_active === false ? "opacity-60" : ""
+                  }`}
                 >
                   <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${stripe}`} />
                   <div className="flex items-center gap-2.5">
@@ -380,8 +486,13 @@ export default function EmployeesPage() {
                       {e.full_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("")}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-display text-base font-semibold text-fg">
-                        {e.full_name}
+                      <span className="flex items-center gap-1.5">
+                        <span className="min-w-0 truncate font-display text-base font-semibold text-fg">
+                          {e.full_name}
+                        </span>
+                        {e.is_active === false && (
+                          <span className="mise-chip-warn shrink-0">suspended</span>
+                        )}
                       </span>
                       <span className="block truncate text-[11px] text-fg-faint">
                         {e.employee_code}
@@ -470,7 +581,12 @@ export default function EmployeesPage() {
       )}
 
       {loginFor && (
-        <StaffLoginModal employee={loginFor} onClose={() => setLoginFor(null)} />
+        <StaffLoginModal
+          employee={loginFor}
+          onClose={() => setLoginFor(null)}
+          onSuspend={suspendEmployee}
+          onRemove={removeEmployee}
+        />
       )}
     </div>
   );
@@ -492,7 +608,19 @@ const ACTION_ICON: Record<string, string> = {
   "staff.verification_resent": "📨",
 };
 
-function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+function StaffLoginModal({
+  employee,
+  onClose,
+  onSuspend,
+  onRemove,
+}: {
+  employee: Employee;
+  onClose: () => void;
+  /** Acts on the PERSON, not the account — so it lives on the page, which owns
+   *  the roster this changes. */
+  onSuspend: (e: Employee) => void;
+  onRemove: (e: Employee) => void;
+}) {
   const [status, setStatus] = useState<LoginStatus>(null);
   const [history, setHistory] = useState<HistoryEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -582,8 +710,12 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
                     📨 Resend verification email
                   </button>
                 )}
-                <button disabled={busy} onClick={() => act(() => api.post(`/employees/${employee.id}/login/active`, { is_active: !status.is_active }), status.is_active ? "Login deactivated" : "Login reactivated")} className="mise-raised mise-press w-full rounded-xl px-3 py-2.5 text-left text-sm text-fg-soft">
-                  {status.is_active ? "🚫 Deactivate this login" : "✅ Reactivate this login"}
+                {/* CALLED THE SAME THING IN BOTH PLACES. This button and the
+                    Roles & Access page's "Stop access" do exactly the same
+                    thing — flip the login's is_active — and used to be called
+                    two different things, so it looked like two features. */}
+                <button disabled={busy} onClick={() => act(() => api.post(`/employees/${employee.id}/login/active`, { is_active: !status.is_active }), status.is_active ? "Access stopped" : "Access restored")} className="mise-btn-flat mise-press min-h-[46px] w-full rounded-xl px-3 py-2.5 text-left text-sm text-fg-soft">
+                  {status.is_active ? "🚫 Stop access" : "✅ Restore access"}
                 </button>
 
                 <div className="mise-well rounded-xl p-3">
@@ -604,6 +736,40 @@ function StaffLoginModal({ employee, onClose }: { employee: Employee; onClose: (
                     🔒 For security we never email the password — tell them the new one in person.
                     They get a &ldquo;your password was changed&rdquo; notice.
                   </p>
+                </div>
+
+                {/* THE PERSON, NOT THE LOGIN.
+                    Everything above acts on the account. These two act on the
+                    employee, and the difference is the whole point of his rule:
+                    "if we remove from employee then role's page need to catch
+                    that, but if we remove from staff, employee don't catch."
+                    A person can exist without an account; an account cannot
+                    exist without a person. */}
+                <div className="rounded-xl border border-rose-400/25 bg-rose-400/[0.05] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">
+                    The employee
+                  </p>
+                  <p className="mt-1 text-[11px] text-fg-faint">
+                    Suspending hides them from the roster and rotas and can be undone.
+                    Removing cannot.
+                  </p>
+                  <div className="mt-2.5 space-y-2">
+                    <button
+                      disabled={busy}
+                      onClick={() => onSuspend(employee)}
+                      className="mise-btn-flat mise-press min-h-[46px] w-full rounded-xl px-3 py-2.5 text-left text-sm text-fg-soft"
+                    >
+                      {employee.is_active === false ? "✅ Bring back" : "⏸ Suspend this employee"}
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => onRemove(employee)}
+                      data-tone="danger"
+                      className="mise-btn-flat mise-press min-h-[46px] w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-300"
+                    >
+                      ✕ Permanently remove {employee.full_name.split(" ")[0]}
+                    </button>
+                  </div>
                 </div>
               </div>
 
