@@ -117,14 +117,14 @@ rows.
 
 | # | What he said | Kind | State |
 |---|---|---|---|
-| 1 | A running **HH:MM:SS clock** in the corner, in the HOTEL's timezone, on literally every page | feature | ☐ |
-| 2 | "No login yet" popup has **no redirect link** to Staff, and its UI is not nice | bug + UI | ☐ |
-| 3 | Purchasing supplier tiles — **card shadow not nice**, use /staff | UI | ☐ |
-| 4 | **Show by supplier → tapping one still shows every supplier's items** | 🔴 BUG | ☐ |
-| 5 | It lists items regardless of whether that supplier prices them | 🔴 BUG | ☐ |
-| 6 | **Card UI differs between the three screens** — be consistent | UI | ☐ |
-| 7 | Price high–low cards "over too much enhanced" | UI | ☐ |
-| 8 | ⭐ **REBUILD THE INVENTORY PAGE** | big | ☐ |
+| 1 | A running **HH:MM:SS clock** in the corner, in the HOTEL's timezone, on literally every page | feature | ✅ verified live: 18:39:12 on 4 pages, ticking, labelled Europe/London while the test machine was in Asia/Calcutta. Now clickable → analog face, 12/24, 8 faces |
+| 2 | "No login yet" popup has **no redirect link** to Staff, and its UI is not nice | bug + UI | ✅ links to the People door — not to a person, because the reason you are reading it is that there is no account yet |
+| 3 | Purchasing supplier tiles — **card shadow not nice**, use /staff | UI | ✅ and the root cause was the base `Card` being raised — fixed there, so every page followed |
+| 4 | **Show by supplier → tapping one still shows every supplier's items** | 🔴 BUG | ✅ verified live: tapping Exotic now prices all 12 cards FROM Exotic. It had shown Aluminium Containers at £4.77 from SK when Exotic's price is £55 |
+| 5 | It lists items regardless of whether that supplier prices them | 🔴 BUG | ✅ same fix — `catVendor` pins the sheet to the supplier you pressed |
+| 6 | **Card UI differs between the three screens** — be consistent | UI | ✅ one card class app-wide; audit passes |
+| 7 | Price high–low cards "over too much enhanced" | UI | ✅ same change |
+| 8 | ⭐ **REBUILD THE INVENTORY PAGE** | big | ✅ the round trip is gone (add item takes supplier + price), and 8 bands became 1 row with a counted Filters popup |
 
 ## 4 and 5 are the same bug and it is a real one
 
@@ -160,11 +160,11 @@ Vendors page still there for people who think supplier-first.
 
 | # | What he said | State |
 |---|---|---|
-| 1 | Changing a supplier on one click must CONFIRM — a misclick changes what costing uses | ☐ |
-| 2 | Purchasing: 4 screens whose card UI he does not like (indent list, PO runs, PO sheet, indent sheet) | ☐ |
-| 3 | Vendors: needs the purchasing popup-in-popup; today it is all scrolling | ☐ |
-| 4 | Price comparison: change the UI completely | ☐ |
-| 5 | ⭐ **CORE FIRST ON EVERY PAGE** | ☐ |
+| 1 | Changing a supplier on one click must CONFIRM — a misclick changes what costing uses | ✅ dialog names BOTH prices, old and new |
+| 2 | Purchasing: 4 screens whose card UI he does not like | ✅ lists became a grid and now say what is IN them; every `mise-card3d` on the page is gone |
+| 3 | Vendors: needs the purchasing popup-in-popup; today it is all scrolling | ✅ drawer deleted; stats + 4 action tiles + stacked popups; Supplies and Add-a-price both tiles→popup with a one-click All |
+| 4 | Price comparison: change the UI completely | ✅ overpaying items lead; show-by ×4; browse popup in columns |
+| 5 | ⭐ **CORE FIRST ON EVERY PAGE** | ✅ verified by test on 5 pages (all at 0px), WITH his exception: summary first where the core is an unbounded list (employees, vendors) |
 
 ## 5 is the one that matters most
 
