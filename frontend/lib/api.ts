@@ -317,6 +317,7 @@ export interface Hotel {
   has_logo?: boolean; // an uploaded brand logo replaces the default DineAI mark
   features?: Record<string, boolean>; // per-hotel entitlements (missing = enabled)
   landing?: LandingConfig; // customizable public-page config
+  login_page?: Record<string, unknown>; // customizable staff sign-in door
 }
 
 /** A live dish from the hotel's real DineAI menu, shown on their public site. */
