@@ -1518,8 +1518,11 @@ function BasketSheet({
                 the scroll he was complaining about. */}
             {!folded.has(g.key) && (
             <ul
-              className="mt-2 grid gap-2"
-              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(10.5rem, 100%), 1fr))" }}
+              // Same column width and gutter as the order pad's own grid, so a
+              // basket card and the card it came from are the same object at
+              // the same size rather than two sizes of the same idea.
+              className="mt-3 grid gap-3"
+              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(12rem, 100%), 1fr))" }}
             >
               {g.rows.map(({ it, qty, line: l }) => {
                 // Priced for THIS line's supplier, so two lines of the same
@@ -1551,7 +1554,7 @@ function BasketSheet({
                       className="mise-flip-inner cursor-pointer"
                     >
                       {/* ── FRONT ─────────────────────────────────────────── */}
-                      <div className="mise-card3d mise-flip-face mise-shine relative overflow-hidden p-2.5 pl-3.5">
+                      <div className="mise-card-inset mise-flip-face relative flex h-full flex-col overflow-hidden p-3 pl-3.5">
                         <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
 
                         {/* Name and money on one baseline, the money in the
@@ -1563,13 +1566,13 @@ function BasketSheet({
                           <span aria-hidden className="shrink-0 text-base leading-none">
                             {categoryEmoji(groupOf(it))}
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-fg">
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-fg">
                             {it.name}
                           </span>
                         </div>
 
-                        <div className="mt-1 flex items-baseline justify-between gap-2">
-                          <span className="font-display text-base font-semibold leading-none tabular-nums text-fg">
+                        <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                          <span className="font-display text-lg font-semibold leading-none tabular-nums text-fg">
                             {format(money.toFixed(2))}
                           </span>
                           <span className="shrink-0 text-[11px] font-medium tabular-nums text-fg-soft">
@@ -1611,6 +1614,7 @@ function BasketSheet({
                                 Supplier and pack for {it.name}, this order only
                               </span>
                               <select
+                                data-testid="basket-supplier"
                                 value={chosen ? `${chosen}|${chosenForm}` : ""}
                                 onChange={(e) => {
                                   const [vid, lvl] = (e.target.value || "").split("|");
@@ -1664,7 +1668,7 @@ function BasketSheet({
                             than a staircase, and it costs no information: an
                             item with no pack chain shows a dash where the pack
                             price would be. */}
-                        <dl className="mt-1.5 space-y-0.5 border-t border-line/50 pt-1.5 text-[10px] leading-tight">
+                        <dl className="mt-2.5 space-y-1 border-t border-line/50 pt-2 text-[11px] leading-tight">
                           <div className="flex items-baseline justify-between gap-2">
                             <dt className="mise-tone-info">in stock</dt>
                             <dd className="mise-tone-info shrink-0 font-semibold tabular-nums">
@@ -1693,8 +1697,12 @@ function BasketSheet({
                           </div>
                         </dl>
 
-                        {/* Small, quiet, and they never flip the card. */}
-                        <div className="mt-1.5 flex items-center justify-end gap-1">
+                        {/* Small, quiet, and they never flip the card. Pushed
+                            to the bottom (mt-auto) so the buttons line up
+                            across the whole grid — a row of cards whose
+                            controls sit at different heights is the thing that
+                            makes a grid look accidental. */}
+                        <div className="mt-auto flex items-center justify-end gap-1 pt-2">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1703,7 +1711,7 @@ function BasketSheet({
                             }}
                             aria-label={`Change how much ${it.name}`}
                             title="Change how much"
-                            className="mise-press grid h-6 w-6 place-items-center rounded-md border border-line text-[10px] text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+                            className="mise-press grid h-8 w-8 place-items-center rounded-lg border border-line text-xs text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
                           >
                             &#9998;
                           </button>
@@ -1715,7 +1723,7 @@ function BasketSheet({
                             }}
                             aria-label={`Remove ${it.name}`}
                             title="Take it out"
-                            className="mise-press grid h-6 w-6 place-items-center rounded-md text-[10px] text-fg-faint transition hover:text-rose-300"
+                            className="mise-press grid h-8 w-8 place-items-center rounded-lg text-xs text-fg-faint transition hover:text-rose-300"
                           >
                             &#10005;
                           </button>
@@ -1726,7 +1734,7 @@ function BasketSheet({
                           No close button: the card itself turns back, and a
                           second ✕ next to the remove ✕ only asks "which one
                           takes it out of my basket?" */}
-                      <div className="mise-card3d mise-flip-face mise-flip-back relative overflow-hidden p-2.5 pl-3.5">
+                      <div className="mise-card-inset mise-flip-face mise-flip-back relative flex h-full flex-col overflow-hidden p-3 pl-3.5">
                         <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${tint}`} />
                         <p className="truncate font-display text-[13px] font-semibold leading-tight text-brand-300">
                           {it.name}
