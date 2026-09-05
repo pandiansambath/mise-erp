@@ -98,7 +98,26 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account is suspended. Contact DineAI support.",
         )
-    if not user.email_verified and not getattr(user, "is_platform_owner", False):
+    # LET THEM IN, THEN VERIFY — except the hotel signing itself up.
+    #
+    # "instead of this we need to make loose, let them enter then verify the
+    #  mail id... implement this loose for all logins except the new hotel
+    #  registration login."
+    #
+    # A member of staff who mistypes their address used to be locked out of a
+    # system their manager had already set up for them, with nobody able to let
+    # them in. A hotel owner who mistypes theirs is a different problem — the
+    # welcome mail, the billing and the recovery route all hang off it — so that
+    # one still verifies on the spot.
+    #
+    # What being unverified costs is set out in `unverified_limits` below:
+    # password reset and alerts are PAUSED, so the address cannot become a way
+    # back into an account until someone has proved they own it.
+    if (
+        not user.email_verified
+        and user.verify_required
+        and not getattr(user, "is_platform_owner", False)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email first — check your inbox (or resend the link).",
@@ -242,8 +261,14 @@ async def register_hotel(
         db, payload.email, payload.password, Role.SUPER_ADMIN.value, hotel.id
     )
     await db.refresh(hotel)  # create_user committed; reload before serialising
-    # New owners must click the emailed link before the app opens.
+    # New owners must click the emailed link before the app opens. This is the
+    # ONE login the loosened gate still stops: "new hotel definitely need to
+    # verify on the spot so that we can send welcome mail to them etc, else
+    # suppose they give wrong mail id and we didn't verify means it will create
+    # so many real confusion." Everything hangs off this address — the welcome
+    # mail, billing, and the only route back into the account.
     user.email_verified = False
+    user.verify_required = True
     user.verify_token = secrets.token_urlsafe(32)
     await db.commit()
     # ONE welcome-and-verify email: the confirm button is the door.
@@ -626,7 +651,13 @@ async def forgot_password(
     # else's inbox.
     ratelimit.guard(request, "forgot_password", payload.email)
     user = await service.get_user_by_email(db, payload.email.strip().lower())
-    if user and user.is_active:
+    # PAUSED UNTIL VERIFIED. "if they not verified mail id then don't allow them
+    # to use forget password or alerts, these are all paused until email id is
+    # verified." That is not just tidiness: letting an unproven address request
+    # a reset link turns a typo into a way into someone else's account. The
+    # response is still the same OK either way, so this leaks nothing about who
+    # exists.
+    if user and user.is_active and user.email_verified:
         user.reset_token = secrets.token_urlsafe(32)
         user.reset_expires = datetime.now(UTC) + timedelta(minutes=60)
         await db.commit()

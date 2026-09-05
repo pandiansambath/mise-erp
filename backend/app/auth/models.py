@@ -121,6 +121,19 @@ class User(Base):
     # Real-email era: new OWNER signups must click the emailed link before the
     # app opens. Existing accounts were grandfathered True by the migration.
     email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # WHO STILL HAS TO VERIFY BEFORE THEY CAN GET IN.
+    #
+    # "implement this loose for all logins EXCEPT the new hotel registration
+    #  login (new hotel definitely need to verify on the spot... else suppose
+    #  they give wrong mail id and we didn't verify means it will create so many
+    #  real confusion)."
+    #
+    # Set only where a hotel signs itself up. Everyone else gets in and verifies
+    # afterwards — with password-reset and alerts paused until they do, so an
+    # unverified address can never become a recovery route.
+    verify_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     # One pending token at a time per purpose; hashed-equivalent randomness via
     # secrets.token_urlsafe. Cleared once used.
     verify_token: Mapped[str | None] = mapped_column(String(64), index=True)
