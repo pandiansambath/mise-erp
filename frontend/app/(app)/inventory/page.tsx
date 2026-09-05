@@ -156,6 +156,10 @@ export default function InventoryPage() {
    *  column, so the purchase history sat three flicks below the fold and the
    *  sheet felt bottomless — "try to reduce the scroll effort". */
   const [detailTab, setDetailTab] = useState<"item" | "suppliers" | "purchases">("item");
+  // Correcting the stock from the item popup, instead of a trip to Stock-take.
+  const [countValue, setCountValue] = useState("");
+  const [countBusy, setCountBusy] = useState(false);
+  const [countMsg, setCountMsg] = useState<string | null>(null);
   const [breakdown, setBreakdown] = useState<Record<string, PurchaseByVendorRow[]>>({});
   const [bdLoading, setBdLoading] = useState<string | null>(null);
   // The "chain": open a purchase into the full delivery it came on (shared reference).
@@ -681,6 +685,8 @@ export default function InventoryPage() {
     // A different item starts at the top, not on whatever tab the last one was
     // left on.
     setDetailTab("item");
+    setCountValue("");
+    setCountMsg(null);
     if (!breakdown[item.id]) {
       setBdLoading(item.id);
       try {
@@ -2251,6 +2257,94 @@ export default function InventoryPage() {
                   <p className="mt-0.5 text-sm text-fg">{openItem.vendor_count ?? 0}</p>
                 </div>
               </div>
+
+              {/* CORRECT THE STOCK, HERE.
+                  Logged as an ADJUSTMENT movement exactly as Stock-take does,
+                  so the trail still says who changed what and when — this is a
+                  shorter road to the same place, not a back door around it. */}
+              {canWrite && (
+                <div className="mise-card-inset mt-3 p-3.5">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                        Correct the stock
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-fg-faint">
+                        system says {fmtQty(openItem.current_stock, openItem.unit)} — type what
+                        you actually counted
+                      </p>
+                    </div>
+                    <label className="shrink-0">
+                      <span className="sr-only">Counted quantity</span>
+                      <input
+                        value={countValue}
+                        onChange={(e) => { setCountValue(numeric(e.target.value)); setCountMsg(null); }}
+                        inputMode="decimal"
+                        placeholder="counted"
+                        aria-label={`Counted quantity of ${openItem.name} in ${openItem.unit}`}
+                        className="mise-well min-h-[40px] w-28 rounded-lg px-2.5 py-2 text-right text-sm tabular-nums outline-none"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={countBusy || !(parseFloat(countValue) >= 0)}
+                      data-tone="brand"
+                      onClick={async () => {
+                        const counted = parseFloat(countValue);
+                        if (!(counted >= 0)) return;
+                        const now = parseFloat(openItem.current_stock) || 0;
+                        const delta = counted - now;
+                        if (Math.abs(delta) < 0.0001) {
+                          setCountMsg("That matches the system already — nothing to change.");
+                          return;
+                        }
+                        const ok = await confirm({
+                          title: `Correct ${openItem.name} to ${counted} ${openItem.unit}?`,
+                          message: (
+                            <>
+                              The system says <b>{fmtQty(openItem.current_stock, openItem.unit)}</b>.
+                              This records an adjustment of{" "}
+                              <b>{delta > 0 ? "+" : ""}{delta.toFixed(3)} {openItem.unit}</b>
+                              {" "}against your count, worth roughly{" "}
+                              <b>{format(String(Math.abs(delta * (parseFloat(openItem.average_cost) || 0)).toFixed(2)))}</b>.
+                            </>
+                          ),
+                          confirmText: "Record the count",
+                        });
+                        if (!ok) return;
+                        setCountBusy(true);
+                        try {
+                          await api.post(`/inventory/items/${openItem.id}/movements`, {
+                            movement_type: "ADJUSTMENT",
+                            quantity: String(delta),
+                            notes: "Counted from Inventory",
+                          });
+                          await load();
+                          setCountValue("");
+                          setCountMsg("Stock corrected, and the adjustment is on the record.");
+                        } catch (e) {
+                          setCountMsg(e instanceof ApiError ? e.message : "Could not record that count");
+                        } finally {
+                          setCountBusy(false);
+                        }
+                      }}
+                      className="mise-btn-flat mise-press min-h-[40px] shrink-0 px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+                    >
+                      {countBusy ? "Saving…" : "Apply"}
+                    </button>
+                  </div>
+                  {countValue !== "" && parseFloat(countValue) >= 0 && (
+                    <p className="mt-2 text-[11px] text-fg-faint">
+                      {(() => {
+                        const d = parseFloat(countValue) - (parseFloat(openItem.current_stock) || 0);
+                        if (Math.abs(d) < 0.0001) return "Matches the system.";
+                        return `${d > 0 ? "Up" : "Down"} ${Math.abs(d).toFixed(3)} ${openItem.unit} on the system figure.`;
+                      })()}
+                    </p>
+                  )}
+                  {countMsg && <p className="mt-2 text-[11px] text-brand-300">{countMsg}</p>}
+                </div>
+              )}
               </>
             )}
 
