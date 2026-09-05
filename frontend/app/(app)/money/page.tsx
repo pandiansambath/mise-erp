@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SubNav } from "@/components/SubNav";
+import { TotalsStrip } from "@/components/PageKit";
 import { spotlight } from "@/components/fx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,7 +17,7 @@ import {
   type MoneyCentre,
   type PnL,
 } from "@/lib/api";
-import { Badge, Button, Card, PageHeader, Spinner, StatCard } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { Bars, Donut, Meter, Waffle, Sparkline } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
@@ -471,7 +472,7 @@ export default function MoneyPage() {
         const net = parseFloat(data.net_profit) || 0;
         const up = net >= 0;
         return (
-          <div className="mise-stagger grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div className="mise-stagger grid gap-3 lg:grid-cols-[1.4fr_2fr]">
             <div className="mise-card-inset relative overflow-hidden p-4 pl-5">
               <span
                 aria-hidden
@@ -491,24 +492,33 @@ export default function MoneyPage() {
                 {data.net_margin_pct}% of what came in
               </p>
             </div>
-            <StatCard
-              label="Gross margin"
-              value={`${data.gross_margin_pct}%`}
-              hint="before overheads"
-              accent="brand"
-            />
-            <StatCard
-              label="Food cost"
-              value={`${data.food_cost_pct}%`}
-              hint="target 25–35%"
-              accent="amber"
-            />
-            <StatCard
-              label="Stock on hand"
-              value={format(data.stock_value.total)}
-              hint={`${data.stock_value.item_count} items at avg cost`}
-              accent="copper"
-              href="/inventory"
+            {/* THE THREE SUPPORTING FIGURES, AS A STRIP.
+                They were three full StatCards, which on a phone stack under the
+                headline into about 500px of page before anything else — "not
+                too much space also". They are how the headline came about, not
+                three separate things to look at, so they read as one object.
+                Same TotalsStrip as Sales, Expenses and My Space, which is the
+                point: one kit, one rhythm. */}
+            <TotalsStrip
+              items={[
+                {
+                  label: "Gross margin",
+                  value: `${data.gross_margin_pct}%`,
+                  hint: "before overheads",
+                  tone: "good",
+                },
+                {
+                  label: "Food cost",
+                  value: `${data.food_cost_pct}%`,
+                  hint: "target 25–35%",
+                  tone: "warn",
+                },
+                {
+                  label: "Stock on hand",
+                  value: format(data.stock_value.total),
+                  hint: `${data.stock_value.item_count} items at avg cost`,
+                },
+              ]}
             />
           </div>
         );
