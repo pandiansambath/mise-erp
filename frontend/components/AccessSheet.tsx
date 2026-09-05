@@ -66,6 +66,14 @@ export function AccessSheet({
   const [arch, setArch] = useState<Archetype[]>([]);
   const [held, setHeld] = useState<Set<string>>(new Set());
   const [job, setJob] = useState("");
+  /** What their AI may do once ai:use is on. Empty = the hotel's defaults, so
+   *  nobody is capped by surprise. */
+  const [ai, setAi] = useState<Record<string, unknown>>({});
+  const [aiTouched, setAiTouched] = useState(false);
+  const patchAi = (patch: Record<string, unknown>) => {
+    setAiTouched(true);
+    setAi((v) => ({ ...v, ...patch }));
+  };
   // The hotel's OWN roles, so a person can simply be put into one instead
   // of having their switches set by hand every time.
   const [mine, setMine] = useState<{ id: string; name: string }[]>([]);
@@ -102,6 +110,10 @@ export function AccessSheet({
     if (!person) return;
     setErr(null);
     setJob(person.role);
+    setAi(
+      ((person as unknown as { ai_settings?: Record<string, unknown> }).ai_settings) ?? {},
+    );
+    setAiTouched(false);
     const base = arch.find((a) => a.key === person.role);
     const defaults = new Set(base?.defaults ?? []);
     if (!person.custom_role_id) {
@@ -127,7 +139,10 @@ export function AccessSheet({
     draft[areaKey] ?? levelOf(area, held);
 
   const owner = person?.role === "SUPER_ADMIN";
-  const dirty = Object.keys(draft).length > 0 || (person != null && job !== person.role);
+  // Touching the AI panel counts as a change too, or Save stays greyed out
+  // while the screen plainly shows something different from what is stored.
+  const dirty =
+    Object.keys(draft).length > 0 || (person != null && job !== person.role) || aiTouched;
 
   /** The highest position this area can offer — so an area with no middle
    *  lands on its only "on" instead of being quietly skipped. */
@@ -190,7 +205,7 @@ export function AccessSheet({
       }
     }
     try {
-      await api.put(`/roles/user/${person.id}/access`, { base_role: job, overrides });
+      await api.put(`/roles/user/${person.id}/access`, { base_role: job, overrides, ai });
       setDraft({});
       onSaved();
       onClose();
@@ -380,6 +395,90 @@ export function AccessSheet({
                 — or set their switches below, just for them
               </span>
             </div>
+
+            {/* ── WHAT THEIR AI MAY DO ────────────────────────────────────
+                "here we don't have a feature to add or remove ai feature
+                 (under this we need to have some filter like whether to give
+                 haiku or sonnet, also whether to give our voice model, also
+                 what the max token max msg etc)."
+
+                WHETHER they get AI is a permission and is already one of the
+                switches below — it did not need a second home, and two places
+                to turn one thing on is how the two drift apart. This is
+                everything UNDER that yes.
+
+                The ceiling is what earns this panel its place. Every other
+                switch here grants access to something already paid for; a
+                model costs money per question, so "who may use it" without
+                "how much" is half a control. */}
+            <div className="mise-card-inset mt-3 p-3.5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-sm font-semibold text-fg">✨ Their AI</p>
+                <p className="text-[11px] text-fg-faint">
+                  applies once the AI switch below is on
+                </p>
+              </div>
+
+              <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Model
+                  </span>
+                  <select
+                    value={(ai.model as string) ?? ""}
+                    onChange={(e) => patchAi({ model: e.target.value || undefined })}
+                    data-testid="ai-model"
+                    className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
+                  >
+                    <option value="">Hotel default</option>
+                    <option value="haiku">Haiku — quick and cheap</option>
+                    <option value="sonnet">Sonnet — slower, better answers</option>
+                  </select>
+                </label>
+
+                <label className="flex items-end gap-2 pb-2.5">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(ai.voice)}
+                    onChange={(e) => patchAi({ voice: e.target.checked })}
+                    data-testid="ai-voice"
+                  />
+                  <span className="text-sm text-fg-soft">Let them talk to it</span>
+                </label>
+
+                <label className="block">
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Max tokens per answer
+                  </span>
+                  <input
+                    value={(ai.max_tokens as string | number | undefined) ?? ""}
+                    inputMode="numeric"
+                    placeholder="hotel default"
+                    onChange={(e) => patchAi({ max_tokens: e.target.value.replace(/[^0-9]/g, "") })}
+                    className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Max messages a day
+                  </span>
+                  <input
+                    value={(ai.max_messages as string | number | undefined) ?? ""}
+                    inputMode="numeric"
+                    placeholder="hotel default"
+                    onChange={(e) => patchAi({ max_messages: e.target.value.replace(/[^0-9]/g, "") })}
+                    className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
+                  />
+                </label>
+              </div>
+
+              <p className="mt-2 text-[11px] text-fg-faint">
+                Blank means the hotel&apos;s default. These are a spend ceiling, not a
+                suggestion — the assistant is the one thing here that costs money every
+                time it is asked.
+              </p>
+            </div>
           </>
         )
       }
@@ -413,7 +512,7 @@ export function AccessSheet({
             {dirty && (
               <button
                 type="button"
-                onClick={() => { setDraft({}); setJob(person?.role ?? ""); }}
+                onClick={() => { setDraft({}); setJob(person?.role ?? ""); setAi(((person as unknown as { ai_settings?: Record<string, unknown> })?.ai_settings) ?? {}); setAiTouched(false); }}
                 className="mise-press rounded-xl border border-line px-3 py-2 text-sm text-fg-soft"
               >
                 Undo

@@ -59,6 +59,9 @@ class UserOut(BaseModel):
     # the archetype, so "Kitchen Manager (view-only payroll)" would silently
     # display as plain "Manager".
     custom_role_id: uuid.UUID | None = None
+    #: Declared explicitly: response_model drops what it has not been told
+    #: about, and this decides which model the app is allowed to call.
+    ai_settings: dict = Field(default_factory=dict)
 
 
 class MeUpdate(BaseModel):
