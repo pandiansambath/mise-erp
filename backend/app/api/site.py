@@ -148,6 +148,11 @@ async def hotel_landing(handle: str, db: AsyncSession = Depends(get_db)) -> dict
         "city": hotel.city,
         "has_logo": bool(hotel.logo_key),
         "logo_url": f"/api/hotels/{hotel.id}/logo" if hotel.logo_key else None,
+        # The staff door's own styling. Public for the same reason the landing
+        # config is: it has to render BEFORE anyone signs in, which is the one
+        # moment nobody has a token. It carries branding only — never anything
+        # about who works there.
+        "login_page": hotel.login_page or {},
         "order_url": f"/order/{hotel.id}",
         "currency": hotel.base_currency,
         "is_open": not hotel.ordering_paused,

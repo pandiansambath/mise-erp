@@ -86,6 +86,7 @@ class HotelOut(BaseModel):
     has_logo: bool = False
     features: dict = Field(default_factory=dict)
     landing: dict = Field(default_factory=dict)  # customizable public-page config
+    login_page: dict = Field(default_factory=dict)  # customizable staff sign-in door
     #: Display taste — PDF grouping, decimal places, whether receiving posts an
     #: expense. Sent so Settings can show what is actually saved rather than
     #: falling back to the defaults every time it loads.
@@ -103,6 +104,7 @@ class HotelUpdate(BaseModel):
     break_penalty_per_min: Decimal | None = Field(default=None, ge=0)
     min_hourly_rate: Decimal | None = Field(default=None, ge=0)
     landing: dict | None = None  # customizable public-page config (tagline/about/accent/…)
+    login_page: dict | None = None  # customizable staff sign-in door
     # IANA zone. Validated against the offered list rather than accepted freely:
     # a typo here silently shifts which DAY every sale and shift belongs to.
     timezone: str | None = None

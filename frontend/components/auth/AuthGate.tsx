@@ -13,6 +13,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { hotelSite } from "@/lib/site";
+import { HotelDoor, type LoginConfig } from "@/components/auth/HotelDoor";
+import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { PasswordInput, SubmitButton, authInput, authLabel } from "@/components/auth/bits";
 import ChefMascot, { type ChefMood } from "@/components/auth/ChefMascot";
@@ -594,6 +596,42 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   useEffect(() => setOwnSite(hotelSite()), []);
   const lockedToLogin = ownSite !== null;
 
+  // THEIR DOOR, IF THEY HAVE DESIGNED ONE.
+  //
+  // Public endpoint on purpose: this renders before anyone signs in, which is
+  // the one moment nobody has a token. It carries branding only — never
+  // anything about who works there.
+  const [door, setDoor] = useState<{
+    cfg: LoginConfig;
+    name: string;
+    logo: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!ownSite) return;
+    let alive = true;
+    fetch(`${API_BASE}/api/public/hotel-landing/${encodeURIComponent(ownSite)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!alive || !d) return;
+        const cfg = (d.login_page ?? {}) as LoginConfig;
+        // Off, or never configured, means the standard door — so an empty
+        // config has to change nothing at all.
+        if (!cfg.enabled) return;
+        setDoor({
+          cfg,
+          name: d.name ?? ownSite,
+          logo: d.logo_url ? `${API_BASE}${d.logo_url}` : null,
+        });
+      })
+      .catch(() => {
+        /* their door failing to load must never lock anyone out — the standard
+           one renders and still signs them in. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [ownSite]);
+
   const [mode, setMode] = useState<AuthMode>(initialMode);
 
   // If someone arrives at /signup on a hotel subdomain, put them back on the
@@ -629,6 +667,17 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   const isLogin = mode === "login";
   const mTableOk = useDecoded("/experience/m/table.jpg");
   const mDawnOk = useDecoded("/experience/m/dawn.jpg");
+
+  // Their door replaces the whole page rather than decorating it: the shared
+  // one loads two large photographs and a sliding cinema panel, and none of
+  // that should be on the critical path of a chef signing in at 6am.
+  if (door) {
+    return (
+      <HotelDoor cfg={door.cfg} hotelName={door.name} logoUrl={door.logo}>
+        <LoginForm active />
+      </HotelDoor>
+    );
+  }
 
   return (
     <div className="mise-dark-page relative h-svh overflow-hidden bg-ink-950 text-slate-100">

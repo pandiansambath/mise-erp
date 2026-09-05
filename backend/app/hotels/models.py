@@ -43,6 +43,14 @@ class Hotel(Base):
     # Customizable public landing page shown at <username>.dineai.cloud
     # (tagline/about/quote/accent/theme/show_order). Empty {} = sensible defaults.
     landing: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Their own SIGN-IN page at the same subdomain — a different job from the
+    # landing page, so a different bag. The landing page sells to a diner; this
+    # one is the staff door, and it is the first thing their team sees every
+    # shift. Empty {} = the standard DineAI door, so a hotel that never opens
+    # the panel is unaffected.
+    login_page: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict, server_default="{}"
+    )
 
     #: How this restaurant wants its numbers and its paperwork. Taste, not
     #: entitlement — `features` decides what they may use, `prefs` decides how

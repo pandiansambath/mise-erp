@@ -4116,3 +4116,189 @@ body.mise-voice-open .mise-launcher-in {
 .mise-voice {
   transition: opacity 320ms ease, transform 320ms ease;
 }
+
+/* ── THE HOTEL'S OWN STAFF DOOR ────────────────────────────────────────────
+   A customisable sign-in page per hotel, at <handle>.dineai.cloud.
+
+     "why cant we give a specialised customisable login page for subdomain of
+      hotel... create a super special login page (with no register button) and
+      this can be customisable... have as much as feature, animation, UI ux,
+      designs so many that the super admin can customise."
+
+   Every colour here comes from a CSS variable set by HotelDoor from the hotel's
+   saved config, so one component covers every combination without a class
+   explosion — and a hotel that has never opened the panel gets the standard
+   door, because the component is not mounted at all.
+
+   All motion respects prefers-reduced-motion, and "Still" is an explicit choice
+   in the picker rather than only an accessibility fallback: a wall tablet in a
+   kitchen should be allowed to stop moving. */
+.mise-door {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  background: var(--door-bg);
+  color: var(--door-fg);
+  font-family: var(--door-font, inherit);
+}
+.mise-door-preview {
+  min-height: 0;
+  height: 100%;
+  border-radius: 0.9rem;
+}
+
+/* the moving part, always behind everything */
+.mise-door-art {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mise-door-wash {
+  position: absolute;
+  inset: 0;
+}
+
+@keyframes mise-door-drift {
+  0%   { transform: translate3d(-6%, -4%, 0) scale(1.1); }
+  50%  { transform: translate3d(6%, 4%, 0) scale(1.22); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1.1); }
+}
+.mise-door-aurora {
+  position: absolute;
+  inset: -25%;
+  background:
+    radial-gradient(38% 42% at 30% 35%, color-mix(in srgb, var(--door-a) 55%, transparent), transparent 70%),
+    radial-gradient(34% 38% at 70% 60%, color-mix(in srgb, var(--door-b) 50%, transparent), transparent 70%);
+  filter: blur(48px);
+  animation: mise-door-drift 26s ease-in-out infinite;
+}
+
+@keyframes mise-door-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.85; transform: scale(1.08); }
+}
+.mise-door-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 62vmax;
+  width: 62vmax;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--door-a) 45%, transparent), transparent);
+  filter: blur(30px);
+  animation: mise-door-breathe 9s ease-in-out infinite;
+}
+
+.mise-door-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--door-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--door-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(70% 60% at 50% 40%, #000 30%, transparent 78%);
+}
+
+.mise-door-spot {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    26rem 26rem at var(--mx, 50%) var(--my, 40%),
+    color-mix(in srgb, var(--door-a) 32%, transparent),
+    transparent 68%
+  );
+  transition: background 220ms ease-out;
+}
+
+/* ── layouts ─────────────────────────────────────────────────────────────── */
+.mise-door-split {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  .mise-door-split {
+    grid-template-columns: 1.05fr 0.95fr;
+  }
+}
+.mise-door-side,
+.mise-door-form,
+.mise-door-centre {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: clamp(1.5rem, 5vw, 3.5rem);
+}
+.mise-door-centre {
+  align-items: center;
+  text-align: center;
+  min-height: 100svh;
+}
+.mise-door-preview .mise-door-centre {
+  min-height: 0;
+}
+/* The "card" layout is the centred one on a plainer ground. */
+.mise-door-card .mise-door-art .mise-door-aurora,
+.mise-door-card .mise-door-art .mise-door-glow {
+  opacity: 0.45;
+}
+
+.mise-door-brand {
+  max-width: 34rem;
+}
+.mise-door-logo {
+  height: 3rem;
+  width: auto;
+  margin-bottom: 1rem;
+  object-fit: contain;
+}
+.mise-door-centre .mise-door-logo {
+  margin-inline: auto;
+}
+.mise-door-headline {
+  font-family: var(--font-display, inherit);
+  font-size: clamp(1.6rem, 4.2vw, 2.9rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  background: linear-gradient(100deg, var(--door-fg), color-mix(in srgb, var(--door-a) 70%, var(--door-fg)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.mise-door-subline {
+  margin-top: 0.6rem;
+  color: var(--door-soft);
+  font-size: clamp(0.9rem, 1.6vw, 1.05rem);
+}
+
+/* The form's own surface. Glass over whatever the art is doing, so the fields
+   stay legible on every palette — the one thing that must never be a taste
+   decision. */
+.mise-door-panel {
+  width: min(26rem, 100%);
+  border-radius: var(--door-radius);
+  border: 1px solid var(--door-line);
+  background: var(--door-panel);
+  backdrop-filter: blur(14px);
+  padding: clamp(1.1rem, 3vw, 1.75rem);
+  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.7);
+}
+.mise-door-footer {
+  margin-top: 0.9rem;
+  color: var(--door-soft);
+  font-size: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mise-door-aurora,
+  .mise-door-glow {
+    animation: none;
+  }
+  .mise-door-spot {
+    transition: none;
+  }
+}
