@@ -39,10 +39,19 @@ attendance_router = APIRouter(prefix="/attendance", tags=["attendance"])
 # ── Employees ─────────────────────────────────────────────────────────────
 @router.get("", response_model=list[EmployeeOut])
 async def list_employees(
+    include_suspended: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("employees:read")),
 ) -> list[EmployeeOut]:
-    emps = await service.list_employees(db, user.hotel_id)
+    """The roster. `include_suspended` is what makes suspension reversible.
+
+    Without it, suspending someone hid them from the only page that could bring
+    them back — a one-way door wearing a two-way label. The list is
+    active-only by default because that is the roster you work from day to day.
+    """
+    emps = await service.list_employees(
+        db, user.hotel_id, active_only=not include_suspended
+    )
     return [EmployeeOut.model_validate(e) for e in emps]
 
 
@@ -141,6 +150,72 @@ async def staff_login(
     if emp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
     return {"login": await service.staff_login_status(db, emp)}
+
+
+@router.get("/{employee_id}/impact")
+async def removal_impact(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    """What a permanent removal would take with it.
+
+    Every foreign key pointing at an employee is ON DELETE CASCADE — attendance,
+    payslips, documents and rota shifts all go. That is a lot to destroy behind a
+    button labelled with one word, so the count is fetched BEFORE the question is
+    asked and the confirmation names it. An informed yes is the only kind worth
+    collecting for something this final.
+    """
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    return await service.removal_impact(db, emp)
+
+
+@router.delete("/{employee_id}")
+async def remove_employee(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    """Permanently remove an employee AND their login.
+
+    The direction matters and is deliberate: "if we remove from employee then
+    role's page need to catch that, but if we remove from staff, employee don't
+    catch." A person can exist without an account; an account cannot exist
+    without a person. So this takes the login with it, while removing a login
+    (DELETE /auth/users/{id}) leaves the employee record standing.
+
+    Super Admin only, like the login equivalent — suspending is the reversible
+    door and it is right there next to this one.
+    """
+    if user.role != "SUPER_ADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only a Super Admin can permanently remove someone. You can suspend them instead.",
+        )
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    if emp.user_id == user.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't remove your own record")
+    name = emp.full_name
+    impact = await service.removal_impact(db, emp)
+    try:
+        await service.remove_employee_permanently(db, emp)
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="employee.removed",
+        summary=(
+            f"Permanently removed {name} — with "
+            f"{impact['attendance']} attendance rows, {impact['payslips']} payslips, "
+            f"{impact['documents']} documents and {impact['shifts']} shifts"
+            + (f", and the login {impact['login_email']}" if impact["login_email"] else "")
+        ),
+        entity_type="employee", entity_id=employee_id,
+    )
+    return {"removed": True, "name": name}
 
 
 @router.post("/{employee_id}/login/email")
