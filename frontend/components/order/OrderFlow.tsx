@@ -20,6 +20,7 @@
 // decide whether they can afford the order.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Item, SupplierOption } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { categoryEmoji, fmtQty, stockState } from "@/components/ItemPicker";
@@ -567,6 +568,9 @@ export function OrderFlow({
   }, []);
   const [basketOpen, setBasketOpen] = useState(false);
   const [bump, setBump] = useState(false);
+  // Portals need a document, so nothing portals on the server pass.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Where the basket has been dragged to, if anywhere. Remembered per browser,
   // because somewhere that suits your screen is not somewhere we can guess.
@@ -1147,48 +1151,67 @@ export function OrderFlow({
       )}
 
       {/* The basket. Always there so the bubble has somewhere to land, and so
-          the count has somewhere to appear. */}
+          the count has somewhere to appear.
+
+          PORTALLED TO <body>, and that is not tidiness.
+
+          `position: fixed` is relative to the viewport only when NO ancestor
+          has a transform, a filter or a backdrop-filter — any of those makes
+          that ancestor the containing block instead. Measured on prod: the
+          clamp had correctly written left:1137.42px on a 1280 viewport and the
+          basket still drew at x=1426, because an ancestor card was carrying
+          transform=matrix(1,0,0,1,0,-1), the one-pixel press effect.
+
+          And that transform is a HOVER state, so it appears and disappears as
+          the cursor crosses cards — the basket jumps by the card's offset every
+          time: "if i move cursor that basket is flickering and hidden". No
+          amount of clamping fixes that; only leaving the subtree does. Same
+          class of bug as the clock popup, same cure. */}
       {/* The basket lives ABOVE the sheets (z-[90]), because it was hiding
           behind the very popup you add things from — "that basket is behind
           this popup, make that basket to be viewable by user in this area
           itself in corner that he can open basket anytime".
           And it DRAGS: "make that basket draggable like user can drag and
           place anywhere in screen". Where it sits is remembered. */}
-      <button
-        id="mise-basket"
-        type="button"
-        ref={basketRef}
-        onPointerDown={startDrag}
-        onClick={() => {
-          if (draggedRef.current) return; // a drag is not a click
-          setBasketOpen(true);
-        }}
-        disabled={lines.length === 0}
-        aria-label={`Basket — ${lines.length} items`}
-        style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
-        className={`mise-press fixed bottom-24 right-4 z-[90] flex touch-none items-center gap-2.5 rounded-2xl border border-brand-400/45 bg-paper-2/95 px-3.5 py-2.5 shadow-xl shadow-black/40 backdrop-blur transition-[opacity,transform] duration-300 sm:right-6 lg:bottom-8 ${
-          lines.length === 0
-            ? "pointer-events-none translate-y-3 scale-90 opacity-0"
-            : "translate-y-0 scale-100 opacity-100"
-        } ${bump ? "mise-pocket-bump ring-2 ring-brand-400" : ""}`}
-      >
-        <span aria-hidden className="relative text-xl leading-none">
-          🧺
-          <span className="absolute -right-2 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1 text-[10px] font-bold tabular-nums text-white">
-            {lines.length}
-          </span>
-        </span>
-        <span className="text-left">
-          <span className="block text-[11px] text-fg-faint">Basket</span>
-          <AnimatedNumber
-            value={total}
-            from="previous"
-            duration={520}
-            format={(x) => format(x.toFixed(2))}
-            className="block font-display text-sm font-semibold tabular-nums text-fg"
-          />
-        </span>
-      </button>
+      {mounted &&
+        createPortal(
+          <button
+            id="mise-basket"
+            type="button"
+            ref={basketRef}
+            onPointerDown={startDrag}
+            onClick={() => {
+              if (draggedRef.current) return; // a drag is not a click
+              setBasketOpen(true);
+            }}
+            disabled={lines.length === 0}
+            aria-label={`Basket — ${lines.length} items`}
+            style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
+            className={`mise-press fixed bottom-24 right-4 z-[90] flex touch-none items-center gap-2.5 rounded-2xl border border-brand-400/45 bg-paper-2/95 px-3.5 py-2.5 shadow-xl shadow-black/40 backdrop-blur transition-[opacity,transform] duration-300 sm:right-6 lg:bottom-8 ${
+              lines.length === 0
+                ? "pointer-events-none translate-y-3 scale-90 opacity-0"
+                : "translate-y-0 scale-100 opacity-100"
+            } ${bump ? "mise-pocket-bump ring-2 ring-brand-400" : ""}`}
+          >
+            <span aria-hidden className="relative text-xl leading-none">
+              🧺
+              <span className="absolute -right-2 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1 text-[10px] font-bold tabular-nums text-white">
+                {lines.length}
+              </span>
+            </span>
+            <span className="text-left">
+              <span className="block text-[11px] text-fg-faint">Basket</span>
+              <AnimatedNumber
+                value={total}
+                from="previous"
+                duration={520}
+                format={(x) => format(x.toFixed(2))}
+                className="block font-display text-sm font-semibold tabular-nums text-fg"
+              />
+            </span>
+          </button>,
+          document.body,
+        )}
 
       {basketOpen && (
         <BasketSheet

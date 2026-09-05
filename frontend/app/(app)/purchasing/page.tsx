@@ -1327,10 +1327,17 @@ export default function PurchasingPage() {
             </p>
           ) : (
           <form
-            // The id is load-bearing: the Submit button is portalled out of
-            // this form's DOM subtree and finds it again by name. See the
-            // note on that button.
-            id="indent-form"
+            // THE ID IS LOAD-BEARING, AND IT MUST BE UNIQUE.
+            //
+            // The Submit button is portalled out of this form's DOM subtree and
+            // finds it again by name, so the name has to resolve to THIS form.
+            // My first attempt reused "indent-form" — which the Card wrapper
+            // above already owns for spotlight() — and getElementById returns
+            // the DIV, being first in document order. The browser then set the
+            // button's form owner to null (a non-form cannot own it) and the
+            // click stayed silent exactly as before the fix. Diagnosed on prod:
+            // duplicateIds: 2, indentFormTag: "DIV", ownerFormId: null.
+            id="indent-order-form"
             onSubmit={submitIndent}
             className="space-y-3"
           >
@@ -1384,7 +1391,7 @@ export default function PurchasingPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="submit"
-                    // WHY form="indent-form" AND NOT JUST type="submit".
+                    // WHY form="indent-order-form" AND NOT JUST type="submit".
                     //
                     // "somehow i tried and clicked basket, now when i click
                     //  submit indent nothing is happening."
@@ -1402,7 +1409,7 @@ export default function PurchasingPage() {
                     // It broke the day SheetPopup became a portal and nothing
                     // was watching, which is why there is now a Playwright test
                     // that presses this button for real.
-                    form="indent-form"
+                    form="indent-order-form"
                     disabled={lines.length === 0}
                     // The form still submits; this only makes the basket come
                     // apart as it goes, so you land back on the page having SEEN
