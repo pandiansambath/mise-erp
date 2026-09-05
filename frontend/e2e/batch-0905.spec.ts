@@ -207,10 +207,28 @@ test("my space renders that person's own attendance history and rota", async ({ 
   await signIn(page);
   await page.goto(`${BASE}/my`);
 
+  // The page is TABS now, not four stacked cards, so only the chosen section is
+  // on screen. Checking all four headings at once would be checking the old
+  // layout — the whole point of the rebuild was that they stopped competing for
+  // one screen.
+  await expect(page.getByRole("heading", { name: /Hi, /i })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("heading", { name: /My attendance/i })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("heading", { name: /My rota/i })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("heading", { name: /My documents/i })).toBeVisible({ timeout: 20_000 });
 
+  for (const section of ["Rota", "Payslips", "Documents"]) {
+    await page.getByRole("tab", { name: new RegExp(section, "i") }).click();
+    await expect(
+      page.getByRole("heading", { name: new RegExp(`My ${section}`, "i") }),
+      `the ${section} tab did not switch the page`,
+    ).toBeVisible({ timeout: 10_000 });
+  }
+  // Check each section's OWN content while that section is open. The previous
+  // version asserted the rota's "rostered" after switching back to Attendance,
+  // which is a test bug that reads exactly like a missing shift.
+  await page.getByRole("tab", { name: /Rota/i }).click();
+  await expect(page.getByText(/rostered/i).first(), "the rota shift never rendered")
+    .toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole("tab", { name: /Attendance/i }).click();
   // The figures have to ARRIVE, not just the headings — response_model has
   // silently dropped declared-looking fields four times in this project, and a
   // heading over an empty box would look identical to a working page.
@@ -218,8 +236,6 @@ test("my space renders that person's own attendance history and rota", async ({ 
   // the string a person actually reads. Asserting the raw decimal was my test
   // describing the payload rather than the page.
   await expect(page.getByText("96h 30m").first(), "the hours total never rendered")
-    .toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/rostered/i).first(), "the rota shift never rendered")
     .toBeVisible({ timeout: 15_000 });
 });
 
