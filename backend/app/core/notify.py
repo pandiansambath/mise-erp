@@ -30,7 +30,23 @@ ALERT_DEFAULTS: dict[str, bool] = {
 
 
 def wants(user, key: str) -> bool:
-    """Does this user want emails for `key`? Overrides win, defaults fill gaps."""
+    """Does this user want emails for `key`? Overrides win, defaults fill gaps.
+
+    ALERTS ARE PAUSED UNTIL THE ADDRESS IS CONFIRMED.
+
+        "if they not verified mail id then don't allow them to use forget
+         password or alerts, these are all paused until email id is verified."
+
+    Now that an unverified login can get INTO the app, the address attached to
+    it is one nobody has proved they own — and a typo would quietly send that
+    hotel's stock levels, payroll notices and low-cash warnings to a stranger.
+    Every alert route passes through here, so this is the one place that has to
+    know it. Transactional mail (verify, reset, password-changed) does not use
+    `wants` and still goes, which is right: those are how someone proves the
+    address in the first place.
+    """
+    if getattr(user, "email_verified", True) is False:
+        return False
     prefs = getattr(user, "email_prefs", None) or {}
     return bool(prefs.get(key, ALERT_DEFAULTS.get(key, False)))
 

@@ -10,6 +10,7 @@ import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { canOpenPage } from "@/lib/access";
 import { can, getGrantedPermissions } from "@/lib/permissions";
 import { Logo } from "@/components/Logo";
+import { VerifyBanner } from "@/components/VerifyBanner";
 import CommandPalette from "@/components/CommandPalette";
 import { VoiceBubble } from "@/components/VoiceBubble";
 import NotificationBell from "@/components/NotificationBell";
@@ -826,6 +827,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             pb is generous so the floating "Ask DineAI" launcher (bottom-right)
             never covers a page's last action button. */}
         <main className="flex-1 px-4 pb-28 pt-6 lg:overflow-y-auto lg:px-8 lg:pb-28 lg:pt-8 has-[[data-bench]]:pt-0 has-[[data-bench]]:pb-0 has-[[data-bench]]:lg:pt-0 has-[[data-bench]]:lg:pb-0">
+        {/* One line, every page, until the address is confirmed. Loosening the
+            gate without saying what it costs just moves the confusion. */}
+        <VerifyBanner />
           <ImpersonationBanner />
           <AnnouncementBanner />
           {children}
