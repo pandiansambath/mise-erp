@@ -520,7 +520,7 @@ export default function DashboardPage() {
               <Link
                 key={a.href}
                 href={a.href}
-                className="mise-raised mise-press rounded-xl p-4"
+                className="mise-btn-flat mise-press rounded-xl p-4"
               >
                 <p className="font-medium text-fg">
                   {a.icon} {a.title}

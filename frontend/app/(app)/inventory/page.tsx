@@ -1786,7 +1786,7 @@ export default function InventoryPage() {
                           >
                             🛒 Order
                           </button>
-                          <button onClick={() => startEdit(item)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-xs font-medium text-fg-soft">
+                          <button onClick={() => startEdit(item)} className="mise-btn-flat mise-press min-h-[34px] rounded-lg px-3 py-2 text-xs font-medium text-fg-soft">
                             ✎
                           </button>
                         </>
