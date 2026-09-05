@@ -51,6 +51,7 @@ export function DetailSheet({
   onSection,
   children,
   width = "md",
+  variant = "side",
 }: {
   open: boolean;
   onClose: () => void;
@@ -77,6 +78,15 @@ export function DetailSheet({
   onSection?: (key: string) => void;
   children: ReactNode;
   width?: "md" | "lg";
+  /** "side" is the drawer this has always been. "center" is the purchasing
+   *  popup shape — centred on both axes, rounded all round, clear of every
+   *  edge.
+   *
+   *  "instead of sidebar i said like popup inside popup." A drawer welded to
+   *  the right edge reads as a different screen; a centred panel reads as
+   *  something opened ON the page you are still looking at, which is what makes
+   *  the purchasing flow feel the way he keeps asking for. */
+  variant?: "side" | "center";
 }) {
   const panel = useRef<HTMLDivElement>(null);
   // 1 for a sheet opened from a page, 2 for one opened from a sheet, and so on.
@@ -140,13 +150,23 @@ export function DetailSheet({
       <div
         ref={panel}
         tabIndex={-1}
-        className={`mise-sheet-in absolute inset-x-0 bottom-0 flex max-h-[92svh] flex-col rounded-t-3xl border border-line bg-paper shadow-2xl outline-none sm:left-auto sm:right-0 sm:max-h-none sm:border-y-0 sm:border-r-0 ${
-          // Nested sheets float clear of the edges so the sheet underneath
-          // stays visible at the rim — you can see what you came from.
-          depth > 1
-            ? "sm:inset-y-4 sm:mr-4 sm:rounded-3xl sm:border"
-            : "sm:inset-y-0 sm:rounded-l-3xl sm:rounded-tr-none"
-        } ${width === "lg" ? "sm:w-[min(720px,96vw)]" : "sm:w-[min(540px,94vw)]"}`}
+        className={
+          variant === "center"
+            ? // CENTRED. Still a bottom sheet on a phone, because that is where
+              // thumbs are and a centred dialog on a 390px screen is just a
+              // sheet with wasted corners — but from `sm` up it floats in the
+              // middle with room on every side.
+              `mise-sheet-in absolute inset-x-0 bottom-0 flex max-h-[92svh] flex-col rounded-t-3xl border border-line bg-paper shadow-2xl outline-none sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[88svh] sm:rounded-3xl ${
+                width === "lg" ? "sm:w-[min(860px,94vw)]" : "sm:w-[min(620px,92vw)]"
+              }`
+            : `mise-sheet-in absolute inset-x-0 bottom-0 flex max-h-[92svh] flex-col rounded-t-3xl border border-line bg-paper shadow-2xl outline-none sm:left-auto sm:right-0 sm:max-h-none sm:border-y-0 sm:border-r-0 ${
+                // Nested sheets float clear of the edges so the sheet underneath
+                // stays visible at the rim — you can see what you came from.
+                depth > 1
+                  ? "sm:inset-y-4 sm:mr-4 sm:rounded-3xl sm:border"
+                  : "sm:inset-y-0 sm:rounded-l-3xl sm:rounded-tr-none"
+              } ${width === "lg" ? "sm:w-[min(720px,96vw)]" : "sm:w-[min(540px,94vw)]"}`
+        }
       >
         {/* grab handle (phones) */}
         <div aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-fg/15 sm:hidden" />

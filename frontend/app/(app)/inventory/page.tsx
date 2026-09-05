@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
 import { DetailSheet, SheetRing } from "@/components/DetailSheet";
 import { SheetPopup } from "@/components/SheetPopup";
+import { SupplierPopup } from "@/components/inventory/SupplierPopup";
 import { InlineEdit } from "@/components/InlineEdit";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -148,6 +149,13 @@ export default function InventoryPage() {
   const [allergensTouched, setAllergensTouched] = useState(false);
   // Per-item "purchases by supplier" record (expand a row to load + show it).
   const [expanded, setExpanded] = useState<string | null>(null);
+  /** The item whose supplier picker is open — the in-place answer to both
+   *  "choose" and "+ supplier", which were page changes before. */
+  const [supplierFor, setSupplierFor] = useState<Item | null>(null);
+  /** Which topic the item popup is showing. All three used to be stacked in one
+   *  column, so the purchase history sat three flicks below the fold and the
+   *  sheet felt bottomless — "try to reduce the scroll effort". */
+  const [detailTab, setDetailTab] = useState<"item" | "suppliers" | "purchases">("item");
   const [breakdown, setBreakdown] = useState<Record<string, PurchaseByVendorRow[]>>({});
   const [bdLoading, setBdLoading] = useState<string | null>(null);
   // The "chain": open a purchase into the full delivery it came on (shared reference).
@@ -670,6 +678,9 @@ export default function InventoryPage() {
       return;
     }
     setExpanded(item.id);
+    // A different item starts at the top, not on whatever tab the last one was
+    // left on.
+    setDetailTab("item");
     if (!breakdown[item.id]) {
       setBdLoading(item.id);
       try {
@@ -1862,11 +1873,28 @@ export default function InventoryPage() {
                       return (
                         <Fragment key={item.id}>
                         <tr
-                          className={`border-b border-line/60 transition even:bg-glass/[0.02] hover:bg-glass/[0.05] ${
-                            hasHistory ? "cursor-pointer" : ""
-                          } ${isOpen ? "bg-glass/[0.04]" : ""} ${st.label === "running low" ? "mise-low-pulse" : ""}`}
-                          onClick={hasHistory ? () => toggleBreakdown(item) : undefined}
-                          aria-expanded={hasHistory ? isOpen : undefined}
+                          className={`cursor-pointer border-b border-line/60 transition even:bg-glass/[0.02] hover:bg-glass/[0.05] ${
+                            isOpen ? "bg-glass/[0.04]" : ""
+                          } ${st.label === "running low" ? "mise-low-pulse" : ""}`}
+                          // EVERY ROW OPENS. It used to be `hasHistory ? … :
+                          // undefined`, so an item nobody had bought yet had a
+                          // click handler of literally `undefined`:
+                          //
+                          //   "i placed cursor in brinjal, i clicked, it's not
+                          //    clickable. why some item it's working, for some
+                          //    it's not working."
+                          //
+                          // Bay Leaves has four purchases, so it opened. Brinjal
+                          // has two suppliers and no deliveries, so it did
+                          // nothing — and nothing about the row said why. The
+                          // gate made sense when this sheet showed ONLY purchase
+                          // history; it now shows stock, min level, category,
+                          // suppliers and prices, every one of which exists
+                          // before anything is ever bought. The empty history is
+                          // a sentence inside the sheet, not a reason to refuse
+                          // to open it.
+                          onClick={() => toggleBreakdown(item)}
+                          aria-expanded={isOpen}
                         >
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2.5">
@@ -1890,23 +1918,39 @@ export default function InventoryPage() {
                                 <span className="text-brand-400">★</span> {item.best_vendor}
                               </span>
                             ) : (item.vendor_count ?? 0) > 0 ? (
-                              <Link
-                                href="/price-comparison"
-                                onClick={(e) => e.stopPropagation()}
-                                title="This item has suppliers but none is chosen — pick which one to use"
-                                className="mise-press inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-semibold text-amber-500 transition hover:bg-amber-400/20 dark:text-amber-300"
+                              // WAS A LINK TO /price-comparison, AND UNREADABLE.
+                              //
+                              // "see here that choose (or +add supplier) word is
+                              //  not visible coz of yellow blur colour."
+                              //
+                              // amber-500 text on a 10% amber tint is invisible
+                              // on his light theme — the same fault I fixed on
+                              // the other chips and missed on this one. It uses
+                              // .mise-chip-warn now, which pins real ink on a
+                              // real background per theme instead of tinting
+                              // one colour with itself.
+                              //
+                              // And it opens the picker HERE rather than taking
+                              // him to another page to do it.
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setSupplierFor(item); }}
+                                title="Pick which supplier this item is costed at"
+                                data-testid="inv-choose-supplier"
+                                className="mise-chip-warn mise-press inline-flex min-h-[32px] items-center gap-1 whitespace-nowrap px-2.5 py-1"
                               >
                                 ★ choose{(item.vendor_count ?? 0) > 1 ? ` · ${item.vendor_count}` : ""}
-                              </Link>
+                              </button>
                             ) : (
-                              <Link
-                                href="/vendors?new=1"
-                                onClick={(e) => e.stopPropagation()}
-                                title="No vendor sells this yet — add a price for it on the Vendors page"
-                                className="mise-press inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-fg-faint transition hover:border-amber-400/40 hover:text-amber-500 dark:hover:text-amber-300"
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setSupplierFor(item); }}
+                                title="Nobody sells this yet — add the first price, here"
+                                data-testid="inv-add-supplier"
+                                className="mise-btn-flat mise-press inline-flex min-h-[32px] items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium text-fg-soft"
                               >
-                                + supplier
-                              </Link>
+                                ＋ supplier
+                              </button>
                             )}
                             {multiVendor && item.best_vendor && (
                               <span className="ml-2 inline-flex items-center whitespace-nowrap rounded-full border border-brand-400/30 bg-brand-400/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-300">
@@ -1916,15 +1960,15 @@ export default function InventoryPage() {
                           </td>
                           <td className="px-5 py-3 text-right">
                             <span className="flex items-center justify-end gap-1 text-fg-soft">
-                              {hasHistory && (
-                                <span
-                                  aria-hidden
-                                  title="Click the row to see purchase history"
-                                  className={`text-[10px] text-brand-300 transition-transform duration-300 ${isOpen ? "rotate-90" : ""}`}
-                                >
-                                  ▶
-                                </span>
-                              )}
+                              <span
+                                aria-hidden
+                                title="Open this item"
+                                className={`text-[10px] transition-transform duration-300 ${
+                                  isOpen ? "rotate-90 text-brand-300" : hasHistory ? "text-brand-300" : "text-fg-faint"
+                                }`}
+                              >
+                                ▶
+                              </span>
                               {fmtQty(item.current_stock, item.unit)}
                             </span>
                             <div className="ml-auto max-w-[8rem]">
@@ -2010,11 +2054,80 @@ export default function InventoryPage() {
         </SheetPopup>
       )}
 
+      {/* THE SUPPLIER PICKER, IN PLACE.
+          Opened from the row chip, and from the detail sheet, so there is one
+          way to choose or add a supplier rather than three that drift apart.
+          The confirmation is the same rule the detail sheet already used: one
+          tap here changes the price every recipe cost, margin and report is
+          worked out from, and the taps sit in a list you are scrolling. */}
+      {supplierFor && (
+        <SupplierPopup
+          item={supplierFor}
+          suppliers={itemSuppliers[supplierFor.id] ?? []}
+          vendorList={vendorList}
+          canWrite={canWrite}
+          format={format}
+          depth={openItem ? 2 : 1}
+          onClose={() => setSupplierFor(null)}
+          onAdded={load}
+          onChoose={async (vendorId) => {
+            const sups = itemSuppliers[supplierFor.id] ?? [];
+            const v = sups.find((x) => x.vendor_id === vendorId);
+            if (!v) return;
+            const each = pricePerBase(supplierFor, v);
+            const now = sups.find((x) => x.is_preferred);
+            const ok = await confirm({
+              title: `Buy ${supplierFor.name} from ${v.vendor_name}?`,
+              message: (
+                <>
+                  Costing, margins and reports will use{" "}
+                  <b>{format(each.toFixed(2))} per {supplierFor.unit}</b>
+                  {now ? (
+                    <>
+                      {" "}instead of {now.vendor_name}&apos;s{" "}
+                      <b>{format(pricePerBase(supplierFor, now).toFixed(2))}</b>
+                    </>
+                  ) : null}
+                  .
+                </>
+              ),
+              confirmText: "Yes, use this supplier",
+            });
+            if (ok) await setChosenSupplier(supplierFor.id, vendorId);
+          }}
+        />
+      )}
+
       {/* Item detail — opens in place, with room for the full story */}
       <DetailSheet
         open={!!openItem}
         onClose={() => { setExpanded(null); setOpenReceipt(null); }}
         width="lg"
+        // "instead of sidebar i said like popup inside popup" — centred, the
+        // shape the purchasing flow uses, with the supplier picker opening on
+        // top of it at depth 2.
+        variant="center"
+        sections={
+          openItem
+            ? [
+                { key: "item", label: "Item", icon: "📦" },
+                {
+                  key: "suppliers",
+                  label: "Suppliers",
+                  icon: "🚚",
+                  count: (itemSuppliers[openItem.id] ?? []).length || undefined,
+                },
+                {
+                  key: "purchases",
+                  label: "Purchases",
+                  icon: "🏷",
+                  count: (breakdown[openItem.id] ?? []).length || undefined,
+                },
+              ]
+            : undefined
+        }
+        active={detailTab}
+        onSection={(k) => setDetailTab(k as "item" | "suppliers" | "purchases")}
         icon={categoryEmoji(openItem?.category ?? "")}
         title={openItem ? openItem.name : ""}
         subtitle={openItem ? `${openItem.category || "uncategorised"} · ${openItem.vendor_count ?? 0} supplier${(openItem.vendor_count ?? 0) === 1 ? "" : "s"}` : ""}
@@ -2075,449 +2188,477 @@ export default function InventoryPage() {
       >
         {openItem && (
           <>
-            {/* EDIT IT WHERE IT IS WRITTEN.
-                "in inventory I want useful UI UX bro... like in-place edit."
-                These three were read-only, so changing a minimum level meant
-                opening a form that asked about eight fields — seven of which
-                you did not come to change. Click the value, change it, Enter.
-                The full form still exists for creating an item and for the
-                fields that genuinely travel together. */}
-            <div className="mise-card-inset grid grid-cols-2 gap-3 p-3.5 sm:grid-cols-3">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                  Min level
-                </p>
-                <div className="mt-0.5 text-sm">
-                  <InlineEdit
-                    label="Minimum stock level"
-                    type="number"
-                    value={openItem.min_stock_level ?? ""}
-                    suffix={openItem.unit}
-                    disabled={!canWrite}
-                    onSave={async (v) => {
-                      await api.patch(`/inventory/items/${openItem.id}`, {
-                        min_stock_level: v === "" ? null : v,
-                      });
-                      await load();
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                  Category
-                </p>
-                <div className="mt-0.5 text-sm">
-                  <InlineEdit
-                    label="Category"
-                    value={openItem.category ?? ""}
-                    disabled={!canWrite}
-                    /* The categories already in use, so this stays a small set
-                       rather than becoming free text that spawns "Veg",
-                       "veg" and "Vegetables" as three different things. */
-                    options={[
-                      { value: "", label: "— none —" },
-                      ...[...new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))]
-                        .sort()
-                        .map((c) => ({ value: c, label: c })),
-                    ]}
-                    onSave={async (v) => {
-                      await api.patch(`/inventory/items/${openItem.id}`, { category: v || null });
-                      await load();
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                  Suppliers
-                </p>
-                <p className="mt-0.5 text-sm text-fg">{openItem.vendor_count ?? 0}</p>
-              </div>
-            </div>
-
-            {/* Change the supplier from HERE.
-                "in inventory I need to change the vendor of an item from the
-                inventory screen itself." It was only possible inside the edit
-                form, which meant opening a whole item to change one field —
-                and the sheet was already showing you the number of suppliers
-                while giving you no way to act on it.
-
-                Prices are per BASE unit, which is what makes them comparable:
-                one supplier's £50 is a 5 kg box and another's is 100 kg. */}
-            {(() => {
-              const sups = itemSuppliers[openItem.id] ?? [];
-              if (sups.length === 0) return null;
-              const chosen = sups.find((v) => v.is_preferred);
-              return (
-                <div className="mise-panel-in mt-5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                      🚚 Chosen supplier
-                    </p>
-                    {chosen && (
-                      <span className="text-[11px] text-fg-faint">
-                        costing uses this price
-                      </span>
-                    )}
+            {/* SECTION 1 — the facts, and the three you can change in place. */}
+            {detailTab === "item" && (
+              <>
+              {/* EDIT IT WHERE IT IS WRITTEN.
+                  "in inventory I want useful UI UX bro... like in-place edit."
+                  These three were read-only, so changing a minimum level meant
+                  opening a form that asked about eight fields — seven of which
+                  you did not come to change. Click the value, change it, Enter.
+                  The full form still exists for creating an item and for the
+                  fields that genuinely travel together. */}
+              <div className="mise-card-inset grid grid-cols-2 gap-3 p-3.5 sm:grid-cols-3">
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Min level
+                  </p>
+                  <div className="mt-0.5 text-sm">
+                    <InlineEdit
+                      label="Minimum stock level"
+                      type="number"
+                      value={openItem.min_stock_level ?? ""}
+                      suffix={openItem.unit}
+                      disabled={!canWrite}
+                      onSave={async (v) => {
+                        await api.patch(`/inventory/items/${openItem.id}`, {
+                          min_stock_level: v === "" ? null : v,
+                        });
+                        await load();
+                      }}
+                    />
                   </div>
-                  <div className="mt-3 space-y-1.5">
-                    {sups.map((v) => {
-                      const on = v.is_preferred;
-                      const each = pricePerBase(openItem, v);
-                      return (
-                        <button
-                          key={v.vendor_id}
-                          type="button"
-                          data-testid="inv-supplier-pick"
-                          disabled={!canWrite || on}
-                          onClick={async () => {
-                            // ASK FIRST. One tap here changes which price every
-                            // recipe cost, every margin and every report is
-                            // worked out from — and the taps sit in a list you
-                            // are scrolling. "else it will create miss click to
-                            // change supplier." A confirm is two seconds; a
-                            // silent switch is a month of wrong costings nobody
-                            // knows to look for.
-                            const each = pricePerBase(openItem, v);
-                            const now = sups.find((x) => x.is_preferred);
-                            const ok = await confirm({
-                              title: `Buy ${openItem.name} from ${v.vendor_name}?`,
-                              message: (
-                                <>
-                                  Costing, margins and reports will use{" "}
-                                  <b>{format(each.toFixed(2))} per {openItem.unit}</b>
-                                  {now ? (
-                                    <>
-                                      {" "}instead of {now.vendor_name}&apos;s{" "}
-                                      <b>
-                                        {format(pricePerBase(openItem, now).toFixed(2))}
-                                      </b>
-                                    </>
-                                  ) : null}
-                                  .
-                                </>
-                              ),
-                              confirmText: "Yes, use this supplier",
-                            });
-                            if (ok) await setChosenSupplier(openItem.id, v.vendor_id);
-                          }}
-                          title={
-                            canWrite
-                              ? on
-                                ? `${v.vendor_name} is already the chosen supplier`
-                                : `Buy ${openItem.name} from ${v.vendor_name} instead`
-                              : "You do not have permission to change this"
-                          }
-                          className={`mise-press flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
-                            on
-                              ? "border-brand-400/50 bg-brand-400/10"
-                              : "border-line hover:border-brand-400/40 disabled:opacity-60"
-                          }`}
-                        >
-                          <span aria-hidden className={on ? "text-brand-300" : "text-fg-faint"}>
-                            {on ? "★" : "☆"}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium text-fg">
-                              {v.vendor_name}
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Category
+                  </p>
+                  <div className="mt-0.5 text-sm">
+                    <InlineEdit
+                      label="Category"
+                      value={openItem.category ?? ""}
+                      disabled={!canWrite}
+                      /* The categories already in use, so this stays a small set
+                         rather than becoming free text that spawns "Veg",
+                         "veg" and "Vegetables" as three different things. */
+                      options={[
+                        { value: "", label: "— none —" },
+                        ...[...new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))]
+                          .sort()
+                          .map((c) => ({ value: c, label: c })),
+                      ]}
+                      onSave={async (v) => {
+                        await api.patch(`/inventory/items/${openItem.id}`, { category: v || null });
+                        await load();
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Suppliers
+                  </p>
+                  <p className="mt-0.5 text-sm text-fg">{openItem.vendor_count ?? 0}</p>
+                </div>
+              </div>
+              </>
+            )}
+
+            {/* SECTION 2 — who sells it and which price costing uses. */}
+            {detailTab === "suppliers" && (
+              <>
+              {/* Change the supplier from HERE.
+                  "in inventory I need to change the vendor of an item from the
+                  inventory screen itself." It was only possible inside the edit
+                  form, which meant opening a whole item to change one field —
+                  and the sheet was already showing you the number of suppliers
+                  while giving you no way to act on it.
+
+                  Prices are per BASE unit, which is what makes them comparable:
+                  one supplier's £50 is a 5 kg box and another's is 100 kg. */}
+              {(() => {
+                const sups = itemSuppliers[openItem.id] ?? [];
+                if (sups.length === 0) return null;
+                const chosen = sups.find((v) => v.is_preferred);
+                return (
+                  <div className="mise-panel-in mt-5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                        🚚 Chosen supplier
+                      </p>
+                      {chosen && (
+                        <span className="text-[11px] text-fg-faint">
+                          costing uses this price
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 space-y-1.5">
+                      {sups.map((v) => {
+                        const on = v.is_preferred;
+                        const each = pricePerBase(openItem, v);
+                        return (
+                          <button
+                            key={v.vendor_id}
+                            type="button"
+                            data-testid="inv-supplier-pick"
+                            disabled={!canWrite || on}
+                            onClick={async () => {
+                              // ASK FIRST. One tap here changes which price every
+                              // recipe cost, every margin and every report is
+                              // worked out from — and the taps sit in a list you
+                              // are scrolling. "else it will create miss click to
+                              // change supplier." A confirm is two seconds; a
+                              // silent switch is a month of wrong costings nobody
+                              // knows to look for.
+                              const each = pricePerBase(openItem, v);
+                              const now = sups.find((x) => x.is_preferred);
+                              const ok = await confirm({
+                                title: `Buy ${openItem.name} from ${v.vendor_name}?`,
+                                message: (
+                                  <>
+                                    Costing, margins and reports will use{" "}
+                                    <b>{format(each.toFixed(2))} per {openItem.unit}</b>
+                                    {now ? (
+                                      <>
+                                        {" "}instead of {now.vendor_name}&apos;s{" "}
+                                        <b>
+                                          {format(pricePerBase(openItem, now).toFixed(2))}
+                                        </b>
+                                      </>
+                                    ) : null}
+                                    .
+                                  </>
+                                ),
+                                confirmText: "Yes, use this supplier",
+                              });
+                              if (ok) await setChosenSupplier(openItem.id, v.vendor_id);
+                            }}
+                            title={
+                              canWrite
+                                ? on
+                                  ? `${v.vendor_name} is already the chosen supplier`
+                                  : `Buy ${openItem.name} from ${v.vendor_name} instead`
+                                : "You do not have permission to change this"
+                            }
+                            className={`mise-press flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
+                              on
+                                ? "border-brand-400/50 bg-brand-400/10"
+                                : "border-line hover:border-brand-400/40 disabled:opacity-60"
+                            }`}
+                          >
+                            <span aria-hidden className={on ? "text-brand-300" : "text-fg-faint"}>
+                              {on ? "★" : "☆"}
                             </span>
-                            <span className="block truncate text-[11px] text-fg-faint">
-                              {supplierPackSize(openItem, v)
-                                ? `${format(String(v.price_per_unit))} per ${levelName(openItem, v.pack_level_id)}`
-                                : "no price yet"}
-                            </span>
-                          </span>
-                          {each > 0 && (
-                            <span className="shrink-0 text-right text-xs tabular-nums text-fg-soft">
-                              {format(each.toFixed(2))}
-                              <span className="block text-[10px] text-fg-faint">
-                                per {openItem.unit}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-fg">
+                                {v.vendor_name}
+                              </span>
+                              <span className="block truncate text-[11px] text-fg-faint">
+                                {supplierPackSize(openItem, v)
+                                  ? `${format(String(v.price_per_unit))} per ${levelName(openItem, v.pack_level_id)}`
+                                  : "no price yet"}
                               </span>
                             </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                            {each > 0 && (
+                              <span className="shrink-0 text-right text-xs tabular-nums text-fg-soft">
+                                {format(each.toFixed(2))}
+                                <span className="block text-[10px] text-fg-faint">
+                                  per {openItem.unit}
+                                </span>
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {vendorMsg && (
+                      <p className="mt-2 text-[11px] text-brand-300">{vendorMsg}</p>
+                    )}
+                    {/* The section could only choose between suppliers that
+                        already existed. Adding one meant closing this, leaving
+                        for the Vendors page and finding your way back. */}
+                    {canWrite && (
+                      <button
+                        type="button"
+                        onClick={() => setSupplierFor(openItem)}
+                        className="mise-btn-flat mise-press mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-fg-soft"
+                      >
+                        <span aria-hidden>＋</span> Add another supplier price
+                      </button>
+                    )}
                   </div>
-                  {vendorMsg && (
-                    <p className="mt-2 text-[11px] text-brand-300">{vendorMsg}</p>
-                  )}
-                </div>
-              );
-            })()}
-            <div className="mt-5">
-                              <div className="mise-panel-in">
-                                <div className="flex items-center justify-between">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                                    🏷 Purchases by supplier
-                                  </p>
-                                  {openRows && openRows.length > 0 && (
-                                    <span className="text-xs text-fg-faint">
-                                      {openRows.length} recent purchase{openRows.length === 1 ? "" : "s"}
-                                    </span>
-                                  )}
-                                </div>
-                                {bdLoading === openItem.id ? (
-                                  <p className="mt-3 text-xs text-fg-faint">Loading…</p>
-                                ) : openRows && openRows.length > 0 ? (
-                                  <>
-                                    {(priceHist[openItem.id]?.length ?? 0) >= 2 && (
-                                      <div className="mise-well mt-3 rounded-xl p-3">
-                                        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                                          Price you paid per {openItem.unit} — over time
-                                        </p>
-                                        <AreaChart
-                                          data={priceHist[openItem.id].map((p) => parseFloat(p.price) || 0)}
-                                          labels={priceHist[openItem.id].map((p) => p.date)}
-                                          color={
-                                            (parseFloat(priceHist[openItem.id][priceHist[openItem.id].length - 1].price) || 0) >
-                                            (parseFloat(priceHist[openItem.id][0].price) || 0)
-                                              ? "#f43f5e"
-                                              : "#10b981"
-                                          }
-                                          height={90}
-                                          formatValue={(v) => format(String(v))}
-                                        />
-                                      </div>
+                );
+              })()}
+              </>
+            )}
+
+            {/* SECTION 3 — what was actually paid, and when. */}
+            {detailTab === "purchases" && (
+              <>
+              <div className="mt-5">
+                                <div className="mise-panel-in">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                                      🏷 Purchases by supplier
+                                    </p>
+                                    {openRows && openRows.length > 0 && (
+                                      <span className="text-xs text-fg-faint">
+                                        {openRows.length} recent purchase{openRows.length === 1 ? "" : "s"}
+                                      </span>
                                     )}
-                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                      {openRows.map((r, idx) => (
-                                        <div
-                                          key={idx}
-                                          role={r.vendor ? "button" : undefined}
-                                          tabIndex={r.vendor ? 0 : undefined}
-                                          onClick={r.vendor && r.vendor_id ? () => router.push(`/vendors?focus=${r.vendor_id}`) : undefined}
-                                          title={r.vendor ? `View ${r.vendor} on the Vendors page` : undefined}
-                                          className={`mise-well flex items-center justify-between rounded-xl px-3.5 py-2.5 ${
-                                            r.vendor ? "mise-feel cursor-pointer" : ""
-                                          }`}
-                                        >
-                                          <div className="flex min-w-0 items-center gap-3">
-                                            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500/15 text-base text-brand-300">🏷</span>
-                                            <div className="min-w-0">
-                                              <p className="truncate font-medium text-fg">
-                                                {r.vendor ?? "No supplier recorded"}
-                                                {r.vendor && <span aria-hidden className="ml-1 text-brand-300">›</span>}
-                                              </p>
-                                              <p className="text-xs text-fg-faint">
-                                                {new Date(r.received_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                              </p>
-                                              {/* HOW BIG THEIR PACK IS, on the
-                                                  delivery it arrived on. "we
-                                                  need to show clearly that this
-                                                  vendor box has 50kg, other
-                                                  vendor 1 box 100kg." Without
-                                                  it the quantities above look
-                                                  like they disagree for no
-                                                  reason. */}
-                                              {/* A ONE-OFF, called out. He asked
-                                                  for the per-purchase supplier
-                                                  choice and warned about it in
-                                                  the same breath: "we need to
-                                                  note and show this clearly in
-                                                  inventory or else it will be a
-                                                  pile up confusion in future."
-                                                  So when a delivery came from
-                                                  anyone but the ★ chosen
-                                                  supplier, the row says so. */}
-                                              {(() => {
-                                                const opts = itemSuppliers[openItem.id] ?? [];
-                                                const star = opts.find((x) => x.is_preferred);
-                                                if (!star || !r.vendor_id || star.vendor_id === r.vendor_id) {
-                                                  return null;
-                                                }
-                                                return (
-                                                  <p className="mise-tone-warn mt-0.5 text-[11px]">
-                                                    one-off · your usual is {star.vendor_name}
-                                                  </p>
-                                                );
-                                              })()}
-                                              {(() => {
-                                                const sv = (itemSuppliers[openItem.id] ?? []).find(
-                                                  (s) => s.vendor_id === r.vendor_id,
-                                                );
-                                                if (!sv?.pack_level_id) return null;
-                                                const lvl = (openItem.pack_levels ?? []).find(
-                                                  (l) => l.id === sv.pack_level_id,
-                                                );
-                                                if (!lvl) return null;
-                                                const own = parseFloat(sv.pack_size_override ?? "");
-                                                const differs = Number.isFinite(own) && own > 0;
-                                                const size = differs ? own : parseFloat(lvl.base_size) || 0;
-                                                if (size <= 0) return null;
-                                                return (
-                                                  <p className="mt-0.5 text-[11px] text-fg-soft">
-                                                    their 1 {lvl.name} ={" "}
-                                                    <b className="text-fg">{size} {openItem.unit}</b>
-                                                    {differs && (
-                                                      <span className="mise-tone-warn ml-1">· their own size</span>
-                                                    )}
-                                                  </p>
-                                                );
-                                              })()}
+                                  </div>
+                                  {bdLoading === openItem.id ? (
+                                    <p className="mt-3 text-xs text-fg-faint">Loading…</p>
+                                  ) : openRows && openRows.length > 0 ? (
+                                    <>
+                                      {(priceHist[openItem.id]?.length ?? 0) >= 2 && (
+                                        <div className="mise-well mt-3 rounded-xl p-3">
+                                          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                                            Price you paid per {openItem.unit} — over time
+                                          </p>
+                                          <AreaChart
+                                            data={priceHist[openItem.id].map((p) => parseFloat(p.price) || 0)}
+                                            labels={priceHist[openItem.id].map((p) => p.date)}
+                                            color={
+                                              (parseFloat(priceHist[openItem.id][priceHist[openItem.id].length - 1].price) || 0) >
+                                              (parseFloat(priceHist[openItem.id][0].price) || 0)
+                                                ? "#f43f5e"
+                                                : "#10b981"
+                                            }
+                                            height={90}
+                                            formatValue={(v) => format(String(v))}
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                        {openRows.map((r, idx) => (
+                                          <div
+                                            key={idx}
+                                            role={r.vendor ? "button" : undefined}
+                                            tabIndex={r.vendor ? 0 : undefined}
+                                            onClick={r.vendor && r.vendor_id ? () => router.push(`/vendors?focus=${r.vendor_id}`) : undefined}
+                                            title={r.vendor ? `View ${r.vendor} on the Vendors page` : undefined}
+                                            className={`mise-well flex items-center justify-between rounded-xl px-3.5 py-2.5 ${
+                                              r.vendor ? "mise-feel cursor-pointer" : ""
+                                            }`}
+                                          >
+                                            <div className="flex min-w-0 items-center gap-3">
+                                              <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500/15 text-base text-brand-300">🏷</span>
+                                              <div className="min-w-0">
+                                                <p className="truncate font-medium text-fg">
+                                                  {r.vendor ?? "No supplier recorded"}
+                                                  {r.vendor && <span aria-hidden className="ml-1 text-brand-300">›</span>}
+                                                </p>
+                                                <p className="text-xs text-fg-faint">
+                                                  {new Date(r.received_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                                </p>
+                                                {/* HOW BIG THEIR PACK IS, on the
+                                                    delivery it arrived on. "we
+                                                    need to show clearly that this
+                                                    vendor box has 50kg, other
+                                                    vendor 1 box 100kg." Without
+                                                    it the quantities above look
+                                                    like they disagree for no
+                                                    reason. */}
+                                                {/* A ONE-OFF, called out. He asked
+                                                    for the per-purchase supplier
+                                                    choice and warned about it in
+                                                    the same breath: "we need to
+                                                    note and show this clearly in
+                                                    inventory or else it will be a
+                                                    pile up confusion in future."
+                                                    So when a delivery came from
+                                                    anyone but the ★ chosen
+                                                    supplier, the row says so. */}
+                                                {(() => {
+                                                  const opts = itemSuppliers[openItem.id] ?? [];
+                                                  const star = opts.find((x) => x.is_preferred);
+                                                  if (!star || !r.vendor_id || star.vendor_id === r.vendor_id) {
+                                                    return null;
+                                                  }
+                                                  return (
+                                                    <p className="mise-tone-warn mt-0.5 text-[11px]">
+                                                      one-off · your usual is {star.vendor_name}
+                                                    </p>
+                                                  );
+                                                })()}
+                                                {(() => {
+                                                  const sv = (itemSuppliers[openItem.id] ?? []).find(
+                                                    (s) => s.vendor_id === r.vendor_id,
+                                                  );
+                                                  if (!sv?.pack_level_id) return null;
+                                                  const lvl = (openItem.pack_levels ?? []).find(
+                                                    (l) => l.id === sv.pack_level_id,
+                                                  );
+                                                  if (!lvl) return null;
+                                                  const own = parseFloat(sv.pack_size_override ?? "");
+                                                  const differs = Number.isFinite(own) && own > 0;
+                                                  const size = differs ? own : parseFloat(lvl.base_size) || 0;
+                                                  if (size <= 0) return null;
+                                                  return (
+                                                    <p className="mt-0.5 text-[11px] text-fg-soft">
+                                                      their 1 {lvl.name} ={" "}
+                                                      <b className="text-fg">{size} {openItem.unit}</b>
+                                                      {differs && (
+                                                        <span className="mise-tone-warn ml-1">· their own size</span>
+                                                      )}
+                                                    </p>
+                                                  );
+                                                })()}
+                                              </div>
+                                            </div>
+                                            <div className="shrink-0 pl-2 text-right">
+                                              <p className="font-semibold text-fg">{fmtQty(r.quantity, openItem.unit)}</p>
+                                              {r.unit_cost != null && (
+                                                <p className="font-mono text-xs text-brand-300">{format(r.unit_cost)}/{openItem.unit}</p>
+                                              )}
+                                              {r.reference_id && (
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); toggleReceipt(r.reference_id!); }}
+                                                  className="mt-1 text-[11px] font-medium text-brand-300 hover:underline"
+                                                  title="See everything received on this delivery"
+                                                >
+                                                  {openReceipt === r.reference_id ? "▾ hide delivery" : "🔗 full delivery"}
+                                                </button>
+                                              )}
                                             </div>
                                           </div>
-                                          <div className="shrink-0 pl-2 text-right">
-                                            <p className="font-semibold text-fg">{fmtQty(r.quantity, openItem.unit)}</p>
-                                            {r.unit_cost != null && (
-                                              <p className="font-mono text-xs text-brand-300">{format(r.unit_cost)}/{openItem.unit}</p>
-                                            )}
-                                            {r.reference_id && (
-                                              <button
-                                                onClick={(e) => { e.stopPropagation(); toggleReceipt(r.reference_id!); }}
-                                                className="mt-1 text-[11px] font-medium text-brand-300 hover:underline"
-                                                title="See everything received on this delivery"
-                                              >
-                                                {openReceipt === r.reference_id ? "▾ hide delivery" : "🔗 full delivery"}
-                                              </button>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {openReceipt && (
-                                      <div className="mise-panel-in mt-3 rounded-xl border border-brand-400/30 bg-paper-3 p-3">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                                          📦 The chain — everything received together on this delivery
-                                        </p>
-                                        {receiptLoading && !receipts[openReceipt] ? (
-                                          <p className="mt-2 text-xs text-fg-faint">Loading…</p>
-                                        ) : receipts[openReceipt] && receipts[openReceipt].length > 0 ? (
-                                          <div className="mt-2 divide-y divide-line/50">
-                                            {receipts[openReceipt].map((l, i) => (
-                                              <div key={i} className="flex items-center justify-between py-1.5 text-sm">
-                                                <span className="min-w-0 truncate text-fg-soft">
-                                                  {l.item_name}
-                                                  {l.item_name.toLowerCase() === openItem.name.toLowerCase() && (
-                                                    <span className="ml-1 text-brand-300">(this openItem)</span>
-                                                  )}
-                                                  {l.vendor && <span className="ml-1 text-fg-faint">· {l.vendor}</span>}
-                                                </span>
-                                                <span className="shrink-0 pl-2 text-right">
-                                                  <b className="text-fg">{fmtQty(l.quantity, l.unit)}</b>
-                                                  {l.unit_cost != null && (
-                                                    <span className="ml-2 font-mono text-xs text-brand-300">{format(l.unit_cost)}/{l.unit}</span>
-                                                  )}
-                                                </span>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="mt-2 text-xs text-fg-faint">Just this openItem was on that delivery.</p>
-                                        )}
+                                        ))}
                                       </div>
-                                    )}
-                                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-xs text-fg-faint">
-                                      <span>On hand <b className="font-semibold text-fg-soft">{fmtQty(openItem.current_stock, openItem.unit)}</b></span>
-                                      <span>Avg cost <b className="font-semibold text-fg-soft">{format(openItem.average_cost)}/{openItem.unit}</b></span>
-                                      <span>Bought (recent) <b className="font-semibold text-fg-soft">{fmtQty(openRows.reduce((s, r) => s + parseFloat(r.quantity || "0"), 0), openItem.unit)}</b></span>
-                                      <span>Last received <b className="font-semibold text-fg-soft">{new Date(openRows[0].received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</b></span>
-                                    </div>
-                                    <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
-                                      Stock from different suppliers mixes into one pool — so DineAI values your {fmtQty(openItem.current_stock, openItem.unit)} on hand at the weighted-average {format(openItem.average_cost)}/{openItem.unit} rather than guessing whose stock is left.
-                                    </p>
-
-                                    {/* When suppliers disagree about how big a
-                                        pack is, SAY SO. Averaging the cost is
-                                        fair because a kg is a kg whoever sent
-                                        it — but a box is not a box, so there is
-                                        no honest single box count to print. */}
-                                    {packDisagreement(openItem, itemSuppliers[openItem.id]) && (
-                                      <p className="mise-tone-warn mt-2 rounded-lg bg-amber-400/10 px-2.5 py-2 text-[11px] leading-relaxed">
-                                        <b>Packs are not the same size here.</b>{" "}
-                                        {packDisagreement(openItem, itemSuppliers[openItem.id])}. Your{" "}
-                                        {fmtQty(openItem.current_stock, openItem.unit)} is counted in{" "}
-                                        {openItem.unit} for that reason — there is no one box to count
-                                        it in.
-                                      </p>
-                                    )}
-                                    {/* ── EVERY WAY YOU CAN BUY IT ──────────
-                                        "in inventory we need to show them
-                                         clearly... even though they have
-                                         different price they all (box, loose
-                                         kg, g etc) are 1 item only."
-                                        Cheapest per base unit first, because
-                                        that is the only ranking that survives
-                                        a box and a loose kilo being compared. */}
-                                    {(() => {
-                                      const opts = itemSuppliers[openItem.id] ?? [];
-                                      if (opts.length === 0) return null;
-                                      const ways = opts
-                                        .map((v) => ({
-                                          v,
-                                          per: pricePerBase(openItem, v),
-                                          form: v.pack_level_id
-                                            ? levelName(openItem, v.pack_level_id)
-                                            : `loose, per ${openItem.unit}`,
-                                          size: v.pack_level_id
-                                            ? supplierPackSize(openItem, v)
-                                            : 0,
-                                        }))
-                                        .filter((w) => w.per > 0)
-                                        .sort((a, b) => a.per - b.per);
-                                      if (ways.length === 0) return null;
-                                      return (
-                                        <div className="mt-4 rounded-xl border border-line bg-paper-2/50 p-3">
+                                      {openReceipt && (
+                                        <div className="mise-panel-in mt-3 rounded-xl border border-brand-400/30 bg-paper-3 p-3">
                                           <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                                            Every way you can buy it
+                                            📦 The chain — everything received together on this delivery
                                           </p>
-                                          <ul className="mt-2 space-y-1">
-                                            {ways.map((w, i) => (
-                                              <li
-                                                key={`${w.v.vendor_id}-${w.v.pack_level_id ?? "loose"}`}
-                                                className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs"
-                                              >
-                                                <span className="min-w-0 truncate">
-                                                  <span className="font-medium text-fg">
-                                                    {w.v.vendor_name}
+                                          {receiptLoading && !receipts[openReceipt] ? (
+                                            <p className="mt-2 text-xs text-fg-faint">Loading…</p>
+                                          ) : receipts[openReceipt] && receipts[openReceipt].length > 0 ? (
+                                            <div className="mt-2 divide-y divide-line/50">
+                                              {receipts[openReceipt].map((l, i) => (
+                                                <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                                                  <span className="min-w-0 truncate text-fg-soft">
+                                                    {l.item_name}
+                                                    {l.item_name.toLowerCase() === openItem.name.toLowerCase() && (
+                                                      <span className="ml-1 text-brand-300">(this openItem)</span>
+                                                    )}
+                                                    {l.vendor && <span className="ml-1 text-fg-faint">· {l.vendor}</span>}
                                                   </span>
-                                                  <span className="ml-1.5 text-fg-faint">
-                                                    {w.v.pack_level_id
-                                                      ? `by the ${w.form}${w.size > 0 ? ` (${w.size} ${openItem.unit})` : ""}`
-                                                      : w.form}
+                                                  <span className="shrink-0 pl-2 text-right">
+                                                    <b className="text-fg">{fmtQty(l.quantity, l.unit)}</b>
+                                                    {l.unit_cost != null && (
+                                                      <span className="ml-2 font-mono text-xs text-brand-300">{format(l.unit_cost)}/{l.unit}</span>
+                                                    )}
                                                   </span>
-                                                  {w.v.is_preferred && (
-                                                    <span className="ml-1 text-amber-300">★</span>
-                                                  )}
-                                                </span>
-                                                <span
-                                                  className={`shrink-0 tabular-nums ${
-                                                    i === 0 ? "mise-tone-good font-semibold" : "text-fg-soft"
-                                                  }`}
-                                                >
-                                                  {format(w.per.toFixed(2))}/{openItem.unit}
-                                                  <span className="ml-1 text-[10px] text-fg-faint">
-                                                    {format(w.v.price_per_unit)}
-                                                    {w.v.pack_level_id ? `/${w.form}` : ""}
-                                                  </span>
-                                                </span>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                          <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
-                                            Ranked by what one {openItem.unit} really costs — a big
-                                            case with a big price can still be the cheapest.
-                                          </p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className="mt-2 text-xs text-fg-faint">Just this openItem was on that delivery.</p>
+                                          )}
                                         </div>
-                                      );
-                                    })()}
+                                      )}
+                                      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3 text-xs text-fg-faint">
+                                        <span>On hand <b className="font-semibold text-fg-soft">{fmtQty(openItem.current_stock, openItem.unit)}</b></span>
+                                        <span>Avg cost <b className="font-semibold text-fg-soft">{format(openItem.average_cost)}/{openItem.unit}</b></span>
+                                        <span>Bought (recent) <b className="font-semibold text-fg-soft">{fmtQty(openRows.reduce((s, r) => s + parseFloat(r.quantity || "0"), 0), openItem.unit)}</b></span>
+                                        <span>Last received <b className="font-semibold text-fg-soft">{new Date(openRows[0].received_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</b></span>
+                                      </div>
+                                      <p className="mt-2.5 text-[11px] leading-relaxed text-fg-faint">
+                                        Stock from different suppliers mixes into one pool — so DineAI values your {fmtQty(openItem.current_stock, openItem.unit)} on hand at the weighted-average {format(openItem.average_cost)}/{openItem.unit} rather than guessing whose stock is left.
+                                      </p>
 
-                                    <div className="mt-3">
-                                      <Link
-                                        href={`/purchasing?openItem=${openItem.id}`}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-brand-400/20"
-                                      >
-                                        🛒 Order / view in Purchasing →
-                                      </Link>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <p className="mt-3 text-xs text-fg-faint">No purchase history yet.</p>
-                                )}
-                              </div>
-            </div>
+                                      {/* When suppliers disagree about how big a
+                                          pack is, SAY SO. Averaging the cost is
+                                          fair because a kg is a kg whoever sent
+                                          it — but a box is not a box, so there is
+                                          no honest single box count to print. */}
+                                      {packDisagreement(openItem, itemSuppliers[openItem.id]) && (
+                                        <p className="mise-tone-warn mt-2 rounded-lg bg-amber-400/10 px-2.5 py-2 text-[11px] leading-relaxed">
+                                          <b>Packs are not the same size here.</b>{" "}
+                                          {packDisagreement(openItem, itemSuppliers[openItem.id])}. Your{" "}
+                                          {fmtQty(openItem.current_stock, openItem.unit)} is counted in{" "}
+                                          {openItem.unit} for that reason — there is no one box to count
+                                          it in.
+                                        </p>
+                                      )}
+                                      {/* ── EVERY WAY YOU CAN BUY IT ──────────
+                                          "in inventory we need to show them
+                                           clearly... even though they have
+                                           different price they all (box, loose
+                                           kg, g etc) are 1 item only."
+                                          Cheapest per base unit first, because
+                                          that is the only ranking that survives
+                                          a box and a loose kilo being compared. */}
+                                      {(() => {
+                                        const opts = itemSuppliers[openItem.id] ?? [];
+                                        if (opts.length === 0) return null;
+                                        const ways = opts
+                                          .map((v) => ({
+                                            v,
+                                            per: pricePerBase(openItem, v),
+                                            form: v.pack_level_id
+                                              ? levelName(openItem, v.pack_level_id)
+                                              : `loose, per ${openItem.unit}`,
+                                            size: v.pack_level_id
+                                              ? supplierPackSize(openItem, v)
+                                              : 0,
+                                          }))
+                                          .filter((w) => w.per > 0)
+                                          .sort((a, b) => a.per - b.per);
+                                        if (ways.length === 0) return null;
+                                        return (
+                                          <div className="mt-4 rounded-xl border border-line bg-paper-2/50 p-3">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                                              Every way you can buy it
+                                            </p>
+                                            <ul className="mt-2 space-y-1">
+                                              {ways.map((w, i) => (
+                                                <li
+                                                  key={`${w.v.vendor_id}-${w.v.pack_level_id ?? "loose"}`}
+                                                  className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs"
+                                                >
+                                                  <span className="min-w-0 truncate">
+                                                    <span className="font-medium text-fg">
+                                                      {w.v.vendor_name}
+                                                    </span>
+                                                    <span className="ml-1.5 text-fg-faint">
+                                                      {w.v.pack_level_id
+                                                        ? `by the ${w.form}${w.size > 0 ? ` (${w.size} ${openItem.unit})` : ""}`
+                                                        : w.form}
+                                                    </span>
+                                                    {w.v.is_preferred && (
+                                                      <span className="ml-1 text-amber-300">★</span>
+                                                    )}
+                                                  </span>
+                                                  <span
+                                                    className={`shrink-0 tabular-nums ${
+                                                      i === 0 ? "mise-tone-good font-semibold" : "text-fg-soft"
+                                                    }`}
+                                                  >
+                                                    {format(w.per.toFixed(2))}/{openItem.unit}
+                                                    <span className="ml-1 text-[10px] text-fg-faint">
+                                                      {format(w.v.price_per_unit)}
+                                                      {w.v.pack_level_id ? `/${w.form}` : ""}
+                                                    </span>
+                                                  </span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                            <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
+                                              Ranked by what one {openItem.unit} really costs — a big
+                                              case with a big price can still be the cheapest.
+                                            </p>
+                                          </div>
+                                        );
+                                      })()}
+
+                                      <div className="mt-3">
+                                        <Link
+                                          href={`/purchasing?openItem=${openItem.id}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="inline-flex items-center gap-1 rounded-lg border border-brand-400/30 bg-brand-400/10 px-3 py-1.5 text-xs font-medium text-brand-300 transition hover:bg-brand-400/20"
+                                        >
+                                          🛒 Order / view in Purchasing →
+                                        </Link>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <p className="mt-3 text-xs text-fg-faint">No purchase history yet.</p>
+                                  )}
+                                </div>
+              </div>
+              </>
+            )}
           </>
         )}
       </DetailSheet>
