@@ -92,6 +92,11 @@ export default function ExpensesPage() {
   const [extraReason, setExtraReason] = useState("");
   const [repeats, setRepeats] = useState(false); // auto-log again every month
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** The category popup, and the fold for the fields nobody fills in most
+   *  days. Both exist so the form stays SHORT: its Save button must never be
+   *  below the fold on the page whose job is logging a spend. */
+  const [catPick, setCatPick] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   // ⌘K "Add an expense" (?new=1) → scroll, ring-pulse and focus the form
   useDeepLink({ new: () => spotlight("expense-form") }, !loading);
@@ -687,114 +692,159 @@ export default function ExpensesPage() {
                   <button type="button" className="underline" onClick={() => { setEditingId(null); setAmount(""); setDescription(""); setRepeats(false); }}>cancel</button>
                 </p>
               )}
-              <form onSubmit={addExpense} className="grid grid-cols-2 gap-3">
-                {/* CATEGORY AS TILES, not a dropdown.
-                    It is the first decision and the one with a shape — "rent"
-                    and "gas" are different KINDS of thing, and a select hides
-                    all of them behind one line of text. Tapping is faster and
-                    it shows what you spend on without opening anything.
+              {/* SHORT BY DEFAULT.
+                  "I need to scrollllll till down to reach that expense entering
+                   card." The card was already beside the entries — the problem
+                  was its HEIGHT: twenty category tiles, then date, payment,
+                  amount, VAT, surcharge, a reason and a description, so Save sat
+                  far below the fold. My category tiles made that worse.
 
-                    Fixed costs get the slate stripe, variable the amber, so the
-                    split this page reports on is visible while you are creating
-                    the entry rather than only afterwards. */}
-                <div className="col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-fg-soft">Category</label>
-                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                    {categories
-                      .filter((c) => c.is_active)
-                      .map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setCategoryId(c.id)}
-                          className={`mise-press relative overflow-hidden rounded-lg px-2.5 py-2 text-left text-xs font-medium transition ${
-                            categoryId === c.id
-                              ? "bg-brand-600 text-white"
-                              : "mise-card-inset text-fg-soft hover:text-fg"
-                          }`}
-                        >
+                  Most expenses are three facts: what it was for, how much, and
+                  it happened today. Those three are the form. The other six are
+                  real and stay — behind one toggle, where they cost nothing
+                  until you need them. */}
+              <form onSubmit={addExpense} className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">What for</label>
+                  <button
+                    type="button"
+                    onClick={() => setCatPick(true)}
+                    className="mise-card-inset mise-press relative mt-1 flex w-full items-center gap-2 overflow-hidden px-3 py-2.5 text-left"
+                  >
+                    {(() => {
+                      const c = categories.find((x) => x.id === categoryId);
+                      return (
+                        <>
                           <span
                             aria-hidden
-                            className={`absolute inset-y-0 left-0 w-0.5 ${
-                              categoryId === c.id
-                                ? "bg-white/40"
-                                : c.kind === "FIXED"
-                                  ? "bg-slate-400/60"
-                                  : "bg-amber-400/70"
+                            className={`absolute inset-y-0 left-0 w-1 ${
+                              c?.kind === "FIXED" ? "bg-slate-400/60" : "bg-amber-400/70"
                             }`}
                           />
-                          <span className="block truncate pl-1">{c.name}</span>
-                        </button>
-                      ))}
-                  </div>
+                          <span className="min-w-0 flex-1 truncate pl-1 text-sm font-medium text-fg">
+                            {c?.name ?? "Pick a category"}
+                          </span>
+                          <span aria-hidden className="shrink-0 text-fg-faint">▾</span>
+                        </>
+                      );
+                    })()}
+                  </button>
                 </div>
-                <div className="hidden">
-                  <Select
-                    value={categoryId}
-                    onChange={setCategoryId}
-                    className="mt-1"
-                    options={categories
-                      .filter((c) => c.is_active)
-                      .map((c) => ({
-                        value: c.id,
-                        label: `${c.name} · ${c.kind === "FIXED" ? "Fixed" : "Variable"}`,
-                      }))}
+
+                <div>
+                  <label className="block text-sm font-medium text-fg-soft">
+                    Amount <span className="text-fg-faint">(incl VAT)</span>
+                  </label>
+                  <input
+                    value={amount}
+                    onChange={(e) => setAmount(numeric(e.target.value))}
+                    inputMode="decimal"
+                    required
+                    placeholder="0.00"
+                    className="mise-well mt-1 w-full rounded-lg px-3 py-3 text-right font-display text-xl tabular-nums outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Date</label>
-                  <input type="date" value={date} max={localISODate()} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={!categoryId || !(parseFloat(amount) > 0)}
+                    data-tone="brand"
+                    className="mise-btn-flat mise-press flex-1 px-4 py-3 text-sm font-bold text-brand-300 disabled:opacity-40"
+                  >
+                    {editingId ? "Save changes" : "Add expense"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen((v) => !v)}
+                    aria-expanded={moreOpen}
+                    className="mise-btn-flat mise-press px-3 py-3 text-sm text-fg-soft"
+                  >
+                    {moreOpen ? "Less ▲" : "More ▾"}
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Payment</label>
-                  <Select value={method} onChange={setMethod} className="mt-1" options={METHODS} />
+
+                {/* Everything that is real but rarely touched. Nothing was
+                    removed — it is one tap away instead of eight rows tall. */}
+                <div className={moreOpen ? "grid grid-cols-2 gap-3 pt-1" : "hidden"}>
+                  <div>
+                    <label className="block text-sm font-medium text-fg-soft">Date</label>
+                    <input type="date" value={date} max={localISODate()} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-fg-soft">Payment</label>
+                    <Select value={method} onChange={setMethod} className="mt-1" options={METHODS} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-fg-soft">of which VAT</label>
+                    <input value={vat} onChange={(e) => setVat(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-fg-soft">Extra / surcharge (+)</label>
+                    <input value={extra} onChange={(e) => setExtra(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className={inputCls} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-fg-soft">Why the extra?</label>
+                    <input value={extraReason} onChange={(e) => setExtraReason(e.target.value)} placeholder="optional reason" className={inputCls} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-fg-soft">Description</label>
+                    <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
+                  </div>
+                  <label className="col-span-2 flex items-center gap-2 text-sm text-fg-soft">
+                    <input
+                      type="checkbox"
+                      checked={repeats}
+                      onChange={(e) => setRepeats(e.target.checked)}
+                      className="h-4 w-4 accent-brand-500"
+                    />
+                    Repeats every month
+                  </label>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Amount (incl VAT)</label>
-                  <input value={amount} onChange={(e) => setAmount(numeric(e.target.value))} inputMode="decimal" required placeholder="0.00" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">of which VAT</label>
-                  <input value={vat} onChange={(e) => setVat(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Extra / surcharge (+)</label>
-                  <input value={extra} onChange={(e) => setExtra(numeric(e.target.value))} inputMode="decimal" placeholder="0.00" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-fg-soft">Why the extra?</label>
-                  <input value={extraReason} onChange={(e) => setExtraReason(e.target.value)} placeholder="optional reason" className={inputCls} />
-                </div>
-                {parseFloat(extra || "0") > 0 && (
-                  <p className="col-span-2 -mt-1 text-xs text-fg-faint">
-                    Total saved = <b className="text-fg-soft">{format(String((parseFloat(amount || "0") + parseFloat(extra || "0")).toFixed(2)))}</b>{" "}
-                    ({format(amount || "0")} base + {format(extra)} extra). Use this when you pay a bit more than the
-                    usual amount (e.g. £900 gas + £50 surcharge) — both are added together and the split is noted.
-                  </p>
-                )}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-fg-soft">Description</label>
-                  <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="optional" className={inputCls} />
-                </div>
-                <label className="col-span-2 flex items-start gap-2 text-sm text-fg-soft">
-                  <input type="checkbox" checked={repeats} onChange={(e) => setRepeats(e.target.checked)} className="mt-0.5" />
-                  <span>
-                    🔁 <b className="text-fg">Repeats every month</b> — DineAI will log this again
-                    automatically next month (rent, gas, internet…). Untick the badge on any
-                    auto-added copy to stop the chain.
-                  </span>
-                </label>
-                <div className="col-span-2 flex flex-wrap items-center gap-2">
-                  <Button type="submit" variant="primary">
-                    {editingId ? "Save changes ✓" : "Add expense"}
-                  </Button>
-                  <Button type="button" variant="soft" onClick={startPettyCash} title="Cash to staff, or something bought outside">
-                    ＋ Petty cash
-                  </Button>
-                </div>
-                {error && <p className="col-span-2 text-sm text-rose-400">{error}</p>}
               </form>
             </Card>
+          )}
+
+          {/* Every category, over the page — the picker that used to be twenty
+              tiles nailed above the amount box. */}
+          {catPick && (
+            <SheetPopup
+              onClose={() => setCatPick(false)}
+              title="What was it for?"
+              subtitle="fixed costs carry the grey stripe, variable the amber"
+              columns={3}
+            >
+              <div className="mise-stagger grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {categories
+                  .filter((c) => c.is_active)
+                  .map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setCategoryId(c.id);
+                        setCatPick(false);
+                      }}
+                      className={`mise-card-inset mise-press relative flex items-center gap-2 overflow-hidden p-3 pl-4 text-left ${
+                        categoryId === c.id ? "ring-1 ring-brand-400/50" : ""
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`absolute inset-y-0 left-0 w-1 ${
+                          c.kind === "FIXED" ? "bg-slate-400/60" : "bg-amber-400/70"
+                        }`}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+                        {c.name}
+                      </span>
+                      {categoryId === c.id && (
+                        <span className="shrink-0 text-[11px] text-brand-300">current</span>
+                      )}
+                    </button>
+                  ))}
+              </div>
+            </SheetPopup>
           )}
 
           {isSuper && (
