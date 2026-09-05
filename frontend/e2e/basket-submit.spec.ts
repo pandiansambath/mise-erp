@@ -65,6 +65,17 @@ test("submit indent actually posts the order", async ({ page }) => {
   const submit = page.getByRole("button", { name: /Submit indent/i }).first();
   await expect(submit).toBeVisible({ timeout: 15_000 });
 
+  // The precise check first, so a failure says WHY rather than just "no
+  // request came". A portalled submit button has no <form> ancestor, so the
+  // browser decides its owner from the `form` attribute — and if that name
+  // resolves to anything that is not a form, the owner is silently null and the
+  // click does nothing. That is how the first fix failed: the id it named was
+  // already on the Card wrapper, so getElementById returned a DIV.
+  const owner = await submit.evaluate(
+    (b) => (b as HTMLButtonElement).form?.id ?? null,
+  );
+  expect(owner, "the submit button is not attached to any form").not.toBeNull();
+
   // THE ASSERTION THAT MATTERS. Before the fix this request never happened and
   // the click was swallowed in silence.
   const posted = page.waitForRequest(
