@@ -101,8 +101,8 @@ the raised idiom still to be replaced, `popup` counts SheetPopup usage.
 
 | # | task | state |
 |---|---|---|
-| A | **Inventory rebuilt from scratch** — asked twice. Still five bands before the list; he does not like the row design | ☐ |
-| B | The remaining 34-page sweep: reports, dashboard, party-order, stock-take, plan, profile, food-safety, allergens, audit, how-it-works, messages | ☐ |
+| A | **Inventory rebuilt from scratch** | ✅ one toolbar row; stock/category/supplier moved into a Filters popup carrying a COUNT, so you can never filter without knowing |
+| B | The remaining 34-page sweep | ✅ all inherit the reference card via the base `Card` fix; reports / stock-take / party-order keep their tables on desktop and stack on mobile |
 
 ## Then: expenses, sales, money — FROM SCRATCH
 
@@ -133,3 +133,19 @@ I applied the purchasing idiom (tiles → popup) to a page whose job is DIFFEREN
 Purchasing is "pick a few things from many". Sales is "type five numbers I
 already know". Tiles are right for choosing and wrong for entering — the shape
 has to follow the job, not the reference page.
+
+
+## Status 2026-09-05
+
+All 34 pages are on the reference card. The three money pages were rebuilt from
+their own jobs rather than from a shared template:
+
+| page | its job | the shape that fits |
+|---|---|---|
+| Sales | type five numbers you already know | a day sheet: every channel a row with a box, one save |
+| Expenses | log one spend, fast | three fields; the other six behind More |
+| Money | tell me where I stand | the money kept, in words, leading |
+
+**The mistake worth not repeating:** I applied purchasing's tiles-and-popups to
+all of them first. Purchasing's job is "pick a few from many" — a tile is right
+there and wrong for entering. Same design language, four different shapes.
