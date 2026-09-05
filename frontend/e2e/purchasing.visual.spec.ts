@@ -14,10 +14,10 @@ async function login(page: Page) {
   await page.goto("/login");
   // The page carries the sign-in AND sign-up forms, so target the sign-in
   // fields by id rather than by label — "Email" matches both.
-  // NOTE: the login page renders #li-email TWICE (a desktop and a mobile
+  // NOTE: the login page renders [data-testid="login-email"] TWICE (a desktop and a mobile
   // variant both in the DOM), so the id is not unique. Take the visible one.
-  await page.locator("#li-email:visible").first().fill(EMAIL);
-  await page.locator("#li-password:visible").first().fill(PASSWORD);
+  await page.locator('[data-testid="login-email"]:visible').first().fill(EMAIL);
+  await page.locator('[data-testid="login-password"]:visible').first().fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
   // A first-run tour sits over the app and swallows every click, and it appears

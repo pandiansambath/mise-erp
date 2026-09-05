@@ -33,8 +33,8 @@ async function signIn(
   await page.goto(`${BASE}/login`);
   // The form renders twice (mobile + desktop copies); :visible or it fills the
   // hidden one and waits forever.
-  await page.locator("#li-email:visible").first().fill(who.email);
-  await page.locator("#li-password:visible").first().fill(who.password);
+  await page.locator('[data-testid="login-email"]:visible').first().fill(who.email);
+  await page.locator('[data-testid="login-password"]:visible').first().fill(who.password);
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 60_000 });
   await page.evaluate(() => localStorage.setItem("mise.tour.done", "1"));

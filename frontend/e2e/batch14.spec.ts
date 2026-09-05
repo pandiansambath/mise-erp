@@ -9,12 +9,12 @@ import { test, expect, type Page } from "@playwright/test";
 const EMAIL = "superadmin@gmail.com";
 const PASSWORD = "superadmin@123";
 
-// There are two #li-email nodes in the DOM (mobile + desktop shells); filling
+// There are two [data-testid="login-email"] nodes in the DOM (mobile + desktop shells); filling
 // the hidden one waits forever on "element is not enabled".
 async function login(page: Page) {
   await page.goto("/login");
-  await page.locator("#li-email:visible").first().fill(EMAIL);
-  await page.locator("#li-password:visible").first().fill(PASSWORD);
+  await page.locator('[data-testid="login-email"]:visible').first().fill(EMAIL);
+  await page.locator('[data-testid="login-password"]:visible').first().fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
   await page.evaluate(() => localStorage.setItem("mise.tour.done", "1"));
