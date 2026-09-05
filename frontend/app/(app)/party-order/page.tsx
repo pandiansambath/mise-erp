@@ -345,7 +345,7 @@ export default function PartyOrderPage() {
           {/* The order */}
           <Card className="mt-4 p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="mise-stack w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                     <th className="px-5 py-3">Dish</th>
@@ -378,8 +378,8 @@ export default function PartyOrderPage() {
                             className="w-16 rounded-md border border-line-2 bg-transparent px-2 py-1 text-right text-sm"
                           />
                         </td>
-                        <td className="px-5 py-3 text-right text-fg-soft">{x.hasPrice ? format(x.price) : "—"}</td>
-                        <td className="px-5 py-3 text-right text-fg-soft">{format(x.cost)}</td>
+                        <td data-label="Price" className="px-5 py-3 text-right text-fg-soft">{x.hasPrice ? format(x.price) : "—"}</td>
+                        <td data-label="Cost" className="px-5 py-3 text-right text-fg-soft">{format(x.cost)}</td>
                         <td className={`px-5 py-3 text-right ${x.profit >= 0 ? "text-fg" : "text-rose-400"}`}>
                           {x.hasPrice ? format(x.profit) : "—"}
                         </td>

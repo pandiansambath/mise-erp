@@ -163,7 +163,7 @@ export default function StockTakePage() {
 
       <Card className="p-0" id="stock-count">
         <div className="max-h-[62vh] overflow-auto">
-          <table className="w-full text-sm">
+          <table className="mise-stack w-full text-sm">
             <thead className="sticky top-0 bg-paper">
               <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
                 <th className="px-4 py-2 font-medium">Item</th>
@@ -184,7 +184,7 @@ export default function StockTakePage() {
                       <span className="font-medium text-fg">{i.name}</span>
                       {i.category && <span className="ml-2 text-xs text-fg-faint">{i.category}</span>}
                     </td>
-                    <td className="px-4 py-2 text-fg-soft">{fmtQty(i.current_stock, i.unit)}</td>
+                    <td data-label="System" className="px-4 py-2 text-fg-soft">{fmtQty(i.current_stock, i.unit)}</td>
                     <td className="px-4 py-2">
                       <span className="flex items-center gap-1.5">
                         <button
