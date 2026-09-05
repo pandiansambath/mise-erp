@@ -501,49 +501,55 @@ export default function EmployeesPage() {
                     </span>
                   </div>
 
-                  <dl className="mt-2.5 space-y-0.5 border-t border-line/50 pt-2 text-[11px]">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-fg-faint">Pay</dt>
-                      <dd className="tabular-nums text-fg">
-                        {e.salary_type === "MONTHLY"
-                          ? e.monthly_salary
-                            ? `${format(e.monthly_salary)}/mo`
-                            : "—"
-                          : e.hourly_rate
-                            ? `${format(e.hourly_rate)}/hr`
-                            : "—"}
-                      </dd>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-fg-faint">Visa</dt>
-                      <dd>
-                        {e.visa_expiry_date ? (
-                          alert ? (
-                            <Badge tone={visaTone(alert.days_left)}>
-                              {alert.days_left < 0 ? "Expired" : `${alert.days_left}d`}
-                            </Badge>
-                          ) : (
-                            <span className="text-fg-soft">{e.visa_expiry_date}</span>
-                          )
-                        ) : (
-                          <span className="text-fg-faint">—</span>
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
+                  {/* PAY IS THE FIGURE, so it is sized like one. It was 11px
+                      in a labelled row, the same weight as the word "Pay"
+                      beside it.
+
+                      And the visa only appears when there IS one. A dash in a
+                      labelled row is a line of type spent saying "nothing" —
+                      on a team where most people need no visa, that was a
+                      column of dashes down the whole page. */}
+                  <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1.5 border-t border-line/50 pt-2.5">
+                    <span className="font-display text-base font-semibold tabular-nums text-fg">
+                      {e.salary_type === "MONTHLY"
+                        ? e.monthly_salary
+                          ? `${format(e.monthly_salary)}/mo`
+                          : "no pay set"
+                        : e.hourly_rate
+                          ? `${format(e.hourly_rate)}/hr`
+                          : "no pay set"}
+                    </span>
+                    {e.visa_expiry_date &&
+                      (alert ? (
+                        <Badge tone={visaTone(alert.days_left)}>
+                          {alert.days_left < 0
+                            ? "visa expired"
+                            : `visa in ${alert.days_left}d`}
+                        </Badge>
+                      ) : (
+                        <span className="text-[11px] text-fg-faint">
+                          visa {e.visa_expiry_date}
+                        </span>
+                      ))}
+                  </div>
 
                   {canWrite && (
                     <div className="mt-2.5 flex gap-1.5">
+                      {/* The primary of the two: everything about the person
+                          as an ACCOUNT — verification, email, password,
+                          history, suspend, remove — lives behind it. Edit
+                          changes their details and is the quieter job. */}
                       <button
                         onClick={() => setLoginFor(e)}
-                        className="mise-press flex-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
-                        title="Login, email verification & history"
+                        data-tone="brand"
+                        className="mise-btn-flat mise-press min-h-[38px] flex-1 px-2.5 py-2 text-xs font-semibold text-brand-300"
+                        title="Login, email verification, history, suspend & remove"
                       >
-                        🔐 Login
+                        🔐 Login &amp; access
                       </button>
                       <button
                         onClick={() => startEdit(e)}
-                        className="mise-press flex-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-fg-soft hover:bg-paper-2"
+                        className="mise-btn-flat mise-press min-h-[38px] px-3 py-2 text-xs font-medium text-fg-soft"
                       >
                         Edit
                       </button>
