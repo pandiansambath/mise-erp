@@ -128,8 +128,8 @@ test("one spoken sentence becomes one turn, not twenty", async ({ page }) => {
   await page.addInitScript(installFakes);
   await page.setViewportSize({ width: 420, height: 900 }); // his phone
   await page.goto(`${BASE}/login`);
-  await page.locator('[data-testid="login-email"]:visible').first().fill("superadmin@gmail.com");
-  await page.locator('[data-testid="login-password"]:visible').first().fill("superadmin@123");
+  await page.locator('[data-testid="login-email"]:visible, #li-email:visible').first().fill("superadmin@gmail.com");
+  await page.locator('[data-testid="login-password"]:visible, #li-password:visible').first().fill("superadmin@123");
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
 
