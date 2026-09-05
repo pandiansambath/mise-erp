@@ -2,8 +2,8 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function login(page: Page) {
   await page.goto("/login");
-  await page.locator('[data-testid="login-email"]:visible').first().fill("superadmin@gmail.com");
-  await page.locator('[data-testid="login-password"]:visible').first().fill("superadmin@123");
+  await page.locator('[data-testid="login-email"]:visible, #li-email:visible').first().fill("superadmin@gmail.com");
+  await page.locator('[data-testid="login-password"]:visible, #li-password:visible').first().fill("superadmin@123");
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
   await page.evaluate(() => localStorage.setItem("mise.tour.done", "1"));

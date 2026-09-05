@@ -19,7 +19,7 @@ test("a hotel subdomain offers sign-in and never registration", async ({ page })
   test.setTimeout(120_000);
 
   await page.goto(`${BASE}/login`);
-  await expect(page.locator('[data-testid="login-email"]:visible').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid="login-email"]:visible, #li-email:visible').first()).toBeVisible({ timeout: 30_000 });
 
   // Nothing on the page should invite them to create a second hotel.
   const registerish = page.getByRole("link", { name: /register|sign up|start free|create account/i });
@@ -35,7 +35,7 @@ test("/signup on a hotel subdomain lands on the sign-in door", async ({ page }) 
 
   // It should end up showing the login form, whatever the URL was.
   await expect(
-    page.locator('[data-testid="login-email"]:visible').first(),
+    page.locator('[data-testid="login-email"]:visible, #li-email:visible').first(),
     "/signup on a hotel subdomain did not fall back to sign-in",
   ).toBeVisible({ timeout: 30_000 });
 });
