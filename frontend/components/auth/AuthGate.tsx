@@ -491,7 +491,16 @@ function useDecoded(src: string): boolean {
 
 /* ──────────────────── the sliding cinema panel ──────────────────── */
 
-function CinePanel({ mode, onSwitch }: { mode: AuthMode; onSwitch: (m: AuthMode) => void }) {
+function CinePanel({
+  mode,
+  onSwitch,
+  hideSwitch = false,
+}: {
+  mode: AuthMode;
+  onSwitch: (m: AuthMode) => void;
+  /** On a hotel's own subdomain there is no other door to pitch. */
+  hideSwitch?: boolean;
+}) {
   // The panel always pitches the OTHER door.
   const pitchSignup = mode === "login";
   const tableOk = useDecoded("/experience/table.jpg");
@@ -556,13 +565,15 @@ function CinePanel({ mode, onSwitch }: { mode: AuthMode; onSwitch: (m: AuthMode)
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => onSwitch(pitchSignup ? "signup" : "login")}
-          className="mise-press relative mt-7 inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur transition hover:border-white/50 hover:bg-white/15"
-        >
-          {pitchSignup ? "Register your hotel →" : "← Sign in instead"}
-        </button>
+        {!hideSwitch && (
+          <button
+            type="button"
+            onClick={() => onSwitch(pitchSignup ? "signup" : "login")}
+            className="mise-press relative mt-7 inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur transition hover:border-white/50 hover:bg-white/15"
+          >
+            {pitchSignup ? "Register your hotel →" : "← Sign in instead"}
+          </button>
+        )}
       </div>
 
       <p className="relative font-mono text-[10px] uppercase tracking-[0.3em] text-slate-400">
@@ -663,7 +674,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
               transition: "transform 650ms cubic-bezier(0.76, 0, 0.24, 1)",
             }}
           >
-            <CinePanel mode={mode} onSwitch={switchTo} />
+            <CinePanel mode={mode} onSwitch={switchTo} hideSwitch={lockedToLogin} />
           </div>
         </div>
       </div>
@@ -703,7 +714,15 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
               )}
             </h1>
             {isLogin ? <LoginForm active /> : <SignupForm active />}
-            <p className="mb-2 mt-5 text-center text-sm text-slate-200 drop-shadow">
+            {/* On a hotel's own door there is nothing to switch TO, so this
+                whole line goes. It used to render a "Register your hotel"
+                button that switchTo() then silently refused to act on — a dead
+                control, which reads as broken rather than as deliberate. */}
+            <p
+              className={`mb-2 mt-5 text-center text-sm text-slate-200 drop-shadow ${
+                lockedToLogin ? "hidden" : ""
+              }`}
+            >
               {isLogin ? (
                 <>
                   New here?{" "}
