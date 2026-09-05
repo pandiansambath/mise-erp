@@ -3900,6 +3900,11 @@ body.mise-voice-open .mise-launcher-in {
   .mise-stack td {
     display: block;
     width: 100%;
+    /* A stacked table must not keep the min-width it needed as a table.
+       Reports carries `min-w-[26rem]` so its four columns stay readable — at
+       390px that is wider than the screen, so the cards would have overflowed
+       sideways: the exact fault the stacking exists to remove. */
+    min-width: 0;
   }
   .mise-stack tr {
     margin: 0.5rem 0.75rem;

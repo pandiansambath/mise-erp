@@ -233,7 +233,7 @@ export default function ReportsPage() {
                 {prev.date_from} → {prev.date_to} <span className="mx-1">·</span> then {pnl.date_from} → {pnl.date_to}
               </p>
               <div className="mise-well mt-4 overflow-x-auto rounded-xl p-3">
-                <table className="w-full min-w-[26rem] text-sm">
+                <table className="mise-stack w-full min-w-[26rem] text-sm">
                   <thead>
                     <tr className="text-left text-xs uppercase text-fg-faint">
                       <th className="py-1.5 font-medium">Line</th>
@@ -260,8 +260,8 @@ export default function ReportsPage() {
                       return (
                         <tr key={label} className="border-t border-line/60">
                           <td className="py-2 text-fg-soft">{label}</td>
-                          <td className="py-2 text-right tabular-nums text-fg-faint">{format(String(av))}</td>
-                          <td className="py-2 text-right font-medium tabular-nums text-fg">{format(String(bv))}</td>
+                          <td data-label="Before" className="py-2 text-right tabular-nums text-fg-faint">{format(String(av))}</td>
+                          <td data-label="This period" className="py-2 text-right font-medium tabular-nums text-fg">{format(String(bv))}</td>
                           <td className="py-2 text-right">
                             <span
                               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
