@@ -10,7 +10,7 @@
 // scrolling to find the submit button.
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { hotelSite } from "@/lib/site";
 import { HotelDoor, type LoginConfig } from "@/components/auth/HotelDoor";
@@ -69,6 +69,14 @@ function useChefMood(typedLen: number) {
 
 function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }) {
   const { login, loginOtp } = useAuth();
+  // UNIQUE PER INSTANCE. The desktop and mobile layouts both mount this form
+  // at all times, so fixed ids meant duplicates in the document — and
+  // htmlFor resolves to the FIRST match, which on a phone is the HIDDEN
+  // desktop field. Tapping the label focused an invisible input, so the first
+  // tap appeared to do nothing and the typing went somewhere unseen.
+  const uid = useId();
+  const emailId = `li-email-${uid}`;
+  const pwId = `li-password-${uid}`;
   const [email, setEmail] = useState("owner@nirai.com");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -200,9 +208,10 @@ function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }
         </>
       )}
       <div>
-        <label htmlFor="li-email" className={authLabel}>Email</label>
+        <label htmlFor={emailId} className={authLabel}>Email</label>
         <input
-          id="li-email"
+          id={emailId}
+          data-testid="login-email"
           type="email"
           autoComplete="username"
           value={email}
@@ -216,9 +225,10 @@ function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }
         />
       </div>
       <div>
-        <label htmlFor="li-password" className={authLabel}>Password</label>
+        <label htmlFor={pwId} className={authLabel}>Password</label>
         <PasswordInput
-          id="li-password"
+          id={pwId}
+          data-testid="login-password"
           value={password}
           onChange={setPassword}
           onFocusChange={chef.setPwFocus}
@@ -604,7 +614,13 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   // your hotel" is both wrong and confusing. Resolved after mount because the
   // hostname does not exist during the server render.
   const [ownSite, setOwnSite] = useState<string | null>(null);
-  useEffect(() => setOwnSite(hotelSite()), []);
+  /** The hostname is not readable during the server render, so `ownSite` being
+   *  null means "not a hotel" only AFTER this is true. */
+  const [mountedHost, setMountedHost] = useState(false);
+  useEffect(() => {
+    setOwnSite(hotelSite());
+    setMountedHost(true);
+  }, []);
   const lockedToLogin = ownSite !== null;
 
   // THEIR DOOR, IF THEY HAVE DESIGNED ONE.
@@ -617,8 +633,20 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
     name: string;
     logo: string | null;
   } | null>(null);
+  /** Have we finished asking whether this hotel has its own door?
+   *
+   *  Until we have, a hotel subdomain paints NOTHING that takes typing. The
+   *  standard page used to render first and be replaced when the answer came
+   *  back, which threw away whatever had already been typed and put a
+   *  different element under the finger that was already moving. */
+  const [doorChecked, setDoorChecked] = useState(false);
   useEffect(() => {
-    if (!ownSite) return;
+    if (ownSite === null) {
+      // Either not a hotel subdomain, or not resolved yet. The apex never has a
+      // door, so it must not wait for one.
+      if (mountedHost) setDoorChecked(true);
+      return;
+    }
     let alive = true;
     fetch(`${API_BASE}/api/public/hotel-landing/${encodeURIComponent(ownSite)}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -637,11 +665,14 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
       .catch(() => {
         /* their door failing to load must never lock anyone out — the standard
            one renders and still signs them in. */
+      })
+      .finally(() => {
+        if (alive) setDoorChecked(true);
       });
     return () => {
       alive = false;
     };
-  }, [ownSite]);
+  }, [ownSite, mountedHost]);
 
   const [mode, setMode] = useState<AuthMode>(initialMode);
 
@@ -678,6 +709,22 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   const isLogin = mode === "login";
   const mTableOk = useDecoded("/experience/m/table.jpg");
   const mDawnOk = useDecoded("/experience/m/dawn.jpg");
+
+  // NOTHING THAT TAKES TYPING UNTIL WE KNOW WHICH DOOR THIS IS.
+  //
+  // A quiet hold for one network round trip is worth far more than a page that
+  // paints instantly and then swaps itself out from under someone's hands.
+  if (!doorChecked) {
+    return (
+      <div className="mise-dark-page grid h-svh place-items-center bg-ink-950 text-slate-300">
+        <span className="sr-only">Loading the sign-in page</span>
+        <span
+          aria-hidden
+          className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-brand-400"
+        />
+      </div>
+    );
+  }
 
   // Their door replaces the whole page rather than decorating it: the shared
   // one loads two large photographs and a sliding cinema panel, and none of

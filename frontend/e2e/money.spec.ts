@@ -13,8 +13,8 @@ const PASSWORD = "StrongPass123!";
 
 async function login(page: Page) {
   await page.goto("/login");
-  await page.locator("#li-email:visible").first().fill(EMAIL);
-  await page.locator("#li-password:visible").first().fill(PASSWORD);
+  await page.locator('[data-testid="login-email"]:visible').first().fill(EMAIL);
+  await page.locator('[data-testid="login-password"]:visible').first().fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
   await page.evaluate(() => localStorage.setItem("mise.tour.done", "1"));

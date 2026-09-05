@@ -19,8 +19,8 @@ const PASSWORD = "superadmin@123";
 // forever for a page that was never going to navigate.
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto(`${BASE}/login`);
-  await page.locator("#li-email:visible").first().fill(EMAIL);
-  await page.locator("#li-password:visible").first().fill(PASSWORD);
+  await page.locator('[data-testid="login-email"]:visible').first().fill(EMAIL);
+  await page.locator('[data-testid="login-password"]:visible').first().fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
   await page.evaluate(() => localStorage.setItem("mise.tour.done", "1"));

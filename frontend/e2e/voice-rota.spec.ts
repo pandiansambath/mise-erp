@@ -126,8 +126,8 @@ test("speaking a rota instruction fills the rota form, on the right day", async 
   await page.addInitScript(installFakes);
   await page.setViewportSize({ width: 420, height: 900 });
   await page.goto(`${BASE}/login`);
-  await page.locator("#li-email:visible").first().fill("superadmin@gmail.com");
-  await page.locator("#li-password:visible").first().fill("superadmin@123");
+  await page.locator('[data-testid="login-email"]:visible').first().fill("superadmin@gmail.com");
+  await page.locator('[data-testid="login-password"]:visible').first().fill("superadmin@123");
   await page.getByRole("button", { name: "Sign in" }).filter({ visible: true }).first().click();
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
 
