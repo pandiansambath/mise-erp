@@ -1,8 +1,8 @@
 """Self-service endpoints (/me): a logged-in employee sees only their OWN
 attendance, payslips, and documents. Resolves the Employee linked to the user."""
 import uuid
-
-from datetime import date as date_type, timedelta
+from datetime import date as date_type
+from datetime import timedelta
 
 from fastapi import (
     APIRouter,
