@@ -1,29 +1,49 @@
 "use client";
 
-import { fmtHours } from "@/lib/quantity";
+// MY SPACE — rebuilt from scratch, 2026-09-05.
+//
+//   "i checked the staff login... ui seriously not nice bro. we need a best ui
+//    ux. it look very raw and very tight to see. please this is a very small
+//    page bro, we have very few section like rota attendance doc payslip, that
+//    is. so please build the entire UI from the scratch."
+//
+// He is right that it is a small page, and that was the problem rather than the
+// excuse. Four things were laid out as if they were forty:
+//
+//   · a two-column grid squeezed the attendance table into half the width, so
+//     dates wrapped onto two lines and the Hours header truncated to "HOURS W…"
+//   · the identity band was five equal boxes, the fifth orphaned onto its own
+//     row, saying things you learn once and never look up again
+//   · every section rendered whether or not it had anything in it, so a new
+//     starter met three large empty boxes
+//   · the payslip status badge sat on top of the amount
+//
+// The rebuild follows his own house rule — click, don't scroll. The page is a
+// personal header plus ONE section at a time, each with the full width it
+// needs. That is what fixes the wrapping and the truncation: not smaller type,
+// more room. And you only ever see the empty state of the thing you asked for.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import {
   api,
   ApiError,
   downloadFile,
   postForm,
-  type AttendanceRow,
   type DocRequest,
   type DocumentItem,
   type Employee,
   type PayrollRow,
 } from "@/lib/api";
-import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
-import { SubNav } from "@/components/SubNav";
-import { spotlight } from "@/components/fx";
+import { Badge, Card, Spinner } from "@/components/ui";
 import { TotalsStrip } from "@/components/PageKit";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
-import { Sparkline } from "@/components/charts";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { useHotelTime } from "@/lib/time";
 import { ROLE_LABELS } from "@/lib/permissions";
+import { fmtHours } from "@/lib/quantity";
+import type { AttendanceRow } from "@/lib/api";
 
 /** Friendly download name: "Balaji - license.pdf" (sanitised, keeps extension). */
 function docName(person: string, type: string, filename?: string): string {
@@ -83,28 +103,80 @@ const payTone: Record<string, "slate" | "amber" | "green"> = {
   PAID: "green",
 };
 
+const niceDate = (iso: string, withYear = false) =>
+  new Date(iso + "T00:00:00").toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    ...(withYear ? { year: "numeric" } : {}),
+  });
+
+type Tab = "attendance" | "rota" | "payslips" | "documents";
+
+/** One warm line, not a large empty box.
+ *
+ *  A new starter with nothing yet met three tall bordered rectangles saying
+ *  variations of "nothing here", which reads as a broken page rather than an
+ *  empty one. */
+function Empty({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-center gap-2.5 px-5 py-10 text-sm text-fg-faint">
+      <span aria-hidden className="text-lg opacity-70">{icon}</span>
+      {children}
+    </div>
+  );
+}
+
 export default function MySpacePage() {
   const { format } = useCurrency();
   const { time: fmtTime } = useHotelTime();
   const { user } = useAuth();
+
   const [emp, setEmp] = useState<Employee | null>(null);
-  const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [payslips, setPayslips] = useState<PayrollRow[]>([]);
   const [docs, setDocs] = useState<DocumentItem[]>([]);
+  const [requests, setRequests] = useState<DocRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notLinked, setNotLinked] = useState(false);
+  const [tab, setTab] = useState<Tab>("attendance");
 
-  // Attendance over a range he chooses, not a fixed tail of rows.
+  // Attendance over a range they choose, not a fixed tail of rows.
   const [attFrom, setAttFrom] = useState(() => isoDay(-30));
   const [attTo, setAttTo] = useState(() => isoDay(0));
   const [history, setHistory] = useState<MyAttendanceHistory>(EMPTY_HISTORY);
   const [attLoading, setAttLoading] = useState(true);
 
-  // The rota, defaulting to last week through the next four — "when am I next
-  // on" is the question, so the range leans forward.
+  // The rota leans forward: "when am I next on" is the question.
   const [rotaFrom, setRotaFrom] = useState(() => isoDay(-7));
   const [rotaTo, setRotaTo] = useState(() => isoDay(28));
   const [shifts, setShifts] = useState<MyShift[]>([]);
   const [rotaLoading, setRotaLoading] = useState(true);
-  const rotaHours = shifts.reduce((t, s) => t + (parseFloat(s.hours) || 0), 0);
+
+  // Frozen at mount: reading the clock DURING render is impure, and this page
+  // has no reason to notice midnight passing while it is open.
+  const [today] = useState(() => isoDay(0));
+  const [visaWarnFrom] = useState(() => isoDay(90));
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadFor, setUploadFor] = useState<string | null>(null);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<Employee>("/me/employee")
+      .then(async (e) => {
+        setEmp(e);
+        await Promise.all([
+          api.get<PayrollRow[]>("/me/payslips").then(setPayslips).catch(() => {}),
+          api.get<DocumentItem[]>("/me/documents").then(setDocs).catch(() => {}),
+          api.get<DocRequest[]>("/me/document-requests").then(setRequests).catch(() => {}),
+        ]);
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 404) setNotLinked(true);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     setAttLoading(true);
@@ -124,18 +196,6 @@ export default function MySpacePage() {
       .finally(() => setRotaLoading(false));
   }, [rotaFrom, rotaTo]);
 
-  // last-7-days totals for the phone swipe card (cutoff frozen at mount)
-  const [weekCutoff] = useState(() => new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
-  const weekStats = useMemo(() => {
-    const week = attendance.filter((a) => a.date >= weekCutoff);
-    return { n: week.length, hrs: week.reduce((t, a) => t + (parseFloat(a.working_hours ?? "0") || 0), 0) };
-  }, [attendance, weekCutoff]);
-  const [requests, setRequests] = useState<DocRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notLinked, setNotLinked] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploadFor, setUploadFor] = useState<string | null>(null);
-
   function reloadDocs() {
     api.get<DocumentItem[]>("/me/documents").then(setDocs).catch(() => {});
     api.get<DocRequest[]>("/me/document-requests").then(setRequests).catch(() => {});
@@ -149,93 +209,169 @@ export default function MySpacePage() {
   async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !uploadFor) return;
-    const form = new FormData();
-    form.append("file", file);
+    setUploadMsg(null);
     try {
+      const form = new FormData();
+      form.append("file", file);
       await postForm(`/me/document-requests/${uploadFor}/upload`, form);
       reloadDocs();
-    } catch {
-      /* surfaced inline below via reload */
+      setUploadMsg("Sent — your manager will review it.");
+    } catch (err) {
+      setUploadMsg(err instanceof ApiError ? err.message : "Could not upload that file");
     } finally {
       e.target.value = "";
       setUploadFor(null);
     }
   }
 
-  useEffect(() => {
-    api
-      .get<Employee>("/me/employee")
-      .then(async (e) => {
-        setEmp(e);
-        await Promise.all([
-          api.get<AttendanceRow[]>("/me/attendance").then(setAttendance).catch(() => {}),
-          api.get<PayrollRow[]>("/me/payslips").then(setPayslips).catch(() => {}),
-          api.get<DocumentItem[]>("/me/documents").then(setDocs).catch(() => {}),
-          api.get<DocRequest[]>("/me/document-requests").then(setRequests).catch(() => {}),
-        ]);
-      })
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 404) setNotLinked(true);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const pendingReqs = requests.filter((r) => r.status !== "APPROVED");
+  const toUpload = pendingReqs.filter((r) => r.status !== "UPLOADED").length;
+
+  /** The next shift that has not happened yet — the single most useful fact on
+   *  this page, and it used to be somewhere in a list you had to read. */
+  const nextShift = useMemo(() => {
+    return [...shifts]
+      .filter((s) => s.date >= today)
+      .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))[0];
+  }, [shifts, today]);
 
   if (loading) return <Spinner />;
 
   if (notLinked || !emp) {
     return (
-      <div>
-        <PageHeader title="My Space" subtitle="Your attendance, payslips and documents." />
-        <Card>
-          <p className="py-6 text-center text-sm text-fg-faint">
-            Your login isn&apos;t linked to an employee record yet. Ask your manager to link it
-            (Staff → Add member → pick your name).
+      <div className="mx-auto max-w-lg py-10">
+        <Card className="text-center">
+          <p className="text-3xl" aria-hidden>🔗</p>
+          <h1 className="mt-3 font-display text-xl font-semibold text-fg">Almost there</h1>
+          <p className="mt-2 text-sm text-fg-faint">
+            Your login isn&apos;t linked to an employee record yet, so there is nothing
+            personal to show. Ask your manager to link it — Staff → Add member → pick
+            your name.
           </p>
         </Card>
       </div>
     );
   }
 
-  const pendingReqs = requests.filter((r) => r.status !== "APPROVED");
+  const firstName = emp.full_name.split(" ")[0];
+  const initials = emp.full_name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+  const pay =
+    emp.salary_type === "HOURLY"
+      ? `${emp.hourly_rate ? format(emp.hourly_rate) : "—"}/hr`
+      : `${emp.monthly_salary ? format(emp.monthly_salary) : "—"}/mo`;
+
+  // Within 90 days, compared as ISO strings so nothing reads the clock here.
+  const visaSoon = Boolean(emp.visa_expiry_date && emp.visa_expiry_date < visaWarnFrom);
+
+  const TABS: { key: Tab; label: string; icon: string; count?: number }[] = [
+    { key: "attendance", label: "Attendance", icon: "⏱" },
+    { key: "rota", label: "Rota", icon: "📅", count: shifts.length || undefined },
+    { key: "payslips", label: "Payslips", icon: "💷", count: payslips.length || undefined },
+    { key: "documents", label: "Documents", icon: "📄", count: docs.length || undefined },
+  ];
 
   return (
-    <div>
+    <div className="mx-auto max-w-5xl">
       <input ref={fileRef} type="file" className="hidden" onChange={onFileChosen} />
-      <PageHeader
-        title={`Hi, ${emp.full_name.split(" ")[0]}`}
-        subtitle="Your attendance, your rota, your payslips and your documents — nobody else's."
-      />
 
-      {/* The four jobs, said out loud, the way every other section does it.
-          These are what a staff login is FOR, and they were cards you had to
-          know to scroll to. */}
-      <SubNav
-        items={[
-          { key: "attendance", label: "My attendance", icon: "⏱", onSelect: () => spotlight("my-attendance") },
-          { key: "rota", label: "My rota", icon: "📅", count: shifts.length || undefined, onSelect: () => spotlight("my-rota") },
-          { key: "docs", label: "My documents", icon: "📄", count: docs.length || undefined, onSelect: () => spotlight("my-documents") },
-          { key: "pay", label: "My payslips", icon: "💷", count: payslips.length || undefined, onSelect: () => spotlight("my-payslips") },
-        ]}
-      />
+      {/* THE PERSON, NOT A PAGE TITLE.
+          This replaces "My Space" plus a five-box band. Who you are, what you
+          are paid and what you can reach are one line of chips, because they
+          are things you confirm at a glance and never study. */}
+      <Card className="mise-feel overflow-hidden p-0">
+        <div className="flex flex-wrap items-center gap-4 border-b border-line/60 bg-gradient-to-r from-brand-500/10 via-transparent to-transparent px-5 py-4">
+          <span
+            aria-hidden
+            className="mise-neo-raised grid h-14 w-14 shrink-0 place-items-center rounded-2xl font-display text-lg font-semibold text-brand-300"
+          >
+            {initials || "🙋"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-2xl font-semibold text-fg">
+              Hi, {firstName}
+            </h1>
+            <p className="mt-0.5 truncate text-sm text-fg-faint">
+              {emp.job_title || "Team member"} · {emp.employee_code}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mise-chip">{pay}</span>
+            <span className="mise-chip">{user ? ROLE_LABELS[user.role] ?? user.role : "Staff"}</span>
+            {emp.visa_expiry_date && (
+              <span
+                className={visaSoon ? "mise-chip-warn" : "mise-chip"}
+                title={`Visa expires ${emp.visa_expiry_date}`}
+              >
+                visa {emp.visa_expiry_date}
+              </span>
+            )}
+          </div>
+        </div>
 
+        {/* NEXT SHIFT — the one thing staff open this page to find, and it was
+            buried in a list you had to read down. */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3 text-sm">
+          {nextShift ? (
+            <span className="text-fg-soft">
+              <span aria-hidden className="mr-1.5">📅</span>
+              Next on{" "}
+              <b className="text-fg">
+                {nextShift.date === today ? "today" : niceDate(nextShift.date)}
+              </b>
+              , {nextShift.start_time.slice(0, 5)}–{nextShift.end_time.slice(0, 5)}
+            </span>
+          ) : (
+            <span className="text-fg-faint">
+              <span aria-hidden className="mr-1.5">📅</span>
+              No upcoming shifts rostered
+            </span>
+          )}
+          <span className="text-fg-soft">
+            <span aria-hidden className="mr-1.5">⏱</span>
+            <b className="text-fg">{fmtHours(history.totals.total_hours)}</b> worked in{" "}
+            {rangeCaption({ from: attFrom, to: attTo }).toLowerCase()}
+          </span>
+        </div>
+      </Card>
+
+      {/* SOMETHING IS ASKED OF YOU. Above the tabs on purpose: it is the only
+          thing on this page with a deadline, and it disappears when done. */}
       {pendingReqs.length > 0 && (
-        <Card className="mb-6 border-amber-400/30 bg-amber-400/5">
-          <h3 className="font-semibold text-fg">📋 Requested from you</h3>
-          <p className="mt-1 text-sm text-fg-faint">Your manager has asked for these documents.</p>
-          <ul className="mt-3 divide-y divide-amber-400/20">
+        <Card className="mt-4 border-amber-400/30 bg-amber-400/[0.06]">
+          <h2 className="font-semibold text-fg">
+            <span aria-hidden className="mr-1.5">📋</span>
+            {toUpload > 0
+              ? `${toUpload} document${toUpload === 1 ? "" : "s"} to send`
+              : "Waiting on your manager"}
+          </h2>
+          <ul className="mt-3 space-y-2">
             {pendingReqs.map((r) => (
-              <li key={r.id} className="flex items-center justify-between py-2.5">
-                <div>
-                  <p className="text-sm font-medium text-fg">{r.title}</p>
-                  <p className="text-xs text-fg-faint">{r.doc_type.replace(/_/g, " ").toLowerCase()}</p>
+              <li
+                key={r.id}
+                className="mise-card-inset flex flex-wrap items-center gap-3 px-4 py-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-fg">{r.title}</p>
+                  <p className="truncate text-xs text-fg-faint">
+                    {r.doc_type.replace(/_/g, " ").toLowerCase()}
+                  </p>
                 </div>
                 {r.status === "UPLOADED" ? (
                   <div className="flex items-center gap-2">
                     <Badge tone="amber">awaiting approval</Badge>
                     {r.document_id && (
                       <button
-                        onClick={() => downloadFile(`/me/documents/${r.document_id}/download`, docName(emp.full_name, r.doc_type))}
-                        className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10"
+                        onClick={() =>
+                          downloadFile(
+                            `/me/documents/${r.document_id}/download`,
+                            docName(emp.full_name, r.doc_type),
+                          )
+                        }
+                        className="mise-btn-flat mise-press min-h-[36px] px-3 py-1.5 text-xs text-fg-soft"
                       >
                         View
                       </button>
@@ -244,7 +380,8 @@ export default function MySpacePage() {
                 ) : (
                   <button
                     onClick={() => pickFile(r.id)}
-                    className="mise-press rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
+                    data-tone="brand"
+                    className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
                   >
                     Upload
                   </button>
@@ -252,322 +389,255 @@ export default function MySpacePage() {
               </li>
             ))}
           </ul>
+          {uploadMsg && <p className="mt-2 text-xs text-brand-300">{uploadMsg}</p>}
         </Card>
       )}
 
-      <Card className="mise-feel mb-6">
-        <div className="mise-stagger grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="mise-well mise-feel rounded-xl p-3">
-            <p className="text-xs uppercase text-fg-faint">Code</p>
-            <p className="font-semibold text-fg">{emp.employee_code}</p>
-          </div>
-          <div className="mise-well mise-feel rounded-xl p-3">
-            <p className="text-xs uppercase text-fg-faint">Job title</p>
-            <p className="font-semibold text-fg">{emp.job_title || "—"}</p>
-          </div>
-          <div className="mise-well mise-feel rounded-xl p-3">
-            <p className="text-xs uppercase text-fg-faint">Access</p>
-            <p className="font-semibold text-fg">
-              {user ? ROLE_LABELS[user.role] ?? user.role : "—"}
-            </p>
-          </div>
-          <div className="mise-well mise-feel rounded-xl p-3">
-            <p className="text-xs uppercase text-fg-faint">Pay</p>
-            <p className="font-semibold text-fg">
-              {emp.salary_type === "HOURLY"
-                ? `${emp.hourly_rate ? format(emp.hourly_rate) : "—"}/hr`
-                : `${emp.monthly_salary ? format(emp.monthly_salary) : "—"}/mo`}
-            </p>
-          </div>
-          {emp.visa_expiry_date && (
-            <div className="mise-well mise-feel rounded-xl p-3">
-              <p className="text-xs uppercase text-fg-faint">Visa expiry</p>
-              <p className="font-semibold text-fg">{emp.visa_expiry_date}</p>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Phone-first mini-app: the essentials as swipeable snap cards. The full
-          tables below stay for desktop (and anyone who scrolls). */}
-      <div className="mb-6 lg:hidden">
-        <div className="mise-noscrollbar -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
-          {payslips.slice(0, 2).map((p) => (
-            <div key={p.id} className="mise-raised mise-feel w-[76%] shrink-0 snap-center rounded-2xl p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint">Payslip · {p.pay_period}</p>
-              <p className="mt-1.5 font-mono text-2xl font-bold text-brand-300">{format(p.net_pay)}</p>
-              <div className="mt-2 flex items-center justify-between">
-                <Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge>
-                <button
-                  onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)}
-                  className="mise-press rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-brand-300"
+      {/* FOUR THINGS, ONE AT A TIME.
+          A real switch, not a scroll-to. It is what gives each section the FULL
+          width — which is what fixes the wrapped dates and the truncated
+          "HOURS W…" header, neither of which was a font-size problem. */}
+      <div
+        role="tablist"
+        aria-label="My Space sections"
+        className="mise-card-inset mt-4 flex gap-1 overflow-x-auto p-1.5"
+      >
+        {TABS.map((t) => {
+          const on = t.key === tab;
+          return (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(t.key)}
+              className={`mise-press flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                on ? "bg-brand-600 text-white shadow-sm" : "text-fg-soft hover:text-fg"
+              }`}
+            >
+              <span aria-hidden>{t.icon}</span>
+              {t.label}
+              {t.count !== undefined && (
+                <span
+                  className={`rounded-md px-1.5 py-px text-[10px] tabular-nums ${
+                    on ? "bg-white/20 text-white" : "bg-fg/10 text-fg-faint"
+                  }`}
                 >
-                  ⬇ PDF
-                </button>
-              </div>
-            </div>
-          ))}
-          <div className="mise-raised mise-feel w-[76%] shrink-0 snap-center rounded-2xl p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint">This week</p>
-            <p className="mt-1.5 font-mono text-2xl font-bold text-fg">
-              {Math.floor(weekStats.hrs)}h {String(Math.round((weekStats.hrs % 1) * 60)).padStart(2, "0")}m
-            </p>
-            <p className="mt-2 text-xs text-fg-faint">
-              {weekStats.n} shift{weekStats.n === 1 ? "" : "s"} in the last 7 days
-            </p>
-          </div>
-          <div className="mise-raised mise-feel w-[76%] shrink-0 snap-center rounded-2xl p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint">Documents</p>
-            <p className="mt-1.5 font-mono text-2xl font-bold text-fg">{docs.length}</p>
-            <p className="mt-2 text-xs text-fg-faint">
-              {requests.filter((r) => r.status === "PENDING").length > 0
-                ? `${requests.filter((r) => r.status === "PENDING").length} still needed from you ↑`
-                : "nothing outstanding — all handed in ✓"}
-            </p>
-          </div>
-        </div>
-        <p className="mt-1 text-center text-[10px] text-fg-faint">swipe →</p>
+                  {t.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card id="my-payslips" className="p-0 scroll-mt-24">
-          <h3 className="px-5 pt-4 font-semibold text-fg">My payslips</h3>
-          {/* CARDS, per /staff. This is the page an employee opens about their
-              own money, on their own phone — a four-column table is the wrong
-              shape for that, and the pay was the second column rather than the
-              thing you came to read. The stripe says whether it has been paid. */}
-          {payslips.length === 0 ? (
-            <p className="px-5 py-6 text-center text-fg-faint">No payslips yet.</p>
+      {/* ── ATTENDANCE ──────────────────────────────────────────────────── */}
+      {tab === "attendance" && (
+        <Card className="mise-fade-in mt-4 p-0">
+          <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+            <h2 className="mr-auto font-semibold text-fg">My attendance</h2>
+            <RangeControls
+              range={{ from: attFrom, to: attTo }}
+              onChange={(r) => { setAttFrom(r.from); setAttTo(r.to); }}
+            />
+          </div>
+
+          <div className="px-5">
+            <TotalsStrip
+              items={[
+                { label: "Hours worked", value: fmtHours(history.totals.total_hours), tone: "good", strong: true },
+                { label: "Days present", value: String(history.totals.present) },
+                { label: "Half days", value: String(history.totals.half_days) },
+                {
+                  label: "Absent",
+                  value: String(history.totals.absent),
+                  tone: history.totals.absent > 0 ? "warn" : "plain",
+                },
+              ]}
+            />
+          </div>
+
+          {attLoading ? (
+            <Empty icon="⏳">Loading your days…</Empty>
+          ) : history.days.length === 0 ? (
+            <Empty icon="⏱">
+              Nothing recorded in {rangeCaption({ from: attFrom, to: attTo }).toLowerCase()}.
+            </Empty>
           ) : (
-            <div className="mise-stagger grid gap-2 p-3 sm:grid-cols-2">
-              {payslips.map((p) => (
-                <div
-                  key={p.id}
-                  className="mise-card-inset relative flex items-center gap-3 overflow-hidden p-3 pl-4"
-                >
-                  <span
-                    aria-hidden
-                    className={`absolute inset-y-0 left-0 w-1 ${
-                      p.status === "PAID" ? "bg-emerald-400/70" : "bg-amber-400/80"
-                    }`}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-display text-lg font-semibold tabular-nums text-fg">
-                      {format(p.net_pay)}
-                    </span>
-                    <span className="block truncate text-[11px] text-fg-faint">
-                      {p.pay_period}
-                    </span>
-                  </span>
-                  <Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge>
-                  <button
-                    onClick={() =>
-                      downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)
-                    }
-                    className="mise-btn-flat mise-press shrink-0 px-2.5 py-1.5 text-xs text-brand-300"
+            <div className="mt-4 overflow-x-auto">
+              {/* FULL WIDTH is the whole fix. Squeezed into half a column this
+                  same table wrapped "2026-08-07" onto two lines and cut the
+                  Hours header down to "HOURS W…". */}
+              <table className="mise-stack w-full text-sm">
+                <thead>
+                  <tr className="border-y border-line text-left text-xs uppercase tracking-wide text-fg-faint">
+                    <th className="px-5 py-2.5 font-medium">Date</th>
+                    <th className="px-5 py-2.5 font-medium">In</th>
+                    <th className="px-5 py-2.5 font-medium">Out</th>
+                    <th className="px-5 py-2.5 text-right font-medium">Hours</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.days.map((a) => (
+                    <tr key={a.date} className="border-b border-line/60 even:bg-glass/[0.02]">
+                      <td className="whitespace-nowrap px-5 py-2.5 font-medium text-fg">
+                        {niceDate(a.date)}
+                      </td>
+                      <td data-label="In" className="px-5 py-2.5 text-fg-soft">{fmtTime(a.clock_in)}</td>
+                      <td data-label="Out" className="px-5 py-2.5 text-fg-soft">{fmtTime(a.clock_out)}</td>
+                      <td data-label="Hours" className="px-5 py-2.5 text-right font-medium tabular-nums text-fg">
+                        {fmtHours(a.working_hours)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── ROTA ────────────────────────────────────────────────────────── */}
+      {tab === "rota" && (
+        <Card className="mise-fade-in mt-4 p-0">
+          <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+            <h2 className="mr-auto font-semibold text-fg">My rota</h2>
+            <span className="text-[11px] text-fg-faint">
+              {shifts.length} shift{shifts.length === 1 ? "" : "s"} ·{" "}
+              {shifts.reduce((t, s) => t + (parseFloat(s.hours) || 0), 0).toFixed(1)}h rostered
+            </span>
+            <RangeControls
+              range={{ from: rotaFrom, to: rotaTo }}
+              onChange={(r) => { setRotaFrom(r.from); setRotaTo(r.to); }}
+            />
+          </div>
+
+          {rotaLoading ? (
+            <Empty icon="⏳">Loading your shifts…</Empty>
+          ) : shifts.length === 0 ? (
+            <Empty icon="📅">No shifts rostered for you in this range.</Empty>
+          ) : (
+            <div className="grid gap-2.5 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
+              {shifts.map((sh) => {
+                const isToday = sh.date === today;
+                const past = sh.date < today;
+                return (
+                  <div
+                    key={sh.id}
+                    className={`mise-card-inset relative overflow-hidden px-4 py-3 pl-5 ${past ? "opacity-55" : ""}`}
                   >
-                    PDF
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-1 ${
+                        isToday ? "bg-brand-400" : past ? "bg-line" : "bg-brand-400/40"
+                      }`}
+                    />
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-fg">
+                        {niceDate(sh.date)}
+                      </p>
+                      {isToday && <span className="mise-chip shrink-0 text-[10px]">today</span>}
+                    </div>
+                    <p className="mt-1 font-display text-lg font-semibold tabular-nums text-fg">
+                      {sh.start_time.slice(0, 5)} – {sh.end_time.slice(0, 5)}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-fg-faint">
+                      {fmtHours(sh.hours)} rostered
+                      {sh.break_minutes > 0 ? ` · ${sh.break_minutes}m break` : ""}
+                      {sh.notes ? ` · ${sh.notes}` : ""}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ── PAYSLIPS ────────────────────────────────────────────────────── */}
+      {tab === "payslips" && (
+        <Card className="mise-fade-in mt-4 p-0">
+          <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+            <h2 className="mr-auto font-semibold text-fg">My payslips</h2>
+            <span className="text-[11px] text-fg-faint">newest first</span>
+          </div>
+
+          {payslips.length === 0 ? (
+            <Empty icon="💷">No payslips yet — they appear once a pay run is finished.</Empty>
+          ) : (
+            <div className="grid gap-2.5 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
+              {payslips.map((p) => (
+                <div key={p.id} className="mise-card-inset px-4 py-3.5">
+                  {/* The badge sat ON the amount before. Its own line above,
+                      where a status belongs — you read what KIND of payslip
+                      this is, then how much. */}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                      {p.pay_period}
+                    </p>
+                    <Badge tone={payTone[p.status] ?? "slate"}>{p.status}</Badge>
+                  </div>
+                  <p className="mt-1.5 font-display text-2xl font-semibold tabular-nums text-fg">
+                    {format(p.net_pay)}
+                  </p>
+                  <p className="text-[11px] text-fg-faint">take-home</p>
+                  <button
+                    onClick={() => downloadFile(`/me/payslips/${p.id}.pdf`, `payslip-${p.pay_period}.pdf`)}
+                    className="mise-btn-flat mise-press mt-3 min-h-[40px] w-full px-4 py-2 text-sm font-medium text-fg-soft"
+                  >
+                    ⬇ Download PDF
                   </button>
                 </div>
               ))}
             </div>
           )}
         </Card>
+      )}
 
-        <Card id="my-attendance" className="p-0 scroll-mt-24">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
-            <h3 className="font-semibold text-fg">My attendance</h3>
-            {(() => {
-              const byDate = new Map(history.days.map((a) => [a.date, parseFloat(a.working_hours ?? "0") || 0]));
-              const data: number[] = [];
-              const labels: string[] = [];
-              for (let i = 27; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                const iso = d.toISOString().slice(0, 10);
-                data.push(byDate.get(iso) ?? 0);
-                labels.push(d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }));
-              }
-              if (!data.some((v) => v > 0)) return null;
-              return (
-                <span className="mise-well flex items-center gap-2 rounded-lg px-3 py-1.5">
-                  <Sparkline data={data} labels={labels} formatValue={(v) => `${v}h worked`} height={24} />
-                  <span className="text-[10px] text-fg-faint">4 weeks</span>
-                </span>
-              );
-            })()}
+      {/* ── DOCUMENTS ───────────────────────────────────────────────────── */}
+      {tab === "documents" && (
+        <Card className="mise-fade-in mt-4 p-0">
+          <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+            <h2 className="mr-auto font-semibold text-fg">My documents</h2>
+            <span className="text-[11px] text-fg-faint">shared with you by your manager</span>
           </div>
 
-          {/* GO BACK AND LOOK. The card showed the last 90 rows and no totals,
-              which answers "was I in yesterday" and nothing else. The question
-              staff actually ask is "how many hours did I do last month", and
-              that needs a range and a sum. Same TimeRangePicker the rest of the
-              app uses, so it is one control to learn, not a new one here. */}
-          <div className="flex flex-wrap items-center gap-2 px-5 pt-3">
-            <RangeControls
-              range={{ from: attFrom, to: attTo }}
-              onChange={(r) => { setAttFrom(r.from); setAttTo(r.to); }}
-            />
-            <span className="text-[11px] text-fg-faint">{rangeCaption({ from: attFrom, to: attTo })}</span>
-          </div>
-
-          <div className="px-5 pt-3">
-            <TotalsStrip
-              items={[
-                { label: "Hours worked", value: fmtHours(history.totals.total_hours), tone: "good", strong: true },
-                { label: "Days present", value: String(history.totals.present) },
-                { label: "Half days", value: String(history.totals.half_days) },
-                { label: "Absent", value: String(history.totals.absent), tone: history.totals.absent > 0 ? "warn" : "plain" },
-              ]}
-            />
-          </div>
-
-          {/* The timesheet STAYS a table: reading down the Hours column is how
-              you check a week, and no card grid does that. `mise-stack` gives
-              the phone a card layout from the same markup. */}
-          <div className="mt-3 overflow-x-auto">
-            <table className="mise-stack w-full text-sm">
-              <thead>
-                <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
-                  <th className="px-5 py-2 font-medium">Date</th>
-                  <th className="px-5 py-2 font-medium">In</th>
-                  <th className="px-5 py-2 font-medium">Out</th>
-                  <th className="px-5 py-2 text-right font-medium">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attLoading ? (
-                  <tr><td colSpan={4} className="px-5 py-6 text-center text-fg-faint">Loading…</td></tr>
-                ) : history.days.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-6 text-center text-fg-faint">
-                    Nothing recorded in {rangeCaption({ from: attFrom, to: attTo }).toLowerCase()}.
-                  </td></tr>
-                ) : history.days.map((a) => (
-                  <tr key={a.date} className="border-b border-line">
-                    <td className="px-5 py-2 text-fg-soft">{a.date}</td>
-                    <td data-label="In" className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_in)}</td>
-                    <td data-label="Out" className="px-5 py-2 text-fg-soft">{fmtTime(a.clock_out)}</td>
-                    <td data-label="Hours" className="px-5 py-2 text-right text-fg-soft">{fmtHours(a.working_hours)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
-
-      {/* MY ROTA. The rota page shows the whole team and needs a manager's
-          permission to open, so a member of staff had no way at all to see when
-          they were next on — they had to ask someone. This is the same data,
-          filtered to them in the QUERY, so no one else's shift is ever loaded. */}
-      <Card id="my-rota" className="mt-6 p-0 scroll-mt-24">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
-          <h3 className="font-semibold text-fg">My rota</h3>
-          <span className="text-[11px] text-fg-faint">
-            {shifts.length} shift{shifts.length === 1 ? "" : "s"} · {rotaHours.toFixed(1)}h rostered
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 px-5 pt-3">
-          <RangeControls
-            range={{ from: rotaFrom, to: rotaTo }}
-            onChange={(r) => { setRotaFrom(r.from); setRotaTo(r.to); }}
-          />
-          <span className="text-[11px] text-fg-faint">past and upcoming</span>
-        </div>
-
-        <div className="mt-3 space-y-2 px-3 pb-3">
-          {rotaLoading ? (
-            <p className="px-2 py-6 text-center text-fg-faint">Loading…</p>
-          ) : shifts.length === 0 ? (
-            <p className="px-2 py-6 text-center text-fg-faint">
-              No shifts rostered for you in this range.
-            </p>
+          {docs.length === 0 ? (
+            <Empty icon="📄">Nothing shared with you yet.</Empty>
           ) : (
-            shifts.map((sh) => {
-              const todayIso = new Date().toISOString().slice(0, 10);
-              const isToday = sh.date === todayIso;
-              const past = sh.date < todayIso;
-              return (
-                <div
-                  key={sh.id}
-                  className={`mise-card-inset relative flex items-center gap-3 overflow-hidden px-4 py-3 pl-5 ${
-                    past ? "opacity-60" : ""
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className={`absolute inset-y-0 left-0 w-1 ${isToday ? "bg-brand-400" : past ? "bg-line" : "bg-brand-400/40"}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-fg">
-                      {new Date(sh.date + "T00:00:00").toLocaleDateString("en-GB", {
-                        weekday: "short", day: "numeric", month: "short",
-                      })}
-                      {isToday && (
-                        <span className="mise-chip ml-2 align-middle text-[10px]">today</span>
-                      )}
-                    </p>
-                    <p className="truncate text-[11px] text-fg-faint">
-                      {sh.start_time.slice(0, 5)} – {sh.end_time.slice(0, 5)}
-                      {sh.break_minutes > 0 ? ` · ${sh.break_minutes}m break` : ""}
-                      {sh.notes ? ` · ${sh.notes}` : ""}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-right">
-                    <span className="block font-display text-sm font-semibold tabular-nums text-fg">
-                      {fmtHours(sh.hours)}
-                    </span>
-                    <span className="block text-[10px] text-fg-faint">rostered</span>
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </Card>
-
-      <Card id="my-documents" className="mt-6 p-0 scroll-mt-24">
-        <h3 className="px-5 pt-4 font-semibold text-fg">My documents</h3>
-        <div className="mt-2 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
-                <th className="px-5 py-2 font-medium">Title</th>
-                <th className="px-5 py-2 font-medium">Type</th>
-                <th className="px-5 py-2 font-medium">Status</th>
-                <th className="px-5 py-2 font-medium">Expiry</th>
-                <th className="px-5 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-6 text-center text-fg-faint">No documents shared with you yet.</td></tr>
-              ) : docs.map((d) => {
-                const req = requests.find((r) => r.document_id === d.id);
+            <div className="grid gap-2.5 px-5 pb-5 sm:grid-cols-2">
+              {docs.map((d) => {
+                const expired = d.expiry_date ? d.expiry_date < today : false;
                 return (
-                <tr key={d.id} className="border-b border-line">
-                  <td className="px-5 py-2 font-medium text-fg">{d.title}</td>
-                  <td className="px-5 py-2 text-fg-faint">{d.doc_type.replace(/_/g, " ").toLowerCase()}</td>
-                  <td className="px-5 py-2">
-                    {req?.status === "APPROVED" ? (
-                      <Badge tone="green">approved ✓</Badge>
-                    ) : req?.status === "UPLOADED" ? (
-                      <Badge tone="amber">awaiting approval</Badge>
-                    ) : (
-                      <Badge tone="slate">shared</Badge>
-                    )}
-                  </td>
-                  <td className="px-5 py-2 text-fg-faint">{d.expiry_date || "—"}</td>
-                  <td className="px-5 py-2 text-right">
-                    <button onClick={() => downloadFile(`/me/documents/${d.id}/download`, docName(emp.full_name, d.doc_type, d.filename))} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">Download</button>
-                  </td>
-                </tr>
+                  <div key={d.id} className="mise-card-inset flex items-center gap-3 px-4 py-3">
+                    <span aria-hidden className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base">
+                      📄
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-fg">{d.title}</p>
+                      <p className="truncate text-[11px] text-fg-faint">
+                        {d.doc_type.replace(/_/g, " ").toLowerCase()}
+                        {d.expiry_date ? ` · expires ${d.expiry_date}` : ""}
+                      </p>
+                    </div>
+                    {expired && <Badge tone="amber">expired</Badge>}
+                    <button
+                      onClick={() =>
+                        downloadFile(
+                          `/me/documents/${d.id}/download`,
+                          docName(emp.full_name, d.doc_type, d.filename),
+                        )
+                      }
+                      className="mise-btn-flat mise-press min-h-[36px] shrink-0 px-3 py-1.5 text-xs text-fg-soft"
+                    >
+                      Download
+                    </button>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
