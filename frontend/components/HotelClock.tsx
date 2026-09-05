@@ -91,7 +91,11 @@ export function HotelClock({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className={`mise-press inline-flex items-center gap-1.5 rounded-lg px-1.5 py-1 tabular-nums transition hover:bg-glass/10 ${className}`}
+      /* 40px tall. Measured at 89x24 on all twenty-two pages — it became a
+         BUTTON when it started opening the clock face, and a 24px-high control
+         is one you miss with a thumb. Being in the shell means one fix counts
+         twenty-two times, and one miss costs the same. */
+      className={`mise-press inline-flex min-h-[40px] items-center gap-1.5 rounded-lg px-2 py-2 tabular-nums transition hover:bg-glass/10 ${className}`}
       title={
         elsewhere
           ? `${hotel?.name ?? "This restaurant"} runs on ${zone} — your device is on ${deviceZone}`

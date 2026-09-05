@@ -40,6 +40,41 @@ test("what overflows on a phone", async ({ page }) => {
     try {
       await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(2600);
+
+      // ARE WE STILL LOGGED IN?
+      //
+      // A run during a container swap lost the session and every page redirected
+      // to /login — so the audit dutifully measured the LOGIN screen twenty
+      // times and reported "no overflow, three small taps", which was true of
+      // the login page and told me nothing about the app. A measurement of the
+      // wrong page is worse than no measurement, because it looks like an
+      // answer.
+      // Give auth time to resolve before deciding we were bounced.
+      //
+      // The first version checked 2.6s after domcontentloaded and called every
+      // page a bounce — while a separate probe proved the session was fine
+      // (token present, expiring hours later, no 401 anywhere). It was catching
+      // the moment BEFORE auth resolves, when the app is briefly on /login.
+      //
+      // A false alarm is better than the false all-clear it replaced, but it is
+      // still a test that lies. It waits for the path to settle, and only calls
+      // it a bounce if we are still on /login after that.
+      let settled = false;
+      for (let i = 0; i < 12; i += 1) {
+        const here = await page.evaluate(() => location.pathname);
+        if (!here.includes("/login")) {
+          settled = true;
+          break;
+        }
+        await page.waitForTimeout(1000);
+      }
+      if (!settled) {
+        throw new Error(
+          `${path}: still on /login after 12s — the session is gone, so nothing ` +
+            `measured here would be about the app. Re-run when the site is stable.`,
+        );
+      }
+      await page.waitForTimeout(1200);
       const r = await page.evaluate(() => {
         // NOT documentElement.scrollWidth. This app scrolls an INNER container,
         // so the document never overflows and every page reported the same

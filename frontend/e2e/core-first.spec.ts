@@ -10,7 +10,11 @@ import { expect, test } from "@playwright/test";
 const BASE = "https://nirai1.dineai.cloud";
 
 const PAGES: { path: string; core: string; what: string }[] = [
-  { path: "/sales", core: "Add today", what: "the takings entry" },
+  // The heading changed with the day-sheet rebuild ("Add today's takings" ->
+  // "Today's takings"), and the test kept looking for the old words — so it
+  // reported the entry MISSING from a page where it renders at the very top.
+  // Matching on the stable noun rather than the sentence.
+  { path: "/sales", core: "takings", what: "the takings entry" },
   { path: "/expenses", core: "Add expense", what: "the expense form" },
   // "Search items" is a PLACEHOLDER, and getByText does not read attributes —
   // the first run reported inventory as never rendering when it had. Use text
