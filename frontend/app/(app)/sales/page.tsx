@@ -522,7 +522,18 @@ export default function SalesPage() {
                   })}
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* THE ACTION BAR STICKS.
+                  Measured, not guessed: with eight channels the save button sat
+                  at 1035px on an 800px screen — the exact fault he reported on
+                  Expenses, which I had just fixed there and then recreated
+                  here. A sheet whose whole point is "fill several boxes" cannot
+                  put the button that commits them past the bottom of the
+                  screen.
+
+                  Sticky rather than moved to the top: the natural order is
+                  still type-then-save, and this keeps that while guaranteeing
+                  the button is always in reach. */}
+              <div className="sticky bottom-2 z-10 mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper/95 p-2 backdrop-blur">
                 <div className="mise-well flex gap-1 rounded-xl p-1">
                   {METHODS.map((m) => (
                     <button
@@ -537,6 +548,25 @@ export default function SalesPage() {
                     </button>
                   ))}
                 </div>
+                {(() => {
+                  const total = Object.entries(draft).reduce((t, [id, v]) => {
+                    const n = parseFloat(v);
+                    if (!(n > 0)) return t;
+                    const pct = parseFloat(
+                      channels.find((c) => c.id === id)?.commission_pct ?? "0",
+                    ) || 0;
+                    return t + n * (1 - pct / 100);
+                  }, 0);
+                  if (total <= 0) return null;
+                  return (
+                    <span className="text-xs text-fg-faint">
+                      nets{" "}
+                      <b className="font-display text-sm text-brand-300">
+                        {format(String(total.toFixed(2)))}
+                      </b>
+                    </span>
+                  );
+                })()}
                 <button
                   type="button"
                   onClick={saveDraft}
