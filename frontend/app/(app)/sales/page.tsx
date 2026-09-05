@@ -127,24 +127,37 @@ export default function SalesPage() {
     await loadDay(d).finally(() => setLoading(false));
   }
 
-  // Channel tiles' sparklines: the trailing week, loaded quietly after paint.
+  // Channel sparklines: the trailing week, in ONE request.
+  //
+  //   "i can note loading pages often... please make our site fast faster."
+  //
+  // This used to fire EIGHT requests — a full day summary per day of the week,
+  // measured at ~600ms each, plus today fetched twice because loadDay had
+  // already asked for it. Every one of those responses carried that day's
+  // lines, totals, cash drawer and petty cash so this could read a single
+  // number off it for a sparkline. /sales/channel-trend answers the whole week
+  // in one query.
   useEffect(() => {
-    const days: string[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push(localISODate(d));
-    }
-    setTrendLabels(days.map((d) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })));
-    Promise.all(days.map((d) => api.get<DaySummary>(`/sales/days/${d}`).catch(() => null))).then((list) => {
-      const map: Record<string, number[]> = {};
-      list.forEach((sm, i) => {
-        sm?.lines.forEach((l) => {
-          (map[l.channel_name] ??= Array(7).fill(0))[i] += parseFloat(l.gross_amount) || 0;
-        });
+    const from = new Date();
+    from.setDate(from.getDate() - 6);
+    const to = new Date();
+    api
+      .get<{ days: string[]; channels: Record<string, number[]> }>(
+        `/sales/channel-trend?date_from=${localISODate(from)}&date_to=${localISODate(to)}`,
+      )
+      .then((r) => {
+        setTrendLabels(
+          r.days.map((d) =>
+            new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" }),
+          ),
+        );
+        setChanTrend(r.channels);
+      })
+      .catch(() => {
+        // A missing sparkline is not worth an error on a page whose job is
+        // taking money. The figures above it come from their own request.
+        setChanTrend({});
       });
-      setChanTrend(map);
-    });
   }, []);
 
   async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {

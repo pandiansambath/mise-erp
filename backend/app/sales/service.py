@@ -1,6 +1,6 @@
 """Daily sales & cash service: channels, daily entry, commission/net, cash variance."""
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -278,6 +278,53 @@ async def daily_net(
     return [
         {"date": d.isoformat(), "net": str(v.quantize(_Q2))} for d, v in sorted(by_day.items())
     ]
+
+
+async def channel_trend(
+    db: AsyncSession, hotel_id: uuid.UUID, date_from: date_type, date_to: date_type
+) -> dict:
+    """Gross per channel per day, in ONE query.
+
+    The sales page used to build this by asking for a full day summary once per
+    day: eight requests at ~600ms each to draw eight sparklines, each response
+    carrying that day's lines, totals, cash drawer and petty cash so the page
+    could read a single number off it. Same figures, one round trip.
+
+    GROSS rather than net, deliberately. This feeds the per-channel sparkline,
+    which answers "how busy was this channel" — commission belongs to the money
+    figures beside it, and netting it here would make a quiet channel that pays
+    nothing look busier than a loud one paying 30%.
+    """
+    rows = await db.execute(
+        select(DailySales.date, SalesChannel.name, SalesLine.gross_amount)
+        .select_from(SalesLine)
+        .join(SalesChannel, SalesLine.channel_id == SalesChannel.id)
+        .join(DailySales, SalesLine.daily_sales_id == DailySales.id)
+        .where(
+            DailySales.hotel_id == hotel_id,
+            DailySales.date >= date_from,
+            DailySales.date <= date_to,
+        )
+    )
+
+    # Every day in the range, including the empty ones — a sparkline with the
+    # quiet days missing tells a lie about the shape of the week.
+    days: list[str] = []
+    cursor = date_from
+    while cursor <= date_to:
+        days.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+    index = {d: i for i, d in enumerate(days)}
+
+    channels: dict[str, list[float]] = {}
+    for day, name, gross in rows.all():
+        slot = index.get(day.isoformat())
+        if slot is None:
+            continue
+        series = channels.setdefault(name, [0.0] * len(days))
+        series[slot] += float(gross or 0)
+
+    return {"days": days, "channels": channels}
 
 
 async def range_summary(
