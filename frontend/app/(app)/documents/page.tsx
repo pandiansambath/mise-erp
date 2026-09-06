@@ -12,6 +12,8 @@ import {
   type ExpiringDoc,
 } from "@/lib/api";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
+import { TotalsStrip } from "@/components/PageKit";
+import { PersonPicker } from "@/components/PersonPicker";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -63,6 +65,9 @@ export default function DocumentsPage() {
   // would draw differently on two renders with no state change, which is
   // exactly the kind of thing that makes a UI flicker for no visible reason.
   const [nowMs] = useState(() => Date.now());
+  /** Which job you are doing. Three stacked cards meant scrolling past two
+   *  of them to reach the third. */
+  const [tab, setTab] = useState<"venue" | "staff" | "upload">("venue");
 
   function load() {
     return Promise.all([
@@ -189,6 +194,66 @@ export default function DocumentsPage() {
       <PageHeader title="Documents" subtitle="Licences, contracts, insurance, bills — with expiry alerts." />
       <input ref={reqFileRef} type="file" className="hidden" onChange={onReqFileChosen} />
 
+      {/* WHAT IS TRUE RIGHT NOW, before anything you might do about it. */}
+      <TotalsStrip
+        className="mb-4"
+        items={[
+          { label: "Venue files", value: String(docs.length) },
+          {
+            label: "Expiring soon",
+            value: String(expiring.length),
+            tone: expiring.length > 0 ? "warn" : "plain",
+            hint: expiring.length > 0 ? "needs renewing" : "all current",
+          },
+          {
+            label: "Waiting on staff",
+            value: String(requests.filter((r) => r.status === "PENDING").length),
+            tone: requests.some((r) => r.status === "PENDING") ? "warn" : "plain",
+          },
+          {
+            label: "To approve",
+            value: String(requests.filter((r) => r.status === "UPLOADED").length),
+            tone: requests.some((r) => r.status === "UPLOADED") ? "good" : "plain",
+            hint: "sent in, unread",
+          },
+        ]}
+      />
+
+      {/* THREE JOBS, ONE AT A TIME. The venue list leads because checking what
+          is about to expire is why anyone opens this page; uploading is
+          occasional and requesting rarer still. */}
+      <div role="tablist" className="mise-card-inset mb-4 flex gap-1 overflow-x-auto p-1.5">
+        {([
+          ["venue", "\u{1f3e0} Venue files", docs.length],
+          ["staff", "\u{1f9d1} Staff documents", requests.length],
+          ...(canWrite ? [["upload", "\u2b06 Upload", undefined] as const] : []),
+        ] as const).map(([key, label, count]) => {
+          const on = tab === key;
+          return (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(key as "venue" | "staff" | "upload")}
+              className={`mise-press flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                on ? "bg-brand-600 text-white shadow-sm" : "text-fg-soft hover:text-fg"
+              }`}
+            >
+              {label}
+              {count !== undefined && count > 0 && (
+                <span
+                  className={`rounded-md px-1.5 py-px text-[10px] tabular-nums ${
+                    on ? "bg-white/20 text-white" : "bg-fg/10 text-fg-faint"
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {expiring.length > 0 && (
         <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
           <p className="text-sm font-semibold text-amber-200">⚠️ Expiring soon</p>
@@ -202,7 +267,8 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      <Card className="p-0">
+      {tab === "venue" && (
+      <Card className="mise-fade-in p-0">
         <div className="border-b border-line px-5 pt-4">
           <h3 className="font-semibold text-fg">Restaurant documents</h3>
           <p className="mb-3 mt-0.5 text-xs text-fg-faint">
@@ -325,6 +391,7 @@ export default function DocumentsPage() {
           );
         })()}
       </Card>
+      )}
 
       {/* The forms come AFTER the documents.
           "never make the user scroll to reach what the page is FOR" — his own
@@ -332,7 +399,7 @@ export default function DocumentsPage() {
           title and the list of licences the page exists to keep an eye on.
           Uploading is occasional; checking what is about to expire is why you
           open Documents at all. */}
-      {canWrite && (
+      {tab === "upload" && canWrite && (
         <Card className="mb-6">
           <p className="mb-3 text-sm font-medium text-fg-soft">Upload a document</p>
           <form onSubmit={upload} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -404,7 +471,7 @@ export default function DocumentsPage() {
         </Card>
       )}
 
-      {canWrite && (
+      {tab === "staff" && canWrite && (
         <Card className="mb-6">
           <p className="mb-1 text-sm font-medium text-fg-soft">Request a document from staff</p>
           <p className="mb-3 text-xs text-fg-faint">
@@ -413,18 +480,24 @@ export default function DocumentsPage() {
           <form onSubmit={createRequest} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div>
               <label className="block text-sm font-medium text-fg-soft">Staff member</label>
-              <Select
+              {/* SEARCH, AND THE CODE STAYS READABLE.
+                  "pandian sambath is big name which hiding the emp id... we
+                   need cool ui dropdown with search feature."
+                  The native select put name and code on one line and truncated
+                  to "pandian sambath (EMPO…", cutting off the one part that
+                  tells two people apart. Two lines, and you type to narrow. */}
+              <PersonPicker
+                className="mt-1"
+                testId="doc-staff-picker"
                 value={reqEmpId}
                 onChange={setReqEmpId}
-                placeholder="Select…"
-                className="mt-1"
-                options={[
-                  { value: "", label: "Select…" },
-                  ...employees.map((emp) => ({
-                    value: emp.id,
-                    label: `${emp.full_name} (${emp.employee_code})`,
-                  })),
-                ]}
+                placeholder="Search staff…"
+                people={employees.map((emp) => ({
+                  id: emp.id,
+                  name: emp.full_name,
+                  code: emp.employee_code,
+                  note: emp.job_title || undefined,
+                }))}
               />
             </div>
             <div>
