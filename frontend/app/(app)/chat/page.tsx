@@ -174,13 +174,15 @@ export default function TeamChatPage() {
   );
 
   return (
-    // The shell tells us how tall we may be. At lg, main owns a definite
-    // height and is the scroll container, so h-full is exactly the room
-    // available. Below lg the DOCUMENT scrolls and main is only min-h-screen,
-    // so the height has to be worked out from the header (3.5rem) and main's
-    // own padding (pt-6 plus the generous pb-28 that keeps the floating nav
-    // and the Ask launcher off a page's last control).
-    <div className="flex h-[calc(100svh-13rem)] min-h-0 flex-col lg:h-full">
+    // MEASURED, not assumed. `h-full` looked right and silently did nothing:
+    // a percentage height resolves against the containing block's height, and
+    // main's is indefinite to a percentage child, so it fell back to auto and
+    // the panes were sized by their content (365px inside a 735px main).
+    //
+    // 13rem is the shell's own arithmetic: the 4rem header plus main's pt-8 and
+    // pb-28. That padding is not decoration — it is what keeps the floating nav
+    // and the Ask launcher off a page's last control.
+    <div className="flex h-[calc(100svh-13rem)] min-h-0 flex-col">
       <PageHeader
         title="Team chat"
         subtitle={
@@ -215,8 +217,12 @@ export default function TeamChatPage() {
         }}
       />
 
-      {/* TWO PANES ON A LAPTOP, ONE ON A PHONE. */}
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[19rem_1fr]">
+      {/* TWO PANES ON A LAPTOP, ONE ON A PHONE.
+          The row is spelled out because a grid's implicit rows are sized to
+          their CONTENT: the container can be given all the height in the world
+          by flex-1 and the row will still be as tall as the messages in it,
+          which is what left the panes floating in a third of the page. */}
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[19rem_1fr]">
         {/* ── rooms ───────────────────────────────────────────────────── */}
         <Card
           className={`min-h-0 overflow-hidden p-0 ${openId ? "hidden lg:flex" : "flex"} flex-col`}
@@ -444,7 +450,10 @@ export default function TeamChatPage() {
                       }
                     }}
                     rows={1}
-                    placeholder={`Message ${room.name}…`}
+                    // Not "Message <room>": on a phone that wraps to two lines
+                    // inside a one-row box and clips. The header directly above
+                    // already says which room this is.
+                    placeholder="Write a message…"
                     data-testid="chat-input"
                     className="mise-well max-h-32 min-h-[44px] flex-1 resize-y rounded-xl px-3.5 py-2.5 text-sm outline-none"
                   />
