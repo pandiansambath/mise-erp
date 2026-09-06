@@ -70,6 +70,15 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* ...except on the hotel's own door, which is a single screen that never
+   scrolls. There the reserved ten pixels have nothing to reserve against and
+   show as a dark seam beside the hotel's own colours — the "scroll bar" he
+   pointed at. Releasing the gutter lets the door reach the full width, so
+   there is no strip left to paint. */
+html.mise-door-open {
+  scrollbar-gutter: auto;
+}
+
 html,
 body {
   background: var(--background);

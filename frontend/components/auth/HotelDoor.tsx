@@ -23,7 +23,7 @@
 // and is the same audited component on every door — customisation must never
 // reach the part that handles a password.
 
-import { useCallback, type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect } from "react";
 
 import { THEMES, type ThemeKey } from "@/lib/theme";
 
@@ -208,6 +208,24 @@ export function HotelDoor({
       <p className="mise-door-subline">{subline}</p>
     </div>
   );
+
+  // The dark strip he saw down the right edge and called a scrollbar.
+  //
+  // `html { scrollbar-gutter: stable }` reserves ten pixels on the right FOR
+  // ALL TIME, so no page shifts sideways when it grows tall enough to scroll.
+  // On every ordinary page that is invisible, because html's background is the
+  // app's background. The door is the one page that paints a palette of its own
+  // — the hotel's, not the product's — so the reserved gutter stayed the app's
+  // near-black and showed as a stripe beside it.
+  //
+  // A sign-in screen is one screen and never scrolls, so it has nothing to gain
+  // from the reservation and a visible seam to lose by it.
+  useEffect(() => {
+    if (preview) return;
+    const el = document.documentElement;
+    el.classList.add("mise-door-open");
+    return () => el.classList.remove("mise-door-open");
+  }, [preview]);
 
   return (
     <div
