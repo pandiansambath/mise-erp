@@ -4,8 +4,11 @@
 // real page and a floating card explains what you're looking at, while the matching
 // section lights up in the sidebar. The tour (not the user) drives the movement.
 // Dependency-free + CSP-safe. Persists completion so it only auto-runs once.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
+import { canOpenPage } from "@/lib/access";
+import { getGrantedPermissions } from "@/lib/permissions";
 
 const KEY = "mise.tour.done";
 
@@ -35,8 +38,22 @@ export function shouldAutoStartTour(): boolean {
 export function Tour({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const [i, setI] = useState(0);
-  const step = STEPS[i];
-  const last = i === STEPS.length - 1;
+
+  // ONLY THE ROOMS THIS PERSON CAN ENTER.
+  //
+  // The tour navigates, so an ungated step does not merely mention a page — it
+  // takes you there. A staff login was being walked through Money and landing
+  // on "Could not load money insights" with a cheerful card over it.
+  const steps = useMemo(() => {
+    const held = new Set(getGrantedPermissions() ?? []);
+    const allowed = STEPS.filter((s) => canOpenPage(s.href, held));
+    // If almost nothing is reachable there is no tour worth giving; the caller
+    // checks this and does not open.
+    return allowed;
+  }, []);
+
+  const step = steps[Math.min(i, Math.max(0, steps.length - 1))];
+  const last = i >= steps.length - 1;
 
   // Every close path funnels through finish() so `i` is reset to 0 for next time.
   const finish = useCallback(() => {
@@ -64,7 +81,7 @@ export function Tour({ open, onClose }: { open: boolean; onClose: () => void }) 
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") finish();
-      else if (e.key === "ArrowRight" || e.key === "Enter") setI((x) => (x >= STEPS.length - 1 ? x : x + 1));
+      else if (e.key === "ArrowRight" || e.key === "Enter") setI((x) => (x >= steps.length - 1 ? x : x + 1));
       else if (e.key === "ArrowLeft") setI((x) => Math.max(0, x - 1));
     };
     window.addEventListener("keydown", onKey);
@@ -102,7 +119,7 @@ export function Tour({ open, onClose }: { open: boolean; onClose: () => void }) 
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-fg">{step.title}</h3>
                 <span className="shrink-0 text-xs text-fg-faint">
-                  {i + 1}/{STEPS.length}
+                  {i + 1}/{steps.length}
                 </span>
               </div>
               <p className="mt-1 text-sm leading-relaxed text-fg-soft">{step.body}</p>
@@ -111,7 +128,7 @@ export function Tour({ open, onClose }: { open: boolean; onClose: () => void }) 
 
           {/* progress dots */}
           <div className="mt-4 flex items-center gap-1.5">
-            {STEPS.map((_, k) => (
+            {steps.map((_, k) => (
               <span
                 key={k}
                 className={`h-1.5 rounded-full transition-all duration-300 ${

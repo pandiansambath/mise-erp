@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { can } from "@/lib/permissions";
 
 import Link from "next/link";
@@ -62,6 +62,7 @@ export function HotelClock({ className = "" }: { className?: string }) {
   const [now, setNow] = useState<Date | null>(null);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   // Straight from the hotel, so every login sees the same clock and a new
   // browser starts where the last one left off.
@@ -76,11 +77,15 @@ export function HotelClock({ className = "" }: { className?: string }) {
   async function saveClock(patch: { clock_12h?: boolean; clock_face?: string }) {
     if (!canSet) return;
     setSaving(true);
+    setSaveErr(null);
     try {
       await api.patch("/hotels/me", { prefs: patch });
       await refreshHotel();
-    } catch {
-      /* a clock that will not save is not worth an error dialog over the app */
+    } catch (e) {
+      // NEVER SILENT AGAIN. This swallowed the error, so a 422 from the server
+      // looked exactly like a button that does nothing — which is precisely how
+      // he reported it. A control that failed has to say so.
+      setSaveErr(e instanceof ApiError ? e.message : "Could not save that");
     } finally {
       setSaving(false);
     }
@@ -156,6 +161,10 @@ export function HotelClock({ className = "" }: { className?: string }) {
         onClose={() => setOpen(false)}
         title={hotel?.name ? `${hotel.name} — local time` : "Local time"}
         subtitle={elsewhere ? `${zone} · your device is on ${deviceZone}` : zone}
+        // A wider card is the other half of "make card bit bigger to ignore the
+        // scroll bar": at one column the dial and its controls had nowhere to
+        // go but downwards.
+        columns={2}
       >
         {/* IT MUST FIT.
             First attempt asked for a two-column popup and a 230px dial, then a
@@ -168,7 +177,14 @@ export function HotelClock({ className = "" }: { className?: string }) {
             scrolling: a smaller dial, tighter gaps, and the faces in two rows
             of four. A popup you have to scroll to see a clock in is not worth
             opening. */}
-        <div className="flex flex-col items-center gap-3">
+        {/* SIDE BY SIDE, NOT STACKED.
+            Sizing everything down to fit made a clock you squint at and STILL
+            scrolled — "i hate scroll. please fit to screen or make card bit
+            bigger". So the card is wider and the dial sits beside its controls:
+            two short columns instead of one tall one, shorter than any screen
+            it can open on, and the dial gets bigger rather than smaller. */}
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
+          <div className="flex shrink-0 flex-col items-center gap-2">
           <AnalogClock size={172} tz={zone} face={face} numerals={hour12} digital={false} />
           <p className="font-mono text-xl font-semibold tabular-nums text-fg">
             {now
@@ -192,6 +208,9 @@ export function HotelClock({ className = "" }: { className?: string }) {
               : ""}
           </p>
 
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-3 sm:items-stretch">
           <div className="mise-well flex gap-1 rounded-xl p-1">
             {([
               [false, "24-hour"],
@@ -246,6 +265,13 @@ export function HotelClock({ className = "" }: { className?: string }) {
                 </button>
               ))}
             </div>
+          </div>
+
+          {saveErr && (
+            <p className="w-full rounded-lg bg-rose-400/10 px-3 py-2 text-center text-[11px] text-rose-300">
+              {saveErr}
+            </p>
+          )}
           </div>
         </div>
       </SheetPopup>

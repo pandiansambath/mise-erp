@@ -76,7 +76,17 @@ async def update_my_hotel(
     if incoming is not None:
         merged = dict(hotel.prefs or {})
         merged.update(incoming)
-        unknown = set(merged) - set(prefs_mod.DEFAULTS)
+        # VALIDATE WHAT THEY ARE CHANGING, not what is already stored.
+        #
+        # This checked the MERGED bag, so a key written by some other part of
+        # the app — ordering stores `kds_code` the first time the kitchen screen
+        # is opened — made every later preference save fail with 422, whatever
+        # it was trying to change. One undeclared key silently froze every
+        # setting in the product, and the failure surfaced as "the button does
+        # nothing".
+        #
+        # A request can only be wrong about what it sends.
+        unknown = set(incoming) - set(prefs_mod.DEFAULTS)
         if unknown:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,

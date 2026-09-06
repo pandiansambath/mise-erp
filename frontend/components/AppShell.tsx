@@ -697,12 +697,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // First-time visitors get the guided tour automatically (once). The tour lives
   // here — not on a page — so it survives the page-to-page navigation it drives.
   useEffect(() => {
-    if (shouldAutoStartTour()) {
-      const t = window.setTimeout(() => setTourOpen(true), 700);
-      return () => window.clearTimeout(t);
-    }
-  }, []);
-  useEffect(() => {
     const h = () => setTourOpen(true);
     window.addEventListener("mise:tour", h);
     return () => window.removeEventListener("mise:tour", h);
@@ -739,6 +733,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const finalNav = selfServiceOnly
     ? navItems.filter((i) => i.href === "/my")
     : navItems;
+
+  useEffect(() => {
+    // Not for a self-service login. A tour of one page is not a tour, and this
+    // one used to march them through Money and Payroll on the way.
+    if (selfServiceOnly) return;
+    if (shouldAutoStartTour()) {
+      const t = window.setTimeout(() => setTourOpen(true), 700);
+      return () => window.clearTimeout(t);
+    }
+  }, [selfServiceOnly]);
 
   // Sign-in always lands on /dashboard, so hiding the link is not enough — they
   // would still start on the page that cannot show them anything. My Space IS
