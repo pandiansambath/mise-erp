@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, postForm } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
+import { SheetPopup } from "@/components/SheetPopup";
 import { Workbench } from "@/components/Workbench";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
@@ -55,6 +56,9 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // The dish whose details are open. Everything that used to sit inline on
+  // every card lives in here now.
+  const [editing, setEditing] = useState<MenuItem | null>(null);
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", price: "", category: "Mains", prep: "" });
@@ -418,94 +422,166 @@ export default function MenuPage() {
         >
           {shown.map((m) => {
             const state = STATES.find((s) => s.key === m.availability) ?? STATES[0];
+            // The one thing done DURING service stays on the tile. Everything
+            // else — the serving window, how long it takes, removing it — is a
+            // decision you make once, so it moved into the sheet. Eight controls
+            // per dish is what made this page four screens tall on a phone.
+            const off = m.availability !== "available";
             return (
               <li key={m.id}>
-                <div className={`mise-card3d p-3.5 ${m.availability === "available" ? "" : "opacity-75"}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-display text-[15px] font-semibold text-fg">
-                        {m.name}
-                      </p>
-                      <p className="text-[11px] text-fg-faint">
-                        {m.category} · {format(m.price)}
-                        {m.recipe_id ? " · from a recipe" : ""}
-                      </p>
-                    </div>
-                    {canWrite && (
-                      <button
-                        type="button"
-                        onClick={() => remove(m)}
-                        aria-label={`Remove ${m.name}`}
-                        className="mise-press shrink-0 rounded-lg border border-line px-2 py-1 text-[10px] text-fg-faint hover:border-rose-400/50 hover:text-rose-300"
-                      >
-                        ✕
-                      </button>
-                    )}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setEditing(m)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter" || ev.key === " ") {
+                      ev.preventDefault();
+                      setEditing(m);
+                    }
+                  }}
+                  data-testid="menu-dish"
+                  className={`mise-card3d mise-press flex cursor-pointer items-center gap-3 p-3 ${
+                    off ? "opacity-75" : ""
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-[15px] font-semibold text-fg">
+                      {m.name}
+                    </p>
+                    <p className="truncate text-[11px] text-fg-faint">
+                      {m.category} · {format(m.price)}
+                      {m.serve_from || m.serve_to
+                        ? ` · ${m.serve_from?.slice(0, 5) ?? "…"}–${m.serve_to?.slice(0, 5) ?? "…"}`
+                        : ""}
+                      {m.prep_minutes ? ` · ${m.prep_minutes} min` : ""}
+                    </p>
                   </div>
-
-                  {/* THE FOUR STATES, as one control — they are one question
-                      with four answers, not four switches. */}
-                  <div className="mt-2.5 flex flex-wrap gap-1">
-                    {STATES.map((s) => (
-                      <button
-                        key={s.key}
-                        type="button"
-                        disabled={!canWrite || busy === m.id}
-                        onClick={() => patch(m, { availability: s.key })}
-                        title={s.hint}
-                        className={`mise-press rounded-lg px-2 py-1 text-[10px] font-medium transition ${
-                          m.availability === s.key ? state.tone : "mise-well text-fg-faint"
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Served only at certain hours, and how long it takes. */}
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-line/50 pt-2.5 text-[11px] text-fg-faint">
-                    <span>Served</span>
-                    <input
-                      type="time"
-                      defaultValue={m.serve_from?.slice(0, 5) ?? ""}
-                      disabled={!canWrite}
-                      onBlur={(e) => patch(m, { serve_from: e.target.value || null })}
-                      className="mise-well rounded-lg px-1.5 py-1 text-[11px] outline-none"
-                    />
-                    <span>to</span>
-                    <input
-                      type="time"
-                      defaultValue={m.serve_to?.slice(0, 5) ?? ""}
-                      disabled={!canWrite}
-                      onBlur={(e) => patch(m, { serve_to: e.target.value || null })}
-                      className="mise-well rounded-lg px-1.5 py-1 text-[11px] outline-none"
-                    />
-                    <span className="w-full text-[10px] text-fg-faint/80">
-                      Leave both blank for all day
+                  {canWrite ? (
+                    <button
+                      type="button"
+                      disabled={busy === m.id}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        patch(m, { availability: off ? "available" : "sold_out" });
+                      }}
+                      title={off ? "Put it back on" : "Mark it sold out"}
+                      data-testid="menu-toggle"
+                      className={`mise-press shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition ${state.tone}`}
+                    >
+                      {busy === m.id ? "…" : state.label}
+                    </button>
+                  ) : (
+                    <span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold ${state.tone}`}>
+                      {state.label}
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <span>Takes</span>
-                      <input
-                        inputMode="numeric"
-                        defaultValue={m.prep_minutes ?? ""}
-                        disabled={!canWrite}
-                        placeholder="—"
-                        aria-label={`Minutes to make ${m.name}`}
-                        onBlur={(e) =>
-                          patch(m, {
-                            prep_minutes: e.target.value ? parseInt(e.target.value, 10) : null,
-                          })
-                        }
-                        className="mise-well w-12 rounded-lg px-1.5 py-1 text-center text-[11px] outline-none"
-                      />
-                      <span>min</span>
-                    </span>
-                  </div>
+                  )}
                 </div>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {editing && (
+        <SheetPopup
+          onClose={() => setEditing(null)}
+          title={editing.name}
+          subtitle={`${editing.category} · ${format(editing.price)}`}
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                On the menu?
+              </p>
+              {/* One question with four answers, not four switches. */}
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {STATES.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    disabled={!canWrite || busy === editing.id}
+                    onClick={() => {
+                      patch(editing, { availability: s.key });
+                      setEditing({ ...editing, availability: s.key });
+                    }}
+                    title={s.hint}
+                    className={`mise-press min-h-[40px] rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      editing.availability === s.key ? s.tone : "mise-well text-fg-faint"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                Served between
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <input
+                  type="time"
+                  defaultValue={editing.serve_from?.slice(0, 5) ?? ""}
+                  disabled={!canWrite}
+                  onBlur={(e) => patch(editing, { serve_from: e.target.value || null })}
+                  data-testid="menu-from"
+                  className="mise-well min-h-[42px] rounded-lg px-2 text-sm outline-none"
+                />
+                <span className="text-fg-faint">to</span>
+                <input
+                  type="time"
+                  defaultValue={editing.serve_to?.slice(0, 5) ?? ""}
+                  disabled={!canWrite}
+                  onBlur={(e) => patch(editing, { serve_to: e.target.value || null })}
+                  className="mise-well min-h-[42px] rounded-lg px-2 text-sm outline-none"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-fg-faint">Leave both blank for all day.</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                Takes to make
+              </p>
+              <div className="mt-1.5 flex items-center gap-2">
+                <input
+                  inputMode="numeric"
+                  defaultValue={editing.prep_minutes ?? ""}
+                  disabled={!canWrite}
+                  placeholder="—"
+                  aria-label={`Minutes to make ${editing.name}`}
+                  onBlur={(e) =>
+                    patch(editing, {
+                      prep_minutes: e.target.value ? parseInt(e.target.value, 10) : null,
+                    })
+                  }
+                  className="mise-well min-h-[42px] w-20 rounded-lg px-2 text-center text-sm outline-none"
+                />
+                <span className="text-sm text-fg-faint">minutes</span>
+              </div>
+              <p className="mt-1 text-[11px] text-fg-faint">
+                What the diner is quoted, and what the kitchen screen counts down.
+              </p>
+            </div>
+
+            {canWrite && (
+              <div className="border-t border-line pt-3 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    remove(editing);
+                    setEditing(null);
+                  }}
+                  data-testid="menu-remove"
+                  className="text-[11px] text-fg-faint underline underline-offset-2 hover:text-rose-400"
+                >
+                  Take {editing.name} off the menu
+                </button>
+              </div>
+            )}
+          </div>
+        </SheetPopup>
       )}
     </Workbench>
   );
