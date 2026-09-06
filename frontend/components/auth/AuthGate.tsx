@@ -632,6 +632,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
     cfg: LoginConfig;
     name: string;
     logo: string | null;
+    theme: string | null;
   } | null>(null);
   /** Have we finished asking whether this hotel has its own door?
    *
@@ -660,6 +661,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
           cfg,
           name: d.name ?? ownSite,
           logo: d.logo_url ? `${API_BASE}${d.logo_url}` : null,
+          theme: d.theme ?? null,
         });
       })
       .catch(() => {
@@ -731,7 +733,7 @@ export default function AuthGate({ initialMode }: { initialMode: AuthMode }) {
   // that should be on the critical path of a chef signing in at 6am.
   if (door) {
     return (
-      <HotelDoor cfg={door.cfg} hotelName={door.name} logoUrl={door.logo}>
+      <HotelDoor cfg={door.cfg} hotelName={door.name} logoUrl={door.logo} hotelTheme={door.theme}>
         <LoginForm active bare />
       </HotelDoor>
     );

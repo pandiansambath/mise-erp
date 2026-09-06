@@ -1404,6 +1404,9 @@ export default function SettingsPage() {
                   <HotelDoor
                     cfg={door}
                     hotelName={hotel?.name ?? "Your restaurant"}
+                    // So the preview shows what they will ACTUALLY get, theme
+                    // inheritance included, rather than a generic default.
+                    hotelTheme={hotel?.theme}
                     logoUrl={hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null}
                     preview
                   >
