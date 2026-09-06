@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     # rules and guidance). Either alone is fine; both is better.
     tavily_api_key: str = ""
 
+    # GIF search in chat. Tenor's free tier is enough for a restaurant; without
+    # a key the picker says so plainly rather than showing an empty grid, and
+    # sending a .gif FILE keeps working either way. The key stays server-side —
+    # a chosen GIF is fetched by us and stored like any other attachment, so a
+    # conversation does not quietly depend on somebody else's CDN staying up.
+    tenor_api_key: str = ""
+
     sentry_dsn: str = ""
     sentry_environment: str = "production"
     # Traces are sampled to nothing by default. Errors are the point; tracing

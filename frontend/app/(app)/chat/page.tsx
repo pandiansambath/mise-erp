@@ -30,6 +30,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { EmojiPicker } from "@/components/EmojiPicker";
 import { PersonPicker } from "@/components/PersonPicker";
 import { SheetPopup } from "@/components/SheetPopup";
 import { Card, PageHeader } from "@/components/ui";
@@ -66,14 +67,6 @@ type Bubble = {
 
 type Person = { id: string; name: string; email: string; role: string };
 
-/** A small, fast set. Deliberately not a 1,800-emoji library: this is a staff
- *  room, and the ones people actually reach for fit on three rows. */
-const EMOJI = [
-  "👍", "👌", "🙏", "🔥", "🎉", "😀", "😂", "🙂", "😉", "😍",
-  "😅", "😴", "🤝", "💪", "👀", "✅", "❌", "⏰", "📣", "❤️",
-  "🍽️", "🍳", "🥗", "🧾", "📦", "🚚", "💷", "⚠️", "🧹", "☕",
-];
-
 /** What the file picker offers. Pictures and video were the original set; he
  *  asked for documents and audio too, and he is right about the workflow — a
  *  rota PDF or a supplier invoice is a normal thing to hand a colleague. An
@@ -99,6 +92,7 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [pickTab, setPickTab] = useState<"emoji" | "gif">("emoji");
   const [sheet, setSheet] = useState<null | "group" | "person" | "settings">(null);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -266,6 +260,24 @@ export default function MessagesPage() {
       void loadTalk();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not send that");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendGif(url: string) {
+    if (!openId) return;
+    setSending(true);
+    setErr(null);
+    try {
+      // Only in-hotel rooms can take a GIF today: the other-restaurants side has
+      // its own attachment endpoint and no picker behind it yet.
+      await api.post(`/chat/rooms/${openId}/gif`, { url });
+      atBottom.current = true;
+      await loadMsgs(openId, scope);
+      void loadRooms();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not send that GIF");
     } finally {
       setSending(false);
     }
@@ -595,22 +607,44 @@ export default function MessagesPage() {
                   />
                 )}
                 {showEmoji && (
-                  <div className="mise-pop absolute bottom-full left-3 z-20 mb-2 w-[min(20rem,86vw)] rounded-2xl border border-line bg-paper p-2 shadow-2xl">
-                    <div className="grid grid-cols-10 gap-1">
-                      {EMOJI.map((e) => (
+                  <div className="mise-pop absolute bottom-full left-3 z-20 mb-2 rounded-2xl border border-line bg-paper p-2 shadow-2xl">
+                    <div className="mise-card-inset mb-2 flex gap-1 rounded-xl p-1">
+                      {(
+                        [
+                          ["emoji", "Emoji"],
+                          ["gif", "GIF"],
+                        ] as const
+                      ).map(([key, label]) => (
                         <button
-                          key={e}
+                          key={key}
                           type="button"
-                          onClick={() => {
-                            setDraft((d) => d + e);
-                            setShowEmoji(false);
-                          }}
-                          className="mise-press grid h-8 place-items-center rounded-lg text-lg hover:bg-glass/10"
+                          onClick={() => setPickTab(key)}
+                          data-testid={`pick-${key}`}
+                          className={`mise-press min-h-[32px] flex-1 rounded-lg px-3 text-xs font-semibold transition ${
+                            pickTab === key
+                              ? "bg-brand-600 text-white"
+                              : "text-fg-soft hover:text-fg"
+                          }`}
                         >
-                          {e}
+                          {label}
                         </button>
                       ))}
                     </div>
+                    {pickTab === "emoji" ? (
+                      <EmojiPicker
+                        onPick={(e) => {
+                          setDraft((d) => d + e);
+                          setShowEmoji(false);
+                        }}
+                      />
+                    ) : (
+                      <GifPicker
+                        onPick={(url) => {
+                          setShowEmoji(false);
+                          void sendGif(url);
+                        }}
+                      />
+                    )}
                   </div>
                 )}
 
@@ -811,6 +845,90 @@ function NewDirect({ onClose, onPick }: { onClose: () => void; onPick: (id: stri
         />
       )}
     </SheetPopup>
+  );
+}
+
+/** GIF search.
+ *
+ *  The key lives on the server, so this asks our own API rather than Tenor: a
+ *  key in front-end JavaScript is a key you have published. Choosing one does
+ *  not hot-link it either — the server fetches it and stores it like any
+ *  attachment, so the joke somebody sent in March is still there in June rather
+ *  than depending on someone else's CDN.
+ */
+function GifPicker({ onPick }: { onPick: (url: string) => void }) {
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState<{ preview: string; url: string; description: string }[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "unconfigured">("loading");
+  const [hint, setHint] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    const id = window.setTimeout(() => {
+      api
+        .get<{
+          configured: boolean;
+          results: { preview: string; url: string; description: string }[];
+          hint?: string;
+        }>(`/chat/gifs?q=${encodeURIComponent(q)}`)
+        .then((d) => {
+          if (!alive) return;
+          setItems(d.results);
+          setHint(d.hint ?? "");
+          setState(d.configured ? "ready" : "unconfigured");
+        })
+        .catch(() => alive && setState("ready"));
+      // Typing a word at a time should not be a request a letter at a time.
+    }, 350);
+    return () => {
+      alive = false;
+      window.clearTimeout(id);
+    };
+  }, [q]);
+
+  return (
+    <div className="w-[min(22rem,88vw)]">
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search GIFs…"
+        data-testid="gif-search"
+        className="mise-well mb-2 min-h-[38px] w-full rounded-lg px-3 text-sm outline-none"
+      />
+      {state === "unconfigured" ? (
+        <p className="px-2 py-6 text-center text-[11px] leading-relaxed text-fg-faint">
+          {hint || "GIF search is not set up yet."}
+          <br />
+          <span className="opacity-80">
+            You can still send a .gif file with the 📎 button.
+          </span>
+        </p>
+      ) : state === "loading" ? (
+        <p className="py-6 text-center text-[11px] text-fg-faint">Looking…</p>
+      ) : items.length === 0 ? (
+        <p className="py-6 text-center text-[11px] text-fg-faint">Nothing found.</p>
+      ) : (
+        <div className="mise-noscrollbar grid max-h-56 grid-cols-3 gap-1 overflow-y-auto">
+          {items.map((g) => (
+            <button
+              key={g.url}
+              type="button"
+              onClick={() => onPick(g.url)}
+              data-testid="gif-option"
+              className="mise-press overflow-hidden rounded-lg"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={g.preview}
+                alt={g.description || "GIF"}
+                loading="lazy"
+                className="h-20 w-full object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
