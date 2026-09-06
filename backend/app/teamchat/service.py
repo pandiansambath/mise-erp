@@ -75,11 +75,19 @@ async def can_see(db: AsyncSession, room: ChatRoom, user: User) -> bool:
     """Membership is a RULE for the standing rooms and a LIST for custom ones."""
     if room.hotel_id != user.hotel_id or not room.is_active:
         return False
+    # Two logins belong to the hotel without belonging in its staff room.
+    #
     # The platform operator is support, not staff. They are attached to a hotel
     # so they can help it, which would otherwise place them silently inside its
     # private staff room — reading a conversation nobody in the restaurant knows
     # they are in. Access to run a hotel is not consent to sit in its break room.
-    if user.is_platform_owner:
+    #
+    # The kiosk is not a person at all. It is a shared tablet by the door that
+    # sits unattended on a counter where anyone can touch it, which is why it
+    # already reaches nothing that reveals what people earn. A private staff
+    # conversation left open on that screen is the same exposure by another
+    # route — and worse, because chat is where people speak freely.
+    if user.is_platform_owner or user.role == Role.KIOSK.value:
         return False
     if room.kind == RoomKind.EVERYONE:
         return True

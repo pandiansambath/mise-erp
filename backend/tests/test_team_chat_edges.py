@@ -262,3 +262,31 @@ async def test_the_platform_operator_is_not_in_the_hotels_staff_room(
     people = await client.get("/api/chat/people", headers=auth_header(owner))
     assert people.status_code == 200
     assert all(p["email"] != "operator@dineai.cloud" for p in people.json())
+
+
+@pytest.mark.asyncio
+async def test_the_tablet_by_the_door_is_not_in_the_staff_room(client, make_user, auth_header):
+    """The kiosk is not a person. It sits unattended on a counter where anyone
+    can touch it, which is why it already reaches nothing that reveals what
+    people earn — and a private staff conversation left open on that screen is
+    the same exposure by another route, only worse, because chat is where
+    people speak freely."""
+    owner = await make_user("kiosk-owner@nirai.com", Role.SUPER_ADMIN.value)
+    tablet = await make_user("tablet@nirai.com", Role.KIOSK.value)
+
+    assert await _rooms(client, auth_header, tablet) == {}
+
+    room = (await _rooms(client, auth_header, owner))[RoomKind.EVERYONE]
+    assert (
+        await client.get(f"/api/chat/rooms/{room['id']}/messages", headers=auth_header(tablet))
+    ).status_code == 404
+    assert (
+        await client.post(
+            f"/api/chat/rooms/{room['id']}/messages",
+            headers=auth_header(tablet),
+            json={"body": "hello from the counter"},
+        )
+    ).status_code == 404
+
+    people = await client.get("/api/chat/people", headers=auth_header(owner))
+    assert all(p["email"] != "tablet@nirai.com" for p in people.json())

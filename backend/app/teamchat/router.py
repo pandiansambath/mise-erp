@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user, require
-from app.auth.models import User
+from app.auth.models import Role, User
 from app.core.database import get_db
 from app.core.storage import get_storage
 from app.teamchat import service
@@ -171,9 +171,10 @@ async def people(
 ) -> list[dict]:
     """Who can be put in a group — every live login in this hotel.
 
-    Minus the platform operator: they are attached to the hotel to support it,
-    not to work in it, and offering them as a colleague to add to the kitchen
-    group is offering the wrong thing.
+    Minus the platform operator, who is attached to the hotel to support it
+    rather than to work in it, and minus the kiosk, which is a tablet by the
+    door. Offering either as a colleague to add to the kitchen group is
+    offering the wrong thing.
     """
     rows = await db.execute(
         select(User).where(
@@ -181,6 +182,7 @@ async def people(
             User.deleted_at.is_(None),
             User.is_active.is_(True),
             User.is_platform_owner.is_(False),
+            User.role != Role.KIOSK.value,
         )
     )
     return [
