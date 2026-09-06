@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Role, User
@@ -40,7 +41,15 @@ def is_manager(user: User) -> bool:
 
 
 async def ensure_standing_rooms(db: AsyncSession, hotel_id: uuid.UUID) -> None:
-    """Make sure Everyone and Managers exist for this hotel."""
+    """Make sure Everyone and Managers exist for this hotel.
+
+    Created lazily, on the first request that lists rooms, so a hotel that never
+    opens chat carries no rows for it. That timing has a cost: two people opening
+    the page in the same second both find no Everyone room and both try to make
+    one. A check-then-insert cannot settle that on its own, so a partial unique
+    index on (hotel_id, kind) decides who was first and the loser simply reads
+    what the winner made.
+    """
     have = {
         r.kind
         for r in (
@@ -52,8 +61,14 @@ async def ensure_standing_rooms(db: AsyncSession, hotel_id: uuid.UUID) -> None:
         if kind not in have:
             db.add(ChatRoom(hotel_id=hotel_id, kind=kind, name=name, emoji=emoji))
             made = True
-    if made:
+    if not made:
+        return
+    try:
         await db.commit()
+    except IntegrityError:
+        # Somebody else got there first. Their room is as good as ours would
+        # have been, and it is the one everybody else is already reading.
+        await db.rollback()
 
 
 async def can_see(db: AsyncSession, room: ChatRoom, user: User) -> bool:
