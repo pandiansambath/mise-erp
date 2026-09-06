@@ -174,7 +174,13 @@ export default function TeamChatPage() {
   );
 
   return (
-    <div className="flex h-[calc(100svh-9rem)] min-h-0 flex-col">
+    // The shell tells us how tall we may be. At lg, main owns a definite
+    // height and is the scroll container, so h-full is exactly the room
+    // available. Below lg the DOCUMENT scrolls and main is only min-h-screen,
+    // so the height has to be worked out from the header (3.5rem) and main's
+    // own padding (pt-6 plus the generous pb-28 that keeps the floating nav
+    // and the Ask launcher off a page's last control).
+    <div className="flex h-[calc(100svh-13rem)] min-h-0 flex-col lg:h-full">
       <PageHeader
         title="Team chat"
         subtitle={
