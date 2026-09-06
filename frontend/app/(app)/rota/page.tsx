@@ -1,21 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SubNav } from "@/components/SubNav";
 import { api, ApiError, downloadFile, postForm, type Employee, type LabourSummary, type Shift } from "@/lib/api";
-import { Card, PageHeader, Spinner } from "@/components/ui";
+import { PageMore, type PageAction } from "@/components/PageKit";
+import { PageHeader, Spinner } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
 import { LeavePanel } from "@/components/LeavePanel";
 import { LEAVE_CHANGED } from "@/components/QuickLeave";
 import { RotaLegend } from "@/components/RotaLegend";
-import { Bars, Meter } from "@/components/charts";
+import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { localISODate as iso } from "@/lib/date";
 import { numeric } from "@/lib/sanitize";
-import { spotlight, useDeepLink } from "@/components/fx";
+import { useDeepLink } from "@/components/fx";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -28,7 +28,6 @@ function mondayOf(d: Date): Date {
   return x;
 }
 const hhmm = (t: string) => t.slice(0, 5);
-const fmtDM = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
 const addDays = (d: Date, n: number) => {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
@@ -72,30 +71,21 @@ export default function RotaPage() {
   const [busy, setBusy] = useState(false);
 
   // Copy a chosen week → this week (editable preview, then apply)
+  // Which sheet is open. Leave, copying, exports and the legend were four
+  // permanent blocks above the week; they are jobs you do occasionally TO a
+  // rota, and none of them earned a place above it.
+  const [sheet, setSheet] = useState<null | "leave" | "copy" | "labour" | "legend">(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [copyRows, setCopyRows] = useState<CopyRow[] | null>(null);
   const [copyBusy, setCopyBusy] = useState(false);
   const [copySource, setCopySource] = useState<Date | null>(null); // Monday of the source week
   const [copyConflict, setCopyConflict] = useState<"skip" | "replace">("skip");
 
   // ⌘K "Copy last week's rota" (?copy=1) → open the copy preview + spotlight it
-  useDeepLink({ copy: () => { startCopy(); spotlight("rota-copy"); } }, !loading);
+  // ⌘K "Copy last week's rota" opens the sheet directly now — there is no
+  // longer a block on the page to scroll to and flash.
+  useDeepLink({ copy: () => { startCopy(); setSheet("copy"); } }, !loading);
 
-  // Grab-and-drag to scroll the week strip left/right (hand cursor).
-  const stripRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef({ down: false, startX: 0, scroll: 0 });
-  function onStripDown(e: React.MouseEvent) {
-    const el = stripRef.current;
-    if (!el) return;
-    dragRef.current = { down: true, startX: e.pageX, scroll: el.scrollLeft };
-  }
-  function onStripMove(e: React.MouseEvent) {
-    const el = stripRef.current;
-    if (!el || !dragRef.current.down) return;
-    el.scrollLeft = dragRef.current.scroll - (e.pageX - dragRef.current.startX);
-  }
-  function endStripDrag() {
-    dragRef.current.down = false;
-  }
 
   function reload() {
     return Promise.all([
@@ -113,6 +103,12 @@ export default function RotaPage() {
     reload().catch(() => setMsg("Could not load the rota.")).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to]);
+
+  function openAdd(iso: string) {
+    setDay(iso);
+    setMsg(null);
+    setAddOpen(true);
+  }
 
   function shiftWeek(delta: number) {
     const d = new Date(weekStart);
@@ -443,323 +439,160 @@ export default function RotaPage() {
           : "text-rose-400";
 
 
+  // WHAT CHANGED HERE, and why.
+  //
+  // Measured before touching it: the week grid — the entire point of the page —
+  // began about 900px down, under a tab strip that only scrolled, a permanently
+  // open Leave panel, six export buttons and an inline five-field form. And the
+  // strip was a horizontal scroller of 170px columns, so on a normal window
+  // Saturday and Sunday were simply off the right-hand edge. A week you cannot
+  // see the end of is not a week.
+  //
+  // Now: one row saying which week and what it costs, then the seven days. The
+  // grid gives every day a column that fits, so the week ends where the week
+  // ends. Leave, copying, exports, the import and the legend are all still here
+  // — behind ⋯, because they are jobs you do occasionally TO the rota, and none
+  // of them earned a permanent place above it.
+  //
+  // Adding a shift moved onto the day itself. A form with a day dropdown asks
+  // you to say in a field what you already said by looking at Thursday.
+  const more: PageAction[] = [
+    { key: "leave", label: "Leave", icon: "🌴", hint: "Book time off — the rota then refuses to schedule them", onSelect: () => setSheet("leave") },
+    { key: "copy", label: "Copy a week across", icon: "⧉", hint: "Bring a past week onto this one, edit before applying", onSelect: () => { startCopy(); setSheet("copy"); } },
+    { key: "labour", label: "Labour by person", icon: "💷", onSelect: () => setSheet("labour") },
+    { key: "xlsx", label: "This week (Excel)", icon: "📊", onSelect: () => void downloadFile(`/rota/export.xlsx?date_from=${from}&date_to=${to}`, `mise-rota-${from}.xlsx`) },
+    { key: "pdf", label: "This week (PDF)", icon: "📄", onSelect: () => void downloadFile(`/rota/export.pdf?date_from=${from}&date_to=${to}`, `mise-rota-${from}.pdf`) },
+    { key: "tmpl", label: "Blank grid (Excel)", icon: "📋", hint: "Fill it in away from the screen, then upload it", onSelect: () => void downloadFile(`/rota/template.xlsx?date_from=${from}&date_to=${to}`, "mise-rota-template.xlsx") },
+    { key: "csv", label: "Blank grid (CSV)", icon: "📋", onSelect: () => void downloadFile(`/rota/template.csv?date_from=${from}&date_to=${to}`, "mise-rota-template.csv") },
+    { key: "upload", label: importing ? "Reading the file…" : "Upload a filled grid", icon: "⬆️", tone: "brand", onSelect: () => importInput.current?.click() },
+    { key: "legend", label: "What you are looking at", icon: "🔑", onSelect: () => setSheet("legend") },
+  ];
+
   return (
     <div>
-      <PageHeader title="Rota" subtitle="Schedule shifts and see forecast labour cost as a % of sales." />
-
-      <SubNav
-        items={[
-          {
-            key: "week",
-            label: "This week",
-            icon: "📅",
-            onSelect: () => setWeekStart(mondayOf(new Date())),
-          },
-          {
-            key: "copy",
-            label: "Copy last week",
-            icon: "⧉",
-            onSelect: () => spotlight("rota-copy"),
-          },
-          {
-            key: "labour",
-            label: "Labour by person",
-            icon: "💷",
-            onSelect: () => spotlight("labour-by-person"),
-          },
-          {
-            key: "legend",
-            label: "What you're looking at",
-            icon: "🔑",
-            onSelect: () => spotlight("rota-legend"),
-          },
-        ]}
+      <PageHeader
+        title="Rota"
+        subtitle="Who is working this week, and what it costs."
+        actions={
+          <div className="flex items-center gap-2">
+            {canWrite && (
+              <button
+                type="button"
+                onClick={() => openAdd(from)}
+                data-tone="brand"
+                data-testid="rota-add"
+                className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
+              >
+                ＋ Add shift
+              </button>
+            )}
+            <PageMore actions={more} title="Rota" subtitle="Leave, copying, exports" />
+          </div>
+        }
       />
 
-      {/* Leave lives beside the rota because that is where it has to be obeyed:
-          scheduling somebody who is off is the mistake this prevents. */}
-      <Card className="mb-6">
-        <LeavePanel employees={employees} canWrite={canWrite} onChanged={() => { reload().catch(() => {}); }} />
-      </Card>
-      {msg && <p className="mb-4 rounded-lg bg-amber-400/10 px-3 py-2 text-sm text-amber-300">{msg}</p>}
-
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <button onClick={() => shiftWeek(-1)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm text-fg-soft">← Prev</button>
-          <span className="text-sm font-medium text-fg">{from} → {to}</span>
-          <button onClick={() => shiftWeek(1)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm text-fg-soft">Next →</button>
+      {/* THE ONLY ROW ABOVE THE WEEK: which week, and what it costs. */}
+      <div className="mise-card-inset mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-3 py-2.5">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => shiftWeek(-1)}
+            aria-label="Previous week"
+            className="mise-btn-flat mise-press grid h-9 w-9 place-items-center text-fg-soft"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekStart(mondayOf(new Date()))}
+            title="Back to this week"
+            data-testid="rota-week"
+            className="mise-press min-w-[11rem] rounded-lg px-2 py-1 text-sm font-semibold text-fg"
+          >
+            {weekDates[0].toLocaleDateString(undefined, { day: "numeric", month: "short" })} –{" "}
+            {weekDates[6].toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+          </button>
+          <button
+            type="button"
+            onClick={() => shiftWeek(1)}
+            aria-label="Next week"
+            className="mise-btn-flat mise-press grid h-9 w-9 place-items-center text-fg-soft"
+          >
+            ›
+          </button>
         </div>
+
         {labour && (
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-fg-soft">{labour.total_hours} h · {format(labour.total_cost)} labour</span>
-            <span className={`font-semibold ${labourTone}`}>
-              {parseFloat(labour.net_sales) > 0 ? `${labour.labour_pct}% of sales` : "no sales yet"}
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+            <span className="tabular-nums text-fg-soft">
+              <span className="font-semibold text-fg">{labour.total_hours}h</span> scheduled
             </span>
+            <span className="tabular-nums text-fg-soft">
+              <span className="font-semibold text-fg">{format(labour.total_cost)}</span> labour
+            </span>
+            {/* The number the whole page exists to move. Amber and red are not
+                decoration: past 30% of sales, a rota is a problem. */}
+            {parseFloat(labour.net_sales) > 0 ? (
+              <span className={`font-semibold tabular-nums ${labourTone}`}>
+                {labour.labour_pct}% of sales
+              </span>
+            ) : (
+              <span className="text-[11px] text-fg-faint">no sales booked for this week yet</span>
+            )}
           </div>
         )}
       </div>
 
-      {labour && parseFloat(labour.net_sales) > 0 && (
-        <div className="mise-well mise-feel mb-4 max-w-md rounded-xl p-4">
-          <Meter label="Labour cost" value={parseFloat(labour.labour_pct) || 0} target={30} goodBelow />
-          <p className="mt-1.5 text-[11px] text-fg-faint">
-            This week&apos;s planned labour as % of net sales — most kitchens aim under 30%.
-          </p>
-        </div>
+      {msg && (
+        <p className="mb-3 rounded-xl bg-glass/10 px-3 py-2 text-sm text-fg-soft" role="status">
+          {msg}
+        </p>
       )}
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        <input ref={importInput} type="file" accept=".xlsx,.csv" className="hidden" onChange={onImportRota} />
-        <button
-          onClick={() => downloadFile(`/rota/export.xlsx?date_from=${from}&date_to=${to}`, `mise-rota-${from}.xlsx`)}
-          className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
-        >
-          ⬇ Excel
-        </button>
-        <button
-          onClick={() => downloadFile(`/rota/export.pdf?date_from=${from}&date_to=${to}`, `mise-rota-${from}.pdf`)}
-          className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
-        >
-          ⬇ PDF
-        </button>
-        {canWrite && (
-          <>
-            <button
-              onClick={startCopy}
-              disabled={!!copyRows}
-              title="Copy a previous week's shifts into this week — pick the week, review, then apply"
-              className="mise-press rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
-            >
-              ⎘ Copy a week
-            </button>
-            <button
-              onClick={() => downloadFile(`/rota/template.xlsx?date_from=${from}&date_to=${to}`, "mise-rota-template.xlsx")}
-              title="Download this week as a blank grid (same layout as ⬇ Excel) — fill the cells and upload it back"
-              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
-            >
-              ⬇ Blank grid (Excel)
-            </button>
-            <button
-              onClick={() => downloadFile(`/rota/template.csv?date_from=${from}&date_to=${to}`, "mise-rota-template.csv")}
-              title="Same blank grid as a CSV"
-              className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft"
-            >
-              CSV
-            </button>
-            <button
-              onClick={() => importInput.current?.click()}
-              disabled={importing}
-              title="Upload a filled grid (the same layout you download) — it replaces that week's shifts for the staff in the file"
-              className="mise-press rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-1.5 text-sm font-medium text-brand-300 hover:bg-brand-500/20 disabled:opacity-50"
-            >
-              {importing ? "Reading…" : "⬆ Upload grid"}
-            </button>
-          </>
-        )}
-      </div>
-
-      {canWrite && (
-        <Card className="mb-6">
-          <p className="mb-3 text-sm font-medium text-fg-soft">Add a shift</p>
-          <form onSubmit={addShift} className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end">
-            <label className="block sm:w-48">
-              <span className="block text-xs font-medium text-fg-faint">Employee</span>
-              <Select
-                value={emp}
-                onChange={setEmp}
-                placeholder="Choose…"
-                className="mt-1 w-full"
-                options={[
-                  { value: "", label: "Choose…" },
-                  ...employees.map((x) => ({ value: x.id, label: x.full_name })),
-                ]}
-              />
-            </label>
-            <label className="block sm:w-48">
-              <span className="block text-xs font-medium text-fg-faint">Day</span>
-              <Select
-                value={day}
-                onChange={setDay}
-                className="mt-1 w-full"
-                options={weekDates.map((d, i) => ({
-                  value: iso(d),
-                  label: `${DAYS[i]} ${d.getDate()}/${d.getMonth() + 1}`,
-                }))}
-              />
-            </label>
-            <label className="block sm:w-auto">
-              <span className="block text-xs font-medium text-fg-faint">Start</span>
-              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:w-32" />
-            </label>
-            <label className="block sm:w-auto">
-              <span className="block text-xs font-medium text-fg-faint">End</span>
-              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:w-32" />
-            </label>
-            <label className="block sm:w-auto">
-              <span className="block text-xs font-medium text-fg-faint">Break (min)</span>
-              <input inputMode="numeric" value={brk} onChange={(e) => setBrk(numeric(e.target.value, { decimal: false }))} title="Unpaid break — deducted from paid hours" className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none sm:w-24" />
-            </label>
-            <button type="submit" disabled={busy} className="mise-press rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-              {busy ? "Adding…" : "Add shift"}
-            </button>
-          </form>
-        </Card>
-      )}
-
-      {copyRows && (
-        <Card className="mise-card-slide mb-6 ring-1 ring-brand-500/30" id="rota-copy">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="font-semibold text-fg">⎘ Copy a week → this week ({from} → {to})</p>
-              <p className="text-xs text-fg-faint">
-                Pick the week to copy from, tweak times, remove any you don&apos;t want, then apply.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-fg-faint">Copy from</span>
-              <button onClick={() => stepCopySource(-1)} disabled={copyBusy} className="mise-raised mise-press rounded-md px-2 py-1 text-xs text-fg-soft" aria-label="Earlier week">‹</button>
-              <span className="min-w-[6rem] text-center text-xs font-medium text-fg">
-                {copySource ? `${fmtDM(copySource)} – ${fmtDM(addDays(copySource, 6))}` : ""}
-              </span>
-              <button onClick={() => stepCopySource(1)} disabled={copyBusy || !canStepLater} title={!canStepLater ? "You can only copy from a past week" : undefined} className="mise-raised mise-press rounded-md px-2 py-1 text-xs text-fg-soft disabled:cursor-not-allowed disabled:opacity-40" aria-label="Later week">›</button>
-              <button onClick={() => { setCopyRows(null); setCopySource(null); }} className="ml-1 text-fg-faint hover:text-fg" aria-label="Cancel">✕</button>
-            </div>
-          </div>
-
-          {copyRows.length === 0 ? (
-            <p className="py-4 text-center text-sm text-fg-faint">No shifts in that week — use ‹ to pick an earlier week.</p>
-          ) : (
-            <>
-              <div className="mt-3 flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
-                <span className="min-w-[7rem] flex-1">Employee</span>
-                <span className="w-20">Day</span>
-                <span className="w-[4.6rem] text-center">Start</span>
-                <span className="w-[4.6rem] text-center">End</span>
-                <span className="w-14 text-center">Break (min)</span>
-                <span className="w-4" />
-              </div>
-              <div className="mise-slide-stagger mt-1 max-h-80 space-y-2 overflow-y-auto pr-1">
-                {copyRows.map((r, i) => {
-                  const dayIdx = weekDates.findIndex((d) => iso(d) === r.date);
-                  const clash = existingKeys.has(`${r.employee_id}|${r.date}`);
-                  return (
-                    <div key={i} className={`mise-well flex flex-wrap items-center gap-2 rounded-xl p-2 text-sm transition ${clash ? "ring-1 ring-amber-400/40" : ""}`}>
-                      <span className="flex min-w-[7rem] flex-1 items-center gap-2 truncate font-medium text-fg">
-                        <span className="truncate">{r.employee_name}</span>
-                        {clash && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300 ring-1 ring-inset ring-amber-400/20">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> scheduled
-                          </span>
-                        )}
-                      </span>
-                      <span className="w-20 text-xs text-fg-faint">
-                        {dayIdx >= 0 ? `${DAYS[dayIdx]} ${weekDates[dayIdx].getDate()}/${weekDates[dayIdx].getMonth() + 1}` : r.date}
-                      </span>
-                      <input type="time" value={r.start_time} onChange={(e) => updateCopyRow(i, { start_time: e.target.value })} className="mise-well w-[4.6rem] rounded-md px-2 py-1 text-xs text-fg outline-none" />
-                      <input type="time" value={r.end_time} onChange={(e) => updateCopyRow(i, { end_time: e.target.value })} className="mise-well w-[4.6rem] rounded-md px-2 py-1 text-xs text-fg outline-none" />
-                      <input type="number" min={0} step={5} value={r.break_minutes} onChange={(e) => updateCopyRow(i, { break_minutes: parseInt(e.target.value, 10) || 0 })} className="mise-well w-14 rounded-md px-2 py-1 text-center text-xs text-fg outline-none" />
-                      <button onClick={() => setCopyRows((rows) => rows && rows.filter((_, k) => k !== i))} className="text-fg-faint hover:text-rose-300" aria-label="Remove">✕</button>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {copyClashes > 0 && (
-            <div className="mise-card-slide mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-paper-2/40 px-3 py-2.5 text-xs">
-              <span className="text-fg-soft">
-                <b className="text-fg">{copyClashes}</b> already scheduled this week —
-              </span>
-              <div className="inline-flex rounded-lg border border-line bg-paper p-0.5">
-                {(["skip", "replace"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setCopyConflict(m)}
-                    className={`rounded-md px-3 py-1 font-medium transition ${
-                      copyConflict === m ? "bg-brand-600 text-white shadow-sm" : "text-fg-soft hover:text-fg"
-                    }`}
-                  >
-                    {m === "skip" ? "Skip them" : "Replace them"}
-                  </button>
-                ))}
-              </div>
-              <span className="text-fg-faint">
-                {copyConflict === "skip" ? "keeps what's already there" : "overwrites the clashing shifts"}
-              </span>
-            </div>
-          )}
-
-          <div className="mt-3 flex items-center gap-2">
-            <button onClick={applyCopy} disabled={copyBusy || copyRows.length === 0} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-              {copyBusy ? "Copying…" : `Apply ${copyRows.length} shift${copyRows.length === 1 ? "" : "s"}`}
-            </button>
-            <button onClick={() => { setCopyRows(null); setCopySource(null); }} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2">Cancel</button>
-          </div>
-        </Card>
-      )}
-
+      {/* Move tickets: every drop is undoable until you say otherwise. */}
       {moves.length > 0 && (
-        <div className="mise-pop mise-raised mb-3 overflow-hidden rounded-2xl border border-copper-400/30">
-          <div className="flex items-center gap-2.5 bg-gradient-to-r from-copper-500/15 via-copper-500/5 to-transparent px-4 py-2.5">
-            <span aria-hidden className="mise-moved-glow grid h-7 w-7 place-items-center rounded-full bg-copper-500/20 text-sm">✥</span>
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+        <div className="mise-card-inset mb-3 rounded-2xl px-3 py-2.5">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-fg">
               {moves.length === 1 ? "1 shift moved" : `${moves.length} shifts moved`}
-              <span className="ml-2 hidden text-[11px] font-normal text-fg-faint sm:inline">Ctrl+Z undoes the latest · stays until you decide</span>
+              <span className="ml-2 font-normal text-fg-faint">⌘Z undoes the last one</span>
             </p>
             <button
               type="button"
               onClick={() => setMoves([])}
-              className="mise-press shrink-0 rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+              className="mise-btn-flat mise-press min-h-[32px] px-3 text-xs font-semibold text-brand-300"
             >
               Keep all ✓
             </button>
           </div>
-          <div className="mise-noscrollbar flex gap-2 overflow-x-auto px-3 py-2.5">
+          <ul className="space-y-1">
             {moves.map((m) => (
-              <span key={m.newId} className="mise-well flex shrink-0 items-center gap-2 rounded-xl py-1.5 pl-3 pr-1.5 text-xs">
-                <span className="text-fg">
-                  <b>{m.name.split(" ")[0]}</b>{" "}
-                  <span className="text-fg-faint">
-                    {new Date(m.fromDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })} →{" "}
-                    {new Date(m.toDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" })}
-                  </span>
+              <li key={m.newId} className="flex items-center gap-2 text-[11px] text-fg-soft">
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-medium text-fg">{m.name}</span> {m.fromDate} → {m.toDate}
                 </span>
                 <button
                   type="button"
                   onClick={() => undoMove(m)}
-                  className="mise-press rounded-lg border border-line px-2 py-1 text-[11px] font-medium text-fg-soft hover:border-rose-400/40 hover:text-rose-300"
+                  className="mise-btn-flat mise-press min-h-[28px] shrink-0 px-2 text-[11px] text-fg-soft"
                 >
-                  ⌫
+                  Undo
                 </button>
-              </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
-      <div id="rota-legend" className="scroll-mt-24"><RotaLegend /></div>
 
-      {canWrite && moves.length === 0 && (
-        <p className="mb-1.5 text-[11px] text-fg-faint">
-          ✥ drag any shift card onto another day to move it — like a board ticket
-        </p>
-      )}
-      {/* A horizontal week strip: each day is at least 170px so the shift cards
-          never get crushed. Grab-and-drag (hand cursor) to scroll left/right. */}
-      <div
-        ref={stripRef}
-        onMouseDown={onStripDown}
-        onMouseMove={onStripMove}
-        onMouseUp={endStripDrag}
-        onMouseLeave={endStripDrag}
-        className="flex cursor-grab gap-3 overflow-x-auto pb-2 select-none active:cursor-grabbing"
-      >
+      {/* THE WEEK. Seven columns on a laptop, so the week ends on screen; seven
+          stacked bands on a phone, because 55px columns are not a rota. */}
+      <div className="grid gap-2 lg:grid-cols-7" data-testid="rota-week">
         {weekDates.map((d, i) => {
-          const shifts = byDay(d);
+          const dayShifts = byDay(d);
           const isToday = iso(d) === iso(new Date());
+          const onLeave = leaveByDay[iso(d)] ?? [];
           return (
-            <Card
+            <div
               key={i}
               onDragOver={(e: React.DragEvent) => {
                 if (!dragId) return;
@@ -772,38 +605,58 @@ export default function RotaPage() {
                 e.preventDefault();
                 moveShift(dragId, iso(d));
               }}
-              className={`min-w-[170px] flex-1 p-3 transition-all duration-150 ${isToday ? "ring-1 ring-brand-500/40" : ""} ${
-                dropDay === iso(d) ? "bg-brand-400/5 ring-2 ring-brand-400/60" : ""
-              }`}
+              data-testid="rota-day"
+              className={`mise-card-inset flex min-h-[7rem] flex-col rounded-2xl p-2 transition-all duration-150 ${
+                isToday ? "ring-1 ring-brand-500/40" : ""
+              } ${dropDay === iso(d) ? "bg-brand-400/5 ring-2 ring-brand-400/60" : ""}`}
             >
-              <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-fg">
-                <span>{DAYS[i]} <span className="text-fg-faint">{d.getDate()}/{d.getMonth() + 1}</span></span>
-                {shifts.length > 0 && <span className="text-[10px] font-normal text-fg-faint">{shifts.length}</span>}
-              </p>
-              {(leaveByDay[iso(d)] ?? []).length > 0 && (
-                <ul className="mb-2 space-y-1">
-                  {(leaveByDay[iso(d)] ?? []).map((lv) => (
+              <div className="mb-1.5 flex items-baseline justify-between gap-1">
+                <p className="text-xs font-semibold text-fg">
+                  {DAYS[i]}{" "}
+                  <span className="font-normal text-fg-faint">
+                    {d.getDate()}/{d.getMonth() + 1}
+                  </span>
+                </p>
+                {canWrite ? (
+                  <button
+                    type="button"
+                    onClick={() => openAdd(iso(d))}
+                    aria-label={`Add a shift on ${DAYS[i]}`}
+                    title="Add a shift on this day"
+                    className="mise-press grid h-6 w-6 shrink-0 place-items-center rounded-md text-fg-faint hover:bg-glass/10 hover:text-brand-300"
+                  >
+                    ＋
+                  </button>
+                ) : (
+                  dayShifts.length > 0 && (
+                    <span className="text-[10px] text-fg-faint">{dayShifts.length}</span>
+                  )
+                )}
+              </div>
+
+              {onLeave.length > 0 && (
+                <ul className="mb-1.5 space-y-1">
+                  {onLeave.map((lv) => (
                     <li
                       key={lv.name}
                       title={`${lv.name} is on approved ${lv.kind.toLowerCase()} leave — they cannot be rota'd`}
-                      className="flex items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-400/[0.08] px-2 py-1 text-[11px] text-sky-300"
+                      className="flex items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-400/[0.08] px-1.5 py-1 text-[10px] text-sky-300"
                     >
                       <span aria-hidden>🌴</span>
                       <span className="min-w-0 flex-1 truncate">{lv.name}</span>
-                      <span className="text-[9px] uppercase opacity-70">{lv.kind}</span>
                     </li>
                   ))}
                 </ul>
               )}
-              {shifts.length === 0 ? (
-                <p className="py-3 text-center text-xs text-fg-faint">—</p>
+
+              {dayShifts.length === 0 ? (
+                <p className="flex-1 py-2 text-center text-[11px] text-fg-faint">—</p>
               ) : (
-                <ul className="space-y-1.5">
-                  {shifts.map((s) => (
+                <ul className="space-y-1">
+                  {dayShifts.map((s) => (
                     <li
                       key={s.id}
                       draggable={canWrite}
-                      onMouseDown={(e) => e.stopPropagation()}
                       onDragStart={(e) => {
                         setDragId(s.id);
                         e.dataTransfer.setData("text/plain", s.id);
@@ -814,16 +667,18 @@ export default function RotaPage() {
                         setDropDay(null);
                       }}
                       title={canWrite ? "Drag onto another day to move this shift" : undefined}
-                      className={`mise-well mise-feel relative rounded-lg p-2 text-xs ${canWrite ? "cursor-grab active:cursor-grabbing" : ""} ${
-                        dragId === s.id ? "opacity-40 ring-1 ring-brand-400/50" : ""
-                      } ${movedIds.has(s.id) ? "mise-moved-glow" : ""}`}
+                      className={`mise-well relative rounded-lg p-1.5 text-[11px] ${
+                        canWrite ? "cursor-grab active:cursor-grabbing" : ""
+                      } ${dragId === s.id ? "opacity-40 ring-1 ring-brand-400/50" : ""} ${
+                        movedIds.has(s.id) ? "mise-moved-glow" : ""
+                      }`}
                     >
                       {movedIds.has(s.id) && (
-                        <span className="absolute -right-1.5 -top-1.5 rounded-full bg-copper-500 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
+                        <span className="absolute -right-1 -top-1 rounded-full bg-copper-500 px-1 py-0.5 text-[8px] font-bold text-white shadow">
                           moved
                         </span>
                       )}
-                      <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-start justify-between gap-1">
                         <button
                           type="button"
                           onClick={() => {
@@ -835,100 +690,359 @@ export default function RotaPage() {
                             setEEnd(s.end_time.slice(0, 5));
                             setEBreak(String(s.break_minutes ?? 0));
                           }}
-                          title={canWrite ? "Edit this shift" : undefined}
-                          className="flex min-w-0 items-center gap-1.5 text-left font-medium text-fg"
+                          data-testid="rota-shift"
+                          className="min-w-0 flex-1 text-left font-medium text-fg"
                         >
-                          <span className="truncate">{s.employee_name}</span>
-                          {canWrite && (
-                            <span className="mise-raised shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-semibold text-brand-400">
-                              ✏️ edit
-                            </span>
-                          )}
+                          <span className="block truncate">{s.employee_name}</span>
                         </button>
                         {canWrite && (
-                          <button onClick={() => removeShift(s.id)} aria-label="Remove shift" className="shrink-0 text-fg-faint hover:text-rose-300">✕</button>
+                          <button
+                            type="button"
+                            onClick={() => removeShift(s.id)}
+                            aria-label={`Remove ${s.employee_name}'s shift`}
+                            className="shrink-0 text-fg-faint hover:text-rose-300"
+                          >
+                            ✕
+                          </button>
                         )}
                       </div>
-                      <div className="mt-0.5 text-fg-soft">
+                      <div className="text-fg-soft">
                         {hhmm(s.start_time)}–{hhmm(s.end_time)}
-                        {s.break_minutes > 0 && <span className="text-fg-faint"> · {s.break_minutes}m brk</span>}
+                        {s.break_minutes > 0 && (
+                          <span className="text-fg-faint"> · {s.break_minutes}m</span>
+                        )}
                       </div>
-                      <div className="text-fg-faint">{s.hours}h · {format(s.cost)}</div>
+                      <div className="text-fg-faint">
+                        {s.hours}h · {format(s.cost)}
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
-            </Card>
+            </div>
           );
         })}
       </div>
 
-      {labour && labour.by_employee.length > 0 && (
-        <Card className="mise-feel mt-6">
-          <h3 id="labour-by-person" className="scroll-mt-24 font-semibold text-fg">Labour by person (this week)</h3>
-          <div className="mise-well mt-3 rounded-xl p-3">
-            <Bars
-              formatValue={(v) => format(String(v))}
-              items={[...labour.by_employee]
-                .sort((a, b) => parseFloat(b.cost) - parseFloat(a.cost))
-                .map((b) => ({
-                  label: `${b.employee_name} · ${b.hours}h`,
-                  value: parseFloat(b.cost) || 0,
-                  color: "#d97742",
-                }))}
-            />
-          </div>
-          <p className="mt-2 text-xs text-fg-faint">
-            Rates: each person&apos;s hourly rate (salaried estimated at monthly ÷ 173h). Labour % = cost ÷ net sales.
-          </p>
-        </Card>
+      {canWrite && (
+        <p className="mt-2 text-[11px] text-fg-faint">
+          Drag any shift onto another day to move it — ⌘Z puts it back.
+        </p>
       )}
 
-      {/* ✏️ shift editor — a proper centered modal (nothing clips, nothing hides) */}
+      <input
+        ref={importInput}
+        type="file"
+        accept=".xlsx,.csv"
+        className="hidden"
+        onChange={onImportRota}
+      />
+
+      {/* ── Add a shift, already knowing which day ──────────────────────── */}
+      {addOpen && (
+        <SheetPopup
+          onClose={() => setAddOpen(false)}
+          title="Add a shift"
+          subtitle={new Date(day + "T00:00:00").toLocaleDateString(undefined, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
+        >
+          <form
+            onSubmit={(e) => {
+              void addShift(e);
+            }}
+            className="space-y-3"
+          >
+            <label className="block text-[11px] text-fg-faint">
+              Who
+              <Select
+                value={emp}
+                onChange={setEmp}
+                options={[
+                  { value: "", label: "Choose…" },
+                  ...employees.map((e) => ({ value: e.id, label: e.full_name })),
+                ]}
+              />
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="block text-[11px] text-fg-faint">
+                Start
+                <input
+                  type="time"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                  data-testid="shift-start"
+                  className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                />
+              </label>
+              <label className="block text-[11px] text-fg-faint">
+                End
+                <input
+                  type="time"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                  data-testid="shift-end"
+                  className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                />
+              </label>
+              <label className="block text-[11px] text-fg-faint">
+                Break (min)
+                <input
+                  inputMode="numeric"
+                  value={brk}
+                  onChange={(e) => setBrk(numeric(e.target.value))}
+                  className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={busy}
+              data-tone="brand"
+              data-testid="shift-save"
+              className="mise-btn-flat mise-press min-h-[46px] w-full px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+            >
+              {busy ? "Adding…" : "Add shift"}
+            </button>
+          </form>
+        </SheetPopup>
+      )}
+
+      {/* ── the shift editor ────────────────────────────────────────────── */}
       {editId && (
         <SheetPopup
           onClose={() => setEditId(null)}
           title={editName}
-          subtitle={`✏️ edit shift · ${editDay}`}
-          footer={
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={eBusy || !eStart || !eEnd || eEnd <= eStart}
-                onClick={() => saveEdit(editId)}
-                className="mise-press flex-1 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
-              >
-                {eBusy ? "Saving…" : "Save changes ✓"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditId(null)}
-                className="mise-raised mise-press rounded-xl px-4 py-3 text-sm text-fg-soft"
-              >
-                Cancel
-              </button>
-            </div>
-          }
+          subtitle={new Date(editDay + "T00:00:00").toLocaleDateString(undefined, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
         >
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="text-xs font-medium text-fg-faint">Starts</span>
-                <input type="time" value={eStart} onChange={(e) => setEStart(e.target.value)} className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-base text-fg outline-none" />
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <label className="block text-[11px] text-fg-faint">
+                Start
+                <input
+                  type="time"
+                  value={eStart}
+                  onChange={(e) => setEStart(e.target.value)}
+                  data-testid="edit-start"
+                  className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                />
               </label>
-              <label className="block">
-                <span className="text-xs font-medium text-fg-faint">Ends</span>
-                <input type="time" value={eEnd} onChange={(e) => setEEnd(e.target.value)} className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-base text-fg outline-none" />
+              <label className="block text-[11px] text-fg-faint">
+                End
+                <input
+                  type="time"
+                  value={eEnd}
+                  onChange={(e) => setEEnd(e.target.value)}
+                  className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                />
+              </label>
+              <label className="block text-[11px] text-fg-faint">
+                Break (min)
+                <input
+                  inputMode="numeric"
+                  value={eBreak}
+                  onChange={(e) => setEBreak(numeric(e.target.value))}
+                  className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                />
               </label>
             </div>
-            <label className="mt-3 flex items-center gap-2 text-sm text-fg-soft">
-              Break
-              <input value={eBreak} onChange={(e) => setEBreak(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" className="mise-well w-20 rounded-xl px-3 py-2 text-center text-fg outline-none" aria-label="Break minutes" />
-              minutes
-            </label>
-            {eEnd && eStart && eEnd <= eStart && (
-              <p className="mt-2 rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-400">end must be after start</p>
+            <button
+              type="button"
+              onClick={() => void saveEdit(editId)}
+              disabled={eBusy}
+              data-tone="brand"
+              data-testid="edit-shift-save"
+              className="mise-btn-flat mise-press min-h-[46px] w-full px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+            >
+              {eBusy ? "Saving…" : "Save shift"}
+            </button>
+          </div>
+        </SheetPopup>
+      )}
+
+      {/* ── leave ───────────────────────────────────────────────────────── */}
+      {sheet === "leave" && (
+        <SheetPopup
+          onClose={() => setSheet(null)}
+          title="Leave"
+          subtitle="The rota refuses to schedule anyone on approved leave, and says until when."
+          columns={2}
+        >
+          <LeavePanel
+            employees={employees}
+            canWrite={canWrite}
+            onChanged={() => {
+              reload().catch(() => {});
+            }}
+          />
+        </SheetPopup>
+      )}
+
+      {/* ── copy a week across ──────────────────────────────────────────── */}
+      {sheet === "copy" && (
+        <SheetPopup
+          onClose={() => {
+            setSheet(null);
+            setCopyRows(null);
+            setCopySource(null);
+          }}
+          title="Copy a week across"
+          subtitle="Edit anything before it lands — nothing is written until you apply."
+          columns={3}
+        >
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => stepCopySource(-1)}
+                className="mise-btn-flat mise-press min-h-[36px] px-3 text-sm"
+              >
+                ‹ earlier
+              </button>
+              <span className="text-sm font-semibold text-fg">
+                {copySource
+                  ? `week of ${copySource.toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                    })}`
+                  : "…"}
+              </span>
+              <button
+                type="button"
+                onClick={() => stepCopySource(1)}
+                disabled={!canStepLater}
+                className="mise-btn-flat mise-press min-h-[36px] px-3 text-sm disabled:opacity-40"
+              >
+                later ›
+              </button>
+            </div>
+
+            {copyRows === null ? (
+              <p className="py-6 text-center text-sm text-fg-faint">Loading that week…</p>
+            ) : copyRows.length === 0 ? (
+              <p className="py-6 text-center text-sm text-fg-faint">
+                Nothing was scheduled that week.
+              </p>
+            ) : (
+              <>
+                {copyClashes > 0 && (
+                  <div className="mise-well rounded-xl px-3 py-2">
+                    <p className="text-[11px] text-fg-soft">
+                      {copyClashes} of these clash with a shift already on this week.
+                    </p>
+                    <div className="mt-1.5 flex gap-2">
+                      {(["skip", "replace"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setCopyConflict(mode)}
+                          className={`mise-press min-h-[32px] rounded-lg px-3 text-[11px] font-semibold ${
+                            copyConflict === mode
+                              ? "bg-brand-600 text-white"
+                              : "text-fg-soft hover:text-fg"
+                          }`}
+                        >
+                          {mode === "skip" ? "Leave those alone" : "Replace them"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+                  {copyRows.map((r, i) => (
+                    <div
+                      key={`${r.employee_id}-${i}`}
+                      className="mise-well flex flex-wrap items-center gap-1.5 rounded-lg px-2 py-1.5"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg">
+                        {r.employee_name}
+                      </span>
+                      <input
+                        type="date"
+                        value={r.date}
+                        onChange={(e) => updateCopyRow(i, { date: e.target.value })}
+                        className="mise-well min-h-[34px] rounded-md px-1.5 text-[11px] outline-none"
+                      />
+                      <input
+                        type="time"
+                        value={r.start_time}
+                        onChange={(e) => updateCopyRow(i, { start_time: e.target.value })}
+                        className="mise-well min-h-[34px] rounded-md px-1.5 text-[11px] outline-none"
+                      />
+                      <input
+                        type="time"
+                        value={r.end_time}
+                        onChange={(e) => updateCopyRow(i, { end_time: e.target.value })}
+                        className="mise-well min-h-[34px] rounded-md px-1.5 text-[11px] outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCopyRows((rows) => rows && rows.filter((_, k) => k !== i))}
+                        aria-label="Drop this one"
+                        className="shrink-0 text-fg-faint hover:text-rose-300"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void applyCopy()}
+                  disabled={copyBusy}
+                  data-tone="brand"
+                  data-testid="copy-apply"
+                  className="mise-btn-flat mise-press min-h-[46px] w-full px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+                >
+                  {copyBusy ? "Copying…" : `Copy ${copyRows.length} onto this week`}
+                </button>
+              </>
             )}
-            <p className="mt-3 text-center text-[10px] text-fg-faint">hours &amp; cost recompute automatically on save</p>
+          </div>
+        </SheetPopup>
+      )}
+
+      {/* ── labour by person ────────────────────────────────────────────── */}
+      {sheet === "labour" && (
+        <SheetPopup
+          onClose={() => setSheet(null)}
+          title="Labour by person"
+          subtitle="This week, scheduled"
+          columns={2}
+        >
+          {labour && labour.by_employee.length > 0 ? (
+            <Bars
+              items={labour.by_employee.map((b) => ({
+                label: b.employee_name,
+                value: parseFloat(b.cost),
+              }))}
+              formatValue={(v) => format(v)}
+            />
+          ) : (
+            <p className="py-6 text-center text-sm text-fg-faint">
+              Nothing scheduled this week yet.
+            </p>
+          )}
+        </SheetPopup>
+      )}
+
+      {/* ── legend ──────────────────────────────────────────────────────── */}
+      {sheet === "legend" && (
+        <SheetPopup
+          onClose={() => setSheet(null)}
+          title="What you are looking at"
+          subtitle="Rota and Attendance are the same fact seen twice."
+          columns={2}
+        >
+          <RotaLegend />
         </SheetPopup>
       )}
     </div>
