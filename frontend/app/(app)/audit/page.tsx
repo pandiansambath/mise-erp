@@ -86,21 +86,22 @@ export default function AuditPage() {
         subtitle="Who changed what — price changes, chosen suppliers, received POs and waste. Newest first."
       />
 
-      <RangeControls
-        range={{ from, to }}
-        onChange={(r) => {
-          setFrom(r.from);
-          setTo(r.to);
-          remember("audit", r);
-        }}
-        className="mb-2"
-      />
-      <p className="mb-5 text-sm text-fg-faint">
-        Events from <b className="text-fg-soft">{rangeCaption({ from, to })}</b>.
-      </p>
-
-      <div className="mb-4 flex flex-wrap items-center gap-4">
-        <div className="mise-well flex max-w-sm flex-1 items-center gap-2 rounded-xl px-3.5 py-2">
+      {/* ONE ROW, NOT FOUR BLOCKS.
+          A range control, then a sentence repeating the range the control
+          already shows, then a search box, then a sparkline — four stacked
+          bands before the first event, on a page that exists to show events.
+          They are all controls for the same list, so they sit on one line and
+          the log starts where the eye lands. */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <RangeControls
+          range={{ from, to }}
+          onChange={(r) => {
+            setFrom(r.from);
+            setTo(r.to);
+            remember("audit", r);
+          }}
+        />
+        <div className="mise-well flex min-w-[14rem] max-w-sm flex-1 items-center gap-2 rounded-xl px-3.5 py-2">
           <span aria-hidden className="text-fg-faint">⌕</span>
           <input
             value={q}
@@ -109,8 +110,12 @@ export default function AuditPage() {
             className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-faint"
           />
         </div>
+        <span className="text-[11px] text-fg-faint">
+          {filtered.length} event{filtered.length === 1 ? "" : "s"} ·{" "}
+          {rangeCaption({ from, to }).toLowerCase()}
+        </span>
         {pulse.out.some((n) => n > 0) && (
-          <div className="mise-well mise-feel flex items-center gap-3 rounded-xl px-4 py-2">
+          <div className="mise-well mise-feel ml-auto flex items-center gap-3 rounded-xl px-4 py-2">
             <Sparkline data={pulse.out} labels={pulse.labels} formatValue={(v) => `${v} action${v === 1 ? "" : "s"}`} height={28} />
             <span className="text-[11px] text-fg-faint">activity · 14d</span>
           </div>

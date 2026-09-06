@@ -106,6 +106,10 @@ export default function PlanPage() {
   // AI first — it's the metered one, so it's what people actually wonder about
   const rows = showAll ? features : features.filter((f) => f.is_ai || !f.core);
 
+  /** Which question you are asking. Three stacked blocks meant scrolling past
+   *  two of them to reach the third, and only one is ever the question. */
+  const [tab, setTab] = useState<"tiers" | "included">("tiers");
+
   return (
     <div className="max-w-5xl">
       <PageHeader
@@ -171,8 +175,33 @@ export default function PlanPage() {
         </Card>
       )}
 
-      {/* the tiers */}
-      <div className="mb-6 grid gap-4 lg:grid-cols-3">
+      {/* TWO QUESTIONS, ONE AT A TIME. Where you stand stays above — it is what
+          you came for. What you could move to, and what each tier actually
+          includes, are separate questions and now separate tabs. */}
+      <div role="tablist" className="mise-card-inset mb-4 flex gap-1 p-1.5">
+        {([
+          ["tiers", "Compare plans"],
+          ["included", "What's included"],
+        ] as const).map(([key, label]) => {
+          const on = tab === key;
+          return (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(key)}
+              className={`mise-press min-h-[44px] flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                on ? "bg-brand-600 text-white shadow-sm" : "text-fg-soft hover:text-fg"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "tiers" && (
+      <div className="mise-fade-in mb-6 grid gap-4 lg:grid-cols-3">
         {plans.map((p) => {
           const mine = current?.key === p.key;
           return (
@@ -221,9 +250,10 @@ export default function PlanPage() {
           );
         })}
       </div>
+      )}
 
-      {/* the honest table */}
-      <Card className="mise-feel">
+      {tab === "included" && (
+      <Card className="mise-feel mise-fade-in">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold text-fg">What each plan includes</h3>
           <button
@@ -276,6 +306,7 @@ export default function PlanPage() {
           </table>
         </div>
       </Card>
+      )}
     </div>
   );
 }

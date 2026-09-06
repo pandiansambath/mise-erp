@@ -271,7 +271,9 @@ export default function MySpacePage() {
     { key: "attendance", label: "Attendance", icon: "⏱" },
     { key: "rota", label: "Rota", icon: "📅", count: shifts.length || undefined },
     { key: "payslips", label: "Payslips", icon: "💷", count: payslips.length || undefined },
-    { key: "documents", label: "Documents", icon: "📄", count: docs.length || undefined },
+    // The badge means "things needing your attention", not "files on record" —
+    // a request you have not sent is the thing worth a number.
+    { key: "documents", label: "Documents", icon: "📄", count: (docs.length + pendingReqs.length) || undefined },
   ];
 
   return (
@@ -337,61 +339,6 @@ export default function MySpacePage() {
           </span>
         </div>
       </Card>
-
-      {/* SOMETHING IS ASKED OF YOU. Above the tabs on purpose: it is the only
-          thing on this page with a deadline, and it disappears when done. */}
-      {pendingReqs.length > 0 && (
-        <Card className="mt-4 border-amber-400/30 bg-amber-400/[0.06]">
-          <h2 className="font-semibold text-fg">
-            <span aria-hidden className="mr-1.5">📋</span>
-            {toUpload > 0
-              ? `${toUpload} document${toUpload === 1 ? "" : "s"} to send`
-              : "Waiting on your manager"}
-          </h2>
-          <ul className="mt-3 space-y-2">
-            {pendingReqs.map((r) => (
-              <li
-                key={r.id}
-                className="mise-card-inset flex flex-wrap items-center gap-3 px-4 py-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-fg">{r.title}</p>
-                  <p className="truncate text-xs text-fg-faint">
-                    {r.doc_type.replace(/_/g, " ").toLowerCase()}
-                  </p>
-                </div>
-                {r.status === "UPLOADED" ? (
-                  <div className="flex items-center gap-2">
-                    <Badge tone="amber">awaiting approval</Badge>
-                    {r.document_id && (
-                      <button
-                        onClick={() =>
-                          downloadFile(
-                            `/me/documents/${r.document_id}/download`,
-                            docName(emp.full_name, r.doc_type),
-                          )
-                        }
-                        className="mise-btn-flat mise-press min-h-[36px] px-3 py-1.5 text-xs text-fg-soft"
-                      >
-                        View
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => pickFile(r.id)}
-                    data-tone="brand"
-                    className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
-                  >
-                    Upload
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {uploadMsg && <p className="mt-2 text-xs text-brand-300">{uploadMsg}</p>}
-        </Card>
-      )}
 
       {/* FOUR THINGS, ONE AT A TIME.
           A real switch, not a scroll-to. It is what gives each section the FULL
@@ -596,13 +543,79 @@ export default function MySpacePage() {
       {/* ── DOCUMENTS ───────────────────────────────────────────────────── */}
       {tab === "documents" && (
         <Card className="mise-fade-in mt-4 p-0">
+          {/* WHAT IS ASKED OF YOU, FIRST.
+              This used to sit in its own banner above the tabs while the tab
+              underneath said "Nothing shared with you yet" — two panels telling
+              one story, and the empty half implying nothing was happening at
+              the exact moment something was being asked. Requests have a
+              deadline and an action, so they lead; files you have been given
+              follow. */}
+          {pendingReqs.length > 0 && (
+            <div className="border-b border-line/60 px-5 py-4">
+              <h2 className="font-semibold text-fg">
+                {toUpload > 0
+                  ? `${toUpload} document${toUpload === 1 ? "" : "s"} your manager has asked for`
+                  : "Waiting on your manager"}
+              </h2>
+              <ul className="mt-3 space-y-2">
+                {pendingReqs.map((r) => (
+                  <li
+                    key={r.id}
+                    className="mise-card-inset flex flex-wrap items-center gap-3 border-amber-400/25 px-4 py-3"
+                  >
+                    <span aria-hidden className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base">
+                      📋
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-fg">{r.title}</p>
+                      <p className="truncate text-[11px] text-fg-faint">
+                        {r.doc_type.replace(/_/g, " ").toLowerCase()}
+                      </p>
+                    </div>
+                    {r.status === "UPLOADED" ? (
+                      <div className="flex items-center gap-2">
+                        <Badge tone="amber">awaiting approval</Badge>
+                        {r.document_id && (
+                          <button
+                            onClick={() =>
+                              downloadFile(
+                                `/me/documents/${r.document_id}/download`,
+                                docName(emp.full_name, r.doc_type),
+                              )
+                            }
+                            className="mise-btn-flat mise-press min-h-[36px] px-3 py-1.5 text-xs text-fg-soft"
+                          >
+                            View
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => pickFile(r.id)}
+                        data-tone="brand"
+                        className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
+                      >
+                        Upload
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {uploadMsg && <p className="mt-2 text-xs text-brand-300">{uploadMsg}</p>}
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-            <h2 className="mr-auto font-semibold text-fg">My documents</h2>
-            <span className="text-[11px] text-fg-faint">shared with you by your manager</span>
+            <h2 className="mr-auto font-semibold text-fg">Shared with you</h2>
+            <span className="text-[11px] text-fg-faint">files your manager has given you</span>
           </div>
 
           {docs.length === 0 ? (
-            <Empty icon="📄">Nothing shared with you yet.</Empty>
+            <Empty icon="📄">
+              {pendingReqs.length > 0
+                ? "Nothing shared with you yet — the requests above are what needs doing."
+                : "Nothing shared with you yet."}
+            </Empty>
           ) : (
             <div className="grid gap-2.5 px-5 pb-5 sm:grid-cols-2">
               {docs.map((d) => {

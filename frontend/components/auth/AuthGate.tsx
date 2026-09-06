@@ -228,7 +228,7 @@ function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }
         <label htmlFor={pwId} className={authLabel}>Password</label>
         <PasswordInput
           id={pwId}
-          data-testid="login-password"
+          testId="login-password"
           value={password}
           onChange={setPassword}
           onFocusChange={chef.setPwFocus}

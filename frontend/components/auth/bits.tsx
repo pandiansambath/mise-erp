@@ -33,6 +33,7 @@ export function AuthBackdrop({ still = "table" }: { still?: string }) {
 /** Password field with show/hide and a caps-lock warning. */
 export function PasswordInput({
   id,
+  testId,
   value,
   onChange,
   autoComplete = "current-password",
@@ -42,6 +43,11 @@ export function PasswordInput({
   onShowChange,
 }: {
   id: string;
+  /** A stable hook for tests. The id is generated per form instance now (three
+   *  LoginForms can be mounted at once), so a test cannot key on it — and a
+   *  data-testid passed to this component was being silently dropped, because
+   *  it did not accept one. */
+  testId?: string;
   value: string;
   onChange: (v: string) => void;
   autoComplete?: string;
@@ -59,6 +65,7 @@ export function PasswordInput({
       <div className="relative">
         <input
           id={id}
+          data-testid={testId}
           type={show ? "text" : "password"}
           autoComplete={autoComplete}
           value={value}
