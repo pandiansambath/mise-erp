@@ -203,6 +203,37 @@ export async function postForm<T>(path: string, form: FormData): Promise<T> {
   return body as T;
 }
 
+/** Cached blob: URLs, keyed by API path.
+ *
+ *  The chat re-polls its room every few seconds. Without this cache every
+ *  picture in the room would be refetched, and visibly flicker, on every poll.
+ */
+const blobUrls = new Map<string, string>();
+
+/** Fetch a protected file and hand back a blob: URL that <img>/<video> can use.
+ *
+ *  An `<img src>` cannot carry an Authorization header, and our token lives in
+ *  localStorage rather than a cookie — so a private image referenced by its API
+ *  path renders as a broken icon however correct the endpoint is. Fetching it
+ *  ourselves and pointing the tag at the blob is the only way to SHOW a file the
+ *  server is right to protect.
+ *
+ *  `path` is an absolute API path exactly as the server returned it (it already
+ *  begins with /api), so only the origin is prepended.
+ */
+export async function fetchBlobUrl(path: string): Promise<string> {
+  const hit = blobUrls.get(path);
+  if (hit) return hit;
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new ApiError(res.status, "Could not load that file");
+  const url = URL.createObjectURL(await res.blob());
+  blobUrls.set(path, url);
+  return url;
+}
+
 /** Fetch a file (with auth) and trigger a browser download. */
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const token = getToken();
