@@ -290,3 +290,127 @@ async def test_the_tablet_by_the_door_is_not_in_the_staff_room(client, make_user
 
     people = await client.get("/api/chat/people", headers=auth_header(owner))
     assert all(p["email"] != "tablet@nirai.com" for p in people.json())
+
+
+@pytest.mark.asyncio
+async def test_anyone_can_message_anyone_one_to_one(client, make_user, auth_header):
+    """"one to one within the hotel — like any staff can chat with anyone, like
+    organisation in teams". The thread used to live at the bottom of an employee
+    record on an admin page, so a cashier or a chef — who cannot open employee
+    records — had no way to message a soul."""
+    chef = await make_user("dm-chef@nirai.com", Role.KITCHEN_MANAGER.value)
+    cashier = await make_user("dm-cashier@nirai.com", Role.CASHIER.value)
+
+    # Neither administers logins, and both can still find each other.
+    people = await client.get("/api/chat/people", headers=auth_header(chef))
+    assert people.status_code == 200
+    assert any(p["id"] == str(cashier.id) for p in people.json())
+    # ...but the address book stays shut: a name and a job is what you need.
+    assert all(p["email"] == "" for p in people.json())
+    # And you are not offered yourself.
+    assert all(p["id"] != str(chef.id) for p in people.json())
+
+    opened = await client.post(
+        "/api/chat/direct", headers=auth_header(chef), json={"user_id": str(cashier.id)}
+    )
+    assert opened.status_code == 200, opened.text
+    rid = opened.json()["id"]
+
+    said = await client.post(
+        f"/api/chat/rooms/{rid}/messages",
+        headers=auth_header(chef),
+        json={"body": "can you take the till at six?"},
+    )
+    assert said.status_code == 200, said.text
+
+    # The other end sees the same conversation...
+    seen = await client.get(f"/api/chat/rooms/{rid}/messages", headers=auth_header(cashier))
+    assert seen.status_code == 200
+    assert "can you take the till at six?" in [m["body"] for m in seen.json()]
+
+    # ...and nobody else does, however senior.
+    owner = await make_user("dm-owner@nirai.com", Role.SUPER_ADMIN.value)
+    assert (
+        await client.get(f"/api/chat/rooms/{rid}/messages", headers=auth_header(owner))
+    ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_one_conversation_per_pair_whichever_way_round(client, make_user, auth_header):
+    """A→B and B→A are the same thread. Two rooms would each hold half the
+    history and neither would look wrong."""
+    a = await make_user("pair-a@nirai.com", Role.MANAGER.value)
+    b = await make_user("pair-b@nirai.com", Role.STAFF.value)
+
+    first = await client.post(
+        "/api/chat/direct", headers=auth_header(a), json={"user_id": str(b.id)}
+    )
+    second = await client.post(
+        "/api/chat/direct", headers=auth_header(b), json={"user_id": str(a.id)}
+    )
+    assert first.status_code == 200 and second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+
+    # It wears the OTHER person's name, so each of them sees who they are talking to.
+    assert first.json()["name"] != second.json()["name"]
+
+
+@pytest.mark.asyncio
+async def test_a_direct_room_refuses_the_things_it_is_not(client, make_user, auth_header):
+    owner = await make_user("dm-solo@nirai.com", Role.SUPER_ADMIN.value)
+    mate = await make_user("dm-mate@nirai.com", Role.STAFF.value)
+
+    alone = await client.post(
+        "/api/chat/direct", headers=auth_header(owner), json={"user_id": str(owner.id)}
+    )
+    assert alone.status_code == 400
+
+    rid = (
+        await client.post(
+            "/api/chat/direct", headers=auth_header(owner), json={"user_id": str(mate.id)}
+        )
+    ).json()["id"]
+    # Its membership is not a list anyone edits — it is the two of them.
+    assert (
+        await client.put(
+            f"/api/chat/rooms/{rid}/members",
+            headers=auth_header(owner),
+            json={"member_ids": []},
+        )
+    ).status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_an_empty_conversation_does_not_clutter_the_list(client, make_user, auth_header):
+    """Opening the picker and changing your mind should not leave a room behind
+    in everybody's sidebar for ever."""
+    a = await make_user("quiet-a@nirai.com", Role.SUPER_ADMIN.value)
+    b = await make_user("quiet-b@nirai.com", Role.STAFF.value)
+
+    await client.post("/api/chat/direct", headers=auth_header(a), json={"user_id": str(b.id)})
+    listed = await client.get("/api/chat/rooms", headers=auth_header(a))
+    assert all(r["kind"] != "direct" for r in listed.json())
+
+
+@pytest.mark.asyncio
+async def test_a_document_may_be_sent_now(client, make_user, auth_header):
+    """"emoji gif video audio image doc etc, anything we can send via chat" —
+    a rota PDF is a normal thing to hand a colleague."""
+    owner = await make_user("doc-owner@nirai.com", Role.SUPER_ADMIN.value)
+    room = (await _rooms(client, auth_header, owner))[RoomKind.EVERYONE]
+
+    sent = await client.post(
+        f"/api/chat/rooms/{room['id']}/attachment",
+        headers=auth_header(owner),
+        files={"file": ("rota.pdf", io.BytesIO(b"%PDF-1.4 rota"), "application/pdf")},
+    )
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["attachment_name"] == "rota.pdf"
+
+    # An executable is still not a document.
+    refused = await client.post(
+        f"/api/chat/rooms/{room['id']}/attachment",
+        headers=auth_header(owner),
+        files={"file": ("run.exe", io.BytesIO(b"MZ"), "application/x-msdownload")},
+    )
+    assert refused.status_code == 400

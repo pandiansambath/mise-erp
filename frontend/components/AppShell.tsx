@@ -42,10 +42,14 @@ const NAV: NavItem[] = [
   // endpoint resolves the employee from the token and can only ever return that
   // person's own rows.
   { href: "/my", label: "My Space", icon: "🙋", hideIfPerm: "attendance:read", group: "Overview", keywords: "self service my attendance rota shifts documents payslip" },
-  // Team chat is the one page with NO permission on it. "all (literally all) in that
-  // chat" — a kitchen porter with no read rights anywhere still belongs in the
-  // hotel's Everyone room, and the room list itself decides what they can open.
-  { href: "/chat", label: "Team chat", icon: "🗣️", group: "Overview", keywords: "chat group message team everyone managers whatsapp emoji photo video gif" },
+  // Messages carries NO permission. "all (literally all) in that chat" — a
+  // kitchen porter with no read rights anywhere still belongs in the hotel's
+  // Everyone room, and the conversation list itself decides what opens.
+  //
+  // ONE entry, not two. Talking to your team and talking to another restaurant
+  // were separate pages in separate nav groups, and the one-to-one thread was
+  // on an admin screen. They are one activity and now one page.
+  { href: "/chat", label: "Messages", icon: "💬", group: "Overview", keywords: "chat message team everyone managers groups direct one to one whatsapp emoji photo video gif document hotels lending talent" },
   { href: "/how-it-works", label: "How it works", icon: "📘", group: "Overview", keywords: "help guide formulas" },
   { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read", feature: "reports", group: "Money", keywords: "profit loss pnl food cost" },
   { href: "/money", label: "Money", icon: "💰", perm: "reports:read", group: "Money", keywords: "cash in out" },
@@ -72,7 +76,6 @@ const NAV: NavItem[] = [
   { href: "/attendance", label: "Attendance", icon: "🕒", perm: "attendance:read", feature: "attendance", group: "People", keywords: "punch clock present" },
   { href: "/rota", label: "Rota", icon: "🗓️", perm: "employees:read", feature: "rota", group: "People", keywords: "shifts schedule week" },
   { href: "/hiring", label: "Hiring", icon: "🧑‍💼", perm: "employees:read", feature: "employees", group: "People", keywords: "jobs vacancy recruit applicants careers board" },
-  { href: "/messages", label: "Messages", icon: "💬", perm: "employees:read", group: "People", keywords: "chat hotels staff lending talent whatsapp" },
   { href: "/staff", label: "Roles & Access", icon: "🔑", perm: "users:read", group: "People", keywords: "staff users accounts roles login access permissions who can sign in" },
   { href: "/plan", label: "Your plan", icon: "💳", perm: "settings:write", group: "Admin", keywords: "plan pricing subscription upgrade billing tier features ai allowance" },
   { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents", group: "Admin", keywords: "files certificates" },

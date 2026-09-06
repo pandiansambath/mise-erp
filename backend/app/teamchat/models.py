@@ -31,6 +31,9 @@ class RoomKind:
     EVERYONE = "everyone"
     MANAGERS = "managers"
     CUSTOM = "custom"
+    #: One person and one other person. Membership is a LIST like a custom
+    #: group — it is simply a list of two — so `can_see` needs no new branch.
+    DIRECT = "direct"
 
 
 class ChatRoom(Base):
@@ -54,6 +57,14 @@ class ChatRoom(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    #: For DIRECT rooms only: the two user ids, sorted, joined by a colon.
+    #:
+    #: Two people opening each other at the same moment must land in the SAME
+    #: conversation, and "did a room already exist between these two" has to be
+    #: one indexed lookup rather than a scan of every room's membership. Sorting
+    #: makes it symmetrical: A→B and B→A produce the same key, so there is no
+    #: such thing as "his copy" and "her copy" of the thread.
+    dm_key: Mapped[str | None] = mapped_column(String(80), index=True)
 
 
 class ChatRoomMember(Base):

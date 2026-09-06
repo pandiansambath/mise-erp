@@ -1,50 +1,64 @@
 "use client";
 
-// TEAM CHAT — the hotel talking to itself.
+// MESSAGES — every conversation this hotel has, in one place.
 //
-//   "inside hotel a grp chat i need... all in that chat they can message, send
-//    gif, emojis, pic, video etc, anything they can send and its persistent,
-//    literally like a whatsapp... another side, we need a grp chat for super
-//    admin + manager roles alone... also i need one customisable grp creation
-//    feature like superadmin can decide to create a grp and add members
-//    whichever he wish."
+//   "here itself integrate all message related for super admin — like hotel to
+//    hotel in one side, within hotel one on one or grp or anything is other
+//    side. but we need a best whatsapp style UI UX with emoji gif video audio
+//    image doc etc, anything we can send via chat."
 //
-// SHAPE: two panes on a laptop — rooms beside the conversation, the way every
-// chat app on a big screen works — and ONE pane at a time on a phone, because
-// 390px cannot hold both and splitting it gives you two things too narrow to
-// use. On a phone the list is the screen; tapping a room replaces it, and Back
-// returns. That is the same gesture people already have in their thumbs.
+//   "one to one within the hotel — like any staff can chat with anyone, like
+//    organisation in teams"
 //
-// The window never scrolls: the shell is a fixed-height column and only the
-// message list moves. "i hate scrolling" applies doubly to a chat, where the
-// composer must never wander off the bottom.
+// THREE THINGS WERE WRONG AND THEY WERE THE SAME THING.
+//
+// Talking to another restaurant lived on /messages. Talking to your own team
+// lived on /chat. Talking to ONE colleague lived at the bottom of their record
+// on the Employees admin page — "seriously worst place to keep" — which also
+// meant a chef or a cashier, who cannot open employee records, had no way to
+// message anybody at all. Three screens, three shapes, one activity.
+//
+// So there is one screen, and the only thing that changes is who you are
+// talking to. Inside the hotel: Everyone, Managers, the groups the owner makes,
+// and any colleague by name. Outside it: the other restaurants on the network.
+// The composer, the bubbles, the attachments and the unread counts are the same
+// in all of them, because a message is a message.
+//
+// On a laptop the list sits beside the conversation. On a phone the list IS the
+// screen and opening one replaces it — 390px split two ways gives you two
+// things too narrow to use.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { api, ApiError, fetchBlobUrl, postForm } from "@/lib/api";
-import { refreshChatUnread } from "@/lib/chatUnread";
-import { Card, PageHeader } from "@/components/ui";
+import { PersonPicker } from "@/components/PersonPicker";
 import { SheetPopup } from "@/components/SheetPopup";
+import { Card, PageHeader } from "@/components/ui";
+import { api, ApiError, fetchBlobUrl, postForm } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { refreshChatUnread } from "@/lib/chatUnread";
 import { can } from "@/lib/permissions";
+
+type Scope = "hotel" | "network";
 
 type Room = {
   id: string;
-  kind: "everyone" | "managers" | "custom";
+  kind: "everyone" | "managers" | "custom" | "direct";
   name: string;
   emoji?: string | null;
   unread: number;
   last_message_at?: string | null;
   preview?: string | null;
   last_sender?: string | null;
+  scope: Scope;
 };
 
-type Msg = {
+type Bubble = {
   id: string;
   body: string | null;
-  sender_user_id: string | null;
+  mine: boolean;
   sender_name: string;
   created_at: string;
+  /** An API path, already absolute. Fetched with the token, never linked raw. */
   attachment_url: string | null;
   attachment_name: string | null;
   attachment_type: string | null;
@@ -52,84 +66,182 @@ type Msg = {
 
 type Person = { id: string; name: string; email: string; role: string };
 
-/** A small, fast emoji set. Deliberately not a 1,800-emoji library: this is a
- *  staff room, and the ones people actually reach for fit on two rows. */
-/** What a group can be called by, at a glance. Deliberately the things a
- *  restaurant actually organises itself around. */
-const ROOM_ICONS = ["💬", "🍽️", "🍳", "📦", "🚚", "🧹", "💷", "📣", "🎉", "⚠️"];
-
+/** A small, fast set. Deliberately not a 1,800-emoji library: this is a staff
+ *  room, and the ones people actually reach for fit on three rows. */
 const EMOJI = [
   "👍", "👌", "🙏", "🔥", "🎉", "😀", "😂", "🙂", "😉", "😍",
   "😅", "😴", "🤝", "💪", "👀", "✅", "❌", "⏰", "📣", "❤️",
   "🍽️", "🍳", "🥗", "🧾", "📦", "🚚", "💷", "⚠️", "🧹", "☕",
 ];
 
-export default function TeamChatPage() {
+/** What the file picker offers. Pictures and video were the original set; he
+ *  asked for documents and audio too, and he is right about the workflow — a
+ *  rota PDF or a supplier invoice is a normal thing to hand a colleague. An
+ *  animated GIF is just an image file, so it needs nothing special. */
+const ACCEPT =
+  "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.odt,.ods,.rtf";
+
+const ROOM_ICONS = ["💬", "🍽️", "🍳", "📦", "🚚", "🧹", "💷", "📣", "🎉", "⚠️"];
+
+export default function MessagesPage() {
   const { user } = useAuth();
   const canManage = can(user?.role, "users:write");
+  // Talking to other restaurants is a different job from talking to your team,
+  // and not everyone who works here does it.
+  const canNetwork = can(user?.role, "employees:read");
 
+  const [scope, setScope] = useState<Scope>("hotel");
   const [rooms, setRooms] = useState<Room[] | null>(null);
+  const [talk, setTalk] = useState<Room[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [msgs, setMsgs] = useState<Msg[] | null>(null);
+  const [msgs, setMsgs] = useState<Bubble[] | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
-  const [makeOpen, setMakeOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sheet, setSheet] = useState<null | "group" | "person" | "settings">(null);
 
   const listRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const room = rooms?.find((r) => r.id === openId) ?? null;
+  const shown = scope === "hotel" ? rooms : talk;
+  const room = (shown ?? []).find((r) => r.id === openId) ?? null;
 
   const loadRooms = useCallback(async () => {
     try {
-      setRooms(await api.get<Room[]>("/chat/rooms"));
+      const rs = await api.get<Omit<Room, "scope">[]>("/chat/rooms");
+      setRooms(rs.map((r) => ({ ...r, scope: "hotel" as const })));
     } catch {
       setRooms((r) => r ?? []);
     }
   }, []);
 
-  const loadMsgs = useCallback(async (id: string) => {
-    try {
-      setMsgs(await api.get<Msg[]>(`/chat/rooms/${id}/messages`));
-      // Reading a room marks it seen server-side, so the nav badge is stale the
-      // instant this returns. Dropping it here beats leaving it lit for another
-      // half minute after the user has plainly read the message.
-      refreshChatUnread();
-    } catch {
-      setMsgs((m) => m ?? []);
+  const loadTalk = useCallback(async () => {
+    if (!canNetwork) {
+      setTalk([]);
+      return;
     }
-  }, []);
+    try {
+      const cs = await api.get<
+        {
+          chat_id: string;
+          other_hotel: string;
+          last_message: string | null;
+          last_message_at: string | null;
+          unread: number;
+        }[]
+      >("/talent/chats");
+      setTalk(
+        cs.map((c) => ({
+          id: c.chat_id,
+          kind: "custom" as const,
+          name: c.other_hotel,
+          emoji: "🏨",
+          unread: c.unread,
+          last_message_at: c.last_message_at,
+          preview: c.last_message,
+          scope: "network" as const,
+        })),
+      );
+    } catch {
+      setTalk((t) => t ?? []);
+    }
+  }, [canNetwork]);
+
+  const loadMsgs = useCallback(
+    async (id: string, sc: Scope) => {
+      try {
+        if (sc === "hotel") {
+          const raw = await api.get<
+            {
+              id: string;
+              body: string | null;
+              sender_user_id: string | null;
+              sender_name: string;
+              created_at: string;
+              attachment_url: string | null;
+              attachment_name: string | null;
+              attachment_type: string | null;
+            }[]
+          >(`/chat/rooms/${id}/messages`);
+          setMsgs(
+            raw.map((m) => ({
+              id: m.id,
+              body: m.body,
+              mine: m.sender_user_id === user?.id,
+              sender_name: m.sender_name,
+              created_at: m.created_at,
+              attachment_url: m.attachment_url,
+              attachment_name: m.attachment_name,
+              attachment_type: m.attachment_type,
+            })),
+          );
+          refreshChatUnread();
+        } else {
+          const d = await api.get<{
+            other_hotel: string;
+            messages: {
+              id: string;
+              mine: boolean;
+              sender_name: string;
+              body: string;
+              created_at: string;
+              has_attachment?: boolean;
+              is_image?: boolean;
+              attachment_name?: string | null;
+            }[];
+          }>(`/talent/chats/${id}/messages`);
+          setMsgs(
+            d.messages.map((m) => ({
+              id: m.id,
+              body: m.body,
+              mine: m.mine,
+              sender_name: m.sender_name,
+              created_at: m.created_at,
+              attachment_url: m.has_attachment
+                ? `/api/talent/chats/${id}/attachment/${m.id}`
+                : null,
+              attachment_name: m.attachment_name ?? null,
+              attachment_type: m.is_image ? "image/*" : null,
+            })),
+          );
+        }
+      } catch {
+        setMsgs((m) => m ?? []);
+      }
+    },
+    [user?.id],
+  );
 
   useEffect(() => {
     void loadRooms();
-  }, [loadRooms]);
+    void loadTalk();
+  }, [loadRooms, loadTalk]);
 
-  // Open the busiest room on a laptop so the page is never a dead end; on a
-  // phone the LIST is the landing screen, because auto-opening a room would
-  // hide the thing you came to choose from.
+  // On a laptop open the busiest conversation so the page is never a dead end.
+  // On a phone the LIST is the landing screen — auto-opening one would hide the
+  // thing you came to choose from.
   useEffect(() => {
     if (openId || !rooms?.length) return;
     if (window.matchMedia("(min-width: 1024px)").matches) setOpenId(rooms[0].id);
   }, [rooms, openId]);
 
   useEffect(() => {
-    if (openId) void loadMsgs(openId);
-  }, [openId, loadMsgs]);
+    if (openId) void loadMsgs(openId, scope);
+  }, [openId, scope, loadMsgs]);
 
   // Poll while somebody is looking. A hidden tab costs nothing.
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState !== "visible") return;
       void loadRooms();
-      if (openId) void loadMsgs(openId);
+      void loadTalk();
+      if (openId) void loadMsgs(openId, scope);
     };
     const id = window.setInterval(tick, 6000);
     return () => window.clearInterval(id);
-  }, [openId, loadRooms, loadMsgs]);
+  }, [openId, scope, loadRooms, loadTalk, loadMsgs]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -142,11 +254,16 @@ export default function TeamChatPage() {
     setSending(true);
     setErr(null);
     try {
-      const m = await api.post<Msg>(`/chat/rooms/${openId}/messages`, { body });
+      if (scope === "hotel") {
+        await api.post(`/chat/rooms/${openId}/messages`, { body });
+      } else {
+        await api.post(`/talent/chats/${openId}/messages`, { body });
+      }
       setDraft("");
       atBottom.current = true;
-      setMsgs((x) => [...(x ?? []), m]);
+      await loadMsgs(openId, scope);
       void loadRooms();
+      void loadTalk();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not send that");
     } finally {
@@ -161,9 +278,14 @@ export default function TeamChatPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const m = await postForm<Msg>(`/chat/rooms/${openId}/attachment`, form);
+      await postForm(
+        scope === "hotel"
+          ? `/chat/rooms/${openId}/attachment`
+          : `/talent/chats/${openId}/attach`,
+        form,
+      );
       atBottom.current = true;
-      setMsgs((x) => [...(x ?? []), m]);
+      await loadMsgs(openId, scope);
       void loadRooms();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not send that file");
@@ -172,47 +294,81 @@ export default function TeamChatPage() {
     }
   }
 
-  const totalUnread = useMemo(
-    () => (rooms ?? []).reduce((t, r) => t + r.unread, 0),
-    [rooms],
-  );
+  async function startDirect(personId: string) {
+    setSheet(null);
+    setErr(null);
+    try {
+      const r = await api.post<{ id: string; name: string }>("/chat/direct", {
+        user_id: personId,
+      });
+      setScope("hotel");
+      // A brand-new conversation has no messages, so the server does not list it
+      // yet — an empty thread in everybody's sidebar the moment somebody opened
+      // the picker and changed their mind would be worse. Showing it here is
+      // what makes "message Balaji" feel like it worked.
+      setRooms((list) =>
+        list && list.some((x) => x.id === r.id)
+          ? list
+          : [
+              {
+                id: r.id,
+                kind: "direct" as const,
+                name: r.name,
+                unread: 0,
+                scope: "hotel" as const,
+              },
+              ...(list ?? []),
+            ],
+      );
+      setOpenId(r.id);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not open that conversation");
+    }
+  }
+
+  const groups = useMemo(() => {
+    const list = shown ?? [];
+    if (scope === "network") return [{ title: "Other restaurants", items: list }];
+    return [
+      { title: "Rooms", items: list.filter((r) => r.kind !== "direct") },
+      { title: "People", items: list.filter((r) => r.kind === "direct") },
+    ].filter((g) => g.items.length > 0);
+  }, [shown, scope]);
 
   return (
-    // MEASURED, not assumed. `h-full` looked right and silently did nothing:
-    // a percentage height resolves against the containing block's height, and
-    // main's is indefinite to a percentage child, so it fell back to auto and
-    // the panes were sized by their content (365px inside a 735px main).
-    //
-    // 13rem is the shell's own arithmetic: the 4rem header plus main's pt-8 and
-    // pb-28. That padding is not decoration — it is what keeps the floating nav
-    // and the Ask launcher off a page's last control.
     <div className="flex h-[calc(100svh-13rem)] min-h-0 flex-col">
       <PageHeader
-        title="Team chat"
-        subtitle={
-          totalUnread > 0
-            ? `${totalUnread} unread message${totalUnread === 1 ? "" : "s"}`
-            : "Everyone, managers, and any group you make."
-        }
+        title="Messages"
+        subtitle="Your team, and the restaurants you work with."
         actions={
-          canManage ? (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setMakeOpen(true)}
-              data-tone="brand"
-              data-testid="new-group"
-              className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
+              onClick={() => setSheet("person")}
+              data-testid="new-direct"
+              className="mise-btn-flat mise-press min-h-[40px] px-3 py-2 text-sm font-semibold text-fg-soft"
             >
-              ＋ New group
+              ＋ New chat
             </button>
-          ) : undefined
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setSheet("group")}
+                data-tone="brand"
+                data-testid="new-group"
+                className="mise-btn-flat mise-press min-h-[40px] px-3 py-2 text-sm font-bold text-brand-300"
+              >
+                ＋ Group
+              </button>
+            )}
+          </div>
         }
       />
 
       <input
         ref={fileRef}
         type="file"
-        accept="image/*,video/*"
+        accept={ACCEPT}
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -221,68 +377,104 @@ export default function TeamChatPage() {
         }}
       />
 
-      {/* TWO PANES ON A LAPTOP, ONE ON A PHONE.
-          The row is spelled out because a grid's implicit rows are sized to
-          their CONTENT: the container can be given all the height in the world
-          by flex-1 and the row will still be as tall as the messages in it,
-          which is what left the panes floating in a third of the page. */}
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[19rem_1fr]">
-        {/* ── rooms ───────────────────────────────────────────────────── */}
+        {/* ── the conversations ───────────────────────────────────────── */}
         <Card
           className={`min-h-0 overflow-hidden p-0 ${openId ? "hidden lg:flex" : "flex"} flex-col`}
         >
-          <div className="border-b border-line px-4 py-3">
-            <p className="text-sm font-semibold text-fg">Conversations</p>
-          </div>
+          {canNetwork && (
+            <div className="mise-card-inset m-2 flex gap-1 rounded-xl p-1">
+              {(
+                [
+                  ["hotel", "This hotel"],
+                  ["network", "Other hotels"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setScope(key);
+                    setOpenId(null);
+                    setMsgs(null);
+                  }}
+                  data-testid={`scope-${key}`}
+                  className={`mise-press min-h-[36px] flex-1 rounded-lg px-2 text-xs font-semibold transition ${
+                    scope === key ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="mise-noscrollbar min-h-0 flex-1 overflow-y-auto p-2">
-            {rooms === null ? (
+            {shown === null ? (
               <p className="px-3 py-6 text-center text-sm text-fg-faint">Loading…</p>
-            ) : rooms.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-fg-faint">
-                No conversations yet.
+            ) : shown.length === 0 ? (
+              <p className="px-3 py-8 text-center text-sm text-fg-faint">
+                {scope === "hotel"
+                  ? "No conversations yet — start one with ＋ New chat."
+                  : "No other restaurants yet."}
               </p>
             ) : (
-              rooms.map((r) => {
-                const on = r.id === openId;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setOpenId(r.id)}
-                    data-testid="chat-room"
-                    className={`mise-press mb-1 flex min-h-[60px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
-                      on ? "bg-brand-500/15" : "hover:bg-glass/5"
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base"
-                    >
-                      {r.emoji ?? "💬"}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-semibold text-fg">{r.name}</span>
-                        {r.kind !== "custom" && (
-                          <span className="mise-chip shrink-0 text-[9px]">
-                            {r.kind === "everyone" ? "all" : "staff only"}
+              groups.map((g) => (
+                <div key={g.title} className="mb-2">
+                  <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint/70">
+                    {g.title}
+                  </p>
+                  {g.items.map((r) => {
+                    const on = r.id === openId;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setOpenId(r.id)}
+                        data-testid="chat-room"
+                        className={`mise-press mb-1 flex min-h-[58px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                          on ? "bg-brand-500/15" : "hover:bg-glass/5"
+                        }`}
+                      >
+                        <span
+                          aria-hidden
+                          className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base"
+                        >
+                          {r.kind === "direct"
+                            ? r.name.slice(0, 1).toUpperCase()
+                            : (r.emoji ?? "💬")}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold text-fg">
+                              {r.name}
+                            </span>
+                            {(r.kind === "everyone" || r.kind === "managers") && (
+                              <span className="mise-chip shrink-0 text-[9px]">
+                                {r.kind === "everyone" ? "all" : "staff only"}
+                              </span>
+                            )}
+                          </span>
+                          <span className="block truncate text-[11px] text-fg-faint">
+                            {r.preview
+                              ? `${
+                                  r.last_sender && r.kind !== "direct"
+                                    ? `${r.last_sender.split(" ")[0]}: `
+                                    : ""
+                                }${r.preview}`
+                              : "No messages yet"}
+                          </span>
+                        </span>
+                        {r.unread > 0 && (
+                          <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-brand-600 px-1.5 text-[10px] font-bold tabular-nums text-white">
+                            {r.unread}
                           </span>
                         )}
-                      </span>
-                      <span className="block truncate text-[11px] text-fg-faint">
-                        {r.preview
-                          ? `${r.last_sender ? `${r.last_sender.split(" ")[0]}: ` : ""}${r.preview}`
-                          : "No messages yet"}
-                      </span>
-                    </span>
-                    {r.unread > 0 && (
-                      <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-brand-600 px-1.5 text-[10px] font-bold tabular-nums text-white">
-                        {r.unread}
-                      </span>
-                    )}
-                  </button>
-                );
-              })
+                      </button>
+                    );
+                  })}
+                </div>
+              ))
             )}
           </div>
         </Card>
@@ -294,8 +486,6 @@ export default function TeamChatPage() {
           {room ? (
             <>
               <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-                {/* Back is the phone's way out of a room. On a laptop both
-                    panes are visible, so it would be a button to nowhere. */}
                 <button
                   type="button"
                   onClick={() => setOpenId(null)}
@@ -304,26 +494,32 @@ export default function TeamChatPage() {
                 >
                   ‹
                 </button>
-                <span aria-hidden className="mise-well grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base">
-                  {room.emoji ?? "💬"}
+                <span
+                  aria-hidden
+                  className="mise-well grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base"
+                >
+                  {room.kind === "direct"
+                    ? room.name.slice(0, 1).toUpperCase()
+                    : (room.emoji ?? "💬")}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-fg">{room.name}</p>
                   <p className="truncate text-[11px] text-fg-faint">
-                    {room.kind === "everyone"
-                      ? "Everyone who works here"
-                      : room.kind === "managers"
-                        ? "Managers and the owner only"
-                        : "Private group"}
+                    {room.scope === "network"
+                      ? "Another restaurant"
+                      : room.kind === "everyone"
+                        ? "Everyone who works here"
+                        : room.kind === "managers"
+                          ? "Managers and the owner only"
+                          : room.kind === "direct"
+                            ? "Just the two of you"
+                            : "Private group"}
                   </p>
                 </div>
-                {/* Only a group the owner made has anything to change. The two
-                    standing rooms take their membership from people's roles, so
-                    a settings button there would open onto nothing. */}
-                {canManage && room.kind === "custom" && (
+                {canManage && room.kind === "custom" && room.scope === "hotel" && (
                   <button
                     type="button"
-                    onClick={() => setSettingsOpen(true)}
+                    onClick={() => setSheet("settings")}
                     aria-label="Group settings"
                     data-testid="room-settings"
                     className="mise-btn-flat mise-press grid h-9 w-9 shrink-0 place-items-center text-base"
@@ -345,58 +541,51 @@ export default function TeamChatPage() {
                   <p className="py-8 text-center text-sm text-fg-faint">Loading…</p>
                 ) : msgs.length === 0 ? (
                   <p className="py-12 text-center text-sm text-fg-faint">
-                    <span aria-hidden className="mr-1.5 text-lg">💬</span>
+                    <span aria-hidden className="mr-1.5 text-lg">
+                      💬
+                    </span>
                     Nothing here yet — say hello.
                   </p>
                 ) : (
-                  msgs.map((m) => {
-                    const own = m.sender_user_id === user?.id;
-                    return (
-                      <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 sm:max-w-[70%] ${
-                            own ? "bg-brand-600 text-white" : "mise-card-inset text-fg"
+                  msgs.map((m) => (
+                    <div key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 sm:max-w-[70%] ${
+                          m.mine ? "bg-brand-600 text-white" : "mise-card-inset text-fg"
+                        }`}
+                      >
+                        {!m.mine && room.kind !== "direct" && (
+                          <p className="mb-0.5 text-[11px] font-semibold text-fg-faint">
+                            {m.sender_name}
+                          </p>
+                        )}
+                        {m.attachment_url && <Attachment msg={m} />}
+                        {m.body && (
+                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                            {m.body}
+                          </p>
+                        )}
+                        <p
+                          className={`mt-1 text-[10px] tabular-nums ${
+                            m.mine ? "text-white/70" : "text-fg-faint"
                           }`}
                         >
-                          {!own && (
-                            <p className="mb-0.5 text-[11px] font-semibold text-fg-faint">
-                              {m.sender_name}
-                            </p>
-                          )}
-
-                          {m.attachment_url && <Attachment msg={m} />}
-
-                          {m.body && (
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                              {m.body}
-                            </p>
-                          )}
-                          <p
-                            className={`mt-1 text-[10px] tabular-nums ${
-                              own ? "text-white/70" : "text-fg-faint"
-                            }`}
-                          >
-                            {new Date(m.created_at).toLocaleString(undefined, {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
+                          {new Date(m.created_at).toLocaleString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
                       </div>
-                    );
-                  })
+                    </div>
+                  ))
                 )}
               </div>
 
               {err && <p className="px-4 pb-1 text-[11px] text-rose-400">{err}</p>}
 
               <div className="relative border-t border-line px-3 py-3">
-                {/* A backdrop rather than a document listener: clicking away is
-                    the gesture people already use to dismiss a picker, and one
-                    element that swallows the click cannot get out of step with
-                    the state the way an added-and-removed listener can. */}
                 {showEmoji && (
                   <button
                     type="button"
@@ -437,8 +626,8 @@ export default function TeamChatPage() {
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    aria-label="Send a picture or video"
-                    title="Picture or video"
+                    aria-label="Send a photo, video or document"
+                    title="Photo, video, audio or document"
                     className="mise-btn-flat mise-press grid h-11 w-11 shrink-0 place-items-center text-lg"
                   >
                     📎
@@ -454,9 +643,6 @@ export default function TeamChatPage() {
                       }
                     }}
                     rows={1}
-                    // Not "Message <room>": on a phone that wraps to two lines
-                    // inside a one-row box and clips. The header directly above
-                    // already says which room this is.
                     placeholder="Write a message…"
                     data-testid="chat-input"
                     className="mise-well max-h-32 min-h-[44px] flex-1 resize-y rounded-xl px-3.5 py-2.5 text-sm outline-none"
@@ -477,7 +663,9 @@ export default function TeamChatPage() {
           ) : (
             <div className="grid flex-1 place-items-center p-8 text-center">
               <p className="text-sm text-fg-faint">
-                <span aria-hidden className="mb-2 block text-3xl">💬</span>
+                <span aria-hidden className="mb-2 block text-3xl">
+                  💬
+                </span>
                 Pick a conversation to start reading.
               </p>
             </div>
@@ -485,23 +673,28 @@ export default function TeamChatPage() {
         </Card>
       </div>
 
-      {makeOpen && (
+      {sheet === "person" && (
+        <NewDirect onClose={() => setSheet(null)} onPick={(id) => void startDirect(id)} />
+      )}
+
+      {sheet === "group" && (
         <NewGroup
-          onClose={() => setMakeOpen(false)}
+          onClose={() => setSheet(null)}
           onMade={(id) => {
-            setMakeOpen(false);
+            setSheet(null);
+            setScope("hotel");
             void loadRooms().then(() => setOpenId(id));
           }}
         />
       )}
 
-      {settingsOpen && room && (
+      {sheet === "settings" && room && (
         <GroupSettings
           room={room}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => setSheet(null)}
           onChanged={() => void loadRooms()}
           onClosed={() => {
-            setSettingsOpen(false);
+            setSheet(null);
             setOpenId(null);
             void loadRooms();
           }}
@@ -511,15 +704,16 @@ export default function TeamChatPage() {
   );
 }
 
-/** A picture or a video, fetched WITH the token and shown from a blob.
+/** A picture, a video, a voice note or a document — fetched WITH the token and
+ *  shown from a blob.
  *
  *  It cannot simply be `<img src={url}>`: the endpoint checks that the viewer
- *  can open the room the file was posted in, and an img tag sends no
+ *  can open the conversation the file was posted in, and an img tag sends no
  *  Authorization header, so the browser would be turned away and paint a broken
- *  icon. Clicking opens the same blob full-size — pointing the link at the API
- *  path would hit the identical wall in a new tab.
+ *  icon. Anything that is not media is offered as a named file to open, because
+ *  a document you cannot identify is not much of an attachment.
  */
-function Attachment({ msg }: { msg: Msg }) {
+function Attachment({ msg }: { msg: Bubble }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -543,24 +737,80 @@ function Attachment({ msg }: { msg: Msg }) {
   }
   if (!url) {
     return (
-      <div className="mb-1.5 grid h-32 w-48 place-items-center rounded-xl bg-glass/10 text-[11px] opacity-70">
+      <div className="mb-1.5 grid h-24 w-44 place-items-center rounded-xl bg-glass/10 text-[11px] opacity-70">
         Loading…
       </div>
     );
   }
+
+  const type = msg.attachment_type ?? "";
+  const name = msg.attachment_name ?? "file";
+
+  if (type.startsWith("video/")) {
+    return <video src={url} controls className="mb-1.5 max-h-64 w-full rounded-xl" />;
+  }
+  if (type.startsWith("audio/")) {
+    return <audio src={url} controls className="mb-1.5 w-full" />;
+  }
+  if (type.startsWith("image/")) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="mb-1.5 block overflow-hidden rounded-xl"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={name} className="max-h-64 rounded-xl object-cover" />
+      </a>
+    );
+  }
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="mb-1.5 block overflow-hidden rounded-xl">
-      {msg.attachment_type?.startsWith("video/") ? (
-        <video src={url} controls className="max-h-64 w-full rounded-xl" />
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="mb-1.5 flex items-center gap-2 rounded-xl bg-glass/10 px-3 py-2 text-[11px] underline-offset-2 hover:underline"
+    >
+      <span aria-hidden className="text-base">
+        📄
+      </span>
+      <span className="min-w-0 flex-1 truncate">{name}</span>
+    </a>
+  );
+}
+
+/** Start a conversation with one colleague. Any login may: that is the point —
+ *  the one-to-one thread used to live on an admin page, so a chef or a cashier
+ *  had no way to message anybody. */
+function NewDirect({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) {
+  const [people, setPeople] = useState<Person[]>([]);
+
+  useEffect(() => {
+    api
+      .get<Person[]>("/chat/people")
+      .then(setPeople)
+      .catch(() => setPeople([]));
+  }, []);
+
+  return (
+    <SheetPopup onClose={onClose} title="New chat" subtitle="Anyone who works here" columns={2}>
+      {people.length === 0 ? (
+        <p className="py-6 text-center text-sm text-fg-faint">Loading colleagues…</p>
       ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={msg.attachment_name ?? ""}
-          className="max-h-64 rounded-xl object-cover"
+        <PersonPicker
+          people={people.map((p) => ({
+            id: p.id,
+            name: p.name,
+            note: p.role.replace(/_/g, " ").toLowerCase(),
+          }))}
+          value=""
+          onChange={onPick}
+          placeholder="Search colleagues…"
+          testId="direct-person"
         />
       )}
-    </a>
+    </SheetPopup>
   );
 }
 
@@ -578,11 +828,9 @@ function MemberList({
 }) {
   const [q, setQ] = useState("");
   const needle = q.trim().toLowerCase();
-  const shown = people.filter(
+  const list = people.filter(
     (p) =>
-      !needle ||
-      p.name.toLowerCase().includes(needle) ||
-      p.email.toLowerCase().includes(needle),
+      !needle || p.name.toLowerCase().includes(needle) || p.email.toLowerCase().includes(needle),
   );
 
   return (
@@ -602,7 +850,7 @@ function MemberList({
         {people.length === 0 && (
           <p className="px-2 py-4 text-center text-[11px] text-fg-faint">Loading people…</p>
         )}
-        {shown.map((p) => {
+        {list.map((p) => {
           const on = picked.has(p.id);
           return (
             <button
@@ -643,13 +891,102 @@ function MemberList({
   );
 }
 
-/** Change who is in a group, or close it.
- *
- *  Without this a group could be made and never unmade, and every experiment
- *  would become permanent furniture in everybody's list. Only the owner's own
- *  groups are editable — Everyone and Managers read their membership off
- *  people's roles, so there is no list here to edit and the server refuses one.
- */
+/** Make a group and choose who is in it. */
+function NewGroup({ onClose, onMade }: { onClose: () => void; onMade: (id: string) => void }) {
+  const [people, setPeople] = useState<Person[]>([]);
+  const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState("💬");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<Person[]>("/chat/people")
+      .then(setPeople)
+      .catch(() => setPeople([]));
+  }, []);
+
+  async function create() {
+    if (!name.trim()) {
+      setErr("Give the group a name.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await api.post<{ id: string }>("/chat/rooms", {
+        name,
+        emoji,
+        member_ids: [...picked],
+      });
+      onMade(r.id);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not make that group");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SheetPopup
+      onClose={onClose}
+      title="New group"
+      subtitle="Name it, then choose who is in it"
+      columns={2}
+    >
+      <div className="space-y-4">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          placeholder="e.g. Kitchen team, Weekend crew"
+          data-testid="group-name"
+          className="mise-well min-h-[44px] w-full rounded-lg px-3 py-2 text-sm outline-none"
+        />
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Icon</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {ROOM_ICONS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setEmoji(e)}
+                aria-label={`Icon ${e}`}
+                aria-pressed={emoji === e}
+                className={`mise-press grid h-10 w-10 place-items-center rounded-xl text-lg transition ${
+                  emoji === e ? "bg-brand-500/20 ring-1 ring-brand-400/50" : "mise-well"
+                }`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <MemberList people={people} picked={picked} setPicked={setPicked} />
+
+        {err && <p className="text-[11px] text-rose-400">{err}</p>}
+
+        <button
+          type="button"
+          onClick={() => void create()}
+          disabled={busy}
+          data-tone="brand"
+          data-testid="group-create"
+          className="mise-btn-flat mise-press min-h-[46px] w-full px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+        >
+          {busy ? "Making…" : "Create group"}
+        </button>
+      </div>
+    </SheetPopup>
+  );
+}
+
+/** Change who is in a group, or close it. Only the owner's own groups: Everyone
+ *  and Managers read their membership off people's roles, and a one-to-one is
+ *  between the two of you. */
 function GroupSettings({
   room,
   onClose,
@@ -668,7 +1005,10 @@ function GroupSettings({
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<Person[]>("/chat/people").then(setPeople).catch(() => setPeople([]));
+    api
+      .get<Person[]>("/chat/people")
+      .then(setPeople)
+      .catch(() => setPeople([]));
     api
       .get<{ member_ids: string[] }>(`/chat/rooms/${room.id}/members`)
       .then((m) => setPicked(new Set(m.member_ids)))
@@ -719,9 +1059,6 @@ function GroupSettings({
           {busy ? "Saving…" : "Save members"}
         </button>
 
-        {/* Closing loses the history, so it asks once. It is not a red button
-            sitting among ordinary ones — it is a quiet link that turns into a
-            question only once you have chosen it. */}
         <div className="border-t border-line pt-3 text-center">
           {confirming ? (
             <div className="space-y-2">
@@ -758,95 +1095,6 @@ function GroupSettings({
             </button>
           )}
         </div>
-      </div>
-    </SheetPopup>
-  );
-}
-
-/** Make a group and choose who is in it — searchable, because a roster of
- *  thirty is a list you scan rather than read. */
-function NewGroup({ onClose, onMade }: { onClose: () => void; onMade: (id: string) => void }) {
-  const [people, setPeople] = useState<Person[]>([]);
-  const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState("💬");
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get<Person[]>("/chat/people").then(setPeople).catch(() => setPeople([]));
-  }, []);
-
-  async function create() {
-    if (!name.trim()) {
-      setErr("Give the group a name.");
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await api.post<{ id: string }>("/chat/rooms", {
-        name,
-        emoji,
-        member_ids: [...picked],
-      });
-      onMade(r.id);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Could not make that group");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <SheetPopup onClose={onClose} title="New group" subtitle="Name it, then choose who is in it" columns={2}>
-      <div className="space-y-4">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={80}
-          placeholder="e.g. Kitchen team, Weekend crew"
-          data-testid="group-name"
-          className="mise-well min-h-[44px] w-full rounded-lg px-3 py-2 text-sm outline-none"
-        />
-
-        {/* Ten icons, shown. A native <select> here was the one raw browser
-            control on the page and it looked it — and picking from ten things
-            you can already see is a worse job for a dropdown than for a row. */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Icon</p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {ROOM_ICONS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setEmoji(e)}
-                aria-label={`Icon ${e}`}
-                aria-pressed={emoji === e}
-                className={`mise-press grid h-10 w-10 place-items-center rounded-xl text-lg transition ${
-                  emoji === e ? "bg-brand-500/20 ring-1 ring-brand-400/50" : "mise-well"
-                }`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <MemberList people={people} picked={picked} setPicked={setPicked} />
-
-        {err && <p className="text-[11px] text-rose-400">{err}</p>}
-
-        <button
-          type="button"
-          onClick={() => void create()}
-          disabled={busy}
-          data-tone="brand"
-          data-testid="group-create"
-          className="mise-btn-flat mise-press min-h-[46px] w-full px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
-        >
-          {busy ? "Making…" : "Create group"}
-        </button>
       </div>
     </SheetPopup>
   );
