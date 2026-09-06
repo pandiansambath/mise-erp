@@ -1,6 +1,7 @@
 """Employee & attendance endpoints. Hotel-scoped."""
 import uuid
 from datetime import date as date_type
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
@@ -150,6 +151,60 @@ async def staff_login(
     if emp is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
     return {"login": await service.staff_login_status(db, emp)}
+
+
+class MessageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class MessageOut(BaseModel):
+    """Every field declared, because response_model drops what it is not told
+    about and this project has lost figures to that four times."""
+
+    id: str
+    body: str
+    from_staff: bool
+    sender_name: str
+    created_at: datetime
+
+
+class ThreadOut(BaseModel):
+    messages: list[MessageOut]
+    unread: int
+
+
+@router.get("/{employee_id}/messages", response_model=ThreadOut)
+async def staff_thread(
+    employee_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> ThreadOut:
+    """The manager's side of the conversation with one member of staff."""
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    msgs = await service.thread_for(db, emp)
+    unread = await service.unread_count(db, emp, for_staff=False)
+    # Opening it is reading it.
+    await service.mark_thread_seen(db, emp, as_staff=False)
+    return ThreadOut(messages=[MessageOut(**m) for m in msgs], unread=unread)
+
+
+@router.post("/{employee_id}/messages", response_model=MessageOut)
+async def staff_thread_post(
+    employee_id: uuid.UUID,
+    payload: MessageIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> MessageOut:
+    emp = await service.get_employee(db, employee_id, user.hotel_id)
+    if emp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+    try:
+        msg = await service.post_message(db, emp, body=payload.body, from_staff=False, user=user)
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return MessageOut(**msg)
 
 
 @router.get("/{employee_id}/impact")

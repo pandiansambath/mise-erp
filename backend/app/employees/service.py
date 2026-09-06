@@ -13,6 +13,7 @@ from app.employees.models import (
     AttendanceStatus,
     Employee,
     PunchType,
+    StaffMessage,
 )
 from app.hotels.models import Hotel
 
@@ -189,6 +190,99 @@ async def set_staff_active(db, emp: Employee, active: bool) -> None:
     u = await db.get(User, emp.user_id)
     u.is_active = active
     await db.commit()
+
+
+async def thread_for(db, emp: Employee, *, limit: int = 200) -> list[dict]:
+    """The whole conversation with one member of staff, oldest first.
+
+    Oldest first because a conversation is read downwards; the UI scrolls to the
+    bottom. `limit` takes the most RECENT ones and then flips them, so a long
+    history shows the end of the thread rather than its beginning.
+    """
+    rows = await db.execute(
+        select(StaffMessage)
+        .where(StaffMessage.employee_id == emp.id)
+        .order_by(StaffMessage.created_at.desc())
+        .limit(limit)
+    )
+    msgs = list(rows.scalars())[::-1]
+    return [
+        {
+            "id": str(m.id),
+            "body": m.body,
+            "from_staff": m.from_staff,
+            "sender_name": m.sender_name,
+            "created_at": m.created_at,
+        }
+        for m in msgs
+    ]
+
+
+async def post_message(
+    db, emp: Employee, *, body: str, from_staff: bool, user
+) -> dict:
+    """Say something in that thread, and mark it read for the side that spoke."""
+    text_body = (body or "").strip()
+    if not text_body:
+        raise AccountError("A message needs some words in it.")
+    if len(text_body) > 4000:
+        raise AccountError("That message is too long — keep it under 4000 characters.")
+
+    who = (
+        getattr(user, "preferred_name", None)
+        or (emp.full_name if from_staff else None)
+        or getattr(user, "email", "").split("@")[0]
+        or "Someone"
+    )
+    msg = StaffMessage(
+        hotel_id=emp.hotel_id,
+        employee_id=emp.id,
+        sender_user_id=getattr(user, "id", None),
+        sender_name=who[:120],
+        from_staff=from_staff,
+        body=text_body,
+    )
+    db.add(msg)
+    # Writing counts as reading: you have obviously seen everything above what
+    # you just replied to, and without this your own message leaves the thread
+    # looking unread to you.
+    now = datetime.now(UTC)
+    if from_staff:
+        emp.msg_seen_staff_at = now
+    else:
+        emp.msg_seen_owner_at = now
+    await db.commit()
+    await db.refresh(msg)
+    return {
+        "id": str(msg.id),
+        "body": msg.body,
+        "from_staff": msg.from_staff,
+        "sender_name": msg.sender_name,
+        "created_at": msg.created_at,
+    }
+
+
+async def mark_thread_seen(db, emp: Employee, *, as_staff: bool) -> None:
+    now = datetime.now(UTC)
+    if as_staff:
+        emp.msg_seen_staff_at = now
+    else:
+        emp.msg_seen_owner_at = now
+    await db.commit()
+
+
+async def unread_count(db, emp: Employee, *, for_staff: bool) -> int:
+    """Messages from the OTHER side since I last looked."""
+    since = emp.msg_seen_staff_at if for_staff else emp.msg_seen_owner_at
+    conds = [
+        StaffMessage.employee_id == emp.id,
+        # Unread means from the other person; my own words are never unread.
+        StaffMessage.from_staff.is_(not for_staff),
+    ]
+    if since is not None:
+        conds.append(StaffMessage.created_at > since)
+    row = await db.execute(select(func.count()).select_from(StaffMessage).where(*conds))
+    return int(row.scalar() or 0)
 
 
 async def removal_impact(db, emp: Employee) -> dict:

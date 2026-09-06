@@ -2,7 +2,7 @@
 attendance, payslips, and documents. Resolves the Employee linked to the user."""
 import uuid
 from datetime import date as date_type
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import (
     APIRouter,
@@ -14,7 +14,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
@@ -123,6 +123,55 @@ async def my_attendance_history(
         totals=MyAttendanceTotals(**data["totals"]),
         days=[AttendanceRow.model_validate(d) for d in data["days"]],
     )
+
+
+class MyMessageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class MyMessageOut(BaseModel):
+    id: str
+    body: str
+    from_staff: bool
+    sender_name: str
+    created_at: datetime
+
+
+class MyThreadOut(BaseModel):
+    messages: list[MyMessageOut]
+    unread: int
+
+
+@router.get("/messages", response_model=MyThreadOut)
+async def my_messages(
+    emp: Employee = Depends(_my_employee),
+    db: AsyncSession = Depends(get_db),
+) -> MyThreadOut:
+    """Their side of the conversation with their manager.
+
+    Scoped by _my_employee like everything else here, so a staff login can only
+    ever read its own thread — the same guarantee as their attendance and rota.
+    """
+    msgs = await emp_service.thread_for(db, emp)
+    unread = await emp_service.unread_count(db, emp, for_staff=True)
+    await emp_service.mark_thread_seen(db, emp, as_staff=True)
+    return MyThreadOut(messages=[MyMessageOut(**m) for m in msgs], unread=unread)
+
+
+@router.post("/messages", response_model=MyMessageOut)
+async def my_message_post(
+    payload: MyMessageIn,
+    emp: Employee = Depends(_my_employee),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> MyMessageOut:
+    try:
+        msg = await emp_service.post_message(
+            db, emp, body=payload.body, from_staff=True, user=user
+        )
+    except emp_service.AccountError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return MyMessageOut(**msg)
 
 
 @router.get("/rota", response_model=list[ShiftOut])

@@ -37,6 +37,7 @@ import {
 } from "@/lib/api";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { TotalsStrip } from "@/components/PageKit";
+import { StaffChat } from "@/components/StaffChat";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -111,7 +112,7 @@ const niceDate = (iso: string, withYear = false) =>
     ...(withYear ? { year: "numeric" } : {}),
   });
 
-type Tab = "attendance" | "rota" | "payslips" | "documents";
+type Tab = "attendance" | "rota" | "payslips" | "documents" | "messages";
 
 /** One warm line, not a large empty box.
  *
@@ -151,6 +152,8 @@ export default function MySpacePage() {
   const [rotaTo, setRotaTo] = useState(() => isoDay(28));
   const [shifts, setShifts] = useState<MyShift[]>([]);
   const [rotaLoading, setRotaLoading] = useState(true);
+  /** So a reply from their manager is visible without opening the tab. */
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
 
   // Frozen at mount: reading the clock DURING render is impure, and this page
   // has no reason to notice midnight passing while it is open.
@@ -186,6 +189,14 @@ export default function MySpacePage() {
       .catch(() => setHistory(EMPTY_HISTORY))
       .finally(() => setAttLoading(false));
   }, [attFrom, attTo]);
+
+  useEffect(() => {
+    // Just the count for the badge; the thread itself loads with its tab.
+    api
+      .get<{ unread: number }>("/me/messages")
+      .then((r) => setUnreadMsgs(r.unread))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setRotaLoading(true);
@@ -274,6 +285,7 @@ export default function MySpacePage() {
     // The badge means "things needing your attention", not "files on record" —
     // a request you have not sent is the thing worth a number.
     { key: "documents", label: "Documents", icon: "📄", count: (docs.length + pendingReqs.length) || undefined },
+    { key: "messages", label: "Messages", icon: "💬", count: unreadMsgs || undefined },
   ];
 
   return (
@@ -541,6 +553,23 @@ export default function MySpacePage() {
       )}
 
       {/* ── DOCUMENTS ───────────────────────────────────────────────────── */}
+      {tab === "messages" && (
+        <Card className="mise-fade-in mt-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold text-fg">Messages</h2>
+            <span className="text-[11px] text-fg-faint">
+              just between you and your manager
+            </span>
+          </div>
+          <StaffChat
+            className="mt-3"
+            endpoint="/me/messages"
+            mine="staff"
+            emptyHint="Nothing here yet — ask your manager anything."
+          />
+        </Card>
+      )}
+
       {tab === "documents" && (
         <Card className="mise-fade-in mt-4 p-0">
           {/* WHAT IS ASKED OF YOU, FIRST.

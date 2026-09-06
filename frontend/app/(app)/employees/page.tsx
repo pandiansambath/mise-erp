@@ -12,6 +12,7 @@ import { SortBar, useSort } from "@/components/sortable";
 import { SheetPopup } from "@/components/SheetPopup";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/components/confirm";
+import { StaffChat } from "@/components/StaffChat";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { numeric } from "@/lib/sanitize";
@@ -777,6 +778,22 @@ function StaffLoginModal({
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* TALK TO THEM, WHERE EVERYTHING ELSE ABOUT THEM IS.
+                  "staff can comment that owner can see, owner can comment that
+                   staff can see here." The same thread they see in My Space —
+                   one conversation, two doors into it. */}
+              <div className="mt-5 border-t border-line pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                  💬 Messages
+                </p>
+                <StaffChat
+                  className="mt-2"
+                  endpoint={`/employees/${employee.id}/messages`}
+                  mine="owner"
+                  emptyHint={`Nothing yet — send ${employee.full_name.split(" ")[0]} a message.`}
+                />
               </div>
 
               {/* audit history timeline */}
