@@ -73,6 +73,12 @@ class Employee(Base):
     bank_sort_code: Mapped[str | None] = mapped_column(String(10))  # XX-XX-XX
     joining_date: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: When each side last opened the message thread. Unread = anything from the
+    #: OTHER side newer than my own timestamp. Kept on the employee rather than a
+    #: thread table because the employee IS the thread — one fewer join on a
+    #: query that runs on every poll.
+    msg_seen_staff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    msg_seen_owner_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -151,4 +157,41 @@ class Leave(Base):
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class StaffMessage(Base):
+    """One line in the conversation between a member of staff and their manager.
+
+        "staff can comment that owner can see, owner can comment that staff can
+         see here. they even can chat like whatsapp. make this chat history
+         persistent"
+
+    Deliberately NOT the `chats` table: that one is hotel_a/hotel_b, two
+    different restaurants talking on the talent board. This is a person inside
+    one restaurant talking to their manager, and squeezing it in there would
+    mean a hotel messaging itself with no way to say which person it was about.
+    """
+
+    __tablename__ = "staff_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id"), nullable=False, index=True
+    )
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sender_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    #: Stored as well as the id so the history still reads properly after a
+    #: login is removed. A thread that becomes "unknown said" is one nobody
+    #: trusts, and this is a record people may need months later.
+    sender_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Which side said it, so both people see their own words on the right.
+    from_staff: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
