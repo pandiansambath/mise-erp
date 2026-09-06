@@ -16,6 +16,9 @@
 # playwright
 /test-results/
 /playwright-report/
+# Screenshots the live checks write. Evidence for the run that made them,
+# not something the repo should carry.
+/e2e-out/
 /blob-report/
 /playwright/.cache/
 /e2e/__screens__/
