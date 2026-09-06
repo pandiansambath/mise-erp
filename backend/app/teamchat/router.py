@@ -7,9 +7,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import get_current_user, require
+from app.auth.deps import effective_permissions, get_current_user, require
 from app.auth.models import Role, User
 from app.core.database import get_db
+from app.core.rbac import has_permission
 from app.core.storage import get_storage
 from app.teamchat import service
 from app.teamchat.models import ChatRoom, ChatRoomMessage, RoomKind
@@ -167,33 +168,81 @@ async def attachment(
 @router.get("/people")
 async def people(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("users:read")),
+    user: User = Depends(get_current_user),
 ) -> list[dict]:
-    """Who can be put in a group — every live login in this hotel.
+    """Colleagues you can talk to — every live login in this hotel.
+
+    NO PERMISSION. It used to require users:read, which is the permission for
+    administering logins, and that quietly meant only an owner or manager could
+    start a conversation. "any staff can chat with anyone, like organisation in
+    teams" does not work if the list of who exists is an admin screen. A kitchen
+    porter knowing that a chef works here is not a disclosure; they share a
+    kitchen.
 
     Minus the platform operator, who is attached to the hotel to support it
     rather than to work in it, and minus the kiosk, which is a tablet by the
-    door. Offering either as a colleague to add to the kitchen group is
-    offering the wrong thing.
+    door. Neither is a colleague to message.
+
+    Email is held back unless the reader administers logins. A name and a job is
+    what you need to pick somebody out of a list; an address book is a different
+    thing to hand out.
     """
     rows = await db.execute(
         select(User).where(
             User.hotel_id == user.hotel_id,
+            User.id != user.id,
             User.deleted_at.is_(None),
             User.is_active.is_(True),
             User.is_platform_owner.is_(False),
             User.role != Role.KIOSK.value,
         )
     )
+    granted = await effective_permissions(db, user)
+    may_admin = (
+        "*" in granted or "users:read" in granted or "users:write" in granted
+        if granted is not None
+        else has_permission(user.role, "users:read")
+    )
     return [
         {
             "id": str(u.id),
             "name": u.preferred_name or u.email.split("@")[0],
-            "email": u.email,
+            "email": u.email if may_admin else "",
             "role": u.role,
         }
         for u in rows.scalars()
     ]
+
+
+class DirectIn(BaseModel):
+    user_id: uuid.UUID
+
+
+@router.post("/direct", response_model=RoomOut)
+async def start_direct(
+    payload: DirectIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> RoomOut:
+    """Open the conversation with one colleague, making it if it is the first.
+
+    Any login may do this. That is the whole point of it — the one-to-one thread
+    used to live at the bottom of an employee's record on an admin page, so a
+    chef or a cashier had no way to message anybody at all.
+    """
+    other = await db.get(User, payload.user_id)
+    if other is None or other.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such person")
+    try:
+        room = await service.direct_room(db, user, other)
+    except service.ChatError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return RoomOut(
+        id=str(room.id),
+        kind=room.kind,
+        name=other.preferred_name or other.email.split("@")[0],
+        emoji=None,
+    )
 
 
 @router.post("/rooms", response_model=RoomOut)
