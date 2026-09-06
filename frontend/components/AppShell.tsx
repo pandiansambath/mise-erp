@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SECTIONS } from "@/lib/sections";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useChatUnread } from "@/lib/chatUnread";
 import { useAuth } from "@/lib/auth";
 import { API_BASE, api, featureOn, getToken, clearToken } from "@/lib/api";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
@@ -77,6 +78,24 @@ const NAV: NavItem[] = [
   { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents", group: "Admin", keywords: "files certificates" },
   { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read", group: "Admin", keywords: "history who changed" },
 ];
+
+/** How many messages are waiting in Team chat. Rendered only on that one nav
+ *  item, and only when there is actually something to say — a badge showing 0
+ *  is furniture. */
+function ChatBadge({ href, compact = false }: { href: string; compact?: boolean }) {
+  const unread = useChatUnread();
+  if (href !== "/chat" || unread < 1) return null;
+  return (
+    <span
+      aria-label={`${unread} unread`}
+      className={`grid min-w-[18px] shrink-0 place-items-center rounded-full bg-brand-600 px-1.5 text-[10px] font-bold tabular-nums text-white ${
+        compact ? "absolute right-1.5 top-1.5 h-[18px]" : "h-[18px]"
+      }`}
+    >
+      {unread > 99 ? "99+" : unread}
+    </span>
+  );
+}
 
 const NAV_GROUPS = ["Overview", "Money", "Stock", "Kitchen", "People", "Admin"];
 
@@ -346,6 +365,7 @@ function NavLinks({
                           {item.icon}
                         </span>
                         <span className="truncate">{item.label}</span>
+                        {item.href === "/chat" && <ChatBadge href={item.href} />}
                       </Link>
 
                     </div>
@@ -587,10 +607,11 @@ function MobileTabBar({ onSearch, items }: { onSearch: () => void; items: NavIte
                         <Link
                           key={n.href}
                           href={n.href}
-                          className={`mise-raised mise-press flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center text-[10px] font-medium leading-tight ${
+                          className={`mise-raised mise-press relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center text-[10px] font-medium leading-tight ${
                             active ? "text-brand-300 ring-1 ring-brand-400/40" : "text-fg-soft"
                           }`}
                         >
+                          {n.href === "/chat" && <ChatBadge href={n.href} compact />}
                           <span aria-hidden className="text-lg leading-none">{n.icon}</span>
                           <span className="line-clamp-2">{n.label}</span>
                         </Link>

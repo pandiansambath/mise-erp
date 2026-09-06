@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, ApiError, fetchBlobUrl, postForm } from "@/lib/api";
+import { refreshChatUnread } from "@/lib/chatUnread";
 import { Card, PageHeader } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
 import { useAuth } from "@/lib/auth";
@@ -89,6 +90,10 @@ export default function TeamChatPage() {
   const loadMsgs = useCallback(async (id: string) => {
     try {
       setMsgs(await api.get<Msg[]>(`/chat/rooms/${id}/messages`));
+      // Reading a room marks it seen server-side, so the nav badge is stale the
+      // instant this returns. Dropping it here beats leaving it lit for another
+      // half minute after the user has plainly read the message.
+      refreshChatUnread();
     } catch {
       setMsgs((m) => m ?? []);
     }
