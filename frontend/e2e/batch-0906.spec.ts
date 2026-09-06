@@ -91,8 +91,11 @@ test("your plan asks one question at a time instead of stacking three", async ({
   await page.goto(`${BASE}/plan`);
   await page.waitForLoadState("domcontentloaded");
 
-  const compare = page.getByRole("button", { name: "Compare plans" });
-  const included = page.getByRole("button", { name: "What's included" });
+  // role="tab", not "button" — the markup sets it explicitly, which overrides
+  // the implicit role. Asking for a button here found nothing and looked
+  // exactly like the tabs being missing; they were on screen the whole time.
+  const compare = page.getByRole("tab", { name: "Compare plans" });
+  const included = page.getByRole("tab", { name: "What's included" });
   await expect(compare).toBeVisible({ timeout: 60_000 });
   await expect(included).toBeVisible();
 
@@ -142,18 +145,39 @@ test("audit and documents load, and put something on the first screen", async ({
   }
 });
 
-test("my space carries the thread with the owner", async ({ page }) => {
+test("my space says something true, and the owner side of the thread answers", async ({
+  page,
+}) => {
   test.setTimeout(180_000);
   await signIn(page);
   await page.goto(`${BASE}/my`);
   await page.waitForLoadState("domcontentloaded");
 
-  // The composer is the thing a person points at when they say "I can message
-  // my manager here" — its absence is the whole failure mode.
-  const composer = page
-    .getByPlaceholder(/message|write|type/i)
-    .or(page.getByRole("textbox").filter({ visible: true }))
-    .first();
-  await expect(composer).toBeVisible({ timeout: 60_000 });
-  await page.screenshot({ path: "e2e-out/my-space-chat.png", fullPage: true });
+  // The owner's own login is not linked to an employee record, so My Space has
+  // no personal thread to show them — and says so, naming the fix. Asserting a
+  // composer here was wrong: it demanded a staff view from an owner account,
+  // and a page that correctly explains itself would have been marked broken.
+  await expect(
+    page
+      .getByText(/isn't linked to an employee record/i)
+      .or(page.getByPlaceholder(/message|write|type/i))
+      .first(),
+  ).toBeVisible({ timeout: 60_000 });
+  await page.screenshot({ path: "e2e-out/my-space.png", fullPage: true });
+
+  // The thread itself is checked where it can be checked without a staff login:
+  // the owner's end of it must answer for a real employee.
+  const result = await page.evaluate(async () => {
+    const token = localStorage.getItem("mise_token");
+    const head = { Authorization: `Bearer ${token}` };
+    const list = await fetch("/api/employees", { headers: head });
+    if (!list.ok) return { stage: "employees", status: list.status };
+    const rows = await list.json();
+    const first = Array.isArray(rows) ? rows[0] : rows?.items?.[0];
+    if (!first) return { stage: "empty", status: 200 };
+    const thread = await fetch(`/api/employees/${first.id}/messages`, { headers: head });
+    return { stage: "thread", status: thread.status, ok: thread.ok };
+  });
+  expect(result.stage, `stopped at ${result.stage} (${result.status})`).toBe("thread");
+  expect(result.status, "the owner end of the staff thread did not answer").toBe(200);
 });
