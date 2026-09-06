@@ -72,6 +72,7 @@ export default function TeamChatPage() {
   const [err, setErr] = useState<string | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [makeOpen, setMakeOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -300,6 +301,20 @@ export default function TeamChatPage() {
                         : "Private group"}
                   </p>
                 </div>
+                {/* Only a group the owner made has anything to change. The two
+                    standing rooms take their membership from people's roles, so
+                    a settings button there would open onto nothing. */}
+                {canManage && room.kind === "custom" && (
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen(true)}
+                    aria-label="Group settings"
+                    data-testid="room-settings"
+                    className="mise-btn-flat mise-press grid h-9 w-9 shrink-0 place-items-center text-base"
+                  >
+                    ⋯
+                  </button>
+                )}
               </div>
 
               <div
@@ -447,6 +462,19 @@ export default function TeamChatPage() {
           }}
         />
       )}
+
+      {settingsOpen && room && (
+        <GroupSettings
+          room={room}
+          onClose={() => setSettingsOpen(false)}
+          onChanged={() => void loadRooms()}
+          onClosed={() => {
+            setSettingsOpen(false);
+            setOpenId(null);
+            void loadRooms();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -504,6 +532,205 @@ function Attachment({ msg }: { msg: Msg }) {
   );
 }
 
+/** Who is in the group — searchable, because a roster of thirty is a list you
+ *  scan rather than read. Shared by "new group" and "group settings" so the two
+ *  cannot drift into behaving differently. */
+function MemberList({
+  people,
+  picked,
+  setPicked,
+}: {
+  people: Person[];
+  picked: Set<string>;
+  setPicked: React.Dispatch<React.SetStateAction<Set<string>>>;
+}) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const shown = people.filter(
+    (p) =>
+      !needle ||
+      p.name.toLowerCase().includes(needle) ||
+      p.email.toLowerCase().includes(needle),
+  );
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Members</p>
+        <p className="text-[11px] text-fg-faint">{picked.size} chosen</p>
+      </div>
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search people…"
+        data-testid="member-search"
+        className="mise-well mt-1.5 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
+      />
+      <div className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
+        {people.length === 0 && (
+          <p className="px-2 py-4 text-center text-[11px] text-fg-faint">Loading people…</p>
+        )}
+        {shown.map((p) => {
+          const on = picked.has(p.id);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              data-testid="member-option"
+              onClick={() =>
+                setPicked((s) => {
+                  const next = new Set(s);
+                  if (next.has(p.id)) next.delete(p.id);
+                  else next.add(p.id);
+                  return next;
+                })
+              }
+              className={`mise-press flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${
+                on ? "bg-brand-500/15" : "hover:bg-glass/5"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] ${
+                  on ? "border-brand-400 bg-brand-600 text-white" : "border-line"
+                }`}
+              >
+                {on ? "✓" : ""}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-fg">{p.name}</span>
+                <span className="block truncate text-[11px] text-fg-faint">
+                  {p.role.replace(/_/g, " ").toLowerCase()}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Change who is in a group, or close it.
+ *
+ *  Without this a group could be made and never unmade, and every experiment
+ *  would become permanent furniture in everybody's list. Only the owner's own
+ *  groups are editable — Everyone and Managers read their membership off
+ *  people's roles, so there is no list here to edit and the server refuses one.
+ */
+function GroupSettings({
+  room,
+  onClose,
+  onChanged,
+  onClosed,
+}: {
+  room: Room;
+  onClose: () => void;
+  onChanged: () => void;
+  onClosed: () => void;
+}) {
+  const [people, setPeople] = useState<Person[]>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get<Person[]>("/chat/people").then(setPeople).catch(() => setPeople([]));
+    api
+      .get<{ member_ids: string[] }>(`/chat/rooms/${room.id}/members`)
+      .then((m) => setPicked(new Set(m.member_ids)))
+      .catch(() => setPicked(new Set()));
+  }, [room.id]);
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.put(`/chat/rooms/${room.id}/members`, { member_ids: [...picked] });
+      onChanged();
+      onClose();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not save that");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shut() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.delete(`/chat/rooms/${room.id}`);
+      onClosed();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not close that group");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SheetPopup onClose={onClose} title={room.name} subtitle="Who is in this group" columns={2}>
+      <div className="space-y-4">
+        <MemberList people={people} picked={picked} setPicked={setPicked} />
+
+        {err && <p className="text-[11px] text-rose-400">{err}</p>}
+
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={busy}
+          data-tone="brand"
+          data-testid="members-save"
+          className="mise-btn-flat mise-press min-h-[46px] w-full px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+        >
+          {busy ? "Saving…" : "Save members"}
+        </button>
+
+        {/* Closing loses the history, so it asks once. It is not a red button
+            sitting among ordinary ones — it is a quiet link that turns into a
+            question only once you have chosen it. */}
+        <div className="border-t border-line pt-3 text-center">
+          {confirming ? (
+            <div className="space-y-2">
+              <p className="text-[11px] text-fg-faint">
+                Close &ldquo;{room.name}&rdquo;? Everyone in it loses the conversation.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="mise-btn-flat mise-press min-h-[40px] flex-1 px-3 text-sm"
+                >
+                  Keep it
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void shut()}
+                  disabled={busy}
+                  data-testid="group-close-confirm"
+                  className="mise-btn-flat mise-press min-h-[40px] flex-1 px-3 text-sm font-bold text-rose-400 disabled:opacity-40"
+                >
+                  Close the group
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              data-testid="group-close"
+              className="text-[11px] text-fg-faint underline underline-offset-2 hover:text-rose-400"
+            >
+              Close this group
+            </button>
+          )}
+        </div>
+      </div>
+    </SheetPopup>
+  );
+}
+
 /** Make a group and choose who is in it — searchable, because a roster of
  *  thirty is a list you scan rather than read. */
 function NewGroup({ onClose, onMade }: { onClose: () => void; onMade: (id: string) => void }) {
@@ -511,18 +738,12 @@ function NewGroup({ onClose, onMade }: { onClose: () => void; onMade: (id: strin
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("💬");
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<Person[]>("/chat/people").then(setPeople).catch(() => setPeople([]));
   }, []);
-
-  const shown = people.filter((p) => {
-    const n = q.trim().toLowerCase();
-    return !n || p.name.toLowerCase().includes(n) || p.email.toLowerCase().includes(n);
-  });
 
   async function create() {
     if (!name.trim()) {
@@ -569,57 +790,7 @@ function NewGroup({ onClose, onMade }: { onClose: () => void; onMade: (id: strin
           />
         </div>
 
-        <div>
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-              Members
-            </p>
-            <p className="text-[11px] text-fg-faint">{picked.size} chosen</p>
-          </div>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search people…"
-            className="mise-well mt-1.5 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
-          />
-          <div className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
-            {shown.map((p) => {
-              const on = picked.has(p.id);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() =>
-                    setPicked((s) => {
-                      const next = new Set(s);
-                      if (next.has(p.id)) next.delete(p.id);
-                      else next.add(p.id);
-                      return next;
-                    })
-                  }
-                  className={`mise-press flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${
-                    on ? "bg-brand-500/15" : "hover:bg-glass/5"
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] ${
-                      on ? "border-brand-400 bg-brand-600 text-white" : "border-line"
-                    }`}
-                  >
-                    {on ? "✓" : ""}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-fg">{p.name}</span>
-                    <span className="block truncate text-[11px] text-fg-faint">
-                      {p.role.replace(/_/g, " ").toLowerCase()}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <MemberList people={people} picked={picked} setPicked={setPicked} />
 
         {err && <p className="text-[11px] text-rose-400">{err}</p>}
 
