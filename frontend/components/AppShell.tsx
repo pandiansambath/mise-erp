@@ -41,6 +41,10 @@ const NAV: NavItem[] = [
   // endpoint resolves the employee from the token and can only ever return that
   // person's own rows.
   { href: "/my", label: "My Space", icon: "🙋", hideIfPerm: "attendance:read", group: "Overview", keywords: "self service my attendance rota shifts documents payslip" },
+  // Team chat is the one page with NO permission on it. "all (literally all) in that
+  // chat" — a kitchen porter with no read rights anywhere still belongs in the
+  // hotel's Everyone room, and the room list itself decides what they can open.
+  { href: "/chat", label: "Team chat", icon: "🗣️", group: "Overview", keywords: "chat group message team everyone managers whatsapp emoji photo video gif" },
   { href: "/how-it-works", label: "How it works", icon: "📘", group: "Overview", keywords: "help guide formulas" },
   { href: "/reports", label: "Reports (P&L)", icon: "📈", perm: "reports:read", feature: "reports", group: "Money", keywords: "profit loss pnl food cost" },
   { href: "/money", label: "Money", icon: "💰", perm: "reports:read", group: "Money", keywords: "cash in out" },

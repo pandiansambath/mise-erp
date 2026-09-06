@@ -85,6 +85,9 @@ export default function PlanPage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
+  /** Which question you are asking. Three stacked blocks meant scrolling past
+   *  two of them to reach the third, and only one is ever the question. */
+  const [tab, setTab] = useState<"tiers" | "included">("tiers");
 
   useEffect(() => {
     Promise.all([
@@ -105,10 +108,6 @@ export default function PlanPage() {
   const current = plans.find((p) => p.label === usage?.plan) ?? null;
   // AI first — it's the metered one, so it's what people actually wonder about
   const rows = showAll ? features : features.filter((f) => f.is_ai || !f.core);
-
-  /** Which question you are asking. Three stacked blocks meant scrolling past
-   *  two of them to reach the third, and only one is ever the question. */
-  const [tab, setTab] = useState<"tiers" | "included">("tiers");
 
   return (
     <div className="max-w-5xl">
