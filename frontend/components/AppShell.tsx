@@ -554,10 +554,15 @@ function MobileTabBar({ onSearch, items }: { onSearch: () => void; items: NavIte
       <Link
         key={t.href}
         href={t.href}
-        className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
+        className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
           active ? "text-brand-300" : "text-fg-faint"
         }`}
       >
+        {/* Staff are the people the Everyone room is for, and a staff login is
+            the one whose bottom bar actually HAS a chat tab — the four anchor
+            tabs are already spoken for on an owner's phone. Leaving the badge
+            out here would hide the count from exactly the people who need it. */}
+        {t.href === "/chat" && <ChatBadge href={t.href} compact />}
         <span
           aria-hidden
           className={`grid h-8 w-12 place-items-center rounded-xl text-lg leading-none transition-all duration-200 ${
