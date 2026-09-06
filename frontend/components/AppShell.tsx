@@ -757,11 +757,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // "No data available: all three data areas returned access errors", which is
   // a page apologising for being shown to someone who was never meant to see
   // it. If My Space is the only real destination, it is the whole app.
+  //
+  // TEAM CHAT BELONGS ON THIS LIST, and forgetting it undid the whole rule.
+  // Adding /chat with no permission — correctly, since the Everyone room is for
+  // everyone — meant a staff login now had a nav item outside the allowlist, so
+  // `every` went false, and the 16rem rail came back carrying Dashboard and How
+  // it works with it. The page he had already signed off reverted itself
+  // because this list was not told about a new page. Anything reachable by a
+  // login that can reach nothing else has to be named here.
+  const SELF_SERVICE_PAGES = ["/my", "/dashboard", "/how-it-works", "/chat"];
   const selfServiceOnly =
     navItems.some((i) => i.href === "/my") &&
-    navItems.every((i) => ["/my", "/dashboard", "/how-it-works"].includes(i.href));
+    navItems.every((i) => SELF_SERVICE_PAGES.includes(i.href));
+  // Their own space and the staff room — the two places that are actually
+  // theirs. Dashboard and How it works still go, which is what he asked for.
   const finalNav = selfServiceOnly
-    ? navItems.filter((i) => i.href === "/my")
+    ? navItems.filter((i) => i.href === "/my" || i.href === "/chat")
     : navItems;
 
   useEffect(() => {
@@ -853,6 +864,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="mt-1 block h-0.5 w-5 bg-current" />
             <span className="mt-1 block h-0.5 w-5 bg-current" />
           </button>
+
+          {/* No rail means no way back, so the slot the menu button vacated
+              becomes one — and only when they are somewhere other than home. */}
+          {selfServiceOnly && pathname !== "/my" && (
+            <Link
+              href="/my"
+              data-testid="back-to-my"
+              className="mise-btn-flat mise-press flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-fg-soft"
+            >
+              ‹ My Space
+            </Link>
+          )}
           <h1 className="font-display text-sm font-semibold text-fg lg:hidden">DineAI</h1>
           {/* ⌘K search — a well that invites the finger */}
           <button

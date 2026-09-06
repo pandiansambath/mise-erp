@@ -1,24 +1,51 @@
 "use client";
 
-import { fmtHours } from "@/lib/quantity";
+// ATTENDANCE — rebuilt around the only question the page is asked.
+//
+//   "UI UX we need to change from the scratch, we need to build the super cool
+//    UI UX. try think deeply and work on"
+//
+// WHAT WAS WRONG, measured before touching anything: the page ran 1.97 screens
+// on a laptop and **4.41 on a phone**, and the six people it is about began
+// roughly a thousand pixels down. Above them sat a history panel, a punch clock
+// illustrated with a 180px cartoon chef, and a numbered how-to for setting up
+// the door tablet. Below them, a legend and a flow explainer. On a phone you
+// reached the end of the first screen without seeing a single person.
+//
+// It was laid out as a manual with the tool at the bottom.
+//
+// WHAT IT IS NOW. One question — *who is in, and who should be* — answered in
+// the first screen. A sticky row says which day and how many are in; under it
+// the staff, as cards, immediately.
+//
+// The punch clock stopped being a section. Picking a name from a dropdown and
+// then pressing a button somewhere else is two steps to say one thing, and it
+// could contradict the list right beside it. Now the card IS the punch clock:
+// each person shows one obvious next action, and what that action is depends on
+// where they are in the day. You cannot clock in somebody who is already in,
+// because that button is not there to press.
+//
+// Everything occasional — exports, the tablet setup, the legend, a person's
+// history — moved behind ⋯ or behind the person it concerns. None of it earned
+// a permanent place above the answer.
 
-import { TimeRangePicker } from "@/components/RangeControls";
-import { useCallback, useEffect, useState } from "react";
-import { SubNav } from "@/components/SubNav";
-import { spotlight } from "@/components/fx";
-import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
-import { localISODate } from "@/lib/date";
-import Link from "next/link";
-import { Badge, Button, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { AttendanceLock } from "@/components/AttendanceLock";
-import { QuickLeave, AttendanceLegend, LEAVE_CHANGED } from "@/components/QuickLeave";
+import Link from "next/link";
+
 import { Bars, CalendarHeat } from "@/components/charts";
+import { TimeRangePicker } from "@/components/RangeControls";
+import { DayStepper, PageMore, type PageAction } from "@/components/PageKit";
+import { AttendanceLegend, LEAVE_CHANGED, QuickLeave } from "@/components/QuickLeave";
+import { SheetPopup } from "@/components/SheetPopup";
+import { Badge, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
-import { useHotelTime } from "@/lib/time";
 import { can } from "@/lib/permissions";
-import { Select } from "@/components/Select";
-import ChefMascot from "@/components/auth/ChefMascot";
+import { fmtHours } from "@/lib/quantity";
+import { useHotelTime } from "@/lib/time";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const daysAgoISO = (n: number) => {
@@ -32,19 +59,56 @@ type AttHistory = {
   date_from: string;
   date_to: string;
   totals: {
-    present: number; half_days: number; absent: number; recorded_days: number;
-    total_hours: string; indicative_pay: string; basis: string;
+    present: number;
+    half_days: number;
+    absent: number;
+    recorded_days: number;
+    total_hours: string;
+    indicative_pay: string;
+    basis: string;
   };
   days: {
-    date: string; status: string; working_hours: string | null;
-    clock_in: string | null; clock_out: string | null; break_minutes: number;
-    /** Present on paper, with nothing recording an arrival. */
+    date: string;
+    status: string;
+    working_hours: string | null;
+    clock_in: string | null;
+    clock_out: string | null;
+    break_minutes: number;
     no_punch?: boolean;
   }[];
 };
 
-/** 120 -> "2h", 90 -> "1h 30m", 30 -> "30m". Minutes alone made a two-hour
-    break read as a typo. */
+/** Where one person is in their day. Deriving this once, in one place, is what
+ *  lets the card show a single obvious action instead of a row of buttons that
+ *  are mostly wrong. */
+type Phase = "leave" | "out" | "working" | "break" | "done";
+
+function phaseOf(r: AttendanceRow | undefined): Phase {
+  if (r?.on_leave) return "leave";
+  if (!r?.clock_in) return "out";
+  if (r.on_break) return "break";
+  if (!r.clock_out) return "working";
+  return "done";
+}
+
+const PHASE_LABEL: Record<Phase, string> = {
+  leave: "On leave",
+  out: "Not in yet",
+  working: "Working",
+  break: "On break",
+  done: "Clocked out",
+};
+
+const PHASE_TONE: Record<Phase, "green" | "amber" | "red" | "slate"> = {
+  leave: "slate",
+  out: "red",
+  working: "green",
+  break: "amber",
+  done: "slate",
+};
+
+/** 120 -> "2h", 90 -> "1h 30m". Minutes alone made a two-hour break read as a
+ *  typo. */
 function fmtBreak(mins: number): string {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -53,707 +117,666 @@ function fmtBreak(mins: number): string {
   return `${m}m`;
 }
 
-const STATUS_TONE: Record<string, string> = {
-  PRESENT: "text-emerald-500",
-  HALF_DAY: "text-amber-500",
-  ABSENT: "text-rose-400",
-};
-
 export default function AttendancePage() {
   const { user } = useAuth();
-  const { format } = useCurrency();
   const { time: fmtTime, timeZone } = useHotelTime();
   const canWrite = can(user?.role, "attendance:write");
 
   const [day, setDay] = useState(today());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rows, setRows] = useState<Record<string, AttendanceRow>>({});
-  // per-person trailing week: employee_id -> hours worked on each of the 7 days ending `day`
   const [week, setWeek] = useState<Record<string, number[]>>({});
-  const [weekDays, setWeekDays] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  // The punch clock: who's at the pad + the press ripple
-  const [punchSel, setPunchSel] = useState("");
-  const [punchRipple, setPunchRipple] = useState(0);
-
-  // Manual edit / back-date (for missed punches)
-  const [editEmp, setEditEmp] = useState<Employee | null>(null);
-  const [ci, setCi] = useState("");
-  const [co, setCo] = useState("");
-  const [brk, setBrk] = useState("0");
-  const [savingEdit, setSavingEdit] = useState(false);
-
-  // UTC ISO -> "HH:MM" in the hotel's timezone (for prefilling the time inputs)
-  const toHHMM = (iso: string | null | undefined): string =>
-    iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }) : "";
-
-
-  // Live preview for the edit dialog — the exact math the server will do:
-  // (out − in, rolling past midnight) − break. No more surprise numbers.
-  const previewMins = (() => {
-    if (!ci || !co) return null;
-    const [ih, im] = ci.split(":").map(Number);
-    const [oh, om] = co.split(":").map(Number);
-    let span = oh * 60 + om - (ih * 60 + im);
-    if (span <= 0) span += 24 * 60; // clock-out after midnight
-    return Math.max(0, span - (parseInt(brk || "0", 10) || 0));
-  })();
-  const previewOvernight = !!ci && !!co && co <= ci;
+  const [openPerson, setOpenPerson] = useState<Employee | null>(null);
+  const [sheet, setSheet] = useState<null | "tablet" | "markers">(null);
 
   const load = useCallback(async (d: string) => {
-    const [emps, att] = await Promise.all([
-      api.get<Employee[]>("/employees"),
-      api.get<AttendanceRow[]>(`/attendance?on=${d}`),
-    ]);
-    setEmployees(emps);
-    setRows(Object.fromEntries(att.map((r) => [r.employee_id, r])));
-  }, []);
-
-  // The week strip loads quietly after the day view — never blocks the page.
-  const loadWeek = useCallback(async (d: string) => {
-    const end = new Date(d + "T12:00:00");
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const dt = new Date(end);
-      dt.setDate(end.getDate() - (6 - i));
-      return dt.toISOString().slice(0, 10);
-    });
-    setWeekDays(days);
-    const perDay = await Promise.all(
-      days.map((dt) => api.get<AttendanceRow[]>(`/attendance?on=${dt}`).catch(() => [] as AttendanceRow[])),
-    );
-    const map: Record<string, number[]> = {};
-    perDay.forEach((att, i) => {
-      for (const r of att) {
-        (map[r.employee_id] ??= Array(7).fill(0))[i] = parseFloat(r.working_hours ?? "0") || 0;
-      }
-    });
-    setWeek(map);
+    setLoading(true);
+    setError(null);
+    try {
+      const [emps, att] = await Promise.all([
+        api.get<Employee[]>("/employees"),
+        api.get<AttendanceRow[]>(`/attendance?on=${d}`),
+      ]);
+      setEmployees(emps);
+      setRows(Object.fromEntries(att.map((r) => [r.employee_id, r])));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not load attendance");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load(day).finally(() => setLoading(false));
-    loadWeek(day);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void load(day);
+  }, [day, load]);
 
-  async function changeDay(d: string) {
-    setDay(d);
-    setLoading(true);
-    await load(d).finally(() => setLoading(false));
-    loadWeek(d);
-  }
+  // The seven days ending on the one being viewed, for the little bar under each
+  // name. Loaded after the page has painted: it is context, not the answer, and
+  // the answer should not wait for it.
+  useEffect(() => {
+    let alive = true;
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(day + "T00:00:00");
+      d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().slice(0, 10);
+    });
+    Promise.all(
+      days.map((dt) =>
+        api.get<AttendanceRow[]>(`/attendance?on=${dt}`).catch(() => [] as AttendanceRow[]),
+      ),
+    ).then((all) => {
+      if (!alive) return;
+      const map: Record<string, number[]> = {};
+      all.forEach((rowsForDay, i) => {
+        for (const r of rowsForDay) {
+          (map[r.employee_id] ??= Array(7).fill(0))[i] = Number(r.working_hours ?? 0);
+        }
+      });
+      setWeek(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [day]);
+
+  useEffect(() => {
+    const again = () => void load(day);
+    window.addEventListener(LEAVE_CHANGED, again);
+    return () => window.removeEventListener(LEAVE_CHANGED, again);
+  }, [day, load]);
 
   async function punch(employeeId: string, type: string) {
+    setBusyId(employeeId);
     setError(null);
     try {
       await api.post("/attendance/punch", { employee_id: employeeId, type });
       await load(day);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Punch failed");
-    }
-  }
-
-  function openEdit(e: Employee) {
-    const r = rows[e.id];
-    setEditEmp(e);
-    setCi(toHHMM(r?.clock_in));
-    setCo(toHHMM(r?.clock_out));
-    setBrk(String(r?.break_minutes ?? 0));
-    setError(null);
-  }
-
-  async function saveEdit() {
-    if (!editEmp) return;
-    setSavingEdit(true);
-    setError(null);
-    try {
-      await api.post("/attendance/edit", {
-        employee_id: editEmp.id,
-        date: day,
-        clock_in: ci || null,
-        clock_out: co || null,
-        break_minutes: parseInt(brk || "0", 10),
-      });
-      setEditEmp(null);
-      await load(day);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "That did not register");
     } finally {
-      setSavingEdit(false);
+      setBusyId(null);
     }
   }
 
-  if (loading) return <Spinner />;
+  const counts = useMemo(() => {
+    let inNow = 0;
+    let onBreak = 0;
+    let leave = 0;
+    let missing = 0;
+    for (const e of employees) {
+      const p = phaseOf(rows[e.id]);
+      if (p === "working") inNow += 1;
+      if (p === "break") {
+        inNow += 1;
+        onBreak += 1;
+      }
+      if (p === "leave") leave += 1;
+      if (p === "out" && rows[e.id]?.scheduled) missing += 1;
+    }
+    return { inNow, onBreak, leave, missing };
+  }, [employees, rows]);
 
-  const isToday = day === today();
-  const present = Object.values(rows).filter((r) => r.status === "PRESENT").length;
-  const btn = "rounded border px-2 py-1 text-xs font-medium";
+  const more: PageAction[] = [
+    {
+      key: "pdf",
+      label: "Timesheet for this day (PDF)",
+      icon: "📄",
+      onSelect: () =>
+        void downloadFile(`/attendance/timesheet.pdf?on=${day}`, `timesheet-${day}.pdf`),
+    },
+    {
+      key: "xlsx",
+      label: "This day (Excel)",
+      icon: "📊",
+      onSelect: () =>
+        void downloadFile(`/attendance/timesheet.xlsx?on=${day}`, `timesheet-${day}.xlsx`),
+    },
+    {
+      key: "range",
+      label: "Last 30 days (Excel)",
+      icon: "🗓️",
+      hint: "Every person, every day, with hours",
+      onSelect: () =>
+        void downloadFile(
+          `/attendance/range.xlsx?date_from=${daysAgoISO(29)}&date_to=${today()}`,
+          "attendance-last-30-days.xlsx",
+        ),
+    },
+    {
+      key: "tablet",
+      label: "The tablet by the door",
+      icon: "🖥️",
+      hint: "Set the PIN and open the clocking screen",
+      onSelect: () => setSheet("tablet"),
+    },
+    {
+      key: "markers",
+      label: "What the markers mean",
+      icon: "🔑",
+      onSelect: () => setSheet("markers"),
+    },
+  ];
 
   return (
     <div>
-      <PageHeader title="Attendance" subtitle="Clock in → (break → resume) → clock out. Hours auto-calculate." />
-
-      <SubNav
-        items={[
-          { key: "today", label: "Today", icon: "📅", onSelect: () => setDay(today()) },
-          {
-            key: "clock",
-            label: "Punch clock",
-            icon: "⏱",
-            onSelect: () => spotlight("punch-clock"),
-          },
-          {
-            key: "history",
-            label: "History by person",
-            icon: "📖",
-            onSelect: () => spotlight("att-history"),
-          },
-          {
-            key: "legend",
-            label: "What the markers mean",
-            icon: "🔑",
-            onSelect: () => spotlight("att-legend"),
-          },
-        ]}
+      <PageHeader
+        title="Attendance"
+        subtitle="Who is in, and who should be."
+        actions={<PageMore actions={more} title="Attendance" subtitle="Exports and setup" />}
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="date"
-          value={day}
-          // Nobody has worked a shift in the future.
-          max={localISODate()}
-          onChange={(e) => changeDay(e.target.value)}
-          className="mise-well rounded-lg px-3 py-2 text-sm outline-none"
-        />
-        <span className="text-sm text-fg-faint">{present} present · {employees.length} staff</span>
-        {/* The rota expected them and they have not clocked in. This is the
-            single thing a manager needs at 09:00, and nothing said it before. */}
-        {(() => {
-          const missing = Object.values(rows).filter((r) => r.missing);
-          if (missing.length === 0) return null;
-          return (
-            <span
-              title={missing.map((r) => r.employee_name).join(", ")}
-              className="mise-pop rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-300"
-            >
-              ⚠ {missing.length} rota&apos;d but not clocked in
+      {/* THE ONLY ROW ABOVE THE PEOPLE. Which day, and how it stands. */}
+      <div className="mise-card-inset mb-4 flex flex-wrap items-center gap-3 rounded-2xl px-3 py-2.5">
+        <DayStepper value={day} onChange={setDay} max={today()} />
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+          <span className="font-semibold text-fg" data-testid="att-count">
+            {counts.inNow} of {employees.length} in
+          </span>
+          {counts.onBreak > 0 && (
+            <span className="text-amber-500">{counts.onBreak} on break</span>
+          )}
+          {counts.leave > 0 && <span className="text-fg-faint">{counts.leave} on leave</span>}
+          {/* The one that needs a phone call, said plainly rather than left for
+              the reader to work out by comparing two columns. */}
+          {counts.missing > 0 && (
+            <span className="font-semibold text-rose-400">
+              {counts.missing} expected, not in
             </span>
-          );
-        })()}
-        <span className="text-xs text-fg-faint">· times in {timeZone}</span>
-        {!isToday && <span className="text-xs text-fg-faint">(punching only works for today)</span>}
-        <div className="ml-auto flex gap-2">
-          <button
-            onClick={() => downloadFile(`/attendance/timesheet.pdf?on=${day}`, `timesheet-${day}.pdf`)}
-            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
-          >
-            ⬇ PDF
-          </button>
-          <button
-            onClick={() => downloadFile(`/attendance/timesheet.xlsx?on=${day}`, `timesheet-${day}.xlsx`)}
-            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
-            title="Just this one day"
-          >
-            ⬇ Excel (day)
-          </button>
-          <button
-            onClick={() => downloadFile(`/attendance/range.xlsx?date_from=${daysAgoISO(29)}&date_to=${today()}`, `attendance-last-30-days.xlsx`)}
-            className="mise-raised mise-press rounded-lg px-3 py-2 text-sm font-medium text-fg-soft"
-            title="Everyone, last 30 days"
-          >
-            ⬇ Last 30 days
-          </button>
+          )}
         </div>
+        <span className="ml-auto text-[11px] text-fg-faint">times in {timeZone}</span>
       </div>
 
-      {error && <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+      {error && (
+        <p className="mb-3 rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-400">{error}</p>
+      )}
 
-      <AttendanceHistoryCard employees={employees} format={format} />
-
-      {/* ── THE PUNCH CLOCK — one big physical button, chef looking on ── */}
-      {isToday && canWrite && employees.length > 0 && (() => {
-        const emp = employees.find((e) => e.id === punchSel) ?? employees[0];
-        const r = rows[emp.id];
-        const state: { type: string | null; label: string; sub: string; tone: string } = !r?.clock_in
-          ? { type: "CLOCK_IN", label: "Clock in", sub: "start the shift", tone: "text-brand-300" }
-          : r.on_break
-            ? { type: "BREAK_END", label: "End break", sub: "back to the pass", tone: "text-amber-300" }
-            : !r.clock_out
-              ? { type: "CLOCK_OUT", label: "Clock out", sub: "wrap the shift", tone: "text-rose-300" }
-              : { type: null, label: "Done ✓", sub: `worked ${fmtHours(r.working_hours)}`, tone: "text-fg-faint" };
-        return (
-          <Card className="mise-feel mb-6">
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="w-28 shrink-0 sm:w-32">
-                <ChefMascot mood={state.type === null ? "happy" : r?.on_break ? "think" : "point"} look={0} />
-              </div>
-              <div className="min-w-[12rem] flex-1">
-                <h3 id="punch-clock" className="scroll-mt-24 font-semibold text-fg">Punch clock</h3>
-                <p className="mb-2 text-xs text-fg-faint">pick a person, press the button — that&apos;s the whole job</p>
-                <Select
-                  value={emp.id}
-                  onChange={setPunchSel}
-                  options={employees.map((e) => {
-                    const er = rows[e.id];
-                    const flag = !er?.clock_in ? "· not in yet" : er.on_break ? "· on break" : er.clock_out ? "· done" : "· working";
-                    return { value: e.id, label: `${e.full_name} ${flag}` };
-                  })}
-                />
-                {r?.clock_in && (
-                  <p className="mt-2 text-xs text-fg-faint">
-                    in {fmtTime(r.clock_in)}{r.break_minutes > 0 ? ` · break ${r.break_minutes}m` : ""}
-                    {r.clock_out ? ` · out ${fmtTime(r.clock_out)}` : ""}
-                  </p>
-                )}
-              </div>
-              <div className="relative mx-auto sm:mx-0">
-                {punchRipple > 0 && (
-                  <span key={punchRipple} aria-hidden className="mise-punch-ring absolute inset-0 rounded-full" />
-                )}
-                <button
-                  type="button"
-                  disabled={state.type === null}
-                  onClick={() => {
-                    setPunchRipple((n) => n + 1);
-                    if (state.type) punch(emp.id, state.type);
-                  }}
-                  className={`mise-raised mise-press relative grid h-36 w-36 place-items-center rounded-full text-center disabled:opacity-60 ${state.tone}`}
-                >
-                  <span>
-                    <span className="block text-xl font-bold">{state.label}</span>
-                    <span className="block text-[11px] text-fg-faint">{state.sub}</span>
-                  </span>
-                </button>
-              </div>
-            </div>
-          </Card>
-        );
-      })()}
-
-      {/* the floor, live: who's on right now — breathing presence chips */}
-      {(() => {
-        const on = employees.filter((e) => {
-          const r = rows[e.id];
-          return r?.clock_in && !r.clock_out;
-        });
-        if (on.length === 0) return null;
-        return (
-          <div className="mise-well mb-4 flex flex-wrap items-center gap-2 rounded-2xl p-2.5">
-            <span className="px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-fg-faint">
-              On the floor now
-            </span>
-            {on.map((e) => {
-              const r = rows[e.id];
-              return (
-                <span
-                  key={e.id}
-                  className={`mise-raised inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                    r?.on_break ? "text-amber-300" : "text-brand-300"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 animate-pulse rounded-full ${r?.on_break ? "bg-amber-400" : "bg-brand-400"}`}
-                    aria-hidden
-                  />
-                  {e.full_name.split(" ")[0]}
-                  {r?.on_break && <span className="text-[10px] opacity-80">break</span>}
-                </span>
-              );
-            })}
-            <span className="ml-auto px-1 text-[11px] text-fg-faint">
-              {on.length} in · {on.filter((e) => rows[e.id]?.on_break).length} on break
-            </span>
-          </div>
-        );
-      })()}
-
-      {/* Turn this device into the screen by the door. */}
-      <AttendanceLock />
-
-      <Card className="p-0">
-        <div className="overflow-x-auto">
-          <table className="mise-stack w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs uppercase text-fg-faint">
-                <th className="px-5 py-3 font-medium">Employee</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">In</th>
-                <th className="px-5 py-3 font-medium">Out</th>
-                <th className="px-5 py-3 text-right font-medium">Break</th>
-                <th className="px-5 py-3 text-right font-medium">Hours</th>
-                <th className="px-5 py-3 text-right font-medium">Penalty</th>
-                {canWrite && <th className="px-5 py-3 font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {employees.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-8 text-center text-fg-faint">No employees yet.</td></tr>
-              ) : (
-                employees.map((e) => {
-                  const r = rows[e.id];
-                  const clockedIn = !!r?.clock_in;
-                  const clockedOut = !!r?.clock_out;
-                  const onBreak = !!r?.on_break;
-                  // Both come from the rota via the same leave service the Rota
-                  // page writes to — this sheet and that one cannot disagree.
-                  const onLeave = !!r?.on_leave;
-                  const missing = !!r?.missing;
-                  return (
-                    <tr key={e.id} className="border-b border-line">
-                      <td className="px-5 py-3 font-medium text-fg">
-                        {e.full_name}
-                        {week[e.id] && (
-                          // the last 7 days at a glance — darker = longer day
-                          <span className="mt-1.5 flex items-center gap-[3px]" aria-hidden>
-                            {week[e.id].map((h, i) => (
-                              <span
-                                key={i}
-                                title={`${weekDays[i]}: ${h ? `${h.toFixed(1)}h` : "off"}`}
-                                className="h-2.5 w-2.5 rounded-[3px]"
-                                style={{
-                                  background:
-                                    h > 0
-                                      ? `rgba(16,185,129,${Math.min(1, 0.25 + (h / 10) * 0.75).toFixed(2)})`
-                                      : "rgba(148,163,158,0.14)",
-                                }}
-                              />
-                            ))}
-                            <span className="ml-1 text-[9px] font-normal text-fg-faint">7d</span>
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        {/* Leave first: someone booked off is NOT absent, and
-                            reading the same for both is what sends a manager
-                            chasing a person who is on holiday. Then the rota's
-                            expectation, which is the difference between "nobody
-                            was due" and "somebody did not turn up". */}
-                        {onLeave ? (
-                          <span className="rounded-full bg-sky-400/15 px-2 py-0.5 text-[11px] font-medium text-sky-300">
-                            🌴 On leave
-                          </span>
-                        ) : onBreak ? (
-                          <Badge tone="amber">On break</Badge>
-                        ) : clockedOut ? (
-                          <Badge tone="slate">Clocked out</Badge>
-                        ) : clockedIn ? (
-                          <Badge tone="green">Working</Badge>
-                        ) : missing ? (
-                          <span
-                            className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-medium text-rose-300"
-                            title={
-                              r?.scheduled_start
-                                ? `The rota expected them at ${r.scheduled_start}`
-                                : "The rota expected them today"
-                            }
-                          >
-                            Not in yet{r?.scheduled_start ? ` · due ${r.scheduled_start}` : ""}
-                          </span>
-                        ) : (
-                          <span className="text-fg-faint" title="No shift on the rota today">—</span>
-                        )}
-                      </td>
-                      <td data-label="In" className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_in ?? null)}</td>
-                      <td data-label="Out" className="px-5 py-3 text-fg-soft">{fmtTime(r?.clock_out ?? null)}</td>
-                      <td data-label="Break" className="px-5 py-3 text-right text-fg-soft">
-                        {onBreak ? (
-                          <span className="text-amber-400">on break…</span>
-                        ) : r && r.break_minutes > 0 ? (
-                          // always show a deducted break, even if it was set via Edit
-                          `${r.break_minutes}m${r.over_break_minutes ? ` (+${r.over_break_minutes})` : ""}`
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td data-label="Hours" className="px-5 py-3 text-right text-fg-soft" title={r?.working_hours ? `${fmtHours(r.working_hours)} — the unpaid break is already taken out` : undefined}>
-                        {fmtHours(r?.working_hours)}
-                        {r?.clock_in && (() => {
-                          // the day as a strip: 06:00→24:00, shift filled in
-                          const frac = (iso: string) => {
-                            const [h, m] = fmtTime(iso).split(":").map(Number);
-                            return Math.max(0, Math.min(1, (h + m / 60 - 6) / 18));
-                          };
-                          const a = frac(r.clock_in);
-                          const b = r.clock_out ? Math.max(a + 0.02, frac(r.clock_out)) : Math.max(a + 0.02, frac(new Date().toISOString()));
-                          return (
-                            <span className="mise-well mt-1.5 block h-1.5 w-24 overflow-hidden rounded-full" aria-hidden>
-                              <span
-                                className={`block h-full rounded-full ${r.clock_out ? "bg-brand-500/70" : "bg-amber-400/80"}`}
-                                style={{ marginLeft: `${a * 100}%`, width: `${Math.max(3, (b - a) * 100)}%` }}
-                              />
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td data-label="Penalty" className="px-5 py-3 text-right">
-                        {r && parseFloat(r.break_penalty) > 0 ? (
-                          <span className="text-rose-400">{format(r.break_penalty)}</span>
-                        ) : (
-                          <span className="text-fg-faint">—</span>
-                        )}
-                      </td>
-                      {canWrite && (
-                        <td className="px-5 py-3">
-                          <div className="flex flex-wrap items-center gap-1">
-                            {isToday && !clockedIn && (
-                              <button onClick={() => punch(e.id, "CLOCK_IN")} className={`${btn} border-brand-400/30 bg-brand-400/10 text-brand-300`}>Clock in</button>
-                            )}
-                            {isToday && clockedIn && !clockedOut && !onBreak && (
-                              <>
-                                <button onClick={() => punch(e.id, "BREAK_START")} className={`${btn} border-amber-400/30 bg-amber-400/10 text-amber-300`}>Start break</button>
-                                <button onClick={() => punch(e.id, "CLOCK_OUT")} className={`${btn} border-line-2 text-fg-soft`}>Clock out</button>
-                              </>
-                            )}
-                            {isToday && clockedIn && !clockedOut && onBreak && (
-                              <button onClick={() => punch(e.id, "BREAK_END")} className={`${btn} border-brand-400/30 bg-brand-400/10 text-brand-300`}>End break</button>
-                            )}
-                            <button onClick={() => openEdit(e)} className={`${btn} border-line text-fg-faint hover:bg-paper-2`} title="Manually set / fix times (works for past dates)">Edit</button>
-                            {/* Booking time off belongs where you notice it is
-                                needed — an empty row at 09:15 — not on another
-                                page you have to remember to visit. */}
-                            {!onLeave && (
-                              <QuickLeave
-                                employeeId={e.id}
-                                employeeName={e.full_name}
-                                day={day}
-                                onBooked={() => { load(day); }}
-                                className={`${btn} border-sky-400/30 bg-sky-400/10 text-sky-300`}
-                              />
-                            )}
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+      {loading ? (
+        <Spinner />
+      ) : employees.length === 0 ? (
+        <Card className="py-10 text-center text-sm text-fg-faint">
+          Nobody on the books yet. Add people on Employees and they appear here.
+        </Card>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {employees.map((e) => (
+            <PersonCard
+              key={e.id}
+              employee={e}
+              row={rows[e.id]}
+              hours={week[e.id]}
+              busy={busyId === e.id}
+              canWrite={canWrite}
+              fmtTime={fmtTime}
+              onPunch={(type) => void punch(e.id, type)}
+              onOpen={() => setOpenPerson(e)}
+            />
+          ))}
         </div>
-      </Card>
+      )}
 
-      {/* The legend explains the sheet; it goes after it. */}
-      <div id="att-legend" className="scroll-mt-24"><AttendanceLegend /></div>
+      {openPerson && (
+        <PersonSheet
+          employee={openPerson}
+          row={rows[openPerson.id]}
+          day={day}
+          canWrite={canWrite}
+          timeZone={timeZone}
+          fmtTime={fmtTime}
+          onClose={() => setOpenPerson(null)}
+          onChanged={() => void load(day)}
+        />
+      )}
 
-      <p className="mt-4 text-xs text-fg-faint">
-        Flow: <b>Clock in</b> → optionally <b>Start break</b> then <b>End break</b> → <b>Clock out</b>.
-        Break time is subtracted from the day&apos;s working hours. Use <b>Edit</b> to fix or
-        back-date a record if someone forgot to punch.
-      </p>
+      {sheet === "tablet" && (
+        <SheetPopup
+          onClose={() => setSheet(null)}
+          title="The tablet by the door"
+          subtitle="A screen that can only clock people in and out"
+        >
+          <AttendanceLock />
+        </SheetPopup>
+      )}
 
-      {editEmp && (
-        <div className="mise-fade fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setEditEmp(null)}>
-          <div className="mise-pop w-full max-w-sm rounded-2xl border border-glass/10 bg-paper-2/95 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl" onClick={(ev) => ev.stopPropagation()}>
-            <h3 className="font-semibold text-fg">Edit attendance</h3>
-            <p className="mt-0.5 text-sm text-fg-faint">{editEmp.full_name} · {day} · times in {timeZone}</p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="text-sm text-fg-soft">Clock in
-                <input type="time" value={ci} onChange={(ev) => setCi(ev.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
-              </label>
-              <label className="text-sm text-fg-soft">Clock out
-                <input type="time" value={co} onChange={(ev) => setCo(ev.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
-              </label>
-              <label className="col-span-2 text-sm text-fg-soft">Break (minutes)
-                <input type="number" min="0" value={brk} onChange={(ev) => setBrk(ev.target.value)} className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none" />
-              </label>
-              {previewMins !== null && (
-                <p className="mise-well col-span-2 rounded-lg px-3 py-2 text-xs text-fg-soft">
-                  {ci} → {co}{previewOvernight ? " (next day)" : ""} − {parseInt(brk || "0", 10) || 0}m break ={" "}
-                  <b className="text-fg">{fmtHours(previewMins / 60)}</b>
-                </p>
-              )}
-            </div>
-            <p className="mt-2 text-xs text-fg-faint">Leave clock-in empty to mark the day absent.</p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setEditEmp(null)} className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm text-fg-soft">Cancel</button>
-              <button onClick={saveEdit} disabled={savingEdit} className="mise-press rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-                {savingEdit ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {sheet === "markers" && (
+        <SheetPopup
+          onClose={() => setSheet(null)}
+          title="What the markers mean"
+          subtitle="Clock in → (break → resume) → clock out. Hours calculate themselves."
+        >
+          <AttendanceLegend />
+        </SheetPopup>
       )}
     </div>
   );
 }
 
-
-/* ── Per-person attendance history: any range, charts, totals, download ── */
-function AttendanceHistoryCard({ employees, format }: {
-  employees: Employee[];
-  format: (v: string) => string;
+/** One person, one card, one obvious next action.
+ *
+ *  The action is derived from where they are in the day rather than listed in
+ *  full, so an impossible one is never on screen to be pressed. Tapping the
+ *  card itself opens everything else about them — the buttons stop propagation
+ *  so a punch never opens a sheet by accident.
+ */
+function PersonCard({
+  employee,
+  row,
+  hours,
+  busy,
+  canWrite,
+  fmtTime,
+  onPunch,
+  onOpen,
+}: {
+  employee: Employee;
+  row?: AttendanceRow;
+  hours?: number[];
+  busy: boolean;
+  canWrite: boolean;
+  fmtTime: (iso: string | null) => string;
+  onPunch: (type: string) => void;
+  onOpen: () => void;
 }) {
-  const [empId, setEmpId] = useState("");
-  const [mode, setMode] = useState<"WEEK" | "MONTH" | "CUSTOM">("MONTH");
-  const [from, setFrom] = useState(daysAgoISO(29));
-  const [to, setTo] = useState(today());
-  const [hist, setHist] = useState<AttHistory | null>(null);
-  const [busy, setBusy] = useState(false);
+  const phase = phaseOf(row);
 
-  function applyMode(m: "WEEK" | "MONTH" | "CUSTOM") {
-    setMode(m);
-    if (m === "WEEK") { setFrom(daysAgoISO(6)); setTo(today()); }
-    else if (m === "MONTH") { setFrom(daysAgoISO(29)); setTo(today()); }
-  }
+  const line = (() => {
+    if (phase === "leave") return "Booked off — nobody to chase";
+    if (phase === "out") {
+      return row?.scheduled_start ? `Due ${row.scheduled_start}` : "No shift on the rota today";
+    }
+    const bits = [`in ${fmtTime(row?.clock_in ?? null)}`];
+    if (row?.clock_out) bits.push(`out ${fmtTime(row.clock_out)}`);
+    if (row?.break_minutes) bits.push(`${fmtBreak(row.break_minutes)} break`);
+    return bits.join(" · ");
+  })();
 
-  const load = useCallback(() => {
-    if (!empId) { setHist(null); return; }
-    setBusy(true);
-    api.get<AttHistory>(`/attendance/history/${empId}?date_from=${from}&date_to=${to}`)
-      .then(setHist).catch(() => setHist(null)).finally(() => setBusy(false));
-  }, [empId, from, to]);
-  useEffect(load, [load]);
+  const actions: { label: string; type: string; strong?: boolean }[] =
+    phase === "out"
+      ? [{ label: "Clock in", type: "CLOCK_IN", strong: true }]
+      : phase === "working"
+        ? [
+            { label: "Break", type: "BREAK_START" },
+            { label: "Clock out", type: "CLOCK_OUT", strong: true },
+          ]
+        : phase === "break"
+          ? [{ label: "End break", type: "BREAK_END", strong: true }]
+          : [];
 
   return (
-    <Card className="mise-feel mb-6">
-      <h3 id="att-history" className="scroll-mt-24 font-semibold text-fg">📖 Attendance history by person</h3>
-      <p className="mt-1 text-sm text-fg-faint">
-        No more clicking day by day — pick a person and a range and see the whole picture:
-        every day, total hours, and the pay it would earn. Download it too.
-      </p>
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        <div className="w-56">
-          <label className="block text-xs font-medium text-fg-faint">Person</label>
-          <Select
-            className="mt-1"
-            value={empId}
-            onChange={setEmpId}
-            options={[{ value: "", label: "Choose a person…" },
-              ...employees.map((e) => ({ value: e.id, label: e.full_name }))]}
-          />
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          onOpen();
+        }
+      }}
+      data-testid="att-person"
+      className="mise-card-inset mise-press flex cursor-pointer flex-col gap-2 rounded-2xl px-3.5 py-3 text-left transition hover:bg-glass/5"
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-fg">{employee.full_name}</p>
+          <p className="truncate text-[11px] text-fg-faint">{line}</p>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-fg-faint">Range</label>
-          <Segmented
-            className="mt-1"
-            value={mode}
-            onChange={(v) => applyMode(v as "WEEK" | "MONTH" | "CUSTOM")}
-            options={[
-              { value: "WEEK", label: "Last 7 days" },
-              { value: "MONTH", label: "Last 30 days" },
-              { value: "CUSTOM", label: "From→to" },
-            ]}
-          />
-        </div>
-        {mode === "CUSTOM" && (
-          // Same CloudWatch-style picker as the money screens: quick presets,
-          // relative windows ("last 6 weeks") and absolute dates in one control.
-          <TimeRangePicker
-            range={{ from, to }}
-            onChange={(r) => {
-              setFrom(r.from);
-              setTo(r.to);
-            }}
-          />
-        )}
-        {empId && (
-          <Button variant="secondary" onClick={() => downloadFile(
-            `/attendance/range.xlsx?date_from=${from}&date_to=${to}&employee_id=${empId}`,
-            `attendance-${hist?.employee.name ?? "person"}-${from}-to-${to}.xlsx`)}>
-            ⬇ Download
-          </Button>
-        )}
+        <Badge tone={PHASE_TONE[phase]}>{PHASE_LABEL[phase]}</Badge>
       </div>
 
-      {busy && <p className="mt-4 text-sm text-fg-faint">Loading…</p>}
-      {hist && !busy && (
-        <div className="mise-cadence-in mt-4">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {[
-              ["Present", String(hist.totals.present), "text-emerald-500"],
-              ["Half-days", String(hist.totals.half_days), "text-amber-500"],
-              ["Absent", String(hist.totals.absent), "text-rose-400"],
-              ["Total hours", hist.totals.total_hours, "text-fg"],
-              ["Indicative pay", format(hist.totals.indicative_pay), "text-brand-400"],
-            ].map(([l, v, c]) => (
-              <div key={l} className="mise-well rounded-xl p-2.5 text-center">
-                <p className={`font-mono text-base font-bold ${c}`}>{v}</p>
-                <p className="text-[10px] uppercase tracking-wide text-fg-faint">{l}</p>
-              </div>
+      <div className="flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-lg font-semibold tabular-nums text-fg">
+            {row?.working_hours ? fmtHours(Number(row.working_hours)) : "—"}
+          </p>
+          {/* Seven days at a glance. Bars, not numbers: the question it answers
+              is "is this normal for them", which is a shape, not a figure. */}
+          {hours && hours.some((h) => h > 0) && (
+            <div className="mt-1 flex h-4 items-end gap-0.5" aria-hidden>
+              {hours.map((h, i) => (
+                <span
+                  key={i}
+                  className="w-1.5 rounded-sm bg-brand-400/50"
+                  style={{ height: `${Math.max(2, Math.min(16, (h / 10) * 16))}px` }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {canWrite && actions.length > 0 && (
+          <div className="flex shrink-0 gap-1.5" onClick={(ev) => ev.stopPropagation()}>
+            {actions.map((a) => (
+              <button
+                key={a.type}
+                type="button"
+                disabled={busy}
+                onClick={() => onPunch(a.type)}
+                data-tone={a.strong ? "brand" : undefined}
+                data-testid={`punch-${a.type}`}
+                className={`mise-btn-flat mise-press min-h-[38px] px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${
+                  a.strong ? "text-brand-300" : "text-fg-soft"
+                }`}
+              >
+                {busy ? "…" : a.label}
+              </button>
             ))}
           </div>
-          <p className="mt-1.5 text-center text-[11px] text-fg-faint">
-            indicative pay = {hist.totals.basis} · the real, overlap-checked run lives in{" "}
-            <Link href="/payroll" className="text-brand-400 underline">Payroll</Link>
-          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
-          {hist.days.length > 0 ? (
-            <>
-              <div className="mt-4">
+/** Everything else about one person: their day, a missed punch, leave, and the
+ *  history that used to need its own panel at the top of the page. */
+function PersonSheet({
+  employee,
+  row,
+  day,
+  canWrite,
+  timeZone,
+  fmtTime,
+  onClose,
+  onChanged,
+}: {
+  employee: Employee;
+  row?: AttendanceRow;
+  day: string;
+  canWrite: boolean;
+  timeZone: string;
+  fmtTime: (iso: string | null) => string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { format } = useCurrency();
+  const [tab, setTab] = useState<"day" | "history">("day");
+
+  const toHHMM = useCallback(
+    (iso: string | null | undefined): string =>
+      iso
+        ? new Date(iso).toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+            timeZone,
+          })
+        : "",
+    [timeZone],
+  );
+
+  const [ci, setCi] = useState(() => toHHMM(row?.clock_in));
+  const [co, setCo] = useState(() => toHHMM(row?.clock_out));
+  const [brk, setBrk] = useState(String(row?.break_minutes ?? 0));
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [hist, setHist] = useState<AttHistory | null>(null);
+  // A range they choose, not three buttons I chose for them. The first cut of
+  // this rewrite offered 7/30/90 and nothing else, which quietly removed the
+  // From→to filter — "attendance we need historical datas too".
+  const [range, setRange] = useState({ from: daysAgoISO(29), to: today() });
+  const loadedFor = useRef<string>("");
+
+  useEffect(() => {
+    if (tab !== "history") return;
+    const key = `${employee.id}:${range.from}:${range.to}`;
+    if (loadedFor.current === key) return;
+    loadedFor.current = key;
+    setHist(null);
+    api
+      .get<AttHistory>(
+        `/attendance/history/${employee.id}?date_from=${range.from}&date_to=${range.to}`,
+      )
+      .then(setHist)
+      .catch(() => setHist(null));
+  }, [tab, employee.id, range.from, range.to]);
+
+  // The exact sum the server will do — (out − in, rolling past midnight) minus
+  // the break — shown as you type, so the saved number is never a surprise.
+  const previewMins = (() => {
+    if (!ci || !co) return null;
+    const [ih, im] = ci.split(":").map(Number);
+    const [oh, om] = co.split(":").map(Number);
+    let span2 = oh * 60 + om - (ih * 60 + im);
+    if (span2 <= 0) span2 += 24 * 60;
+    return Math.max(0, span2 - (parseInt(brk || "0", 10) || 0));
+  })();
+  const overnight = !!ci && !!co && co <= ci;
+
+  async function save() {
+    setSaving(true);
+    setErr(null);
+    try {
+      await api.post("/attendance/edit", {
+        employee_id: employee.id,
+        date: day,
+        clock_in: ci || null,
+        clock_out: co || null,
+        break_minutes: parseInt(brk || "0", 10) || 0,
+      });
+      onChanged();
+      onClose();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not save that");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const phase = phaseOf(row);
+
+  return (
+    <SheetPopup
+      onClose={onClose}
+      title={employee.full_name}
+      subtitle={`${PHASE_LABEL[phase]} · ${new Date(day + "T00:00:00").toLocaleDateString(
+        undefined,
+        { weekday: "long", day: "numeric", month: "long" },
+      )}`}
+      columns={2}
+    >
+      <div className="space-y-4">
+        <Segmented
+          options={[
+            { value: "day", label: "This day" },
+            { value: "history", label: "History" },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+
+        {tab === "day" ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[
+                ["In", fmtTime(row?.clock_in ?? null)],
+                ["Out", fmtTime(row?.clock_out ?? null)],
+                ["Break", row?.break_minutes ? fmtBreak(row.break_minutes) : "—"],
+              ].map(([label, value]) => (
+                <div key={label} className="mise-well rounded-xl px-2 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wide text-fg-faint">{label}</p>
+                  <p className="text-sm font-semibold tabular-nums text-fg">{value || "—"}</p>
+                </div>
+              ))}
+            </div>
+
+            {row?.over_break_minutes ? (
+              <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] text-amber-500">
+                Break over-ran by {fmtBreak(row.over_break_minutes)} — {format(
+                  Number(row.break_penalty || 0),
+                )} deducted.
+              </p>
+            ) : null}
+
+            {canWrite && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                  Fix or back-date
+                </p>
+                <p className="text-[11px] text-fg-faint">
+                  For when somebody forgot to punch. Times are {timeZone}.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="text-[11px] text-fg-faint">
+                    In
+                    <input
+                      type="time"
+                      value={ci}
+                      onChange={(e) => setCi(e.target.value)}
+                      data-testid="edit-in"
+                      className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="text-[11px] text-fg-faint">
+                    Out
+                    <input
+                      type="time"
+                      value={co}
+                      onChange={(e) => setCo(e.target.value)}
+                      data-testid="edit-out"
+                      className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="text-[11px] text-fg-faint">
+                    Break (min)
+                    <input
+                      type="number"
+                      min={0}
+                      value={brk}
+                      onChange={(e) => setBrk(e.target.value)}
+                      className="mise-well mt-1 min-h-[42px] w-full rounded-lg px-2 text-sm outline-none"
+                    />
+                  </label>
+                </div>
+
+                {previewMins !== null && (
+                  <p className="text-[11px] text-fg-faint">
+                    That is{" "}
+                    <span className="font-semibold text-fg">{fmtHours(previewMins / 60)}</span>{" "}
+                    worked{overnight ? " — counted through midnight" : ""}.
+                  </p>
+                )}
+                {err && <p className="text-[11px] text-rose-400">{err}</p>}
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void save()}
+                    disabled={saving}
+                    data-tone="brand"
+                    data-testid="edit-save"
+                    className="mise-btn-flat mise-press min-h-[44px] flex-1 px-4 py-2 text-sm font-bold text-brand-300 disabled:opacity-40"
+                  >
+                    {saving ? "Saving…" : "Save this day"}
+                  </button>
+                  <QuickLeave
+                    employeeId={employee.id}
+                    employeeName={employee.full_name}
+                    day={day}
+                    onBooked={() => {
+                      onChanged();
+                      onClose();
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <TimeRangePicker range={range} onChange={setRange} />
+              <button
+                type="button"
+                onClick={() =>
+                  void downloadFile(
+                    `/attendance/history/${employee.id}.xlsx?date_from=${range.from}&date_to=${range.to}`,
+                    `${employee.full_name}-attendance.xlsx`,
+                  )
+                }
+                className="mise-btn-flat mise-press min-h-[36px] px-3 text-xs font-semibold text-fg-soft"
+              >
+                ↓ Excel
+              </button>
+            </div>
+
+            {!hist ? (
+              <p className="py-6 text-center text-sm text-fg-faint">Loading…</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    ["Present", String(hist.totals.present)],
+                    ["Absent", String(hist.totals.absent)],
+                    ["Hours", fmtHours(Number(hist.totals.total_hours || 0))],
+                    ["Would earn", format(Number(hist.totals.indicative_pay || 0))],
+                  ].map(([label, value]) => (
+                    <div key={label} className="mise-well rounded-xl px-2 py-2.5 text-center">
+                      <p className="text-[10px] uppercase tracking-wide text-fg-faint">{label}</p>
+                      <p className="text-sm font-semibold tabular-nums text-fg">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-fg-faint">
+                  {hist.totals.basis} — indicative. The real, overlap-checked run
+                  lives in{" "}
+                  <Link href="/payroll" className="text-brand-400 underline">
+                    Payroll
+                  </Link>
+                  .
+                </p>
+
                 <CalendarHeat
                   days={hist.days.map((d) => ({
                     date: d.date,
-                    value: d.status === "PRESENT" ? 2 : d.status === "HALF_DAY" ? 1 : 0,
+                    value: Number(d.working_hours ?? 0),
                   }))}
-                  formatValue={(v) => (v === 2 ? "present" : v === 1 ? "half-day" : "absent")}
+                  formatValue={(v) => fmtHours(v)}
                 />
-              </div>
-              <div className="mt-4">
-                <Bars items={[...hist.days].reverse().map((d) => ({
-                  label: d.date.slice(5),
-                  value: parseFloat(d.working_hours ?? "0") || 0,
-                  color: d.status === "PRESENT" ? "#10b981" : d.status === "HALF_DAY" ? "#f59e0b" : "#f43f5e",
-                }))} formatValue={(v) => `${v}h`} />
-                <p className="mt-1 text-center text-[10px] text-fg-faint">hours worked each day</p>
-              </div>
-              {/* overflow-x too: this table gained a "no punch" chip and four
-                  columns, and y-only scrolling meant the whole PAGE scrolled
-                  sideways on a phone instead of the table. */}
-              <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-line">
-                <table className="w-full text-sm">
-                  <tbody className="divide-y divide-line">
-                    {hist.days.map((d) => (
-                      <tr key={d.date}>
-                        <td className="px-3 py-2 font-mono text-fg-soft">{d.date}</td>
-                        <td className={`px-3 py-2 font-semibold ${STATUS_TONE[d.status] ?? "text-fg-faint"}`}>
-                          {d.status.replace("_", "-").toLowerCase()}
-                          {/* "present" with no clock-in and no hours is the app
-                              asserting a shift nothing recorded. Say so. */}
-                          {d.no_punch && (
-                            <span
-                              title="Marked present, but no clock-in was recorded"
-                              className="ml-1.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300"
-                            >
-                              no punch
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-fg-faint">
-                          {d.clock_in ? `${d.clock_in.slice(11, 16)}–${d.clock_out ? d.clock_out.slice(11, 16) : "…"}` : "—"}
-                          {/* An unpaid break was being subtracted from the hours
-                              and never shown, so "11:01–20:00 … 6.98h" read as
-                              broken arithmetic. It was right: 8h59m less a
-                              two-hour break. Saying so is the fix. */}
-                          {d.break_minutes > 0 && (
-                            <span className="ml-1.5 whitespace-nowrap text-[11px] text-amber-300/90">
-                              −{fmtBreak(d.break_minutes)} break
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          className="px-3 py-2 text-right font-mono text-fg"
-                          title={
-                            d.break_minutes > 0
-                              ? `${d.clock_in?.slice(11, 16)}–${d.clock_out?.slice(11, 16)} is ${fmtBreak(d.break_minutes)} longer; the unpaid break is not paid time.`
-                              : undefined
-                          }
-                        >
-                          {fmtHours(d.working_hours)}
-                        </td>
-                      </tr>
+
+                <Bars
+                  items={[
+                    { label: "Present", value: hist.totals.present },
+                    { label: "Half days", value: hist.totals.half_days },
+                    { label: "Absent", value: hist.totals.absent },
+                  ]}
+                />
+
+                <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                  {hist.days
+                    .slice()
+                    .reverse()
+                    .map((d) => (
+                      <div
+                        key={d.date}
+                        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px]"
+                      >
+                        <span className="w-20 shrink-0 tabular-nums text-fg-faint">
+                          {new Date(d.date + "T00:00:00").toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </span>
+                        <span className="flex-1 truncate text-fg-soft">
+                          {d.clock_in ? `${fmtTime(d.clock_in)} → ${fmtTime(d.clock_out)}` : "—"}
+                          {d.no_punch ? " · marked present" : ""}
+                        </span>
+                        <span className="shrink-0 tabular-nums font-semibold text-fg">
+                          {d.working_hours ? fmtHours(Number(d.working_hours)) : "—"}
+                        </span>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <p className="mise-well mt-3 rounded-xl p-4 text-sm text-fg-faint">No attendance recorded in this range.</p>
-          )}
-        </div>
-      )}
-    </Card>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </SheetPopup>
   );
 }
