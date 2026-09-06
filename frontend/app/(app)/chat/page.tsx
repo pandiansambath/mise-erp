@@ -383,8 +383,20 @@ export default function TeamChatPage() {
               {err && <p className="px-4 pb-1 text-[11px] text-rose-400">{err}</p>}
 
               <div className="relative border-t border-line px-3 py-3">
+                {/* A backdrop rather than a document listener: clicking away is
+                    the gesture people already use to dismiss a picker, and one
+                    element that swallows the click cannot get out of step with
+                    the state the way an added-and-removed listener can. */}
                 {showEmoji && (
-                  <div className="mise-pop absolute bottom-full left-3 mb-2 w-[min(20rem,86vw)] rounded-2xl border border-line bg-paper p-2 shadow-2xl">
+                  <button
+                    type="button"
+                    aria-label="Close emoji picker"
+                    onClick={() => setShowEmoji(false)}
+                    className="fixed inset-0 z-10 cursor-default"
+                  />
+                )}
+                {showEmoji && (
+                  <div className="mise-pop absolute bottom-full left-3 z-20 mb-2 w-[min(20rem,86vw)] rounded-2xl border border-line bg-paper p-2 shadow-2xl">
                     <div className="grid grid-cols-10 gap-1">
                       {EMOJI.map((e) => (
                         <button
@@ -425,6 +437,7 @@ export default function TeamChatPage() {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
+                      if (e.key === "Escape") setShowEmoji(false);
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         void send();
