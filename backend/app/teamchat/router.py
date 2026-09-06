@@ -169,12 +169,18 @@ async def people(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("users:read")),
 ) -> list[dict]:
-    """Who can be put in a group — every live login in this hotel."""
+    """Who can be put in a group — every live login in this hotel.
+
+    Minus the platform operator: they are attached to the hotel to support it,
+    not to work in it, and offering them as a colleague to add to the kitchen
+    group is offering the wrong thing.
+    """
     rows = await db.execute(
         select(User).where(
             User.hotel_id == user.hotel_id,
             User.deleted_at.is_(None),
             User.is_active.is_(True),
+            User.is_platform_owner.is_(False),
         )
     )
     return [
