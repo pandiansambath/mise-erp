@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { api, ApiError, API_BASE, postForm } from "@/lib/api";
+import { api, ApiError, fetchBlobUrl, postForm } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
 import { useAuth } from "@/lib/auth";
@@ -328,29 +328,7 @@ export default function TeamChatPage() {
                             </p>
                           )}
 
-                          {m.attachment_url && (
-                            <a
-                              href={`${API_BASE}${m.attachment_url}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mb-1.5 block overflow-hidden rounded-xl"
-                            >
-                              {m.attachment_type?.startsWith("video/") ? (
-                                <video
-                                  src={`${API_BASE}${m.attachment_url}`}
-                                  controls
-                                  className="max-h-64 w-full rounded-xl"
-                                />
-                              ) : (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={`${API_BASE}${m.attachment_url}`}
-                                  alt={m.attachment_name ?? ""}
-                                  className="max-h-64 rounded-xl object-cover"
-                                />
-                              )}
-                            </a>
-                          )}
+                          {m.attachment_url && <Attachment msg={m} />}
 
                           {m.body && (
                             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
@@ -465,6 +443,59 @@ export default function TeamChatPage() {
         />
       )}
     </div>
+  );
+}
+
+/** A picture or a video, fetched WITH the token and shown from a blob.
+ *
+ *  It cannot simply be `<img src={url}>`: the endpoint checks that the viewer
+ *  can open the room the file was posted in, and an img tag sends no
+ *  Authorization header, so the browser would be turned away and paint a broken
+ *  icon. Clicking opens the same blob full-size — pointing the link at the API
+ *  path would hit the identical wall in a new tab.
+ */
+function Attachment({ msg }: { msg: Msg }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!msg.attachment_url) return;
+    let alive = true;
+    fetchBlobUrl(msg.attachment_url)
+      .then((u) => alive && setUrl(u))
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [msg.attachment_url]);
+
+  if (failed) {
+    return (
+      <p className="mb-1.5 rounded-xl bg-glass/10 px-3 py-2 text-[11px] opacity-80">
+        ⚠️ {msg.attachment_name ?? "That file"} could not be loaded.
+      </p>
+    );
+  }
+  if (!url) {
+    return (
+      <div className="mb-1.5 grid h-32 w-48 place-items-center rounded-xl bg-glass/10 text-[11px] opacity-70">
+        Loading…
+      </div>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="mb-1.5 block overflow-hidden rounded-xl">
+      {msg.attachment_type?.startsWith("video/") ? (
+        <video src={url} controls className="max-h-64 w-full rounded-xl" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={msg.attachment_name ?? ""}
+          className="max-h-64 rounded-xl object-cover"
+        />
+      )}
+    </a>
   );
 }
 
