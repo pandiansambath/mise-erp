@@ -153,6 +153,11 @@ async def hotel_landing(handle: str, db: AsyncSession = Depends(get_db)) -> dict
         # moment nobody has a token. It carries branding only — never anything
         # about who works there.
         "login_page": hotel.login_page or {},
+        # The theme the restaurant already runs on. The door inherits it unless
+        # someone has deliberately chosen door colours, so picking burgundy for
+        # the dashboard makes the sign-in page burgundy too, with no second
+        # question and no settings trip.
+        "theme": hotel.theme,
         "order_url": f"/order/{hotel.id}",
         "currency": hotel.base_currency,
         "is_open": not hotel.ordering_paused,

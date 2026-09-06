@@ -25,6 +25,8 @@
 
 import { useCallback, type CSSProperties, type ReactNode } from "react";
 
+import { THEMES, type ThemeKey } from "@/lib/theme";
+
 export type LoginConfig = {
   /** Off = the standard DineAI door. Empty config must change nothing. */
   enabled?: boolean;
@@ -120,6 +122,9 @@ export function HotelDoor({
   cfg,
   hotelName,
   logoUrl,
+  /** The theme the restaurant runs on. The door inherits it unless the owner
+   *  has deliberately chosen door colours of their own. */
+  hotelTheme,
   children,
   /** The settings preview renders this at a small size inside a panel. */
   preview = false,
@@ -127,10 +132,30 @@ export function HotelDoor({
   cfg: LoginConfig;
   hotelName: string;
   logoUrl?: string | null;
+  hotelTheme?: string | null;
   children: ReactNode;
   preview?: boolean;
 }) {
-  const c = { ...DEFAULT_LOGIN, ...cfg };
+  // INHERIT THE RESTAURANT'S OWN THEME.
+  //
+  // "let say he is choosing burgundy as default theme, then we need to match
+  //  this login page too with that theme."
+  //
+  // They have already answered this question once, for the dashboard. Asking
+  // again at onboarding would be asking twice for the same answer — so an
+  // un-customised door takes its colours from the theme they already run on,
+  // and only an explicit choice here overrides it.
+  const inherited = (() => {
+    const t = THEMES[hotelTheme as ThemeKey];
+    if (!t) return null;
+    return {
+      accent: t.brand["500"],
+      accent2: t.aurora?.[1] ?? t.brand["400"],
+      theme: (t.light ? "light" : "dark") as LoginConfig["theme"],
+    };
+  })();
+
+  const c = { ...DEFAULT_LOGIN, ...(inherited ?? {}), ...cfg };
   const ink = THEME_INK[c.theme] ?? THEME_INK.dark;
   const wash = HERO_WASH[c.hero] ?? HERO_WASH.warm;
   const radius = c.corners === "sharp" ? "0px" : "1.5rem";
