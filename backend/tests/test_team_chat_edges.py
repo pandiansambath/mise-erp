@@ -231,3 +231,34 @@ async def test_who_counts_as_a_manager(make_user):
     ):
         user = await make_user(f"rule-{role.lower()}@nirai.com", role)
         assert service.is_manager(user) is expected, role
+
+
+@pytest.mark.asyncio
+async def test_the_platform_operator_is_not_in_the_hotels_staff_room(
+    client, db, make_user, auth_header
+):
+    """Support is attached to a hotel so it can help — which would otherwise
+    place it silently inside the hotel's private staff room, reading a
+    conversation nobody in the restaurant knows it is in. Access to run a hotel
+    is not consent to sit in its break room."""
+    owner = await make_user("hotel-owner@nirai.com", Role.SUPER_ADMIN.value)
+    operator = await make_user("operator@dineai.cloud", Role.SUPER_ADMIN.value)
+    operator.is_platform_owner = True
+    await db.commit()
+
+    # The hotel's own owner sees both rooms; the operator sees none.
+    assert RoomKind.EVERYONE in await _rooms(client, auth_header, owner)
+    assert await _rooms(client, auth_header, operator) == {}
+
+    # Nor can they reach one by id.
+    room = (await _rooms(client, auth_header, owner))[RoomKind.EVERYONE]
+    assert (
+        await client.get(
+            f"/api/chat/rooms/{room['id']}/messages", headers=auth_header(operator)
+        )
+    ).status_code == 404
+
+    # And they are not offered as somebody to add to a group.
+    people = await client.get("/api/chat/people", headers=auth_header(owner))
+    assert people.status_code == 200
+    assert all(p["email"] != "operator@dineai.cloud" for p in people.json())

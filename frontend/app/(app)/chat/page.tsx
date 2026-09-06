@@ -54,6 +54,10 @@ type Person = { id: string; name: string; email: string; role: string };
 
 /** A small, fast emoji set. Deliberately not a 1,800-emoji library: this is a
  *  staff room, and the ones people actually reach for fit on two rows. */
+/** What a group can be called by, at a glance. Deliberately the things a
+ *  restaurant actually organises itself around. */
+const ROOM_ICONS = ["💬", "🍽️", "🍳", "📦", "🚚", "🧹", "💷", "📣", "🎉", "⚠️"];
+
 const EMOJI = [
   "👍", "👌", "🙏", "🔥", "🎉", "😀", "😂", "🙂", "😉", "😍",
   "😅", "😴", "🤝", "💪", "👀", "✅", "❌", "⏰", "📣", "❤️",
@@ -797,25 +801,36 @@ function NewGroup({ onClose, onMade }: { onClose: () => void; onMade: (id: strin
   return (
     <SheetPopup onClose={onClose} title="New group" subtitle="Name it, then choose who is in it" columns={2}>
       <div className="space-y-4">
-        <div className="flex gap-2">
-          <select
-            value={emoji}
-            onChange={(e) => setEmoji(e.target.value)}
-            aria-label="Group icon"
-            className="mise-well min-h-[44px] w-20 rounded-lg px-2 text-center text-lg outline-none"
-          >
-            {["💬", "🍽️", "🍳", "📦", "🚚", "🧹", "💷", "📣", "🎉", "⚠️"].map((e) => (
-              <option key={e} value={e}>{e}</option>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          placeholder="e.g. Kitchen team, Weekend crew"
+          data-testid="group-name"
+          className="mise-well min-h-[44px] w-full rounded-lg px-3 py-2 text-sm outline-none"
+        />
+
+        {/* Ten icons, shown. A native <select> here was the one raw browser
+            control on the page and it looked it — and picking from ten things
+            you can already see is a worse job for a dropdown than for a row. */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Icon</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {ROOM_ICONS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setEmoji(e)}
+                aria-label={`Icon ${e}`}
+                aria-pressed={emoji === e}
+                className={`mise-press grid h-10 w-10 place-items-center rounded-xl text-lg transition ${
+                  emoji === e ? "bg-brand-500/20 ring-1 ring-brand-400/50" : "mise-well"
+                }`}
+              >
+                {e}
+              </button>
             ))}
-          </select>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={80}
-            placeholder="e.g. Kitchen team, Weekend crew"
-            data-testid="group-name"
-            className="mise-well min-h-[44px] flex-1 rounded-lg px-3 py-2 text-sm outline-none"
-          />
+          </div>
         </div>
 
         <MemberList people={people} picked={picked} setPicked={setPicked} />
