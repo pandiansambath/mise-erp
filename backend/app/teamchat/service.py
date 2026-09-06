@@ -272,7 +272,13 @@ async def set_members(db: AsyncSession, room: ChatRoom, member_ids: list[uuid.UU
             await db.execute(select(ChatRoomMember).where(ChatRoomMember.room_id == room.id))
         ).scalars()
     )
+    # Whoever made it stays in it. Without this an owner could empty their own
+    # group, lose sight of it, and then be unable to close it either — closing
+    # requires being able to see the room, so the group would be stranded in
+    # everyone's history with no way to reach it.
     want = set(member_ids)
+    if room.created_by:
+        want.add(room.created_by)
     for m in existing:
         if m.user_id not in want:
             await db.delete(m)
