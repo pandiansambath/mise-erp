@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 // MY SPACE — rebuilt from scratch, 2026-09-05.
 //
 //   "i checked the staff login... ui seriously not nice bro. we need a best ui
@@ -361,6 +363,17 @@ export default function MySpacePage() {
         aria-label="My Space sections"
         className="mise-card-inset mt-4 flex gap-1 overflow-x-auto p-1.5"
       >
+        {/* The staff room. A link rather than a tab, because it is a page of its
+            own — but it belongs in this row, because for a staff login this row
+            IS the navigation: they have no sidebar, by request. */}
+        <Link
+          href="/chat"
+          data-testid="my-team-chat"
+          className="mise-press flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold text-fg-soft transition hover:text-fg"
+        >
+          <span aria-hidden>🗣️</span>
+          Team chat
+        </Link>
         {TABS.map((t) => {
           const on = t.key === tab;
           return (
