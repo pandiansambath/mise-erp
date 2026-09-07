@@ -39,6 +39,7 @@ import {
 } from "@/lib/api";
 import { Badge, Card, Spinner } from "@/components/ui";
 import { TotalsStrip } from "@/components/PageKit";
+import { DocComments } from "@/components/DocComments";
 import { StaffChat } from "@/components/StaffChat";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
 import { useAuth } from "@/lib/auth";
@@ -601,10 +602,8 @@ export default function MySpacePage() {
               </h2>
               <ul className="mt-3 space-y-2">
                 {pendingReqs.map((r) => (
-                  <li
-                    key={r.id}
-                    className="mise-card-inset flex flex-wrap items-center gap-3 border-amber-400/25 px-4 py-3"
-                  >
+                  <li key={r.id} className="mise-card-inset border-amber-400/25 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span aria-hidden className="mise-well grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base">
                       📋
                     </span>
@@ -640,6 +639,16 @@ export default function MySpacePage() {
                         Upload
                       </button>
                     )}
+                  </div>
+                  {/* The conversation about THIS document, where the document
+                      is. "suppose anything is missing or needed he can comment
+                      and superadmin can read and request again nah." */}
+                  <details className="mt-2 border-t border-line/60 pt-2">
+                    <summary className="cursor-pointer text-[11px] font-semibold text-brand-300">
+                      💬 Notes about this document
+                    </summary>
+                    <DocComments requestId={r.id} mine="staff" className="mt-2" />
+                  </details>
                   </li>
                 ))}
               </ul>

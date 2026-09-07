@@ -11,6 +11,7 @@ import {
   type Employee,
   type ExpiringDoc,
 } from "@/lib/api";
+import { DocComments } from "@/components/DocComments";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { TotalsStrip } from "@/components/PageKit";
 import { PersonPicker } from "@/components/PersonPicker";
@@ -50,6 +51,9 @@ export default function DocumentsPage() {
   const [expiring, setExpiring] = useState<ExpiringDoc[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [requests, setRequests] = useState<DocRequest[]>([]);
+  // Which request's notes are open. One at a time: two open threads on one
+  // screen is two conversations you have to keep apart by eye.
+  const [noteOn, setNoteOn] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [docType, setDocType] = useState("LICENSE");
@@ -552,10 +556,35 @@ export default function DocumentsPage() {
                           {r.status === "UPLOADED" && (
                             <button onClick={() => approveRequest(r.id)} className="rounded-md border border-brand-400/30 bg-brand-400/10 px-2 py-1 text-xs font-medium text-brand-300">Approve</button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setNoteOn((n) => (n === r.id ? null : r.id))}
+                            data-testid="doc-notes"
+                            className="rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2"
+                            title="Notes about this document"
+                          >
+                            💬 Notes
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
+                  {/* The owner's end of the same thread. Kept as a row that
+                      opens rather than a popup, so the note sits under the
+                      document it is about — which is the entire point of
+                      these not being chat messages. */}
+                  {requests
+                    .filter((r) => r.id === noteOn)
+                    .map((r) => (
+                      <tr key={`${r.id}-notes`} className="border-b border-line">
+                        <td colSpan={4} className="px-3 py-3">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+                            Notes · {r.employee_name} · {r.title}
+                          </p>
+                          <DocComments requestId={r.id} mine="owner" />
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
