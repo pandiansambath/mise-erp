@@ -14,7 +14,7 @@
 // kitchen that has built its recipes should not retype them; a kitchen that
 // wants to add a special for tonight should not have to build a recipe first.
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, postForm } from "@/lib/api";
+import { api, ApiError, API_BASE, postForm } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
 import { Workbench } from "@/components/Workbench";
@@ -187,17 +187,57 @@ export default function MenuPage() {
     await load();
   }
 
+  // WHY THIS PAGE WAS HARD TO READ, and it was not the cards.
+  //
+  //   "now menu section: see this UI, cards are not nice to see, i think you
+  //    need to rebuild the whole menu page from the scratch."
+  //
+  // Thirteen dishes came out as thirteen identical rows, each saying "Main"
+  // and each carrying a solid dark-red pill reading "On the menu". A word
+  // printed thirteen times carries no information — the two that said "Off the
+  // menu" were the whole message, and they were the hardest things on the page
+  // to find because everything else was shouting the same colour.
+  //
+  // A menu has a SHAPE: starters, then mains, then desserts. That shape was
+  // being thrown away by an alphabetical list, which is why every card had to
+  // repeat its own category to make up for it. Group by course and the category
+  // line disappears from every card at once, leaving room for the thing a menu
+  // is actually about, which is the price.
+  const [cat, setCat] = useState<string>("");
+
+  const categories = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const m of items) seen.set(m.category, (seen.get(m.category) ?? 0) + 1);
+    return [...seen.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [items]);
+
   const shown = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    const list = t
-      ? items.filter(
-          (m) => m.name.toLowerCase().includes(t) || m.category.toLowerCase().includes(t),
-        )
-      : items;
+    const needle = q.trim().toLowerCase();
+    let list = items;
+    if (needle) {
+      list = list.filter(
+        (m) =>
+          m.name.toLowerCase().includes(needle) || m.category.toLowerCase().includes(needle),
+      );
+    }
+    if (cat) list = list.filter((m) => m.category === cat);
     return [...list].sort(
       (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
     );
-  }, [items, q]);
+  }, [items, q, cat]);
+
+  /** The visible dishes, in courses. A search that spans courses still shows
+   *  them grouped, because "three of these are starters" is worth knowing even
+   *  when you went looking for the word "chicken". */
+  const courses = useMemo(() => {
+    const by = new Map<string, MenuItem[]>();
+    for (const m of shown) {
+      const list = by.get(m.category);
+      if (list) list.push(m);
+      else by.set(m.category, [m]);
+    }
+    return [...by.entries()];
+  }, [shown]);
 
   const live = items.filter((m) => m.availability === "available").length;
   const off = items.length - live;
@@ -219,12 +259,13 @@ export default function MenuPage() {
               <button
                 type="button"
                 onClick={() => setAdding((a) => !a)}
-                className="mise-press rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white"
+                data-tone="brand"
+                className="mise-btn-flat mise-press min-h-[42px] px-4 text-sm"
               >
                 {adding ? "Close" : "＋ Add a dish"}
               </button>
               <label
-                className="mise-press mise-raised cursor-pointer rounded-xl px-4 py-2.5 text-sm font-medium text-fg-soft"
+                className="mise-btn-flat mise-press flex cursor-pointer items-center rounded-xl px-4 py-2.5 text-sm font-semibold text-fg-soft"
                 title="A photo of your menu, or a spreadsheet — DineAI reads it and you confirm"
               >
                 {reading ? "Reading…" : "📷 Read a menu"}
@@ -244,7 +285,7 @@ export default function MenuPage() {
                 onClick={importRecipes}
                 disabled={busy === "import"}
                 title="Bring every priced recipe across — the costing comes with it"
-                className="mise-press mise-raised rounded-xl px-4 py-2.5 text-sm font-medium text-fg-soft disabled:opacity-40"
+                className="mise-btn-flat mise-press min-h-[42px] px-4 text-sm font-semibold text-fg-soft disabled:opacity-40"
               >
                 {busy === "import" ? "Importing…" : "📋 Copy from Recipes"}
               </button>
@@ -253,11 +294,38 @@ export default function MenuPage() {
         </div>
       }
       tally={
-        <p className="text-xs text-fg-faint">
-          <b className="text-fg-soft tabular-nums">{live}</b> on the menu ·{" "}
-          <b className="text-fg-soft tabular-nums">{off}</b> off or out of stock · a dish that is
-          off still shows the diner <i>why</i>, and when it is back
-        </p>
+        /* CLICK, DON'T SCROLL. A menu with six courses and sixty dishes is a
+           long page; the courses are the index for it, and an index you can
+           press beats one you scroll past. */
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setCat("")}
+            className={`mise-press rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+              cat === "" ? "mise-btn-flat text-fg" : "text-fg-faint hover:text-fg-soft"
+            }`}
+            data-tone={cat === "" ? "brand" : undefined}
+          >
+            All {items.length}
+          </button>
+          {categories.map(([name, n]) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setCat((c) => (c === name ? "" : name))}
+              className={`mise-press rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                cat === name ? "mise-btn-flat text-fg" : "text-fg-faint hover:text-fg-soft"
+              }`}
+              data-tone={cat === name ? "brand" : undefined}
+            >
+              {name} {n}
+            </button>
+          ))}
+          <span className="ml-auto text-[11px] text-fg-faint">
+            <b className="tabular-nums text-fg-soft">{live}</b> on ·{" "}
+            <b className="tabular-nums text-fg-soft">{off}</b> off
+          </span>
+        </div>
       }
     >
       {err && (
@@ -416,70 +484,131 @@ export default function MenuPage() {
           </div>
         </Card>
       ) : (
-        <ul
-          className="mise-stagger grid gap-2.5"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(19rem, 100%), 1fr))" }}
-        >
-          {shown.map((m) => {
-            const state = STATES.find((s) => s.key === m.availability) ?? STATES[0];
-            // The one thing done DURING service stays on the tile. Everything
-            // else — the serving window, how long it takes, removing it — is a
-            // decision you make once, so it moved into the sheet. Eight controls
-            // per dish is what made this page four screens tall on a phone.
-            const off = m.availability !== "available";
-            return (
-              <li key={m.id}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setEditing(m)}
-                  onKeyDown={(ev) => {
-                    if (ev.key === "Enter" || ev.key === " ") {
-                      ev.preventDefault();
-                      setEditing(m);
-                    }
-                  }}
-                  data-testid="menu-dish"
-                  className={`mise-card3d mise-press flex cursor-pointer items-center gap-3 p-3 ${
-                    off ? "opacity-75" : ""
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-display text-[15px] font-semibold text-fg">
-                      {m.name}
-                    </p>
-                    <p className="truncate text-[11px] text-fg-faint">
-                      {m.category} · {format(m.price)}
-                      {m.serve_from || m.serve_to
-                        ? ` · ${m.serve_from?.slice(0, 5) ?? "…"}–${m.serve_to?.slice(0, 5) ?? "…"}`
-                        : ""}
-                      {m.prep_minutes ? ` · ${m.prep_minutes} min` : ""}
-                    </p>
-                  </div>
-                  {canWrite ? (
-                    <button
-                      type="button"
-                      disabled={busy === m.id}
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        patch(m, { availability: off ? "available" : "sold_out" });
-                      }}
-                      title={off ? "Put it back on" : "Mark it sold out"}
-                      data-testid="menu-toggle"
-                      className={`mise-press shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition ${state.tone}`}
-                    >
-                      {busy === m.id ? "…" : state.label}
-                    </button>
-                  ) : (
-                    <span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold ${state.tone}`}>
-                      {state.label}
-                    </span>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-5">
+          {courses.map(([course, dishes]) => (
+            <section key={course}>
+              {/* THE COURSE, said once. It used to be printed on all thirteen
+                  cards because there was nothing else to tell you where you
+                  were in the menu. */}
+              <div className="mb-2 flex items-baseline gap-2">
+                <h2 className="font-display text-sm font-bold uppercase tracking-wider text-fg-soft">
+                  {course}
+                </h2>
+                <span className="text-[11px] tabular-nums text-fg-faint">{dishes.length}</span>
+                <span aria-hidden className="h-px flex-1 bg-line" />
+              </div>
+
+              <ul
+                className="mise-stagger grid gap-2"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(15rem, 100%), 1fr))" }}
+              >
+                {dishes.map((m) => {
+                  const state = STATES.find((s) => s.key === m.availability) ?? STATES[0];
+                  const off = m.availability !== "available";
+                  return (
+                    <li key={m.id}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setEditing(m)}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Enter" || ev.key === " ") {
+                            ev.preventDefault();
+                            setEditing(m);
+                          }
+                        }}
+                        data-testid="menu-dish"
+                        className={`mise-card-inset mise-press flex h-full cursor-pointer flex-col rounded-2xl p-3 ${
+                          off ? "opacity-70" : ""
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          {/* A FACE. The photo if there is one, the dish's own
+                              emoji if not, and the first letter as the last
+                              resort — anything rather than fourteen cards that
+                              differ only in a line of text. */}
+                          <span
+                            aria-hidden
+                            className="mise-well grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl text-lg"
+                          >
+                            {m.has_photo ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={`${API_BASE}/api/public/order/menu-photo/${m.id}`}
+                                alt=""
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              (m.emoji ?? m.name.slice(0, 1).toUpperCase())
+                            )}
+                          </span>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-display text-[15px] font-bold leading-tight text-fg">
+                              {m.name}
+                            </p>
+                            {/* THE PRICE, at the size a price deserves. It was
+                                11px grey, tucked behind the category, on a page
+                                whose entire subject is what things cost. */}
+                            <p className="mt-0.5 text-base font-bold tabular-nums text-fg">
+                              {format(m.price)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {(m.prep_minutes || m.serve_from || m.serve_to) && (
+                          <p className="mt-2 truncate text-[11px] text-fg-faint">
+                            {m.prep_minutes ? `${m.prep_minutes} min` : ""}
+                            {m.prep_minutes && (m.serve_from || m.serve_to) ? " · " : ""}
+                            {m.serve_from || m.serve_to
+                              ? `${m.serve_from?.slice(0, 5) ?? "…"}–${m.serve_to?.slice(0, 5) ?? "…"}`
+                              : ""}
+                          </p>
+                        )}
+
+                        {/* THE STATUS, ONLY WHEN IT IS NEWS.
+                            Thirteen pills reading "On the menu" told you
+                            nothing and buried the two that said otherwise. A
+                            dish being available is the default; the exception
+                            is the whole message, so only the exception is
+                            drawn. */}
+                        <div className="mt-auto flex items-center gap-2 pt-2">
+                          {off ? (
+                            <span
+                              className={`shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold ${state.tone}`}
+                            >
+                              {state.label}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                              ● On
+                            </span>
+                          )}
+                          {canWrite && (
+                            <button
+                              type="button"
+                              disabled={busy === m.id}
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                patch(m, { availability: off ? "available" : "sold_out" });
+                              }}
+                              title={off ? "Put it back on" : "Mark it sold out"}
+                              data-testid="menu-toggle"
+                              className="mise-btn-flat mise-press ml-auto min-h-[30px] shrink-0 px-2.5 text-[11px] font-semibold text-fg-soft"
+                            >
+                              {busy === m.id ? "…" : off ? "Put back" : "Sold out"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
 
       {editing && (
