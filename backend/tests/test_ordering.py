@@ -922,7 +922,7 @@ async def test_the_qr_carries_the_tables_name_and_survives_a_rename(
     actually drawn, and the geometry constant stays inside the range that was
     measured safe.
     """
-    from app.ordering.router import _qr_label, _qr_svg_with_label
+    from app.ordering.router import _fit_font, _qr_lines
 
     admin = await make_user("qrlabel@test.com", Role.SUPER_ADMIN.value)
     h = auth_header(admin)
@@ -957,18 +957,47 @@ async def test_the_qr_carries_the_tables_name_and_survives_a_rename(
         "a cached QR would keep showing the old name on a reprinted card"
     )
 
-    # A long name is truncated rather than shrunk into unreadability.
+    # A NAME THAT FITS, WHICH IS NOT THE SAME AS A CODE THAT SCANS.
+    #
+    # The first version of this chose a font size from the character count and
+    # drew one line. It decoded perfectly — the plate is 9% of the area against
+    # ~30% of recoverable modules — so the check went green, and "Terrace 4"
+    # and "Window bay" spilled straight off the white plate onto the black
+    # modules where nobody could read them. Decodability and legibility are
+    # different properties and only one of them was being tested.
+    #
+    # Two lines, because a table name is nearly always two short words, and
+    # stacking them buys far more size than shrinking one long line does.
     class _T:
-        label = "The long terrace table by the window"
+        label = "Window bay"
 
-    assert len(_qr_label(_T())) <= 10 and _qr_label(_T()).endswith("…")
+    assert _qr_lines(_T()) == ["Window", "bay"]
 
-    # The geometry that the decode test verified. If someone widens the plate,
-    # this is the line that should stop them.
-    import inspect
+    class _T2:
+        label = "Terrace 4"
 
-    src = inspect.getsource(_qr_svg_with_label)
-    assert "side * 0.26" in src, (
+    assert _qr_lines(_T2()) == ["Terrace", "4"]
+
+    class _T3:
+        label = "12"
+
+    assert _qr_lines(_T3()) == ["12"], "a short name stays on one line, and big"
+
+    # The font must be small enough to sit inside the plate with its margin.
+    # This is the arithmetic the SVG has to trust, since SVG text cannot be
+    # measured before it renders; the PNG path measures for real and shrinks
+    # further if this was optimistic.
+    for lines in (["Window", "bay"], ["12"], ["Terrace", "4"]):
+        f = _fit_font(lines, 100.0)
+        widest = max(len(x) for x in lines)
+        assert f * 0.58 * widest <= 100.0 * 0.84 + 0.01, (lines, f)
+        assert f * len(lines) <= 100.0 * 0.84 + 0.01, (lines, f)
+
+    # The geometry the decode sweep verified. If someone widens the plate, this
+    # is the line that should stop them.
+    from app.ordering.router import _QR_PLATE
+
+    assert _QR_PLATE <= 0.32, (
         "plate width changed — re-run the decode sweep before trusting it; "
         "measured failure point is between 0.38 and 0.44 of the side"
     )
