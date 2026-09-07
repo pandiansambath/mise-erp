@@ -32,3 +32,20 @@ ignore = ["B008"]  # FastAPI uses function calls (Depends()) in defaults by desi
 [tool.coverage.run]
 source = ["app"]
 omit = ["app/main.py", "app/scripts/*", "tests/*"]
+# WHY THE COVERAGE NUMBER WAS A LIE, AND WHY THE GATE KEPT HOVERING AT 70.
+#
+# SQLAlchemy's async layer runs its synchronous work inside a GREENLET — that is
+# what `greenlet` is doing in requirements.txt, and it is not optional. Without
+# being told, coverage.py loses its trace function across a greenlet switch, so
+# in every endpoint that touches the database the first `await` into SQLAlchemy
+# is recorded and EVERY LINE AFTER IT in that function is reported as missing.
+#
+# The proof it was measurement and not dead code: a test asserts a 400 that can
+# only be raised at teamchat/router.py:231, it passes, and coverage called that
+# line unexecuted.
+#
+# So eleven new tests moved the total by 0.04 of a percentage point — six
+# statements — while genuinely exercising several hundred lines that were never
+# credited. The gate was not tight because the suite was thin; it was tight
+# because most of what the suite runs was invisible to the counter.
+concurrency = ["greenlet", "thread"]
