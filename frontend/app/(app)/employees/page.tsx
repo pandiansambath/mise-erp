@@ -710,74 +710,168 @@ function StaffLoginModal({
 
               {msg && <p className="mt-3 rounded-lg bg-brand-500/10 px-3 py-2 text-xs text-brand-400">{msg}</p>}
 
-              {/* controls */}
-              <div className="mt-4 space-y-3">
-                {!status.email_verified && (
-                  <button disabled={busy} onClick={() => act(() => api.post(`/employees/${employee.id}/login/resend-verification`), "Verification email resent ✓")} className="mise-raised mise-press w-full rounded-xl px-3 py-2.5 text-left text-sm text-fg-soft">
-                    📨 Resend verification email
+              {/* WHAT MADE THIS LOOK RAW.
+                  "in employee page UI... see this UI, worst raw UI, we need to
+                   decorate with designs please."
+                  It was one column of identical grey rows — resend, stop, an
+                  email box, a password box, then two red buttons — with nothing
+                  saying which of them belonged together. Six controls of equal
+                  weight is a list to read rather than a screen to use.
+                  They are grouped now by the question they answer: getting in,
+                  and being let in at all. Each group is a card with a heading,
+                  so the permanent one is visibly a different kind of thing. */}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <section className="mise-card-inset rounded-2xl p-3.5">
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <span aria-hidden className="mise-well grid h-8 w-8 place-items-center rounded-xl text-sm">
+                      🔑
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-fg">Getting in</p>
+                      <p className="text-[11px] text-fg-faint">Their address and password</p>
+                    </div>
+                  </div>
+
+                  {!status.email_verified && (
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        act(
+                          () => api.post(`/employees/${employee.id}/login/resend-verification`),
+                          "Verification email resent ✓",
+                        )
+                      }
+                      className="mise-btn-flat mise-press mb-2.5 min-h-[42px] w-full rounded-xl px-3 text-sm font-semibold text-brand-300"
+                    >
+                      ✉️ Resend the verification email
+                    </button>
+                  )}
+
+                  <label className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Change email
+                  </label>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      type="email"
+                      placeholder="new@email.com"
+                      className="mise-well min-h-[40px] flex-1 rounded-lg px-3 text-sm text-fg outline-none"
+                    />
+                    <button
+                      disabled={busy || !newEmail}
+                      onClick={() =>
+                        act(
+                          () =>
+                            api
+                              .post(`/employees/${employee.id}/login/email`, { email: newEmail })
+                              .then(() => setNewEmail("")),
+                          "Email changed — verification sent",
+                        )
+                      }
+                      className="mise-press min-h-[40px] shrink-0 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[10px] text-fg-faint">
+                    They must confirm the new address before it works.
+                  </p>
+
+                  <label className="mt-3 block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                    Reset password
+                  </label>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      value={newPw}
+                      onChange={(e) => setNewPw(e.target.value)}
+                      type="text"
+                      placeholder="new password (min 8)"
+                      className="mise-well min-h-[40px] flex-1 rounded-lg px-3 text-sm text-fg outline-none"
+                    />
+                    <button
+                      disabled={busy || newPw.length < 8}
+                      onClick={() =>
+                        act(
+                          () =>
+                            api
+                              .post(`/employees/${employee.id}/login/password`, { password: newPw })
+                              .then(() => setNewPw("")),
+                          "Password reset — staff notified by email",
+                        )
+                      }
+                      className="mise-press min-h-[40px] shrink-0 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[10px] text-fg-faint">
+                    🔒 We never email a password — tell them in person. They get a
+                    &ldquo;your password was changed&rdquo; notice.
+                  </p>
+                </section>
+
+                <section className="mise-card-inset rounded-2xl p-3.5">
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <span aria-hidden className="mise-well grid h-8 w-8 place-items-center rounded-xl text-sm">
+                      🚪
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-fg">Being let in</p>
+                      <p className="text-[11px] text-fg-faint">Whether this login works at all</p>
+                    </div>
+                  </div>
+
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      act(
+                        () =>
+                          api.post(`/employees/${employee.id}/login/active`, {
+                            is_active: !status.is_active,
+                          }),
+                        status.is_active ? "Access stopped" : "Access restored",
+                      )
+                    }
+                    className="mise-btn-flat mise-press min-h-[46px] w-full rounded-xl px-3 text-left text-sm font-semibold text-fg-soft"
+                  >
+                    {status.is_active ? "Stop access" : "Restore access"}
                   </button>
-                )}
-                {/* CALLED THE SAME THING IN BOTH PLACES. This button and the
-                    Roles & Access page's "Stop access" do exactly the same
-                    thing — flip the login's is_active — and used to be called
-                    two different things, so it looked like two features. */}
-                <button disabled={busy} onClick={() => act(() => api.post(`/employees/${employee.id}/login/active`, { is_active: !status.is_active }), status.is_active ? "Access stopped" : "Access restored")} className="mise-btn-flat mise-press min-h-[46px] w-full rounded-xl px-3 py-2.5 text-left text-sm text-fg-soft">
-                  {status.is_active ? "🚫 Stop access" : "✅ Restore access"}
-                </button>
-
-                <div className="mise-well rounded-xl p-3">
-                  <label className="text-xs font-medium text-fg-soft">Change email (re-verification required)</label>
-                  <div className="mt-1.5 flex gap-2">
-                    <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="new@email.com" className="mise-raised flex-1 rounded-lg px-3 py-2 text-sm text-fg outline-none" />
-                    <button disabled={busy || !newEmail} onClick={() => act(() => api.post(`/employees/${employee.id}/login/email`, { email: newEmail }).then(() => setNewEmail("")), "Email changed — verification sent ✉️")} className="mise-press rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-50">Set</button>
-                  </div>
-                </div>
-
-                <div className="mise-well rounded-xl p-3">
-                  <label className="text-xs font-medium text-fg-soft">Reset password</label>
-                  <div className="mt-1.5 flex gap-2">
-                    <input value={newPw} onChange={(e) => setNewPw(e.target.value)} type="text" placeholder="new password (min 8)" className="mise-raised flex-1 rounded-lg px-3 py-2 text-sm text-fg outline-none" />
-                    <button disabled={busy || newPw.length < 8} onClick={() => act(() => api.post(`/employees/${employee.id}/login/password`, { password: newPw }).then(() => setNewPw("")), "Password reset — staff notified by email")} className="mise-press rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-50">Set</button>
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-fg-faint">
-                    🔒 For security we never email the password — tell them the new one in person.
-                    They get a &ldquo;your password was changed&rdquo; notice.
+                  <p className="mt-1.5 text-[10px] text-fg-faint">
+                    Stopping is instant and reversible — their history stays exactly as it is.
                   </p>
-                </div>
 
-                {/* THE PERSON, NOT THE LOGIN.
-                    Everything above acts on the account. These two act on the
-                    employee, and the difference is the whole point of his rule:
-                    "if we remove from employee then role's page need to catch
-                    that, but if we remove from staff, employee don't catch."
-                    A person can exist without an account; an account cannot
-                    exist without a person. */}
-                <div className="rounded-xl border border-rose-400/25 bg-rose-400/[0.05] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-rose-300">
-                    The employee
-                  </p>
-                  <p className="mt-1 text-[11px] text-fg-faint">
-                    Suspending hides them from the roster and rotas and can be undone.
-                    Removing cannot.
-                  </p>
-                  <div className="mt-2.5 space-y-2">
-                    <button
-                      disabled={busy}
-                      onClick={() => onSuspend(employee)}
-                      className="mise-btn-flat mise-press min-h-[46px] w-full rounded-xl px-3 py-2.5 text-left text-sm text-fg-soft"
-                    >
-                      {employee.is_active === false ? "✅ Bring back" : "⏸ Suspend this employee"}
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() => onRemove(employee)}
-                      data-tone="danger"
-                      className="mise-btn-flat mise-press min-h-[46px] w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-300"
-                    >
-                      ✕ Permanently remove {employee.full_name.split(" ")[0]}
-                    </button>
+                  {/* Kept visually apart, and the two are NOT the same button
+                      wearing different words: suspending hides someone from the
+                      roster and can be undone; removing cannot. Giving them the
+                      same weight is how the wrong one gets pressed. */}
+                  <div className="mt-3 rounded-xl border border-rose-400/25 bg-rose-400/[0.05] p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-300">
+                      The employee
+                    </p>
+                    <p className="mt-1 text-[10px] text-fg-faint">
+                      Suspending hides them from the roster and rotas and can be undone.
+                      Removing cannot.
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      <button
+                        disabled={busy}
+                        onClick={() => onSuspend(employee)}
+                        className="mise-btn-flat mise-press min-h-[42px] w-full rounded-xl px-3 text-left text-sm text-fg-soft"
+                      >
+                        {employee.is_active === false ? "Bring back" : "Suspend this employee"}
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() => onRemove(employee)}
+                        data-tone="danger"
+                        className="mise-btn-flat mise-press min-h-[42px] w-full rounded-xl px-3 text-left text-sm font-semibold text-rose-300"
+                      >
+                        Permanently remove {employee.full_name.split(" ")[0]}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </section>
               </div>
 
               {/* MESSAGING MOVED OUT OF HERE, and this is the whole reason.
