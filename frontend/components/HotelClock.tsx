@@ -256,6 +256,10 @@ export function HotelClock({ className = "" }: { className?: string }) {
           {/* Where the zone is actually changed. The popup names the zone and
               then left him to go and find the setting — the same dead end the
               login popup had. */}
+          {/* Only offered to whoever can actually change it. This link is how
+              he found a staff account looking at the whole settings page —
+              a shortcut is still a door. */}
+          {canSet && (
           <Link
             href="/settings#timezone"
             onClick={() => setOpen(false)}
@@ -264,6 +268,7 @@ export function HotelClock({ className = "" }: { className?: string }) {
             Change the restaurant&apos;s timezone
             <span aria-hidden>→</span>
           </Link>
+          )}
 
           <div className="w-full">
             <p className="mb-1.5 text-center text-[10px] uppercase tracking-wide text-fg-faint">

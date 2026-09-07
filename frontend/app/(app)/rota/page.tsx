@@ -469,7 +469,11 @@ export default function RotaPage() {
   ];
 
   return (
-    <div>
+    // The week is a board, so it should occupy the board's worth of space.
+    // Left to size itself it sat in the top third of a laptop screen with a
+    // blank half underneath — which is what "clumsy" looks like when nothing
+    // is actually wrong: seven short boxes floating above nothing.
+    <div className="flex h-[calc(100svh-13rem)] min-h-0 flex-col">
       <PageHeader
         title="Rota"
         subtitle="Who is working this week, and what it costs."
@@ -506,7 +510,7 @@ export default function RotaPage() {
             type="button"
             onClick={() => setWeekStart(mondayOf(new Date()))}
             title="Back to this week"
-            data-testid="rota-week"
+            data-testid="rota-week-label"
             className="mise-press min-w-[11rem] rounded-lg px-2 py-1 text-sm font-semibold text-fg"
           >
             {weekDates[0].toLocaleDateString(undefined, { day: "numeric", month: "short" })} –{" "}
@@ -586,7 +590,10 @@ export default function RotaPage() {
 
       {/* THE WEEK. Seven columns on a laptop, so the week ends on screen; seven
           stacked bands on a phone, because 55px columns are not a rota. */}
-      <div className="grid gap-2 lg:grid-cols-7" data-testid="rota-week">
+      <div
+        className="mise-noscrollbar grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-y-auto lg:auto-rows-auto lg:grid-cols-7 lg:grid-rows-[minmax(0,1fr)]"
+        data-testid="rota-week"
+      >
         {weekDates.map((d, i) => {
           const dayShifts = byDay(d);
           const isToday = iso(d) === iso(new Date());
@@ -611,11 +618,18 @@ export default function RotaPage() {
               } ${dropDay === iso(d) ? "bg-brand-400/5 ring-2 ring-brand-400/60" : ""}`}
             >
               <div className="mb-1.5 flex items-baseline justify-between gap-1">
-                <p className="text-xs font-semibold text-fg">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-fg">
                   {DAYS[i]}{" "}
                   <span className="font-normal text-fg-faint">
                     {d.getDate()}/{d.getMonth() + 1}
                   </span>
+                  {/* A ring around a column is a hint you have to know how to
+                      read. The word is not. */}
+                  {isToday && (
+                    <span className="rounded-full bg-brand-600 px-1.5 py-px text-[9px] font-bold text-white">
+                      today
+                    </span>
+                  )}
                 </p>
                 {canWrite ? (
                   <button
@@ -650,7 +664,23 @@ export default function RotaPage() {
               )}
 
               {dayShifts.length === 0 ? (
-                <p className="flex-1 py-2 text-center text-[11px] text-fg-faint">—</p>
+                // An em-dash is a shrug. A day with nobody on it is the most
+                // common thing you came here to change, so it offers the change
+                // rather than reporting the absence.
+                canWrite ? (
+                  <button
+                    type="button"
+                    onClick={() => openAdd(iso(d))}
+                    className="mise-press flex flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line py-4 text-[11px] text-fg-faint transition hover:border-brand-400/50 hover:text-brand-300"
+                  >
+                    <span aria-hidden className="text-base leading-none">＋</span>
+                    Add a shift
+                  </button>
+                ) : (
+                  <p className="flex-1 py-3 text-center text-[11px] text-fg-faint">
+                    Nobody on
+                  </p>
+                )
               ) : (
                 <ul className="space-y-1">
                   {dayShifts.map((s) => (
