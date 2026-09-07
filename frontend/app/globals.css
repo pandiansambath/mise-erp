@@ -435,22 +435,30 @@ html:has(.mise-app) { background: #04120d; }
 
 /* ── Staggered rise for grids of cards (KPIs, quick actions, pickers) ───── */
 @keyframes mise-rise {
-  from { opacity: 0; transform: translateY(12px); }
+  /* A MOVING TARGET IS A MISSED TAP.
+     "i need to click one any button 2 or 3 times to make it click."
+     This rose 12px with fill-mode `both` and delays up to 0.48s, so every item
+     in a staggered list sat twelve pixels from where it appeared to be, for up
+     to a second — and any re-render restarted it. An audit of the live site
+     found buttons still displaced three and a half seconds after load. You aim,
+     the element is not there, the press lands on nothing.
+     It fades now. A fade cannot move the thing you are pointing at. */
+  from { opacity: 0; }
   to   { opacity: 1; transform: none; }
 }
-.mise-stagger > * { animation: mise-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.mise-stagger > *:nth-child(1) { animation-delay: 0.04s; }
-.mise-stagger > *:nth-child(2) { animation-delay: 0.08s; }
-.mise-stagger > *:nth-child(3) { animation-delay: 0.12s; }
-.mise-stagger > *:nth-child(4) { animation-delay: 0.16s; }
-.mise-stagger > *:nth-child(5) { animation-delay: 0.2s; }
-.mise-stagger > *:nth-child(6) { animation-delay: 0.24s; }
-.mise-stagger > *:nth-child(7) { animation-delay: 0.28s; }
-.mise-stagger > *:nth-child(8) { animation-delay: 0.32s; }
-.mise-stagger > *:nth-child(9) { animation-delay: 0.36s; }
-.mise-stagger > *:nth-child(10) { animation-delay: 0.4s; }
-.mise-stagger > *:nth-child(11) { animation-delay: 0.44s; }
-.mise-stagger > *:nth-child(n + 12) { animation-delay: 0.48s; }
+.mise-stagger > * { animation: mise-rise 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mise-stagger > *:nth-child(1) { animation-delay: 0.030s; }
+.mise-stagger > *:nth-child(2) { animation-delay: 0.048s; }
+.mise-stagger > *:nth-child(3) { animation-delay: 0.066s; }
+.mise-stagger > *:nth-child(4) { animation-delay: 0.084s; }
+.mise-stagger > *:nth-child(5) { animation-delay: 0.102s; }
+.mise-stagger > *:nth-child(6) { animation-delay: 0.120s; }
+.mise-stagger > *:nth-child(7) { animation-delay: 0.138s; }
+.mise-stagger > *:nth-child(8) { animation-delay: 0.156s; }
+.mise-stagger > *:nth-child(9) { animation-delay: 0.174s; }
+.mise-stagger > *:nth-child(10) { animation-delay: 0.192s; }
+.mise-stagger > *:nth-child(11) { animation-delay: 0.200s; }
+.mise-stagger > *:nth-child(n + 12) { animation-delay: 0.2s; }
 
 /* ── Curtain sweep across the auth boundary (login/signup → app) ────────── */
 @keyframes mise-curtain-up {

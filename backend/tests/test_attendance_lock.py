@@ -184,3 +184,43 @@ def test_shape_check_accepts_only_digits_in_range() -> None:
     for bad in ("123", "123456789", "12ab", ""):
         with pytest.raises(attendance_lock.PinError):
             attendance_lock.check_shape(bad)
+
+
+@pytest.mark.asyncio
+async def test_hours_range_answers_in_one_request(client, db, hotel, make_user, auth_header):
+    """The attendance page drew a seven-day bar per person as SEVEN calls.
+
+    From his desk that is seven round trips to London for one small picture —
+    about 300ms of latency each, and a browser runs six at a time. One request
+    now, shaped so the client does no matching: employee id -> a value per day,
+    in the same order the caller asked for.
+    """
+    from datetime import date, timedelta
+
+    owner = await make_user("hours-owner@nirai.com", Role.SUPER_ADMIN.value)
+    today = date.today()
+    start = today - timedelta(days=6)
+
+    r = await client.get(
+        f"/api/attendance/hours?date_from={start}&date_to={today}",
+        headers=auth_header(owner),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert isinstance(body, dict)
+    for values in body.values():
+        assert len(values) == 7, "one value per day asked for"
+
+    # Backwards is not an error, it is somebody dragging a date picker.
+    flipped = await client.get(
+        f"/api/attendance/hours?date_from={today}&date_to={start}",
+        headers=auth_header(owner),
+    )
+    assert flipped.status_code == 200
+
+    # A range wide enough to be a mistake is refused rather than served slowly.
+    huge = await client.get(
+        f"/api/attendance/hours?date_from={today - timedelta(days=400)}&date_to={today}",
+        headers=auth_header(owner),
+    )
+    assert huge.status_code == 400
