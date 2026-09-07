@@ -302,17 +302,19 @@ export function JobSheet({
         { label: "Pages they can open", value: `${reach.on} of ${reach.total}` },
         { label: "People with this job", value: String(job?.people ?? 0), people: holders },
       ]}
-      lead={
-        <AiGrantPanel
-          value={ai}
-          onChange={(patch) => {
-            setAiTouched(true);
-            setAi((a) => ({ ...a, ...patch }));
-          }}
-          title="AI for this job"
-          hint="everyone with this job — one person can still differ"
-          idPrefix="job-ai"
-        />
+      areaPanel={(key) =>
+        key === "ai" ? (
+          <AiGrantPanel
+            value={ai}
+            onChange={(patch) => {
+              setAiTouched(true);
+              setAi((a) => ({ ...a, ...patch }));
+            }}
+            title="Everyone with this job"
+            hint="one person can still differ"
+            idPrefix="job-ai"
+          />
+        ) : null
       }
       intro={
         <>
