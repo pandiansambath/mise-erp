@@ -69,6 +69,36 @@ export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
   const { user, hotel, refreshHotel } = useAuth();
   const [ripple, setRipple] = useState(true);
+  // THE TIMEZONE LINK LOOKED BROKEN, AND THE ANCHOR WAS FINE.
+  //
+  //   "that 1 button redirect button change time zone not working"
+  //
+  // The clock links to /settings#timezone and `id="timezone"` is right there.
+  // But this page fetches before it renders the section, so at the moment the
+  // router honours the hash the element does not exist yet — the browser has
+  // nothing to scroll to, gives up, and you land at the top of a long page with
+  // no idea where the setting went. Indistinguishable from a dead link.
+  //
+  // So the scroll waits for the content instead of for the navigation.
+  useEffect(() => {
+    if (typeof window === "undefined" || window.location.hash !== "#timezone") return;
+    let tries = 0;
+    const id = window.setInterval(() => {
+      const el = document.getElementById("timezone");
+      if (el) {
+        window.clearInterval(id);
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        // A flash, because arriving at the right place still leaves you asking
+        // which of these boxes you were sent here for.
+        el.classList.add("mise-flash");
+        window.setTimeout(() => el.classList.remove("mise-flash"), 2200);
+      } else if (++tries > 40) {
+        window.clearInterval(id);
+      }
+    }, 100);
+    return () => window.clearInterval(id);
+  }, []);
+
   useEffect(() => {
     setRipple(rippleEnabled(hotel?.id));
   }, [hotel?.id]);
