@@ -147,11 +147,24 @@ function Editable({
   );
 }
 
+/** "Today", "Yesterday", or the date — once, where it changes. A timestamp on
+ *  every line is noise; a date where the day turns over is what you scan for. */
+function dayLabel(at: number): string {
+  const d = new Date(at);
+  const today = new Date();
+  const yest = new Date();
+  yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+}
+
 function Bubble({
   who,
   children,
   tight = false,
   grouped = false,
+  endsRun = true,
   at,
 }: {
   who: "ai" | "me";
@@ -159,6 +172,8 @@ function Bubble({
   tight?: boolean;
   /** Same speaker as the message above: drop the avatar and tighten the gap. */
   grouped?: boolean;
+  /** Last of a run by this speaker — the one that carries the time. */
+  endsRun?: boolean;
   at?: number;
 }) {
   const mine = who === "me";
@@ -176,24 +191,31 @@ function Bubble({
             ✦
           </div>
         ))}
+      {/* Matched to the team chat deliberately: same app, same conversation
+          shape. 15px because 13.5 reads as a log, and the corners square up
+          along a run so a burst from one speaker looks like one turn. */}
       <div
         className={`max-w-[min(58rem,82%)] rounded-2xl ${
-          tight ? "p-2" : "px-4 py-3"
-        } text-[13.5px] leading-[1.7] ${
+          tight ? "p-2" : "px-4 py-2.5"
+        } text-[15px] leading-relaxed ${
           mine
-            ? "mise-press rounded-br-md bg-brand-600 text-white shadow-lg shadow-brand-900/20"
-            : "mise-card-inset rounded-bl-md text-fg"
+            ? "mise-press bg-brand-600 text-white shadow-lg shadow-brand-900/20"
+            : "mise-card-inset text-fg"
+        } ${grouped ? (mine ? "rounded-tr-md" : "rounded-tl-md") : ""} ${
+          !endsRun ? (mine ? "rounded-br-md" : "rounded-bl-md") : ""
         }`}
       >
         {children}
+        {at && endsRun && (
+          <p
+            className={`mt-1 text-right text-[10px] tabular-nums ${
+              mine ? "text-white/70" : "text-fg-faint"
+            }`}
+          >
+            {new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </p>
+        )}
       </div>
-      {/* Timestamps on hover only — useful when you want them, noise when you
-          don't, and a chat covered in clock text reads like a log file. */}
-      {at && (
-        <span className="self-end pb-1 text-[10px] text-fg-faint opacity-0 transition-opacity group-hover:opacity-100">
-          {new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
-      )}
     </div>
   );
 }
@@ -879,7 +901,30 @@ export default function AiScanPage() {
         {msgs.map((m, i) => {
           // grouped = same speaker as the message above
           const prev = msgs[i - 1];
+          const next = msgs[i + 1];
           const grouped = Boolean(prev && prev.who === m.who && prev.kind !== "card");
+          // A conversation that ran over midnight should say so. Without this a
+          // question from last Tuesday sits directly under this morning's, with
+          // nothing between them but a gap.
+          // `Msg` is a union and the photo/card variants carry no timestamp,
+          // so read it defensively rather than assuming every message has one.
+          const atOf = (x?: Msg) =>
+            x && "at" in x && typeof x.at === "number" ? x.at : undefined;
+          const mAt = atOf(m);
+          const pAt = atOf(prev);
+          const newDay = Boolean(
+            mAt && (!pAt || new Date(pAt).toDateString() !== new Date(mAt).toDateString()),
+          );
+          const endsRun = !next || next.who !== m.who || next.kind === "card";
+          const divider = newDay ? (
+            <div key={`d-${m.id}`} className="my-4 flex items-center gap-3">
+              <span className="h-px flex-1 bg-line" />
+              <span className="mise-well rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+                {dayLabel(mAt as number)}
+              </span>
+              <span className="h-px flex-1 bg-line" />
+            </div>
+          ) : null;
           if (m.kind === "photo") {
             return (
               <Bubble key={m.id} who="me" tight grouped={grouped}>
@@ -940,7 +985,9 @@ export default function AiScanPage() {
             );
           }
           return (
-            <Bubble key={m.id} who={m.who} grouped={grouped} at={m.at}>
+            <div key={m.id}>
+              {divider}
+            <Bubble who={m.who} grouped={grouped} endsRun={endsRun} at={m.at}>
               <Typewriter text={m.text} animate={m.who === "ai" && m.id === liveId} />
               {m.choices && m.choices.length > 0 && (
                 <div className="mt-2.5 flex flex-wrap gap-2">
@@ -971,6 +1018,7 @@ export default function AiScanPage() {
                 </div>
               )}
             </Bubble>
+            </div>
           );
         })}
         {/* Openers, shown only while the thread is still empty. Chips that
