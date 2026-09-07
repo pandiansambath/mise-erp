@@ -37,6 +37,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { api, ApiError, fetchBlobUrl, postForm } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { refreshChatUnread } from "@/lib/chatUnread";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { can } from "@/lib/permissions";
 
 type Scope = "hotel" | "network";
@@ -75,6 +76,22 @@ const ACCEPT =
   "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.odt,.ods,.rtf";
 
 const ROOM_ICONS = ["💬", "🍽️", "🍳", "📦", "🚚", "🧹", "💷", "📣", "🎉", "⚠️"];
+
+/** "Today", "Yesterday", or the date. A timestamp on every line is noise; a
+ *  date once, where it changes, is the thing you actually scan for. */
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const yest = new Date();
+  yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
 
 export default function MessagesPage() {
   const { user } = useAuth();
@@ -225,7 +242,21 @@ export default function MessagesPage() {
     if (openId) void loadMsgs(openId, scope);
   }, [openId, scope, loadMsgs]);
 
-  // Poll while somebody is looking. A hidden tab costs nothing.
+  // LIVE. "its not realtime, i can see small delay in message delivery" — and
+  // he was right: a six-second poll makes every message three seconds old on
+  // average. The hotel already keeps a Server-Sent Events stream open for live
+  // PO updates, so chat rides on that rather than opening a second connection.
+  //
+  // The event carries no text, only "something changed in room X", because
+  // everyone in the hotel is on that stream including people who cannot open
+  // this room. We fetch through the endpoint that checks.
+  useLiveRefresh("chat.message", () => {
+    void loadRooms();
+    if (openId && scope === "hotel") void loadMsgs(openId, scope);
+  });
+
+  // A slow backstop, for the hotel-to-hotel side (which is not on this hotel's
+  // bus) and for a stream that dropped without the browser noticing.
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState !== "visible") return;
@@ -233,7 +264,7 @@ export default function MessagesPage() {
       void loadTalk();
       if (openId) void loadMsgs(openId, scope);
     };
-    const id = window.setInterval(tick, 6000);
+    const id = window.setInterval(tick, scope === "network" ? 6000 : 20000);
     return () => window.clearInterval(id);
   }, [openId, scope, loadRooms, loadTalk, loadMsgs]);
 
@@ -547,7 +578,7 @@ export default function MessagesPage() {
                   const el = e.currentTarget;
                   atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
                 }}
-                className="mise-noscrollbar min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3"
+                className="mise-noscrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
               >
                 {msgs === null ? (
                   <p className="py-8 text-center text-sm text-fg-faint">Loading…</p>
@@ -559,39 +590,98 @@ export default function MessagesPage() {
                     Nothing here yet — say hello.
                   </p>
                 ) : (
-                  msgs.map((m) => (
-                    <div key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 sm:max-w-[70%] ${
-                          m.mine ? "bg-brand-600 text-white" : "mise-card-inset text-fg"
-                        }`}
-                      >
-                        {!m.mine && room.kind !== "direct" && (
-                          <p className="mb-0.5 text-[11px] font-semibold text-fg-faint">
-                            {m.sender_name}
-                          </p>
+                  msgs.map((m, i) => {
+                    // WHAT MADE IT FEEL TIGHT, and it was not the padding.
+                    //
+                    // Every message repeated the sender's name and the full
+                    // date, so five lines from one person in one minute printed
+                    // their name five times and the date five times. A chat
+                    // reads as a conversation because it DROPS what has not
+                    // changed: a run of messages from the same person shows one
+                    // name, and a time only when the run ends.
+                    const prev = i > 0 ? msgs[i - 1] : null;
+                    const next = i < msgs.length - 1 ? msgs[i + 1] : null;
+                    const newDay =
+                        !prev ||
+                        new Date(prev.created_at).toDateString() !==
+                          new Date(m.created_at).toDateString();
+                    const startsRun =
+                        newDay || !prev || prev.mine !== m.mine ||
+                        prev.sender_name !== m.sender_name;
+                    const endsRun =
+                        !next ||
+                        next.mine !== m.mine ||
+                        next.sender_name !== m.sender_name ||
+                        new Date(next.created_at).toDateString() !==
+                          new Date(m.created_at).toDateString();
+
+                    return (
+                      <div key={m.id}>
+                        {newDay && (
+                          <div className="my-4 flex items-center gap-3">
+                            <span className="h-px flex-1 bg-line" />
+                            <span className="mise-well rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+                              {dayLabel(m.created_at)}
+                            </span>
+                            <span className="h-px flex-1 bg-line" />
+                          </div>
                         )}
-                        {m.attachment_url && <Attachment msg={m} />}
-                        {m.body && (
-                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                            {m.body}
-                          </p>
-                        )}
-                        <p
-                          className={`mt-1 text-[10px] tabular-nums ${
-                            m.mine ? "text-white/70" : "text-fg-faint"
-                          }`}
+                        <div
+                          className={`flex items-end gap-2 ${
+                            m.mine ? "justify-end" : "justify-start"
+                          } ${endsRun ? "mb-2.5" : "mb-0.5"}`}
                         >
-                          {new Date(m.created_at).toLocaleString(undefined, {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
+                          {/* The avatar sits with the LAST message of a run, so
+                              a burst of five reads as one person speaking. */}
+                          {!m.mine && room.kind !== "direct" && (
+                            <span
+                              aria-hidden
+                              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-500/15 text-[10px] font-bold text-brand-300 ${
+                                endsRun ? "" : "invisible"
+                              }`}
+                            >
+                              {m.sender_name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          <div
+                            className={`max-w-[78%] px-3.5 py-2 sm:max-w-[65%] ${
+                              m.mine
+                                ? "bg-brand-600 text-white"
+                                : "mise-card-inset text-fg"
+                            } ${
+                              m.mine
+                                ? `rounded-2xl ${startsRun ? "rounded-tr-md" : ""} ${endsRun ? "rounded-br-md" : ""}`
+                                : `rounded-2xl ${startsRun ? "rounded-tl-md" : ""} ${endsRun ? "rounded-bl-md" : ""}`
+                            }`}
+                          >
+                            {startsRun && !m.mine && room.kind !== "direct" && (
+                              <p className="mb-1 text-[11px] font-semibold text-brand-300">
+                                {m.sender_name}
+                              </p>
+                            )}
+                            {m.attachment_url && <Attachment msg={m} />}
+                            {m.body && (
+                              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                                {m.body}
+                              </p>
+                            )}
+                            {endsRun && (
+                              <p
+                                className={`mt-0.5 text-right text-[10px] tabular-nums ${
+                                  m.mine ? "text-white/70" : "text-fg-faint"
+                                }`}
+                              >
+                                {new Date(m.created_at).toLocaleTimeString(undefined, {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 

@@ -126,11 +126,25 @@ export function PageMore({
         onClick={() => setOpen(true)}
         aria-label={label}
         title={label}
-        // min-h-[40px]: the mobile audit found the app full of 24–30px controls,
-        // and a control you miss with a thumb is a control that does not exist.
-        className={`mise-btn-flat mise-press grid min-h-[40px] w-10 place-items-center text-lg leading-none text-fg-soft ${className}`}
+        data-testid="page-more"
+        // A BARE ⋯ IS A SECRET.
+        //
+        //   "that 3 dot to open is not visible, we need to make this visible,
+        //    else user will think there is no extra features"
+        //
+        // He is right, and it is the worst kind of wrong: everything behind it
+        // still works, so nothing looks broken — the exports and the setup
+        // simply cease to exist for anyone who never guessed. A glyph is not a
+        // label. It says "More" now, in words, and carries the count so the
+        // page admits how much is behind it.
+        //
+        // min-h-[40px]: the mobile audit found the app full of 24–30px
+        // controls, and a control you miss with a thumb does not exist either.
+        className={`mise-btn-flat mise-press inline-flex min-h-[40px] items-center gap-1.5 px-3 text-sm font-semibold leading-none text-fg-soft ${className}`}
       >
-        ⋯
+        <span aria-hidden className="text-base leading-none">⋯</span>
+        <span>More</span>
+        <span className="mise-chip text-[10px] tabular-nums">{actions.length}</span>
       </button>
       {open && (
         <SheetPopup
