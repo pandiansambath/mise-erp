@@ -14,6 +14,7 @@ import {
 } from "@/components/auth/HotelDoor";
 import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
+import { SettingsPreview } from "@/components/SettingsPreview";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { rippleEnabled, setRippleEnabled } from "@/lib/ripplePref";
@@ -394,7 +395,16 @@ export default function SettingsPage() {
   const inputCls = "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none";
 
   return (
-    <div className="max-w-2xl">
+    // FULL WIDTH, AND THE PREVIEW GETS A HOME.
+    //
+    //   "whenever we open setting page, open this in full entire UI, and left
+    //    side we can show setting, right side u can use 2 view"
+    //
+    // The previews were live and correct and useless: each was a ~400px box
+    // inside a 2xl column, so a page designed for a 1280px laptop was being
+    // judged in a slot a third that size. You were looking at the phone layout
+    // while trying to decide how the laptop one reads.
+    <div className="w-full">
       <PageHeader
         title="Settings"
         subtitle={
@@ -428,6 +438,8 @@ export default function SettingsPage() {
         ))}
       </div>
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_30rem]">
+        <div className="min-w-0">
       {canConfigure && (
       <Card className="mise-feel mb-6" id="s-display">
         <h3 className="font-semibold text-fg">Display currency</h3>
@@ -1253,24 +1265,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* ── the REAL page, live ────────────────────────────────── */}
-            <div className="lg:sticky lg:top-4 lg:self-start">
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Live preview</p>
-                <p className="text-[11px] text-fg-faint">scroll it ↓</p>
-              </div>
-              <div className="overflow-hidden rounded-2xl border border-line shadow-2xl shadow-black/30">
-                <div className="flex items-center gap-1.5 border-b border-line bg-paper-2 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-                  <span className="ml-2 truncate text-[11px] text-fg-faint">{siteHost || "yourhandle.dineai.cloud"}</span>
-                </div>
-                <div className="max-h-[560px] overflow-y-auto overscroll-contain">
-                  <HotelSite data={previewData} config={land} preview />
-                </div>
-              </div>
-            </div>
           </div>
         </Card>
       )}
@@ -1453,50 +1447,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* The real component, with a dummy form standing in for the real
-                one — the preview must not render a working password field
-                inside a settings page. */}
-            <div className="lg:sticky lg:top-4 lg:self-start">
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-fg-faint">
-                Live preview
-              </p>
-              <div className="overflow-hidden rounded-2xl border border-line shadow-2xl shadow-black/30">
-                <div className="flex items-center gap-1.5 border-b border-line bg-paper-2 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-                  <span className="ml-2 truncate text-[11px] text-fg-faint">
-                    {siteHost || "yourhandle.dineai.cloud"}/login
-                  </span>
-                </div>
-                <div className="h-[440px]">
-                  <HotelDoor
-                    cfg={door}
-                    hotelName={hotel?.name ?? "Your restaurant"}
-                    // So the preview shows what they will ACTUALLY get, theme
-                    // inheritance included, rather than a generic default.
-                    hotelTheme={hotel?.theme}
-                    logoUrl={hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null}
-                    preview
-                  >
-                    <div className="space-y-2.5" aria-hidden>
-                      <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
-                      <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
-                      <div
-                        className="h-10 rounded-lg"
-                        style={{
-                          background: `linear-gradient(100deg, ${door.accent ?? DEFAULT_LOGIN.accent}, ${door.accent2 ?? DEFAULT_LOGIN.accent2})`,
-                        }}
-                      />
-                    </div>
-                  </HotelDoor>
-                </div>
-              </div>
-              <p className="mt-1.5 text-[11px] text-fg-faint">
-                The sign-in fields are drawn as blanks here — the real ones only ever
-                render on the real door.
-              </p>
-            </div>
           </div>
         )}
       </Card>
@@ -1548,6 +1498,41 @@ export default function SettingsPage() {
           </a>
         </div>
       </Card>
+        </div>
+
+        {/* The dock. Sticky, because you change a colour on the left and look
+            right — scrolling away from the thing you are judging is what made
+            the old inline previews so hard to use. */}
+        {canConfigure && (
+          <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+            <SettingsPreview
+              host={siteHost ?? ""}
+              site={<HotelSite data={previewData} config={land} preview />}
+              door={
+                <HotelDoor
+                  cfg={door}
+                  hotelName={hotel?.name ?? "Your restaurant"}
+                  hotelTheme={hotel?.theme}
+                  logoUrl={hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null}
+                  preview
+                >
+                  <div className="space-y-2.5" aria-hidden>
+                    <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
+                    <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
+                    <div
+                      className="h-10 rounded-lg"
+                      style={{
+                        background: `linear-gradient(100deg, ${door.accent ?? DEFAULT_LOGIN.accent}, ${door.accent2 ?? DEFAULT_LOGIN.accent2})`,
+                      }}
+                    />
+                  </div>
+                </HotelDoor>
+              }
+            />
+          </aside>
+        )}
+      </div>
+
     </div>
   );
 }
