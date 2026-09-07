@@ -180,6 +180,31 @@ export class ApiError extends Error {
 // is long enough to collapse a burst of duplicate calls and a back-navigation,
 // and too short to show anybody yesterday's number.
 const GET_TTL_MS = 3000;
+
+/** Endpoints that barely change, and how long they may be reused.
+ *
+ *  Measured: every page pays for the same five shell calls before it fetches
+ *  anything of its own — who am I, any announcements, onboarding state, unread
+ *  counts. Five round trips to London, repeated on every navigation, for
+ *  answers that were the same a minute ago.
+ *
+ *  The window is chosen per endpoint by what it costs to be stale. Being told
+ *  about a new announcement a minute late costs nothing. Being shown the wrong
+ *  stock figure costs money — which is why nothing about stock, sales or money
+ *  is on this list, and why the default stays three seconds. */
+const LONG_TTL: [RegExp, number][] = [
+  [/^\/auth\/me$/, 60_000],
+  [/^\/platform\/announcements\/active$/, 120_000],
+  [/^\/hotels\/onboarding$/, 120_000],
+  [/^\/hotels\/timezones$/, 600_000],
+  [/^\/platform\/plans\/matrix$/, 300_000],
+];
+
+function ttlFor(path: string): number {
+  const bare = path.split("?")[0];
+  for (const [re, ms] of LONG_TTL) if (re.test(bare)) return ms;
+  return GET_TTL_MS;
+}
 const inFlight = new Map<string, Promise<unknown>>();
 const recent = new Map<string, { at: number; data: unknown }>();
 
@@ -327,7 +352,7 @@ export const api = {
   invalidate: clearReadCache,
   get: <T>(path: string): Promise<T> => {
     const hit = recent.get(path);
-    if (hit && Date.now() - hit.at < GET_TTL_MS) return Promise.resolve(hit.data as T);
+    if (hit && Date.now() - hit.at < ttlFor(path)) return Promise.resolve(hit.data as T);
 
     const running = inFlight.get(path);
     if (running) return running as Promise<T>;
