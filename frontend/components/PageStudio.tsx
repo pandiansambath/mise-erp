@@ -81,13 +81,18 @@ export function PageStudio({
 
       {/* Controls left, page right. On a phone they stack, controls first,
           because you cannot edit and watch at once on 390px anyway. */}
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_1fr] overflow-hidden lg:grid-cols-[26rem_1fr] lg:grid-rows-1">
-        <div className="mise-noscrollbar min-h-0 overflow-y-auto border-line p-4 lg:border-r lg:p-5">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_1fr] overflow-hidden lg:grid-cols-[30rem_1fr] lg:grid-rows-1">
+        {/* WHY THE CONTROLS LOOKED CLUMSY. They were written for a wide card
+            and carry two- and three-column grids inside; dropped into a column
+            they kept those columns and every field became a stub — "Add",
+            "Pho", "Mor", a Quote box one character wide. Collapsing the inner
+            grids to one column here, rather than rewriting thirty fields,
+            keeps one source of truth for the form and gives every input the
+            full width it was always asking for. */}
+        <div className="mise-noscrollbar min-h-0 overflow-y-auto border-line p-4 lg:border-r lg:p-6 [&_.grid]:grid-cols-1 [&_input]:w-full [&_textarea]:min-h-[5rem] [&_textarea]:w-full">
           {controls}
         </div>
-        <div className="mise-noscrollbar min-h-0 overflow-y-auto bg-shell p-4 lg:p-6">
-          {preview}
-        </div>
+        <div className="min-h-0 overflow-hidden bg-shell p-4 lg:p-6">{preview}</div>
       </div>
     </div>,
     document.body,

@@ -1,29 +1,26 @@
 "use client";
 
-// THE PREVIEW DOCK.
+// THE PREVIEW — a real one.
 //
-//   "this preview page is there nah, its dynamically changing whenever we do
-//    changes — but dimension and view wise its failing. so whenever we open
-//    setting page, open this in full entire UI, and left side we can show
-//    setting, right side u can use 2 view: 1 is 9:16 another is 16:9. both
-//    screen need to show the preview. so total 4 (2 for landing page of hotel
-//    and 2 for login page of hotel)"
+//   "that preview is not fitting to screen, i need to scroll to see the bottom.
+//    also we need a real preview: if i scroll inside the preview then that page
+//    need to be scrolled, not the design page."
 //
-// WHAT WAS ACTUALLY WRONG. The previews were live and correct — and useless,
-// because each was a ~400px-wide box inside a 2xl-wide column. A page designed
-// for a 1280px laptop was being judged in a slot a third that size, which is
-// not a preview of anything: the hero wraps, the columns stack, and you are
-// looking at the phone layout while trying to decide how the laptop one reads.
+// Both halves of that are the same mistake. The frame was sized to the whole
+// scaled page, so a long page made a long frame and the STUDIO scrolled — you
+// moved the editor to see the bottom of the thing you were editing, and the
+// controls slid away while you did it.
 //
-// So the page it renders is given its REAL dimensions — 1280×720 for a laptop,
-// 390×844 for a phone — and the whole thing is scaled down to fit the dock.
-// Scaling is what makes it truthful: the component still lays itself out at the
-// width it will really have, and only the pixels shrink.
+// A device does not work that way. A phone is a fixed window with a page moving
+// behind it. So the frame is now exactly the space available, and the page
+// scrolls INSIDE it. That is also what makes it honest: a hero that fills a
+// laptop screen should fill this frame too, and you should have to scroll to
+// find out what is under the fold — because your customers will.
 //
-// One consequence worth knowing: a `transform` makes this element the containing
-// block for anything `position: fixed` inside it. Both previewed components run
-// in `preview` mode and paint nothing fixed, which is why this is safe here and
-// would not be for an arbitrary page.
+// Scrolling works while clicks do not: the scaled page carries
+// `pointer-events: none`, so a wheel or a drag is handled by the frame around
+// it and a tap on "Order online" does nothing. A preview that can be navigated
+// away from is not a preview.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -35,53 +32,47 @@ const SIZES: Record<Shape, { w: number; h: number; label: string; hint: string }
   tall: { w: 390, h: 844, label: "9:16", hint: "phone" },
 };
 
-// HOW BIG THE FRAME MAY BE ON SCREEN.
-//
-//   "desktop preview is looking cool, but mobile preview very bad — make it
-//    small bro, why too lengthy."
-//
-// A 9:16 frame scaled to the dock's WIDTH comes out taller than the window: at
-// 480px wide a phone is 1038px tall. Correct, and unusable. So the phone is
-// capped by HEIGHT and centred, which is also how a phone looks when somebody
-// holds one up — narrow, in the middle, all of it visible at once.
-const MAX_H: Record<Shape, number> = { wide: 520, tall: 560 };
-
 export function SettingsPreview({
   site,
   door,
   host,
   className = "",
 }: {
-  /** The public page, rendered by the real component. */
   site: ReactNode;
-  /** The staff sign-in page, likewise. */
   door: ReactNode;
   host: string;
   className?: string;
 }) {
   const [which, setWhich] = useState<Which>("site");
   const [shape, setShape] = useState<Shape>("wide");
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.3);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.4);
 
   const size = SIZES[shape];
 
-  // Measure rather than assume: the dock is a fraction of a window that can be
-  // any width, and a hard-coded scale would be right on exactly one monitor.
+  // Fit the frame to the room it has, in BOTH directions. Measuring only the
+  // width is what made the phone 1038px tall inside a 700px pane.
   useEffect(() => {
-    const el = boxRef.current;
+    const el = shellRef.current;
     if (!el) return;
-    const fit = () =>
-      setScale(Math.min(1, el.clientWidth / size.w, MAX_H[shape] / size.h));
+    const fit = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (!w || !h) return;
+      setScale(Math.min(1, w / size.w, h / size.h));
+    };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [size.w, size.h, shape]);
+  }, [size.w, size.h]);
+
+  const frameW = Math.round(size.w * scale);
+  const frameH = Math.round(size.h * scale);
 
   return (
-    <div className={className}>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+    <div className={`flex h-full min-h-0 flex-col ${className}`}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="mise-card-inset flex gap-1 rounded-xl p-1">
           {(
             [
@@ -94,7 +85,7 @@ export function SettingsPreview({
               type="button"
               onClick={() => setWhich(key)}
               data-testid={`preview-${key}`}
-              className={`mise-press min-h-[34px] rounded-lg px-3 text-xs font-semibold transition ${
+              className={`mise-press min-h-[36px] rounded-lg px-3.5 text-xs font-semibold transition ${
                 which === key ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
               }`}
             >
@@ -110,8 +101,7 @@ export function SettingsPreview({
               type="button"
               onClick={() => setShape(key)}
               data-testid={`preview-${key}`}
-              title={SIZES[key].hint}
-              className={`mise-press min-h-[34px] rounded-lg px-3 text-xs font-semibold transition ${
+              className={`mise-press min-h-[36px] rounded-lg px-3.5 text-xs font-semibold transition ${
                 shape === key ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
               }`}
             >
@@ -120,47 +110,50 @@ export function SettingsPreview({
             </button>
           ))}
         </div>
+
+        <span className="ml-auto text-[11px] text-fg-faint">scroll inside it ↓</span>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-line shadow-2xl shadow-black/30">
-        <div className="flex items-center gap-1.5 border-b border-line bg-paper-2 px-3 py-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-          <span className="ml-2 truncate text-[11px] text-fg-faint">
-            {host || "yourhandle.dineai.cloud"}
-            {which === "door" ? "/login" : ""}
-          </span>
-        </div>
-
-        {/* The frame is the real aspect ratio, so a 9:16 preview is genuinely
-            the shape of a phone rather than a narrow slice of a laptop. */}
+      {/* The shell is the room available; the frame is the device inside it. */}
+      <div ref={shellRef} className="grid min-h-0 flex-1 place-items-center">
         <div
-          ref={boxRef}
-          className="relative grid w-full place-items-start justify-center overflow-hidden bg-shell"
-          style={{ height: `${Math.round(size.h * scale)}px` }}
+          className="overflow-hidden rounded-2xl border border-line shadow-2xl shadow-black/30"
+          style={{ width: `${frameW}px` }}
         >
+          <div className="flex items-center gap-1.5 border-b border-line bg-paper-2 px-3 py-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
+            <span className="ml-2 truncate text-[11px] text-fg-faint">
+              {host || "yourhandle.dineai.cloud"}
+              {which === "door" ? "/login" : ""}
+            </span>
+          </div>
+
           <div
-            style={{
-              width: `${size.w}px`,
-              height: `${size.h}px`,
-              transform: `scale(${scale})`,
-              transformOrigin: "top center",
-            }}
-            // Nothing in here is clickable: it is a picture of a page, and a
-            // half-working copy of a sign-in form inside a settings screen is
-            // worse than an obviously inert one.
-            aria-hidden
-            className="pointer-events-none overflow-hidden"
+            className="mise-noscrollbar overflow-y-auto overscroll-contain bg-shell"
+            style={{ width: `${frameW}px`, height: `${frameH}px` }}
           >
-            {which === "site" ? site : door}
+            {/* The page at its real width, scaled. `pointer-events-none` keeps
+                the wheel with the frame and the links inert. */}
+            <div
+              style={{
+                width: `${size.w}px`,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+              }}
+              aria-hidden
+              className="pointer-events-none"
+            >
+              {which === "site" ? site : door}
+            </div>
           </div>
         </div>
       </div>
 
-      <p className="mt-1.5 text-[11px] text-fg-faint">
-        Shown at {size.w}×{size.h} and scaled to fit — the page lays itself out at
-        the width it will really have, so this is what people get.
+      <p className="mt-2 shrink-0 text-center text-[11px] text-fg-faint">
+        {size.w}×{size.h}, scaled to fit — the page lays itself out at the width it
+        will really have, so this is what people get.
       </p>
     </div>
   );

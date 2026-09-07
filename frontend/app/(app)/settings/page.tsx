@@ -943,8 +943,15 @@ export default function SettingsPage() {
         <Card className="mise-feel mb-6" id="s-site">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="font-semibold text-fg">Your public page</h3>
-              <p className="mt-1 text-sm text-fg-faint">What a diner sees — photos, hours, links and the ordering button.</p>
+              <h3 className="font-semibold text-fg">Your pages</h3>
+              {/* ONE card, not two. "here why 2 things... already we have a
+                  toggle to do for login page too" — and he is right: the studio
+                  switches between them, so a second door into the same room was
+                  only ever a second thing to read. */}
+              <p className="mt-1 text-sm text-fg-faint">
+                The public page a diner sees, and the sign-in page your team
+                sees. Design both here.
+              </p>
             </div>
             <button
               type="button"
@@ -953,7 +960,7 @@ export default function SettingsPage() {
               data-tone="brand"
               className="mise-btn-flat mise-press min-h-[44px] shrink-0 px-4 text-sm font-bold text-brand-300"
             >
-              Design it →
+              Design your pages →
             </button>
           </div>
         </Card>
@@ -969,25 +976,6 @@ export default function SettingsPage() {
           standard door and nothing changes under them. The form inside is the
           same audited component on every door — this styles the room, never the
           thing that handles a password. */}
-      {canConfigure && (
-        <Card className="mise-feel mb-6" id="s-door">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="font-semibold text-fg">🚪 Your staff sign-in page</h3>
-              <p className="mt-1 text-sm text-fg-faint">What your team sees when they sign in at your own address.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setStudio("door")}
-              data-testid="open-studio-door"
-              data-tone="brand"
-              className="mise-btn-flat mise-press min-h-[44px] shrink-0 px-4 text-sm font-bold text-brand-300"
-            >
-              Design it →
-            </button>
-          </div>
-        </Card>
-      )}
 
       <Card className="mise-feel mb-6" id="s-account">
         <h3 className="font-semibold text-fg">Account</h3>
