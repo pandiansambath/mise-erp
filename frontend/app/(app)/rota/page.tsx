@@ -19,6 +19,30 @@ import { useDeepLink } from "@/components/fx";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** The calendar day a column REPRESENTS, taken from the same fields the column
+ *  prints.
+ *
+ * THE BUG THIS FIXES, which was not cosmetic. `localISODate` formats a Date in
+ * the HOTEL's timezone — correct for "what day is it in the restaurant", and
+ * wrong for "which day is this column". The headers print `d.getDate()`, which
+ * is the BROWSER's day. For anybody east of London the two disagree: a column
+ * labelled "Mon 7/9" had the identity 2026-09-06, because midnight on the 7th
+ * in Kolkata is the evening of the 6th in London.
+ *
+ * So dragging a shift onto Monday filed it against Sunday. His undo ticket said
+ * so in plain text — "Mohamed 2026-09-06 → 2026-09-07" — while the card sat
+ * under a column headed 7/9. A rota that quietly stores a different day from
+ * the one you dropped it on is worse than a rota that looks wrong.
+ *
+ * The label and the identity now come from the same three numbers. */
+function dayKey(d: Date): string {
+  return (
+    `${d.getFullYear()}-` +
+    `${String(d.getMonth() + 1).padStart(2, "0")}-` +
+    `${String(d.getDate()).padStart(2, "0")}`
+  );
+}
+
 /** Monday of the week containing `d`. */
 function mondayOf(d: Date): Date {
   const x = new Date(d);
@@ -53,8 +77,11 @@ export default function RotaPage() {
     () => DAYS.map((_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; }),
     [weekStart],
   );
-  const from = iso(weekDates[0]);
-  const to = iso(weekDates[6]);
+  // `localISODate` is right for this and only this: which calendar day the
+  // restaurant is currently having.
+  const hotelToday = iso(new Date());
+  const from = dayKey(weekDates[0]);
+  const to = dayKey(weekDates[6]);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -76,6 +103,9 @@ export default function RotaPage() {
   // rota, and none of them earned a place above it.
   const [sheet, setSheet] = useState<null | "leave" | "copy" | "labour" | "legend">(null);
   const [addOpen, setAddOpen] = useState(false);
+  // The move list stays collapsed unless asked for — see the comment on the
+  // ticket strip.
+  const [showMoves, setShowMoves] = useState(false);
   const [copyRows, setCopyRows] = useState<CopyRow[] | null>(null);
   const [copyBusy, setCopyBusy] = useState(false);
   const [copySource, setCopySource] = useState<Date | null>(null); // Monday of the source week
@@ -427,7 +457,7 @@ export default function RotaPage() {
   // into its time position, and no other card ever appears to jump.
   const byDay = (d: Date) =>
     shifts
-      .filter((s) => s.date === iso(d))
+      .filter((s) => s.date === dayKey(d))
       .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.employee_name.localeCompare(b.employee_name));
   const labourTone =
     !labour || parseFloat(labour.net_sales) <= 0
@@ -473,22 +503,39 @@ export default function RotaPage() {
     // Left to size itself it sat in the top third of a laptop screen with a
     // blank half underneath — which is what "clumsy" looks like when nothing
     // is actually wrong: seven short boxes floating above nothing.
-    <div className="flex h-[calc(100svh-13rem)] min-h-0 flex-col">
+    <div className="min-h-0">
       <PageHeader
         title="Rota"
         subtitle="Who is working this week, and what it costs."
         actions={
           <div className="flex items-center gap-2">
             {canWrite && (
-              <button
-                type="button"
-                onClick={() => openAdd(from)}
-                data-tone="brand"
-                data-testid="rota-add"
-                className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
-              >
-                ＋ Add shift
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => openAdd(from)}
+                  data-tone="brand"
+                  data-testid="rota-add"
+                  className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-bold text-brand-300"
+                >
+                  ＋ Add shift
+                </button>
+                {/* "that copy any week's rota feature button — try to place
+                    somewhere here instead of keeping in more." Fair: filling
+                    next week from last week is the single most common thing
+                    anybody does on this page, and it was two taps into a menu. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    startCopy();
+                    setSheet("copy");
+                  }}
+                  data-testid="rota-copy-week"
+                  className="mise-btn-flat mise-press min-h-[40px] px-4 py-2 text-sm font-semibold text-fg-soft"
+                >
+                  ⧉ Copy a week
+                </button>
+              </>
             )}
             <PageMore actions={more} title="Rota" subtitle="Leave, copying, exports" />
           </div>
@@ -553,51 +600,85 @@ export default function RotaPage() {
         </p>
       )}
 
-      {/* Move tickets: every drop is undoable until you say otherwise. */}
+      {/* ONE LINE, NOT A PILE.
+          "that undo feature is coming one by one which will drag the card too
+           much — suppose we moving so many cards, we need to make something
+           here to handle the ui for pile uping undo."
+          Right: six moves pushed the week off the screen, and the thing you
+          were looking at is the week. It is one line now — how many, undo the
+          last, or keep them all — and the full list opens if you want it.
+          Nobody needs to read six tickets; they need to undo the one they just
+          got wrong. */}
       {moves.length > 0 && (
-        <div className="mise-card-inset mb-3 rounded-2xl px-3 py-2.5">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-fg">
+        <div className="mise-card-inset mb-3 rounded-2xl px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-fg">
               {moves.length === 1 ? "1 shift moved" : `${moves.length} shifts moved`}
-              <span className="ml-2 font-normal text-fg-faint">⌘Z undoes the last one</span>
-            </p>
+            </span>
             <button
               type="button"
-              onClick={() => setMoves([])}
-              className="mise-btn-flat mise-press min-h-[32px] px-3 text-xs font-semibold text-brand-300"
+              onClick={() => undoMove(moves[moves.length - 1])}
+              className="mise-btn-flat mise-press min-h-[32px] px-3 text-xs font-semibold text-fg-soft"
+            >
+              Undo last
+            </button>
+            {moves.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setShowMoves((v) => !v)}
+                data-testid="moves-toggle"
+                className="mise-press text-xs font-medium text-brand-300 underline underline-offset-2"
+              >
+                {showMoves ? "hide" : `see all ${moves.length}`}
+              </button>
+            )}
+            <span className="text-[11px] text-fg-faint">⌘Z undoes the last</span>
+            <button
+              type="button"
+              onClick={() => {
+                setMoves([]);
+                setShowMoves(false);
+              }}
+              className="mise-btn-flat mise-press ml-auto min-h-[32px] px-3 text-xs font-semibold text-brand-300"
             >
               Keep all ✓
             </button>
           </div>
-          <ul className="space-y-1">
-            {moves.map((m) => (
-              <li key={m.newId} className="flex items-center gap-2 text-[11px] text-fg-soft">
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="font-medium text-fg">{m.name}</span> {m.fromDate} → {m.toDate}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => undoMove(m)}
-                  className="mise-btn-flat mise-press min-h-[28px] shrink-0 px-2 text-[11px] text-fg-soft"
-                >
-                  Undo
-                </button>
-              </li>
-            ))}
-          </ul>
+
+          {showMoves && (
+            <ul className="mise-noscrollbar mt-2 max-h-32 space-y-1 overflow-y-auto border-t border-line/60 pt-2">
+              {moves.map((m) => (
+                <li key={m.newId} className="flex items-center gap-2 text-[11px] text-fg-soft">
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-medium text-fg">{m.name}</span> {m.fromDate} → {m.toDate}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => undoMove(m)}
+                    className="mise-btn-flat mise-press min-h-[28px] shrink-0 px-2 text-[11px] text-fg-soft"
+                  >
+                    Undo
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
       {/* THE WEEK. Seven columns on a laptop, so the week ends on screen; seven
           stacked bands on a phone, because 55px columns are not a rota. */}
       <div
-        className="mise-noscrollbar grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-2 overflow-y-auto lg:auto-rows-auto lg:grid-cols-7 lg:grid-rows-[minmax(0,1fr)]"
+        className="grid gap-2 overflow-visible lg:grid-cols-7 lg:items-start"
         data-testid="rota-week"
       >
         {weekDates.map((d, i) => {
           const dayShifts = byDay(d);
-          const isToday = iso(d) === iso(new Date());
-          const onLeave = leaveByDay[iso(d)] ?? [];
+          // The restaurant's today, not the browser's — a kitchen in London
+          // is still on Monday while a phone in Kolkata has ticked over. But
+          // compared against the column's own label, so the two cannot drift.
+          const isToday = dayKey(d) === hotelToday;
+          const onLeave = leaveByDay[dayKey(d)] ?? [];
           return (
             <div
               key={i}
@@ -605,17 +686,24 @@ export default function RotaPage() {
                 if (!dragId) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "move";
-                if (dropDay !== iso(d)) setDropDay(iso(d));
+                if (dropDay !== dayKey(d)) setDropDay(dayKey(d));
               }}
-              onDragLeave={() => setDropDay((cur) => (cur === iso(d) ? null : cur))}
+              onDragLeave={() => setDropDay((cur) => (cur === dayKey(d) ? null : cur))}
               onDrop={(e: React.DragEvent) => {
                 e.preventDefault();
-                moveShift(dragId, iso(d));
+                moveShift(dragId, dayKey(d));
               }}
               data-testid="rota-day"
+              // A DAY GROWS DOWNWARDS, it does not scroll.
+              // "if i add more than 5 members means its in the card itself giving
+              //  scroll which is very tight to scroll and check."
+              // A scroll box inside a grid cell is the worst of both: you cannot see
+              // the day, and you cannot drop onto the part you cannot see. The row
+              // is sized by its fullest day now, and the PAGE scrolls if a week is
+              // genuinely busy — which is a thing people already know how to do.
               className={`mise-card-inset flex min-h-[7rem] flex-col rounded-2xl p-2 transition-all duration-150 ${
                 isToday ? "ring-1 ring-brand-500/40" : ""
-              } ${dropDay === iso(d) ? "bg-brand-400/5 ring-2 ring-brand-400/60" : ""}`}
+              } ${dropDay === dayKey(d) ? "bg-brand-400/5 ring-2 ring-brand-400/60" : ""}`}
             >
               <div className="mb-1.5 flex items-baseline justify-between gap-1">
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-fg">
@@ -634,7 +722,7 @@ export default function RotaPage() {
                 {canWrite ? (
                   <button
                     type="button"
-                    onClick={() => openAdd(iso(d))}
+                    onClick={() => openAdd(dayKey(d))}
                     aria-label={`Add a shift on ${DAYS[i]}`}
                     title="Add a shift on this day"
                     // 24x24 was below the size a thumb can reliably hit — the audit found
@@ -672,7 +760,7 @@ export default function RotaPage() {
                 canWrite ? (
                   <button
                     type="button"
-                    onClick={() => openAdd(iso(d))}
+                    onClick={() => openAdd(dayKey(d))}
                     className="mise-press flex flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line py-4 text-[11px] text-fg-faint transition hover:border-brand-400/50 hover:text-brand-300"
                   >
                     <span aria-hidden className="text-base leading-none">＋</span>
