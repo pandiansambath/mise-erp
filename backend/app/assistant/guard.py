@@ -75,14 +75,24 @@ async def effective_ai(db: AsyncSession, user: User) -> dict:
     """
     from app.auth.models import RoleDefault  # local: avoids an import cycle
 
+    # `getattr` rather than `user.role`, because this is reached from the token
+    # path AND from the metering path, and the latter is called with whatever
+    # stands in for a user at the time. A spend guard that raises is a guard
+    # that stops the product working, so it degrades to "no job defaults"
+    # instead of to an exception.
+    role = getattr(user, "role", None)
     job = (
-        await db.execute(
-            select(RoleDefault).where(
-                RoleDefault.hotel_id == user.hotel_id,
-                RoleDefault.base_role == user.role,
+        (
+            await db.execute(
+                select(RoleDefault).where(
+                    RoleDefault.hotel_id == user.hotel_id,
+                    RoleDefault.base_role == role,
+                )
             )
-        )
-    ).scalar_one_or_none()
+        ).scalar_one_or_none()
+        if role
+        else None
+    )
 
     out: dict = dict((job.ai_settings or {}) if job else {})
     out.update(dict(getattr(user, "ai_settings", None) or {}))
