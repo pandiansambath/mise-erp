@@ -10,6 +10,7 @@ import secrets
 import uuid
 from datetime import UTC, date
 from datetime import date as dt_date
+from datetime import datetime as dt_datetime
 from datetime import time as dt_time
 from decimal import Decimal
 from io import BytesIO as _BytesIO
@@ -874,6 +875,28 @@ class TableOut(BaseModel):
     sort_order: int
     is_active: bool
 
+    # ── WHAT THIS PAGE COULD BE TELLING YOU AND WASN'T ──────────────────────
+    #
+    #   "you need to add some more useful feature here bro."
+    #
+    # It was a printing utility: nineteen QR codes and a download button. But
+    # the tables it lists are the tables people are SITTING AT, and every fact
+    # needed to say so was already in the orders table — nobody had joined them
+    # up. So the same page now answers "which tables are busy right now", which
+    # is the question anyone standing in a restaurant actually has.
+    #
+    # No new columns and no migration: a live sitting is simply the orders
+    # against this table that have not reached a terminal state. Deriving it
+    # rather than storing it means it cannot drift out of step with the orders
+    # themselves, which is the usual fate of a denormalised "is_occupied" flag.
+    #
+    # Declared HERE, explicitly. `response_model` silently drops any field the
+    # schema does not name — this project has been bitten by that six times, and
+    # every one looked like a backend that had stopped working.
+    open_orders: int = 0
+    seated_since: dt_datetime | None = None
+    needs_help: bool = False
+
 
 @router.get("/tables", response_model=list[TableOut])
 async def list_tables(
@@ -890,7 +913,43 @@ async def list_tables(
         .scalars()
         .all()
     )
-    return [TableOut.model_validate(t) for t in rows]
+
+    # One grouped query for the whole room rather than one per table: nineteen
+    # tables would otherwise be nineteen round trips to render one page.
+    live_rows = (
+        await db.execute(
+            select(
+                Order.table_id,
+                func.count().label("n"),
+                func.min(Order.created_at).label("since"),
+                func.max(Order.help_requested_at).label("help"),
+            )
+            .where(
+                Order.hotel_id == user.hotel_id,
+                Order.table_id.isnot(None),
+                Order.status.notin_(
+                    [
+                        OrderStatus.COMPLETED.value,
+                        OrderStatus.REJECTED.value,
+                        OrderStatus.CANCELLED.value,
+                    ]
+                ),
+            )
+            .group_by(Order.table_id)
+        )
+    ).all()
+    live = {str(r.table_id): r for r in live_rows}
+
+    out: list[TableOut] = []
+    for t in rows:
+        o = TableOut.model_validate(t)
+        r = live.get(str(t.id))
+        if r is not None:
+            o.open_orders = int(r.n or 0)
+            o.seated_since = r.since
+            o.needs_help = r.help is not None
+        out.append(o)
+    return out
 
 
 @router.post("/tables", response_model=TableOut, status_code=status.HTTP_201_CREATED)
@@ -935,6 +994,15 @@ class BulkTablesIn(BaseModel):
     #: "how you know each table will have 4 seats... it depends, so we need to
     #: get these datas from super admin." Four is only where the form starts.
     seats: int = Field(default=4, ge=1, le=40)
+    #: "when creating several tables, if user wish to add different name for
+    #:  each table means we need to allow nah."
+    #:
+    #: Right — a restaurant is not "Table 1..10". It is a terrace, a window bay,
+    #: two booths and a counter, and a numbering scheme that ignores that makes
+    #: the staff translate every order in their heads. Given names, each one is
+    #: used in turn; anything past the end of the list falls back to the
+    #: prefix-and-number it would have had, so a half-filled form still works.
+    labels: list[str] | None = Field(default=None, max_length=200)
 
 
 @router.post("/tables/bulk", response_model=list[TableOut], status_code=status.HTTP_201_CREATED)
@@ -943,10 +1011,11 @@ async def create_tables_bulk(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("orders:write")),
 ) -> list[TableOut]:
-    """Create N tables, skipping labels that already exist.
+    """Create N tables — named individually if names were given.
 
-    Skipping rather than rejecting keeps the call safely repeatable: pressing it
-    twice must not produce two "Table 1", and must not fail outright either.
+    Skipping duplicate labels rather than rejecting keeps the call safely
+    repeatable: pressing it twice must not produce two "Table 1", and must not
+    fail outright either.
     """
     existing = set(
         (
@@ -963,11 +1032,21 @@ async def create_tables_bulk(
         )
     ).scalar_one()
 
+    given = [s.strip() for s in (payload.labels or []) if s and s.strip()]
+
     made: list[DiningTable] = []
     i = 0
     while len(made) < payload.count and i < payload.count * 4:
         i += 1
-        label = f"{payload.prefix.strip()} {start + i}".strip()
+        # A name they typed if there is one for this slot, otherwise the
+        # numbered fallback. Indexed on how many we have MADE rather than on the
+        # loop counter, so a skipped duplicate does not silently consume
+        # somebody's name and shift every table after it by one.
+        label = (
+            given[len(made)]
+            if len(made) < len(given)
+            else f"{payload.prefix.strip()} {start + i}".strip()
+        )
         if label in existing:
             continue
         t = DiningTable(
@@ -1039,11 +1118,9 @@ async def table_qr(code: str, db: AsyncSession = Depends(get_db)):
     a splash of curry on it, which is the real operating environment for a card
     that lives on a table.
     """
-    import segno
     from fastapi import Response
 
     t, hotel = await _table_by_code(db, code)
-    qr = segno.make(_table_url(hotel, t.code), error="h")
     # `svg_inline` omits the xmlns declaration — fine when pasted INTO html,
     # fatal for a standalone file: a browser loading it through <img> refuses
     # to render an SVG with no namespace, and the card comes out as alt text.
@@ -1052,9 +1129,14 @@ async def table_qr(code: str, db: AsyncSession = Depends(get_db)):
     # White is baked in rather than left transparent, because this file gets
     # opened, mailed and printed on its own, and a transparent QR on a dark
     # background is one no camera will read.
-    buf = _BytesIO()
-    qr.save(buf, kind="svg", scale=8, dark="#111111", light="#ffffff", border=2)
-    return Response(content=buf.getvalue(), media_type="image/svg+xml")
+    #
+    # No cache header: the label in the middle is the table's NAME, and renaming
+    # a table has to change the card you print. See the rename endpoint.
+    return Response(
+        content=_qr_svg_with_label(hotel, t),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 # ── The customer's side ──────────────────────────────────────────────────────
@@ -1526,14 +1608,147 @@ async def kitchen_screen_move(
 # it into a poster, PDF for anyone who wants to print it properly.
 
 
-def _card_png(hotel, table, scale: int = 12) -> bytes:
+# ── THE TABLE'S NAME, INSIDE ITS OWN QR ──────────────────────────────────────
+#
+#   "make qr like it needs to have a table name (numbers or name whatever) — it
+#    needs to be in that qr center area, surrounded by qr."
+#
+# This is the logo-in-the-middle trick every restaurant QR uses, and it works
+# for a reason worth writing down: these codes are generated at error="h", which
+# is Reed-Solomon at the highest level — roughly 30% of the modules can be
+# destroyed and the code still decodes. Covering the centre is exactly that,
+# destroying modules on purpose, and the maths does not care that we did it
+# deliberately.
+#
+# The knock-out is kept to a quarter of the width — about 6% of the area, well
+# inside the budget even after the format-information regions are accounted for
+# — because the tolerance is a safety margin for the real enemy: a thumbprint, a
+# splash of curry, and a phone camera in dim restaurant light. Spending it all
+# on decoration would mean a card that scans on a desk and fails at a table.
+#
+# The centre is also the safest place to spend it. A QR's three finder squares
+# and its timing rows live at the edges; lose those and there is nothing for a
+# camera to lock onto. The middle is ordinary data, which is what error
+# correction is for.
+
+_QR_LABEL_MAX = 10
+
+
+def _qr_label(table) -> str:
+    """What goes in the middle — short enough to read at 8mm across.
+
+    A long name is truncated rather than shrunk to fit: "Terrace corner 2"
+    rendered small enough to fit the hole is a name nobody reads from standing
+    height, which defeats the point of putting it there.
+    """
+    label = (table.label or "").strip()
+    return label if len(label) <= _QR_LABEL_MAX else label[: _QR_LABEL_MAX - 1] + "…"
+
+
+def _qr_svg_with_label(hotel, table, scale: int = 8) -> bytes:
+    """Segno's SVG with a knocked-out plate and the table's name over it.
+
+    Done by editing the finished document rather than by drawing the QR
+    ourselves: segno decides the module layout, and anything that second-guesses
+    it is a bug waiting for a version bump. We only add two elements before the
+    closing tag, so the code underneath is untouched and still decodes on its
+    own if the label ever fails to render.
+    """
     import segno
 
+    qr = segno.make(_table_url(hotel, table.code), error="h")
     buf = _BytesIO()
-    segno.make(_table_url(hotel, table.code), error="h").save(
-        buf, kind="png", scale=scale, dark="#111111", light="#ffffff", border=2
+    qr.save(buf, kind="svg", scale=scale, dark="#111111", light="#ffffff", border=2)
+    svg = buf.getvalue().decode("utf-8")
+
+    # segno writes width/height in pixels on the root element; the drawing is in
+    # module units scaled by `scale`, so the full side is (modules + 2*border).
+    side = (qr.symbol_size(scale=scale, border=2))[0]
+    hole = side * 0.26
+    x = (side - hole) / 2.0
+    label = _qr_label(table)
+    # A font size that fills the plate for a short name and steps down for a
+    # long one, so "12" and "Terrace 4" both sit comfortably rather than one
+    # of them overflowing.
+    font = hole * (0.52 if len(label) <= 3 else 0.42 if len(label) <= 6 else 0.28)
+
+    plate = (
+        f'<rect x="{x:.1f}" y="{x:.1f}" width="{hole:.1f}" height="{hole:.1f}" '
+        f'rx="{hole * 0.22:.1f}" fill="#ffffff" stroke="#111111" '
+        f'stroke-width="{max(1.0, side * 0.006):.1f}"/>'
+        f'<text x="{side / 2:.1f}" y="{side / 2:.1f}" fill="#111111" '
+        f'font-family="Helvetica,Arial,sans-serif" font-weight="700" '
+        f'font-size="{font:.1f}" text-anchor="middle" '
+        f'dominant-baseline="central">{_xml_escape(label)}</text>'
     )
-    return buf.getvalue()
+    return (svg.replace("</svg>", plate + "</svg>")).encode("utf-8")
+
+
+def _xml_escape(s: str) -> str:
+    return (
+        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    )
+
+
+def _card_png(hotel, table, scale: int = 12) -> bytes:
+    """The raster twin of the SVG, plate and all.
+
+    The PDF embeds this one, so if the two ever disagreed the printed cards
+    would not match the ones downloaded from the page — which is the version
+    somebody sticks on the table.
+    """
+    import segno
+
+    qr = segno.make(_table_url(hotel, table.code), error="h")
+    buf = _BytesIO()
+    qr.save(buf, kind="png", scale=scale, dark="#111111", light="#ffffff", border=2)
+    raw = buf.getvalue()
+
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        # Pillow is how the plate gets drawn; without it the code is still a
+        # perfectly good code. A missing decoration must never cost a table its
+        # QR, so this falls back rather than raising.
+        return raw
+
+    im = Image.open(_BytesIO(raw)).convert("RGB")
+    side = im.size[0]
+    hole = int(side * 0.26)
+    x = (side - hole) // 2
+    d = ImageDraw.Draw(im)
+    radius = int(hole * 0.22)
+    d.rounded_rectangle(
+        [x, x, x + hole, x + hole],
+        radius=radius,
+        fill="#ffffff",
+        outline="#111111",
+        width=max(1, int(side * 0.006)),
+    )
+
+    label = _qr_label(table)
+    target = int(hole * (0.52 if len(label) <= 3 else 0.42 if len(label) <= 6 else 0.28))
+    font = None
+    for name in ("DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"):
+        try:
+            font = ImageFont.truetype(name, target)
+            break
+        except OSError:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+
+    box = d.textbbox((0, 0), label, font=font)
+    d.text(
+        (side / 2 - (box[2] - box[0]) / 2 - box[0], side / 2 - (box[3] - box[1]) / 2 - box[1]),
+        label,
+        fill="#111111",
+        font=font,
+    )
+
+    out = _BytesIO()
+    im.save(out, format="PNG")
+    return out.getvalue()
 
 
 @table_router.get("/{code}/qr.png")

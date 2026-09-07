@@ -896,3 +896,159 @@ async def test_an_unknown_dish_does_not_trigger_a_search(
     )
 
     assert called["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_the_qr_carries_the_tables_name_and_survives_a_rename(
+    client, make_user, auth_header
+):
+    """"make qr like it needs to have a table name (numbers or name whatever) —
+    it needs to be in that qr center area, surrounded by qr... after created
+    also we need to allow them to edit all, regenerated qr."
+
+    The plate is a deliberate hole punched through the middle of the symbol.
+    That is safe because these are generated at error="h" — Reed-Solomon at the
+    highest level, roughly 30% of modules recoverable — and the plate is 26% of
+    the SIDE, which is 6.8% of the AREA.
+
+    Those numbers were not taken on trust. Decoding the rendered PNG with
+    OpenCV, a 26% plate reads at every label length tested and at every scale
+    from 164px up; the real failure point sits between 38% and 44% of the side.
+    So there is roughly 1.5x of margin left over for the actual enemies — a
+    thumbprint, a splash of curry, and a phone camera in dim restaurant light.
+
+    Adding opencv to CI just to re-derive that is not worth 40MB on every run,
+    so this asserts the two things that could regress in code: the label is
+    actually drawn, and the geometry constant stays inside the range that was
+    measured safe.
+    """
+    from app.ordering.router import _qr_label, _qr_svg_with_label
+
+    admin = await make_user("qrlabel@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+
+    made = await client.post(
+        "/api/ordering/tables", json={"label": "Terrace 2", "seats": 4}, headers=h
+    )
+    assert made.status_code == 201, made.text
+    table_id = made.json()["id"]
+    code = made.json()["code"]
+
+    svg = await client.get(f"/api/public/table/{code}/qr.svg")
+    assert svg.status_code == 200, svg.text
+    body = svg.text
+    assert "Terrace 2" in body, "the table's name belongs in the middle of its own code"
+    assert "<rect" in body and "<text" in body, "plate and label both drawn"
+    # It must still be a standalone, renderable document — an SVG without the
+    # namespace shows as alt text in an <img>, which is how this broke before.
+    assert "xmlns" in body
+
+    # RENAMING REDRAWS IT. The code itself is untouched — that card is on a
+    # table and must keep working — but the name in the middle is the new one.
+    ren = await client.patch(
+        f"/api/ordering/tables/{table_id}",
+        json={"label": "Window bay", "seats": 4, "sort_order": 0, "is_active": True},
+        headers=h,
+    )
+    assert ren.status_code == 200, ren.text
+    again = await client.get(f"/api/public/table/{code}/qr.svg")
+    assert "Window bay" in again.text and "Terrace 2" not in again.text
+    assert again.headers.get("cache-control") == "no-cache", (
+        "a cached QR would keep showing the old name on a reprinted card"
+    )
+
+    # A long name is truncated rather than shrunk into unreadability.
+    class _T:
+        label = "The long terrace table by the window"
+
+    assert len(_qr_label(_T())) <= 10 and _qr_label(_T()).endswith("…")
+
+    # The geometry that the decode test verified. If someone widens the plate,
+    # this is the line that should stop them.
+    import inspect
+
+    src = inspect.getsource(_qr_svg_with_label)
+    assert "side * 0.26" in src, (
+        "plate width changed — re-run the decode sweep before trusting it; "
+        "measured failure point is between 0.38 and 0.44 of the side"
+    )
+
+
+@pytest.mark.asyncio
+async def test_several_tables_can_be_named_individually(client, make_user, auth_header):
+    """"when creating several tables, if user wish to add different name for each
+    table means we need to allow nah."
+
+    A restaurant is not "Table 1..10" — it is a terrace, a window bay, two
+    booths and a counter. Names given are used in turn; anything past the end of
+    the list falls back to the numbering, so half-filling the form still works.
+    """
+    admin = await make_user("bulknames@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+
+    made = await client.post(
+        "/api/ordering/tables/bulk",
+        headers=h,
+        json={"count": 4, "prefix": "Table", "seats": 2, "labels": ["Terrace", "Window bay"]},
+    )
+    assert made.status_code == 201, made.text
+    labels = [t["label"] for t in made.json()]
+    assert labels[:2] == ["Terrace", "Window bay"], "the names given are the names used"
+    assert len(labels) == 4, "the rest still get made"
+    assert all(x.startswith("Table ") for x in labels[2:]), "…under the numbered fallback"
+    assert all(t["seats"] == 2 for t in made.json())
+
+    # No names at all is the old behaviour, unchanged.
+    plain = await client.post(
+        "/api/ordering/tables/bulk", headers=h, json={"count": 2, "prefix": "Booth", "seats": 6}
+    )
+    assert plain.status_code == 201, plain.text
+    assert all(t["label"].startswith("Booth ") for t in plain.json())
+
+
+@pytest.mark.asyncio
+async def test_the_tables_page_says_which_tables_are_busy(
+    client, make_user, auth_header, monkeypatch
+):
+    """"you need to add some more useful feature here bro."
+
+    The page listed nineteen QR codes and nothing about the room. Every fact
+    needed to say which tables are OCCUPIED was already in the orders table;
+    nobody had joined them up. Derived rather than stored, so it cannot drift
+    out of step with the orders themselves — which is the usual fate of a
+    denormalised is_occupied flag.
+    """
+    monkeypatch.setattr(notify, "send_email", lambda *a, **k: None)
+    admin = await make_user("floor@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+
+    t1 = (
+        await client.post("/api/ordering/tables", json={"label": "T1", "seats": 4}, headers=h)
+    ).json()
+    (await client.post("/api/ordering/tables", json={"label": "T2", "seats": 4}, headers=h))
+
+    dish = await _menu_item(client, h, name="Dosa", price="5.00")
+
+    # Nothing ordered yet: the whole room is free.
+    rows = (await client.get("/api/ordering/tables", headers=h)).json()
+    assert {r["label"]: r["open_orders"] for r in rows} == {"T1": 0, "T2": 0}
+    assert all(r["seated_since"] is None for r in rows)
+
+    placed = await client.post(
+        f"/api/public/table/{t1['code']}",
+        json={"customer_name": "Sam", "phone": "07000000000",
+              "items": [{"menu_item_id": dish["id"], "qty": 1}]},
+    )
+    assert placed.status_code == 201, placed.text
+
+    rows = (await client.get("/api/ordering/tables", headers=h)).json()
+    by = {r["label"]: r for r in rows}
+    assert by["T1"]["open_orders"] == 1, "the field must survive response_model"
+    assert by["T1"]["seated_since"] is not None
+    assert by["T2"]["open_orders"] == 0, "the other table is untouched"
+
+    # Clearing the table down ends the sitting.
+    rel = await client.post(f"/api/ordering/tables/{t1['id']}/release", headers=h)
+    assert rel.status_code == 200, rel.text
+    rows = (await client.get("/api/ordering/tables", headers=h)).json()
+    assert {r["label"]: r["open_orders"] for r in rows} == {"T1": 0, "T2": 0}
