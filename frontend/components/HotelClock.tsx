@@ -67,8 +67,24 @@ export function HotelClock({ className = "" }: { className?: string }) {
   // Straight from the hotel, so every login sees the same clock and a new
   // browser starts where the last one left off.
   const prefs = (hotel?.prefs ?? {}) as { clock_12h?: boolean; clock_face?: string };
-  const face = (prefs.clock_face as ClockFace) || "classic";
-  const hour12 = Boolean(prefs.clock_12h);
+
+  // WHY THE PRESS FELT "HARD".
+  //
+  //   "clicking the button is not seamless fine, its hard and its button
+  //    clicking transition is not nice"
+  //
+  // Every press went to the server and back — a PATCH, then a full hotel
+  // refresh — and the button was DISABLED for the whole trip while the
+  // selection stayed where it was. So the thing you just pressed ignored you
+  // for half a second and then jumped. That is not a slow button, it is a
+  // button that appears not to have heard you.
+  //
+  // The choice now lands immediately and the save follows. If the save fails
+  // the choice snaps back and says why, which is the only case where the old
+  // behaviour was telling the truth.
+  const [pending, setPending] = useState<{ clock_12h?: boolean; clock_face?: string }>({});
+  const face = ((pending.clock_face ?? prefs.clock_face) as ClockFace) || "classic";
+  const hour12 = Boolean(pending.clock_12h ?? prefs.clock_12h);
 
   // Only whoever can configure the hotel may change it — for everyone else the
   // clock is something they read, not something they set.
@@ -76,15 +92,21 @@ export function HotelClock({ className = "" }: { className?: string }) {
 
   async function saveClock(patch: { clock_12h?: boolean; clock_face?: string }) {
     if (!canSet) return;
+    setPending((p) => ({ ...p, ...patch }));
     setSaving(true);
     setSaveErr(null);
     try {
       await api.patch("/hotels/me", { prefs: patch });
       await refreshHotel();
+      // The server now agrees, so stop overriding it — otherwise a stale
+      // optimistic value would outlive the fact it was guessing at.
+      setPending({});
     } catch (e) {
       // NEVER SILENT AGAIN. This swallowed the error, so a 422 from the server
       // looked exactly like a button that does nothing — which is precisely how
-      // he reported it. A control that failed has to say so.
+      // he reported it. A control that failed has to say so, and put itself
+      // back where it was.
+      setPending({});
       setSaveErr(e instanceof ApiError ? e.message : "Could not save that");
     } finally {
       setSaving(false);
@@ -220,7 +242,7 @@ export function HotelClock({ className = "" }: { className?: string }) {
                 key={label}
                 type="button"
                 onClick={() => saveClock({ clock_12h: v })}
-                disabled={!canSet || saving}
+                disabled={!canSet}
                 title={canSet ? undefined : "Your manager sets the clock for the whole restaurant"}
                 className={`mise-press min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                   hour12 === v ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
@@ -253,7 +275,7 @@ export function HotelClock({ className = "" }: { className?: string }) {
                   key={f.key}
                   type="button"
                   onClick={() => saveClock({ clock_face: f.key })}
-                  disabled={!canSet || saving}
+                  disabled={!canSet}
                   title={canSet ? undefined : "Your manager sets the clock for the whole restaurant"}
                   className={`mise-press min-h-[34px] rounded-lg px-2 py-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
                     face === f.key

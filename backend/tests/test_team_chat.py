@@ -163,13 +163,30 @@ async def test_owner_makes_a_group_and_picks_who_is_in_it(client, make_user, aut
 
 
 @pytest.mark.asyncio
-async def test_staff_cannot_create_rooms_or_list_people(client, make_user, auth_header):
+async def test_staff_cannot_create_groups_but_can_find_a_colleague(
+    client, make_user, auth_header
+):
+    """Two different questions, and they used to have the same answer.
+
+    Making a GROUP stays with whoever administers logins — "superadmin can
+    decide to create a grp". But listing colleagues does not: it is what makes
+    a one-to-one possible, and gating it on users:read meant a porter or a
+    cashier could not message a single person. This test used to assert that
+    second 403, which was the bug wearing a passing test.
+    """
     porter = await make_user("porter5@nirai.com", Role.STAFF.value)
+    mate = await make_user("porter5b@nirai.com", Role.STAFF.value)
+
     made = await client.post(
         "/api/chat/rooms", headers=auth_header(porter), json={"name": "My own club"}
     )
     assert made.status_code == 403
-    assert (await client.get("/api/chat/people", headers=auth_header(porter))).status_code == 403
+
+    people = await client.get("/api/chat/people", headers=auth_header(porter))
+    assert people.status_code == 200
+    assert any(p["id"] == str(mate.id) for p in people.json())
+    # A name and a job, not an address book.
+    assert all(p["email"] == "" for p in people.json())
 
 
 @pytest.mark.asyncio
@@ -205,18 +222,26 @@ async def test_standing_rooms_cannot_be_closed_or_hand_edited(client, make_user,
 
 
 @pytest.mark.asyncio
-async def test_pictures_and_video_only_and_the_file_is_room_scoped(
-    client, make_user, auth_header
-):
+async def test_what_may_be_attached_and_who_can_reach_it(client, make_user, auth_header):
     owner = await make_user("owner6@nirai.com", Role.SUPER_ADMIN.value)
     porter = await make_user("porter6@nirai.com", Role.STAFF.value)
     managers = (await _rooms(client, auth_header, owner))[RoomKind.MANAGERS]
 
-    # A document is not a photo — it belongs in Documents, where it gets filed.
-    refused = await client.post(
+    # A document IS allowed now. It was refused on the reasoning that a chat
+    # should not become a filing cabinet, and that was the wrong call about a
+    # real workflow: handing a colleague a rota PDF is a normal thing to do.
+    doc = await client.post(
         f"/api/chat/rooms/{managers['id']}/attachment",
         headers=auth_header(owner),
         files={"file": ("invoice.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")},
+    )
+    assert doc.status_code == 200, doc.text
+
+    # An executable is still not a document.
+    refused = await client.post(
+        f"/api/chat/rooms/{managers['id']}/attachment",
+        headers=auth_header(owner),
+        files={"file": ("run.exe", io.BytesIO(b"MZ"), "application/x-msdownload")},
     )
     assert refused.status_code == 400
 
