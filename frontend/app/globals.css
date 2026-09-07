@@ -4097,9 +4097,33 @@ body.mise-voice-open .mise-launcher-in {
 }
 .mise-voice[data-staged] .mise-voice-card {
   border-color: transparent;
-  background: transparent;
+  /* `background: transparent` was not enough — the card also carries a
+     backdrop-filter, which keeps painting a pale wash over whatever is behind
+     it. On the stage that read as a leftover panel fragment with a small button
+     stuck to one end, which is exactly what he saw. */
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow: none;
   padding: 0;
+}
+
+/* THE ORB IS THE POINT OF THE STAGE, so it stops being a 44px button there.
+   "that circle inside circle kinda jarvis kinda center animation card is not
+    correctly fitting for that voice model."
+   It shrinks to 44px once a conversation exists — right in the panel, where it
+   sits beside a header and a transcript. On the stage there IS no panel: the
+   orb flew to the top of the screen to be the only thing on it, and four rings
+   inside 44 pixels is a smudge rather than something running. */
+.mise-voice[data-staged] .mise-voice-orb {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+/* Room for the rings, which reach 10% beyond the orb, and for the line of text
+   beside it — the card clips (`overflow: clip`), so without this the outermost
+   ring loses its edge. */
+.mise-voice[data-staged] {
+  padding: 0.5rem;
 }
 /* Everything except the orb folds away — header, composer, conversation. What
    is left is the orb and the one line telling him it is listening, which is the
