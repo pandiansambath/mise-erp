@@ -550,6 +550,98 @@ html:has(.mise-app) { background: #04120d; }
 [data-mode="light"] .text-amber-300,
 [data-mode="light"] .text-amber-400 { color: #b45309; }
 
+/* ── AND EVERY SHADE THAT WAS SLIPPING PAST IT ────────────────────────────
+   "this is in so many pages i guess, please check and solve all area please."
+
+   The three rules above list `-200 -300 -400` by hand, and that list had drifted
+   out of date with the app. Forty-four places were using something not on it:
+
+     · opacity modifiers. `text-brand-300/90` compiles to a class literally
+       named `text-brand-300\/90`, which `.text-brand-300` does not match. The
+       existing comment in this file already warned that these escape silently —
+       and eleven of them had accumulated since.
+     · `text-amber-500`, eleven uses. #f59e0b on near-white is 2.1:1, which is
+       not a colour, it is a suggestion of one.
+     · the `-100` shades — near-white inks sitting on a 10-20% tint. Correct on
+       the dark theme, invisible on the light one.
+     · `hover:` variants, which needed their own selector all along.
+
+   This block is GENERATED from the classes actually present in app/ and
+   components/, so it covers what is there rather than what somebody remembered.
+   Regenerate by grepping for `text-<hue>-<shade>` and rebuilding the list; a
+   new shade that is not here will fail the same silent way, so the tell is
+   always a colour that looks right on dark and washes out on light.
+
+   Still only `color`. The colour VARIABLES are deliberately left alone: they
+   also feed `bg-rose-400/10` and friends, and darkening those would turn every
+   soft tint on the site into a grey smudge. */
+[data-mode="light"] .text-amber-100,
+[data-mode="light"] .hover\:text-amber-100:hover,
+[data-mode="light"] .text-amber-200,
+[data-mode="light"] .hover\:text-amber-200:hover,
+[data-mode="light"] .text-amber-200\/80,
+[data-mode="light"] .hover\:text-amber-200\/80:hover,
+[data-mode="light"] .text-amber-300,
+[data-mode="light"] .hover\:text-amber-300:hover,
+[data-mode="light"] .text-amber-300\/80,
+[data-mode="light"] .hover\:text-amber-300\/80:hover,
+[data-mode="light"] .text-amber-300\/90,
+[data-mode="light"] .hover\:text-amber-300\/90:hover,
+[data-mode="light"] .text-amber-400,
+[data-mode="light"] .hover\:text-amber-400:hover,
+[data-mode="light"] .text-amber-500,
+[data-mode="light"] .hover\:text-amber-500:hover { color: #b45309; }
+
+[data-mode="light"] .text-brand-100,
+[data-mode="light"] .hover\:text-brand-100:hover,
+[data-mode="light"] .text-brand-200,
+[data-mode="light"] .hover\:text-brand-200:hover,
+[data-mode="light"] .text-brand-200\/80,
+[data-mode="light"] .hover\:text-brand-200\/80:hover,
+[data-mode="light"] .text-brand-300,
+[data-mode="light"] .hover\:text-brand-300:hover,
+[data-mode="light"] .text-brand-300\/80,
+[data-mode="light"] .hover\:text-brand-300\/80:hover,
+[data-mode="light"] .text-brand-300\/90,
+[data-mode="light"] .hover\:text-brand-300\/90:hover,
+[data-mode="light"] .text-brand-400,
+[data-mode="light"] .hover\:text-brand-400:hover { color: var(--color-brand-700); }
+
+[data-mode="light"] .text-emerald-100,
+[data-mode="light"] .hover\:text-emerald-100:hover,
+[data-mode="light"] .text-emerald-100\/90,
+[data-mode="light"] .hover\:text-emerald-100\/90:hover,
+[data-mode="light"] .text-emerald-200,
+[data-mode="light"] .hover\:text-emerald-200:hover,
+[data-mode="light"] .text-emerald-300,
+[data-mode="light"] .hover\:text-emerald-300:hover,
+[data-mode="light"] .text-emerald-300\/80,
+[data-mode="light"] .hover\:text-emerald-300\/80:hover,
+[data-mode="light"] .text-emerald-400,
+[data-mode="light"] .hover\:text-emerald-400:hover,
+[data-mode="light"] .text-emerald-500,
+[data-mode="light"] .hover\:text-emerald-500:hover { color: #047857; }
+
+[data-mode="light"] .text-rose-100\/90,
+[data-mode="light"] .hover\:text-rose-100\/90:hover,
+[data-mode="light"] .text-rose-200,
+[data-mode="light"] .hover\:text-rose-200:hover,
+[data-mode="light"] .text-rose-300,
+[data-mode="light"] .hover\:text-rose-300:hover,
+[data-mode="light"] .text-rose-300\/80,
+[data-mode="light"] .hover\:text-rose-300\/80:hover,
+[data-mode="light"] .text-rose-400,
+[data-mode="light"] .hover\:text-rose-400:hover,
+[data-mode="light"] .text-rose-500,
+[data-mode="light"] .hover\:text-rose-500:hover { color: #be123c; }
+
+[data-mode="light"] .text-sky-200,
+[data-mode="light"] .hover\:text-sky-200:hover,
+[data-mode="light"] .text-sky-300,
+[data-mode="light"] .hover\:text-sky-300:hover,
+[data-mode="light"] .text-sky-400,
+[data-mode="light"] .hover\:text-sky-400:hover { color: #0369a1; }
+
 /* ── Reading tones: a colour that means something, in EITHER theme ────────────
    The basket rows said "in stock" in sky-300 and "after this" in emerald-300.
    Those are DARK-theme shades — pale ink chosen to glow on a near-black card —
