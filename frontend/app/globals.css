@@ -4262,6 +4262,29 @@ body.mise-voice-open .mise-launcher-in {
   -webkit-backdrop-filter: none;
   box-shadow: none;
   padding: 0;
+
+  /* ── WHY THE RINGS STILL DID NOT FIT ─────────────────────────────────────
+       "that circle inside circle kinda jarvis kinda center animation card is
+        not correctly fitting for that voice model."
+
+     Measured on the live site rather than reasoned about, because the last
+     three guesses at this were wrong. On the stage: orb 72px, ring box 86px
+     (they sit at `inset: -10%`), card 94px tall — and each ring also SCALES
+     with the voice, `1 + level * 0.05 * r`, which at full level on the
+     outermost ring is 86 x 1.2 = 103px. Into a 94px box, with `overflow:
+     clip`. So the outer ring lost its edge exactly when the voice was
+     loudest, which is precisely when you are looking at it.
+
+     Padding the wrapper (below) was the earlier attempt and it could not work:
+     the clip happens at the CARD, and the wrapper is outside it.
+
+     The right fix is to notice that on the stage this card has no background,
+     no border, no shadow and no backdrop-filter — it is not a surface at all,
+     so there is nothing for it to contain. `clip` was doing no visual work and
+     charging a clipped ring for it. Scoped to the stage: in the panel the card
+     IS a surface, and there `clip` stays, because it is what stops the
+     contents shunting sideways. */
+  overflow: visible;
 }
 
 /* THE ORB IS THE POINT OF THE STAGE, so it stops being a 44px button there.
