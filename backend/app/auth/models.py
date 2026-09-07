@@ -59,6 +59,15 @@ class RoleDefault(Base):
     )
     base_role: Mapped[str] = mapped_column(String(32), nullable=False)
     permissions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    #: What the AI may do for everyone with this JOB.
+    #:
+    #: It already existed per PERSON, which is the exception rather than the
+    #: rule: "so manager means what and all he can access, super admin can
+    #: choose this" is a sentence about a job, not about a name. Setting the
+    #: model, the voice and the caps once per role is the difference between a
+    #: setting and a chore — and a person's own settings still win, exactly as
+    #: their own permissions do.
+    ai_settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

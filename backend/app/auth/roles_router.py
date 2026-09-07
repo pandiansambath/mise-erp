@@ -467,6 +467,10 @@ async def set_user_access(
 class JobIn(BaseModel):
     #: The COMPLETE list this job reaches at this hotel.
     permissions: list[str] = Field(default_factory=list)
+    #: What the AI may do for everyone with this job. Absent means
+    #: "leave it alone" — sending {} would read as "clear it", and the
+    #: two must not be the same request.
+    ai: dict | None = None
 
 
 @router.get("/jobs")
@@ -512,11 +516,46 @@ async def list_jobs(
                 "suggested": envelope_for(key),
                 "customised": key in rows,
                 "people": counts.get(key, 0),
+                # What the AI may do for this job. Empty = the hotel's defaults.
+                "ai": dict(rows[key].ai_settings or {}) if key in rows else {},
             }
             for key in ASSIGNABLE
             if key != Role.KIOSK.value
         ],
     }
+
+
+def _clean_ai(raw: dict) -> dict:
+    """Validate an AI block. One implementation, used for a PERSON and for a JOB.
+
+    Two copies of this would drift, and the way they would drift is that one of
+    them stops enforcing a cap — which is the whole point of it. The AI is the
+    only part of this product that can spend money without anybody pressing
+    anything.
+    """
+    clean: dict = {}
+    if "model" in raw and raw["model"] in ("haiku", "sonnet"):
+        clean["model"] = raw["model"]
+    if "voice" in raw:
+        clean["voice"] = bool(raw["voice"])
+    for key, cap in (("max_tokens", 32000), ("max_messages", 1000)):
+        val = raw.get(key)
+        if val is None or val == "":
+            continue
+        try:
+            n = int(val)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"{key.replace('_', ' ')} must be a whole number.",
+            ) from None
+        if n < 0 or n > cap:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"{key.replace('_', ' ')} must be between 0 and {cap}.",
+            )
+        clean[key] = n
+    return clean
 
 
 @router.put("/jobs/{base_role}")
@@ -561,6 +600,8 @@ async def set_job(
         db.add(row)
     else:
         row.permissions = wanted
+    if payload.ai is not None:
+        row.ai_settings = _clean_ai(payload.ai)
 
     await audit.record(
         db,

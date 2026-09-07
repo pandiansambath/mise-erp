@@ -60,10 +60,53 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> Decimal:
     return cost.quantize(Decimal("0.000001"))
 
 
+async def effective_ai(db: AsyncSession, user: User) -> dict:
+    """What the AI may do for THIS person: their own settings over their job's.
+
+    Two layers, and the order is the same one permissions already use, because
+    people expect a setting on a person to beat a setting on their job — that is
+    what makes an exception an exception.
+
+    Neither layer can widen anything. The plan is the ceiling and it is checked
+    where the model is chosen; these settings only ever choose from inside it.
+    Storage that nothing reads is not a setting, it is a note — which is what
+    these were until now: saved on the person, shown in the UI, and ignored by
+    the assistant.
+    """
+    from app.auth.models import RoleDefault  # local: avoids an import cycle
+
+    job = (
+        await db.execute(
+            select(RoleDefault).where(
+                RoleDefault.hotel_id == user.hotel_id,
+                RoleDefault.base_role == user.role,
+            )
+        )
+    ).scalar_one_or_none()
+
+    out: dict = dict((job.ai_settings or {}) if job else {})
+    out.update(dict(getattr(user, "ai_settings", None) or {}))
+    return out
+
+
 async def model_for(db: AsyncSession, user: User) -> str:
-    """The Bedrock model this hotel's plan entitles it to."""
+    """The Bedrock model this person gets.
+
+    The PLAN decides what is available; the job or the person may choose
+    something cheaper inside that. A hotel on the entry tier asking for Sonnet
+    still gets Haiku — a setting must never be a way to buy an upgrade — but a
+    hotel on the top tier can put its kitchen porters on Haiku and keep Sonnet
+    for the people costing the menu.
+    """
     hotel = await db.get(Hotel, user.hotel_id)
-    return feat.plan_model(getattr(hotel, "plan", "") or feat.DEFAULT_PLAN)
+    plan = getattr(hotel, "plan", "") or feat.DEFAULT_PLAN
+    allowed = feat.plan_model(plan)
+
+    want = (await effective_ai(db, user)).get("model")
+    if want == "haiku" and "haiku" not in allowed:
+        # Downgrading is always permitted: it can only ever cost less.
+        return feat.plan_model("kitchen")
+    return allowed
 
 
 # Roughly four characters per token for English. Crude, but the alternative was

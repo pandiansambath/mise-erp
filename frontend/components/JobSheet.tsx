@@ -39,6 +39,8 @@ export type Job = {
   suggested: string[];
   customised: boolean;
   people: number;
+  /** What the AI may do for everyone with this job. Empty = hotel defaults. */
+  ai?: Record<string, unknown>;
 };
 
 function ThreeWay({
@@ -144,6 +146,17 @@ export function JobSheet({
 }) {
   const [held, setHeld] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<Record<string, Level>>({});
+  // What the AI may do for everyone with this job.
+  //
+  //   "i said u to add ai related role toggles too nah. u said u added, but
+  //    where? i can see here"
+  //
+  // He was right to ask. The panel existed on the per-PERSON sheet, which is
+  // the exception rather than the rule — "so manager means what and all he can
+  // access" is a sentence about a JOB. Setting it once here is the difference
+  // between a setting and a chore.
+  const [ai, setAi] = useState<Record<string, unknown>>({});
+  const [aiTouched, setAiTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const confirm = useConfirm();
   const [err, setErr] = useState<string | null>(null);
@@ -152,6 +165,8 @@ export function JobSheet({
     if (!job) return;
     setHeld(new Set(job.permissions));
     setDraft({});
+    setAi({ ...(job.ai ?? {}) });
+    setAiTouched(false);
     setErr(null);
   }, [job]);
 
@@ -161,7 +176,7 @@ export function JobSheet({
   const suggested = useMemo(() => new Set(job?.suggested ?? []), [job]);
 
   const current = (a: Parameters<typeof levelOf>[0]) => draft[a.key] ?? levelOf(a, held);
-  const dirty = Object.keys(draft).length > 0;
+  const dirty = Object.keys(draft).length > 0 || aiTouched;
 
   const reach = useMemo(() => {
     const pages = new Set<string>();
@@ -243,7 +258,13 @@ export function JobSheet({
       }
     }
     try {
-      await api.put(`/roles/jobs/${job.key}`, { permissions: [...perms] });
+      await api.put(`/roles/jobs/${job.key}`, {
+        permissions: [...perms],
+        // Only when touched: omitting it means "leave the AI alone", whereas
+        // {} means "clear it back to the hotel's defaults", and saving a
+        // permission change must not quietly do the second.
+        ...(aiTouched ? { ai } : {}),
+      });
       onSaved();
       onClose();
     } catch (e) {
@@ -280,6 +301,90 @@ export function JobSheet({
         { label: "Pages they can open", value: `${reach.on} of ${reach.total}` },
         { label: "People with this job", value: String(job?.people ?? 0), people: holders },
       ]}
+      lead={
+        <div className="mise-card-inset mt-3 p-3.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-fg">✨ AI for this job</p>
+            <p className="text-[11px] text-fg-faint">
+              everyone with this job — one person can still differ
+            </p>
+          </div>
+
+          <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                Model
+              </span>
+              <select
+                value={(ai.model as string) ?? ""}
+                onChange={(e) => {
+                  setAiTouched(true);
+                  setAi((a) => ({ ...a, model: e.target.value || undefined }));
+                }}
+                data-testid="job-ai-model"
+                className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
+              >
+                <option value="">Hotel default</option>
+                <option value="haiku">Haiku — quick and cheap</option>
+                <option value="sonnet">Sonnet — slower, better answers</option>
+              </select>
+            </label>
+
+            <label className="flex items-end gap-2 pb-2.5">
+              <input
+                type="checkbox"
+                checked={Boolean(ai.voice)}
+                onChange={(e) => {
+                  setAiTouched(true);
+                  setAi((a) => ({ ...a, voice: e.target.checked }));
+                }}
+                data-testid="job-ai-voice"
+              />
+              <span className="text-sm text-fg-soft">Let them talk to it</span>
+            </label>
+
+            <label className="block">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                Max tokens per answer
+              </span>
+              <input
+                value={(ai.max_tokens as string | number | undefined) ?? ""}
+                inputMode="numeric"
+                placeholder="hotel default"
+                onChange={(e) => {
+                  setAiTouched(true);
+                  setAi((a) => ({ ...a, max_tokens: e.target.value.replace(/[^0-9]/g, "") }));
+                }}
+                data-testid="job-ai-tokens"
+                className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
+              />
+            </label>
+
+            <label className="block">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                Max messages a day
+              </span>
+              <input
+                value={(ai.max_messages as string | number | undefined) ?? ""}
+                inputMode="numeric"
+                placeholder="hotel default"
+                onChange={(e) => {
+                  setAiTouched(true);
+                  setAi((a) => ({ ...a, max_messages: e.target.value.replace(/[^0-9]/g, "") }));
+                }}
+                className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
+              />
+            </label>
+          </div>
+
+          <p className="mt-2 text-[11px] text-fg-faint">
+            Blank means the hotel&apos;s default. A cheaper model here always applies;
+            a dearer one still cannot exceed what your plan includes — these are a
+            spend ceiling, and the assistant is the one thing that costs money every
+            time it is asked.
+          </p>
+        </div>
+      }
       intro={
         <>
           Everyone with this job gets this — one person can still be changed on their own

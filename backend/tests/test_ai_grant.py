@@ -83,3 +83,57 @@ async def test_an_unknown_model_is_dropped_not_stored(client, make_user, auth_he
     assert r.status_code == 200
     me = await client.get("/api/auth/me", headers=auth_header(target))
     assert "model" not in me.json()["user"]["ai_settings"]
+
+
+@pytest.mark.asyncio
+async def test_ai_settings_can_be_set_on_the_job_and_a_person_still_wins(
+    client, db, make_user, auth_header
+):
+    """"i said u to add ai related role toggles too nah. u said u added, but
+    where?" — the panel existed on the per-PERSON sheet only. A job is where
+    this belongs: setting the model once per role is a setting, setting it on
+    every person who ever holds that role is a chore."""
+    from app.assistant import guard
+
+    owner = await make_user("job-ai-owner@nirai.com", Role.SUPER_ADMIN.value)
+    chef = await make_user("job-ai-chef@nirai.com", Role.KITCHEN_MANAGER.value)
+
+    saved = await client.put(
+        f"/api/roles/jobs/{Role.KITCHEN_MANAGER.value}",
+        headers=auth_header(owner),
+        json={"permissions": ["inventory:read"], "ai": {"model": "haiku", "max_tokens": 900}},
+    )
+    assert saved.status_code == 200, saved.text
+
+    listed = await client.get("/api/roles/jobs", headers=auth_header(owner))
+    job = next(j for j in listed.json()["jobs"] if j["key"] == Role.KITCHEN_MANAGER.value)
+    assert job["ai"]["model"] == "haiku"
+    assert job["ai"]["max_tokens"] == 900
+
+    # The chef inherits it without anybody touching their card.
+    await db.refresh(chef)
+    assert (await guard.effective_ai(db, chef))["model"] == "haiku"
+
+    # And their own settings still win — that is what makes an exception one.
+    chef.ai_settings = {"model": "sonnet"}
+    await db.commit()
+    await db.refresh(chef)
+    assert (await guard.effective_ai(db, chef))["model"] == "sonnet"
+
+
+@pytest.mark.asyncio
+async def test_a_job_setting_cannot_buy_a_better_model_than_the_plan(
+    client, db, hotel, make_user, auth_header
+):
+    """A setting must never be a way around the paywall. Downgrading is always
+    allowed, because it can only ever cost less."""
+    from app.assistant import guard
+
+    owner = await make_user("plan-ai@nirai.com", Role.SUPER_ADMIN.value)
+    hotel.plan = "kitchen"
+    owner.ai_settings = {"model": "sonnet"}
+    await db.commit()
+    await db.refresh(owner)
+
+    entry = await guard.model_for(db, owner)
+    assert "sonnet" not in entry.lower()
