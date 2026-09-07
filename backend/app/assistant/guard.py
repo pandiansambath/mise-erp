@@ -94,7 +94,19 @@ async def effective_ai(db: AsyncSession, user: User) -> dict:
         else None
     )
 
+    # Three layers, narrowest last: the built-in job, then the role the hotel
+    # invented and assigned, then the person. Each is an exception to the one
+    # before it, which is the same order permissions already resolve in.
     out: dict = dict((job.ai_settings or {}) if job else {})
+
+    role_id = getattr(user, "custom_role_id", None)
+    if role_id:
+        from app.auth.models import CustomRole
+
+        cr = await db.get(CustomRole, role_id)
+        if cr is not None:
+            out.update(dict(cr.ai_settings or {}))
+
     out.update(dict(getattr(user, "ai_settings", None) or {}))
     return out
 

@@ -99,6 +99,12 @@ class CustomRole(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    #: What the AI may do for everyone in this role.
+    #:
+    #: A role a hotel invented is still a job. Leaving it out meant the one
+    #: sheet he actually opened — a role he made himself — had no AI panel,
+    #: while the built-in jobs did.
+    ai_settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class User(Base):
