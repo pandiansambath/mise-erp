@@ -1135,7 +1135,62 @@ export default function RotaPage() {
             month: "long",
           })}
         >
-          <div className="space-y-3">
+          <div className="space-y-3.5">
+            {/* ── MOVE IT WITHOUT DRAGGING ──────────────────────────────────
+                "i tried dragging card... very very clumsy and tight nah."
+
+                The card scrolling under the drag is fixed — days grow now
+                instead of scrolling. But the rest of "clumsy" is dragging
+                itself, and there is a harder problem underneath it: HTML5
+                drag events do not fire on touch AT ALL. On his phone the
+                rota simply could not be rearranged. Not awkwardly — at all.
+
+                So the day is a row of buttons. Seven targets you press, which
+                works on a phone, works with a keyboard, works for anyone who
+                would rather not drag, and is one tap instead of a gesture that
+                has to be aimed. Drag stays for the desktop, because when it
+                works it is lovely; it is no longer the ONLY way. */}
+            {canWrite && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+                  Which day
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {weekDates.map((d) => {
+                    const key = dayKey(d);
+                    const here = key === editDay;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={eBusy}
+                        onClick={() => {
+                          if (here) return;
+                          moveShift(editId, key);
+                          setEditDay(key);
+                        }}
+                        data-testid="edit-day"
+                        data-tone={here ? "brand" : undefined}
+                        className={`mise-btn-flat mise-press min-h-[44px] min-w-[3.4rem] px-2 text-xs font-semibold ${
+                          here ? "" : "text-fg-soft"
+                        } disabled:opacity-40`}
+                      >
+                        <span className="block">
+                          {d.toLocaleDateString(undefined, { weekday: "short" })}
+                        </span>
+                        <span className="block text-[10px] font-normal text-fg-faint">
+                          {d.getDate()}/{d.getMonth() + 1}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] text-fg-faint">
+                  Moving is undoable — Ctrl+Z, or the Undo button on the week.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-2">
               <label className="block text-[11px] text-fg-faint">
                 Start
