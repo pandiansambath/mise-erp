@@ -80,6 +80,33 @@ async def create_shift(
     if clash is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, clash[1])
 
+    # THE SAME SHIFT, TWICE.
+    #
+    #   "i clicked 2 times (its accepting it) and in rota we can see 2 mohamed
+    #    on same exact time."
+    #
+    # He is right that it should not. One person cannot work two shifts at once,
+    # so an identical row is never a thing somebody meant — it is a double tap,
+    # a slow network, or a button pressed again because the first press did not
+    # look like it had landed. All three are OUR fault, and all three end with a
+    # rota that overstates the labour cost and a manager wondering who to send
+    # home.
+    #
+    # Refused at the SERVER rather than by disabling the button, because a
+    # disabled button only helps the tab that is doing the clicking. Two people
+    # rostering at once, or one person on two devices, still gets past it.
+    existing = await service.list_shifts(db, user.hotel_id, payload.date, payload.date)
+    if any(
+        str(r["employee_id"]) == str(payload.employee_id)
+        and str(r["start_time"])[:5] == str(payload.start_time)[:5]
+        and str(r["end_time"])[:5] == str(payload.end_time)[:5]
+        for r in existing
+    ):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "That shift is already on the rota — same person, same day, same hours.",
+        )
+
     await service.create_shift(db, user.hotel_id, **payload.model_dump())
     # re-read via list so the response carries employee_name + computed hours/cost
     rows = await service.list_shifts(db, user.hotel_id, payload.date, payload.date)

@@ -220,3 +220,54 @@ async def test_rota_grid_import_xlsx_and_bad_cell(client, make_user, auth_header
         "/api/rota/import", headers=h, files={"file": ("rota.xlsx", buf.getvalue(), mime)}
     )
     assert bad.status_code == 422 and bad.json()["detail"]["errors"]
+
+
+@pytest.mark.asyncio
+async def test_the_same_shift_cannot_be_added_twice(client, db, hotel, make_user, auth_header):
+    """"i clicked 2 times (its accepting it) and in rota we can see 2 mohamed on
+    same exact time."
+
+    One person cannot work two shifts at once, so an identical row is never a
+    thing somebody meant — it is a double tap, a slow network, or a button
+    pressed again because the first press did not look like it landed. All three
+    are our fault, and all three end with a rota that overstates the labour cost
+    and a manager wondering who to send home.
+
+    Refused at the SERVER, not by disabling the button: a disabled button only
+    helps the tab doing the clicking, and two managers rostering at once still
+    get past it.
+    """
+    from datetime import date
+
+    from app.employees import service as emp_service
+
+    owner = await make_user("dup-owner@nirai.com", Role.SUPER_ADMIN.value)
+    emp = await emp_service.create_employee(db, hotel.id, full_name="Mohamed")
+    day = date.today().isoformat()
+    body = {
+        "employee_id": str(emp.id),
+        "date": day,
+        "start_time": "11:00",
+        "end_time": "17:00",
+        "break_minutes": 0,
+    }
+
+    first = await client.post("/api/rota/shifts", headers=auth_header(owner), json=body)
+    assert first.status_code == 201, first.text
+
+    again = await client.post("/api/rota/shifts", headers=auth_header(owner), json=body)
+    assert again.status_code == 409, again.text
+    assert "already on the rota" in again.json()["detail"]
+
+    # A DIFFERENT time for the same person is a real split shift and must pass.
+    split = await client.post(
+        "/api/rota/shifts",
+        headers=auth_header(owner),
+        json={**body, "start_time": "18:00", "end_time": "22:00"},
+    )
+    assert split.status_code == 201, split.text
+
+    listed = await client.get(
+        f"/api/rota/shifts?date_from={day}&date_to={day}", headers=auth_header(owner)
+    )
+    assert len(listed.json()) == 2, "one duplicate refused, one genuine split kept"
