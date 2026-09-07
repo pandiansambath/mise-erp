@@ -36,6 +36,7 @@
 // exactly what it should be: an implementation detail he never sees.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { AiGrantPanel } from "@/components/AiGrantPanel";
 import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
 import {
@@ -76,6 +77,11 @@ export function RoleBuilder({
   onSaved: () => void;
 }) {
   const [name, setName] = useState("");
+  // A role the hotel invented is still a job, and a job is where AI belongs.
+  // This sheet had no AI panel at all — I added it to JobSheet and stopped,
+  // which is the same miss AccessModal's own comment warns about.
+  const [ai, setAi] = useState<Record<string, unknown>>({});
+  const [aiTouched, setAiTouched] = useState(false);
   // Never chosen on screen. STAFF is the narrowest thing we have, so a new
   // role begins shut and is opened one switch at a time.
   const base = role?.base_role ?? "STAFF";
@@ -92,6 +98,8 @@ export function RoleBuilder({
 
   useEffect(() => {
     if (!open) return;
+    setAi({ ...((role as unknown as { ai_settings?: Record<string, unknown> })?.ai_settings ?? {}) });
+    setAiTouched(false);
     setName(role?.name ?? "");
     setDraft({});
     setErr(null);
@@ -185,7 +193,14 @@ export function RoleBuilder({
       }
     }
     try {
-      const body = { name: name.trim(), base_role: base, overrides };
+      const body = {
+        name: name.trim(),
+        base_role: base,
+        overrides,
+        // Only when touched: omitting it leaves the AI alone, whereas {} means
+        // "clear it", and saving a permission change must not quietly do that.
+        ...(aiTouched ? { ai } : {}),
+      };
       if (role) await api.patch(`/roles/${role.id}`, body);
       else await api.post("/roles", body);
       onSaved();

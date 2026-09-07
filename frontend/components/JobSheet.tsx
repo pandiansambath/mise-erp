@@ -17,6 +17,7 @@
 //      does; our job is to make the consequence visible, not to argue.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { AiGrantPanel } from "@/components/AiGrantPanel";
 import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
 import {
@@ -302,88 +303,16 @@ export function JobSheet({
         { label: "People with this job", value: String(job?.people ?? 0), people: holders },
       ]}
       lead={
-        <div className="mise-card-inset mt-3 p-3.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-sm font-semibold text-fg">✨ AI for this job</p>
-            <p className="text-[11px] text-fg-faint">
-              everyone with this job — one person can still differ
-            </p>
-          </div>
-
-          <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                Model
-              </span>
-              <select
-                value={(ai.model as string) ?? ""}
-                onChange={(e) => {
-                  setAiTouched(true);
-                  setAi((a) => ({ ...a, model: e.target.value || undefined }));
-                }}
-                data-testid="job-ai-model"
-                className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
-              >
-                <option value="">Hotel default</option>
-                <option value="haiku">Haiku — quick and cheap</option>
-                <option value="sonnet">Sonnet — slower, better answers</option>
-              </select>
-            </label>
-
-            <label className="flex items-end gap-2 pb-2.5">
-              <input
-                type="checkbox"
-                checked={Boolean(ai.voice)}
-                onChange={(e) => {
-                  setAiTouched(true);
-                  setAi((a) => ({ ...a, voice: e.target.checked }));
-                }}
-                data-testid="job-ai-voice"
-              />
-              <span className="text-sm text-fg-soft">Let them talk to it</span>
-            </label>
-
-            <label className="block">
-              <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                Max tokens per answer
-              </span>
-              <input
-                value={(ai.max_tokens as string | number | undefined) ?? ""}
-                inputMode="numeric"
-                placeholder="hotel default"
-                onChange={(e) => {
-                  setAiTouched(true);
-                  setAi((a) => ({ ...a, max_tokens: e.target.value.replace(/[^0-9]/g, "") }));
-                }}
-                data-testid="job-ai-tokens"
-                className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
-              />
-            </label>
-
-            <label className="block">
-              <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-                Max messages a day
-              </span>
-              <input
-                value={(ai.max_messages as string | number | undefined) ?? ""}
-                inputMode="numeric"
-                placeholder="hotel default"
-                onChange={(e) => {
-                  setAiTouched(true);
-                  setAi((a) => ({ ...a, max_messages: e.target.value.replace(/[^0-9]/g, "") }));
-                }}
-                className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
-              />
-            </label>
-          </div>
-
-          <p className="mt-2 text-[11px] text-fg-faint">
-            Blank means the hotel&apos;s default. A cheaper model here always applies;
-            a dearer one still cannot exceed what your plan includes — these are a
-            spend ceiling, and the assistant is the one thing that costs money every
-            time it is asked.
-          </p>
-        </div>
+        <AiGrantPanel
+          value={ai}
+          onChange={(patch) => {
+            setAiTouched(true);
+            setAi((a) => ({ ...a, ...patch }));
+          }}
+          title="AI for this job"
+          hint="everyone with this job — one person can still differ"
+          idPrefix="job-ai"
+        />
       }
       intro={
         <>

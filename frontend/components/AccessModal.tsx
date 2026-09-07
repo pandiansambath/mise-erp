@@ -393,7 +393,7 @@ export function AccessModal({
         className="mise-fade-in absolute inset-0 bg-black/60 backdrop-blur-[3px]"
         onClick={onClose}
       />
-      <div className="mise-pop-lg relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-line bg-paper shadow-2xl shadow-black/60 sm:max-w-6xl sm:rounded-3xl">
+      <div className="mise-pop-lg relative flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-line bg-paper shadow-2xl shadow-black/60 sm:max-w-6xl sm:rounded-3xl">
         <div aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-fg/15 sm:hidden" />
 
         <header className="flex shrink-0 items-center gap-3 border-b border-line bg-gradient-to-r from-brand-500/10 via-transparent to-transparent px-5 py-3.5">
@@ -535,7 +535,7 @@ export function AccessModal({
               scrollbar you never see beats a category you cannot click, so it
               gets one as a last resort — five items fit, and on the day they do
               not, they are reachable instead of gone. */}
-          <nav className="flex min-h-0 shrink-0 gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r">
+          <nav className="mise-noscrollbar flex min-h-0 shrink-0 gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r">
             {SECTIONS.map((s) => {
               const on = s.key === group;
               const live = s.areas.filter((a) => current(a) !== "none").length;
@@ -585,7 +585,7 @@ export function AccessModal({
             </p>
           </nav>
 
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
+          <div className="mise-noscrollbar min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
 
             <div className="mb-2 flex items-center gap-2 px-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">

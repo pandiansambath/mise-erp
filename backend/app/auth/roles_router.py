@@ -86,6 +86,9 @@ class RoleIn(BaseModel):
     #: Which job's defaults to begin from. Not a limit — see `_clip`.
     base_role: str = Role.STAFF.value
     overrides: dict[str, bool] = Field(default_factory=dict)
+    #: What the AI may do for this role. Absent leaves it alone;
+    #: {} clears it back to the hotel default.
+    ai: dict | None = None
 
 
 class RoleOut(BaseModel):
@@ -95,6 +98,10 @@ class RoleOut(BaseModel):
     overrides: dict[str, bool]
     permissions: list[str]
     is_active: bool
+    #: DECLARED, because response_model drops what it is not told about — the
+    #: sixth time that has cost this project a field that was saved correctly
+    #: and then vanished on the way to the browser.
+    ai_settings: dict = Field(default_factory=dict)
 
 
 def _out(cr: CustomRole) -> RoleOut:
@@ -102,6 +109,7 @@ def _out(cr: CustomRole) -> RoleOut:
         id=cr.id,
         name=cr.name,
         base_role=cr.base_role,
+        ai_settings=dict(cr.ai_settings or {}),
         overrides=cr.overrides or {},
         permissions=resolve_permissions(cr.base_role, cr.overrides or {}),
         is_active=cr.is_active,
@@ -158,6 +166,8 @@ async def create_role(
         base_role=payload.base_role,
         overrides=_clip(payload.base_role, payload.overrides),
     )
+    if payload.ai is not None:
+        cr.ai_settings = _clean_ai(payload.ai)
     db.add(cr)
     await db.commit()
     await db.refresh(cr)
@@ -184,6 +194,8 @@ async def update_role(
     cr.name = payload.name.strip()
     cr.base_role = payload.base_role
     cr.overrides = _clip(payload.base_role, payload.overrides)
+    if payload.ai is not None:
+        cr.ai_settings = _clean_ai(payload.ai)
     await db.commit()
     await db.refresh(cr)
     await audit.record(
