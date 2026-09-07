@@ -184,6 +184,129 @@ async def test_an_uncounted_yesterday_suggests_nothing(db, hotel) -> None:
     assert await cash.carried_opening(db, hotel.id, TODAY) is None
 
 
+@pytest.mark.asyncio
+async def test_the_carry_is_in_the_totals_before_anyone_presses_save(db, hotel) -> None:
+    """"previous closing is today's opening, but this is not happening
+    automatically... i need to click this grey dead save button, then only i can
+    see the total cash amount."
+
+    The carry-forward existed and was only ever a SUGGESTION: offered to the
+    browser, which put it in a box, while every total stayed computed from a
+    stored opening of zero. The page showed a float in one place and nothing
+    expected in another, and the only way to reconcile them was to press the one
+    button that looked disabled.
+
+    A previous pass patched the arithmetic in the BROWSER. That fixed one panel
+    and nothing else — the API still reported an expected drawer of zero to the
+    day PDF, the reports, the auto-close and the assistant. A money figure that
+    is only right in one component is not right.
+
+    So this asserts the property that matters: with nothing saved for today, the
+    day's own totals already carry yesterday's close.
+    """
+    from app.sales import service
+    from app.sales.models import DailySales
+
+    db.add(
+        DailySales(
+            hotel_id=hotel.id,
+            date=TODAY - timedelta(days=1),
+            opening_cash=D(100),
+            cash_counted=D(455),
+        )
+    )
+    await db.commit()
+
+    # Nothing at all saved for today — no record, no click.
+    summary = await service.day_summary(db, hotel.id, TODAY)
+    assert summary["opening_cash"] == D(455), "the drawer still holds last night's count"
+    assert summary["suggested_opening"] == D(455), "and the UI is told it is a carry"
+    assert summary["expected_cash"] == D(455), (
+        "the EXPECTED figure must carry too — this is the one that was zero, "
+        "and the one every other consumer of this endpoint reads"
+    )
+    assert summary["drawer"]["opening"] == D(455)
+
+
+@pytest.mark.asyncio
+async def test_a_saved_opening_is_never_second_guessed(db, hotel) -> None:
+    """An entered figure outranks the carry. Somebody counted the float into the
+    till this morning; the software does not know better."""
+    from app.sales import service
+    from app.sales.models import DailySales
+
+    db.add(
+        DailySales(
+            hotel_id=hotel.id,
+            date=TODAY - timedelta(days=1),
+            opening_cash=D(100),
+            cash_counted=D(455),
+        )
+    )
+    db.add(DailySales(hotel_id=hotel.id, date=TODAY, opening_cash=D(200)))
+    await db.commit()
+
+    summary = await service.day_summary(db, hotel.id, TODAY)
+    assert summary["opening_cash"] == D(200)
+    assert summary["suggested_opening"] is None, "nothing to suggest — it is already set"
+
+
+@pytest.mark.asyncio
+async def test_creating_a_days_record_seeds_the_carried_opening(db, hotel) -> None:
+    """The moment a row exists, that row is what the auto-close, the variance
+    and the day PDF read from. Leaving the opening at zero there would let
+    saving a NOTE quietly turn a correct figure into a wrong one."""
+    from app.sales import service
+    from app.sales.models import DailySales
+
+    db.add(
+        DailySales(
+            hotel_id=hotel.id,
+            date=TODAY - timedelta(days=1),
+            opening_cash=D(100),
+            cash_counted=D(455),
+        )
+    )
+    await db.commit()
+
+    # A notes-only save — the user touched nothing to do with cash.
+    rec = await service.upsert_day(db, hotel.id, TODAY, notes="busy lunch")
+    await db.commit()
+    assert rec.opening_cash == D(455), "the stored row carries it too, not just the read path"
+
+    # And it is in the audit trail, so the float did not appear from nowhere.
+    hist = await cash.history_for(db, hotel.id, TODAY)
+    seeded = [h for h in hist if h.field == "opening_cash"]
+    assert seeded, "the seed is recorded like every other till edit"
+    assert "Carried" in (seeded[0].reason or "")
+
+
+@pytest.mark.asyncio
+async def test_no_carry_when_yesterday_was_never_counted(db, hotel) -> None:
+    """Inventing a float is worse than showing none: a wrong opening makes every
+    later figure on the day wrong, and it looks authoritative while doing it."""
+    from app.sales import service
+    from app.sales.models import DailySales
+
+    db.add(
+        DailySales(
+            hotel_id=hotel.id,
+            date=TODAY - timedelta(days=1),
+            opening_cash=D(100),
+            cash_counted=None,
+        )
+    )
+    await db.commit()
+
+    summary = await service.day_summary(db, hotel.id, TODAY)
+    assert summary["opening_cash"] == D(0)
+    assert summary["suggested_opening"] is None
+
+    rec = await service.upsert_day(db, hotel.id, TODAY, notes="x")
+    await db.commit()
+    assert rec.opening_cash == D(0), "nothing to carry, so nothing is invented"
+
+
 # ── the audit trail ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
