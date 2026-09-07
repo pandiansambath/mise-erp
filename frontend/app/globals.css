@@ -537,18 +537,18 @@ html:has(.mise-app) { background: #04120d; }
    rules are unlayered, so they win over Tailwind's layered utilities. One
    central block → every dashboard page becomes readable on light.
    ════════════════════════════════════════════════════════════════════════ */
-.mise-app[data-mode="light"] .text-brand-200,
-.mise-app[data-mode="light"] .text-brand-300,
-.mise-app[data-mode="light"] .text-brand-400 { color: var(--color-brand-700); }
+[data-mode="light"] .text-brand-200,
+[data-mode="light"] .text-brand-300,
+[data-mode="light"] .text-brand-400 { color: var(--color-brand-700); }
 
-.mise-app[data-mode="light"] .text-rose-200,
-.mise-app[data-mode="light"] .text-rose-300,
-.mise-app[data-mode="light"] .text-rose-400,
-.mise-app[data-mode="light"] .hover\:text-rose-300:hover { color: #be123c; }
+[data-mode="light"] .text-rose-200,
+[data-mode="light"] .text-rose-300,
+[data-mode="light"] .text-rose-400,
+[data-mode="light"] .hover\:text-rose-300:hover { color: #be123c; }
 
-.mise-app[data-mode="light"] .text-amber-200,
-.mise-app[data-mode="light"] .text-amber-300,
-.mise-app[data-mode="light"] .text-amber-400 { color: #b45309; }
+[data-mode="light"] .text-amber-200,
+[data-mode="light"] .text-amber-300,
+[data-mode="light"] .text-amber-400 { color: #b45309; }
 
 /* ── Reading tones: a colour that means something, in EITHER theme ────────────
    The basket rows said "in stock" in sky-300 and "after this" in emerald-300.
@@ -603,22 +603,22 @@ html:has(.mise-app) { background: #04120d; }
 .mise-tone-good { color: var(--tone-good); }
 .mise-tone-warn { color: var(--tone-warn); }
 
-.mise-app[data-mode="light"] .text-sky-200,
-.mise-app[data-mode="light"] .text-sky-300,
-.mise-app[data-mode="light"] .text-sky-400 { color: #0369a1; }
+[data-mode="light"] .text-sky-200,
+[data-mode="light"] .text-sky-300,
+[data-mode="light"] .text-sky-400 { color: #0369a1; }
 
-.mise-app[data-mode="light"] .text-emerald-200,
-.mise-app[data-mode="light"] .text-emerald-300,
-.mise-app[data-mode="light"] .text-emerald-400 { color: #047857; }
+[data-mode="light"] .text-emerald-200,
+[data-mode="light"] .text-emerald-300,
+[data-mode="light"] .text-emerald-400 { color: #047857; }
 
-.mise-app[data-mode="light"] .text-copper-200,
-.mise-app[data-mode="light"] .text-copper-300 { color: #9a5a2b; }
+[data-mode="light"] .text-copper-200,
+[data-mode="light"] .text-copper-300 { color: #9a5a2b; }
 
 /* Native form controls + overscroll backdrop follow the light scheme too
    (the dark defaults above would render dark dropdowns on a light page). */
-.mise-app[data-mode="light"] input,
-.mise-app[data-mode="light"] select,
-.mise-app[data-mode="light"] textarea { color-scheme: light; }
+[data-mode="light"] input,
+[data-mode="light"] select,
+[data-mode="light"] textarea { color-scheme: light; }
 html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
 
 /* ── Landing journey (WebGL) ──────────────────────────────────────────────── */
@@ -952,7 +952,7 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
     inset 0 -1px 0 color-mix(in srgb, var(--color-glass) 10%, transparent);
   transform: translateY(-1px);
 }
-.mise-app[data-mode="light"] .mise-card-inset {
+[data-mode="light"] .mise-card-inset {
   background: color-mix(in srgb, #0f172a 4%, var(--color-paper));
   box-shadow:
     inset 0 2px 6px color-mix(in srgb, #0f172a 10%, transparent),
@@ -990,19 +990,19 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
     inset 0 1px 0 color-mix(in srgb, #000 15%, transparent);
 }
 /* Light theme: real soft-UI shadows (dark grey out, white in). */
-.mise-app[data-mode="light"] .mise-well {
+[data-mode="light"] .mise-well {
   background: color-mix(in srgb, #0f172a 4%, var(--color-paper));
   box-shadow:
     inset 2px 2px 6px color-mix(in srgb, #0f172a 12%, transparent),
     inset -2px -2px 5px color-mix(in srgb, #fff 80%, transparent);
 }
-.mise-app[data-mode="light"] .mise-raised {
+[data-mode="light"] .mise-raised {
   background: var(--color-paper);
   box-shadow:
     3px 3px 8px color-mix(in srgb, #0f172a 12%, transparent),
     -3px -3px 8px color-mix(in srgb, #fff 85%, transparent);
 }
-.mise-app[data-mode="light"] .mise-raised:active {
+[data-mode="light"] .mise-raised:active {
   box-shadow:
     inset 2px 2px 6px color-mix(in srgb, #0f172a 14%, transparent),
     inset -2px -2px 5px color-mix(in srgb, #fff 70%, transparent);
@@ -1017,7 +1017,7 @@ html:has(.mise-app[data-mode="light"]) { background: #eef2f6; }
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.mise-app[data-mode="light"] .mise-glass-panel {
+[data-mode="light"] .mise-glass-panel {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(250, 247, 244, 0.82));
   border: 1px solid rgba(255, 255, 255, 0.75);
   box-shadow: 0 24px 70px rgba(31, 26, 22, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -3692,7 +3692,7 @@ body.mise-voice-open .mise-launcher-in {
     0 18px 48px -24px rgba(0, 0, 0, 0.5),
     0 0 0 1px color-mix(in srgb, var(--color-glass) 4%, transparent) inset;
 }
-.mise-app[data-mode="light"] .mise-chat-log {
+[data-mode="light"] .mise-chat-log {
   box-shadow:
     0 18px 44px -26px rgba(15, 23, 42, 0.22),
     0 0 0 1px rgba(15, 23, 42, 0.05) inset;
@@ -3730,7 +3730,7 @@ body.mise-voice-open .mise-launcher-in {
     0 14px 34px -18px rgba(0, 0, 0, 0.5),
     0 0 0 3px color-mix(in srgb, var(--color-brand-500) 14%, transparent);
 }
-.mise-app[data-mode="light"] .mise-chat-composer {
+[data-mode="light"] .mise-chat-composer {
   box-shadow:
     0 10px 26px -20px rgba(15, 23, 42, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -3784,7 +3784,7 @@ body.mise-voice-open .mise-launcher-in {
   position: relative;
   z-index: 1;
 }
-.mise-app[data-mode="light"] .mise-chat-rail {
+[data-mode="light"] .mise-chat-rail {
   box-shadow:
     0 18px 44px -26px rgba(15, 23, 42, 0.22),
     0 0 0 1px rgba(15, 23, 42, 0.05) inset;
@@ -3801,7 +3801,7 @@ body.mise-voice-open .mise-launcher-in {
     0 18px 48px -24px rgba(0, 0, 0, 0.5),
     0 0 0 1px color-mix(in srgb, var(--color-glass) 4%, transparent) inset;
 }
-.mise-app[data-mode="light"] .mise-chat-shell {
+[data-mode="light"] .mise-chat-shell {
   box-shadow:
     0 18px 44px -26px rgba(15, 23, 42, 0.22),
     0 0 0 1px rgba(15, 23, 42, 0.05) inset;
@@ -4025,13 +4025,37 @@ body.mise-voice-open .mise-launcher-in {
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* THE PRIMARY BUTTON WAS PINK TEXT ON A PINK FILL.
+   A 12% tint with `text-brand-300` over it. Inside a popup the light-theme
+   text rescue could not reach it at all (see the portal note above), so
+   "Save this day" came out at almost the same lightness as the button it was
+   printed on — which is what he was seeing when he said the text looked
+   blurred. It is not blurred; there is barely a colour difference between the
+   ink and the paper.
+
+   The fill goes up, the border becomes a real edge, and the ink is set HERE
+   rather than left to whatever utility the JSX happened to use — so a button
+   cannot be pale by forgetting a class. These rules are unlayered, so they
+   win over Tailwind's `text-brand-300` without needing !important. */
 .mise-btn-flat[data-tone="brand"] {
-  border-color: color-mix(in srgb, var(--color-brand-400) 45%, transparent);
-  background: color-mix(in srgb, var(--color-brand-400) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand-400) 55%, transparent);
+  background: color-mix(in srgb, var(--color-brand-400) 16%, transparent);
+  color: color-mix(in srgb, var(--color-brand-300) 82%, var(--color-fg));
+  font-weight: 700;
+}
+[data-mode="light"] .mise-btn-flat[data-tone="brand"] {
+  background: color-mix(in srgb, var(--color-brand-400) 15%, var(--color-paper));
+  color: var(--color-brand-700);
 }
 .mise-btn-flat[data-tone="danger"] {
-  border-color: color-mix(in srgb, #f43f5e 40%, transparent);
-  background: color-mix(in srgb, #f43f5e 10%, transparent);
+  border-color: color-mix(in srgb, #f43f5e 48%, transparent);
+  background: color-mix(in srgb, #f43f5e 14%, transparent);
+  color: color-mix(in srgb, #fb7185 82%, var(--color-fg));
+  font-weight: 700;
+}
+[data-mode="light"] .mise-btn-flat[data-tone="danger"] {
+  background: color-mix(in srgb, #f43f5e 13%, var(--color-paper));
+  color: #be123c;
 }
 
 
@@ -4059,11 +4083,51 @@ body.mise-voice-open .mise-launcher-in {
   color: color-mix(in srgb, var(--chip) 62%, var(--color-fg));
   border: 1px solid color-mix(in srgb, var(--chip) 32%, transparent);
 }
-.mise-chip[data-tone="green"]  { --chip: #10b981; }
-.mise-chip[data-tone="amber"]  { --chip: #f59e0b; }
-.mise-chip[data-tone="red"]    { --chip: #f43f5e; }
-.mise-chip[data-tone="sky"]    { --chip: #0ea5e9; }
+.mise-chip[data-tone="green"]  { --chip: #10b981; --chip-ink: #047857; }
+.mise-chip[data-tone="amber"]  { --chip: #f59e0b; --chip-ink: #b45309; }
+.mise-chip[data-tone="red"]    { --chip: #f43f5e; --chip-ink: #be123c; }
+.mise-chip[data-tone="sky"]    { --chip: #0ea5e9; --chip-ink: #0369a1; }
 .mise-chip[data-tone="slate"]  { --chip: var(--color-fg-faint); }
+
+/* ── WHY THE RED CAME OUT MILD ────────────────────────────────────────────
+   "why bro in so many place i can [see] this kinda mild red color, its
+    looking like pale color not nice which making text also blur, we need to
+    show strongly nah (but dont over darken and make worse)."
+
+   Two separate things were making it mild, and only one of them was the tint.
+
+   The tint: 20% of the hue over the page. On the dark theme that is a visible
+   glow. On the LIGHT theme — which is the one he uses — 20% of #f43f5e over
+   near-white is rgb(250,232,236), which is not a chip, it is a blush.
+
+   The ink: `color-mix(#f43f5e 62%, var(--color-fg))`. That reads as if it
+   darkens the red, and numerically it does — but --color-fg on light is a
+   blue-black slate, so mixing towards it drags the hue sideways as well as
+   down. #f43f5e mixed 38% into slate lands on rgb(157,48,74): a muddy mauve.
+   It PASSES contrast, which is why no check ever complained, and it still
+   looks washed out, because the eye reads saturation as strength and that
+   mix has thrown half of it away.
+
+   So each tone now names its own ink — the 700 stop of its own hue, chosen
+   rather than computed. Fully saturated, dark enough to read at 8:1 on the
+   chip, and nowhere near the near-black that "don't over darken" rules out.
+   The tint comes up to 16% over paper (an opaque mix, so it cannot go
+   transparent over a card) and the border to 42%, which is what turns a blush
+   back into an object with an edge. */
+[data-mode="light"] .mise-chip {
+  background: color-mix(in srgb, var(--chip) 16%, var(--color-paper));
+  border-color: color-mix(in srgb, var(--chip) 42%, transparent);
+  color: var(--chip-ink, color-mix(in srgb, var(--chip) 62%, var(--color-fg)));
+}
+
+/* A red that means it, in either theme, without a utility class per shade.
+   Mixed towards the FOREGROUND for the dark theme (where it must lighten to
+   be seen) and pinned to the saturated 700 stop on light. */
+.text-danger {
+  color: color-mix(in srgb, #fb7185 82%, var(--color-fg));
+  font-weight: 600;
+}
+[data-mode="light"] .text-danger { color: #be123c; }
 
 /* ── THE STAGE ───────────────────────────────────────────────────────────
    "when i turn on voice model it needs to close that bubble chat UI, and the

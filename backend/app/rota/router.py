@@ -132,6 +132,23 @@ async def list_shifts(
 
 
 class ShiftPatch(BaseModel):
+    # A MOVE IS ONE FACT CHANGING, NOT A CREATE AND A DELETE.
+    #
+    #   "here i moved 1 member from today to next day but it got duplicated...
+    #    then i clicked undo last, 1 undo done, duplicate stayed here itself,
+    #    there is no undo."
+    #
+    # Dragging a card used to POST a new shift on the target day and then
+    # DELETE the old one. Between those two calls the same shift genuinely
+    # exists twice, and everything that can go wrong in that window did:
+    # a second drop event, a live-refresh landing mid-flight, or an undo
+    # pressed before the POST returned — which left the created shift with no
+    # ticket pointing at it, so there was nothing left to undo it WITH. That is
+    # his "duplicate stayed and there is no undo", exactly.
+    #
+    # Changing the date here closes the window instead of policing it. One
+    # request, one row, no interval in which the rota is wrong.
+    date: date_type | None = None
     start_time: time_type | None = None
     end_time: time_type | None = None
     break_minutes: int | None = Field(default=None, ge=0, le=480)
@@ -149,18 +166,46 @@ async def update_shift(
     sh = await service.get_shift(db, shift_id, user.hotel_id)
     if sh is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Shift not found")
+    was = sh.date
     for k, v in payload.model_dump(exclude_unset=True).items():
         if v is not None:
             setattr(sh, k, v)
     if sh.end_time <= sh.start_time:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "End must be after start")
+
+    # Landing on a new day means every rule a create has to pass applies again.
+    # A move that dodges the leave check is how somebody ends up rostered on
+    # their own holiday, and a move that dodges the duplicate check is the bug
+    # this endpoint exists to fix.
+    if sh.date != was:
+        clash = await leave.blocking_leave(db, user.hotel_id, sh.employee_id, sh.date)
+        if clash is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, clash[1])
+        same_day = await service.list_shifts(db, user.hotel_id, sh.date, sh.date)
+        if any(
+            str(r["id"]) != str(shift_id)
+            and str(r["employee_id"]) == str(sh.employee_id)
+            and str(r["start_time"])[:5] == str(sh.start_time)[:5]
+            and str(r["end_time"])[:5] == str(sh.end_time)[:5]
+            for r in same_day
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "They are already on that day at those hours.",
+            )
+
     await db.commit()
     rows = await service.list_shifts(db, user.hotel_id, sh.date, sh.date)
     row = next(r for r in rows if str(r["id"]) == str(shift_id))
     await audit.record(
-        db, hotel_id=user.hotel_id, user=user, action="shift.edit",
-        summary=f"Shift edited: {row['employee_name']} {sh.date} "
-                f"{sh.start_time}-{sh.end_time}",
+        db, hotel_id=user.hotel_id, user=user,
+        action="shift.move" if sh.date != was else "shift.edit",
+        summary=(
+            f"Shift moved: {row['employee_name']} {was} → {sh.date}"
+            if sh.date != was
+            else f"Shift edited: {row['employee_name']} {sh.date} "
+                 f"{sh.start_time}-{sh.end_time}"
+        ),
         entity_type="shift", entity_id=shift_id,
     )
     return ShiftOut.model_validate(row)

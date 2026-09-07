@@ -651,8 +651,12 @@ function StaffLoginModal({
     finally { setBusy(false); }
   }
 
+  // THREE COLUMNS' WORTH OF ROOM, not two. "still i need to scroll to see below
+  // details — why? just make the popup big to show all with no scroll." Two
+  // side-by-side cards, a status banner and a history timeline do not fit in
+  // 40rem, and the answer to that is width, not a scrollbar.
   return (
-    <SheetPopup onClose={onClose} title={employee.full_name} subtitle="🔐 Login & access" columns={2}>
+    <SheetPopup onClose={onClose} title={employee.full_name} subtitle="Login & access" columns={3}>
         <div>
           {!loaded ? (
             <p className="text-sm text-fg-faint">Loading…</p>
@@ -680,32 +684,70 @@ function StaffLoginModal({
             </div>
           ) : (
             <>
-              {/* status chips */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-sm text-fg">{status.email}</span>
-                {status.email_verified ? (
-                  <Badge tone="green">✓ verified</Badge>
-                ) : (
-                  <Badge tone="amber">⚠ unverified</Badge>
-                )}
-                {status.is_active ? (
-                  <Badge tone="green">active</Badge>
-                ) : (
-                  <Badge tone="red">deactivated</Badge>
-                )}
-                <span className="text-xs text-fg-faint">{status.role.replace(/_/g, " ").toLowerCase()}</span>
+              {/* THE TOP OF THIS SHEET, WHICH HE CALLED RAW.
+                  "look that top description portion — look very raw, those text
+                   are... this whole highlighted is look raw."
+                  He was looking at a monospace email sitting on the same line as
+                  three chips and a lowercase job title, all at different weights
+                  and none of them attached to anything. It read as debug output
+                  because that is structurally what it was: four unrelated values
+                  printed in a row.
+                  It is one identity card now — the address is the heading it
+                  deserves to be, the role sits under it as a caption, and the two
+                  states that actually change what you can do (can they sign in,
+                  are they switched on) are on the right where a status belongs. */}
+              <div className="mise-card-inset flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl p-3.5">
+                <span
+                  aria-hidden
+                  className="mise-well grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
+                >
+                  ✉️
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-semibold tracking-tight text-fg">
+                    {status.email}
+                  </p>
+                  <p className="mt-0.5 text-xs capitalize text-fg-soft">
+                    Signs in as {status.role.replace(/_/g, " ").toLowerCase()}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {status.email_verified ? (
+                    <Badge tone="green">✓ verified</Badge>
+                  ) : (
+                    <Badge tone="amber">⚠ unverified</Badge>
+                  )}
+                  {status.is_active ? (
+                    <Badge tone="green">active</Badge>
+                  ) : (
+                    <Badge tone="red">deactivated</Badge>
+                  )}
+                </div>
               </div>
+              {/* WHY THIS READ AS RAW. It was a paragraph of small coloured
+                  text carrying a parenthesis about grandfathered accounts —
+                  a footnote, at the top of the screen, in a colour chosen to
+                  shout. A status is a state, not an essay: one line saying
+                  what is true, and the explanation only where it changes what
+                  you would do. */}
               {!status.email_verified ? (
-                <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
-                  🔴 <b>Live status:</b> not confirmed yet — they can&apos;t sign in until they click
-                  the verification link DineAI emailed. Resend it if it went astray.
-                </p>
+                <div className="mt-2.5 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-3.5 py-2.5">
+                  <span aria-hidden className="text-base leading-none">⏳</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-fg">Waiting on them to confirm</p>
+                    <p className="mt-0.5 text-[11px] text-fg-soft">
+                      They cannot sign in until they open the link we emailed. Resend it
+                      below if it went astray.
+                    </p>
+                  </div>
+                </div>
               ) : (
-                <p className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-500">
-                  🟢 <b>Live status:</b> this inbox is confirmed. (Accounts made before verification
-                  existed — your early test logins — were grandfathered as verified; every login
-                  created from now must confirm live before it works.)
-                </p>
+                <div className="mt-2.5 flex items-center gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3.5 py-2.5">
+                  <span aria-hidden className="text-base leading-none">✓</span>
+                  <p className="text-sm font-medium text-fg">
+                    This address is confirmed — they can sign in.
+                  </p>
+                </div>
               )}
 
               {msg && <p className="mt-3 rounded-lg bg-brand-500/10 px-3 py-2 text-xs text-brand-400">{msg}</p>}

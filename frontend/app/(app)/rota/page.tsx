@@ -211,78 +211,144 @@ export default function RotaPage() {
   const [moves, setMoves] = useState<Move[]>([]);
   const movedIds = useMemo(() => new Set(moves.map((m) => m.newId)), [moves]);
 
+  // A DROP THAT FIRED TWICE COULD NOT BE UNDONE ONCE.
+  //
+  //   "here i moved 1 member from today to next day but it got duplicated...
+  //    then i clicked undo last, 1 undo done, duplicate stayed here itself,
+  //    there is no undo."
+  //
+  // Two faults, one symptom.
+  //
+  // First, the move was a CREATE followed by a DELETE. Between those two calls
+  // the shift exists on both days for real, on the server, and anything that
+  // reads the rota in that window sees a duplicate. It is one PATCH now — the
+  // row changes its date, and there is no in-between state to catch.
+  //
+  // Second, and this is the half that made it unrecoverable: `moves` was keyed
+  // on a temporary id, and the undo only deleted the server row if that id had
+  // already been swapped for a real one. Undo pressed too early therefore
+  // restored the shift on the old day and left the new one standing, with its
+  // ticket now gone — a duplicate with nothing left pointing at it. Hence "1
+  // undo done, duplicate stayed, there is no undo". With a PATCH there is no
+  // temporary id at all: the shift keeps the id it always had, so undo is just
+  // the same PATCH pointing back the other way and it cannot arrive too early.
+  //
+  // `movingRef` is a ref rather than state on purpose. Two drop events inside
+  // one gesture run in the same tick, so a state flag set by the first has not
+  // rendered by the time the second reads it — the guard has to be a value
+  // that changes the instant it is written.
+  const movingRef = useRef<Set<string>>(new Set());
+
   function moveShift(id: string | null, targetDate: string) {
     setDropDay(null);
     setDragId(null);
+    if (!id || movingRef.current.has(id)) return;
     const sh = shifts.find((x) => x.id === id);
     if (!sh || sh.date === targetDate) return;
+    movingRef.current.add(id);
     const fromDate = sh.date;
-    // INSTANT: card lands + ticket appears in the same frame; the server
-    // settles in the background and quietly swaps in the real id.
-    const tempId = `tmp-${sh.id}-${targetDate}`; // unique: the id changes once the server settles
-    setShifts((list) => list.map((x) => (x.id === id ? { ...x, id: tempId, date: targetDate } : x)));
+
+    // INSTANT: the card lands and the ticket appears in the same frame; the
+    // server settles behind it.
+    setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: targetDate } : x)));
     setMoves((list) => [
       ...list,
       {
-        newId: tempId, name: sh.employee_name, fromDate, toDate: targetDate,
+        newId: id, name: sh.employee_name, fromDate, toDate: targetDate,
         employee_id: sh.employee_id, start_time: sh.start_time, end_time: sh.end_time,
         break_minutes: sh.break_minutes,
       },
     ]);
+    setRedos([]); // a fresh move ends the redo trail, as it does in every editor
+
     (async () => {
       try {
-        const created = await api.post<Shift>("/rota/shifts", {
-          employee_id: sh.employee_id,
-          date: targetDate,
-          start_time: sh.start_time,
-          end_time: sh.end_time,
-          break_minutes: sh.break_minutes,
-        });
-        await api.delete(`/rota/shifts/${sh.id}`);
-        setShifts((list) => list.map((x) => (x.id === tempId ? created : x)));
-        setMoves((list) => list.map((m) => (m.newId === tempId ? { ...m, newId: created.id } : m)));
+        await api.patch(`/rota/shifts/${id}`, { date: targetDate });
         reload().catch(() => {}); // labour totals refresh quietly
       } catch (err) {
-        setShifts((list) => list.map((x) => (x.id === tempId ? { ...x, id: sh.id, date: fromDate } : x)));
-        setMoves((list) => list.filter((m) => m.newId !== tempId));
+        setShifts((list) => list.map((x) => (x.id === id ? { ...x, date: fromDate } : x)));
+        setMoves((list) => list.filter((m) => m.newId !== id));
         setMsg(err instanceof ApiError ? err.message : "Could not move the shift");
+      } finally {
+        movingRef.current.delete(id);
       }
     })();
   }
 
+  // "i also need ctrl y to redo, both i want."
+  // An undo you cannot take back is only half a safety net — you hesitate over
+  // the undo instead of the move. Undone moves land here in the order they were
+  // undone, and redo replays the newest.
+  const [redos, setRedos] = useState<Move[]>([]);
+
   const undoMove = useCallback((m: Move) => {
-    // INSTANT: ticket line goes, card slides home; the server follows.
+    // INSTANT: the ticket goes, the card slides home, the server follows.
     setMoves((list) => list.filter((x) => x.newId !== m.newId));
     setShifts((list) => list.map((x) => (x.id === m.newId ? { ...x, date: m.fromDate } : x)));
+    setRedos((list) => [...list, m]);
     (async () => {
       try {
-        const restored = await api.post<Shift>("/rota/shifts", {
-          employee_id: m.employee_id, date: m.fromDate,
-          start_time: m.start_time, end_time: m.end_time, break_minutes: m.break_minutes,
-        });
-        if (!m.newId.startsWith("tmp-")) await api.delete(`/rota/shifts/${m.newId}`);
-        setShifts((list) => list.map((x) => (x.id === m.newId ? restored : x)));
+        await api.patch(`/rota/shifts/${m.newId}`, { date: m.fromDate });
         reload().catch(() => {});
       } catch (err) {
         setMsg(err instanceof ApiError ? err.message : "Could not undo the move");
+        setRedos((list) => list.filter((x) => x.newId !== m.newId));
         reload().catch(() => {});
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ctrl+Z / ⌘Z undoes the LATEST move while tickets are open
+  const redoMove = useCallback((m: Move) => {
+    setRedos((list) => list.filter((x) => x.newId !== m.newId));
+    setShifts((list) => list.map((x) => (x.id === m.newId ? { ...x, date: m.toDate } : x)));
+    setMoves((list) => [...list, m]);
+    (async () => {
+      try {
+        await api.patch(`/rota/shifts/${m.newId}`, { date: m.toDate });
+        reload().catch(() => {});
+      } catch (err) {
+        setMsg(err instanceof ApiError ? err.message : "Could not redo the move");
+        setMoves((list) => list.filter((x) => x.newId !== m.newId));
+        reload().catch(() => {});
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // "ctrl z to undo working, but i also need ctrl y to redo, both i want."
+  //
+  // Ctrl+Y is the Windows spelling and he is on Windows, so that is the one
+  // that had to work. Ctrl+Shift+Z is bound too, because it is the same key
+  // everywhere else and someone reaching for it should not find nothing.
+  //
+  // The handler no longer bails when there are no move tickets — there can be
+  // a redo waiting with the undo list empty, which is exactly the state you are
+  // in the moment after undoing your only move. Typing where text goes is left
+  // alone: Ctrl+Z in the notes box has to mean what it means in every box.
   useEffect(() => {
-    if (moves.length === 0) return;
+    if (moves.length === 0 && redos.length === 0) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = document.activeElement as HTMLElement | null;
+      const typing =
+        !!el &&
+        (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (typing) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        if (moves.length === 0) return;
         e.preventDefault();
         undoMove(moves[moves.length - 1]);
+      } else if (k === "y" || (k === "z" && e.shiftKey)) {
+        if (redos.length === 0) return;
+        e.preventDefault();
+        redoMove(redos[redos.length - 1]);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moves, undoMove]);
+  }, [moves, redos, undoMove, redoMove]);
 
   // Load any source week's shifts into the editable preview, mapped onto THIS week's
   // matching weekdays. Source defaults to last week but can be stepped to any week.
@@ -609,19 +675,36 @@ export default function RotaPage() {
           last, or keep them all — and the full list opens if you want it.
           Nobody needs to read six tickets; they need to undo the one they just
           got wrong. */}
-      {moves.length > 0 && (
+      {(moves.length > 0 || redos.length > 0) && (
         <div className="mise-card-inset mb-3 rounded-2xl px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-fg">
-              {moves.length === 1 ? "1 shift moved" : `${moves.length} shifts moved`}
+              {moves.length === 0
+                ? "Move undone"
+                : moves.length === 1
+                  ? "1 shift moved"
+                  : `${moves.length} shifts moved`}
             </span>
-            <button
-              type="button"
-              onClick={() => undoMove(moves[moves.length - 1])}
-              className="mise-btn-flat mise-press min-h-[32px] px-3 text-xs font-semibold text-fg-soft"
-            >
-              Undo last
-            </button>
+            {moves.length > 0 && (
+              <button
+                type="button"
+                onClick={() => undoMove(moves[moves.length - 1])}
+                data-testid="rota-undo"
+                className="mise-btn-flat mise-press min-h-[32px] px-3 text-xs font-semibold text-fg-soft"
+              >
+                ↶ Undo last
+              </button>
+            )}
+            {redos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => redoMove(redos[redos.length - 1])}
+                data-testid="rota-redo"
+                className="mise-btn-flat mise-press min-h-[32px] px-3 text-xs font-semibold text-fg-soft"
+              >
+                ↷ Redo
+              </button>
+            )}
             {moves.length > 1 && (
               <button
                 type="button"
@@ -632,16 +715,18 @@ export default function RotaPage() {
                 {showMoves ? "hide" : `see all ${moves.length}`}
               </button>
             )}
-            <span className="text-[11px] text-fg-faint">⌘Z undoes the last</span>
+            <span className="text-[11px] text-fg-faint">Ctrl+Z undo · Ctrl+Y redo</span>
             <button
               type="button"
               onClick={() => {
                 setMoves([]);
+                setRedos([]);
                 setShowMoves(false);
               }}
-              className="mise-btn-flat mise-press ml-auto min-h-[32px] px-3 text-xs font-semibold text-brand-300"
+              data-tone="brand"
+              className="mise-btn-flat mise-press ml-auto min-h-[32px] px-3 text-xs font-semibold"
             >
-              Keep all ✓
+              {moves.length === 0 ? "Dismiss ✓" : "Keep all ✓"}
             </button>
           </div>
 
@@ -846,7 +931,7 @@ export default function RotaPage() {
 
       {canWrite && (
         <p className="mt-2 text-[11px] text-fg-faint">
-          Drag any shift onto another day to move it — ⌘Z puts it back.
+          Drag any shift onto another day to move it — Ctrl+Z puts it back, Ctrl+Y brings it forward again.
         </p>
       )}
 

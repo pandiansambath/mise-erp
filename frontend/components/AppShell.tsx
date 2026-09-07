@@ -813,6 +813,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [selfServiceOnly, pathname, router]);
 
+  // THE MODE HAS TO REACH THE PORTALS.
+  //
+  // Every popup renders with createPortal into <body>, which is a SIBLING of
+  // this div — so `.mise-app[data-mode=…] .text-brand-300` never matched inside
+  // one, and the light-theme colour rescue silently stopped at the popup edge.
+  // That is why "Save this day" was pink-on-pink while the same colour two
+  // inches away on the page read strongly.
+  //
+  // <html> is an ancestor of body, so a copy of the flag up there covers the
+  // page and every portal at once, whatever a component chose to render into.
+  useEffect(() => {
+    const mode = THEMES[theme].light ? "light" : "dark";
+    document.documentElement.dataset.mode = mode;
+    return () => {
+      delete document.documentElement.dataset.mode;
+    };
+  }, [theme]);
+
   return (
     <div
       data-mode={THEMES[theme].light ? "light" : "dark"}

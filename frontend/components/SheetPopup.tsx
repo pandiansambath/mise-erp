@@ -28,6 +28,7 @@ import { overlayOpened } from "@/lib/overlay";
  */
 export function SheetPopup({
   onClose,
+  onBack,
   title,
   subtitle,
   depth = 1,
@@ -37,6 +38,19 @@ export function SheetPopup({
   footer,
 }: {
   onClose: () => void;
+  /** WHERE DOES ✕ LEAVE YOU?
+   *
+   *    "here there is no back option."
+   *
+   *  On a sheet opened FROM another sheet, closing is ambiguous: it could mean
+   *  "put me back where I was" or "I am done with all of this". A ✕ can only
+   *  say the second. Give this and the header grows a ← that says the first,
+   *  which is the one people want after booking a day off and still wanting the
+   *  person's week in front of them.
+   *
+   *  Omit it on a top-level sheet — there is nowhere to go back to, and an
+   *  arrow that means the same as ✕ is a second button teaching nothing. */
+  onBack?: () => void;
   title: string;
   subtitle?: string;
   /** 1 = over the page, 2 = over another sheet. Only the depth changes. */
@@ -50,11 +64,16 @@ export function SheetPopup({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  // Escape, and Android's Back, both mean "the smallest step backwards" — so
+  // where there is a step back they take it, rather than dumping you on the
+  // page two levels down.
+  const goBack = onBack ?? onClose;
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        goBack();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -65,12 +84,12 @@ export function SheetPopup({
       window.removeEventListener("keydown", onKey);
       release();
     };
-  }, [onClose]);
+  }, [goBack]);
 
   // On Android, Back should close the popup rather than leave the page. The
   // order pad never wired this up because its sheets are always reachable by
   // the ✕; a popup on every page makes it worth having.
-  useBackToClose(true, onClose);
+  useBackToClose(true, goBack);
 
   const z = depth === 1 ? "z-[70]" : "z-[80]";
   // Centred, both axes, at every size. It used to be pinned to the top with
@@ -116,7 +135,7 @@ export function SheetPopup({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`mise-pop-centre mise-sheet-sheen fixed ${box} ${z} flex max-h-[86dvh] flex-col overflow-hidden rounded-3xl border border-line bg-paper shadow-2xl`}
+        className={`mise-pop-centre mise-sheet-sheen fixed ${box} ${z} flex max-h-[92dvh] flex-col overflow-hidden rounded-3xl border border-line bg-paper shadow-2xl`}
       >
         {/* WHY THE TEXT LOOKED BLURRED.
             "color also not nice making text to blur."
@@ -132,7 +151,17 @@ export function SheetPopup({
             aria-hidden
             className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand-500 via-brand-400 to-transparent"
           />
-          <div className="min-w-0">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back"
+              className="mise-press mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line-2 bg-paper-2 text-base font-semibold text-fg-soft transition hover:border-brand-400/50 hover:text-brand-300"
+            >
+              ←
+            </button>
+          )}
+          <div className="min-w-0 flex-1">
             <p className="truncate font-display text-xl font-bold tracking-tight text-fg">
               {title}
             </p>
