@@ -10,6 +10,7 @@ import { LEAVE_CHANGED } from "@/components/QuickLeave";
 import { RotaLegend } from "@/components/RotaLegend";
 import { Bars } from "@/components/charts";
 import { Select } from "@/components/Select";
+import { InfoDot } from "@/components/InfoDot";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
@@ -237,6 +238,58 @@ export default function RotaPage() {
   // one gesture run in the same tick, so a state flag set by the first has not
   // rendered by the time the second reads it — the guard has to be a value
   // that changes the instant it is written.
+  // ── THE WEEK CHECK ────────────────────────────────────────────────────────
+  //
+  //   "in this rota, just think any other creative feature that we can add...
+  //    any other creative feature that will make the user feel comfortable and
+  //    impressed."
+  //
+  // The page could already tell you what the week COSTS. It could not tell you
+  // whether the week is any good — and those are different questions. A rota is
+  // wrong long before it is expensive: a day with nobody on it, a person
+  // rostered eleven days without a break, somebody quietly pushed past the
+  // working-time limit. Every one of those is invisible in a grid of cards,
+  // because seeing it means adding up a column in your head.
+  //
+  // Nothing new is fetched. All three answers are already sitting in `shifts`;
+  // nobody had added them up. That is the feature: not more data, the same data
+  // read the way a manager reads it.
+  //
+  // 48 hours is the UK Working Time Regulations weekly average. It is an
+  // average over 17 weeks rather than a hard weekly cap, so this WARNS and
+  // never blocks — a genuine 50-hour week during a festival is legal and
+  // normal, and a rota tool that refuses to let you build one is a rota tool
+  // people stop using. It is here because nobody notices it by accident.
+  const weekCheck = useMemo(() => {
+    // dayKey, not iso — the columns are keyed on the calendar day the header
+    // prints, and mixing the two is what put "today" on Tuesday last time.
+    const inWeek = shifts.filter((s) => s.date >= from && s.date <= to);
+
+    const byPerson = new Map<string, { name: string; hours: number; days: Set<string> }>();
+    for (const s of inWeek) {
+      const cur = byPerson.get(s.employee_id) ?? {
+        name: s.employee_name,
+        hours: 0,
+        days: new Set<string>(),
+      };
+      cur.hours += parseFloat(s.hours || "0") || 0;
+      cur.days.add(s.date);
+      byPerson.set(s.employee_id, cur);
+    }
+
+    const people = [...byPerson.values()].sort((a, b) => b.hours - a.hours);
+    const longWeeks = people.filter((p) => p.hours > 48);
+    // Six or seven days on is where a week stops having a day off in it.
+    const noDayOff = people.filter((p) => p.days.size >= 6);
+    const emptyDays = weekDates.filter(
+      (d) =>
+        inWeek.every((s) => s.date !== dayKey(d)) &&
+        (leaveByDay[dayKey(d)] ?? []).length === 0,
+    );
+
+    return { people, longWeeks, noDayOff, emptyDays };
+  }, [shifts, weekDates, from, to, leaveByDay]);
+
   const movingRef = useRef<Set<string>>(new Set());
 
   function moveShift(id: string | null, targetDate: string) {
@@ -659,6 +712,62 @@ export default function RotaPage() {
           </div>
         )}
       </div>
+
+      {/* ── WHAT THE COST ROW COULD NOT TELL YOU ─────────────────────────────
+          The row above says what the week COSTS. This says whether the week is
+          any GOOD, and those are different questions — a rota is wrong long
+          before it is expensive.
+
+          It only appears when there is something to say. A quiet week draws
+          nothing, because a panel that says "all fine" every day is a panel
+          people stop reading, and then it is not there on the day it matters. */}
+      {(weekCheck.longWeeks.length > 0 ||
+        weekCheck.noDayOff.length > 0 ||
+        weekCheck.emptyDays.length > 0) && (
+        <div className="mise-card-inset mb-3 rounded-2xl px-3 py-2.5" data-testid="rota-check">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+            <span className="font-semibold text-fg">Worth a look</span>
+
+            {weekCheck.emptyDays.length > 0 && (
+              <span className="text-fg-soft">
+                <b className="text-fg">Nobody on</b>{" "}
+                {weekCheck.emptyDays
+                  .map((d) => d.toLocaleDateString(undefined, { weekday: "short" }))
+                  .join(", ")}
+                <InfoDot label="Why a day with nobody on it is flagged">
+                  These days have no shifts and nobody on booked leave. Usually it means the
+                  rota is unfinished — but if you are closed that day, it is right, and you
+                  can ignore it.
+                </InfoDot>
+              </span>
+            )}
+
+            {weekCheck.longWeeks.length > 0 && (
+              <span className="text-danger">
+                <b>Over 48h:</b>{" "}
+                {weekCheck.longWeeks.map((p) => `${p.name} (${p.hours.toFixed(1)}h)`).join(", ")}
+                <InfoDot label="Why 48 hours is flagged">
+                  <b className="text-fg">The UK working-time limit is 48 hours a week</b>,
+                  averaged over 17 weeks — so a single long week during a festival is legal
+                  and normal. This is a nudge, not a block: nobody notices it by accident,
+                  and the average is built one week at a time.
+                </InfoDot>
+              </span>
+            )}
+
+            {weekCheck.noDayOff.length > 0 && (
+              <span className="text-fg-soft">
+                <b className="text-fg">No day off:</b>{" "}
+                {weekCheck.noDayOff.map((p) => p.name).join(", ")}
+                <InfoDot label="Why six days on is flagged">
+                  Six or seven days on is a week without a day off in it. Legal, and worth
+                  seeing before the rota goes up rather than after somebody reads it.
+                </InfoDot>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {msg && (
         <p className="mb-3 rounded-xl bg-glass/10 px-3 py-2 text-sm text-fg-soft" role="status">

@@ -51,28 +51,30 @@ test("the red inside a popup is a red you can read", async ({ browser }) => {
   console.log("HTML data-mode =", mode);
   expect(mode, "the mode must reach <html>, or no portal can see it").toBeTruthy();
 
-  await page.goto(`${BASE}/rota`);
-  await page.waitForTimeout(2500);
-  await page.getByRole("button", { name: /Copy a week/i }).first().click();
+  // The attendance person sheet, because that is the popup in his screenshot:
+  // "Save this day" came out pink text on a pink fill. The copy-a-week popup
+  // only renders its apply button when the source week HAS shifts, which makes
+  // it a bad choice for a check that must not go green for the wrong reason.
+  await page.goto(`${BASE}/attendance`);
+  await page.waitForTimeout(3000);
+  // The person card is a role="button" div, not a <button>.
+  await page.getByRole("button").filter({ hasText: /Not in yet|Working|Clocked out/ }).first().click();
   await page.waitForTimeout(1500);
 
-  const btn = page.locator('[data-testid="copy-apply"]');
+  const btn = page.locator('[data-testid="edit-save"]');
   await expect(btn).toBeVisible();
+  await page.screenshot({ path: "e2e-out/colour-sheet.png" });
   const seen = await btn.evaluate((el) => {
     const cs = getComputedStyle(el);
-    // The button's own background is a translucent mix, so walk up for the
-    // opaque surface it is actually painted on.
-    let node: HTMLElement | null = el as HTMLElement;
-    let bg = cs.backgroundColor;
-    while (node && (bg === "rgba(0, 0, 0, 0)" || bg.startsWith("rgba(") && bg.endsWith(", 0)"))) {
-      node = node.parentElement;
-      bg = node ? getComputedStyle(node).backgroundColor : "rgb(255,255,255)";
-    }
-    return { color: cs.color, bg, panel: getComputedStyle(el.closest('[role="dialog"]')!).backgroundColor };
+    return {
+      color: cs.color,
+      bg: cs.backgroundColor,
+      panel: getComputedStyle(el.closest('[role="dialog"]')!).backgroundColor,
+    };
   });
 
   const ratio = contrast(seen.color, seen.panel);
-  console.log(`COPY BUTTON ink=${seen.color} on panel=${seen.panel} → ${ratio.toFixed(2)}:1`);
+  console.log(`SAVE BUTTON ink=${seen.color} on panel=${seen.panel} → ${ratio.toFixed(2)}:1`);
   await page.screenshot({ path: "e2e-out/colour-popup.png" });
 
   // 4.5:1 is the WCAG AA floor for body text. "Save this day" measured barely
