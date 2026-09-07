@@ -121,6 +121,24 @@ async def upsert_day(
         record = DailySales(hotel_id=hotel_id, date=day, entered_by=entered_by)
         db.add(record)
         await db.flush()  # the row must exist before history references it
+        # A NEW DAY STARTS WITH LAST NIGHT'S DRAWER.
+        #
+        # The read path already reports the carry, but the moment a row exists
+        # that row is what the auto-close, the variance and the day PDF read
+        # from — so if the opening were left at zero here, saving a note would
+        # quietly turn a correct figure into a wrong one. Seeded through
+        # record_change like every other till edit, so the history says where
+        # the number came from rather than showing a float that appeared from
+        # nowhere.
+        if opening_cash is None:
+            carried = await cash_mod.carried_opening(db, hotel_id, day)
+            if carried is not None:
+                await cash_mod.record_change(
+                    db, hotel_id, day, "opening_cash", record.opening_cash, carried,
+                    user_id=entered_by,
+                    reason="Carried from the previous day's counted close",
+                )
+                record.opening_cash = carried
     # Each change is written to the append-only history BEFORE it is applied,
     # while the old value is still readable. This is the only record of who
     # changed a till figure, when, and from what.
@@ -215,26 +233,53 @@ async def day_summary(db: AsyncSession, hotel_id: uuid.UUID, day: date_type) -> 
     opening = record.opening_cash if record else Decimal("0")
     counted = record.cash_counted if record else None
 
-    # The full drawer. Cash expenses and petty cash move the till too, and
-    # leaving them out made an honest day look short. See app/sales/cash.py.
     from app.sales import cash as cash_mod
 
+    # ── THE FLOAT DOES NOT VANISH OVERNIGHT ─────────────────────────────────
+    #
+    #   "previous closing is today's opening, but this is not happening
+    #    automatically... i need to click this grey dead save button, then only
+    #    i can see the total cash amount."
+    #
+    # The carry-forward existed, and it was only ever a SUGGESTION: the number
+    # was offered to the browser, which put it in a box, while every total was
+    # still computed from the stored opening of zero. So the page showed a float
+    # in one place and £0.00 expected in another, and the only way to reconcile
+    # them was to press the one button that looked disabled.
+    #
+    # A previous pass patched the arithmetic in the browser. That fixed this one
+    # panel and nothing else — the API still reported an expected drawer of zero
+    # to the day PDF, the reports, the auto-close and the assistant. A money
+    # figure that is only correct in one component is not correct.
+    #
+    # So the carry is applied HERE, where the number is made. Yesterday's
+    # counted close is this morning's float whether or not anybody pressed
+    # anything, because that is what physically happened to the drawer.
+    #
+    # Still only when the day is genuinely untouched — no opening entered and
+    # nothing counted. An entered figure is never second-guessed, and a day
+    # whose previous day was never counted keeps zero rather than inventing a
+    # float, because a wrong opening makes every later figure wrong.
+    suggested_opening = None
+    if record is None or (record.opening_cash == Decimal("0") and counted is None):
+        suggested_opening = await cash_mod.carried_opening(db, hotel_id, day)
+        if suggested_opening is not None:
+            opening = suggested_opening
+
+    # The full drawer. Cash expenses and petty cash move the till too, and
+    # leaving them out made an honest day look short. See app/sales/cash.py.
     drawer = await cash_mod.drawer_for(
         db, hotel_id, day, opening=opening, cash_sales=cash_sales, counted=counted
     )
     expected_cash = drawer["expected"]
     variance = drawer["variance"]
 
-    # If today was never opened, OFFER yesterday's close rather than 0 — the
-    # float does not vanish overnight. A suggestion only; an existing record is
-    # left exactly as entered.
-    suggested_opening = None
-    if record is None or (record.opening_cash == Decimal("0") and counted is None):
-        suggested_opening = await cash_mod.carried_opening(db, hotel_id, day)
-
     return {
         "id": record.id if record else None,
         "date": day,
+        # The EFFECTIVE opening — carried when the day is untouched, as
+        # entered otherwise. `suggested_opening` is non-null exactly when
+        # this one is a carry, so the UI can still say where it came from.
         "opening_cash": opening,
         "cash_counted": counted,
         "expected_cash": expected_cash,

@@ -33,6 +33,26 @@ async function signIn(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 60_000 });
 }
 
+/** Relative luminance → contrast ratio, so a colour claim is a number somebody
+ *  can argue with rather than "looks fine to me". */
+function contrast(fg: string, bg: string): number {
+  const parse = (c: string) => {
+    const m = c.match(/\d+(\.\d+)?/g);
+    return m ? m.slice(0, 3).map(Number) : [0, 0, 0];
+  };
+  const lum = (rgb: number[]) => {
+    const [r, g, b] = rgb.map((v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const a = lum(parse(fg));
+  const b = lum(parse(bg));
+  const [hi, lo] = a > b ? [a, b] : [b, a];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 test("tables: tiles, a name inside the QR, and who is sitting where", async ({ browser }) => {
   test.setTimeout(240_000);
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -182,5 +202,79 @@ test("the voice rings are no longer cut off by their own card", async ({ browser
   if (box.staged) {
     expect(box.cardOverflow, "a transparent card has nothing to clip").not.toBe("clip");
   }
+  await ctx.close();
+});
+
+/** MOBILE AND DARK, because everything above was checked at 1440px on the light
+ *  theme and that is one of four corners. The rebuilt pages are new layouts and
+ *  the colour work changed a rule that applies to BOTH themes — the brand
+ *  button's ink is now set in CSS rather than by a utility class, and that rule
+ *  is not scoped to light. If it is wrong on dark, it is wrong everywhere the
+ *  dark theme is used. */
+for (const page_ of [
+  { path: "/tables", name: "tables" },
+  { path: "/menu", name: "menu" },
+  { path: "/rota", name: "rota" },
+]) {
+  test(`${page_.name} on a phone`, async ({ browser }) => {
+    test.setTimeout(180_000);
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await ctx.newPage();
+    await signIn(page);
+    await page.goto(`${BASE}${page_.path}`);
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: `e2e-out/v-${page_.name}-phone.png`, fullPage: true });
+
+    // The page body must never scroll SIDEWAYS. A horizontal scrollbar on a
+    // phone is the tell for a fixed width somewhere, and it makes every
+    // vertical swipe feel like it is fighting you.
+    const over = await page.evaluate(() => ({
+      docW: document.documentElement.scrollWidth,
+      winW: window.innerWidth,
+      h: document.documentElement.scrollHeight,
+    }));
+    console.log(`${page_.path} PHONE ${JSON.stringify(over)}`);
+    expect(over.docW, "nothing should overflow the viewport width").toBeLessThanOrEqual(
+      over.winW + 1,
+    );
+    await ctx.close();
+  });
+}
+
+test("the brand button is readable on the DARK theme too", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  await signIn(page);
+
+  // Force the app root onto dark and read the button's ink against its panel.
+  // The rule that sets that ink is NOT scoped to light, so dark has to be
+  // checked separately rather than assumed to follow.
+  await page.goto(`${BASE}/attendance`);
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => {
+    document.documentElement.dataset.mode = "dark";
+    document.querySelector(".mise-app")?.setAttribute("data-mode", "dark");
+  });
+  await page.getByRole("button").filter({ hasText: /Not in yet|Working|Clocked out/ }).first().click();
+  await page.waitForTimeout(1200);
+
+  const btn = page.locator('[data-testid="edit-save"]');
+  await expect(btn).toBeVisible();
+  const seen = await btn.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return {
+      color: cs.color,
+      panel: getComputedStyle(el.closest('[role="dialog"]')!).backgroundColor,
+    };
+  });
+  const ratio = contrast(seen.color, seen.panel);
+  console.log(`DARK SAVE BUTTON ink=${seen.color} on ${seen.panel} → ${ratio.toFixed(2)}:1`);
+  await page.screenshot({ path: "e2e-out/v-dark.png" });
+  expect(ratio, "the brand button must read on dark as well as light").toBeGreaterThan(4.5);
   await ctx.close();
 });
