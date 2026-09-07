@@ -246,6 +246,7 @@ export function AccessModal({
   intro,
   banner,
   lead,
+  areaPanel,
   current,
   onSet,
   pagesOn,
@@ -266,6 +267,29 @@ export function AccessModal({
   banner?: ReactNode;
   /** Anything that must sit above the groups — the name field, the chooser. */
   lead?: ReactNode;
+  /** Extra controls that belong INSIDE one area's card.
+   *
+   *  "under ai we have so many features nah... i need a under ai what are all
+   *   feature we gonna give — this permission also i need."
+   *
+   *  The AI settings were a separate block at the top of the sheet, so the
+   *  switch that turns the assistant on and the settings that shape it were in
+   *  two different places on one screen. Putting them in the same card is the
+   *  obvious fix, and it beats the alternative of repeating the switch inside
+   *  the panel — two places to turn one thing on is how the two drift apart. */
+  /** A block rendered UNDER one area's controls, inside its card.
+   *
+   *  "under ai we have so many features nah... i need a under ai what are all
+   *   feature we gonna give — this permission also i need."
+   *
+   *  The AI settings sat in a separate block at the top of the sheet, so the
+   *  switch that turns the assistant on and the settings that shape it were in
+   *  two different places on one screen. Same card is the obvious fix, and it
+   *  beats repeating the switch inside the panel — two places to turn one thing
+   *  on is how the two drift apart.
+   *
+   *  Distinct from `areaExtra`, which is a small inline note in the title row. */
+  areaPanel?: (areaKey: string) => ReactNode;
   current: (a: Area) => Level;
   onSet: (a: Area, l: Level) => void;
   /** Which of an area's screens are shown. Undefined = all of them. */
@@ -617,7 +641,7 @@ export function AccessModal({
                     key={a.key}
                     className={`mise-well relative overflow-hidden rounded-xl px-3 py-2 transition ${
                       current(a) === "none" ? "opacity-70" : ""
-                    }`}
+                    } ${areaPanel?.(a.key) ? "sm:col-span-2" : ""}`}
                   >
                     {/* A hairline down the left edge: on at a glance, without
                         reading three button labels to find out. */}
@@ -703,6 +727,11 @@ export function AccessModal({
                         onChange={(l) => setWithConfirm(a, l)}
                       />
                     </span>
+                    {areaPanel?.(a.key) && (
+                      <div className="mt-2.5 border-t border-line/60 pt-2.5">
+                        {areaPanel(a.key)}
+                      </div>
+                    )}
                   </li>
                 );
               })}

@@ -246,42 +246,19 @@ export function RoleBuilder({
         { label: "Pages they can open", value: `${reach.on} of ${reach.total}` },
         { label: "People in this role", value: String(people.length), people },
       ]}
-      lead={
-        <>
-          {err && (
-            <p className="mb-3 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
-              {err}
-            </p>
-          )}
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-medium text-fg-faint">
-              What is this job called?
-            </span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={60}
-              autoFocus
-              placeholder="Poori Master, Tandoor Lead, Floor Manager…"
-              className="mise-well w-full rounded-xl px-3 py-2.5 text-base outline-none"
-            />
-            {/* 5c — "if I touch and edit, it is edited. No, we need a
-                confirmation to change anything."
-                A confirm on every keystroke would be unusable, so the honest
-                version is: typing changes NOTHING until you save, the field
-                says so the moment it differs, and the save asks. */}
-            <span className="mt-1 block text-[10px] leading-relaxed text-fg-faint">
-              {role && name.trim() !== role.name ? (
-                <span className="mise-tone-warn font-medium">
-                  Renaming from &ldquo;{role.name}&rdquo; — nothing changes until you save, and
-                  we will ask first.
-                </span>
-              ) : (
-                <>Your words, not ours. This is what you will see next to their name.</>
-              )}
-            </span>
-          </label>
-        </>
+      areaPanel={(key) =>
+        key === "ai" ? (
+          <AiGrantPanel
+            value={ai}
+            onChange={(patch) => {
+              setAiTouched(true);
+              setAi((a) => ({ ...a, ...patch }));
+            }}
+            title="Everyone in this role"
+            hint="one person can still differ"
+            idPrefix="role-ai"
+          />
+        ) : null
       }
       intro={
         <>

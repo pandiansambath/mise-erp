@@ -118,21 +118,36 @@ export function SheetPopup({
         aria-label={title}
         className={`mise-pop-centre mise-sheet-sheen fixed ${box} ${z} flex max-h-[86dvh] flex-col overflow-hidden rounded-3xl border border-line bg-paper shadow-2xl`}
       >
-        <div className="relative flex shrink-0 items-start justify-between gap-3 border-b border-line bg-gradient-to-b from-brand-500/10 to-transparent px-4 py-3">
+        {/* WHY THE TEXT LOOKED BLURRED.
+            "color also not nice making text to blur."
+            The header carried a brand wash — a pink gradient behind the title —
+            and on the light theme that puts mid-tone colour directly under dark
+            text with nothing between them. Nothing is out of focus; the
+            contrast is simply too low to read cleanly, which the eye reports as
+            blur. A heading earns its emphasis from weight and size, not from a
+            tint behind it, so the wash is gone and the type is stronger.
+            A thin accent rule keeps the popup feeling like ours. */}
+        <div className="relative flex shrink-0 items-start justify-between gap-3 border-b border-line bg-paper px-5 py-3.5">
+          <span
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand-500 via-brand-400 to-transparent"
+          />
           <div className="min-w-0">
-            <p className="truncate font-display text-lg font-semibold text-fg">{title}</p>
-            {subtitle && <p className="truncate text-xs text-fg-faint">{subtitle}</p>}
+            <p className="truncate font-display text-xl font-bold tracking-tight text-fg">
+              {title}
+            </p>
+            {subtitle && <p className="truncate text-xs text-fg-soft">{subtitle}</p>}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line-2 text-fg-soft transition hover:border-brand-400/50"
+            className="mise-press grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line-2 bg-paper-2 text-base font-semibold text-fg-soft transition hover:border-rose-400/50 hover:text-rose-400"
           >
             ✕
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">{children}</div>
+        <div className="mise-noscrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>
         {footer && <div className="shrink-0 border-t border-line p-3">{footer}</div>}
       </div>
     </>
