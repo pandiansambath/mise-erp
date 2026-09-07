@@ -428,11 +428,42 @@ function PersonCard({
         <Badge tone={PHASE_TONE[phase]}>{PHASE_LABEL[phase]}</Badge>
       </div>
 
+      {/* THE FIGURES, ON THE CARD.
+          "you need to show major details in front page itself instead of clicks
+           and seeing. nobody will like click and see... they prefer instant see
+           the core details."
+          In, out, break and hours were the old table's columns and they were
+          right to be visible: they are what you SCAN. The sheet keeps what you
+          only ever open one at a time — fixing a punch, booking leave, reading
+          a month of history. */}
+      <div className="grid grid-cols-4 gap-1 border-t border-line/60 pt-2">
+        {[
+          ["In", fmtTime(row?.clock_in ?? null) || "—"],
+          ["Out", fmtTime(row?.clock_out ?? null) || "—"],
+          ["Break", row?.break_minutes ? fmtBreak(row.break_minutes) : "—"],
+          ["Hours", row?.working_hours ? fmtHours(Number(row.working_hours)) : "—"],
+        ].map(([label, value], i) => (
+          <div key={label} className="text-center">
+            <p className="text-[9px] uppercase tracking-wide text-fg-faint">{label}</p>
+            <p
+              className={`tabular-nums ${
+                i === 3 ? "text-sm font-semibold text-fg" : "text-xs text-fg-soft"
+              }`}
+            >
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {row?.over_break_minutes ? (
+        <p className="rounded-lg bg-amber-500/10 px-2 py-1 text-[10px] text-amber-500">
+          Break over-ran by {fmtBreak(row.over_break_minutes)}
+        </p>
+      ) : null}
+
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-semibold tabular-nums text-fg">
-            {row?.working_hours ? fmtHours(Number(row.working_hours)) : "—"}
-          </p>
           {/* Seven days at a glance. Bars, not numbers: the question it answers
               is "is this normal for them", which is a shape, not a figure. */}
           {hours && hours.some((h) => h > 0) && (

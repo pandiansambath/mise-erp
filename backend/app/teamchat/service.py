@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import Role, User
+from app.core import events
 from app.teamchat.models import (
     ChatRoom,
     ChatRoomMember,
@@ -341,6 +342,28 @@ async def post(
     await _mark_seen(db, room, user, commit=False)
     await db.commit()
     await db.refresh(msg)
+
+    # LIVE, not "within six seconds".
+    #
+    #   "also its not realtime, i can see small delay in message delivery"
+    #
+    # He is right, and the delay was the poll: the page asked every six seconds,
+    # so a message was on average three seconds old before anybody saw it. In a
+    # kitchen that is the difference between a chat and a noticeboard.
+    #
+    # The hotel already has a Server-Sent Events bus for live PO updates. Chat
+    # rides on it rather than opening a second channel — one connection per
+    # person is already one more than none, and a second would double it for
+    # every page in the app.
+    #
+    # Only a nudge is published, never the message. Everyone in the hotel is on
+    # this stream, including people who cannot open this room, so putting the
+    # text on the wire would hand a private conversation to the whole building.
+    # The nudge says "something changed in room X"; each client then asks for it
+    # through the endpoint that checks whether they may see it.
+    await events.publish(
+        room.hotel_id, {"type": "chat.message", "room_id": str(room.id)}
+    )
     return _msg(msg)
 
 

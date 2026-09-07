@@ -780,20 +780,21 @@ function StaffLoginModal({
                 </div>
               </div>
 
-              {/* TALK TO THEM, WHERE EVERYTHING ELSE ABOUT THEM IS.
-                  "staff can comment that owner can see, owner can comment that
-                   staff can see here." The same thread they see in My Space —
-                   one conversation, two doors into it. */}
+              {/* MESSAGING MOVED OUT OF HERE, and this is the whole reason.
+                  "seriously worst place to keep" — a conversation with a
+                  colleague was at the bottom of their PERSONNEL RECORD, on a
+                  page needing employees:read, which is why a chef and a cashier
+                  could not message anybody at all. It lives on Messages now,
+                  with everything else, so there is one place and one composer.
+                  A link, not a second thread: two doors into one conversation
+                  is how two conversations start. */}
               <div className="mt-5 border-t border-line pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                  💬 Messages
-                </p>
-                <StaffChat
-                  className="mt-2"
-                  endpoint={`/employees/${employee.id}/messages`}
-                  mine="owner"
-                  emptyHint={`Nothing yet — send ${employee.full_name.split(" ")[0]} a message.`}
-                />
+                <Link
+                  href="/chat"
+                  className="mise-btn-flat mise-press inline-flex min-h-[40px] items-center gap-2 px-3 text-sm font-semibold text-brand-300"
+                >
+                  💬 Message {employee.full_name.split(" ")[0]}
+                </Link>
               </div>
 
               {/* audit history timeline */}
