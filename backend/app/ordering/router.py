@@ -1631,26 +1631,62 @@ async def kitchen_screen_move(
 # camera to lock onto. The middle is ordinary data, which is what error
 # correction is for.
 
-_QR_LABEL_MAX = 10
+# How much of the plate the text may fill before it is shrunk. The rest is the
+# margin that keeps a name from touching the plate's own border.
+# The plate's width as a fraction of the symbol's. 0.30 is 9% of the AREA;
+# decoding was measured to survive up to ~0.38, so this keeps roughly 1.6x
+# of margin for the real enemies — a thumbprint, a splash of curry, and a
+# phone camera in dim restaurant light.
+_QR_PLATE = 0.30
+_QR_TEXT_FILL = 0.84
+# Below this the name is no longer readable from standing height, so it gets
+# shortened rather than shrunk any further.
+_QR_MIN_FONT_FRAC = 0.20
+
+
+def _qr_lines(table) -> list[str]:
+    """The name, broken into at most two lines.
+
+    A LESSON PAID FOR. The first version chose a font size from the character
+    COUNT and drew one line. It decoded perfectly — the plate is only 9% of the
+    area and error="h" recovers ~30% — so the test went green, and "Terrace 4"
+    and "Window bay" spilled straight out of the white plate onto the black
+    modules, where they were unreadable. Decodability and legibility are
+    different properties, and the check only knew about the first one.
+
+    Two lines, because a table name is nearly always two short words and
+    stacking them buys far more size than shrinking one long line does:
+    "Window bay" over two lines fits at roughly twice the font of one.
+    """
+    label = (table.label or "").strip()
+    if not label:
+        return [""]
+    if len(label) <= 4:
+        return [label]
+    words = label.split()
+    if len(words) >= 2:
+        # Split as evenly as possible by character count, so "Terrace 4" gives
+        # "Terrace" / "4" rather than something top-heavy.
+        best, gap = 1, None
+        for i in range(1, len(words)):
+            a, b = len(" ".join(words[:i])), len(" ".join(words[i:]))
+            if gap is None or abs(a - b) < gap:
+                best, gap = i, abs(a - b)
+        return [" ".join(words[:best]), " ".join(words[best:])]
+    return [label]
 
 
 def _qr_label(table) -> str:
-    """What goes in the middle — short enough to read at 8mm across.
-
-    A long name is truncated rather than shrunk to fit: "Terrace corner 2"
-    rendered small enough to fit the hole is a name nobody reads from standing
-    height, which defeats the point of putting it there.
-    """
-    label = (table.label or "").strip()
-    return label if len(label) <= _QR_LABEL_MAX else label[: _QR_LABEL_MAX - 1] + "…"
+    """The single-line form, kept for anything that wants one string."""
+    return " ".join(_qr_lines(table))
 
 
 def _qr_svg_with_label(hotel, table, scale: int = 8) -> bytes:
     """Segno's SVG with a knocked-out plate and the table's name over it.
 
-    Done by editing the finished document rather than by drawing the QR
-    ourselves: segno decides the module layout, and anything that second-guesses
-    it is a bug waiting for a version bump. We only add two elements before the
+    Done by editing the finished document rather than drawing the QR ourselves:
+    segno decides the module layout, and anything that second-guesses it is a
+    bug waiting for a version bump. Only two elements are appended before the
     closing tag, so the code underneath is untouched and still decodes on its
     own if the label ever fails to render.
     """
@@ -1661,27 +1697,43 @@ def _qr_svg_with_label(hotel, table, scale: int = 8) -> bytes:
     qr.save(buf, kind="svg", scale=scale, dark="#111111", light="#ffffff", border=2)
     svg = buf.getvalue().decode("utf-8")
 
-    # segno writes width/height in pixels on the root element; the drawing is in
-    # module units scaled by `scale`, so the full side is (modules + 2*border).
     side = (qr.symbol_size(scale=scale, border=2))[0]
-    hole = side * 0.26
+    hole = side * _QR_PLATE
     x = (side - hole) / 2.0
-    label = _qr_label(table)
-    # A font size that fills the plate for a short name and steps down for a
-    # long one, so "12" and "Terrace 4" both sit comfortably rather than one
-    # of them overflowing.
-    font = hole * (0.52 if len(label) <= 3 else 0.42 if len(label) <= 6 else 0.28)
+    lines = _qr_lines(table)
+    font = _fit_font(lines, hole)
 
     plate = (
         f'<rect x="{x:.1f}" y="{x:.1f}" width="{hole:.1f}" height="{hole:.1f}" '
         f'rx="{hole * 0.22:.1f}" fill="#ffffff" stroke="#111111" '
         f'stroke-width="{max(1.0, side * 0.006):.1f}"/>'
-        f'<text x="{side / 2:.1f}" y="{side / 2:.1f}" fill="#111111" '
-        f'font-family="Helvetica,Arial,sans-serif" font-weight="700" '
-        f'font-size="{font:.1f}" text-anchor="middle" '
-        f'dominant-baseline="central">{_xml_escape(label)}</text>'
     )
+    # Vertically centre the block of lines on the plate's middle.
+    step = font * 1.06
+    top = side / 2.0 - (len(lines) - 1) * step / 2.0
+    for i, line in enumerate(lines):
+        plate += (
+            f'<text x="{side / 2:.1f}" y="{top + i * step:.1f}" fill="#111111" '
+            f'font-family="Helvetica,Arial,sans-serif" font-weight="700" '
+            f'font-size="{font:.1f}" text-anchor="middle" '
+            f'dominant-baseline="central">{_xml_escape(line)}</text>'
+        )
     return (svg.replace("</svg>", plate + "</svg>")).encode("utf-8")
+
+
+def _fit_font(lines: list[str], hole: float) -> float:
+    """A font size that fits the plate, estimated the same way in SVG and PNG.
+
+    SVG cannot be measured before it is rendered, so this uses the standard
+    approximation for a bold sans face: an average glyph is about 0.58 of the
+    font size wide. The PNG path measures for real and shrinks further if the
+    estimate was optimistic — the two only have to agree closely enough that a
+    printed card and a downloaded one look like the same card.
+    """
+    longest = max((len(x) for x in lines), default=1) or 1
+    by_width = hole * _QR_TEXT_FILL / (0.58 * longest)
+    by_height = hole * _QR_TEXT_FILL / max(1, len(lines))
+    return max(hole * _QR_MIN_FONT_FRAC, min(by_width, by_height))
 
 
 def _xml_escape(s: str) -> str:
@@ -1714,37 +1766,61 @@ def _card_png(hotel, table, scale: int = 12) -> bytes:
 
     im = Image.open(_BytesIO(raw)).convert("RGB")
     side = im.size[0]
-    hole = int(side * 0.26)
+    hole = int(side * _QR_PLATE)
     x = (side - hole) // 2
     d = ImageDraw.Draw(im)
-    radius = int(hole * 0.22)
     d.rounded_rectangle(
         [x, x, x + hole, x + hole],
-        radius=radius,
+        radius=int(hole * 0.22),
         fill="#ffffff",
         outline="#111111",
         width=max(1, int(side * 0.006)),
     )
 
-    label = _qr_label(table)
-    target = int(hole * (0.52 if len(label) <= 3 else 0.42 if len(label) <= 6 else 0.28))
-    font = None
-    for name in ("DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"):
-        try:
-            font = ImageFont.truetype(name, target)
-            break
-        except OSError:
-            continue
+    lines = _qr_lines(table)
+
+    def _face(size: int):
+        for name in ("DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"):
+            try:
+                return ImageFont.truetype(name, size)
+            except OSError:
+                continue
+        return None
+
+    # Start from the shared estimate, then MEASURE and shrink until it really
+    # fits. The estimate is what the SVG has to use; this is the check the SVG
+    # cannot make, and it is the one that catches a wide name spilling off the
+    # plate onto the black modules.
+    size = max(6, int(_fit_font(lines, float(hole))))
+    font = _face(size)
     if font is None:
         font = ImageFont.load_default()
+    else:
+        limit = hole * _QR_TEXT_FILL
+        while size > 6:
+            widest = max(
+                (d.textbbox((0, 0), ln, font=font)[2] - d.textbbox((0, 0), ln, font=font)[0])
+                for ln in lines
+            )
+            tall = len(lines) * size * 1.06
+            if widest <= limit and tall <= limit:
+                break
+            size -= 1
+            font = _face(size) or font
 
-    box = d.textbbox((0, 0), label, font=font)
-    d.text(
-        (side / 2 - (box[2] - box[0]) / 2 - box[0], side / 2 - (box[3] - box[1]) / 2 - box[1]),
-        label,
-        fill="#111111",
-        font=font,
-    )
+    step = size * 1.06
+    top = side / 2.0 - (len(lines) - 1) * step / 2.0
+    for i, line in enumerate(lines):
+        box = d.textbbox((0, 0), line, font=font)
+        d.text(
+            (
+                side / 2 - (box[2] - box[0]) / 2 - box[0],
+                top + i * step - (box[3] - box[1]) / 2 - box[1],
+            ),
+            line,
+            fill="#111111",
+            font=font,
+        )
 
     out = _BytesIO()
     im.save(out, format="PNG")
