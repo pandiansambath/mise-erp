@@ -38,6 +38,7 @@ import { Bars, CalendarHeat } from "@/components/charts";
 import { TimeRangePicker } from "@/components/RangeControls";
 import { DayStepper, PageMore, type PageAction } from "@/components/PageKit";
 import { AttendanceLegend, LEAVE_CHANGED, QuickLeave } from "@/components/QuickLeave";
+import { InfoDot } from "@/components/InfoDot";
 import { SheetPopup } from "@/components/SheetPopup";
 import { Badge, Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { api, ApiError, downloadFile, type AttendanceRow, type Employee } from "@/lib/api";
@@ -283,10 +284,23 @@ export default function AttendancePage() {
           )}
           {counts.leave > 0 && <span className="text-fg-faint">{counts.leave} on leave</span>}
           {/* The one that needs a phone call, said plainly rather than left for
-              the reader to work out by comparing two columns. */}
+              the reader to work out by comparing two columns.
+              "here u showing expected 1 but not yet — here have a i icon to
+               explain that sentence."
+              Fair: "expected" is doing a lot of quiet work. It does not mean
+              late, and it does not mean everybody who is off. It means the rota
+              says they are on today, they have not clocked in, and they have
+              not booked the day off — which is exactly the shortlist worth
+              ringing, and nothing else. */}
           {counts.missing > 0 && (
-            <span className="font-semibold text-rose-400">
+            <span className="inline-flex items-center gap-1 font-semibold text-danger">
               {counts.missing} expected, not in
+              <InfoDot label="What “expected, not in” means">
+                <b className="text-fg">The rota says they are on today, and they have not
+                clocked in.</b>{" "}
+                Anyone who booked the day off is not counted here, so this is the list worth
+                a phone call — not a list of everyone missing.
+              </InfoDot>
             </span>
           )}
         </div>
@@ -611,7 +625,10 @@ function PersonSheet({
         undefined,
         { weekday: "long", day: "numeric", month: "long" },
       )}`}
-      columns={2}
+      // "also this popup is small." It carries a whole month of history — a
+      // heatmap, a bar chart and a day-by-day list — in 40rem. Three columns'
+      // width is what that content was always drawn for.
+      columns={3}
     >
       <div className="space-y-4">
         <Segmented
@@ -707,14 +724,17 @@ function PersonSheet({
                   >
                     {saving ? "Saving…" : "Save this day"}
                   </button>
+                  {/* It used to close this sheet on its way out, because the
+                      old dropdown had nowhere to leave you. Now it stacks, so
+                      booking a day off refreshes what is behind it and hands
+                      the person straight back. */}
                   <QuickLeave
+                    depth={2}
                     employeeId={employee.id}
                     employeeName={employee.full_name}
                     day={day}
-                    onBooked={() => {
-                      onChanged();
-                      onClose();
-                    }}
+                    onBooked={onChanged}
+                    className="mise-btn-flat mise-press min-h-[44px] px-4 py-2 text-sm font-semibold text-fg-soft"
                   />
                 </div>
               </div>

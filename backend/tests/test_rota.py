@@ -271,3 +271,93 @@ async def test_the_same_shift_cannot_be_added_twice(client, db, hotel, make_user
         f"/api/rota/shifts?date_from={day}&date_to={day}", headers=auth_header(owner)
     )
     assert len(listed.json()) == 2, "one duplicate refused, one genuine split kept"
+
+
+@pytest.mark.asyncio
+async def test_a_move_is_one_write_and_undoes_cleanly(
+    client, db, hotel, make_user, auth_header
+):
+    """"here i moved 1 member from today to next day but it got duplicated...
+    then i clicked undo last, 1 undo done, duplicate stayed here itself, there
+    is no undo."
+
+    The move used to be a CREATE on the new day followed by a DELETE of the old
+    one. Between those two calls the shift really does exist twice, and an undo
+    pressed inside that window restored the original while the newly created row
+    stayed behind with nothing pointing at it — a duplicate that no undo could
+    reach.
+
+    A move is one fact changing, so it is one PATCH. This asserts the property
+    that makes the bug impossible rather than the symptom: after a move there is
+    exactly one row and it still has the SAME id, so undo is the same call
+    pointing the other way and can never arrive too early to work.
+    """
+    from datetime import date, timedelta
+
+    from app.employees import service as emp_service
+
+    owner = await make_user("move-owner@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(owner)
+    emp = await emp_service.create_employee(db, hotel.id, full_name="Mohamed")
+    mon = date.today()
+    tue = mon + timedelta(days=1)
+
+    made = await client.post(
+        "/api/rota/shifts",
+        headers=h,
+        json={
+            "employee_id": str(emp.id),
+            "date": mon.isoformat(),
+            "start_time": "11:00",
+            "end_time": "17:00",
+            "break_minutes": 0,
+        },
+    )
+    assert made.status_code == 201, made.text
+    shift_id = made.json()["id"]
+
+    moved = await client.patch(
+        f"/api/rota/shifts/{shift_id}", headers=h, json={"date": tue.isoformat()}
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["date"] == tue.isoformat()
+    # THE ID SURVIVES. This is the whole point: undo does not need to wait for a
+    # server-assigned id to exist before it can name the thing it is undoing.
+    assert moved.json()["id"] == shift_id
+
+    week = await client.get(
+        f"/api/rota/shifts?date_from={mon.isoformat()}&date_to={tue.isoformat()}",
+        headers=h,
+    )
+    assert len(week.json()) == 1, "a move leaves one shift, never two"
+
+    # Undo: the same call, pointing back.
+    back = await client.patch(
+        f"/api/rota/shifts/{shift_id}", headers=h, json={"date": mon.isoformat()}
+    )
+    assert back.status_code == 200, back.text
+    week = await client.get(
+        f"/api/rota/shifts?date_from={mon.isoformat()}&date_to={tue.isoformat()}",
+        headers=h,
+    )
+    assert len(week.json()) == 1 and week.json()[0]["date"] == mon.isoformat()
+
+    # And a move ONTO an identical shift is refused, exactly as a create is —
+    # otherwise the duplicate rule could be walked around by dragging.
+    twin = await client.post(
+        "/api/rota/shifts",
+        headers=h,
+        json={
+            "employee_id": str(emp.id),
+            "date": tue.isoformat(),
+            "start_time": "11:00",
+            "end_time": "17:00",
+            "break_minutes": 0,
+        },
+    )
+    assert twin.status_code == 201, twin.text
+    onto = await client.patch(
+        f"/api/rota/shifts/{shift_id}", headers=h, json={"date": tue.isoformat()}
+    )
+    assert onto.status_code == 409, onto.text
+    assert "already on that day" in onto.json()["detail"]
