@@ -148,6 +148,48 @@ export class ApiError extends Error {
   }
 }
 
+// ── WHY THE APP FEELS HEAVY, MEASURED ───────────────────────────────────────
+//
+//   "site got heavy so site is always loading even for small small movement and
+//    navigations... i should not see that loading animation itself."
+//
+// Measured before changing anything, because "it feels slow" has several very
+// different causes and only one of them is a bigger server.
+//
+//   /api/health does NO database work. On a warm connection it still takes
+//   ~300ms, and a bare TCP connect takes 284ms. That ~300ms is the round trip
+//   from his desk to London. It is the speed of light and a bigger box does not
+//   move it.
+//
+//   Payloads are 17–82KB. Not bandwidth either.
+//
+//   But each page makes 8–16 API calls. A browser runs about six at a time, so
+//   fifteen calls is three waves — roughly a second of pure waiting before the
+//   server has done a thing.
+//
+// So the fix is to make FEWER round trips, not faster ones.
+//
+// Two things happen here. Identical GETs in flight at the same moment share one
+// request — several components asking for the same list is otherwise several
+// journeys to London for one answer. And a GET repeated within a few seconds is
+// served from memory, which is what makes going back to a page you just left
+// instant instead of a spinner.
+//
+// The window is deliberately short. This is a live restaurant: stock moves,
+// people clock in, and a stale figure is worse than a slow one. Three seconds
+// is long enough to collapse a burst of duplicate calls and a back-navigation,
+// and too short to show anybody yesterday's number.
+const GET_TTL_MS = 3000;
+const inFlight = new Map<string, Promise<unknown>>();
+const recent = new Map<string, { at: number; data: unknown }>();
+
+/** Anything that WRITES makes every cached read suspect. Rather than track
+ *  which endpoint invalidates which, drop the lot: the cache is three seconds
+ *  deep, so throwing it away costs one round trip and never costs correctness. */
+function clearReadCache(): void {
+  recent.clear();
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -281,14 +323,42 @@ export async function downloadFilePost(
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "POST", body: data ? JSON.stringify(data) : undefined }),
-  patch: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "PATCH", body: data ? JSON.stringify(data) : undefined }),
-  put: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "PUT", body: data ? JSON.stringify(data) : undefined }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /** Drop cached reads — call after anything that writes. */
+  invalidate: clearReadCache,
+  get: <T>(path: string): Promise<T> => {
+    const hit = recent.get(path);
+    if (hit && Date.now() - hit.at < GET_TTL_MS) return Promise.resolve(hit.data as T);
+
+    const running = inFlight.get(path);
+    if (running) return running as Promise<T>;
+
+    const p = request<T>(path)
+      .then((data) => {
+        recent.set(path, { at: Date.now(), data });
+        return data;
+      })
+      .finally(() => {
+        inFlight.delete(path);
+      });
+    inFlight.set(path, p);
+    return p;
+  },
+  post: <T>(path: string, data?: unknown) => {
+    clearReadCache();
+    return request<T>(path, { method: "POST", body: data ? JSON.stringify(data) : undefined });
+  },
+  patch: <T>(path: string, data?: unknown) => {
+    clearReadCache();
+    return request<T>(path, { method: "PATCH", body: data ? JSON.stringify(data) : undefined });
+  },
+  put: <T>(path: string, data?: unknown) => {
+    clearReadCache();
+    return request<T>(path, { method: "PUT", body: data ? JSON.stringify(data) : undefined });
+  },
+  delete: <T>(path: string) => {
+    clearReadCache();
+    return request<T>(path, { method: "DELETE" });
+  },
 };
 
 // ── Domain types (mirror backend schemas) ──────────────────────────────────

@@ -282,6 +282,10 @@ export const SECTIONS: Section[] = [
         // our filing rather than his question. Asking it something and showing
         // it a photo are the same assistant, and the bubble and the full page
         // are the same conversation.
+        // Both routes keep the same label on purpose — they ARE one assistant.
+        // The chip row de-duplicates by label so it reads once; the second
+        // entry still has to be here, because this list is what governs which
+        // pages the switch opens.
         pages: [
           { label: "The assistant", slug: "ask-dineai", href: "/assistant" },
           { label: "The assistant", slug: "ai-scan", href: "/ai-scan" },
