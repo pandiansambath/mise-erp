@@ -1,7 +1,7 @@
 """Employee & attendance endpoints. Hotel-scoped."""
 import uuid
 from datetime import date as date_type
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
@@ -390,6 +390,38 @@ async def employee_history(
 
 
 # ── Attendance ────────────────────────────────────────────────────────────
+@attendance_router.get("/hours")
+async def attendance_hours(
+    date_from: date_type,
+    date_to: date_type,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("attendance:read")),
+) -> dict[str, list[float]]:
+    """Hours worked per person, per day, across a range — in ONE request.
+
+    The attendance page draws a seven-day bar under each name, and it was
+    fetching it as seven separate calls to `?on=`. Measured from his desk that
+    is seven round trips to London for one small picture: about 300ms of pure
+    latency each, and the browser only runs six at a time.
+
+    The shape is `{employee_id: [h, h, h, h, h, h, h]}`, indexed the same way
+    the caller built its date list, so the client does no matching.
+    """
+    if date_to < date_from:
+        date_from, date_to = date_to, date_from
+    span = (date_to - date_from).days + 1
+    if span > 62:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That range is too wide.")
+
+    out: dict[str, list[float]] = {}
+    for i in range(span):
+        day = date_from + timedelta(days=i)
+        for row in await service.list_attendance(db, user.hotel_id, day):
+            slot = out.setdefault(str(row.employee_id), [0.0] * span)
+            slot[i] = float(row.working_hours or 0)
+    return out
+
+
 @attendance_router.get("", response_model=list[AttendanceRow])
 async def list_attendance(
     on: date_type | None = Query(default=None),

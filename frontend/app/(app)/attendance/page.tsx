@@ -154,30 +154,32 @@ export default function AttendancePage() {
     void load(day);
   }, [day, load]);
 
-  // The seven days ending on the one being viewed, for the little bar under each
-  // name. Loaded after the page has painted: it is context, not the answer, and
+  // The seven days ending on the one being viewed, for the little bar under
+  // each name.
+  //
+  // This used to be SEVEN requests — one per day. Measured from his desk that
+  // is seven round trips to London for one small picture, at roughly 300ms of
+  // latency each, and a browser only runs six at a time. It is one request now.
+  // Still fired after the page has painted: it is context, not the answer, and
   // the answer should not wait for it.
   useEffect(() => {
     let alive = true;
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(day + "T00:00:00");
-      d.setDate(d.getDate() - (6 - i));
-      return d.toISOString().slice(0, 10);
-    });
-    Promise.all(
-      days.map((dt) =>
-        api.get<AttendanceRow[]>(`/attendance?on=${dt}`).catch(() => [] as AttendanceRow[]),
-      ),
-    ).then((all) => {
-      if (!alive) return;
-      const map: Record<string, number[]> = {};
-      all.forEach((rowsForDay, i) => {
-        for (const r of rowsForDay) {
-          (map[r.employee_id] ??= Array(7).fill(0))[i] = Number(r.working_hours ?? 0);
-        }
+    const from = new Date(day + "T00:00:00");
+    from.setDate(from.getDate() - 6);
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate(),
+      ).padStart(2, "0")}`;
+    api
+      .get<Record<string, number[]>>(
+        `/attendance/hours?date_from=${iso(from)}&date_to=${day}`,
+      )
+      .then((map) => {
+        if (alive) setWeek(map);
+      })
+      .catch(() => {
+        /* the bars are context; their absence must not break the page */
       });
-      setWeek(map);
-    });
     return () => {
       alive = false;
     };

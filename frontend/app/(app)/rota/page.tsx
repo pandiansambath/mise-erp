@@ -637,7 +637,9 @@ export default function RotaPage() {
                     onClick={() => openAdd(iso(d))}
                     aria-label={`Add a shift on ${DAYS[i]}`}
                     title="Add a shift on this day"
-                    className="mise-press grid h-6 w-6 shrink-0 place-items-center rounded-md text-fg-faint hover:bg-glass/10 hover:text-brand-300"
+                    // 24x24 was below the size a thumb can reliably hit — the audit found
+                    // eight of these on one screen. A wet hand in a kitchen needs 32.
+                    className="mise-press grid h-8 w-8 shrink-0 place-items-center rounded-lg text-base text-fg-faint hover:bg-glass/10 hover:text-brand-300"
                   >
                     ＋
                   </button>
