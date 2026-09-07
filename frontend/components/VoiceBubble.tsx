@@ -427,7 +427,21 @@ export function VoiceBubble() {
    * Not simply "live and empty" — a question waiting for confirmation, an error,
    * or an answer with a shape all need the panel, and any of them appearing
    * takes it off the stage on its own. */
-  const staged = live && !showing && !pending && !err && !peeking;
+  // WHY THE PANEL FLASHED OPEN ON EVERY COMMAND.
+  //
+  //   "whenever i say like go to rota and do this, its opening the bubble chat
+  //    and auto closing bro, unwantedly."
+  //
+  // `!pending` was in here. While the assistant is THINKING, pending is true,
+  // so the orb came off the stage — which renders the panel — and when the
+  // answer arrived and was not worth showing, it went back. Open, then shut,
+  // every single turn, for nothing.
+  //
+  // Thinking is not something to look at. It is a state of the orb, which
+  // already shows it. The panel arrives only when there is something that has
+  // to be SEEN — a table, a list, an answer too long to hold in your head —
+  // which is what `showing` is for and the only thing that should move it.
+  const staged = live && !showing && !err && !peeking;
   // A browser that refused to autoplay has to be tapped once before it will
   // ever make a sound. Saying so is the difference between "broken" and "tap".
   const [needsTap, setNeedsTap] = useState(false);
@@ -648,6 +662,13 @@ export function VoiceBubble() {
     if (drainingRef.current) return;
     drainingRef.current = true;
     setPhase("speaking");
+    // Ears off before the first sample leaves the speaker.
+    pausedForSpeechRef.current = true;
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* already stopped */
+    }
     // 60ms, and from the AUDIO where we can get it. The fallback keeps the old
     // jitter so an orb that cannot be measured still looks alive.
     const tick = window.setInterval(() => {
@@ -685,6 +706,21 @@ export function VoiceBubble() {
       deafUntilRef.current = Date.now() + 900;
       // Back to listening, because the microphone never actually left.
       setPhase(liveRef.current ? "listening" : "idle");
+
+      // Ears back on. Deliberately AFTER the echo window, and only if he has
+      // not closed it in the meantime — restarting a recogniser he just turned
+      // off is its own kind of not listening.
+      pausedForSpeechRef.current = false;
+      if (liveRef.current && recRef.current && !preferAwsRef.current) {
+        window.setTimeout(() => {
+          if (!liveRef.current || pausedForSpeechRef.current) return;
+          try {
+            recRef.current?.start();
+          } catch {
+            /* already running, which is the outcome we wanted anyway */
+          }
+        }, 350);
+      }
     }
   }, [playChunk, setLevel, speechLevel]);
 
@@ -1033,6 +1069,21 @@ export function VoiceBubble() {
    * Chrome uses this one, so every duplication report was about code the fold
    * never touched. */
   const liveUtterRef = useRef<Utterance>({ finals: [], partial: "" });
+  // CLOSE THE EARS WHILE IT TALKS, rather than throwing away what they hear.
+  //
+  //   "only listening the 1st sentence and started give answer... its talking
+  //    to itself. only when i turn off and turn on then only its listening."
+  //
+  // Discarding results while speaking was never enough. A recogniser that is
+  // still RUNNING keeps accumulating its own voice, and one stray result that
+  // arrives a millisecond after the deaf window closes is a question the
+  // assistant asked itself — which it then answers, which makes it speak again.
+  // That is the loop, and once in it the microphone is busy with the machine
+  // instead of with him.
+  //
+  // A stopped recogniser cannot hear anything, so it stops being a question of
+  // timing. This flag is what stops `onend` putting it straight back.
+  const pausedForSpeechRef = useRef(false);
 
   /** True once we have already extended this turn, so a sentence that keeps
    *  ending on "and" cannot hold the microphone open indefinitely. */
@@ -1287,6 +1338,10 @@ export function VoiceBubble() {
       // cycle) and the twenty copies of one sentence (twenty live streams, all
       // transcribing him at once). Three symptoms, one loop.
       if (preferAwsRef.current) return;
+      // We stopped it ourselves so it could not hear the reply. Restarting here
+      // would undo that a few milliseconds later, which is exactly how it ended
+      // up in conversation with itself.
+      if (pausedForSpeechRef.current) return;
       try {
         rec.start();
       } catch {
