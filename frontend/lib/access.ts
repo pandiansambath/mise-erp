@@ -253,15 +253,40 @@ export const SECTIONS: Section[] = [
         write: ["safety:write"],
         pages: [{ label: "Food Safety", slug: "food-safety", href: "/food-safety" }],
       },
+    ],
+  },
+  {
+    // AI IS ITS OWN CATEGORY NOW.
+    //
+    //   "i hate scrolling — i need to scroll to reach this place. better remove
+    //    this ai stuff from here and create a new category as sidebar like AI,
+    //    and here u can add, with no scroll."
+    //
+    // It was the last card in Kitchen, so reaching the settings meant scrolling
+    // past four other switches inside a pane that then scrolled again. It is
+    // also the only switch here that costs money per use, which is reason
+    // enough for it not to be filed behind the recipes.
+    key: "assistant",
+    label: "AI",
+    icon: "✨",
+    areas: [
       {
         key: "ai",
-        label: "The assistant",
-        blurb: "Asking DineAI questions",
+        label: "DineAI assistant",
+        blurb: "Asking questions, and reading bills and recipes from a photo",
         icon: "✨",
         read: [],
         write: ["ai:use"],
-        pages: [{ label: "Ask DineAI", slug: "ask-dineai", href: "/assistant" }, { label: "AI scan", slug: "ai-scan", href: "/ai-scan" }],
-        onLabel: "Can use",
+        // ONE SWITCH, NOT TWO. "why the hell u showing as two like 'ask dine
+        // ai' and 'ai scan'? why 2?" — because these were two routes, which is
+        // our filing rather than his question. Asking it something and showing
+        // it a photo are the same assistant, and the bubble and the full page
+        // are the same conversation.
+        pages: [
+          { label: "The assistant", slug: "ask-dineai", href: "/assistant" },
+          { label: "The assistant", slug: "ai-scan", href: "/ai-scan" },
+        ],
+        onLabel: "Can use it",
       },
     ],
   },

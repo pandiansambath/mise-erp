@@ -35,6 +35,17 @@ const SIZES: Record<Shape, { w: number; h: number; label: string; hint: string }
   tall: { w: 390, h: 844, label: "9:16", hint: "phone" },
 };
 
+// HOW BIG THE FRAME MAY BE ON SCREEN.
+//
+//   "desktop preview is looking cool, but mobile preview very bad — make it
+//    small bro, why too lengthy."
+//
+// A 9:16 frame scaled to the dock's WIDTH comes out taller than the window: at
+// 480px wide a phone is 1038px tall. Correct, and unusable. So the phone is
+// capped by HEIGHT and centred, which is also how a phone looks when somebody
+// holds one up — narrow, in the middle, all of it visible at once.
+const MAX_H: Record<Shape, number> = { wide: 520, tall: 560 };
+
 export function SettingsPreview({
   site,
   door,
@@ -60,12 +71,13 @@ export function SettingsPreview({
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
-    const fit = () => setScale(Math.min(1, el.clientWidth / size.w));
+    const fit = () =>
+      setScale(Math.min(1, el.clientWidth / size.w, MAX_H[shape] / size.h));
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [size.w]);
+  }, [size.w, size.h, shape]);
 
   return (
     <div className={className}>
@@ -125,15 +137,15 @@ export function SettingsPreview({
             the shape of a phone rather than a narrow slice of a laptop. */}
         <div
           ref={boxRef}
-          className="relative w-full overflow-hidden bg-shell"
-          style={{ height: `${size.h * scale}px` }}
+          className="relative grid w-full place-items-start justify-center overflow-hidden bg-shell"
+          style={{ height: `${Math.round(size.h * scale)}px` }}
         >
           <div
             style={{
               width: `${size.w}px`,
               height: `${size.h}px`,
               transform: `scale(${scale})`,
-              transformOrigin: "top left",
+              transformOrigin: "top center",
             }}
             // Nothing in here is clickable: it is a picture of a page, and a
             // half-working copy of a sign-in form inside a settings screen is
