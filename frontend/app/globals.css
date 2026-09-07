@@ -459,6 +459,24 @@ html:has(.mise-app) { background: #04120d; }
 .mise-stagger > *:nth-child(10) { animation-delay: 0.192s; }
 .mise-stagger > *:nth-child(11) { animation-delay: 0.200s; }
 .mise-stagger > *:nth-child(n + 12) { animation-delay: 0.2s; }
+/* PAST THE TWELFTH, NOTHING ANIMATES.
+   Measured on /inventory: 23 animations running at once and 3.6k DOM nodes,
+   blocking the main thread for 1.7 SECONDS in total with one task of 831ms.
+   A press cannot paint while the thread is busy, which is exactly what "i
+   clicked but after few sec only it sensing that i clicked" is.
+   Nobody sees the fortieth row arrive anyway — it is below the fold. The
+   flourish is for the rows you can see; the rest just cost. */
+.mise-stagger > *:nth-child(n + 13) { animation: none; opacity: 1; }
+
+/* LONG LISTS: let the browser skip what is off screen.
+   `content-visibility: auto` tells it not to lay out or paint a row until it
+   is near the viewport, and `contain-intrinsic-size` keeps the scrollbar
+   honest in the meantime. Thirty-six hundred nodes becomes the handful you are
+   actually looking at, with no change to the markup. */
+.mise-long-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 76px;
+}
 
 /* ── Curtain sweep across the auth boundary (login/signup → app) ────────── */
 @keyframes mise-curtain-up {
