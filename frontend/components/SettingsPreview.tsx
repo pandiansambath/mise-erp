@@ -46,7 +46,11 @@ export function SettingsPreview({
   const [which, setWhich] = useState<Which>("site");
   const [shape, setShape] = useState<Shape>("wide");
   const shellRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.4);
+  // The real, unscaled height of the page being previewed. Measured, because a
+  // hero page and a sign-in page are nothing like the same length.
+  const [contentH, setContentH] = useState(720);
 
   const size = SIZES[shape];
 
@@ -66,6 +70,18 @@ export function SettingsPreview({
     ro.observe(el);
     return () => ro.disconnect();
   }, [size.w, size.h]);
+
+  // Watch the previewed page itself: switching from the public page to the
+  // sign-in page changes its length entirely, and the spacer must follow.
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const read = () => setContentH(Math.max(size.h, el.scrollHeight));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [which, shape, size.h]);
 
   const frameW = Math.round(size.w * scale);
   const frameH = Math.round(size.h * scale);
@@ -134,18 +150,30 @@ export function SettingsPreview({
             className="mise-noscrollbar overflow-y-auto overscroll-contain bg-shell"
             style={{ width: `${frameW}px`, height: `${frameH}px` }}
           >
-            {/* The page at its real width, scaled. `pointer-events-none` keeps
-                the wheel with the frame and the links inert. */}
-            <div
-              style={{
-                width: `${size.w}px`,
-                transform: `scale(${scale})`,
-                transformOrigin: "top left",
-              }}
-              aria-hidden
-              className="pointer-events-none"
-            >
-              {which === "site" ? site : door}
+            {/* WHY IT SCROLLED PAST THE END.
+                `transform: scale()` is a PAINT operation and changes nothing
+                about layout. A 3000px page scaled to 0.5 still occupied 3000px
+                of scroll height while painting only 1500px — so the second half
+                of the scrollbar was empty space under a page that had already
+                finished.
+                This spacer carries the SCALED height and the page is laid over
+                it, so the scrollbar now ends where the page ends. */}
+            <div style={{ height: `${Math.round(contentH * scale)}px`, position: "relative" }}>
+              <div
+                ref={innerRef}
+                style={{
+                  width: `${size.w}px`,
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top left",
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                }}
+                aria-hidden
+                className="pointer-events-none"
+              >
+                {which === "site" ? site : door}
+              </div>
             </div>
           </div>
         </div>

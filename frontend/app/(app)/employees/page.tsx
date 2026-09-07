@@ -727,8 +727,8 @@ function StaffLoginModal({
                       🔑
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-fg">Getting in</p>
-                      <p className="text-[11px] text-fg-faint">Their address and password</p>
+                      <p className="text-base font-bold text-fg">Getting in</p>
+                      <p className="text-[11px] text-fg-soft">Their address and password</p>
                     </div>
                   </div>
 
@@ -747,7 +747,7 @@ function StaffLoginModal({
                     </button>
                   )}
 
-                  <label className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-fg-soft">
                     Change email
                   </label>
                   <div className="mt-1 flex gap-2">
@@ -817,8 +817,8 @@ function StaffLoginModal({
                       🚪
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-fg">Being let in</p>
-                      <p className="text-[11px] text-fg-faint">Whether this login works at all</p>
+                      <p className="text-base font-bold text-fg">Being let in</p>
+                      <p className="text-[11px] text-fg-soft">Whether this login works at all</p>
                     </div>
                   </div>
 
@@ -845,27 +845,36 @@ function StaffLoginModal({
                       wearing different words: suspending hides someone from the
                       roster and can be undone; removing cannot. Giving them the
                       same weight is how the wrong one gets pressed. */}
-                  <div className="mt-3 rounded-xl border border-rose-400/25 bg-rose-400/[0.05] p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-300">
-                      The employee
+                  {/* WHY THE RED WAS INVISIBLE.
+                      "color not visible to eyes, dim red color."
+                      rose-300 is a PALE red — designed to sit on a dark ground.
+                      On a pale rose panel it is pale-on-pale, and the one
+                      control here that cannot be undone was the hardest thing
+                      on the screen to read.
+                      A destructive action should be the most legible thing in
+                      the room, not the least: solid ground, full-strength text,
+                      and the irreversible one filled rather than outlined so it
+                      never reads as the same weight as Suspend. */}
+                  <div className="mt-3 rounded-xl border border-rose-500/40 bg-paper p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-rose-500">
+                      Careful
                     </p>
-                    <p className="mt-1 text-[10px] text-fg-faint">
+                    <p className="mt-1 text-[11px] text-fg-soft">
                       Suspending hides them from the roster and rotas and can be undone.
                       Removing cannot.
                     </p>
-                    <div className="mt-2 space-y-2">
+                    <div className="mt-2.5 space-y-2">
                       <button
                         disabled={busy}
                         onClick={() => onSuspend(employee)}
-                        className="mise-btn-flat mise-press min-h-[42px] w-full rounded-xl px-3 text-left text-sm text-fg-soft"
+                        className="mise-btn-flat mise-press min-h-[44px] w-full rounded-xl px-3 text-left text-sm font-semibold text-fg disabled:opacity-50"
                       >
                         {employee.is_active === false ? "Bring back" : "Suspend this employee"}
                       </button>
                       <button
                         disabled={busy}
                         onClick={() => onRemove(employee)}
-                        data-tone="danger"
-                        className="mise-btn-flat mise-press min-h-[42px] w-full rounded-xl px-3 text-left text-sm font-semibold text-rose-300"
+                        className="mise-press min-h-[44px] w-full rounded-xl bg-rose-600 px-3 text-left text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-50"
                       >
                         Permanently remove {employee.full_name.split(" ")[0]}
                       </button>
@@ -885,9 +894,10 @@ function StaffLoginModal({
               <div className="mt-5 border-t border-line pt-4">
                 <Link
                   href="/chat"
-                  className="mise-btn-flat mise-press inline-flex min-h-[40px] items-center gap-2 px-3 text-sm font-semibold text-brand-300"
+                  className="mise-btn-flat mise-press inline-flex min-h-[42px] items-center gap-2 rounded-xl px-4 text-sm font-bold text-fg"
                 >
-                  💬 Message {employee.full_name.split(" ")[0]}
+                  <span aria-hidden>💬</span>
+                  Message {employee.full_name.split(" ")[0]}
                 </Link>
               </div>
 
