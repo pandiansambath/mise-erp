@@ -15,6 +15,7 @@ from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
 from app.core import logging_setup, monitoring
 from app.core.config import settings
+from app.documents.comments import router as doc_comments_router
 from app.documents.router import router as documents_router
 from app.employees.router import attendance_router
 from app.employees.router import router as employees_router
@@ -148,6 +149,7 @@ def create_app() -> FastAPI:
     app.include_router(payroll_router, prefix="/api")
     app.include_router(purchasing_router, prefix="/api")
     app.include_router(documents_router, prefix="/api")
+    app.include_router(doc_comments_router, prefix="/api")
     app.include_router(selfservice_router, prefix="/api")
     app.include_router(hotels_router, prefix="/api")
     app.include_router(events_router, prefix="/api")
