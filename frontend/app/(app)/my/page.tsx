@@ -40,6 +40,7 @@ import {
 import { Badge, Card, Spinner } from "@/components/ui";
 import { TotalsStrip } from "@/components/PageKit";
 import { DocComments } from "@/components/DocComments";
+import { SheetPopup } from "@/components/SheetPopup";
 import { StaffChat } from "@/components/StaffChat";
 import { RangeControls, rangeCaption } from "@/components/RangeControls";
 import { useAuth } from "@/lib/auth";
@@ -115,7 +116,9 @@ const niceDate = (iso: string, withYear = false) =>
     ...(withYear ? { year: "numeric" } : {}),
   });
 
-type Tab = "attendance" | "rota" | "payslips" | "documents" | "messages";
+// No "messages": that conversation is a direct room in Messages now, and a
+// second door into it here is the duplication he just called out one level up.
+type Tab = "attendance" | "rota" | "payslips" | "documents";
 
 /** One warm line, not a large empty box.
  *
@@ -143,6 +146,9 @@ export default function MySpacePage() {
   const [loading, setLoading] = useState(true);
   const [notLinked, setNotLinked] = useState(false);
   const [tab, setTab] = useState<Tab>("attendance");
+  // Which document request is open. One at a time: this is a record you
+  // read, and two open records is two histories to keep apart by eye.
+  const [openReq, setOpenReq] = useState<string | null>(null);
 
   // Attendance over a range they choose, not a fixed tail of rows.
   const [attFrom, setAttFrom] = useState(() => isoDay(-30));
@@ -288,7 +294,6 @@ export default function MySpacePage() {
     // The badge means "things needing your attention", not "files on record" —
     // a request you have not sent is the thing worth a number.
     { key: "documents", label: "Documents", icon: "📄", count: (docs.length + pendingReqs.length) || undefined },
-    { key: "messages", label: "Messages", icon: "💬", count: unreadMsgs || undefined },
   ];
 
   return (
@@ -373,7 +378,7 @@ export default function MySpacePage() {
           className="mise-press flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold text-fg-soft transition hover:text-fg"
         >
           <span aria-hidden>🗣️</span>
-          Team chat
+          Messages
         </Link>
         {TABS.map((t) => {
           const on = t.key === tab;
@@ -567,22 +572,6 @@ export default function MySpacePage() {
       )}
 
       {/* ── DOCUMENTS ───────────────────────────────────────────────────── */}
-      {tab === "messages" && (
-        <Card className="mise-fade-in mt-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-semibold text-fg">Messages</h2>
-            <span className="text-[11px] text-fg-faint">
-              just between you and your manager
-            </span>
-          </div>
-          <StaffChat
-            className="mt-3"
-            endpoint="/me/messages"
-            mine="staff"
-            emptyHint="Nothing here yet — ask your manager anything."
-          />
-        </Card>
-      )}
 
       {tab === "documents" && (
         <Card className="mise-fade-in mt-4 p-0">
@@ -640,15 +629,18 @@ export default function MySpacePage() {
                       </button>
                     )}
                   </div>
-                  {/* The conversation about THIS document, where the document
-                      is. "suppose anything is missing or needed he can comment
-                      and superadmin can read and request again nah." */}
-                  <details className="mt-2 border-t border-line/60 pt-2">
-                    <summary className="cursor-pointer text-[11px] font-semibold text-brand-300">
-                      💬 Notes about this document
-                    </summary>
-                    <DocComments requestId={r.id} mine="staff" className="mt-2" />
-                  </details>
+                  {/* "he can click that doc request and put comment" — so the
+                      request opens, rather than hiding a thread behind a
+                      disclosure triangle nobody presses. */}
+                  <button
+                    type="button"
+                    onClick={() => setOpenReq(r.id)}
+                    data-testid="open-doc-thread"
+                    className="mise-press mt-2 flex w-full items-center gap-1.5 border-t border-line/60 pt-2 text-[11px] font-semibold text-brand-300"
+                  >
+                    💬 Comments &amp; history
+                    <span className="text-fg-faint">— ask a question about this</span>
+                  </button>
                   </li>
                 ))}
               </ul>
@@ -702,6 +694,17 @@ export default function MySpacePage() {
           )}
         </Card>
       )}
+      {openReq && (
+        <SheetPopup
+          onClose={() => setOpenReq(null)}
+          title={pendingReqs.find((x) => x.id === openReq)?.title ?? "Document"}
+          subtitle="Everything said about this request, kept for good"
+          columns={2}
+        >
+          <DocComments requestId={openReq} mine="staff" />
+        </SheetPopup>
+      )}
+
     </div>
   );
 }

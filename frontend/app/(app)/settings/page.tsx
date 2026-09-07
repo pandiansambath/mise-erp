@@ -15,6 +15,7 @@ import {
 import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { rippleEnabled, setRippleEnabled } from "@/lib/ripplePref";
 import { CURRENCIES, type CurrencyCode, useCurrency } from "@/lib/currency";
 import { numeric } from "@/lib/sanitize";
@@ -102,7 +103,23 @@ export default function SettingsPage() {
   useEffect(() => {
     setRipple(rippleEnabled(hotel?.id));
   }, [hotel?.id]);
-  const isAdmin = user?.role === "SUPER_ADMIN";
+  // WHO MAY CONFIGURE THE RESTAURANT.
+  //
+  //   "i can see in staff account i can see setting page. why the hell. whatever
+  //    belongs to staff, that only need to show... full settings only available
+  //    to superadmin."
+  //
+  // Two things were wrong. Several hotel-wide panels were not gated at all — the
+  // sign-in page designer among them, which is how he found this — and the gate
+  // that did exist compared the ROLE NAME, so a hotel that invented "Assistant
+  // Manager" and granted it hotel:config would still have been refused, while
+  // the switch on the Roles page said otherwise.
+  //
+  // The server was never fooled: PATCH /hotels/me requires hotel:config, so
+  // nothing here was ever saveable by staff. But a page full of controls that
+  // all fail on Save is its own kind of broken.
+  const canConfigure = can(user?.role, "hotel:config");
+  const isAdmin = canConfigure;
 
   const [allowance, setAllowance] = useState("0");
   const [tz, setTz] = useState("Europe/London");
@@ -378,15 +395,30 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl">
-      <PageHeader title="Settings" subtitle="Display preferences, house rules and account." />
+      <PageHeader
+        title="Settings"
+        subtitle={
+          canConfigure
+            ? "Display preferences, house rules and account."
+            : "Your account. House rules are set by whoever runs the restaurant."
+        }
+      />
 
       <div className="mise-well mb-6 flex flex-wrap gap-1.5 rounded-xl p-1.5">
         {[
-          ["#s-display", "💱 Display"],
-          ["#s-alerts", "🔔 Email & 2FA"],
-          ...(isAdmin ? [["#s-handle", "🆔 Hotel handle"], ["#s-site", "🌐 Public page"]] : []),
-          ...(isAdmin
-            ? [["#s-billing", "💳 Billing"], ["#s-attendance", "⏱️ Attendance rules"], ["#s-payroll", "💷 Payroll"]]
+          // A link to a section that is not on the page is a dead end, so the
+          // row is built from what this person can actually see.
+          ...(canConfigure
+            ? [
+                ["#s-display", "💱 Display"],
+                ["#s-alerts", "🔔 Email & 2FA"],
+                ["#s-handle", "🆔 Hotel handle"],
+                ["#s-site", "🌐 Public page"],
+                ["#s-billing", "💳 Billing"],
+                ["#s-attendance", "⏱️ Attendance rules"],
+                ["#s-payroll", "💷 Payroll"],
+                ["#s-door", "🚪 Sign-in page"],
+              ]
             : []),
           ["#s-account", "👤 Account"],
         ].map(([href, label]) => (
@@ -396,6 +428,7 @@ export default function SettingsPage() {
         ))}
       </div>
 
+      {canConfigure && (
       <Card className="mise-feel mb-6" id="s-display">
         <h3 className="font-semibold text-fg">Display currency</h3>
         <p className="mt-1 text-sm text-fg-faint">
@@ -430,6 +463,7 @@ export default function SettingsPage() {
             .join("  ·  ")}
         </p>
       </Card>
+      )}
 
       {/* How the paperwork and the numbers read.
           He asked for each of these rather than accepting mine: "PDFs grouped
@@ -437,6 +471,7 @@ export default function SettingsPage() {
           wanted", and "the decimals, I can see unwanted decimals, shall we keep
           configurable?". They live in hotels.prefs so a new one does not cost a
           migration each time. */}
+      {canConfigure && (
       <Card className="mise-feel mb-6" id="s-paperwork">
         <h3 className="font-semibold text-fg">Paperwork &amp; numbers</h3>
         <p className="mt-1 text-sm text-fg-faint">
@@ -535,7 +570,9 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-brand-300">Saved for the whole restaurant.</p>
         )}
       </Card>
+      )}
 
+      {canConfigure && (
       <Card className="mise-feel mb-6" id="s-alerts">
         <h3 className="font-semibold text-fg">Email alerts</h3>
         <p className="mt-1 text-sm text-fg-faint">
@@ -611,6 +648,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </Card>
+      )}
 
       {isAdmin && (
         <Card className="mise-feel mb-6" id="s-billing">
@@ -1247,6 +1285,7 @@ export default function SettingsPage() {
           standard door and nothing changes under them. The form inside is the
           same audited component on every door — this styles the room, never the
           thing that handles a password. */}
+      {canConfigure && (
       <Card className="mise-feel mb-6" id="s-door">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="font-semibold text-fg">🚪 Your staff sign-in page</h3>
@@ -1461,6 +1500,7 @@ export default function SettingsPage() {
           </div>
         )}
       </Card>
+      )}
 
       <Card className="mise-feel mb-6" id="s-account">
         <h3 className="font-semibold text-fg">Account</h3>

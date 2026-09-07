@@ -379,16 +379,34 @@ export default function MessagesPage() {
   }, [shown, scope]);
 
   return (
-    <div className="flex h-[calc(100svh-13rem)] min-h-0 flex-col">
-      <PageHeader
-        title="Messages"
-        subtitle="Your team, and the restaurants you work with."
-        actions={
+    // WHY IT COULD ONLY SHOW TWO MESSAGES.
+    //
+    //   "messages are very tight, i can see only 2 messages at once. if i want
+    //    more mean i need scroll chat to see. worst exp ever. better make that
+    //    chat showing screen alone big in terms of height"
+    //
+    // The height was going to furniture. A page title and subtitle took ~120px,
+    // main's own padding another ~144, and the card sat inside what was left —
+    // so a 900px screen gave the conversation about 380. WhatsApp Web does not
+    // put a masthead above the conversation, and neither should this.
+    //
+    // `data-bench` tells the shell to drop main's vertical padding for this
+    // page; the title moves into the rail where it costs nothing; and the whole
+    // thing takes the viewport minus the top bar. The conversation gets the
+    // screen, which is the only thing on it worth having.
+    <div data-bench className="flex h-[calc(100svh-4rem)] min-h-0 flex-col pb-2 pt-2">
+      <div className="sr-only">
+        <PageHeader
+          title="Messages"
+          subtitle="Your team, and the restaurants you work with."
+        />
+      </div>
+      <div className="mb-2 flex items-center justify-end gap-2 lg:hidden">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSheet("person")}
-              data-testid="new-direct"
+              data-testid="new-direct-mobile"
               className="mise-btn-flat mise-press min-h-[40px] px-3 py-2 text-sm font-semibold text-fg-soft"
             >
               ＋ New chat
@@ -398,15 +416,14 @@ export default function MessagesPage() {
                 type="button"
                 onClick={() => setSheet("group")}
                 data-tone="brand"
-                data-testid="new-group"
+                data-testid="new-group-mobile"
                 className="mise-btn-flat mise-press min-h-[40px] px-3 py-2 text-sm font-bold text-brand-300"
               >
                 ＋ Group
               </button>
             )}
           </div>
-        }
-      />
+      </div>
 
       <input
         ref={fileRef}
@@ -425,6 +442,32 @@ export default function MessagesPage() {
         <Card
           className={`min-h-0 overflow-hidden p-0 ${openId ? "hidden lg:flex" : "flex"} flex-col`}
         >
+          <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2.5">
+            <p className="font-display text-lg font-semibold text-fg">Messages</p>
+            <div className="hidden items-center gap-1.5 lg:flex">
+              <button
+                type="button"
+                onClick={() => setSheet("person")}
+                data-testid="new-direct"
+                title="Start a conversation with a colleague"
+                className="mise-btn-flat mise-press grid h-9 w-9 place-items-center text-base"
+              >
+                ＋
+              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => setSheet("group")}
+                  data-testid="new-group"
+                  title="Make a group"
+                  className="mise-btn-flat mise-press grid h-9 w-9 place-items-center text-base"
+                >
+                  👥
+                </button>
+              )}
+            </div>
+          </div>
+
           {canNetwork && (
             <div className="mise-card-inset m-2 flex gap-1 rounded-xl p-1">
               {(
