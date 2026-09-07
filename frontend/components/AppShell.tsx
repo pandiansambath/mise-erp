@@ -774,6 +774,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     navItems.every((i) => SELF_SERVICE_PAGES.includes(i.href));
   // Their own space and the staff room — the two places that are actually
   // theirs. Dashboard and How it works still go, which is what he asked for.
+  // TWO PAGES TAKE THE WHOLE WINDOW.
+  //
+  //   "whenever we open setting or profile, dont show the left side menu bar —
+  //    instead take over full entire page for that setting/profile alone, so
+  //    that u can get so many spaces... using left side and leaving empty on
+  //    right side is making the ui worst."
+  //
+  // He is right about these two specifically. Every other page is somewhere you
+  // arrive from the rail and leave by the rail. Settings and your profile are
+  // somewhere you go ON PURPOSE, do one job, and come back from — and both are
+  // wide: a form beside a live preview does not fit in what is left after a
+  // 16rem rail. The rail is replaced by a way back, which is the only thing it
+  // was providing here.
+  const wideRoute = pathname === "/settings" || pathname === "/profile";
   const finalNav = selfServiceOnly
     ? navItems.filter((i) => i.href === "/my" || i.href === "/chat")
     : navItems;
@@ -807,13 +821,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       // A one-item sidebar is a signpost pointing at the room you are standing
       // in, and it was taking 16rem to do it.
       className={`mise-app min-h-screen bg-shell text-fg lg:grid lg:h-screen lg:overflow-hidden ${
-        selfServiceOnly ? "lg:grid-cols-1" : "lg:grid-cols-[16rem_1fr]"
+        selfServiceOnly || wideRoute ? "lg:grid-cols-1" : "lg:grid-cols-[16rem_1fr]"
       }`}
     >
       <ShellAurora />
 
       {/* Desktop sidebar — fixed, scrolls on its own if the nav is long */}
-      {!selfServiceOnly && (
+      {!selfServiceOnly && !wideRoute && (
         <aside className="relative hidden border-r border-glass/10 bg-shell/80 backdrop-blur-xl lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
           <Brand />
           <NavLinks items={finalNav} pathname={pathname} />
@@ -860,7 +874,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             /* And hidden entirely when the drawer it opens holds one link to
                the page you are already on. */
             className={`h-11 w-11 place-items-center rounded-lg text-fg-soft hover:bg-glass/5 lg:hidden ${
-              selfServiceOnly ? "hidden" : "grid"
+              selfServiceOnly || wideRoute ? "hidden" : "grid"
             }`}
           >
             <span className="block h-0.5 w-5 bg-current" />
@@ -870,6 +884,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* No rail means no way back, so the slot the menu button vacated
               becomes one — and only when they are somewhere other than home. */}
+          {wideRoute && (
+            <Link
+              href="/dashboard"
+              data-testid="leave-wide"
+              className="mise-btn-flat mise-press flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-fg-soft"
+            >
+              ‹ Back
+            </Link>
+          )}
+
           {selfServiceOnly && pathname !== "/my" && (
             <Link
               href="/my"

@@ -31,7 +31,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmojiPicker } from "@/components/EmojiPicker";
-import { PersonPicker } from "@/components/PersonPicker";
 import { SheetPopup } from "@/components/SheetPopup";
 import { Card, PageHeader } from "@/components/ui";
 import { api, ApiError, fetchBlobUrl, postForm } from "@/lib/api";
@@ -947,36 +946,82 @@ function Attachment({ msg }: { msg: Bubble }) {
   );
 }
 
-/** Start a conversation with one colleague. Any login may: that is the point —
- *  the one-to-one thread used to live on an admin page, so a chef or a cashier
- *  had no way to message anybody. */
+/** Start a conversation with one colleague.
+ *
+ *  WHY THIS IS NOT PersonPicker. That component is a dropdown: a closed trigger
+ *  that opens a portalled list positioned against the trigger. Inside a popup
+ *  that produced two search boxes stacked on each other and a list hanging out
+ *  through the bottom of the sheet — "how can i search with this UI".
+ *
+ *  A sheet is already a surface that opened for one job, so the list belongs
+ *  open. No trigger, no portal, no second box: type, and the names narrow.
+ */
 function NewDirect({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) {
   const [people, setPeople] = useState<Person[]>([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
       .get<Person[]>("/chat/people")
       .then(setPeople)
-      .catch(() => setPeople([]));
+      .catch(() => setPeople([]))
+      .finally(() => setLoading(false));
   }, []);
+
+  const needle = q.trim().toLowerCase();
+  const shown = people.filter(
+    (p) => !needle || p.name.toLowerCase().includes(needle) || p.role.toLowerCase().includes(needle),
+  );
 
   return (
     <SheetPopup onClose={onClose} title="New chat" subtitle="Anyone who works here" columns={2}>
-      {people.length === 0 ? (
-        <p className="py-6 text-center text-sm text-fg-faint">Loading colleagues…</p>
-      ) : (
-        <PersonPicker
-          people={people.map((p) => ({
-            id: p.id,
-            name: p.name,
-            note: p.role.replace(/_/g, " ").toLowerCase(),
-          }))}
-          value=""
-          onChange={onPick}
+      <div className="space-y-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
           placeholder="Search colleagues…"
-          testId="direct-person"
+          autoFocus
+          data-testid="direct-search"
+          className="mise-well min-h-[46px] w-full rounded-xl px-4 text-sm outline-none"
         />
-      )}
+
+        <div className="mise-noscrollbar max-h-[52vh] space-y-1 overflow-y-auto pr-1">
+          {loading ? (
+            <p className="py-6 text-center text-sm text-fg-faint">Loading colleagues…</p>
+          ) : shown.length === 0 ? (
+            <p className="py-6 text-center text-sm text-fg-faint">
+              {people.length === 0 ? "Nobody else has a login yet." : `Nobody matches “${q}”.`}
+            </p>
+          ) : (
+            shown.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onPick(p.id)}
+                data-testid="direct-person"
+                className="mise-press flex min-h-[52px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-brand-500/10"
+              >
+                <span
+                  aria-hidden
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-500/15 text-xs font-bold text-brand-300"
+                >
+                  {p.name.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-fg">{p.name}</span>
+                  <span className="block truncate text-[11px] text-fg-faint">
+                    {p.role.replace(/_/g, " ").toLowerCase()}
+                  </span>
+                </span>
+                <span aria-hidden className="shrink-0 text-fg-faint">
+                  ›
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
     </SheetPopup>
   );
 }

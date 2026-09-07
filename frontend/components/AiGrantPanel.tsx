@@ -59,9 +59,9 @@ export function AiGrantPanel({
             data-testid={`${idPrefix}-model`}
             className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm outline-none"
           >
-            <option value="">Hotel default</option>
-            <option value="haiku">Haiku — quick and cheap</option>
-            <option value="sonnet">Sonnet — slower, better answers</option>
+            <option value="">Whatever the hotel uses</option>
+            <option value="haiku">Haiku — faster, costs less</option>
+            <option value="sonnet">Sonnet — slower, thinks harder, costs more</option>
           </select>
         </label>
 
@@ -73,17 +73,19 @@ export function AiGrantPanel({
             data-testid={`${idPrefix}-voice`}
             className="h-4 w-4"
           />
-          <span className="text-sm text-fg-soft">Let them talk to it</span>
+          <span className="text-sm text-fg-soft">
+            Voice — they can speak to it instead of typing
+          </span>
         </label>
 
         <label className="block">
           <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-            Max tokens per answer
+            Longest answer it may give
           </span>
           <input
             value={num("max_tokens")}
             inputMode="numeric"
-            placeholder="hotel default"
+            placeholder="no limit of your own"
             onChange={(e) => onChange({ max_tokens: e.target.value.replace(/[^0-9]/g, "") })}
             data-testid={`${idPrefix}-tokens`}
             className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
@@ -92,12 +94,12 @@ export function AiGrantPanel({
 
         <label className="block">
           <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-            Max messages a day
+            Questions they may ask a day
           </span>
           <input
             value={num("max_messages")}
             inputMode="numeric"
-            placeholder="hotel default"
+            placeholder="no limit of your own"
             onChange={(e) => onChange({ max_messages: e.target.value.replace(/[^0-9]/g, "") })}
             data-testid={`${idPrefix}-messages`}
             className="mise-well mt-1 min-h-[40px] w-full rounded-lg px-3 py-2 text-sm tabular-nums outline-none"
@@ -106,9 +108,10 @@ export function AiGrantPanel({
       </div>
 
       <p className="mt-2 text-[11px] text-fg-faint">
-        Blank means the hotel&apos;s default. A cheaper model always applies; a dearer
-        one still cannot exceed what your plan includes. These are a spend ceiling —
-        the assistant is the one thing here that costs money every time it is asked.
+        Leave a box empty to use whatever the restaurant uses. Choosing a cheaper
+        model always works; a dearer one still cannot go beyond your plan. These are
+        a spending limit — the assistant is the one thing here that costs money every
+        single time somebody asks it something.
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
@@ -89,6 +90,7 @@ export function HotelClock({ className = "" }: { className?: string }) {
   // Only whoever can configure the hotel may change it — for everyone else the
   // clock is something they read, not something they set.
   const canSet = can(user?.role, "settings:write");
+  const router = useRouter();
 
   async function saveClock(patch: { clock_12h?: boolean; clock_face?: string }) {
     if (!canSet) return;
@@ -259,15 +261,29 @@ export function HotelClock({ className = "" }: { className?: string }) {
           {/* Only offered to whoever can actually change it. This link is how
               he found a staff account looking at the whole settings page —
               a shortcut is still a door. */}
+          {/* WHY THIS DID NOTHING, THREE TIMES.
+              It was a <Link> whose onClick closed the popup — and closing the
+              popup UNMOUNTS THE ANCHOR mid-click. The element handling the
+              navigation ceases to exist before the navigation begins, so the
+              browser drops it. Nothing throws, nothing logs, the popup shuts
+              and you are exactly where you were.
+              I had fixed the anchor it points at, and then who can see it, and
+              both were real — but neither was this. Pushing the route
+              imperatively cannot be cancelled by unmounting the button that
+              asked for it. */}
           {canSet && (
-          <Link
-            href="/settings#timezone"
-            onClick={() => setOpen(false)}
-            className="mise-press inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11px] font-medium text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
-          >
-            Change the restaurant&apos;s timezone
-            <span aria-hidden>→</span>
-          </Link>
+            <button
+              type="button"
+              onClick={() => {
+                router.push("/settings#timezone");
+                setOpen(false);
+              }}
+              data-testid="clock-timezone"
+              className="mise-press inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[11px] font-medium text-fg-soft hover:border-brand-400/50 hover:text-brand-300"
+            >
+              Change the restaurant&apos;s timezone
+              <span aria-hidden>→</span>
+            </button>
           )}
 
           <div className="w-full">

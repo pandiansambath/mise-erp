@@ -14,6 +14,7 @@ import {
 } from "@/components/auth/HotelDoor";
 import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
+import { PageStudio } from "@/components/PageStudio";
 import { SettingsPreview } from "@/components/SettingsPreview";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -120,6 +121,10 @@ export default function SettingsPage() {
   // nothing here was ever saveable by staff. But a page full of controls that
   // all fail on Save is its own kind of broken.
   const canConfigure = can(user?.role, "hotel:config");
+  // Which page is being designed, if any. Nothing renders a preview until
+  // somebody opens the studio — "it need to show only when we reach the
+  // preview edit area".
+  const [studio, setStudio] = useState<null | "site" | "door">(null);
   const isAdmin = canConfigure;
 
   const [allowance, setAllowance] = useState("0");
@@ -438,8 +443,6 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_30rem]">
-        <div className="min-w-0">
       {canConfigure && (
       <Card className="mise-feel mb-6" id="s-display">
         <h3 className="font-semibold text-fg">Display currency</h3>
@@ -936,8 +939,292 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {isAdmin && (
+      {canConfigure && (
         <Card className="mise-feel mb-6" id="s-site">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-fg">Your public page</h3>
+              <p className="mt-1 text-sm text-fg-faint">What a diner sees — photos, hours, links and the ordering button.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStudio("site")}
+              data-testid="open-studio-site"
+              data-tone="brand"
+              className="mise-btn-flat mise-press min-h-[44px] shrink-0 px-4 text-sm font-bold text-brand-300"
+            >
+              Design it →
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* ── THEIR OWN SIGN-IN DOOR ──────────────────────────────────────
+          "why cant we give a specialised customisable login page for subdomain
+           of hotel... create a super special login page (with no register
+           button) and this can be customisable... have as much as feature,
+           animation, UI ux, designs so many."
+
+          Off by default, so a hotel that never opens this panel keeps the
+          standard door and nothing changes under them. The form inside is the
+          same audited component on every door — this styles the room, never the
+          thing that handles a password. */}
+      {canConfigure && (
+        <Card className="mise-feel mb-6" id="s-door">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-fg">🚪 Your staff sign-in page</h3>
+              <p className="mt-1 text-sm text-fg-faint">What your team sees when they sign in at your own address.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStudio("door")}
+              data-testid="open-studio-door"
+              data-tone="brand"
+              className="mise-btn-flat mise-press min-h-[44px] shrink-0 px-4 text-sm font-bold text-brand-300"
+            >
+              Design it →
+            </button>
+          </div>
+        </Card>
+      )}
+
+      <Card className="mise-feel mb-6" id="s-account">
+        <h3 className="font-semibold text-fg">Account</h3>
+        <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-fg-faint">Email</dt>
+            <dd className="font-medium text-fg">{user?.email}</dd>
+          </div>
+          <div>
+            <dt className="text-fg-faint">Role</dt>
+            <dd className="font-medium text-fg">{user?.role.replace(/_/g, " ")}</dd>
+          </div>
+        </dl>
+      </Card>
+
+      <Card className="mise-feel border-rose-500/30">
+        <h3 className="font-semibold text-rose-300">Danger zone</h3>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-fg">Reset this device&apos;s local data</p>
+            <p className="text-xs text-fg-faint">clears theme, dismissed banners, tour progress and cached preferences on THIS browser — your restaurant data is untouched</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                const keep = localStorage.getItem("mise_token");
+                localStorage.clear();
+                if (keep) localStorage.setItem("mise_token", keep);
+              } catch { /* ignore */ }
+              window.location.reload();
+            }}
+            className="mise-press rounded-lg border border-rose-500/40 px-3 py-1.5 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
+          >
+            Reset local data
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <div>
+            <p className="text-sm text-fg">Close your DineAI account</p>
+            <p className="text-xs text-fg-faint">handled personally so nothing is lost by accident — email us and we action it same-day</p>
+          </div>
+          <a href="mailto:support@mise.app?subject=Close%20my%20Mise%20account" className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft">
+            Contact support
+          </a>
+        </div>
+      </Card>
+      {/* DESIGNING A PAGE IS ITS OWN SURFACE.
+          "better can move the entire feature to a popup view... here we can
+           freely do the modification and see the preview too."
+          Controls on the left with real width — they were truncating their own
+          labels in a third of a column — and the page itself on the right at
+          its true size. Nothing else on screen, because nothing else is the
+          job. */}
+      <PageStudio
+        open={studio !== null}
+        onClose={() => setStudio(null)}
+        title={studio === "door" ? "Your staff sign-in page" : "Your public page"}
+        subtitle={
+          studio === "door"
+            ? `what your team sees at ${siteHost || "your address"}`
+            : `what a diner sees at ${siteHost || "your address"}`
+        }
+        controls={
+          studio === "door" ? (
+            <div className="space-y-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="font-semibold text-fg">🚪 Your staff sign-in page</h3>
+          <p className="text-xs text-fg-faint">
+            what your team sees at {siteHost || "yourhandle.dineai.cloud"}
+          </p>
+        </div>
+
+        <label className="mt-3 flex items-center gap-2.5 text-sm text-fg-soft">
+          <input
+            type="checkbox"
+            checked={!!door.enabled}
+            onChange={(e) => setD("enabled", e.target.checked)}
+            data-testid="door-enabled"
+          />
+          Use my own design instead of the standard DineAI page
+        </label>
+
+        {door.enabled && (
+          <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                  Greeting
+                </label>
+                <input
+                  value={door.headline ?? ""}
+                  maxLength={60}
+                  onChange={(e) => setD("headline", e.target.value)}
+                  placeholder={`Welcome back to ${hotel?.name ?? "your restaurant"}`}
+                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                />
+                <input
+                  value={door.subline ?? ""}
+                  maxLength={90}
+                  onChange={(e) => setD("subline", e.target.value)}
+                  placeholder="Sign in to start your shift."
+                  className="mise-well mt-2 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                />
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Layout</p>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
+                  {LOGIN_LAYOUTS.map((l) => (
+                    <button
+                      key={l.key}
+                      type="button"
+                      onClick={() => setD("layout", l.key)}
+                      className={`mise-btn-flat mise-press min-h-[52px] px-3 py-2 text-left text-xs ${
+                        (door.layout ?? DEFAULT_LOGIN.layout) === l.key ? "text-brand-300" : "text-fg-soft"
+                      }`}
+                      data-tone={(door.layout ?? DEFAULT_LOGIN.layout) === l.key ? "brand" : undefined}
+                    >
+                      <span className="block font-semibold">{l.label}</span>
+                      <span className="block text-[10px] text-fg-faint">{l.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Motion</p>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                  {LOGIN_EFFECTS.map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setD("effect", f.key)}
+                      className={`mise-btn-flat mise-press min-h-[52px] px-3 py-2 text-left text-xs ${
+                        (door.effect ?? DEFAULT_LOGIN.effect) === f.key ? "text-brand-300" : "text-fg-soft"
+                      }`}
+                      data-tone={(door.effect ?? DEFAULT_LOGIN.effect) === f.key ? "brand" : undefined}
+                    >
+                      <span className="block font-semibold">{f.label}</span>
+                      <span className="block text-[10px] text-fg-faint">{f.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Colours</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {PALETTES.map((pal) => {
+                    const on = (door.accent ?? DEFAULT_LOGIN.accent) === pal.a;
+                    return (
+                      <button
+                        key={pal.key}
+                        type="button"
+                        title={pal.label}
+                        onClick={() => { setD("accent", pal.a); setD("accent2", pal.b); }}
+                        className={`mise-press h-9 w-9 rounded-xl border-2 transition ${
+                          on ? "border-brand-400 scale-110" : "border-transparent"
+                        }`}
+                        style={{ background: `linear-gradient(135deg, ${pal.a}, ${pal.b})` }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Mood</p>
+                  <select
+                    value={door.theme ?? DEFAULT_LOGIN.theme}
+                    onChange={(e) => setD("theme", e.target.value as LoginConfig["theme"])}
+                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  >
+                    {LANDING_THEMES.map((t) => (
+                      <option key={t.key} value={t.key}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Light</p>
+                  <select
+                    value={door.hero ?? DEFAULT_LOGIN.hero}
+                    onChange={(e) => setD("hero", e.target.value)}
+                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                  >
+                    {HERO_STYLES.map((h) => (
+                      <option key={h.key} value={h.key}>{h.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t border-line pt-3">
+                <label className="flex items-center gap-2 text-sm text-fg-soft">
+                  <input
+                    type="checkbox"
+                    checked={door.show_logo ?? DEFAULT_LOGIN.show_logo}
+                    onChange={(e) => setD("show_logo", e.target.checked)}
+                  />
+                  Show our logo
+                </label>
+                <label className="flex items-center gap-2 text-sm text-fg-soft">
+                  <input
+                    type="checkbox"
+                    checked={(door.corners ?? DEFAULT_LOGIN.corners) === "sharp"}
+                    onChange={(e) => setD("corners", e.target.checked ? "sharp" : "soft")}
+                  />
+                  Square corners
+                </label>
+                <input
+                  value={door.footer ?? ""}
+                  maxLength={90}
+                  onChange={(e) => setD("footer", e.target.value)}
+                  placeholder="A line at the bottom — e.g. Staff only · ask Sam for a password"
+                  className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  onClick={saveDoor}
+                  disabled={doorBusy}
+                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {doorBusy ? "Saving…" : "Save sign-in page"}
+                </button>
+                {doorSaved && <span className="text-sm text-emerald-500">✓ Saved — it&apos;s live</span>}
+              </div>
+            </div>
+
+          </div>
+        )}
+            </div>
+          ) : (
+            <div className="space-y-4">
           <h3 className="font-semibold text-fg">🌐 Your public page</h3>
           <p className="mt-1 text-sm text-fg-faint">
             The branded page shown at{" "}
@@ -1266,272 +1553,36 @@ export default function SettingsPage() {
             </div>
 
           </div>
-        </Card>
-      )}
-
-      {/* ── THEIR OWN SIGN-IN DOOR ──────────────────────────────────────
-          "why cant we give a specialised customisable login page for subdomain
-           of hotel... create a super special login page (with no register
-           button) and this can be customisable... have as much as feature,
-           animation, UI ux, designs so many."
-
-          Off by default, so a hotel that never opens this panel keeps the
-          standard door and nothing changes under them. The form inside is the
-          same audited component on every door — this styles the room, never the
-          thing that handles a password. */}
-      {canConfigure && (
-      <Card className="mise-feel mb-6" id="s-door">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="font-semibold text-fg">🚪 Your staff sign-in page</h3>
-          <p className="text-xs text-fg-faint">
-            what your team sees at {siteHost || "yourhandle.dineai.cloud"}
-          </p>
-        </div>
-
-        <label className="mt-3 flex items-center gap-2.5 text-sm text-fg-soft">
-          <input
-            type="checkbox"
-            checked={!!door.enabled}
-            onChange={(e) => setD("enabled", e.target.checked)}
-            data-testid="door-enabled"
-          />
-          Use my own design instead of the standard DineAI page
-        </label>
-
-        {door.enabled && (
-          <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                  Greeting
-                </label>
-                <input
-                  value={door.headline ?? ""}
-                  maxLength={60}
-                  onChange={(e) => setD("headline", e.target.value)}
-                  placeholder={`Welcome back to ${hotel?.name ?? "your restaurant"}`}
-                  className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                />
-                <input
-                  value={door.subline ?? ""}
-                  maxLength={90}
-                  onChange={(e) => setD("subline", e.target.value)}
-                  placeholder="Sign in to start your shift."
-                  className="mise-well mt-2 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                />
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Layout</p>
-                <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
-                  {LOGIN_LAYOUTS.map((l) => (
-                    <button
-                      key={l.key}
-                      type="button"
-                      onClick={() => setD("layout", l.key)}
-                      className={`mise-btn-flat mise-press min-h-[52px] px-3 py-2 text-left text-xs ${
-                        (door.layout ?? DEFAULT_LOGIN.layout) === l.key ? "text-brand-300" : "text-fg-soft"
-                      }`}
-                      data-tone={(door.layout ?? DEFAULT_LOGIN.layout) === l.key ? "brand" : undefined}
-                    >
-                      <span className="block font-semibold">{l.label}</span>
-                      <span className="block text-[10px] text-fg-faint">{l.hint}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Motion</p>
-                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                  {LOGIN_EFFECTS.map((f) => (
-                    <button
-                      key={f.key}
-                      type="button"
-                      onClick={() => setD("effect", f.key)}
-                      className={`mise-btn-flat mise-press min-h-[52px] px-3 py-2 text-left text-xs ${
-                        (door.effect ?? DEFAULT_LOGIN.effect) === f.key ? "text-brand-300" : "text-fg-soft"
-                      }`}
-                      data-tone={(door.effect ?? DEFAULT_LOGIN.effect) === f.key ? "brand" : undefined}
-                    >
-                      <span className="block font-semibold">{f.label}</span>
-                      <span className="block text-[10px] text-fg-faint">{f.hint}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Colours</p>
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {PALETTES.map((pal) => {
-                    const on = (door.accent ?? DEFAULT_LOGIN.accent) === pal.a;
-                    return (
-                      <button
-                        key={pal.key}
-                        type="button"
-                        title={pal.label}
-                        onClick={() => { setD("accent", pal.a); setD("accent2", pal.b); }}
-                        className={`mise-press h-9 w-9 rounded-xl border-2 transition ${
-                          on ? "border-brand-400 scale-110" : "border-transparent"
-                        }`}
-                        style={{ background: `linear-gradient(135deg, ${pal.a}, ${pal.b})` }}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Mood</p>
-                  <select
-                    value={door.theme ?? DEFAULT_LOGIN.theme}
-                    onChange={(e) => setD("theme", e.target.value as LoginConfig["theme"])}
-                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                  >
-                    {LANDING_THEMES.map((t) => (
-                      <option key={t.key} value={t.key}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Light</p>
-                  <select
-                    value={door.hero ?? DEFAULT_LOGIN.hero}
-                    onChange={(e) => setD("hero", e.target.value)}
-                    className="mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                  >
-                    {HERO_STYLES.map((h) => (
-                      <option key={h.key} value={h.key}>{h.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2 border-t border-line pt-3">
-                <label className="flex items-center gap-2 text-sm text-fg-soft">
-                  <input
-                    type="checkbox"
-                    checked={door.show_logo ?? DEFAULT_LOGIN.show_logo}
-                    onChange={(e) => setD("show_logo", e.target.checked)}
-                  />
-                  Show our logo
-                </label>
-                <label className="flex items-center gap-2 text-sm text-fg-soft">
-                  <input
-                    type="checkbox"
-                    checked={(door.corners ?? DEFAULT_LOGIN.corners) === "sharp"}
-                    onChange={(e) => setD("corners", e.target.checked ? "sharp" : "soft")}
-                  />
-                  Square corners
-                </label>
-                <input
-                  value={door.footer ?? ""}
-                  maxLength={90}
-                  onChange={(e) => setD("footer", e.target.value)}
-                  placeholder="A line at the bottom — e.g. Staff only · ask Sam for a password"
-                  className="mise-well w-full rounded-lg px-3 py-2 text-sm text-fg outline-none"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <button
-                  onClick={saveDoor}
-                  disabled={doorBusy}
-                  className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-                >
-                  {doorBusy ? "Saving…" : "Save sign-in page"}
-                </button>
-                {doorSaved && <span className="text-sm text-emerald-500">✓ Saved — it&apos;s live</span>}
-              </div>
             </div>
-
-          </div>
-        )}
-      </Card>
-      )}
-
-      <Card className="mise-feel mb-6" id="s-account">
-        <h3 className="font-semibold text-fg">Account</h3>
-        <dl className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-fg-faint">Email</dt>
-            <dd className="font-medium text-fg">{user?.email}</dd>
-          </div>
-          <div>
-            <dt className="text-fg-faint">Role</dt>
-            <dd className="font-medium text-fg">{user?.role.replace(/_/g, " ")}</dd>
-          </div>
-        </dl>
-      </Card>
-
-      <Card className="mise-feel border-rose-500/30">
-        <h3 className="font-semibold text-rose-300">Danger zone</h3>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm text-fg">Reset this device&apos;s local data</p>
-            <p className="text-xs text-fg-faint">clears theme, dismissed banners, tour progress and cached preferences on THIS browser — your restaurant data is untouched</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              try {
-                const keep = localStorage.getItem("mise_token");
-                localStorage.clear();
-                if (keep) localStorage.setItem("mise_token", keep);
-              } catch { /* ignore */ }
-              window.location.reload();
-            }}
-            className="mise-press rounded-lg border border-rose-500/40 px-3 py-1.5 text-sm font-medium text-rose-300 hover:bg-rose-500/10"
-          >
-            Reset local data
-          </button>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-          <div>
-            <p className="text-sm text-fg">Close your DineAI account</p>
-            <p className="text-xs text-fg-faint">handled personally so nothing is lost by accident — email us and we action it same-day</p>
-          </div>
-          <a href="mailto:support@mise.app?subject=Close%20my%20Mise%20account" className="mise-raised mise-press rounded-lg px-3 py-1.5 text-sm font-medium text-fg-soft">
-            Contact support
-          </a>
-        </div>
-      </Card>
-        </div>
-
-        {/* The dock. Sticky, because you change a colour on the left and look
-            right — scrolling away from the thing you are judging is what made
-            the old inline previews so hard to use. */}
-        {canConfigure && (
-          <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-            <SettingsPreview
-              host={siteHost ?? ""}
-              site={<HotelSite data={previewData} config={land} preview />}
-              door={
-                <HotelDoor
-                  cfg={door}
-                  hotelName={hotel?.name ?? "Your restaurant"}
-                  hotelTheme={hotel?.theme}
-                  logoUrl={hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null}
-                  preview
-                >
-                  <div className="space-y-2.5" aria-hidden>
-                    <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
-                    <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
-                    <div
-                      className="h-10 rounded-lg"
-                      style={{
-                        background: `linear-gradient(100deg, ${door.accent ?? DEFAULT_LOGIN.accent}, ${door.accent2 ?? DEFAULT_LOGIN.accent2})`,
-                      }}
-                    />
-                  </div>
-                </HotelDoor>
-              }
-            />
-          </aside>
-        )}
-      </div>
+          )
+        }
+        preview={
+          <SettingsPreview
+            host={siteHost ?? ""}
+            site={<HotelSite data={previewData} config={land} preview />}
+            door={
+              <HotelDoor
+                cfg={door}
+                hotelName={hotel?.name ?? "Your restaurant"}
+                hotelTheme={hotel?.theme}
+                logoUrl={hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null}
+                preview
+              >
+                <div className="space-y-2.5" aria-hidden>
+                  <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
+                  <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
+                  <div
+                    className="h-10 rounded-lg"
+                    style={{
+                      background: `linear-gradient(100deg, ${door.accent ?? DEFAULT_LOGIN.accent}, ${door.accent2 ?? DEFAULT_LOGIN.accent2})`,
+                    }}
+                  />
+                </div>
+              </HotelDoor>
+            }
+          />
+        }
+      />
 
     </div>
   );
