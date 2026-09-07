@@ -165,7 +165,7 @@ function WhyPopup({ area, why, onClose }: { area: Area; why: Why; onClose: () =>
             <dt className="text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
               Opens these pages
             </dt>
-            <dd className="text-fg-soft">{area.pages.map((p) => p.label).join(" · ")}</dd>
+            <dd className="text-fg-soft">{uniqueLabels(area.pages).join(" · ")}</dd>
           </div>
         </dl>
 
@@ -235,6 +235,19 @@ function PeoplePopup({ stat, onClose }: { stat: Stat; onClose: () => void }) {
     </div>,
     document.body,
   );
+}
+
+/** The distinct page labels of an area. Two routes may deliberately share a
+ *  label — the assistant is one thing reachable two ways — and printing both
+ *  reads as a stutter. */
+function uniqueLabels(pages: { label: string }[]): string[] {
+  return [...new Set(pages.map((p) => p.label))];
+}
+
+/** The first page for each distinct label, so the switches stay one-per-thing. */
+function dedupePages<T extends { label: string }>(pages: T[]): T[] {
+  const seen = new Set<string>();
+  return pages.filter((p) => (seen.has(p.label) ? false : (seen.add(p.label), true)));
 }
 
 export function AccessModal({
@@ -684,7 +697,11 @@ export function AccessModal({
                              the permission behind the row is untouched, so this
                              only ever takes screens away. */
                           <span className="mt-1 flex flex-wrap gap-1">
-                            {a.pages.map((pg) => {
+                            {/* De-duplicated: two routes that are deliberately
+                                ONE thing should read once. "why here duplicate?
+                                the assistant the assistant" — because merging
+                                them left both labels in the list. */}
+                            {dedupePages(a.pages).map((pg) => {
                               const only = pagesOn?.(a);
                               const shown = !only || only.has(pg.slug);
                               const off = current(a) === "none";
@@ -714,7 +731,7 @@ export function AccessModal({
                           </span>
                         ) : (
                           <span className="block truncate text-[10px] leading-tight text-fg-faint">
-                            {a.pages.map((pg) => pg.label).join(" · ")}
+                            {uniqueLabels(a.pages).join(" · ")}
                           </span>
                         )}
                       </span>
