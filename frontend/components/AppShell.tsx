@@ -396,7 +396,9 @@ function NavLinks({
                                   }
                                   onClick?.();
                                 }}
-                                className={`block rounded-md px-2 py-1.5 text-[12px] transition ${
+                                // 30px tall: two pixels under what a thumb reliably hits, and there
+                                // are five of these under every section. The audit measured them.
+                                className={`flex min-h-[34px] items-center rounded-md px-2 py-1.5 text-[12px] transition ${
                                   on
                                     ? "bg-brand-400/15 font-medium text-brand-300"
                                     : "text-fg-faint hover:bg-glass/5 hover:text-fg"
