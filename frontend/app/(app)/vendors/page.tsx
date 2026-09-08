@@ -26,6 +26,7 @@ import { SubNav } from "@/components/SubNav";
 import { VendorLedger } from "@/components/VendorLedger";
 import { ItemPickerSingle, categoryEmoji } from "@/components/ItemPicker";
 import { SheetPopup } from "@/components/SheetPopup";
+import { InfoDot } from "@/components/InfoDot";
 import { useConfirm } from "@/components/confirm";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
@@ -846,8 +847,19 @@ export default function VendorsPage() {
           title={supplyCat}
           subtitle={`${shownSupply.length} priced by ${selectedVendor?.name ?? "this supplier"}`}
         >
-          {/* Columns, so fifty-four items are a page rather than a scroll. */}
-          <div className="mise-stagger grid gap-2 lg:grid-cols-2">
+          {/* SMALL CARDS, AS MANY AS FIT.
+              "if 2 items means UI looking weird; if more means looking somewhat
+               ok. We are wasting space I guess — we can make those a small
+               rectangle or square card and show so many in that card, so that
+               we can reduce the scroll effort."
+              Two fixed columns meant a category with two items drew two bars
+              the width of the screen, and fifty-four items still scrolled. An
+              auto-fill track sizes the cards to the content instead: two items
+              are two small cards, fifty-four are four or five to a row. */}
+          <div
+            className="mise-stagger grid gap-2"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(17rem, 100%), 1fr))" }}
+          >
             {shownSupply.map((vi: VendorItem) => (
                       <div
                         key={vi.id}
@@ -869,18 +881,26 @@ export default function VendorsPage() {
                           // and opening the other in the SAME commit made the
                           // click appear to do nothing: each popup pushes a
                           // history entry so Back can dismiss it, and the
-                          // closing one calls history.back() while the opening
-                          // one is pushing. The pop then lands on the new
-                          // popup and dismisses it — "it's closing and going
-                          // back", which is precisely what he saw.
+                          // ONE STEP AT A TIME.
                           //
-                          // A tick apart, the cleanup finishes before the new
-                          // entry exists, and there is nothing to race.
-                          setSupplyCat(null);
-                          window.setTimeout(() => {
-                            setPriceRow(vi);
-                            setSheetLevel(lv?.name ?? "");
-                          }, 0);
+                          //   "if i click any item see, previous popup closed,
+                          //    which is making me to jump 1 popup, skip in
+                          //    between. Please be one by one."
+                          //
+                          // This used to close the category and open the price
+                          // a tick later. That was a workaround for a history
+                          // race — two overlays, one popping while the other
+                          // pushed — and `useBackToClose` now refuses to pop an
+                          // entry that is not its own, so the race is handled
+                          // where it belongs and the workaround can go.
+                          //
+                          // The cost of that workaround was exactly what he
+                          // describes: ✕ on the price landed you on the page,
+                          // two levels down, because the category it came from
+                          // no longer existed. The price is a real third layer
+                          // now, so every ✕ walks back one step.
+                          setPriceRow(vi);
+                          setSheetLevel(lv?.name ?? "");
                         }}
                         role="button"
                         tabIndex={0}
@@ -1549,9 +1569,10 @@ export default function VendorsPage() {
               with the thing that opened it. */}
           {priceRow && (
           <SheetPopup
-            depth={2}
-            columns={2}
+            depth={3}
+            columns={3}
             onClose={() => setPriceRow(null)}
+            onBack={supplyCat ? () => setPriceRow(null) : undefined}
             title={itemName(priceRow.item_id)}
             subtitle={(() => {
               // "price per unit" is the phrase that caused the confusion in the
@@ -1582,7 +1603,17 @@ export default function VendorsPage() {
               // came out thirty times too big. Now every size is listed, priced
               // off the ONE quote, with the size they actually sell it in named.
               return (
-                <>
+                /* TWO COLUMNS, SO IT STOPS SCROLLING.
+                   "this is small cards but still I need to scroll to see the
+                    bottom — why the hell."
+                   Fair. It was a single column: five facts, a heading, a
+                   paragraph, a form and three buttons stacked one under the
+                   other, so the Save button sat below the fold on a popup
+                   holding almost nothing. The facts and the form are different
+                   jobs — one is read, the other is filled in — and side by side
+                   they both fit on one screen. */
+                <div className="grid gap-x-5 gap-y-1 lg:grid-cols-2">
+                  <div className="min-w-0">
                   {/* Only worth saying separately when the quote is for a PACK.
                       Bought loose, "they quote £0.76" and "1 kg £0.76" are the
                       same row printed twice. */}
@@ -1643,15 +1674,20 @@ export default function VendorsPage() {
                     />
                   )}
 
+                  </div>
+
                   {canWrite && (
-                    <>
-                      <p className="mt-5 text-xs font-medium uppercase tracking-wide text-fg-faint">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-fg-faint lg:mt-0">
                         How they sell it
-                      </p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-fg-soft">
-                        Written as a sentence, because that is how it gets quoted on the phone —
-                        and because &ldquo;1 bottle&rdquo; is a different number of{" "}
-                        {it?.unit ?? "units"} at different suppliers.
+                        {/* The explanation was four lines of body text above a
+                            form on a popup that already did not fit. It is read
+                            once, so it lives behind the ⓘ. */}
+                        <InfoDot label="Why this is written as a sentence">
+                          Written as a sentence because that is how it gets quoted on the
+                          phone — and because &ldquo;1 bottle&rdquo; is a different number of{" "}
+                          {it?.unit ?? "units"} at different suppliers.
+                        </InfoDot>
                       </p>
                       <form
                         className="mt-2 space-y-2"
@@ -1812,9 +1848,9 @@ export default function VendorsPage() {
                           Remove this price
                         </button>
                       </div>
-                    </>
+                    </div>
                   )}
-                </>
+                </div>
               );
             })()}
           </SheetPopup>
