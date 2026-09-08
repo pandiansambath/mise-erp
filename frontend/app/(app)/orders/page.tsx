@@ -16,6 +16,7 @@ import { API_BASE, api } from "@/lib/api";
 import { Card, PageHeader } from "@/components/ui";
 import { useDeepLink } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
+import { canWritePage } from "@/lib/permissions";
 import { dishPhoto } from "@/lib/dishPhoto";
 
 type MenuItem = {
@@ -538,7 +539,18 @@ function chime() {
 
 /* ── the page ── */
 export default function OrdersPage() {
-  const { hotel } = useAuth();
+  const { hotel, user } = useAuth();
+
+  // THIS PAGE HAD NO WRITE GATE AT ALL.
+  //
+  //   "what if I need ONLINE ORDER page alone to be read only, other 2 pages in
+  //    write mode?"
+  //
+  // Answering that meant discovering that Online Orders never checked anything:
+  // anyone who could open it could move a ticket, reprice the menu, pause the
+  // kitchen and mint a rider PIN. Making it read-onlyABLE required first making
+  // it gated at all, which is the more important half of this change.
+  const canWrite = canWritePage(user?.role, "sales:write", "/orders");
   const [tab, setTab] = useState<"board" | "menu" | "riders">("board");
   const [orders, setOrders] = useState<Order[] | null>(null);
 
@@ -605,6 +617,7 @@ export default function OrdersPage() {
   }, [load]);
 
   async function assign(orderId: string, riderId: string) {
+    if (!canWrite) return;
     await api.post(`/ordering/orders/${orderId}/assign`, { rider_id: riderId }).catch(() => {});
     load();
   }
@@ -612,6 +625,7 @@ export default function OrdersPage() {
   async function move(id: string, status: string) {
     // optimistic: the card jumps immediately, the poll settles the truth
     setOrders((prev) => prev?.map((o) => (o.id === id ? { ...o, status } : o)) ?? null);
+    if (!canWrite) return;
     await api.patch(`/ordering/orders/${id}`, { status }).catch(() => {});
     load();
   }
@@ -707,6 +721,7 @@ export default function OrdersPage() {
               onBlur={() => {
                 const v = Math.min(180, Math.max(5, parseInt(prep || "20", 10)));
                 setPrep(String(v));
+                if (!canWrite) return;
                 api.patch("/ordering/settings", { prep_minutes: v }).catch(() => {});
               }}
               aria-label="Prep minutes"

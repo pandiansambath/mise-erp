@@ -12,7 +12,7 @@ import { useConfirm } from "@/components/confirm";
 import { ListManager } from "@/components/ListManager";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency";
-import { can } from "@/lib/permissions";
+import { canWritePage, can } from "@/lib/permissions";
 import { localISODate } from "@/lib/date";
 import { numeric } from "@/lib/sanitize";
 import { spotlight, useDeepLink } from "@/components/fx";
@@ -25,7 +25,7 @@ export default function SalesPage() {
   const { user } = useAuth();
   const { format } = useCurrency();
   const confirm = useConfirm();
-  const canWrite = can(user?.role, "sales:write");
+  const canWrite = canWritePage(user?.role, "sales:write", "/sales");
   const isSuper = user?.role === "SUPER_ADMIN";
 
   const reloadChannels = async () => {

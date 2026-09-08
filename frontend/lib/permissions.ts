@@ -1,3 +1,5 @@
+import { canWriteHref } from "./access";
+
 // Client-side mirror of the backend RBAC matrix (app/core/rbac.py).
 // The backend is the source of truth and ENFORCES access; this is only for
 // UX — hiding nav/controls a role can't use. Keep in sync with the backend.
@@ -82,4 +84,28 @@ export function can(role: string | undefined | null, permission: string): boolea
     if (perms.includes(`${moduleName}:write`)) return true;
   }
   return false;
+}
+
+/**
+ * Can this person CHANGE things on this particular screen?
+ *
+ *   "what if I need ONLINE ORDER page alone to be read only, other 2 pages in
+ *    write mode? How can I do this? Currently it's bundled."
+ *
+ * `can()` answers for a MODULE, and one module permission covers several
+ * screens — Sales & Cash, Online Orders and Money all read the same data, so
+ * they cannot be split apart at the data layer. This narrows that answer for a
+ * single screen: the module permission still has to allow it, and a
+ * `page:<slug>:ro` grant then takes the writing away from that screen alone.
+ *
+ * Only ever restricts. It cannot hand anybody an ability `can()` refused, which
+ * is what makes it safe for the UI to decide.
+ */
+export function canWritePage(
+  role: string | undefined | null,
+  permission: string,
+  href: string,
+): boolean {
+  if (!can(role, permission)) return false;
+  return canWriteHref(href, new Set(getGrantedPermissions() ?? []));
 }

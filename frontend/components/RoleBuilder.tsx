@@ -39,7 +39,7 @@ import { api, ApiError } from "@/lib/api";
 import { AiGrantPanel } from "@/components/AiGrantPanel";
 import { useConfirm } from "@/components/confirm";
 import { AccessModal } from "@/components/AccessModal";
-import {
+import { readOnlyKey,
   levelOf,
   overridesFor,
   SECTIONS,
@@ -137,7 +137,6 @@ export function RoleBuilder({
   }
 
   const named = name.trim().length >= 2;
-  const dirty = Object.keys(draft).length > 0 || name.trim() !== (role?.name ?? "");
 
   /**
    * 5a — which SCREENS each area hands over. `undefined` for an area means
@@ -152,6 +151,34 @@ export function RoleBuilder({
     if (!narrowed) return undefined;
     return new Set(a.pages.filter((pg) => held.has(`page:${pg.slug}`)).map((pg) => pg.slug));
   }
+
+  /** 5b — which of those screens are READ-ONLY, even though the area itself
+   *  can be changed. Same shape as `pageDraft`: untouched areas fall back to
+   *  what the role already holds, so opening this sheet changes nothing. */
+  const [roDraft, setRoDraft] = useState<Record<string, Set<string>>>({});
+
+  function readOnlyPages(a: Area): Set<string> {
+    if (roDraft[a.key]) return roDraft[a.key];
+    return new Set(a.pages.filter((pg) => held.has(readOnlyKey(pg.slug))).map((pg) => pg.slug));
+  }
+
+  function togglePageRo(a: Area, slug: string, ro: boolean) {
+    setRoDraft((d) => {
+      const now = new Set(d[a.key] ?? readOnlyPages(a));
+      if (ro) now.add(slug);
+      else now.delete(slug);
+      return { ...d, [a.key]: now };
+    });
+  }
+
+  // Declared AFTER the three drafts it reads: a const cannot see a `useState`
+  // below it, and the page/read-only drafts were added later than this line
+  // originally sat.
+  const dirty =
+    Object.keys(draft).length > 0 ||
+    Object.keys(pageDraft).length > 0 ||
+    Object.keys(roDraft).length > 0 ||
+    name.trim() !== (role?.name ?? "");
 
   function togglePage(a: Area, slug: string, on: boolean) {
     setPageDraft((d) => {
@@ -179,7 +206,7 @@ export function RoleBuilder({
     const perms = new Set<string>();
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        const map = overridesFor(a, current(a), shownPages(a));
+        const map = overridesFor(a, current(a), shownPages(a), readOnlyPages(a));
         for (const [p, on] of Object.entries(map)) if (on) perms.add(p);
       }
     }
@@ -189,7 +216,10 @@ export function RoleBuilder({
     const overrides: Record<string, boolean> = {};
     for (const s of SECTIONS) {
       for (const a of s.areas) {
-        for (const [p, on] of Object.entries(overridesFor(a, current(a)))) overrides[p] = on;
+        for (const [p, on] of Object.entries(
+          overridesFor(a, current(a), shownPages(a), readOnlyPages(a)),
+        ))
+          overrides[p] = on;
       }
     }
     try {
@@ -268,6 +298,8 @@ export function RoleBuilder({
       }
       pagesOn={(a) => shownPages(a)}
       onTogglePage={(a, slug, on) => togglePage(a, slug, on)}
+      pagesRo={(a) => readOnlyPages(a)}
+      onTogglePageRo={(a, slug, ro) => togglePageRo(a, slug, ro)}
       current={(a) => current(a)}
       onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
       onBulk={(l, g) => bulk(l, g)}

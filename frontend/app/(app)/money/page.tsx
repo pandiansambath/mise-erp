@@ -22,7 +22,7 @@ import { Bars, Donut, Meter, Waffle, Sparkline } from "@/components/charts";
 import { AnimatedNumber } from "@/components/fx";
 import { useAuth } from "@/lib/auth";
 import { CURRENCIES, useCurrency } from "@/lib/currency";
-import { can } from "@/lib/permissions";
+import { canWritePage, can } from "@/lib/permissions";
 
 const CLASS_META: Record<string, { emoji: string; label: string; tone: "green" | "amber" | "slate" | "red" }> = {
   star: { emoji: "⭐", label: "Star", tone: "green" },
@@ -36,7 +36,7 @@ const CLASS_META: Record<string, { emoji: string; label: string; tone: "green" |
 function BudgetCard() {
   const { format } = useCurrency();
   const { user } = useAuth();
-  const canWrite = can(user?.role, "reports:write");
+  const canWrite = canWritePage(user?.role, "reports:write", "/money");
   const [b, setB] = useState<BudgetVsActual | null>(null);
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState<BudgetTargets>({
@@ -185,7 +185,7 @@ function BudgetCard() {
 function MenuEngineeringCard() {
   const { format } = useCurrency();
   const { user } = useAuth();
-  const canWrite = can(user?.role, "sales:write");
+  const canWrite = canWritePage(user?.role, "sales:write", "/money");
   const today = new Date().toISOString().slice(0, 10);
 
   const [me, setMe] = useState<MenuEngineering | null>(null);
