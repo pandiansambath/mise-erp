@@ -533,7 +533,7 @@ export function OrderFlow({
   // category cannot — "what am I buying from Rudra" and "what is costing me
   // the most" — and the second one has no groups at all, because a price
   // ranking that is broken into buckets is not a ranking.
-  const [showBy, setShowBy] = useState<"category" | "vendor" | "price">("category");
+  const [showBy, setShowBy] = useState<"category" | "vendor" | "price" | "all">("category");
   // ONE SUPPLIER FOR THIS POPUP, for this sitting only.
   //
   //   "I also want the same in categories (the items showing popup) — so that
@@ -767,6 +767,20 @@ export function OrderFlow({
    * Per base unit and not per pack, for the reason the comparison page exists:
    * one supplier's £50 is a 5 kg box and another's is 100 kg, so ranking on the
    * sticker price puts the cheapest thing you buy at the top of the list. */
+  /** EVERY ITEM, IN ONE FLAT LIST.
+   *
+   *   "here i need show by: all items — show all items."
+   *
+   *  Category and Supplier both make you open something before you can see
+   *  anything, and Price high–low reorders the world to answer a question you
+   *  may not be asking. Sometimes you simply know what you want and would like
+   *  to find it. Alphabetical, because that is the order in which a person
+   *  looks for a name they already have in their head. */
+  const everything = useMemo(
+    () => [...items].sort((a, b) => a.name.localeCompare(b.name)),
+    [items],
+  );
+
   const dearest = useMemo(
     () =>
       [...items]
@@ -881,6 +895,7 @@ export function OrderFlow({
             [
               ["category", "Category"],
               ["vendor", "Supplier"],
+              ["all", "All items"],
               ["price", "Price high–low"],
             ] as const
           ).map(([key, label]) => (
@@ -932,6 +947,16 @@ export function OrderFlow({
           </span>
         )}
       </div>
+
+      {/* No groups here either — that is the whole point of asking for it. */}
+      {showBy === "all" && (
+        <ItemGrid
+          shown={everything}
+          supplierFor={supplierFor}
+          picked={picked}
+          onOpen={setOpenItem}
+        />
+      )}
 
       {/* Dearest first has no groups: a price ranking split into buckets is not
           a ranking. Straight to the items, most expensive at the top. */}

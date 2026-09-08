@@ -53,8 +53,14 @@ export function SheetPopup({
   onBack?: () => void;
   title: string;
   subtitle?: string;
-  /** 1 = over the page, 2 = over another sheet. Only the depth changes. */
-  depth?: 1 | 2;
+  /** 1 = over the page, 2 = over another sheet, 3 = over that one.
+   *
+   *  Three exists because Vendors genuinely has three: the supplier, then one
+   *  of its categories, then one price inside that category. It used to fake
+   *  the third by CLOSING the second — "previous popup closed, which is making
+   *  me to jump 1 popup, skip in between" — so ✕ dropped you two levels at
+   *  once. A real third layer means every ✕ walks back exactly one step. */
+  depth?: 1 | 2 | 3;
   /** So anything on the page can find this panel and animate it — the burst
    *  needs a handle on the thing that is about to fly. */
   panelId?: string;
@@ -91,21 +97,42 @@ export function SheetPopup({
   // the ✕; a popup on every page makes it worth having.
   useBackToClose(true, goBack);
 
-  const z = depth === 1 ? "z-[70]" : "z-[80]";
+  const z = depth === 1 ? "z-[70]" : depth === 2 ? "z-[80]" : "z-[88]";
   // Centred, both axes, at every size. It used to be pinned to the top with
   // side insets, so it sat high and off-centre — "this popup is not centred".
   // No -translate-x-1/2 here: .mise-pop-centre carries the centring inside its
   // keyframes, because an animation's transform replaces the class's.
-  const width: Record<number, string> = {
-    4: "w-[min(72rem,95vw)]",
-    3: depth === 1 ? "w-[min(56rem,94vw)]" : "w-[min(58rem,94vw)]",
-    2: depth === 1 ? "w-[min(40rem,94vw)]" : "w-[min(42rem,94vw)]",
-    1:
-      depth === 1
-        ? "w-fit min-w-[min(22rem,92vw)] max-w-[min(30rem,94vw)]"
-        : "w-[min(26rem,94vw)]",
+  // Each layer is a little wider than the one under it, so the sheet below
+  // stays visible at the rim and you can see what you are standing on.
+  //
+  // WRITTEN OUT IN FULL, NOT COMPUTED. Tailwind reads these class names from
+  // the SOURCE at build time; a name assembled at runtime — `w-[min(${n}rem)]`
+  // — is a string the compiler never saw, so no rule is emitted and the popup
+  // renders with no width at all. Every arbitrary value here has to be a
+  // literal for that reason, however repetitive it looks.
+  const width: Record<number, Record<number, string>> = {
+    1: {
+      1: "w-fit min-w-[min(22rem,92vw)] max-w-[min(30rem,94vw)]",
+      2: "w-[min(26rem,94vw)]",
+      3: "w-[min(28rem,94vw)]",
+    },
+    2: {
+      1: "w-[min(40rem,94vw)]",
+      2: "w-[min(42rem,94vw)]",
+      3: "w-[min(44rem,94vw)]",
+    },
+    3: {
+      1: "w-[min(56rem,94vw)]",
+      2: "w-[min(58rem,94vw)]",
+      3: "w-[min(60rem,94vw)]",
+    },
+    4: {
+      1: "w-[min(72rem,95vw)]",
+      2: "w-[min(74rem,95vw)]",
+      3: "w-[min(76rem,95vw)]",
+    },
   };
-  const box = `left-1/2 top-1/2 ${width[Math.min(4, Math.max(1, columns))]}`;
+  const box = `left-1/2 top-1/2 ${width[Math.min(4, Math.max(1, columns))][depth]}`;
 
   // RENDERED INTO <body>, ALWAYS.
   //
