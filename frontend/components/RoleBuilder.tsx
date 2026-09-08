@@ -243,12 +243,38 @@ export function RoleBuilder({
         ? "view"
         : "none";
 
-    // Moving an area OFF "can change" makes every page read-only by
-    // definition, so the per-page markers stop meaning anything and are
-    // cleared rather than left to surprise somebody later.
+    // WHEN THE AREA RISES, THE OTHERS MUST NOT RISE WITH IT.
+    //
+    // Setting one page to "can change" pulls the area from "can see" up to
+    // "can change" — and every page not marked read-only would then be
+    // editable, silently promoting two pages he never touched. So the pages
+    // that were only readable BEFORE the rise are pinned read-only as it
+    // happens. Their level did not change; only the area moved underneath them.
+    if (top === "edit" && wasArea !== "edit") {
+      for (const x of a.pages) {
+        if (x.slug === pg.slug || !pages.has(x.slug)) continue;
+        ro.add(x.slug);
+      }
+      ro.delete(pg.slug);
+    }
+
     setDraft((d) => ({ ...d, [a.key]: top }));
     setPageDraft((d) => ({ ...d, [a.key]: pages }));
-    setRoDraft((d) => ({ ...d, [a.key]: top === "edit" ? ro : new Set<string>() }));
+    // KEPT, NOT WIPED.
+    //
+    // This used to clear the whole read-only set whenever `top` was not
+    // "edit", on the reasoning that markers mean nothing on a read-only area.
+    // True, but destructive: with the area on "can see", marking one page
+    // "can look" computes top === "view" and threw the marker away — so the
+    // very next click that raised the area to "can change" re-read an empty
+    // set and PROMOTED the page he had just made read-only.
+    //
+    // That is the exact arrangement he asked for ("Online Orders read-only, the
+    // other two writable") and it was unreachable by the natural path: it only
+    // worked if you happened to set "can change" first. The set is preserved
+    // now; `overridesFor` already declines to emit these markers unless the
+    // area is editable, so nothing meaningless is ever saved.
+    setRoDraft((d) => ({ ...d, [a.key]: ro }));
   }
 
   function togglePage(a: Area, slug: string, on: boolean) {
