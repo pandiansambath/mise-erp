@@ -205,10 +205,36 @@ export default function MenuPage() {
   // is actually about, which is the price.
   const [cat, setCat] = useState<string>("");
 
+  // "MAIN 12" AND "MAINS 1" ARE THE SAME COURSE.
+  //
+  // Grouping by course exposed something the old alphabetical list had been
+  // hiding: the data holds both spellings, so the page drew two sections for
+  // one course, one of them holding a single dish. Nobody typed a new course —
+  // they typed the same one with an s.
+  //
+  // Matched on a normalised key (case-folded, trailing s dropped) and LABELLED
+  // with whichever spelling is used most, so the page reads the way the kitchen
+  // mostly writes it. Display only: nothing is rewritten in the database,
+  // because the fix for the data is a decision he should make on a dish, not
+  // something a page does behind him.
+  const courseKey = (name: string) => name.trim().toLowerCase().replace(/s$/, "");
+
   const categories = useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const m of items) seen.set(m.category, (seen.get(m.category) ?? 0) + 1);
-    return [...seen.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    // key → { total, spellings }
+    const seen = new Map<string, { n: number; names: Map<string, number> }>();
+    for (const m of items) {
+      const k = courseKey(m.category);
+      const e = seen.get(k) ?? { n: 0, names: new Map<string, number>() };
+      e.n += 1;
+      e.names.set(m.category, (e.names.get(m.category) ?? 0) + 1);
+      seen.set(k, e);
+    }
+    return [...seen.entries()]
+      .map(([k, e]) => {
+        const best = [...e.names.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        return [k, e.n, best[0][0]] as [string, number, string];
+      })
+      .sort((a, b) => b[1] - a[1] || a[2].localeCompare(b[2]));
   }, [items]);
 
   const shown = useMemo(() => {
@@ -220,7 +246,7 @@ export default function MenuPage() {
           m.name.toLowerCase().includes(needle) || m.category.toLowerCase().includes(needle),
       );
     }
-    if (cat) list = list.filter((m) => m.category === cat);
+    if (cat) list = list.filter((m) => courseKey(m.category) === cat);
     return [...list].sort(
       (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
     );
@@ -230,14 +256,18 @@ export default function MenuPage() {
    *  them grouped, because "three of these are starters" is worth knowing even
    *  when you went looking for the word "chicken". */
   const courses = useMemo(() => {
+    const label = new Map(categories.map(([k, , name]) => [k, name]));
     const by = new Map<string, MenuItem[]>();
     for (const m of shown) {
-      const list = by.get(m.category);
+      const k = courseKey(m.category);
+      const list = by.get(k);
       if (list) list.push(m);
-      else by.set(m.category, [m]);
+      else by.set(k, [m]);
     }
-    return [...by.entries()];
-  }, [shown]);
+    return [...by.entries()].map(
+      ([k, dishes]) => [label.get(k) ?? dishes[0].category, dishes] as [string, MenuItem[]],
+    );
+  }, [shown, categories]);
 
   const live = items.filter((m) => m.availability === "available").length;
   const off = items.length - live;
@@ -308,15 +338,15 @@ export default function MenuPage() {
           >
             All {items.length}
           </button>
-          {categories.map(([name, n]) => (
+          {categories.map(([key, n, name]) => (
             <button
-              key={name}
+              key={key}
               type="button"
-              onClick={() => setCat((c) => (c === name ? "" : name))}
+              onClick={() => setCat((c) => (c === key ? "" : key))}
               className={`mise-press rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
-                cat === name ? "mise-btn-flat text-fg" : "text-fg-faint hover:text-fg-soft"
+                cat === key ? "mise-btn-flat text-fg" : "text-fg-faint hover:text-fg-soft"
               }`}
-              data-tone={cat === name ? "brand" : undefined}
+              data-tone={cat === key ? "brand" : undefined}
             >
               {name} {n}
             </button>

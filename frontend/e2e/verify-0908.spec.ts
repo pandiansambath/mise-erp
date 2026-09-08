@@ -74,12 +74,20 @@ test("tables: tiles, a name inside the QR, and who is sitting where", async ({ b
 
   // The live-sitting field has to survive response_model — the failure mode
   // that has cost this project six fields is the value arriving as undefined.
+  // THE APP SENDS A BEARER TOKEN, NOT A COOKIE. A raw fetch with
+  // `credentials: "include"` therefore arrives unauthenticated and comes back
+  // 401 — which this test then reported as "the field is missing", blaming the
+  // server for my own missing header. Read the token the way the app does.
   const api = await page.evaluate(async () => {
-    const r = await fetch("/api/ordering/tables", { credentials: "include" });
+    const token =
+      window.sessionStorage.getItem("mise_token") ?? window.localStorage.getItem("mise_token");
+    const r = await fetch("/api/ordering/tables", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     const rows = await r.json();
     return Array.isArray(rows)
-      ? { n: rows.length, sample: rows[0], hasField: "open_orders" in (rows[0] ?? {}) }
-      : { n: 0, sample: null, hasField: false };
+      ? { status: r.status, n: rows.length, sample: rows[0], hasField: "open_orders" in (rows[0] ?? {}) }
+      : { status: r.status, n: 0, sample: null, hasField: false };
   });
   console.log(`TABLES API ${JSON.stringify(api).slice(0, 240)}`);
   expect(api.hasField, "open_orders must be declared on TableOut or it is dropped").toBe(true);
