@@ -112,12 +112,6 @@ export function RoleBuilder({
 
   const current = (a: Parameters<typeof levelOf>[0]) => draft[a.key] ?? levelOf(a, held);
 
-  const reach = useMemo(() => {
-    const pages = new Set<string>();
-    for (const s of SECTIONS)
-      for (const a of s.areas) if (current(a) !== "none") for (const pg of a.pages) pages.add(pg.slug);
-    return { on: pages.size, total: ALL_PAGES.size };
-  }, [draft, held]);
 
   /** The highest position this area can offer — so an area with no middle
    *  lands on its only "on" instead of being quietly skipped. */
@@ -179,6 +173,29 @@ export function RoleBuilder({
     Object.keys(pageDraft).length > 0 ||
     Object.keys(roDraft).length > 0 ||
     name.trim() !== (role?.name ?? "");
+
+  /** "PAGES THEY CAN OPEN — 28 of 33".
+   *
+   *  It used to count every page of every switched-on area, ignoring the
+   *  shortlist entirely, so hiding a page left the number unmoved and the
+   *  headline contradicted the chips right under it. Counts what they can
+   *  actually open now. Read-only pages still count: they can open them, which
+   *  is what the label says.
+   *
+   *  Declared after the page draft it reads — a const cannot see a `useState`
+   *  below it. */
+  const reach = useMemo(() => {
+    const pages = new Set<string>();
+    for (const s of SECTIONS) {
+      for (const a of s.areas) {
+        if (current(a) === "none") continue;
+        const only = shownPages(a);
+        for (const pg of a.pages) if (!only || only.has(pg.slug)) pages.add(pg.slug);
+      }
+    }
+    return { on: pages.size, total: ALL_PAGES.size };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, pageDraft, held]);
 
   function togglePage(a: Area, slug: string, on: boolean) {
     setPageDraft((d) => {

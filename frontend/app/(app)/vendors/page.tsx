@@ -842,7 +842,11 @@ export default function VendorsPage() {
       {supplyCat && (
         <SheetPopup
           depth={2}
-          columns={4}
+          // SIZED TO WHAT IT HOLDS. Always asking for four columns meant a
+          // category with two items drew two 280px cards and left 620px of
+          // empty white beside them, with the second item's name wrapping onto
+          // three lines inside its narrow card while that space sat unused.
+          columns={shownSupply.length <= 2 ? 2 : shownSupply.length <= 6 ? 3 : 4}
           onClose={() => setSupplyCat(null)}
           title={supplyCat}
           subtitle={`${shownSupply.length} priced by ${selectedVendor?.name ?? "this supplier"}`}
@@ -1570,7 +1574,12 @@ export default function VendorsPage() {
           {priceRow && (
           <SheetPopup
             depth={3}
-            columns={3}
+            // Wider than the category beneath it. At columns={3} the depth-3
+            // panel came out 960px against the category's 1184px, so the layer
+            // underneath showed only as two thin slivers at the extreme edges —
+            // inverting the whole point of stacking, which is being able to see
+            // what you are standing on.
+            columns={4}
             onClose={() => setPriceRow(null)}
             onBack={supplyCat ? () => setPriceRow(null) : undefined}
             title={itemName(priceRow.item_id)}
