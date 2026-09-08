@@ -727,15 +727,39 @@ export function AccessModal({
                                   : ro || current(a) === "view"
                                     ? "read"
                                     : "write";
+                              // ANOTHER SWITCH MAY ALSO OPEN THIS PAGE.
+                              // Online Orders sits under Kitchen as well, Money
+                              // under Reports & P&L. The reach counter counts
+                              // pages a person can REACH, so hiding one here
+                              // leaves it reachable and the number correctly
+                              // does not move — which is arithmetically right
+                              // and visually identical to the bug where it did
+                              // not track the draft at all. Say so on the chip
+                              // rather than let it be reported again.
+                              //
+                              // I wrote this once already and then deleted it
+                              // myself: rewriting the chips replaced the block
+                              // it lived in, and the now-unused import survived
+                              // because an unused import is only a warning.
+                              const alsoVia = areasOpening(pg.slug).filter(
+                                (x) => x.key !== a.key,
+                              );
                               return (
                                 <span
                                   key={pg.slug}
                                   title={
-                                    state === "write"
+                                    (state === "write"
                                       ? `${pg.label}: they can change it`
                                       : state === "read"
                                         ? `${pg.label}: they can only look`
-                                        : `${pg.label}: hidden`
+                                        : `${pg.label}: hidden`) +
+                                    (state === "hidden" && alsoVia.length
+                                      ? `
+
+Still reachable through ${alsoVia
+                                          .map((x) => x.label)
+                                          .join(" and ")}, so the page count does not change.`
+                                      : "")
                                   }
                                   className={`rounded-md border px-1.5 py-0.5 text-[10px] ${
                                     state === "hidden"
@@ -749,6 +773,11 @@ export function AccessModal({
                                     <span aria-hidden className="mr-0.5">👁</span>
                                   )}
                                   {pg.label}
+                                  {state === "hidden" && alsoVia.length > 0 && (
+                                    <span aria-hidden className="ml-1 no-underline">
+                                      ↗
+                                    </span>
+                                  )}
                                 </span>
                               );
                             })}
