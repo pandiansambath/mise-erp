@@ -28,7 +28,7 @@ import { createPortal } from "react-dom";
 
 import { useConfirm } from "@/components/confirm";
 
-import { areasOpening,
+import { sectionOf, areasOpening,
   LEVEL_HINT,
   SECTIONS,
   labelFor,
@@ -378,19 +378,12 @@ export function AccessModal({
     if (ok) onSet(a, l);
   }
 
-  /** Same for a single screen. The strike-through is a lovely control and it is
-   *  still a decision about what somebody can reach. */
-  async function togglePageWithConfirm(a: Area, pg: PageRef, on: boolean) {
-    const ok = await confirm({
-      title: on ? `Show ${pg.label}?` : `Hide ${pg.label}?`,
-      message: on
-        ? `${pg.label} goes back into their menu. The rest of ${a.label} is unchanged.`
-        : `${pg.label} leaves their menu. They keep the rest of ${a.label} — this hides one screen, it does not change what they may touch.`,
-      confirmText: on ? "Show it" : "Hide it",
-      tone: on ? "default" : "danger",
-    });
-    if (ok) onTogglePage?.(a, pg.slug, on);
-  }
+  // The per-screen confirm that used to live here is gone with the chips it
+  // guarded: the chips are a READOUT now and the choice is made in the per-page
+  // sheet, which shows the consequence under every option rather than asking
+  // after the fact. Deleted rather than left dangling — an unused symbol is
+  // only a lint WARNING, and the last one I left behind was a fix I had
+  // silently deleted and then claimed in a commit message.
 
   async function bulkWithConfirm(l: Level, groupKey?: string) {
     const scope = groupKey
@@ -741,8 +734,19 @@ export function AccessModal({
                               // myself: rewriting the chips replaced the block
                               // it lived in, and the now-unused import survived
                               // because an unused import is only a warning.
+                              //
+                              // FILTERED BY WHETHER THAT SWITCH IS ACTUALLY ON.
+                              // Without this the sentence below can be false: a
+                              // role with Kitchen switched off has no other
+                              // route to Online Orders, so hiding it here DOES
+                              // change the count — while the chip cheerfully
+                              // promised it would not. Caught on a freshly
+                              // created role (3 of 33 → 2 of 33 with the
+                              // reassurance still showing). An explanation that
+                              // is sometimes wrong is worse than none, because
+                              // it is trusted.
                               const alsoVia = areasOpening(pg.slug).filter(
-                                (x) => x.key !== a.key,
+                                (x) => x.key !== a.key && current(x) !== "none",
                               );
                               return (
                                 <span
@@ -757,7 +761,10 @@ export function AccessModal({
                                       ? `
 
 Still reachable through ${alsoVia
-                                          .map((x) => x.label)
+                                          .map((x) => {
+                                            const sec = sectionOf(x);
+                                            return sec ? `${x.label} (under ${sec})` : x.label;
+                                          })
                                           .join(" and ")}, so the page count does not change.`
                                       : "")
                                   }

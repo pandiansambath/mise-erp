@@ -374,6 +374,14 @@ export function canWriteHref(href: string, held: Set<string>): boolean {
  *  at all: a struck-through chip next to an unmoved number. So the chip says so
  *  itself rather than leaving it to be re-reported.
  */
+/** The section a switch is filed under — "Orders & parties" lives in Kitchen.
+ *  Named alongside the switch so somebody sent looking for it knows where to
+ *  look, rather than being given a name and no address. */
+export function sectionOf(area: Area): string | null {
+  for (const s of SECTIONS) if (s.areas.some((a) => a.key === area.key)) return s.label;
+  return null;
+}
+
 export function areasOpening(slug: string): Area[] {
   const out: Area[] = [];
   for (const s of SECTIONS)
