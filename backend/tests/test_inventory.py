@@ -418,3 +418,45 @@ async def test_seed_starter_preview_and_selective(client, make_user, auth_header
     # preview now flags it as existing
     prev2 = await client.get("/api/inventory/seed-starter", headers=h)
     assert prev2.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_items_move_into_a_category_and_can_create_it(
+    client, db, hotel, make_user, auth_header
+):
+    """"if I want to create a new category and want to move/copy item to that
+    category... but wait, if we copy means it will create duplicate confusion,
+    so better move — keep move option alone."
+
+    He talked himself out of copy inside one sentence and was right to: the same
+    sack of rice filed under two categories is one sack counted twice, and every
+    total built on it is wrong afterwards. So there is MOVE and no copy.
+
+    The destination need not exist. A category here is a string on the item, so
+    filing something under an unused name IS creating it — which is what lets
+    "make a new category and put these in it" be one action rather than two.
+    """
+    from app.inventory import service as inv
+
+    owner = await make_user("catmove@nirai.com", Role.SUPER_ADMIN.value)
+    h = auth_header(owner)
+
+    a = await inv.create_item(db, hotel.id, name="Cumin", unit="kg", category="Other")
+    b = await inv.create_item(db, hotel.id, name="Cardamom", unit="kg", category="Other")
+    await inv.create_item(db, hotel.id, name="Rice", unit="kg", category="Grains")
+
+    moved = await client.post(
+        "/api/inventory/categories/move",
+        headers=h,
+        json={"item_ids": [str(a.id), str(b.id)], "to_name": "Spices"},
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json() == {"moved": 2, "category": "Spices"}
+
+    rows = (await client.get("/api/inventory/items", headers=h)).json()
+    by = {r["name"]: r["category"] for r in (rows["items"] if isinstance(rows, dict) else rows)}
+    assert by["Cumin"] == "Spices" and by["Cardamom"] == "Spices"
+    assert by["Rice"] == "Grains", "an item nobody picked must not move"
+
+    # MOVED, not copied — the originals are gone from where they were.
+    assert "Other" not in set(by.values()), "nothing may be left behind in the old category"

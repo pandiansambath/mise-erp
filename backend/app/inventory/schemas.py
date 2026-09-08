@@ -191,3 +191,15 @@ class WasteList(BaseModel):
 class CategoryRename(BaseModel):
     from_name: str = Field(min_length=1, max_length=60)
     to_name: str = Field(min_length=1, max_length=60)
+
+
+class CategoryMove(BaseModel):
+    """Re-file hand-picked items under one category.
+
+    Capped at 500 in one go — not a security limit, a sanity one: a request
+    carrying every item a hotel owns is far more likely to be a mistake than an
+    intention, and refusing it is kinder than performing it.
+    """
+
+    item_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    to_name: str = Field(min_length=1, max_length=60)
