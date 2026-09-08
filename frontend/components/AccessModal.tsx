@@ -28,7 +28,7 @@ import { createPortal } from "react-dom";
 
 import { useConfirm } from "@/components/confirm";
 
-import {
+import { areasOpening,
   LEVEL_HINT,
   SECTIONS,
   labelFor,
@@ -266,6 +266,7 @@ export function AccessModal({
   onTogglePage,
   pagesRo,
   onTogglePageRo,
+  onOpenPages,
   onBulk,
   areaExtra,
   explain,
@@ -315,6 +316,8 @@ export function AccessModal({
    *  read only, other 2 pages in write mode?" */
   pagesRo?: (a: Area) => Set<string>;
   onTogglePageRo?: (a: Area, slug: string, ro: boolean) => void;
+  /** Open the per-page sheet for this area. */
+  onOpenPages?: (a: Area) => void;
   /** level, or a group key to limit it to. */
   onBulk: (l: Level, group?: string) => void;
   /** Per-area trimmings the caller owns: "not saved yet", etc. */
@@ -697,85 +700,69 @@ export function AccessModal({
                           {areaExtra?.(a)}
                         </span>
                         {onTogglePage ? (
-                          /* 5a — "under Inventory you gave 3 things, but what if
-                             super admin wants to give only the Inventory page
-                             alone?" Each screen this switch opens is now its own
-                             tick. Untick one and it disappears from their sidebar;
-                             the permission behind the row is untouched, so this
-                             only ever takes screens away. */
+                          /* SET EACH PAGE, ONE AT A TIME.
+                             "those 3 is there nah — in that 1 I can give write,
+                              1 I can give read, like this I want bro... go build
+                              popup kinda thing like ask in these 3 page what
+                              role u want to give."
+
+                             What was here before was a CYCLING chip: click once
+                             for read-only, again to hide, again to give it back.
+                             Three answers hidden in one control, discoverable
+                             only by clicking and watching. Worse, it only
+                             offered read-only when the area was already on "can
+                             change", so on an area set to "can see" the chips
+                             did nothing — the exact state he screenshotted.
+
+                             The chips are now a READOUT, and the button asks. */
                           <span className="mt-1 flex flex-wrap items-center gap-1">
-                            {/* De-duplicated: two routes that are deliberately
-                                ONE thing should read once. "why here duplicate?
-                                the assistant the assistant" — because merging
-                                them left both labels in the list. */}
                             {dedupePages(a.pages).map((pg) => {
                               const only = pagesOn?.(a);
                               const shown = !only || only.has(pg.slug);
                               const off = current(a) === "none";
-                              // Read-only is only a distinct state while the
-                              // AREA can be changed. On a "can see" area every
-                              // page is already read-only and a second marker
-                              // would be a thing to un-set later for no reason.
-                              const canRo = !!onTogglePageRo && current(a) === "edit";
-                              const ro = canRo && !!pagesRo?.(a).has(pg.slug);
-                              const state = !shown ? "hidden" : ro ? "read" : "write";
+                              const ro = !!pagesRo?.(a).has(pg.slug);
+                              const state =
+                                off || !shown
+                                  ? "hidden"
+                                  : ro || current(a) === "view"
+                                    ? "read"
+                                    : "write";
                               return (
-                                <button
+                                <span
                                   key={pg.slug}
-                                  type="button"
-                                  disabled={off}
-                                  // ONE CHIP, THREE ANSWERS.
-                                  //
-                                  //   "what if I need ONLINE ORDER page alone to
-                                  //    be read only, other 2 pages in write
-                                  //    mode? Currently it's bundled."
-                                  //
-                                  // It cycles rather than opening a menu because
-                                  // there are only three answers and they have a
-                                  // natural order — most access, less, none. A
-                                  // dropdown per page would be twelve dropdowns
-                                  // on this card.
-                                  onClick={() => {
-                                    if (!canRo) {
-                                      togglePageWithConfirm(a, pg, !shown);
-                                      return;
-                                    }
-                                    if (state === "write") onTogglePageRo?.(a, pg.slug, true);
-                                    else if (state === "read") {
-                                      onTogglePageRo?.(a, pg.slug, false);
-                                      togglePageWithConfirm(a, pg, false);
-                                    } else {
-                                      togglePageWithConfirm(a, pg, true);
-                                    }
-                                  }}
                                   title={
-                                    off
-                                      ? "Switch this on first"
-                                      : !canRo
-                                        ? shown
-                                          ? `Hide ${pg.label} from them`
-                                          : `Show ${pg.label} to them`
-                                        : state === "write"
-                                          ? `${pg.label}: they can change it — click for read-only`
-                                          : state === "read"
-                                            ? `${pg.label}: they can only look — click to hide it`
-                                            : `${pg.label}: hidden — click to give it back`
+                                    state === "write"
+                                      ? `${pg.label}: they can change it`
+                                      : state === "read"
+                                        ? `${pg.label}: they can only look`
+                                        : `${pg.label}: hidden`
                                   }
-                                  className={`mise-press rounded-md border px-1.5 py-0.5 text-[10px] transition disabled:opacity-40 ${
-                                    off || state === "hidden"
+                                  className={`rounded-md border px-1.5 py-0.5 text-[10px] ${
+                                    state === "hidden"
                                       ? "border-line text-fg-faint line-through"
                                       : state === "read"
                                         ? "border-amber-400/50 bg-amber-400/10 text-fg-soft"
                                         : "border-brand-400/50 bg-brand-400/10 text-fg-soft"
                                   }`}
                                 >
-                                  {state === "read" && !off && (
+                                  {state === "read" && (
                                     <span aria-hidden className="mr-0.5">👁</span>
                                   )}
                                   {pg.label}
-                                </button>
+                                </span>
                               );
                             })}
+                            {onOpenPages && dedupePages(a.pages).length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenPages(a)}
+                                disabled={current(a) === "none"}
+                                data-testid={`setpages-${a.key}`}
+                                className="mise-press rounded-md border border-line-2 px-1.5 py-0.5 text-[10px] font-semibold text-fg-soft transition hover:border-brand-400/60 hover:text-brand-300 disabled:opacity-40"
+                              >
+                                Set each page →
+                              </button>
+                            )}
                           </span>
                         ) : (
                           <span className="block truncate text-[10px] leading-tight text-fg-faint">
