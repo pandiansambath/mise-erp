@@ -937,7 +937,12 @@ async def test_the_qr_carries_the_tables_name_and_survives_a_rename(
     svg = await client.get(f"/api/public/table/{code}/qr.svg")
     assert svg.status_code == 200, svg.text
     body = svg.text
-    assert "Terrace 2" in body, "the table's name belongs in the middle of its own code"
+    # TWO text elements, not one string. The label is split across lines so it
+    # fits the plate — "Terrace 2" is never in the document as a single run, and
+    # asserting on the joined form is what made this test fail against correct
+    # code. Assert what is actually drawn.
+    assert ">Terrace<" in body, "the table's name belongs in the middle of its own code"
+    assert ">2<" in body, "…and so does the rest of it"
     assert "<rect" in body and "<text" in body, "plate and label both drawn"
     # It must still be a standalone, renderable document — an SVG without the
     # namespace shows as alt text in an <img>, which is how this broke before.
@@ -952,7 +957,8 @@ async def test_the_qr_carries_the_tables_name_and_survives_a_rename(
     )
     assert ren.status_code == 200, ren.text
     again = await client.get(f"/api/public/table/{code}/qr.svg")
-    assert "Window bay" in again.text and "Terrace 2" not in again.text
+    assert ">Window<" in again.text and ">bay<" in again.text
+    assert ">Terrace<" not in again.text, "the old name must be gone from the redrawn code"
     assert again.headers.get("cache-control") == "no-cache", (
         "a cached QR would keep showing the old name on a reprinted card"
     )
@@ -1066,7 +1072,7 @@ async def test_the_tables_page_says_which_tables_are_busy(
     placed = await client.post(
         f"/api/public/table/{t1['code']}",
         json={"customer_name": "Sam", "phone": "07000000000",
-              "items": [{"menu_item_id": dish["id"], "qty": 1}]},
+              "items": [{"menu_item_id": dish["id"], "quantity": 1}]},
     )
     assert placed.status_code == 201, placed.text
 
