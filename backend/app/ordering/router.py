@@ -439,7 +439,9 @@ async def move_order(
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
     allowed = ORDER_FLOW.get(order.status, [])
-    if payload.status not in allowed:
+    if not _flow_allows(
+        order.status, payload.status, is_request=await _is_request_not_food(db, order)
+    ):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"Can't move {order.status} → {payload.status} (allowed: {', '.join(allowed) or '—'})",
@@ -1580,7 +1582,9 @@ async def kitchen_screen_move(
     order = await db.get(Order, order_id)
     if order is None or order.hotel_id != hotel.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
-    if payload.status not in ORDER_FLOW.get(order.status, []):
+    if not _flow_allows(
+        order.status, payload.status, is_request=await _is_request_not_food(db, order)
+    ):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"Can't move {order.status} to {payload.status}",
@@ -1590,6 +1594,37 @@ async def kitchen_screen_move(
     await db.commit()
     await db.refresh(order)
     return _order_out(order)
+
+
+async def _is_request_not_food(db: AsyncSession, order: Order) -> bool:
+    """Is this ticket a REQUEST rather than something to cook?
+
+      "as a customer if I ask like 'need water please' as a msg, this also going
+       like food in kitchen screen like start cooking, ready, served. Kitchen
+       screen bug, please fix."
+
+    He is right. A message arriving when the table has no live order creates one
+    to hang itself on — a real Order row, with a status, and therefore the whole
+    cooking flow. Nobody cooks a napkin, so Accept → Start cooking → Ready →
+    Served is four presses of theatre for something that needs one.
+
+    The tell was already in the data and needs no new column: an order with no
+    ITEMS is not food. ORDER_FLOW is a rule about COOKING, and there is nothing
+    here to cook, so such a ticket may be finished from wherever it stands.
+    """
+    n = (
+        await db.execute(
+            select(func.count()).select_from(OrderItem).where(OrderItem.order_id == order.id)
+        )
+    ).scalar_one()
+    return int(n or 0) == 0
+
+
+def _flow_allows(order_status: str, wanted: str, *, is_request: bool) -> bool:
+    if wanted in ORDER_FLOW.get(order_status, []):
+        return True
+    # A request can always be marked done, and can always be waved away.
+    return is_request and wanted in (OrderStatus.COMPLETED.value, OrderStatus.CANCELLED.value)
 
 
 # ── Taking the cards away ────────────────────────────────────────────────────

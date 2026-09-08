@@ -44,6 +44,28 @@ const NEXT: Record<string, { to: string; label: string }> = {
   READY: { to: "COMPLETED", label: "Served" },
 };
 
+/** A REQUEST IS NOT A DISH.
+ *
+ *   "as a customer if I ask like 'need water please' as a msg, this also going
+ *    like food in kitchen screen like start cooking, ready, served. Kitchen
+ *    screen bug, please fix."
+ *
+ * He is right, and the cause is that a message arriving when the table has no
+ * live order CREATES one to hang itself on — a real Order row with a status,
+ * and therefore the whole cooking flow. Nobody cooks a napkin, so Accept →
+ * Start cooking → Ready → Served is four presses of theatre for something that
+ * needs one.
+ *
+ * The tell is already in the data and needed no schema change: an order with no
+ * ITEMS is not food. It gets one button that finishes it.
+ */
+function nextStep(o: { status: string; items: { name: string }[] }) {
+  if (o.items.length === 0) {
+    return o.status === "COMPLETED" ? undefined : { to: "COMPLETED", label: "Done" };
+  }
+  return NEXT[o.status];
+}
+
 const STAGE: Record<string, { label: string; dot: string }> = {
   NEW: { label: "New", dot: "bg-amber-400" },
   CONFIRMED: { label: "Accepted", dot: "bg-sky-400" },
@@ -131,7 +153,7 @@ export default function KitchenPage() {
   }
 
   async function advance(o: Order) {
-    const step = NEXT[o.status];
+    const step = nextStep(o);
     if (!step) return;
     setBusy(o.id);
     try {
@@ -369,7 +391,7 @@ export default function KitchenPage() {
 
                     <div className="flex-1">
                     {g.rows.map((o, i) => {
-                      const step = NEXT[o.status];
+                      const step = nextStep(o);
                       const stage = STAGE[o.status] ?? STAGE.NEW;
                       return (
                         <div key={o.id} className="mt-3 border-t border-line/60 pt-2.5">
@@ -405,8 +427,8 @@ export default function KitchenPage() {
                               </li>
                             ))}
                             {o.items.length === 0 && (
-                              <li className="text-xs text-fg-faint">
-                                No food — they just need someone.
+                              <li className="text-xs font-medium text-fg-soft">
+                                🔔 No food — they just need someone.
                               </li>
                             )}
                           </ul>
