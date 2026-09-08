@@ -471,6 +471,39 @@ async def rename_category(db: AsyncSession, hotel_id: uuid.UUID, old: str, new: 
     return result.rowcount or 0
 
 
+async def move_items_to_category(
+    db: AsyncSession, hotel_id: uuid.UUID, item_ids: list[uuid.UUID], to_name: str
+) -> int:
+    """Re-file a hand-picked set of items under one category.
+
+      "if I want to create a new category and want to move/copy item to that
+       category... but wait, if we copy means it will create duplicate
+       confusion, so better move — keep move option alone."
+
+    He talked himself out of copy mid-sentence and he was right to: the same
+    item filed under two categories is one physical sack of rice counted twice,
+    and every total built on it is then wrong. So this MOVES. There is no copy.
+
+    The destination does not have to exist — a category here is just a string on
+    the item, so filing something under a name nobody has used yet IS creating
+    it. That is what makes "create a new category and move things into it" one
+    action instead of two.
+
+    Hotel-scoped in the WHERE clause, not filtered afterwards: an id from
+    another tenant must not be reachable even by accident.
+    """
+    if not item_ids:
+        return 0
+    value = (to_name or "").strip() or None
+    result = await db.execute(
+        update(Item)
+        .where(Item.hotel_id == hotel_id, Item.id.in_(item_ids))
+        .values(category=value)
+    )
+    await db.commit()
+    return result.rowcount or 0
+
+
 async def seed_starter_items(
     db: AsyncSession,
     hotel_id: uuid.UUID,

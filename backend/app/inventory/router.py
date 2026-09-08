@@ -18,6 +18,7 @@ from app.core.template_io import Column, TemplateSpec
 from app.inventory import export, pack_service, service
 from app.inventory.models import Item, MovementType, VendorItemAlias
 from app.inventory.schemas import (
+    CategoryMove,
     CategoryRename,
     ItemCreate,
     ItemOut,
@@ -259,6 +260,30 @@ async def rename_category(
     """Rename a category across all its items; renaming into an existing name merges them."""
     moved = await service.rename_category(db, user.hotel_id, payload.from_name, payload.to_name)
     return {"updated": moved}
+
+
+@router.post("/categories/move")
+async def move_category(
+    payload: CategoryMove,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """Move chosen items into a category, creating it if it is new.
+
+    MOVE, never copy — see the note on the service function. The destination is
+    just a string on the item, so filing things under an unused name is how a
+    category gets created; that is what lets "make a new category and put these
+    six things in it" be one action rather than two.
+    """
+    moved = await service.move_items_to_category(
+        db, user.hotel_id, payload.item_ids, payload.to_name
+    )
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="inventory.category.move",
+        summary=f"Moved {moved} item{'' if moved == 1 else 's'} into {payload.to_name.strip()}",
+        entity_type="item", entity_id=None,
+    )
+    return {"moved": moved, "category": payload.to_name.strip()}
 
 
 @router.post(

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
 import { DetailSheet, SheetRing } from "@/components/DetailSheet";
 import { SheetPopup } from "@/components/SheetPopup";
+import { MoveToCategory } from "@/components/inventory/MoveToCategory";
 import { SupplierPopup } from "@/components/inventory/SupplierPopup";
 import { InlineEdit } from "@/components/InlineEdit";
 import Link from "next/link";
@@ -145,6 +146,10 @@ export default function InventoryPage() {
    *  residence above the list they filter. */
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [catFrom, setCatFrom] = useState("");
+  // "if I want to create a new category and want to move item to that
+  //  category" — its own sheet, because renaming a whole group and
+  //  re-filing six things are different jobs that happen to share a noun.
+  const [moveOpen, setMoveOpen] = useState(false);
   const [catTo, setCatTo] = useState("");
   const [allergensTouched, setAllergensTouched] = useState(false);
   // Per-item "purchases by supplier" record (expand a row to load + show it).
@@ -940,6 +945,12 @@ export default function InventoryPage() {
               icon: "🗂",
               onSelect: () => setCatMgr(true),
             },
+            {
+              key: "move-category",
+              label: "Move items to a category",
+              icon: "📦",
+              onSelect: () => setMoveOpen(true),
+            },
           ]}
           active={statusFilter === "low" || statusFilter === "out" ? "low" : undefined}
         />
@@ -1583,7 +1594,23 @@ export default function InventoryPage() {
 
           {/* The renamer, opened from the toolbar rather than owning a row. */}
           <div className={catMgr ? "mb-3" : "hidden"}>
-            {catMgr && (
+            {moveOpen && (
+        <MoveToCategory
+          items={items.map((i) => ({
+            id: i.id,
+            name: i.name,
+            category: i.category ?? null,
+            unit: i.unit,
+          }))}
+          categories={categories}
+          onClose={() => setMoveOpen(false)}
+          onDone={async () => {
+            await load();
+          }}
+        />
+      )}
+
+      {catMgr && (
               <div className="mise-card-inset flex flex-wrap items-end gap-2 p-3">
                 <div>
                   <label className="block text-xs font-medium text-fg-faint">Rename</label>
