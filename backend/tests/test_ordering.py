@@ -1087,3 +1087,84 @@ async def test_the_tables_page_says_which_tables_are_busy(
     assert rel.status_code == 200, rel.text
     rows = (await client.get("/api/ordering/tables", headers=h)).json()
     assert {r["label"]: r["open_orders"] for r in rows} == {"T1": 0, "T2": 0}
+
+
+@pytest.mark.asyncio
+async def test_a_request_is_not_cooked(client, make_user, auth_header, monkeypatch):
+    """"as a customer if I ask like 'need water please' as a msg, this also going
+    like food in kitchen screen like start cooking, ready, served. Kitchen
+    screen bug, please fix."
+
+    A message arriving when the table has no live order CREATES one to hang
+    itself on — a real Order row, with a status, and therefore the whole cooking
+    flow. Nobody cooks a napkin, so Accept → Start cooking → Ready → Served was
+    four presses of theatre for something that needs one.
+
+    The tell was already in the data and needed no new column: an order with no
+    ITEMS is not food. ORDER_FLOW is a rule about cooking, and there is nothing
+    here to cook.
+    """
+    monkeypatch.setattr(notify, "send_email", lambda *a, **k: None)
+    admin = await make_user("waterplease@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+
+    table = (
+        await client.post("/api/ordering/tables", json={"label": "T9", "seats": 2}, headers=h)
+    ).json()
+
+    said = await client.post(
+        f"/api/public/table/{table['code']}/message", json={"text": "need water please"}
+    )
+    assert said.status_code == 202, said.text
+
+    listed = await client.get("/api/ordering/orders", headers=h)
+    assert listed.status_code == 200, listed.text
+    # The payload is {"orders": [...], "vitals": {...}} and each row carries
+    # `table_label`, not `table_id` — matched on the message so the assertion
+    # cannot pass by finding some other table's ticket.
+    rows = listed.json()["orders"]
+    ticket = next(o for o in rows if o["guest_message"] == "need water please")
+    assert ticket["table_label"] == "T9"
+    assert ticket["items"] == [], "a request carries no food"
+    assert ticket["guest_message"] == "need water please"
+
+    # THE BUG: this used to be refused, because NEW may only go to CONFIRMED or
+    # REJECTED — so the only way to clear a napkin request was to pretend to
+    # cook it.
+    done = await client.patch(
+        f"/api/ordering/orders/{ticket['id']}", json={"status": "COMPLETED"}, headers=h
+    )
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "COMPLETED"
+
+
+@pytest.mark.asyncio
+async def test_real_food_still_has_to_be_cooked_in_order(
+    client, make_user, auth_header, monkeypatch
+):
+    """The other half: loosening the rule for requests must not loosen it for
+    food. A dish that could jump from NEW straight to SERVED would let a ticket
+    be cleared off the pass without anybody making it."""
+    monkeypatch.setattr(notify, "send_email", lambda *a, **k: None)
+    admin = await make_user("stillcooked@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+
+    table = (
+        await client.post("/api/ordering/tables", json={"label": "T10", "seats": 2}, headers=h)
+    ).json()
+    dish = await _menu_item(client, h, name="Dal", price="4.00")
+    placed = await client.post(
+        f"/api/public/table/{table['code']}",
+        json={
+            "customer_name": "Sam",
+            "phone": "07000000000",
+            "items": [{"menu_item_id": dish["id"], "quantity": 1}],
+        },
+    )
+    assert placed.status_code == 201, placed.text
+    oid = placed.json()["id"]
+
+    jump = await client.patch(
+        f"/api/ordering/orders/{oid}", json={"status": "COMPLETED"}, headers=h
+    )
+    assert jump.status_code == 422, "food still has to go through the pass"
