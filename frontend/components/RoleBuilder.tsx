@@ -38,8 +38,9 @@ import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { AiGrantPanel } from "@/components/AiGrantPanel";
 import { useConfirm } from "@/components/confirm";
+import { PagePermissions } from "@/components/PagePermissions";
 import { AccessModal } from "@/components/AccessModal";
-import { readOnlyKey,
+import { type PageRef, readOnlyKey,
   levelOf,
   overridesFor,
   SECTIONS,
@@ -197,6 +198,59 @@ export function RoleBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, pageDraft, held]);
 
+  /** Which area's per-page sheet is open. */
+  const [pagesFor, setPagesFor] = useState<Area | null>(null);
+
+  /** What ONE page is set to, right now. */
+  function pageLevelOf(a: Area, pg: PageRef): Level {
+    const only = shownPages(a);
+    if (current(a) === "none" || (only && !only.has(pg.slug))) return "none";
+    if (current(a) === "view") return "view";
+    return readOnlyPages(a).has(pg.slug) ? "view" : "edit";
+  }
+
+  /** Set one page, and pull the AREA up to the maximum of its pages.
+   *
+   *  One rule, so the area switch and the page switches cannot contradict each
+   *  other: THE AREA IS THE MAXIMUM OF ITS PAGES. Giving one page "can change"
+   *  turns the area on to "can change" and leaves its neighbours exactly where
+   *  they were — which is what makes "Online Orders read-only, the other two
+   *  writable" expressible at all.
+   */
+  function setPageLevel(a: Area, pg: PageRef, level: Level) {
+    const pages = new Set(shownPages(a) ?? a.pages.map((x) => x.slug));
+    const ro = new Set(readOnlyPages(a));
+    const wasArea = current(a);
+
+    if (level === "none") {
+      pages.delete(pg.slug);
+      ro.delete(pg.slug);
+    } else {
+      pages.add(pg.slug);
+      if (level === "view") ro.add(pg.slug);
+      else ro.delete(pg.slug);
+    }
+
+    // The area rises to the highest level any surviving page now has. It is
+    // never lowered here: dropping one page to "can look" must not quietly
+    // demote the others.
+    const levels = a.pages
+      .filter((x) => pages.has(x.slug))
+      .map((x) => (x.slug === pg.slug ? level : ro.has(x.slug) ? "view" : wasArea));
+    const top: Level = levels.includes("edit")
+      ? "edit"
+      : levels.includes("view")
+        ? "view"
+        : "none";
+
+    // Moving an area OFF "can change" makes every page read-only by
+    // definition, so the per-page markers stop meaning anything and are
+    // cleared rather than left to surprise somebody later.
+    setDraft((d) => ({ ...d, [a.key]: top }));
+    setPageDraft((d) => ({ ...d, [a.key]: pages }));
+    setRoDraft((d) => ({ ...d, [a.key]: top === "edit" ? ro : new Set<string>() }));
+  }
+
   function togglePage(a: Area, slug: string, on: boolean) {
     setPageDraft((d) => {
       const now = new Set(d[a.key] ?? shownPages(a) ?? a.pages.map((pg) => pg.slug));
@@ -283,6 +337,7 @@ export function RoleBuilder({
   }
 
   return (
+    <>
     <AccessModal
       open={open}
       onClose={onClose}
@@ -317,6 +372,7 @@ export function RoleBuilder({
       onTogglePage={(a, slug, on) => togglePage(a, slug, on)}
       pagesRo={(a) => readOnlyPages(a)}
       onTogglePageRo={(a, slug, ro) => togglePageRo(a, slug, ro)}
+      onOpenPages={(a) => setPagesFor(a)}
       current={(a) => current(a)}
       onSet={(a, l) => setDraft((d) => ({ ...d, [a.key]: l }))}
       onBulk={(l, g) => bulk(l, g)}
@@ -351,5 +407,14 @@ export function RoleBuilder({
         </div>
       }
     />
+    {pagesFor && (
+      <PagePermissions
+        area={pagesFor}
+        levelFor={(pg) => pageLevelOf(pagesFor, pg)}
+        onSet={(pg, l) => setPageLevel(pagesFor, pg, l)}
+        onClose={() => setPagesFor(null)}
+      />
+    )}
+    </>
   );
 }

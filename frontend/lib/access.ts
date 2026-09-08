@@ -361,6 +361,26 @@ export function canWriteHref(href: string, held: Set<string>): boolean {
   return pageLevel(area, page, held) === "edit";
 }
 
+/** Every area that opens this screen.
+ *
+ *  TWO SWITCHES CAN OPEN THE SAME PAGE, and it is not a mistake: Online Orders
+ *  is reachable from Sales & till AND from Kitchen, Money from Sales & till AND
+ *  from Reports & P&L. A restaurant genuinely has both routes to them.
+ *
+ *  It matters here because the reach counter counts PAGES A PERSON CAN OPEN —
+ *  a set — so hiding Online Orders under Sales & till leaves it reachable
+ *  through Kitchen and the number correctly stays put. Arithmetically right,
+ *  and visually indistinguishable from the bug where it did not track the draft
+ *  at all: a struck-through chip next to an unmoved number. So the chip says so
+ *  itself rather than leaving it to be re-reported.
+ */
+export function areasOpening(slug: string): Area[] {
+  const out: Area[] = [];
+  for (const s of SECTIONS)
+    for (const a of s.areas) if (a.pages.some((p) => p.slug === slug)) out.push(a);
+  return out;
+}
+
 /** Which area owns a screen, by href — for the sidebar and the page guards. */
 export function areaForHref(href: string): Area | null {
   for (const s of SECTIONS)
