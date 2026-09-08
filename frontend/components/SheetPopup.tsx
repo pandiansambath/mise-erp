@@ -26,6 +26,21 @@ import { overlayOpened } from "@/lib/overlay";
  *  - it is as WIDE as its content needs, because a popup that stays one size
  *    while its list grows is a popup you scroll instead of read
  */
+/** Every open sheet's depth, so Escape can tell which one is on top.
+ *
+ *  ESCAPE WAS CLOSING THE WRONG SHEET. Each open popup registers its own
+ *  keydown listener on `window`, and `stopPropagation` does not stop other
+ *  listeners on the SAME target — only `stopImmediatePropagation` would, and
+ *  which listener runs first is registration order, i.e. the OLDEST sheet.
+ *
+ *  Verified on the live site with three open: Escape left the supplier and the
+ *  price sheet and closed the CATEGORY between them, orphaning the top one over
+ *  a parent it no longer belonged to — and the price sheet lost its ← at the
+ *  same time, because the category it pointed back to was gone.
+ *
+ *  Escape means "the thing in front of me", so only the deepest open sheet acts. */
+const openDepths: number[] = [];
+
 export function SheetPopup({
   onClose,
   onBack,
@@ -76,11 +91,20 @@ export function SheetPopup({
   const goBack = onBack ?? onClose;
 
   useEffect(() => {
+    openDepths.push(depth);
+    return () => {
+      const i = openDepths.lastIndexOf(depth);
+      if (i >= 0) openDepths.splice(i, 1);
+    };
+  }, [depth]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        goBack();
-      }
+      if (e.key !== "Escape") return;
+      // Only the sheet in front. See the note on `openDepths`.
+      if (openDepths.length > 0 && depth !== Math.max(...openDepths)) return;
+      e.stopPropagation();
+      goBack();
     };
     window.addEventListener("keydown", onKey);
     // The page behind must not scroll under a popup, and the floating launcher
@@ -90,7 +114,7 @@ export function SheetPopup({
       window.removeEventListener("keydown", onKey);
       release();
     };
-  }, [goBack]);
+  }, [goBack, depth]);
 
   // On Android, Back should close the popup rather than leave the page. The
   // order pad never wired this up because its sheets are always reachable by

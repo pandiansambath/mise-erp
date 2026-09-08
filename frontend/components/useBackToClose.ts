@@ -8,6 +8,27 @@ import { useEffect, useRef } from "react";
  *  event, and only one can be in flight. */
 let selfPop = false;
 
+/** Claim the next `popstate` as OURS, for every listener in the round.
+ *
+ *  The clear is registered as a listener rather than done on a timer because
+ *  `history.back()` is asynchronous: a `setTimeout(0)` scheduled here could fire
+ *  before the pop ever arrives, and then the flag is already gone when the
+ *  handlers run. Registering now means this listener is LAST in the round —
+ *  after every overlay's — so all of them see the flag, and then it clears.
+ *
+ *  The timer is only a safety net for a pop that never comes (a blocked
+ *  `back()`), so a stuck flag cannot silently disable every later overlay. */
+function claimPop(): void {
+  selfPop = true;
+  const done = () => {
+    selfPop = false;
+    window.removeEventListener("popstate", done);
+    window.clearTimeout(bail);
+  };
+  const bail = window.setTimeout(done, 1000);
+  window.addEventListener("popstate", done);
+}
+
 /** Set when an overlay is closing BECAUSE we are navigating somewhere.
  *
  *  THE SEVEN-TIME BUG. "Change the restaurant's timezone" did nothing, and he
@@ -87,7 +108,27 @@ export function useBackToClose(open: boolean, onClose: () => void) {
       // edit form opened and vanished in the same breath, three reports
       // running. A pop we caused ourselves belongs to nobody.
       if (selfPop) {
-        selfPop = false;
+        // NOT cleared here. `popstate` is dispatched to EVERY registered
+        // listener in one round, and clearing the flag in the first one to run
+        // meant the second saw `false` and closed itself.
+        //
+        // With two overlays that was invisible — the only other listener was
+        // the one doing the popping. With THREE it is the bug he reported:
+        //
+        //   "if i click any item see, previous popup closed, which is making me
+        //    to jump 1 popup, skip in between."
+        //
+        // Measured, not guessed. Instrumenting `history` on the live site gave:
+        //   -listener (live=3)   the price sheet detaches
+        //   history.back() with live=3
+        //   popstate delivered (live=3)   ONE event, THREE listeners
+        //   -listener (live=2)   the CATEGORY unmounts
+        // The supplier's handler (registered first) ate the flag; the
+        // category's then saw false and closed. So ✕ on the price sheet landed
+        // on the supplier, exactly the skipped step he described — even after
+        // the stacking itself was fixed.
+        //
+        // `claimPop` clears it after the whole round instead.
         return;
       }
       pushed.current = false;
@@ -118,7 +159,7 @@ export function useBackToClose(open: boolean, onClose: () => void) {
         pushed.current = false;
         // Claim the pop before it happens, so whichever overlay is listening
         // when it lands knows it was not meant for them.
-        selfPop = true;
+        claimPop();
         window.history.back();
       }
       pushed.current = false;
