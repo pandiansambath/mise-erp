@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { keepOverlayHistoryOnNavigate } from "@/components/useBackToClose";
 import { useEffect, useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
@@ -261,20 +262,32 @@ export function HotelClock({ className = "" }: { className?: string }) {
           {/* Only offered to whoever can actually change it. This link is how
               he found a staff account looking at the whole settings page —
               a shortcut is still a door. */}
-          {/* WHY THIS DID NOTHING, THREE TIMES.
-              It was a <Link> whose onClick closed the popup — and closing the
-              popup UNMOUNTS THE ANCHOR mid-click. The element handling the
-              navigation ceases to exist before the navigation begins, so the
-              browser drops it. Nothing throws, nothing logs, the popup shuts
-              and you are exactly where you were.
-              I had fixed the anchor it points at, and then who can see it, and
-              both were real — but neither was this. Pushing the route
-              imperatively cannot be cancelled by unmounting the button that
-              asked for it. */}
+          {/* WHY THIS DID NOTHING — THE SEVENTH REPORT.
+              "this is 7th time im saying this same issue."
+
+              Three earlier fixes each corrected something real and none of them
+              was the cause: the anchor it pointed at, who was allowed to see
+              it, and a <Link> unmounted mid-click. Switching to an imperative
+              push removed the third and the button still did nothing.
+
+              Settled by measurement instead of theory — patching `history` on
+              the live site and recording the calls the click produced:
+
+                  ["back()", "popstate"]        …and no push at all.
+
+              Closing this popup runs `useBackToClose`'s cleanup, which takes
+              the overlay's history entry back off the stack. `router.push` is a
+              TRANSITION and had not written its entry yet, so the cleanup's
+              "is the top of the stack still mine?" check said yes — correctly —
+              and popped. The pending navigation went with it.
+
+              The close now declares itself a navigation, so the entry stays and
+              nothing is unwound. */}
           {canSet && (
             <button
               type="button"
               onClick={() => {
+                keepOverlayHistoryOnNavigate();
                 router.push("/settings#timezone");
                 setOpen(false);
               }}

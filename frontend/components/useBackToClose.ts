@@ -8,6 +8,41 @@ import { useEffect, useRef } from "react";
  *  event, and only one can be in flight. */
 let selfPop = false;
 
+/** Set when an overlay is closing BECAUSE we are navigating somewhere.
+ *
+ *  THE SEVEN-TIME BUG. "Change the restaurant's timezone" did nothing, and he
+ *  reported it seven times while three different fixes were applied to three
+ *  different innocent things — the anchor it pointed at, who was allowed to see
+ *  it, and a <Link> being unmounted mid-click. All three were real faults. None
+ *  of them was this one.
+ *
+ *  What actually happened, measured on the live site by patching `history` and
+ *  recording the calls: pressing the button produced `["back()", "popstate"]`
+ *  and no push at all. The handler ran `router.push(...)` and then closed the
+ *  popup; closing runs the cleanup below, which takes the overlay's history
+ *  entry back off the stack. `router.push` is a TRANSITION — at the moment the
+ *  cleanup runs it has not written its entry yet, so the guard that checks
+ *  "is the top of the stack still mine?" says yes, quite correctly, and pops.
+ *  The pending navigation goes with it. Nothing throws, nothing logs, and you
+ *  are exactly where you were.
+ *
+ *  So an overlay that closes in order to GO somewhere has to say so. Its entry
+ *  is left on the stack, which is also the behaviour you want: Back from the
+ *  new page returns to the page the overlay was opened from. */
+let navigatingAway = false;
+
+/** Call immediately BEFORE `router.push`/`replace` when a click both navigates
+ *  and closes an overlay. Without it the close undoes the navigation. */
+export function keepOverlayHistoryOnNavigate(): void {
+  navigatingAway = true;
+  // Self-clearing, so a navigation that never happens cannot leave every later
+  // overlay unable to tidy up after itself. One frame is far longer than the
+  // gap between the click handler and the effect cleanup it triggers.
+  setTimeout(() => {
+    navigatingAway = false;
+  }, 0);
+}
+
 /** Make the browser BACK button close an overlay instead of leaving the page.
  *
  * Without this, opening a modal and pressing back navigates away entirely —
@@ -71,6 +106,13 @@ export function useBackToClose(open: boolean, onClose: () => void) {
       // NEW overlay's entry, whose popstate handler closed it immediately: the
       // edit form opened and vanished in the same frame, which looked exactly
       // like a dead button. If somebody else is on top, leave the stack alone.
+      // Going somewhere: leave the entry alone. See the note on
+      // `navigatingAway` above — popping here is what silently cancelled the
+      // navigation seven times running.
+      if (navigatingAway) {
+        pushed.current = false;
+        return;
+      }
       const top = (window.history.state as { overlay?: string } | null)?.overlay;
       if (pushed.current && top === id) {
         pushed.current = false;
