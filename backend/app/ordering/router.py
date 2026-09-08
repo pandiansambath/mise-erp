@@ -1724,14 +1724,20 @@ def _qr_svg_with_label(hotel, table, scale: int = 8) -> bytes:
 def _fit_font(lines: list[str], hole: float) -> float:
     """A font size that fits the plate, estimated the same way in SVG and PNG.
 
-    SVG cannot be measured before it is rendered, so this uses the standard
-    approximation for a bold sans face: an average glyph is about 0.58 of the
-    font size wide. The PNG path measures for real and shrinks further if the
-    estimate was optimistic — the two only have to agree closely enough that a
-    printed card and a downloaded one look like the same card.
+    SVG cannot be measured before it renders, so this estimates from the average
+    advance of a bold sans face. 0.58 is the figure usually quoted and it is
+    optimistic: rendered in a browser at that size, "Window" and "Table" both
+    reached the edge of the plate and "Window" crossed it. Caps and round
+    lowercase run wider than the average, and a table name is mostly caps.
+
+    0.66 was arrived at by rendering the real SVG in a real browser and looking
+    at it, which is the only way this particular number can be checked. The PNG
+    path measures for real and shrinks further if even this is generous — the
+    two only have to agree closely enough that a printed card and a downloaded
+    one look like the same card.
     """
     longest = max((len(x) for x in lines), default=1) or 1
-    by_width = hole * _QR_TEXT_FILL / (0.58 * longest)
+    by_width = hole * _QR_TEXT_FILL / (0.66 * longest)
     by_height = hole * _QR_TEXT_FILL / max(1, len(lines))
     return max(hole * _QR_MIN_FONT_FRAC, min(by_width, by_height))
 
