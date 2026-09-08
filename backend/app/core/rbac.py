@@ -189,7 +189,22 @@ def envelope_for(base_role: str) -> list[str]:
 #: access beyond it. Used the way he means it (give Inventory, withhold Waste)
 #: that is exactly right, and it is why it is safe to let the UI define the
 #: slugs rather than enumerating them here.
-_PAGE_KEY = re.compile(r"^page:[a-z0-9-]{1,40}$")
+#: …and `page:<slug>:ro` says that ONE of those screens is read-only, even where
+#: the module permission grants writing.
+#:
+#:   "what if I need ONLINE ORDER page alone to be read only, other 2 pages in
+#:    write mode? How can I do this? Currently it's bundled. So please make it
+#:    flexible to do whatever the super admin wants."
+#:
+#: He is right that it was bundled, and the note above explains why it had to
+#: be: Sales & Cash, Online Orders and Money read the same data, so ONE module
+#: permission guards all three. That does not change — a `:ro` grant cannot
+#: widen anything, and the module permission is still the lock on the data.
+#: What it does is take writing away from one screen while leaving its
+#: neighbours alone, which is exactly the direction a restriction is allowed to
+#: travel. Anyone reaching the API directly is still bounded by the module
+#: permission, so this is honestly a UI restriction and is documented as one.
+_PAGE_KEY = re.compile(r"^page:[a-z0-9-]{1,40}(:ro)?$")
 
 
 def is_page_key(perm: str) -> bool:

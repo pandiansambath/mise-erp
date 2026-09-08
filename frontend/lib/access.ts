@@ -317,6 +317,50 @@ export function pageAllowed(area: Area, page: PageRef, held: Set<string>): boole
   return !narrowed || held.has(`page:${page.slug}`);
 }
 
+/** The grant that makes one screen read-only inside an otherwise writable area. */
+export const readOnlyKey = (slug: string) => `page:${slug}:ro`;
+
+/**
+ * What this person may do on ONE page — which is not always what they may do
+ * in the area around it.
+ *
+ *   "I made the sale and cash page to be cross. Now in that 3 pages... what if
+ *    I need ONLINE ORDER page alone to be read only, other 2 pages in write
+ *    mode? How can I do this? Currently it's bundled. So please make it
+ *    flexible to do whatever the super admin wants."
+ *
+ * He is right that it was bundled, and there is a real reason it had to be:
+ * Sales & Cash, Online Orders and Money all read the same data, so one module
+ * permission guards all three — you cannot hand out "write sales" for one
+ * screen and withhold it for another at the data layer, because it is the same
+ * data.
+ *
+ * What CAN be done honestly is take a screen's write actions away while leaving
+ * its neighbours alone. That is a restriction, and restrictions are always safe
+ * to apply: `page:<slug>:ro` can only ever narrow. It cannot grant anything the
+ * area does not already allow, and anyone reaching the API directly is still
+ * bounded by the module permission. It is a UI-level lock and is documented as
+ * one in `rbac.py` too, so nobody later mistakes it for a data guarantee.
+ */
+export function pageLevel(area: Area, page: PageRef, held: Set<string>): Level {
+  if (!pageAllowed(area, page, held)) return "none";
+  const level = levelOf(area, held);
+  if (level === "edit" && held.has(readOnlyKey(page.slug))) return "view";
+  return level;
+}
+
+/** Can this person CHANGE things on this screen? What every page should ask
+ *  before showing a Save button, in place of the area-wide permission. */
+export function canWriteHref(href: string, held: Set<string>): boolean {
+  // The owner's wildcard is not a page grant and must not be narrowed by one.
+  if (held.has("*")) return true;
+  const area = areaForHref(href);
+  if (!area) return true;
+  const page = area.pages.find((p) => p.href === href);
+  if (!page) return levelOf(area, held) === "edit";
+  return pageLevel(area, page, held) === "edit";
+}
+
 /** Which area owns a screen, by href — for the sidebar and the page guards. */
 export function areaForHref(href: string): Area | null {
   for (const s of SECTIONS)
@@ -410,6 +454,8 @@ export function overridesFor(
   level: Level,
   /** Which of this area's screens to show. Omit = all of them. */
   pages?: Set<string>,
+  /** Which of them are read-only, even though the area can be changed. */
+  readOnly?: Set<string>,
 ): Record<string, boolean> {
   const out: Record<string, boolean> = {};
   for (const p of area.read) out[p] = level !== "none";
@@ -418,6 +464,10 @@ export function overridesFor(
   // back on cannot leave a stale "no" behind it.
   for (const pg of area.pages) {
     out[`page:${pg.slug}`] = level !== "none" && (!pages || pages.has(pg.slug));
+    // Per-page read-only, likewise written both ways. Only meaningful while the
+    // area is writable at all; on a "can see" area every page is already
+    // read-only and a second marker would just be noise to un-set later.
+    out[readOnlyKey(pg.slug)] = level === "edit" && !!readOnly?.has(pg.slug);
   }
   return out;
 }

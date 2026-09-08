@@ -264,6 +264,8 @@ export function AccessModal({
   onSet,
   pagesOn,
   onTogglePage,
+  pagesRo,
+  onTogglePageRo,
   onBulk,
   areaExtra,
   explain,
@@ -308,6 +310,11 @@ export function AccessModal({
   /** Which of an area's screens are shown. Undefined = all of them. */
   pagesOn?: (a: Area) => Set<string> | undefined;
   onTogglePage?: (a: Area, slug: string, on: boolean) => void;
+  /** Which of this area's screens are read-only despite the area being
+   *  writable — the answer to "what if I need ONLINE ORDER page alone to be
+   *  read only, other 2 pages in write mode?" */
+  pagesRo?: (a: Area) => Set<string>;
+  onTogglePageRo?: (a: Area, slug: string, ro: boolean) => void;
   /** level, or a group key to limit it to. */
   onBulk: (l: Level, group?: string) => void;
   /** Per-area trimmings the caller owns: "not saved yet", etc. */
@@ -696,7 +703,7 @@ export function AccessModal({
                              tick. Untick one and it disappears from their sidebar;
                              the permission behind the row is untouched, so this
                              only ever takes screens away. */
-                          <span className="mt-1 flex flex-wrap gap-1">
+                          <span className="mt-1 flex flex-wrap items-center gap-1">
                             {/* De-duplicated: two routes that are deliberately
                                 ONE thing should read once. "why here duplicate?
                                 the assistant the assistant" — because merging
@@ -705,25 +712,66 @@ export function AccessModal({
                               const only = pagesOn?.(a);
                               const shown = !only || only.has(pg.slug);
                               const off = current(a) === "none";
+                              // Read-only is only a distinct state while the
+                              // AREA can be changed. On a "can see" area every
+                              // page is already read-only and a second marker
+                              // would be a thing to un-set later for no reason.
+                              const canRo = !!onTogglePageRo && current(a) === "edit";
+                              const ro = canRo && !!pagesRo?.(a).has(pg.slug);
+                              const state = !shown ? "hidden" : ro ? "read" : "write";
                               return (
                                 <button
                                   key={pg.slug}
                                   type="button"
                                   disabled={off}
-                                  onClick={() => togglePageWithConfirm(a, pg, !shown)}
+                                  // ONE CHIP, THREE ANSWERS.
+                                  //
+                                  //   "what if I need ONLINE ORDER page alone to
+                                  //    be read only, other 2 pages in write
+                                  //    mode? Currently it's bundled."
+                                  //
+                                  // It cycles rather than opening a menu because
+                                  // there are only three answers and they have a
+                                  // natural order — most access, less, none. A
+                                  // dropdown per page would be twelve dropdowns
+                                  // on this card.
+                                  onClick={() => {
+                                    if (!canRo) {
+                                      togglePageWithConfirm(a, pg, !shown);
+                                      return;
+                                    }
+                                    if (state === "write") onTogglePageRo?.(a, pg.slug, true);
+                                    else if (state === "read") {
+                                      onTogglePageRo?.(a, pg.slug, false);
+                                      togglePageWithConfirm(a, pg, false);
+                                    } else {
+                                      togglePageWithConfirm(a, pg, true);
+                                    }
+                                  }}
                                   title={
                                     off
                                       ? "Switch this on first"
-                                      : shown
-                                        ? `Hide ${pg.label} from them`
-                                        : `Show ${pg.label} to them`
+                                      : !canRo
+                                        ? shown
+                                          ? `Hide ${pg.label} from them`
+                                          : `Show ${pg.label} to them`
+                                        : state === "write"
+                                          ? `${pg.label}: they can change it — click for read-only`
+                                          : state === "read"
+                                            ? `${pg.label}: they can only look — click to hide it`
+                                            : `${pg.label}: hidden — click to give it back`
                                   }
                                   className={`mise-press rounded-md border px-1.5 py-0.5 text-[10px] transition disabled:opacity-40 ${
-                                    shown && !off
-                                      ? "border-brand-400/50 bg-brand-400/10 text-fg-soft"
-                                      : "border-line text-fg-faint line-through"
+                                    off || state === "hidden"
+                                      ? "border-line text-fg-faint line-through"
+                                      : state === "read"
+                                        ? "border-amber-400/50 bg-amber-400/10 text-fg-soft"
+                                        : "border-brand-400/50 bg-brand-400/10 text-fg-soft"
                                   }`}
                                 >
+                                  {state === "read" && !off && (
+                                    <span aria-hidden className="mr-0.5">👁</span>
+                                  )}
                                   {pg.label}
                                 </button>
                               );
