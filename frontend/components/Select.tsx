@@ -41,6 +41,7 @@ export function Select({
   placeholder = "Select…",
   className = "",
   searchable,
+  note,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -50,6 +51,13 @@ export function Select({
   /** Force the filter box on or off. Left alone it appears once the list is
    *  long enough to be worth searching — see SEARCH_FROM. */
   searchable?: boolean;
+  /** A caveat pinned under the list.
+   *
+   *  Exists because I twice wrote a commit message claiming the currency picker
+   *  said its rates were approximate, when the sentence was only ever a CODE
+   *  COMMENT. A caution that lives in the source protects nobody: the person
+   *  who needs it is looking at the screen. */
+  note?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -143,7 +151,14 @@ export function Select({
             className="mise-pop fixed z-[95] overflow-auto overscroll-contain rounded-xl border border-line bg-paper-2 p-1 shadow-2xl shadow-black/40"
             style={{
               left: pos.left,
-              width: pos.width,
+              // THE TRIGGER'S WIDTH IS NOT THE LIST'S WIDTH.
+              // The currency button is deliberately narrow (112px) so the header
+              // stays tidy, and the popover inherited that — clipping the very
+              // second line it exists to show: "British Po…", "New Zealand Do…".
+              // The list may be wider than the thing that opened it; it is
+              // floating over the page either way.
+              minWidth: Math.max(pos.width, 232),
+              maxWidth: Math.max(pos.width, Math.min(320, window.innerWidth - 24)),
               maxHeight: pos.maxH,
               ...(pos.up ? { bottom: pos.bottom + 6 } : { top: pos.top + 6 }),
             }}
@@ -191,9 +206,18 @@ export function Select({
                     <span className="block truncate text-[11px] text-fg-faint">{o.hint}</span>
                   )}
                 </span>
-                {o.value === value && <span className="shrink-0 text-brand-400">✓</span>}
+                {/* No tick on an empty placeholder: "Choose…" carrying a ✓
+                    reads as though nothing were a choice somebody made. */}
+                {o.value === value && o.value !== "" && (
+                  <span className="shrink-0 text-brand-400">✓</span>
+                )}
               </button>
             ))}
+            {note && (
+              <p className="mt-1 border-t border-line/60 px-3 pb-1 pt-2 text-[11px] leading-relaxed text-fg-faint">
+                {note}
+              </p>
+            )}
           </div>,
           document.body,
         )}

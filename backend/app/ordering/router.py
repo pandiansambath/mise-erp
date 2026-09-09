@@ -1738,10 +1738,26 @@ def _qr_svg_with_label(hotel, table, scale: int = 8) -> bytes:
     lines = _qr_lines(table)
     font = _fit_font(lines, hole)
 
+    # MADE OF THE CODE, NOT STUCK ON IT.
+    #
+    #   "that table name is looking separately from that qr — I can literally
+    #    see both are separate. Please have like that table name also part of
+    #    QR so that it will be more professional."
+    #
+    # He is right, and it was the outline that did it: a thin dark rule around a
+    # white square reads as a sticker someone placed on top. A QR is built from
+    # square modules on a grid, so a plate that belongs to it should be made of
+    # the same thing — a quiet gap in the pattern, cornered like a module, with
+    # no border drawn around it at all.
+    #
+    # The white plate is inset by one module's worth so the surrounding modules
+    # form its edge instead. The rounding matches a module's own corner radius.
+    module = side * (1.0 / (qr.symbol_size(scale=1, border=2)[0]))
+    pad = module * 1.2
     plate = (
-        f'<rect x="{x:.1f}" y="{x:.1f}" width="{hole:.1f}" height="{hole:.1f}" '
-        f'rx="{hole * 0.22:.1f}" fill="#ffffff" stroke="#111111" '
-        f'stroke-width="{max(1.0, side * 0.006):.1f}"/>'
+        f'<rect x="{x - pad:.1f}" y="{x - pad:.1f}" '
+        f'width="{hole + pad * 2:.1f}" height="{hole + pad * 2:.1f}" '
+        f'rx="{module * 1.6:.1f}" fill="#ffffff"/>'
     )
     # Vertically centre the block of lines on the plate's middle.
     step = font * 1.06
@@ -1810,12 +1826,15 @@ def _card_png(hotel, table, scale: int = 12) -> bytes:
     hole = int(side * _QR_PLATE)
     x = (side - hole) // 2
     d = ImageDraw.Draw(im)
+    # The raster twin of the SVG plate — no outline, inset by a little over one
+    # module so the code's own squares form the edge. See the note there: the
+    # drawn border was what made the name read as a sticker placed on top.
+    module = side / qr.symbol_size(scale=1, border=2)[0]
+    pad = int(module * 1.2)
     d.rounded_rectangle(
-        [x, x, x + hole, x + hole],
-        radius=int(hole * 0.22),
+        [x - pad, x - pad, x + hole + pad, x + hole + pad],
+        radius=int(module * 1.6),
         fill="#ffffff",
-        outline="#111111",
-        width=max(1, int(side * 0.006)),
     )
 
     lines = _qr_lines(table)
