@@ -1071,12 +1071,24 @@ export default function RotaPage() {
           >
             <label className="block text-[11px] text-fg-faint">
               Who
+              {/* "if I have more employees then it's gonna hit bottom, so
+                  please handle this — also have a search functionality."
+                  The popover already flips upward and caps its own height, so
+                  it cannot run off the screen. The missing half was being able
+                  to TYPE a name: past a handful of people, scanning a list is
+                  slower than three letters. Six rather than the usual eight,
+                  because a rota is where you know exactly who you want. */}
               <Select
                 value={emp}
                 onChange={setEmp}
+                searchable={employees.length >= 6}
                 options={[
                   { value: "", label: "Choose…" },
-                  ...employees.map((e) => ({ value: e.id, label: e.full_name })),
+                  ...employees.map((e) => ({
+                    value: e.id,
+                    label: e.full_name,
+                    hint: e.job_title || undefined,
+                  })),
                 ]}
               />
             </label>
