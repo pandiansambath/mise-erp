@@ -145,13 +145,50 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
     }
   }, [menu]);
 
+  // "MAIN" AND "MAINS" ARE THE SAME COURSE.
+  //
+  // The kitchen types the category by hand, so the same course arrives spelled
+  // two ways — and this is the screen where that matters most, because a diner
+  // reading two "Main" sections assumes they are different things and orders
+  // from one of them. Matched on a normalised key, labelled with whichever
+  // spelling the kitchen uses most.
+  const courseKey = (name: string) => name.trim().toLowerCase().replace(/s$/, "");
+
   const cats = useMemo(() => {
-    const seen: string[] = [];
-    for (const m of menu) if (!seen.includes(m.category)) seen.push(m.category);
-    return seen;
+    const seen = new Map<string, { n: number; names: Map<string, number> }>();
+    for (const m of menu) {
+      const k = courseKey(m.category);
+      const e = seen.get(k) ?? { n: 0, names: new Map<string, number>() };
+      e.n += 1;
+      e.names.set(m.category, (e.names.get(m.category) ?? 0) + 1);
+      seen.set(k, e);
+    }
+    return [...seen.entries()].map(([k, e]) => {
+      const best = [...e.names.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      return { key: k, label: best[0][0], n: e.n };
+    });
   }, [menu]);
 
-  const shown = useMemo(() => menu.filter((m) => !cat || m.category === cat), [menu, cat]);
+  const shown = useMemo(
+    () => menu.filter((m) => !cat || courseKey(m.category) === cat),
+    [menu, cat],
+  );
+
+  /** The visible dishes, in courses — a menu has a shape and a flat list throws
+   *  it away. */
+  const courses = useMemo(() => {
+    const label = new Map(cats.map((c) => [c.key, c.label]));
+    const by = new Map<string, MenuItem[]>();
+    for (const m of shown) {
+      const k = courseKey(m.category);
+      const arr = by.get(k);
+      if (arr) arr.push(m);
+      else by.set(k, [m]);
+    }
+    return [...by.entries()].map(
+      ([k, rows]) => [label.get(k) ?? rows[0].category, rows] as [string, MenuItem[]],
+    );
+  }, [shown, cats]);
   const lines = useMemo(
     () => Object.entries(cart).map(([id, q]) => ({ item: menu.find((m) => m.id === id)!, q })).filter((l) => l.item),
     [cart, menu],
@@ -321,115 +358,184 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         {/* ── The menu. */}
         {cats.length > 0 && (
           <div className="mise-noscrollbar sticky top-[4.25rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell/85 px-4 py-3 backdrop-blur-xl">
+            {/* "All" first, because a diner arriving at a menu wants to SEE the
+                menu — sending them to pick a course before anything appears is
+                a decision demanded before they have the information to make
+                it. */}
+            <button
+              type="button"
+              onClick={() => setCat(null)}
+              className={`mise-press shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                cat === null ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
+              }`}
+            >
+              Everything
+            </button>
             {cats.map((c) => (
               <button
-                key={c}
+                key={c.key}
                 type="button"
-                onClick={() => setCat(c)}
-                className={`mise-press shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
-                  cat === c ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
+                onClick={() => setCat((k) => (k === c.key ? null : c.key))}
+                className={`mise-press shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                  cat === c.key ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
                 }`}
               >
-                {c}
+                {c.label}
+                <span className="ml-1 opacity-60">{c.n}</span>
               </button>
             ))}
           </div>
         )}
 
-        <ul className="mt-1 space-y-2.5">
-          {shown.map((m) => {
-            const q = cart[m.id] ?? 0;
-            return (
-              <li
-                key={m.id}
-                className={`mise-card3d overflow-hidden p-3 ${m.orderable === false ? "opacity-60" : ""}`}
-              >
-                <div className="flex gap-3">
-                  <span
-                    aria-hidden
-                    className="mise-well grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-2xl"
-                  >
-                    {/* Their own photo first, then the bundled library, then an
-                        emoji. A menu of grey squares sells nothing, and most
-                        kitchens will never get round to uploading photos. */}
-                    {(() => {
-                      const src = m.has_photo
-                        ? `${API_BASE}/api/public/order/menu-photo/${m.id}`
-                        : dishPhoto(m.name);
-                      if (!src) return m.emoji ?? "🍽️";
-                      return (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={src} alt="" className="h-full w-full object-cover" />
-                      );
-                    })()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-display text-[15px] font-semibold leading-tight">{m.name}</p>
-                    {/* The "slogan" he asked for — the line that sells the dish. */}
-                    {m.description && (
-                      <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-fg-faint">
-                        {m.description}
-                      </p>
-                    )}
-                    {/* "touch me ai to see whats are all health benefits u will
-                        get if u eat this" — offered on the dish itself, where
-                        the curiosity actually happens. */}
-                    <button
-                      type="button"
-                      onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
-                      className="mise-press mise-tone-info mt-1 flex items-center gap-1 text-[11px] font-medium"
-                    >
-                      ✨ What&apos;s in it, and what it does for you
-                    </button>
+        {/* ── THE MENU, AS A MENU ──────────────────────────────────────────
+            "I personally don't like this UI bro, UI UX is very bad. This is a
+             very very important page — this only will be first impression of
+             the customer of that hotel... see raw UI bro, definitely we need to
+             change, else customer will be disappointed."
 
-                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <span className="font-display text-sm font-semibold text-fg">
-                        {money(m.price)}
-                      </span>
-                      {/* OFF THE MENU RIGHT NOW — said, not hidden. A dish that
-                          silently disappears reads as "they don't do that";
-                          one that says "served 07:00–11:00" brings them back
-                          tomorrow. */}
-                      {m.orderable === false ? (
-                        <span className="mise-tone-warn rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-medium">
-                          {m.unavailable_reason ?? "Not available"}
-                        </span>
-                      ) : q === 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => bump(m.id, 1)}
-                          className="mise-press rounded-xl bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white"
-                        >
-                          Add
-                        </button>
-                      ) : (
-                        <span className="mise-well flex items-center gap-1 rounded-xl p-0.5">
+            He is right about the stakes, and the diagnosis is the same one that
+            fixed the admin menu: a printed menu has a SHAPE — starters, then
+            mains, then desserts — and a flat alphabetical list throws it away.
+            Every card then had to repeat its own course to make up for the
+            ordering that discarded it.
+
+            Three other things were costing this page its first impression:
+
+            · the cards were raised slabs (`mise-card3d`) on a site that is
+              inset everywhere else, so the one screen a customer sees was the
+              one screen drawn in the old style;
+            · "✨ What's in it, and what it does for you" was a full blue
+              sentence on EVERY card — thirteen identical invitations shouting
+              over the food. It is the dish's own row now, tapped from the name;
+            · the photo was 64px. On a menu the photograph IS the selling, and a
+              thumbnail the size of a favicon sells nothing.
+        */}
+        <div className="mt-1 space-y-6">
+          {courses.map(([course, dishes]) => (
+            <section key={course}>
+              <div className="mb-2.5 flex items-baseline gap-2">
+                <h2 className="font-display text-base font-bold tracking-tight text-fg">
+                  {course}
+                </h2>
+                <span aria-hidden className="h-px flex-1 bg-line" />
+                <span className="text-[11px] tabular-nums text-fg-faint">{dishes.length}</span>
+              </div>
+
+              <ul className="grid gap-2.5 sm:grid-cols-2">
+                {dishes.map((m) => {
+                  const q = cart[m.id] ?? 0;
+                  const off = m.orderable === false;
+                  const src = m.has_photo
+                    ? `${API_BASE}/api/public/order/menu-photo/${m.id}`
+                    : dishPhoto(m.name);
+                  return (
+                    <li key={m.id}>
+                      <article
+                        className={`mise-card-inset flex h-full flex-col overflow-hidden rounded-2xl ${
+                          off ? "opacity-70" : ""
+                        }`}
+                      >
+                        {/* A WIDE PHOTO, not a thumbnail. This is the only
+                            picture of the food a diner will ever see, and the
+                            hotel's photo comes first, then the bundled library,
+                            then the emoji — most kitchens will never get round
+                            to uploading their own. */}
+                        {src ? (
                           <button
                             type="button"
-                            onClick={() => bump(m.id, -1)}
-                            aria-label={`One less ${m.name}`}
-                            className="mise-press grid h-7 w-7 place-items-center rounded-lg text-fg-soft"
+                            onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
+                            aria-label={`More about ${m.name}`}
+                            className="mise-press relative block h-32 w-full overflow-hidden bg-glass/5"
                           >
-                            −
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={src}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                            <span
+                              aria-hidden
+                              className="absolute bottom-1.5 right-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm"
+                            >
+                              ✨ about this
+                            </span>
                           </button>
-                          <span className="w-6 text-center text-sm font-semibold tabular-nums">{q}</span>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => bump(m.id, 1)}
-                            aria-label={`One more ${m.name}`}
-                            className="mise-press grid h-7 w-7 place-items-center rounded-lg bg-brand-600 text-white"
+                            onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
+                            aria-label={`More about ${m.name}`}
+                            className="mise-press grid h-24 w-full place-items-center bg-glass/5 text-4xl"
                           >
-                            +
+                            {m.emoji ?? "🍽️"}
                           </button>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                        )}
+
+                        <div className="flex min-w-0 flex-1 flex-col p-3">
+                          <p className="font-display text-[15px] font-bold leading-tight text-fg">
+                            {m.name}
+                          </p>
+                          {/* The line that sells the dish. */}
+                          {m.description && (
+                            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-fg-soft">
+                              {m.description}
+                            </p>
+                          )}
+
+                          <div className="mt-auto flex items-center justify-between gap-2 pt-2.5">
+                            <span className="font-display text-lg font-bold tabular-nums text-fg">
+                              {money(m.price)}
+                            </span>
+                            {/* OFF THE MENU RIGHT NOW — said, not hidden. A dish
+                                that silently disappears reads as "they don't do
+                                that"; one that says "served 07:00–11:00" brings
+                                them back tomorrow. */}
+                            {off ? (
+                              <span className="mise-tone-warn rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-medium">
+                                {m.unavailable_reason ?? "Not available"}
+                              </span>
+                            ) : q === 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => bump(m.id, 1)}
+                                className="mise-press rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white"
+                              >
+                                Add
+                              </button>
+                            ) : (
+                              <span className="mise-well flex items-center gap-1 rounded-xl p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => bump(m.id, -1)}
+                                  aria-label={`One less ${m.name}`}
+                                  className="mise-press grid h-8 w-8 place-items-center rounded-lg text-fg-soft"
+                                >
+                                  −
+                                </button>
+                                <span className="w-6 text-center text-sm font-bold tabular-nums">
+                                  {q}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => bump(m.id, 1)}
+                                  aria-label={`One more ${m.name}`}
+                                  className="mise-press grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white"
+                                >
+                                  +
+                                </button>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
 
         {runningTotal > 0 && (
           <p className="mt-5 text-center text-[11px] text-fg-faint">
