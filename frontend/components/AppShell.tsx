@@ -109,9 +109,13 @@ function CurrencySwitcher() {
       value={currency}
       onChange={(v) => setCurrency(v as CurrencyCode)}
       className="w-28"
+      // The trigger stays short — `₹ INR` — while the list carries the full
+      // name and, invisibly, the countries that use it, so "india" finds INR.
       options={(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => ({
         value: code,
         label: `${CURRENCIES[code].symbol} ${code}`,
+        hint: CURRENCIES[code].label,
+        keywords: CURRENCIES[code].where,
       }))}
     />
   );

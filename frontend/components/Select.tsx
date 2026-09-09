@@ -10,7 +10,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-export type SelectOption = { value: string; label: string };
+export type SelectOption = {
+  value: string;
+  label: string;
+  /** A quieter second line in the list — the full name behind a short code. */
+  hint?: string;
+  /** Extra words the filter should match, never shown.
+   *
+   *  "have a search functionality that I can search india or inr — both are
+   *   valid and point same inr."
+   *  A currency is looked for by its COUNTRY far more often than by its code,
+   *  and "India" appears nowhere in "₹ INR". */
+  keywords?: string;
+};
 
 type Pos = { left: number; top: number; bottom: number; width: number; maxH: number; up: boolean };
 
@@ -93,9 +105,11 @@ export function Select({
   const needle = q.trim().toLowerCase();
   const shown = !needle
     ? options
-    : options.filter(
-        (o) =>
-          o.label.toLowerCase().includes(needle) || o.value.toLowerCase().includes(needle),
+    : options.filter((o) =>
+        [o.label, o.value, o.hint ?? "", o.keywords ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle),
       );
 
   return (
@@ -171,8 +185,13 @@ export function Select({
                   o.value === value ? "font-medium text-brand-300" : "text-fg-soft"
                 }`}
               >
-                <span className="truncate">{o.label}</span>
-                {o.value === value && <span className="text-brand-400">✓</span>}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{o.label}</span>
+                  {o.hint && (
+                    <span className="block truncate text-[11px] text-fg-faint">{o.hint}</span>
+                  )}
+                </span>
+                {o.value === value && <span className="shrink-0 text-brand-400">✓</span>}
               </button>
             ))}
           </div>,
