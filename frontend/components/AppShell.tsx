@@ -970,14 +970,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             ⌕
           </button>
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
+          {/* THE AVATAR WAS OFF THE SCREEN.
+              At 390px this cluster ran to x=418 — 28px past the viewport — and
+              because the page cannot be scrolled sideways, the profile button
+              was simply unreachable. Adding the currency picker to mobile is
+              what tipped it over, so the row has to be able to give ground:
+              `min-w-0` lets it shrink, and the clock (the one item that is
+              information rather than a control) stands down first. A control
+              you cannot reach is worse than a clock you cannot see. */}
+          <div className="ml-auto flex min-w-0 shrink items-center gap-1.5 sm:gap-3">
             {/* The restaurant's own clock, on every page — it lives in the shell
                 so no page has to remember to carry it. The hotel's zone, not the
                 device's: everything beside it (the sales day, the rota, the
                 attendance cut-off) is already reckoned in the hotel's zone, so a
                 clock showing the tablet's time would quietly disagree with every
                 number on the screen. */}
-            <HotelClock className="text-fg-soft" />
+            <span className="hidden min-[420px]:contents">
+              <HotelClock className="text-fg-soft" />
+            </span>
             <NotificationBell />
             <ThemeSwitcher />
             {/* SHOWN ON THE PHONE TOO.

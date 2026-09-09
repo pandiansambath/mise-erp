@@ -4601,65 +4601,91 @@ body.mise-voice-open .mise-launcher-in {
 }
 
 /* ── THE TOP BAR ─────────────────────────────────────────────────────────
-   "this UI UX you need to change bro, looking bit raw with no designs or
-    animation."
+   "I gave task like completely change the UI UX of that top area completely
+    with unique trending style UI."
 
-   He is right, and it is the element with the least excuse: it is on every
-   single screen. It was `bg-shell/70` with a 1px `border-glass/10` under it —
-   a tint and a hairline, which is not a design, it is the absence of one.
+   My first pass was a gradient and a hairline. He is right that it was not a
+   change — it was the same bar, very slightly nicer, and he had asked for the
+   bar to be different.
 
-   Three changes, none of them decoration for its own sake:
+   So: a RAIL rather than a strip. The controls sit inside a single rounded
+   capsule that floats clear of the page edges, the way a modern app's command
+   bar does, with the page visibly passing underneath it. That is the "trending"
+   shape he is describing, and it earns its keep: grouping the controls into one
+   object makes the header read as one thing to use rather than five loose
+   widgets scattered along an edge.
 
-   · a GRADIENT rather than a flat wash, so it reads as a surface with a light
-     source rather than a translucent film. Two stops, barely a percent apart —
-     enough for the eye, not enough to notice as an effect.
-   · the rule underneath is a brand-tinted hairline that FADES ACROSS, brightest
-     at the left where the page's own content starts. A uniform grey line says
-     "a box ends here"; this says "the page begins here".
-   · a soft shadow that only appears once the page is scrolled, via
-     `scroll-timeline` where it is supported. A bar that is always shadowed is
-     floating over nothing most of the time.
+   The moving part is deliberately one thing, not five. A quiet sheen crosses
+   the capsule's border, slowly, once every twelve seconds. It is the only
+   animation, it never loops fast enough to nag, and it stops entirely for
+   anybody who has asked for reduced motion.
    ──────────────────────────────────────────────────────────────────────── */
 .mise-topbar {
+  background: transparent;
+  border: 0;
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+}
+
+/* The capsule itself is drawn as a pseudo-element so the header's own flex
+   layout is untouched — the controls keep their existing spacing and nothing
+   inside had to be rewrapped. */
+.mise-topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0.35rem 0.6rem;
+  border-radius: 1rem;
   background:
     linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--color-shell) 82%, var(--color-paper)),
-      color-mix(in srgb, var(--color-shell) 74%, transparent)
+      135deg,
+      color-mix(in srgb, var(--color-paper) 92%, var(--color-brand-400)),
+      color-mix(in srgb, var(--color-shell) 88%, transparent)
     );
-  backdrop-filter: blur(18px) saturate(1.15);
-  -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  position: sticky;
+  border: 1px solid color-mix(in srgb, var(--color-brand-400) 22%, var(--color-line));
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--color-glass) 12%, transparent) inset,
+    0 8px 28px -22px color-mix(in srgb, #000 70%, transparent);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  pointer-events: none;
+  z-index: -1;
 }
+
+/* The sheen. One element, one slow pass. */
 .mise-topbar::after {
   content: "";
   position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: 1px;
+  inset: 0.35rem 0.6rem;
+  border-radius: 1rem;
+  padding: 1px;
   background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--color-brand-400) 55%, transparent),
-    color-mix(in srgb, var(--color-brand-400) 18%, transparent) 45%,
-    color-mix(in srgb, var(--color-line) 60%, transparent)
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--color-brand-400) 65%, transparent) 42%,
+    color-mix(in srgb, var(--color-brand-300) 80%, transparent) 50%,
+    transparent 72%
   );
+  /* Paints the BORDER only: the mask keeps the fill and subtracts the middle,
+     so the sweep runs round the rim instead of washing over the controls. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  background-size: 220% 100%;
+  animation: mise-rail-sheen 12s linear infinite;
+  pointer-events: none;
+  opacity: 0.9;
+}
+@keyframes mise-rail-sheen {
+  0%   { background-position: 140% 0; }
+  60%  { background-position: -40% 0; }
+  100% { background-position: -40% 0; }
 }
 
-/* The lift on scroll. `animation-timeline: scroll()` is progressive
-   enhancement — where it is unsupported the bar simply keeps its flat state,
-   which is exactly what it looks like today, so nothing is lost. */
-@supports (animation-timeline: scroll()) {
-  .mise-topbar {
-    animation: mise-topbar-lift linear both;
-    animation-timeline: scroll();
-    animation-range: 0 96px;
-  }
-  @keyframes mise-topbar-lift {
-    to {
-      box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--color-ink-950, #000) 55%, transparent);
-    }
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .mise-topbar { animation: none; }
+  .mise-topbar::after { animation: none; opacity: 0.35; }
 }
