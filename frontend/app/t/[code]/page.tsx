@@ -96,7 +96,6 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   // The talk sheet: null = shut, {dish} = opened about a dish.
   const [talk, setTalk] = useState<{ dish?: { id: string; name: string } | null } | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const firstLoad = useRef(true);
 
   const money = (v: string | number) =>
     `${SYMBOL[hotel?.currency ?? "GBP"] ?? ""}${Number(v).toFixed(2)}`;
@@ -138,12 +137,14 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (menu.length && firstLoad.current) {
-      firstLoad.current = false;
-      setCat(menu[0]?.category ?? null);
-    }
-  }, [menu]);
+  // NO AUTO-SELECTED COURSE. This used to jump to the first dish's category on
+  // load, and after the course filter started matching on a NORMALISED key it
+  // was setting `cat` to a raw label — "Mains" against a key of "main" — which
+  // matches nothing. The menu rendered the pills and then NOT ONE DISH, on the
+  // one page a customer ever sees. My own regression, shipped.
+  //
+  // It should not exist regardless: a diner arriving at a menu wants the menu.
+  // "Everything" is the default and the whole list is there to scroll.
 
   // "MAIN" AND "MAINS" ARE THE SAME COURSE.
   //
