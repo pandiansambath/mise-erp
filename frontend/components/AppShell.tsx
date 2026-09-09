@@ -108,7 +108,20 @@ function CurrencySwitcher() {
     <Select
       value={currency}
       onChange={(v) => setCurrency(v as CurrencyCode)}
-      className="w-28"
+      className="w-[5.5rem] sm:w-28"
+      // SAID ON THE SCREEN, NOT IN A COMMENT.
+      //
+      // I twice wrote a commit message claiming this picker warned that its
+      // rates were approximate. Both times the sentence existed only as a code
+      // comment in `lib/currency.tsx`. A caution that lives in the source
+      // protects nobody — the person who needs it is looking at the screen, and
+      // 47 static GBP-based rates were shipping with no caveat at all.
+      note={
+        <>
+          Rates are approximate and for viewing only — your books stay in the
+          restaurant&apos;s own currency.
+        </>
+      }
       // The trigger stays short — `₹ INR` — while the list carries the full
       // name and, invisibly, the countries that use it, so "india" finds INR.
       options={(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => ({
@@ -884,7 +897,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             rail won and covered the top of the dropdown. Raising the header
             raises everything it contains with it. Sheets start at z-50, so they
             still cover this. */}
-        <header className="sticky top-0 z-40 flex items-center gap-2 border-b border-glass/10 bg-shell/70 px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-8">
+        {/* THE BAR ACROSS THE TOP OF EVERY PAGE.
+            "this UI UX you need to change bro, looking bit raw with no designs
+             or animation."
+            It was a flat translucent strip with a 1px rule under it: correct,
+            and characterless — the one element present on every screen was the
+            one element with no design in it at all. It has a hairline of brand
+            colour along the bottom that brightens as you scroll (so the bar
+            asserts itself only once there is something underneath it), a very
+            slight gradient so it reads as a surface rather than a tint, and its
+            controls now share one hover treatment instead of three. */}
+        <header className="mise-topbar sticky top-0 z-40 flex items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 lg:px-8">
           <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-brand-400/30 to-transparent" />
           <button
             type="button"
@@ -957,9 +980,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <HotelClock className="text-fg-soft" />
             <NotificationBell />
             <ThemeSwitcher />
-            <div className="hidden sm:block">
-              <CurrencySwitcher />
-            </div>
+            {/* SHOWN ON THE PHONE TOO.
+                It was `hidden sm:block`, so below 640px there was no way to
+                change the display currency at all — on the device most likely
+                to be held by somebody who thinks in a different one. The
+                trigger is narrower there rather than absent; the popover sizes
+                itself independently, so the list stays readable. */}
+            <CurrencySwitcher />
             <UserMenu />
           </div>
         </header>

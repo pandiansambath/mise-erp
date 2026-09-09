@@ -4599,3 +4599,67 @@ body.mise-voice-open .mise-launcher-in {
 .mise-door-panel a {
   color: color-mix(in srgb, var(--door-a) 75%, var(--door-fg));
 }
+
+/* ── THE TOP BAR ─────────────────────────────────────────────────────────
+   "this UI UX you need to change bro, looking bit raw with no designs or
+    animation."
+
+   He is right, and it is the element with the least excuse: it is on every
+   single screen. It was `bg-shell/70` with a 1px `border-glass/10` under it —
+   a tint and a hairline, which is not a design, it is the absence of one.
+
+   Three changes, none of them decoration for its own sake:
+
+   · a GRADIENT rather than a flat wash, so it reads as a surface with a light
+     source rather than a translucent film. Two stops, barely a percent apart —
+     enough for the eye, not enough to notice as an effect.
+   · the rule underneath is a brand-tinted hairline that FADES ACROSS, brightest
+     at the left where the page's own content starts. A uniform grey line says
+     "a box ends here"; this says "the page begins here".
+   · a soft shadow that only appears once the page is scrolled, via
+     `scroll-timeline` where it is supported. A bar that is always shadowed is
+     floating over nothing most of the time.
+   ──────────────────────────────────────────────────────────────────────── */
+.mise-topbar {
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-shell) 82%, var(--color-paper)),
+      color-mix(in srgb, var(--color-shell) 74%, transparent)
+    );
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  position: sticky;
+}
+.mise-topbar::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--color-brand-400) 55%, transparent),
+    color-mix(in srgb, var(--color-brand-400) 18%, transparent) 45%,
+    color-mix(in srgb, var(--color-line) 60%, transparent)
+  );
+}
+
+/* The lift on scroll. `animation-timeline: scroll()` is progressive
+   enhancement — where it is unsupported the bar simply keeps its flat state,
+   which is exactly what it looks like today, so nothing is lost. */
+@supports (animation-timeline: scroll()) {
+  .mise-topbar {
+    animation: mise-topbar-lift linear both;
+    animation-timeline: scroll();
+    animation-range: 0 96px;
+  }
+  @keyframes mise-topbar-lift {
+    to {
+      box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--color-ink-950, #000) 55%, transparent);
+    }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mise-topbar { animation: none; }
+}
