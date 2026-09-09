@@ -274,7 +274,13 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
       {/* ── Where you are. The first thing to settle, because a QR could have
              been anything and a diner needs to know they scanned the right one. */}
       <header className="sticky top-0 z-40 border-b border-glass/10 bg-shell/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
+        {/* WRAPS INSTEAD OF CRAMPING. At 390 the name, the table line and two
+            buttons were fighting for one row, so "You're at Table 1 · food in
+            about 20 min" broke across three lines and squeezed the buttons to
+            the edge. The buttons drop to their own row on a narrow screen —
+            they are the two things a diner reaches for without looking, and
+            they should be a comfortable size. */}
+        <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
           <span
             aria-hidden
             className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-400 text-sm font-bold text-white"
@@ -282,8 +288,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
             {(hotel?.name ?? "·").slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-lg leading-tight">{hotel?.name ?? "…"}</h1>
-            <p className="text-[11px] text-fg-faint">
+            <h1 className="truncate font-display text-xl font-bold leading-tight">
+              {hotel?.name ?? "…"}
+            </h1>
+            <p className="truncate text-xs text-fg-soft">
               You&apos;re at <b className="text-brand-300">{table?.label ?? "…"}</b>
               {hotel?.prep_minutes ? ` · food in about ${hotel.prep_minutes} min` : ""}
             </p>
@@ -291,14 +299,14 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           <button
             type="button"
             onClick={() => setTalk({})}
-            className="mise-press mise-well shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-fg-soft"
+            className="mise-press mise-well min-h-[44px] flex-1 rounded-xl px-4 text-sm font-semibold text-fg-soft sm:flex-none"
           >
             💬 Ask
           </button>
           <button
             type="button"
             onClick={callStaff}
-            className={`mise-press shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+            className={`mise-press min-h-[44px] flex-1 rounded-xl px-4 text-sm font-semibold transition sm:flex-none ${
               helped ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
             }`}
           >
@@ -325,31 +333,138 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               return (
                 <div
                   key={o.id}
-                  className={`mise-card3d overflow-hidden p-3.5 ${
+                  className={`mise-card-inset relative overflow-hidden rounded-2xl p-4 ${
                     o.status === "PREPARING" ? "mise-cooking" : ""
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className={`text-sm font-semibold ${say.tone}`}>{say.label}</p>
-                      <p className="text-[11px] text-fg-faint">{say.hint}</p>
-                    </div>
-                    {left !== null && o.status !== "READY" && (
-                      <div className="shrink-0 text-right">
-                        <p className="font-display text-2xl font-semibold tabular-nums text-fg">
-                          {left}
-                          <span className="ml-1 text-xs font-normal text-fg-faint">min</span>
-                        </p>
-                        <p className="text-[10px] text-fg-faint">about</p>
-                      </div>
-                    )}
-                    {o.status === "READY" && <span aria-hidden className="text-2xl">🛎️</span>}
-                  </div>
-                  {o.items.length > 0 && (
-                    <p className="mt-2 truncate border-t border-line/50 pt-2 text-[11px] text-fg-soft">
-                      {o.items.map((i) => `${i.quantity}× ${i.name}`).join(" · ")}
-                    </p>
-                  )}
+                  {/* ── WAITING IS THE FEELING THIS PAGE HAS TO HANDLE ────────
+                      "what about that updater area — like whenever we customer
+                       ask or order, the notification is there nah, that area
+                       still has old worst UI."
+
+                      He is right, and it is the most important card on the page.
+                      Everything else is browsing; this is the bit a person keeps
+                      looking at while their food is somewhere they cannot see.
+
+                      It was a raised slab with a label, a hint, and "0" over the
+                      word "about" — which reads as nothing at all, and answers
+                      the wrong question. A diner does not want a STATUS, they
+                      want to know how far along their food is and roughly when
+                      it lands. So: a journey with the current stop lit, a bar
+                      that fills as the minutes go, and a countdown that says
+                      what it is counting.
+
+                      The stages are the diner's four, not the kitchen's seven —
+                      REJECTED and CANCELLED are not steps on a journey, they are
+                      the journey ending, and they get the plain message below
+                      instead of a broken-looking track. */}
+                  {(() => {
+                    const STOPS = [
+                      { key: "NEW", label: "Sent" },
+                      { key: "CONFIRMED", label: "Accepted" },
+                      { key: "PREPARING", label: "Cooking" },
+                      { key: "READY", label: "On its way" },
+                    ];
+                    const at = STOPS.findIndex((s) => s.key === o.status);
+                    const ended = o.status === "REJECTED" || o.status === "CANCELLED";
+                    // How far through the promised wait we are. Only once the
+                    // kitchen has accepted: before that there is nothing to
+                    // measure against and a bar creeping along would be a
+                    // promise nobody made.
+                    const pct =
+                      from && left !== null && mins > 0
+                        ? Math.min(100, Math.max(0, ((mins - left) / mins) * 100))
+                        : 0;
+                    return (
+                      <>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className={`font-display text-lg font-bold leading-tight ${say.tone}`}>
+                              {say.label}
+                            </p>
+                            <p className="mt-0.5 text-xs text-fg-soft">{say.hint}</p>
+                          </div>
+                          {o.status === "READY" ? (
+                            <span aria-hidden className="shrink-0 text-3xl">🛎️</span>
+                          ) : left !== null ? (
+                            <div className="shrink-0 text-right">
+                              {/* "0 min / about" read as nothing. The unit and
+                                  the hedge belong in one sentence under the
+                                  number, not stacked into a column. */}
+                              <p className="font-display text-3xl font-bold leading-none tabular-nums text-fg">
+                                {left}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-fg-faint">
+                                {left === 0 ? "any moment" : left === 1 ? "min away" : "mins away"}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {!ended && (
+                          <>
+                            <div
+                              className="mt-3 h-1.5 overflow-hidden rounded-full bg-glass/10"
+                              role="progressbar"
+                              aria-valuenow={Math.round(pct)}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label="How far along your order is"
+                            >
+                              <span
+                                className="block h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-300 transition-[width] duration-1000"
+                                style={{ width: `${o.status === "READY" ? 100 : pct}%` }}
+                              />
+                            </div>
+
+                            <ol className="mt-2.5 flex items-center gap-1">
+                              {STOPS.map((s, i) => {
+                                const done = at >= 0 && i <= at;
+                                const here = i === at;
+                                return (
+                                  <li key={s.key} className="flex flex-1 flex-col items-center gap-1">
+                                    <span
+                                      aria-hidden
+                                      className={`h-2 w-2 rounded-full transition ${
+                                        here
+                                          ? "bg-brand-500 ring-4 ring-brand-500/20"
+                                          : done
+                                            ? "bg-brand-400"
+                                            : "bg-fg-faint/30"
+                                      }`}
+                                    />
+                                    <span
+                                      className={`text-[10px] leading-none ${
+                                        here ? "font-bold text-fg" : "text-fg-faint"
+                                      }`}
+                                    >
+                                      {s.label}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ol>
+                          </>
+                        )}
+
+                        {o.items.length > 0 && (
+                          <ul className="mt-3 space-y-1 border-t border-line/60 pt-2.5">
+                            {o.items.map((i) => (
+                              <li
+                                key={`${o.id}-${i.name}`}
+                                className="flex items-baseline gap-2 text-xs text-fg-soft"
+                              >
+                                <span className="font-bold tabular-nums text-brand-300">
+                                  {i.quantity}×
+                                </span>
+                                <span className="min-w-0 flex-1 truncate">{i.name}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })}
