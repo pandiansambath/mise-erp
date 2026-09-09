@@ -50,3 +50,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 e2e/verify-*.spec.ts
+
+# Watcher agents write throwaway verification specs here while checking a
+# deploy on the live site. They are scratch, not tests: named for one commit,
+# deleted by the agent afterwards. They kept getting swept into commits because
+# I stage with `git add -A`, so one agent's scratch file ended up tracked and
+# the NEXT agent's deletion of it showed as a real change. Ignore them at the
+# source rather than remembering not to add them.
+e2e/tmp-*.spec.ts
