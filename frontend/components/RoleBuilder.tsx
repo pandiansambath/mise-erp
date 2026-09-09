@@ -104,19 +104,6 @@ export function RoleBuilder({
     setName(role?.name ?? "");
     setDraft({});
     setErr(null);
-    // AND THE PAGE DRAFTS. They were missed when they were added, and this
-    // component is mounted permanently on the Staff page — so an unsaved
-    // per-page change made on one role was still sitting here when the NEXT
-    // role opened. Reproduced on production: hide a page on `sub-admin`, close
-    // WITHOUT saving, open `super master`, and it opens with that page already
-    // struck through and its Save button live on a role nobody had touched.
-    // One stray click would write a narrowed page list into a real role.
-    //
-    // A draft is per-role by definition; leaving it behind is not a stale value
-    // but somebody else's decision applied to the wrong person.
-    setPageDraft({});
-    setRoDraft({});
-    setPagesFor(null);
   }, [open, role]);
 
   const held = useMemo(
@@ -215,6 +202,29 @@ export function RoleBuilder({
   const [pagesFor, setPagesFor] = useState<Area | null>(null);
 
   /** What ONE page is set to, right now. */
+  // THE PAGE DRAFTS ARE RESET HERE, NOT UP THERE.
+  //
+  // They were missed when they were added: this component stays mounted on the
+  // Staff page, so an unsaved per-page change made on one role was still
+  // sitting there when the NEXT role opened. Reproduced on production — hide a
+  // page on `sub-admin`, close WITHOUT saving, open `super master`, and it
+  // opens with that page struck through and its Save button live on a role
+  // nobody had touched. A draft is per-role by definition; leaving it behind is
+  // not a stale value, it is somebody else's decision applied to the wrong
+  // person.
+  //
+  // In its OWN effect below the `useState`s it clears, because a `const` cannot
+  // be referenced before it is declared. My first attempt put these three lines
+  // in the reset effect above, where the setters do not exist yet — `tsc` and
+  // `next build` both accepted it and `eslint` refused, which is the whole
+  // reason `npm run lint` is a separate gate.
+  useEffect(() => {
+    if (!open) return;
+    setPageDraft({});
+    setRoDraft({});
+    setPagesFor(null);
+  }, [open, role]);
+
   function pageLevelOf(a: Area, pg: PageRef): Level {
     const only = shownPages(a);
     if (current(a) === "none" || (only && !only.has(pg.slug))) return "none";
