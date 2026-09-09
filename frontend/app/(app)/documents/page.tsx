@@ -11,6 +11,8 @@ import {
   type Employee,
   type ExpiringDoc,
 } from "@/lib/api";
+import { SheetPopup } from "@/components/SheetPopup";
+import { DocViewer } from "@/components/DocViewer";
 import { DocComments } from "@/components/DocComments";
 import { Badge, Card, PageHeader, Spinner } from "@/components/ui";
 import { TotalsStrip } from "@/components/PageKit";
@@ -71,7 +73,23 @@ export default function DocumentsPage() {
   const [nowMs] = useState(() => Date.now());
   /** Which job you are doing. Three stacked cards meant scrolling past two
    *  of them to reach the third. */
-  const [tab, setTab] = useState<"venue" | "staff" | "upload">("venue");
+  // TWO TABS, NOT THREE.
+  //
+  //   "you split as 3 parts — venue files, staff doc, upload. What's the venue
+  //    file and upload? It's really confusing even for me, I'm the developer.
+  //    It's confusing for me, then think about laymans."
+  //
+  // The cause is grammatical and it is worth naming: "Venue files" and "Staff
+  // documents" are NOUNS — two kinds of thing you might be looking at. "Upload"
+  // is a VERB. Putting an action in a row of categories asks the reader to sort
+  // it out, and the honest answer to "what is the difference between Venue files
+  // and Upload?" is that there isn't one; Upload puts a file INTO Venue files.
+  //
+  // So the tabs are two kinds of document, and uploading is a button where the
+  // other actions are.
+  const [tab, setTab] = useState<"venue" | "staff">("venue");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [viewing, setViewing] = useState<{ id: string; filename: string } | null>(null);
 
   function load() {
     return Promise.all([
@@ -223,14 +241,16 @@ export default function DocumentsPage() {
         ]}
       />
 
-      {/* THREE JOBS, ONE AT A TIME. The venue list leads because checking what
-          is about to expire is why anyone opens this page; uploading is
-          occasional and requesting rarer still. */}
-      <div role="tablist" className="mise-card-inset mb-4 flex gap-1 overflow-x-auto p-1.5">
+      {/* TWO KINDS OF DOCUMENT, AND ONE ACTION BESIDE THEM.
+          The venue list leads because checking what is about to expire is why
+          anyone opens this page; adding one is occasional. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div role="tablist" className="mise-card-inset flex flex-1 gap-1 overflow-x-auto p-1.5">
         {([
-          ["venue", "\u{1f3e0} Venue files", docs.length],
-          ["staff", "\u{1f9d1} Staff documents", requests.length],
-          ...(canWrite ? [["upload", "\u2b06 Upload", undefined] as const] : []),
+          // Named for whose they are, which is the only difference that
+          // matters: ours, or somebody's we asked for.
+          ["venue", "\u{1f3e0} The restaurant's", docs.length],
+          ["staff", "\u{1f9d1} Asked from staff", requests.length],
         ] as const).map(([key, label, count]) => {
           const on = tab === key;
           return (
@@ -238,7 +258,7 @@ export default function DocumentsPage() {
               key={key}
               role="tab"
               aria-selected={on}
-              onClick={() => setTab(key as "venue" | "staff" | "upload")}
+              onClick={() => setTab(key as "venue" | "staff")}
               className={`mise-press flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition ${
                 on ? "bg-brand-600 text-white shadow-sm" : "text-fg-soft hover:text-fg"
               }`}
@@ -256,6 +276,18 @@ export default function DocumentsPage() {
             </button>
           );
         })}
+        </div>
+        {canWrite && (
+          <button
+            type="button"
+            onClick={() => setUploadOpen(true)}
+            data-tone="brand"
+            data-testid="doc-add"
+            className="mise-btn-flat mise-press min-h-[48px] shrink-0 px-4 text-sm"
+          >
+            + Add a document
+          </button>
+        )}
       </div>
 
       {expiring.length > 0 && (
@@ -373,11 +405,23 @@ export default function DocumentsPage() {
                       </div>
                     </dl>
                     <div className="mt-2.5 flex gap-1.5">
+                      {/* OPEN COMES FIRST. "I have only download option" — and a
+                          licence you must download, find in a folder and open in
+                          another app is a licence nobody checks. Looking at it is
+                          the common act; keeping a copy is the rare one. */}
+                      <button
+                        onClick={() => setViewing({ id: d.id, filename: d.filename })}
+                        data-tone="brand"
+                        data-testid="doc-open"
+                        className="mise-btn-flat mise-press flex-1 rounded-md px-2 py-1.5 text-xs"
+                      >
+                        Open
+                      </button>
                       <button
                         onClick={() => downloadFile(`/documents/${d.id}/download`, d.filename)}
-                        className="mise-press flex-1 rounded-md border border-line px-2 py-1.5 text-xs text-brand-300 hover:bg-brand-400/10"
+                        className="mise-press rounded-md border border-line px-2 py-1.5 text-xs text-fg-soft hover:bg-paper-2"
                       >
-                        Download
+                        ⬇
                       </button>
                       {canWrite && (
                         <button
@@ -403,9 +447,22 @@ export default function DocumentsPage() {
           title and the list of licences the page exists to keep an eye on.
           Uploading is occasional; checking what is about to expire is why you
           open Documents at all. */}
-      {tab === "upload" && canWrite && (
-        <Card className="mb-6">
-          <p className="mb-3 text-sm font-medium text-fg-soft">Upload a document</p>
+      {viewing && (
+        <DocViewer
+          path={`/documents/${viewing.id}/download`}
+          filename={viewing.filename}
+          onClose={() => setViewing(null)}
+          onDownload={() => downloadFile(`/documents/${viewing.id}/download`, viewing.filename)}
+        />
+      )}
+
+      {uploadOpen && canWrite && (
+        <SheetPopup
+          columns={3}
+          onClose={() => setUploadOpen(false)}
+          title="Add a document"
+          subtitle="A licence, insurance, a contract, a bill — the restaurant's own paperwork"
+        >
           <form onSubmit={upload} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-fg-soft">File</label>
@@ -472,7 +529,7 @@ export default function DocumentsPage() {
               {error && <span className="ml-3 text-sm text-rose-400">{error}</span>}
             </div>
           </form>
-        </Card>
+        </SheetPopup>
       )}
 
       {tab === "staff" && canWrite && (
