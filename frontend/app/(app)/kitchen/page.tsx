@@ -314,7 +314,7 @@ export default function KitchenPage() {
               <p className="mise-tone-warn mb-2 text-xs font-semibold uppercase tracking-wide">
                 🔔 Waiting for someone
               </p>
-              <ul className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(15rem, 100%), 1fr))" }}>
+              <ul className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(15rem, 100%), 1fr))" }}>
                 {calling.map((g) => {
                   const said = g.rows.find((r) => r.guest_message)?.guest_message;
                   const mins = Math.floor((now - +new Date(g.rows[0].created_at)) / 60000);
@@ -345,7 +345,7 @@ export default function KitchenPage() {
 
           <ul
             className="mise-stagger grid gap-3"
-            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(20rem, 100%), 1fr))" }}
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(22rem, 100%), 1fr))" }}
           >
             {groups.map((g) => {
               const first = g.rows[0];
@@ -360,8 +360,12 @@ export default function KitchenPage() {
                 1,
                 first.eta_minutes ?? (parseInt(prep, 10) || 20),
               );
+              // The ring and the bar both go red past the promise, and at that
+              // point they merge into one red line — the bar stops reading as a
+              // bar exactly when it matters most. The ring keeps amber for the
+              // warning and hands the "over" state to the bar alone.
               const heat =
-                mins >= 20 ? "ring-2 ring-rose-400/70" : mins >= 10 ? "ring-1 ring-amber-400/60" : "";
+                mins >= promised ? "ring-2 ring-rose-400/40" : mins >= promised * 0.7 ? "ring-1 ring-amber-400/60" : "";
               return (
                 <li key={g.key} id={`t-${g.key}`} className="h-full">
                   {/* Cards stretch to the row's height and push their actions to

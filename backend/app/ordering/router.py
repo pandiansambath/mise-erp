@@ -15,7 +15,7 @@ from datetime import time as dt_time
 from decimal import Decimal
 from io import BytesIO as _BytesIO
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1518,8 +1518,101 @@ async def rotate_kitchen_screen(
     return await kitchen_screen_link(db, user)
 
 
+# ── LOCKING THE KITCHEN SCREEN ───────────────────────────────────────────────
+#
+#   "for kitchen screen tab screen kiosk we need pin or something bro, else
+#    anyone can access that hotel's private one. So like we have in attendance
+#    kiosk, here also we need."
+#
+# He is right, and it is not a UI point. `/kds/<code>` was a bare URL: whoever
+# has the link sees live orders, table numbers and guest messages, forever,
+# with no way to take it back short of rotating the code. A link is a password
+# that gets photographed over somebody's shoulder, pasted into a group chat and
+# left in a browser history on a tablet that goes home with a leaver.
+#
+# The PIN is the SAME one the attendance kiosk uses, deliberately. A restaurant
+# has one door code; asking staff to remember a second is how both end up
+# written on the wall next to the screen.
+#
+# What this is and is not: the code still identifies the hotel, and the PIN
+# proves the person at the screen belongs there. Neither is a login, and the
+# board still shows only orders — never money, people or settings. It raises
+# the cost of a leaked link from "permanent" to "until the PIN changes", which
+# is the honest description.
+#
+# OPT-IN, because a screen bolted to a kitchen wall that demands a PIN after
+# every reload is a screen somebody tapes the PIN to. Off by default; the owner
+# turns it on for a tablet that leaves the pass.
+
+
+def _kds_locked(hotel: Hotel) -> bool:
+    return bool((hotel.prefs or {}).get("kds_pin_required"))
+
+
+async def _kds_hotel(db: AsyncSession, code: str) -> Hotel:
+    hotel = (
+        await db.execute(select(Hotel).where(Hotel.prefs["kds_code"].as_string() == code))
+    ).scalar_one_or_none()
+    if hotel is None or not hotel.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This screen is no longer connected")
+    return hotel
+
+
+def _kds_pass(hotel: Hotel) -> str:
+    """What a correctly unlocked screen holds.
+
+    Derived from the hotel's id and its PIN hash rather than being a stored
+    session: it needs no table, it is different per restaurant, and CHANGING THE
+    PIN INVALIDATES EVERY SCREEN at once — which is the whole point of being
+    able to change it.
+    """
+    import hashlib
+
+    raw = f"{hotel.id}:{hotel.attendance_pin_hash or ''}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def _kds_guard(hotel: Hotel, presented: str | None) -> None:
+    if not _kds_locked(hotel):
+        return
+    if presented and secrets.compare_digest(presented, _kds_pass(hotel)):
+        return
+    raise HTTPException(
+        status.HTTP_401_UNAUTHORIZED,
+        "This kitchen screen is locked — enter the restaurant's PIN.",
+    )
+
+
+class KdsUnlock(BaseModel):
+    pin: str
+
+
+@kds_router.post("/{code}/unlock")
+async def kitchen_screen_unlock(
+    code: str, payload: KdsUnlock, db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Trade the restaurant's PIN for the value the screen then presents.
+
+    Deliberately gives back nothing about the hotel on failure — a wrong PIN and
+    an unknown code look the same, so this cannot be used to discover which
+    codes are real.
+    """
+    from app.employees import attendance_lock
+
+    hotel = await _kds_hotel(db, code)
+    if not _kds_locked(hotel):
+        return {"pass": None, "locked": False}
+    if not attendance_lock.verify(hotel, payload.pin):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "That PIN is not right.")
+    return {"pass": _kds_pass(hotel), "locked": True}
+
+
 @kds_router.get("/{code}")
-async def kitchen_screen_board(code: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def kitchen_screen_board(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    x_kds_pass: str | None = Header(default=None, alias="X-Kds-Pass"),
+) -> dict:
     """The pass, for a screen with no login.
 
     READ ONLY on purpose is not enough on its own — a chef has to be able to
@@ -1527,13 +1620,8 @@ async def kitchen_screen_board(code: str, db: AsyncSession = Depends(get_db)) ->
     below, and both are scoped to the one hotel the code belongs to. What the
     code can NOT do is read money, people or settings.
     """
-    hotel = (
-        await db.execute(
-            select(Hotel).where(Hotel.prefs["kds_code"].as_string() == code)
-        )
-    ).scalar_one_or_none()
-    if hotel is None or not hotel.is_active:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "This screen is no longer connected")
+    hotel = await _kds_hotel(db, code)
+    _kds_guard(hotel, x_kds_pass)
 
     rows = (
         (
@@ -1571,14 +1659,20 @@ class KdsMove(BaseModel):
 
 @kds_router.patch("/{code}/orders/{order_id}")
 async def kitchen_screen_move(
-    code: str, order_id: uuid.UUID, payload: KdsMove, db: AsyncSession = Depends(get_db)
+    code: str,
+    order_id: uuid.UUID,
+    payload: KdsMove,
+    db: AsyncSession = Depends(get_db),
+    x_kds_pass: str | None = Header(default=None, alias="X-Kds-Pass"),
 ) -> dict:
-    """Move a ticket along from the kitchen screen."""
-    hotel = (
-        await db.execute(select(Hotel).where(Hotel.prefs["kds_code"].as_string() == code))
-    ).scalar_one_or_none()
-    if hotel is None or not hotel.is_active:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "This screen is no longer connected")
+    """Move a ticket along from the kitchen screen.
+
+    Guarded like the board. A lock that only covers reading would let anybody
+    with the link mark a table's food served, which is worse than letting them
+    look at it.
+    """
+    hotel = await _kds_hotel(db, code)
+    _kds_guard(hotel, x_kds_pass)
     order = await db.get(Order, order_id)
     if order is None or order.hotel_id != hotel.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
@@ -1840,12 +1934,38 @@ def _card_png(hotel, table, scale: int = 12) -> bytes:
     lines = _qr_lines(table)
 
     def _face(size: int):
-        for name in ("DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"):
+        """A font at the size asked for, whatever the container happens to have.
+
+        THE PRINTED CARD HAD A BLANK HOLE IN IT. These three faces are not in the
+        image, so every lookup failed and the caller fell back to
+        `ImageFont.load_default()` — a fixed ~11px bitmap that IGNORES the size
+        argument entirely. The SVG drew "Table 1" bold at 25px; the PNG drew the
+        same word tiny and unbold, adrift in a large white square, looking like a
+        hole somebody had pencilled into.
+
+        It was survivable while the plate had a border and was small. Enlarging
+        it and removing the border made it obvious — and the PNG is the one that
+        gets PRINTED and stuck on a table, so it is the one that matters most.
+
+        `load_default(size=)` has taken a size since Pillow 10.1 and renders a
+        real scalable face, so the fallback is now a fallback rather than a
+        different, broken design.
+        """
+        for name in (
+            "DejaVuSans-Bold.ttf",
+            "DejaVuSans.ttf",
+            "arialbd.ttf",
+            "Arial Bold.ttf",
+            "LiberationSans-Bold.ttf",
+        ):
             try:
                 return ImageFont.truetype(name, size)
             except OSError:
                 continue
-        return None
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:  # Pillow < 10.1 — no sized default
+            return None
 
     # Start from the shared estimate, then MEASURE and shrink until it really
     # fits. The estimate is what the SVG has to use; this is the check the SVG

@@ -188,7 +188,7 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
       ) : (
         <ul
           className="grid gap-3"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(20rem, 100%), 1fr))" }}
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(24rem, 100%), 1fr))" }}
         >
           {groups.map((g) => {
             const first = g.rows[0];

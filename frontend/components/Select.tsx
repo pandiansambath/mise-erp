@@ -73,7 +73,29 @@ export function Select({
     const above = r.top - 10;
     const up = below < 200 && above > below;
     const maxH = Math.max(120, Math.min(288, up ? above : below));
-    setPos({ left: r.left, top: r.bottom, bottom: window.innerHeight - r.top, width: r.width, maxH, up });
+    // KEPT ON SCREEN, NOW THAT THE LIST CAN BE WIDER THAN ITS BUTTON.
+    //
+    // The popover used to inherit the trigger's width, so aligning its left
+    // edge with the trigger's could never overflow. Widening it to stop the
+    // second line being clipped broke that quietly: the currency button sits at
+    // the far right of the header, so a 232px list hung off the edge of the
+    // window with half the names unreachable.
+    //
+    // It is measured and clamped here rather than left to CSS, because the
+    // element is `fixed` and has no containing block to be constrained by.
+    const w = Math.min(
+      Math.max(r.width, 232),
+      Math.max(r.width, Math.min(320, window.innerWidth - 24)),
+    );
+    const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
+    setPos({
+      left,
+      top: r.bottom,
+      bottom: window.innerHeight - r.top,
+      width: w,
+      maxH,
+      up,
+    });
   }, []);
 
   // Measure when opening (portal only renders once positioned, so there's no flash).
@@ -151,14 +173,13 @@ export function Select({
             className="mise-pop fixed z-[95] overflow-auto overscroll-contain rounded-xl border border-line bg-paper-2 p-1 shadow-2xl shadow-black/40"
             style={{
               left: pos.left,
-              // THE TRIGGER'S WIDTH IS NOT THE LIST'S WIDTH.
-              // The currency button is deliberately narrow (112px) so the header
-              // stays tidy, and the popover inherited that — clipping the very
-              // second line it exists to show: "British Po…", "New Zealand Do…".
-              // The list may be wider than the thing that opened it; it is
-              // floating over the page either way.
-              minWidth: Math.max(pos.width, 232),
-              maxWidth: Math.max(pos.width, Math.min(320, window.innerWidth - 24)),
+              // THE TRIGGER'S WIDTH IS NOT THE LIST'S WIDTH — the currency
+              // button is deliberately narrow so the header stays tidy, and the
+              // popover inheriting that clipped the very second line it exists
+              // to show ("British Po…"). Both the width AND the left edge are
+              // decided in `place()`, together, because widening one without
+              // re-clamping the other is what pushed it off the screen.
+              width: pos.width,
               maxHeight: pos.maxH,
               ...(pos.up ? { bottom: pos.bottom + 6 } : { top: pos.top + 6 }),
             }}
