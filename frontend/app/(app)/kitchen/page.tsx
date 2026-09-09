@@ -263,7 +263,7 @@ export default function KitchenPage() {
                 type="button"
                 onClick={savePrep}
                 disabled={savingPrep}
-                className="mise-press mise-raised rounded-xl px-3 py-2.5 text-xs font-medium text-fg-soft disabled:opacity-40"
+                className="mise-btn-flat mise-press rounded-xl px-3 py-2.5 text-xs font-semibold text-fg-soft disabled:opacity-40"
               >
                 {savingPrep ? "…" : "Save"}
               </button>
@@ -322,7 +322,7 @@ export default function KitchenPage() {
                     <li key={g.key}>
                       <a
                         href={`#t-${g.key}`}
-                        className="mise-press mise-card3d flex h-full items-center gap-2.5 px-3 py-2 text-left"
+                        className="mise-press mise-card-inset flex h-full items-center gap-2.5 rounded-xl px-3 py-2 text-left"
                       >
                         <span className="font-display text-lg font-semibold text-fg">
                           {g.title}
@@ -352,6 +352,14 @@ export default function KitchenPage() {
               const mins = Math.floor((now - +new Date(first.created_at)) / 60000);
               const w = waited(mins);
               const help = g.rows.some((r) => r.help_requested_at);
+              // What the table was told. A per-ticket ETA outranks the
+              // hotel-wide default: "a biryani is forty minutes and a lassi is
+              // two", and the bar has to measure against the promise that was
+              // actually made.
+              const promised = Math.max(
+                1,
+                first.eta_minutes ?? (parseInt(prep, 10) || 20),
+              );
               const heat =
                 mins >= 20 ? "ring-2 ring-rose-400/70" : mins >= 10 ? "ring-1 ring-amber-400/60" : "";
               return (
@@ -359,7 +367,33 @@ export default function KitchenPage() {
                   {/* Cards stretch to the row's height and push their actions to
                       the bottom, so a grid of tickets has ONE baseline instead of
                       a ragged staircase — "there is no alignment". */}
-                  <div className={`mise-card3d relative flex h-full flex-col overflow-hidden p-4 ${heat}`}>
+                  <div
+                    className={`mise-card-inset relative flex h-full flex-col overflow-hidden rounded-2xl p-4 ${heat}`}
+                  >
+                    {/* HOW THE CLOCK IS GOING, not just how long it has been.
+                        "worst UI UX ever — those cards are also having old card
+                         style... rebuild with as much useful features too."
+                        A number counting up tells a chef the age; it does not
+                        tell them whether they are winning. The promise made to
+                        the table is `prep` minutes, so the bar fills towards
+                        that and changes colour as it runs out — the one fact a
+                        pass actually runs on, readable from across the room
+                        without reading anything. */}
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-0 top-0 h-1 bg-glass/10"
+                    >
+                      <span
+                        className={`block h-full transition-[width] duration-700 ${
+                          mins >= promised
+                            ? "bg-rose-500"
+                            : mins >= promised * 0.7
+                              ? "bg-amber-400"
+                              : "bg-emerald-500"
+                        }`}
+                        style={{ width: `${Math.min(100, (mins / Math.max(1, promised)) * 100)}%` }}
+                      />
+                    </span>
                     {help && (
                       <p className="mb-2 rounded-lg bg-amber-400/15 px-2.5 py-1.5 text-xs font-semibold text-amber-200">
                         🔔 This table asked for someone
