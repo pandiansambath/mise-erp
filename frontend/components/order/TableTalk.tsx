@@ -15,7 +15,7 @@
 // The chips matter more than the box. Most people will not type on a phone in a
 // restaurant with a drink in their other hand, so the five things anybody
 // actually asks for are one tap away, and the keyboard is the fallback.
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { API_BASE } from "@/lib/api";
 
@@ -371,6 +371,8 @@ export function TableTalk({
     [chat, dish],
   );
   const [showEarlier, setShowEarlier] = useState(false);
+  // So the send control can hand focus to the box rather than sit greyed.
+  const inputRef = useRef<HTMLInputElement>(null);
 
   async function send(message: string) {
     if (!message.trim()) return;
@@ -433,7 +435,9 @@ export function TableTalk({
               widget; the actual plate is the difference between a dialog and
               a waiter leaning in. */}
           {tab === "ai" && dish?.photo ? (
-            <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl bg-glass/5">
+            /* 56px, not 44. It is the dish the whole sheet is about; at
+               icon size on a 672px panel it read as a favicon. */
+            <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-glass/5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={dish.photo} alt="" className="h-full w-full object-cover" />
             </span>
@@ -682,6 +686,7 @@ export function TableTalk({
               <div className="sticky bottom-0 -mx-4 mt-3 border-t border-line/60 bg-shell px-4 pb-1 pt-3">
                 <div className="flex items-center gap-2">
                   <input
+                    ref={inputRef}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && ask(q)}
@@ -698,10 +703,19 @@ export function TableTalk({
                       input in a way a dimmed verb is not. */}
                   <button
                     type="button"
-                    disabled={busy || !q.trim()}
-                    onClick={() => ask(q)}
+                    disabled={busy}
+                    onClick={() => {
+                      // NOT DISABLED WHEN EMPTY — it puts the cursor in the
+                      // box instead. Replacing a permanently-greyed "Ask" word
+                      // with a permanently-greyed arrow changed the shape and
+                      // kept the fault: the first thing a diner sees on this
+                      // sheet should not look broken. Pressing it when there
+                      // is nothing to send now does the only useful thing.
+                      if (!q.trim()) return inputRef.current?.focus();
+                      ask(q);
+                    }}
                     aria-label="Ask"
-                    className="mise-press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-600 text-white transition disabled:bg-glass/15 disabled:text-fg-faint"
+                    className="mise-press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-600 text-white transition disabled:opacity-60"
                   >
                     <span aria-hidden className="text-lg leading-none">↑</span>
                   </button>

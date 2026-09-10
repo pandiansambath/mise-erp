@@ -20,7 +20,7 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
-import { dishPhoto } from "@/lib/dishPhoto";
+import { assignPhotos } from "@/lib/dishPhoto";
 import { TableTalk } from "@/components/order/TableTalk";
 import { MealTimeline } from "@/components/order/MealTimeline";
 import { burstAway } from "@/components/order/burst";
@@ -163,6 +163,13 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   // spelling the kitchen uses most.
   const courseKey = (name: string) => name.trim().toLowerCase().replace(/s$/, "");
 
+  // Stand-in photographs, worked out across the ENTIRE menu rather than the
+  // dishes currently on screen. Doing it per-render over the visible subset
+  // meant a photo hopped between dishes when a category was pressed, and left
+  // four dishes — including the £15 Chicken Biryani — as grey boxes with an
+  // emoji in them. See `assignPhotos`.
+  const photos = useMemo(() => assignPhotos(menu), [menu]);
+
   const cats = useMemo(() => {
     const seen = new Map<string, { n: number; names: Map<string, number> }>();
     for (const m of menu) {
@@ -270,8 +277,6 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
     );
   }
 
-  // See the note where it is used, in the dish grid.
-  const usedPhotos = new Set<string>();
 
   // Reads the hour so the page is not identical at 9am and 9pm. Computed from
   // `now`, which already ticks for the countdown, so it costs nothing extra
@@ -286,7 +291,30 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   // THE WHOLE SITTING now, served rounds included — the endpoint stopped
   // filtering out COMPLETED, so this went from 'what is cooking' to 'what
   // this table has run up', which is what the label already claimed.
+  /** A dish name the way a guest should see it.
+   *
+   *  The menu is typed by whoever set the hotel up, so "chicken chutka" sits
+   *  next to "Butter Chicken" on the one screen a customer ever sees. Only
+   *  names that are ENTIRELY lower case are touched — title-casing everything
+   *  would turn "MTR Dosa" into "Mtr Dosa" and a hotel that capitalised its
+   *  own menu deliberately would have that undone. Small words stay small,
+   *  because "Chicken 65 With Garlic" reads like a headline, not a dish.
+   */
+  const dishName = (s: string) => {
+    if (s !== s.toLowerCase()) return s;
+    const small = new Set(["and", "with", "in", "of", "the", "a", "on", "or"]);
+    return s
+      .split(/(\s+)/)
+      .map((w, i) =>
+        /^\s+$/.test(w) || (i > 0 && small.has(w))
+          ? w
+          : w.charAt(0).toUpperCase() + w.slice(1),
+      )
+      .join("");
+  };
+
   const runningTotal = live.reduce((t, o) => t + Number(o.total), 0);
+
 
   return (
     <div
@@ -569,10 +597,6 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               thumbnail the size of a favicon sells nothing.
         */}
         <div className="mt-1 space-y-6">
-          {/* Tracks which stock photographs this render has already spent, so
-              the second dish that maps to the same file falls back to its
-              emoji. Rebuilt on every render, deliberately: it is a property of
-              what is on screen right now, not state to keep. */}
           {courses.map(([course, dishes]) => (
             <section key={course}>
               <div className="mb-2.5 flex items-baseline gap-2">
@@ -599,26 +623,13 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                 {dishes.map((m) => {
                   const q = cart[m.id] ?? 0;
                   const off = m.orderable === false;
-                  // THE SAME PICTURE, THREE TIMES, SIDE BY SIDE.
-                  //
-                  // `dishPhoto()` keyword-matches a small bundled library, so
-                  // Mutton, Vegetable and Chicken Biryani all resolve to the
-                  // same photograph — and widening the grid to four columns
-                  // put them next to each other in one row, which makes the
-                  // menu look fake in a way one repeated image never did.
-                  //
-                  // A hotel's OWN photo is always used. A stock stand-in is
-                  // used once per course and after that the dish falls back to
-                  // its emoji: an honest symbol beats a picture of a different
-                  // dish wearing this one's name.
-                  const stock = m.has_photo ? null : dishPhoto(m.name);
-                  const dup = !!stock && usedPhotos.has(stock);
-                  if (stock && !dup) usedPhotos.add(stock);
+                  // One photo per dish, decided once for the whole menu —
+                  // see `assignPhotos`. The hotel's own picture always wins;
+                  // everything else gets a distinct stand-in that does not
+                  // move when a category filter is pressed.
                   const src = m.has_photo
                     ? `${API_BASE}/api/public/order/menu-photo/${m.id}`
-                    : dup
-                      ? null
-                      : stock;
+                    : (photos[m.id] ?? null);
                   return (
                     <li key={m.id}>
                       <article
@@ -640,9 +651,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                               // is a dialog about a string; the same sheet with
                               // the plate you just tapped is a conversation
                               // about that plate.
-                              setTalk({ dish: { id: m.id, name: m.name, photo: src } })
+                              setTalk({ dish: { id: m.id, name: dishName(m.name), photo: src } })
                             }
-                            aria-label={`More about ${m.name}`}
+                            aria-label={`More about ${dishName(m.name)}`}
                             className="mise-press relative block aspect-[16/10] w-full overflow-hidden bg-glass/5 sm:aspect-[4/3]"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -662,17 +673,28 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                         ) : (
                           <button
                             type="button"
-                            onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
-                            aria-label={`More about ${m.name}`}
-                            className="mise-press grid aspect-[16/10] w-full place-items-center bg-glass/5 text-5xl sm:aspect-[4/3]"
+                            onClick={() => setTalk({ dish: { id: m.id, name: dishName(m.name) } })}
+                            aria-label={`More about ${dishName(m.name)}`}
+                            className="mise-press relative grid aspect-[16/10] w-full place-items-center bg-glass/5 text-5xl sm:aspect-[4/3]"
                           >
                             {m.emoji ?? "🍽️"}
+                            {/* The badge belongs here too. Without it the
+                                picture-less cards were the only ones on the
+                                page that looked untappable — the dishes most
+                                in need of an explanation were the ones that
+                                appeared to offer none. */}
+                            <span
+                              aria-hidden
+                              className="absolute bottom-1.5 right-1.5 rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm"
+                            >
+                              ✨ about this
+                            </span>
                           </button>
                         )}
 
                         <div className="flex min-w-0 flex-1 flex-col p-3">
                           <p className="font-display text-[15px] font-bold leading-tight text-fg">
-                            {m.name}
+                            {dishName(m.name)}
                           </p>
                           {/* The line that sells the dish, when the kitchen
                               has written one.
@@ -719,7 +741,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                                 <button
                                   type="button"
                                   onClick={() => bump(m.id, -1)}
-                                  aria-label={`One less ${m.name}`}
+                                  aria-label={`One less ${dishName(m.name)}`}
                                   className="mise-press grid h-8 w-8 place-items-center rounded-lg text-fg-soft"
                                 >
                                   −
@@ -730,7 +752,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                                 <button
                                   type="button"
                                   onClick={() => bump(m.id, 1)}
-                                  aria-label={`One more ${m.name}`}
+                                  aria-label={`One more ${dishName(m.name)}`}
                                   className="mise-press grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white"
                                 >
                                   +
