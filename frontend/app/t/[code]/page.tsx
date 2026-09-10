@@ -263,6 +263,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   }
 
   const active = live.filter((o) => !["COMPLETED", "REJECTED", "CANCELLED"].includes(o.status));
+  // Whether the second column earns its place — see the note on <main>.
+  // Declared HERE, below `active`: a const cannot be read above its own
+  // declaration, and `tsc` catches that where `next build` does not.
+  const railHasContent = active.length > 0;
   const runningTotal = live.reduce((t, o) => t + Number(o.total), 0);
 
   return (
@@ -359,7 +363,21 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           tablet, three on a laptop, four on a wide monitor, five past that.
           The order rail widens slightly too, because a 21rem card beside a
           1600px menu looks like an afterthought. */}
-      <main className="mx-auto w-full max-w-[110rem] px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-8 lg:px-8 2xl:grid-cols-[minmax(0,1fr)_26rem] 2xl:gap-12 2xl:px-12">
+      {/* THE RAIL ONLY EXISTS WHEN IT HAS SOMETHING TO SAY.
+          I split the page in two and then looked at it on a 1920px screen with
+          no live order: a menu on the left and, beside it, six hundred pixels
+          of nothing holding one grey sentence. A two-column layout with an
+          empty second column does not read as spacious, it reads as broken —
+          worse than the centred column it replaced.
+          So the split is conditional. Nothing to track and nothing in the
+          basket, and the menu simply takes the whole width. */}
+      <main
+        className={`mx-auto w-full max-w-[110rem] px-4 lg:px-8 2xl:px-12 ${
+          railHasContent
+            ? "lg:grid lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-8 2xl:grid-cols-[minmax(0,1fr)_26rem] 2xl:gap-12"
+            : ""
+        }`}
+      >
         {/* ── The live ticket. "which will show real-time estimation to bring
                that food" — the reason this page stays open after ordering. */}
         {active.length > 0 && (
@@ -757,7 +775,12 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         <TableTalk code={code} dish={talk.dish} onClose={() => setTalk(null)} />
       )}
 
-      {/* ── The basket, pinned. Never a page you have to go to. */}
+      {/* ── The basket, pinned. Never a page you have to go to.
+             Pinned to the bottom on a phone, where thumbs are; and on a wide
+             screen it stops being a bar across the foot of a 1900px window —
+             which is a long way from the dish you just added — and sits in the
+             rail beside the menu instead. Same component, placed where the eye
+             already is. */}
       {count > 0 && (
         <div
           id="mise-table-basket"
