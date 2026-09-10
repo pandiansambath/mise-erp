@@ -254,7 +254,17 @@ class TableMessage(Base):
         ForeignKey("dining_tables.id", ondelete="CASCADE"), nullable=False, index=True
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    #: True when the restaurant wrote it, False when the table did.
+    #: Which conversation this line belongs to: "counter" (the table talking
+    #: to staff) or "ai" (the table talking to the assistant).
+    #:
+    #: Both are kept, because he asked for both:
+    #:   "both normal chat and ai chat be persistent."
+    #: They are separate threads rather than one, because they are separate
+    #: conversations — mixing "more water please" into a discussion about what
+    #: is in the biryani would make both harder to read, and the staff reply
+    #: box would then appear to be answering the assistant.
+    channel: Mapped[str] = mapped_column(String(12), nullable=False, default="counter")
+    #: True when the restaurant — or, on the AI thread, the assistant — wrote it.
     from_staff: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     #: Who replied, when it was us. NULL for the diner's own lines.
     staff_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))

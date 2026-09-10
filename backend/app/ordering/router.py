@@ -1467,7 +1467,8 @@ async def release_table(
     for o in rows:
         o.status = OrderStatus.COMPLETED.value
         o.help_requested_at = None
-    # The conversation belongs to the party that just left. Ended rather than
+    # BOTH conversations belong to the party that just left — the counter
+    # thread and the AI one. Ended rather than
     # deleted — what a table asked for is worth keeping — so the next people to
     # sit down start on a blank screen instead of reading somebody else's.
     await db.execute(
@@ -2192,11 +2193,17 @@ def _msg_out(m: TableMessage) -> dict:
     }
 
 
-async def _open_thread(db: AsyncSession, table_id) -> list[TableMessage]:
+async def _open_thread(
+    db: AsyncSession, table_id, channel: str = "counter"
+) -> list[TableMessage]:
     rows = (
         await db.execute(
             select(TableMessage)
-            .where(TableMessage.table_id == table_id, TableMessage.cleared_at.is_(None))
+            .where(
+                TableMessage.table_id == table_id,
+                TableMessage.cleared_at.is_(None),
+                TableMessage.channel == channel,
+            )
             .order_by(TableMessage.created_at)
         )
     ).scalars()
@@ -2204,7 +2211,9 @@ async def _open_thread(db: AsyncSession, table_id) -> list[TableMessage]:
 
 
 @table_router.get("/{code}/messages")
-async def table_thread(code: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def table_thread(
+    code: str, channel: str = "counter", db: AsyncSession = Depends(get_db)
+) -> dict:
     """What has been said at this table, this sitting.
 
     Public and code-keyed like the rest of the diner's side. It exposes only
@@ -2212,7 +2221,8 @@ async def table_thread(code: str, db: AsyncSession = Depends(get_db)) -> dict:
     other table's thread, no staff names, no order detail.
     """
     t, _hotel = await _table_by_code(db, code)
-    return {"messages": [_msg_out(m) for m in await _open_thread(db, t.id)]}
+    kind = "ai" if channel == "ai" else "counter"
+    return {"messages": [_msg_out(m) for m in await _open_thread(db, t.id, kind)]}
 
 
 @router.get("/tables/{table_id}/messages")
@@ -2590,6 +2600,29 @@ async def guest_ask(code: str, payload: GuestAskIn, db: AsyncSession = Depends(g
             ),
             "reason": "model_access" if off else "error",
         }
+    # KEPT, so closing the sheet does not lose the conversation.
+    #
+    #   "if I close and open, it's not showing the previous history... make the
+    #    history persistent until owner clear that table."
+    #
+    # The assistant's exchange lived only in React state, so it died with the
+    # popup — a diner who asked what was in a dish, closed the sheet to look at
+    # it, and came back had nothing. Both sides of the turn are stored on the
+    # table's AI thread, which the release endpoint clears along with the
+    # counter one.
+    db.add(
+        TableMessage(
+            hotel_id=hotel.id, table_id=t.id, channel="ai",
+            body=payload.question.strip(), from_staff=False,
+        )
+    )
+    db.add(
+        TableMessage(
+            hotel_id=hotel.id, table_id=t.id, channel="ai",
+            body=answer, from_staff=True,
+        )
+    )
+    await db.commit()
     return {"ok": True, "answer": answer}
 
 
