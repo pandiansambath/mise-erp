@@ -280,14 +280,22 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
             the edge. The buttons drop to their own row on a narrow screen —
             they are the two things a diner reaches for without looking, and
             they should be a comfortable size. */}
-        <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:px-8">
           <span
             aria-hidden
             className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-400 text-sm font-bold text-white"
           >
             {(hotel?.name ?? "·").slice(0, 1).toUpperCase()}
           </span>
-          <div className="min-w-0 flex-1">
+          {/* WRAPPING BY AMPUTATION IS NOT WRAPPING.
+              I set the row to `flex-wrap` and gave the buttons `flex-1`, and the
+              row never wrapped: the name block is `flex-1 min-w-0`, so it
+              collapsed first and the table line truncated to "You're at T…".
+              The one sentence whose whole job is telling a diner they scanned
+              the RIGHT code was the thing that got cut.
+              The buttons take half the width each below `sm`, which forces them
+              onto their own line and gives the name back its own. */}
+          <div className="min-w-0 flex-1 basis-full sm:basis-auto">
             <h1 className="truncate font-display text-xl font-bold leading-tight">
               {hotel?.name ?? "…"}
             </h1>
@@ -299,14 +307,14 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           <button
             type="button"
             onClick={() => setTalk({})}
-            className="mise-press mise-well min-h-[44px] flex-1 rounded-xl px-4 text-sm font-semibold text-fg-soft sm:flex-none"
+            className="mise-press mise-well min-h-[44px] flex-1 basis-[calc(50%-0.375rem)] rounded-xl px-4 text-sm font-semibold text-fg-soft sm:flex-none sm:basis-auto"
           >
             💬 Ask
           </button>
           <button
             type="button"
             onClick={callStaff}
-            className={`mise-press min-h-[44px] flex-1 rounded-xl px-4 text-sm font-semibold transition sm:flex-none ${
+            className={`mise-press min-h-[44px] flex-1 basis-[calc(50%-0.375rem)] whitespace-nowrap rounded-xl px-3 text-sm font-semibold transition sm:flex-none sm:basis-auto ${
               helped ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
             }`}
           >
@@ -315,11 +323,32 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4">
+      {/* ── ONE PAGE, TWO SHAPES ─────────────────────────────────────────
+          "for mobile and desktop we need to build UI based on size of screen
+           nah — here too right and left so many space is empty."
+
+          He is right, and it was not a small miss: the whole page was
+          `max-w-2xl`, a 672px column. On a phone that is the page. On a laptop
+          it is a phone held up in the middle of the screen with a third of the
+          window empty on either side, which reads as unfinished however good
+          the cards are.
+
+          A menu and a live order want different room, so they get different
+          room. Below `lg` it is one column and the order sits on top, because
+          when you are waiting that is the only thing you care about. From `lg`
+          it becomes two: the menu takes the width it deserves and grows to
+          three dishes a row, while the order moves to a sticky rail on the
+          right where it stays in view as you scroll the food.
+
+          The DOM order is the MOBILE order — order first, then menu — and the
+          rail is placed with `order` at `lg` only. A screen reader and a phone
+          both get the sequence that makes sense; the desktop rearrangement is
+          presentational, which is the only kind of reordering that is safe. */}
+      <main className="mx-auto max-w-6xl px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-8 lg:px-8">
         {/* ── The live ticket. "which will show real-time estimation to bring
                that food" — the reason this page stays open after ordering. */}
         {active.length > 0 && (
-          <section className="mise-pop mt-4 space-y-2">
+          <section className="mise-pop mt-4 space-y-2 lg:order-2 lg:sticky lg:top-24">
             {active.map((o) => {
               const say = SAY[o.status] ?? SAY.NEW;
               // The clock starts when the KITCHEN accepted it, not when it was
@@ -371,6 +400,19 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                     // kitchen has accepted: before that there is nothing to
                     // measure against and a bar creeping along would be a
                     // promise nobody made.
+                    // HOW LATE, NOT JUST HOW FAR.
+                    //
+                    // The bar clamped at 100% and the countdown clamped at 0,
+                    // so an order five hours late rendered as a full bar over
+                    // the word "any moment" — while the journey still showed
+                    // "Cooking" unlit. A full bar above an unlit stop is
+                    // self-contradictory, and it is the first thing the eye
+                    // lands on. Telling a waiting diner "any moment" for the
+                    // fifth hour is the fastest way to teach them to stop
+                    // believing the screen.
+                    const overdueBy =
+                      from && mins > 0 ? Math.floor((now - (from + mins * 60000)) / 60000) : 0;
+                    const late = overdueBy > 0;
                     const pct =
                       from && left !== null && mins > 0
                         ? Math.min(100, Math.max(0, ((mins - left) / mins) * 100))
@@ -386,19 +428,47 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                           </div>
                           {o.status === "READY" ? (
                             <span aria-hidden className="shrink-0 text-3xl">🛎️</span>
+                          ) : late ? (
+                            /* Owned rather than hidden. A kitchen that is
+                               behind is a fact the table already knows; saying
+                               it plainly, and pointing at the button that
+                               fetches a human, is the only version of this that
+                               keeps their trust. */
+                            <div className="shrink-0 text-right">
+                              <p className="font-display text-lg font-bold leading-tight text-amber-500">
+                                Running late
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-fg-soft">
+                                {overdueBy < 60
+                                  ? `about ${overdueBy} min over`
+                                  : "sorry — do ask us"}
+                              </p>
+                            </div>
                           ) : left !== null ? (
                             <div className="shrink-0 text-right">
-                              {/* "0 min / about" read as nothing. The unit and
-                                  the hedge belong in one sentence under the
-                                  number, not stacked into a column. */}
+                              {/* The unit and the hedge belong in one sentence
+                                  under the number, not stacked into a column. */}
                               <p className="font-display text-3xl font-bold leading-none tabular-nums text-fg">
                                 {left}
                               </p>
                               <p className="mt-0.5 text-[11px] text-fg-faint">
-                                {left === 0 ? "any moment" : left === 1 ? "min away" : "mins away"}
+                                {left === 1 ? "min away" : "mins away"}
                               </p>
                             </div>
-                          ) : null}
+                          ) : (
+                            /* JUST SENT. `from` is null until the kitchen
+                               accepts, so this used to show no time at all —
+                               the exact moment a diner most wants a number was
+                               the one moment the card had none. The hotel's own
+                               estimate is not a promise the kitchen has made
+                               yet, so it is offered as the guide it is. */
+                            <div className="shrink-0 text-right">
+                              <p className="font-display text-3xl font-bold leading-none tabular-nums text-fg-soft">
+                                ~{mins}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-fg-faint">mins, usually</p>
+                            </div>
+                          )}
                         </div>
 
                         {!ended && (
@@ -412,8 +482,12 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                               aria-label="How far along your order is"
                             >
                               <span
-                                className="block h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-300 transition-[width] duration-1000"
-                                style={{ width: `${o.status === "READY" ? 100 : pct}%` }}
+                                className={`block h-full rounded-full transition-[width] duration-1000 ${
+                                  late
+                                    ? "bg-amber-500"
+                                    : "bg-gradient-to-r from-brand-500 to-brand-300"
+                                }`}
+                                style={{ width: `${o.status === "READY" || late ? 100 : pct}%` }}
                               />
                             </div>
 
@@ -472,8 +546,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         )}
 
         {/* ── The menu. */}
+        <div className="lg:order-1 lg:min-w-0">
         {cats.length > 0 && (
-          <div className="mise-noscrollbar sticky top-[4.25rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell/85 px-4 py-3 backdrop-blur-xl">
+          <div className="mise-noscrollbar sticky top-[4.25rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell/85 px-4 py-3 backdrop-blur-xl lg:mx-0 lg:rounded-xl lg:px-3">
             {/* "All" first, because a diner arriving at a menu wants to SEE the
                 menu — sending them to pick a course before anything appears is
                 a decision demanded before they have the information to make
@@ -537,7 +612,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                 <span className="text-[11px] tabular-nums text-fg-faint">{dishes.length}</span>
               </div>
 
-              <ul className="grid gap-2.5 sm:grid-cols-2">
+              <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 {dishes.map((m) => {
                   const q = cart[m.id] ?? 0;
                   const off = m.orderable === false;
@@ -653,8 +728,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           ))}
         </div>
 
+        </div>
+
         {runningTotal > 0 && (
-          <p className="mt-5 text-center text-[11px] text-fg-faint">
+          <p className="mt-5 text-center text-[11px] text-fg-faint lg:order-1">
             Ordered so far at this table:{" "}
             <b className="text-fg-soft">{money(runningTotal)}</b>
           </p>
@@ -671,7 +748,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           id="mise-table-basket"
           className="fixed inset-x-0 bottom-0 z-40 border-t border-glass/10 bg-shell/90 p-3 backdrop-blur-xl"
         >
-          <div className="mx-auto max-w-2xl">
+          <div className="mx-auto max-w-6xl px-0 lg:px-4">
             {basketOpen && (
               <div className="mise-pop mb-2 max-h-[45vh] overflow-y-auto rounded-2xl">
                 {lines.map((l) => (
