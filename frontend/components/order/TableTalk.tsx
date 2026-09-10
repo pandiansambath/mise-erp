@@ -35,6 +35,15 @@ const QUESTIONS = [
   "How do I contact you?",
 ];
 
+/** One exchange, and the dish it was about.
+ *
+ *  `topic` is the dish the sheet was opened from when the question was asked,
+ *  or null for a general one. It is what stops the Chettinad sheet opening on
+ *  an answer about dosa — see `TableMessage.topic` on the server, and the
+ *  split into `scoped` / `earlier` in the component.
+ */
+type Turn = { me: string; ai: string; topic?: string | null };
+
 /** What to offer next, given what has already been said.
  *
  *   "that suggestion is disappeared after I clicked 1 — why? Please show
@@ -55,14 +64,32 @@ const QUESTIONS = [
  * offering the question just answered.
  */
 function nextSuggestions(
-  chat: { me: string; ai: string }[],
+  chat: Turn[],
   dish?: { id: string; name: string } | null,
 ): string[] {
   const asked = new Set(chat.map((c) => c.me.trim().toLowerCase()));
   const out: string[] = [];
 
   // 1. Dishes the last answer actually named — the model bolds them.
-  const last = chat[chat.length - 1]?.ai ?? "";
+  //
+  //    ONLY WHEN THAT ANSWER BELONGS HERE.
+  //
+  //      "I clicked Chettinad but the suggestions are showing for Masala Dosa
+  //       ... user should not feel this confusing."
+  //
+  //    `chat` is the whole table's history now that it persists, so the last
+  //    answer in it is frequently about a completely different dish — and its
+  //    bolded names became this sheet's follow-ups. Opening the Chettinad card
+  //    offered "Is the Masala Dosa spicy?" as the first chip, which is not a
+  //    follow-up to anything the diner just did.
+  //
+  //    A dish-scoped sheet only mines answers about ITS dish. The rest of the
+  //    history is still there to read; it just does not get to write the
+  //    questions.
+  const inScope = dish
+    ? chat.filter((c) => (c.topic ?? "") === dish.name)
+    : chat;
+  const last = inScope[inScope.length - 1]?.ai ?? "";
   const named = [...last.matchAll(/\*\*([^*\n]{2,40}?)\*\*/g)]
     .map((m) => m[1].trim().replace(/[.,:;!?]$/, ""))
     // A price or a number in bold is not a dish.
@@ -81,8 +108,14 @@ function nextSuggestions(
     );
   }
 
-  // 3. The standing ones, so there is always something to press.
-  out.push(...QUESTIONS, "Anything vegetarian?", "What's your spiciest dish?");
+  // 3. The standing ones, so there is always something to press — but NOT on
+  //    a dish sheet that already has three of its own. "What is this place
+  //    known for?" as the fourth chip under "About Chicken Chettinad" reads as
+  //    the assistant losing the thread, and the text box and the other tab are
+  //    both right there for anything else.
+  if (!dish) {
+    out.push(...QUESTIONS, "Anything vegetarian?", "What's your spiciest dish?");
+  }
 
   const seen = new Set<string>();
   return out
@@ -123,6 +156,84 @@ function namedDishes(
   return out.slice(0, 3);
 }
 
+/** One question and its answer.
+ *
+ *  Pulled out of the tab because it is now rendered in two places: the
+ *  conversation about the dish you opened, and the table's earlier questions
+ *  folded above it. Two copies of a bubble is exactly how the ✨ marker and the
+ *  currency note went missing before — fixed in one place, still wrong in the
+ *  other.
+ *
+ *  THE ANSWER IS THE PRODUCT HERE.
+ *
+ *    "this chat UI also not nice — this single page will fetch so many clients
+ *     for us indirectly, so build like a premium one."
+ *
+ *  The reply used to be a grey raised slab with a tail: a speech bubble from a
+ *  support widget. But this is the restaurant talking about its own food, and
+ *  it is the most impressive thing on the page — a stranger asking "what do you
+ *  recommend?" and getting a considered answer about the actual menu. It reads
+ *  as a served plate now: the house mark beside it, generous line height, and
+ *  the dish names the model bolds carrying real weight.
+ */
+function Exchange({
+  turn,
+  menu,
+  onAdd,
+  added,
+  setAdded,
+}: {
+  turn: Turn;
+  menu: { id: string; name: string; price: string; orderable?: boolean }[];
+  onAdd?: (id: string) => void;
+  added: Set<string>;
+  setAdded: React.Dispatch<React.SetStateAction<Set<string>>>;
+}) {
+  const named = onAdd ? namedDishes(turn.ai, menu) : [];
+  return (
+    <div className="space-y-2">
+      <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm">
+        {turn.me}
+      </p>
+      <div className="flex items-start gap-2">
+        <span
+          aria-hidden
+          className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs text-white"
+        >
+          ✦
+        </span>
+        <div className="mise-card-inset mr-auto w-fit max-w-[92%] rounded-2xl rounded-tl-md px-3.5 py-3 text-[15px] leading-relaxed text-fg [&_strong]:font-bold [&_strong]:text-brand-300">
+          {/* It replies in markdown. This used to print the raw text, so a
+              diner read literal ** around every bolded word — on the one
+              screen a stranger ever sees. */}
+          <ChatMarkdown text={turn.ai} />
+          {/* Act on it here — see `namedDishes`. Without this the assistant
+              could recommend the Mutton Biryani and the only way to accept was
+              to close the sheet, scroll the menu and find it again. */}
+          {named.length > 0 && (
+            <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line/60 pt-2.5">
+              {named.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => {
+                    onAdd?.(d.id);
+                    setAdded((s) => new Set(s).add(d.id));
+                  }}
+                  data-testid="ai-add"
+                  className="mise-press rounded-full bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  {added.has(d.id) ? `✓ Added ${d.name}` : `Add ${d.name}`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TableTalk({
   code,
   dish,
@@ -131,8 +242,11 @@ export function TableTalk({
   onClose,
 }: {
   code: string;
-  /** When opened from a dish, the assistant is grounded in that dish. */
-  dish?: { id: string; name: string } | null;
+  /** When opened from a dish, the assistant is grounded in that dish.
+   *  `photo` is whatever the card was showing — the hotel's own picture or
+   *  the bundled stand-in — so the sheet opens on the plate that was
+   *  tapped rather than on its name in bold. */
+  dish?: { id: string; name: string; photo?: string | null } | null;
   /** The orderable menu, so a dish the assistant names can be added here.
    *
    *  THE BIGGEST MISS ON A PAGE WHOSE JOB IS TAKING AN ORDER. The assistant
@@ -183,7 +297,9 @@ export function TableTalk({
   }, [tab, code]);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
-  const [chat, setChat] = useState<{ me: string; ai: string }[]>([]);
+  // Each turn remembers WHICH DISH it was about, so a dish-scoped sheet can
+  // open on its own conversation. See `scoped`/`earlier` below.
+  const [chat, setChat] = useState<Turn[]>([]);
   // THE ASSISTANT'S CONVERSATION SURVIVES THE POPUP.
   //
   //   "if I close and open, it's not showing the previous history... make
@@ -205,13 +321,15 @@ export function TableTalk({
         const r = await fetch(`${API_BASE}/api/public/table/${code}/messages?channel=ai`);
         if (!r.ok) return;
         const d = await r.json();
-        const rows: { body: string; from_staff: boolean }[] = d.messages ?? [];
-        // Stored as alternating question/answer rows; the UI pairs them.
-        const pairs: { me: string; ai: string }[] = [];
+        const rows: { body: string; from_staff: boolean; topic?: string | null }[] =
+          d.messages ?? [];
+        // Stored as alternating question/answer rows; the UI pairs them. The
+        // topic rides on the question — the answer's copy is the same value.
+        const pairs: Turn[] = [];
         for (let i = 0; i < rows.length; i++) {
           if (rows[i].from_staff) continue;
           const reply = rows[i + 1]?.from_staff ? rows[i + 1].body : "";
-          pairs.push({ me: rows[i].body, ai: reply });
+          pairs.push({ me: rows[i].body, ai: reply, topic: rows[i].topic ?? null });
         }
         if (!stop && pairs.length) setChat(pairs);
       } catch {
@@ -227,6 +345,32 @@ export function TableTalk({
   // Recomputed after every answer, so the chips move with the
   // conversation instead of vanishing after the first press.
   const suggestions = useMemo(() => nextSuggestions(chat, dish), [chat, dish]);
+
+  // ── HISTORY WITHOUT THE CONFUSION ────────────────────────────────────────
+  //
+  //   "I clicked Chettinad but the suggestions are showing for Masala Dosa...
+  //    user should not feel this confusing — but still we need to show history,
+  //    don't compromise history for this. We need history without that
+  //    confusion."
+  //
+  // Persistence landed flat: one thread per table, replayed identically
+  // whichever dish you opened it from. So the Chettinad sheet's last line was
+  // an answer about dosa, sitting exactly where a reply to the tap you just
+  // made would sit — the page appeared to have misheard.
+  //
+  // The two requirements are not opposed. A dish sheet opens on ITS dish; the
+  // rest of the table's conversation is one tap above it, labelled, and
+  // nothing is thrown away. A sheet opened from the header has no dish, so
+  // there is nothing to separate and the whole thread reads straight through.
+  const scoped = useMemo(
+    () => (dish ? chat.filter((c) => (c.topic ?? "") === dish.name) : chat),
+    [chat, dish],
+  );
+  const earlier = useMemo(
+    () => (dish ? chat.filter((c) => (c.topic ?? "") !== dish.name) : []),
+    [chat, dish],
+  );
+  const [showEarlier, setShowEarlier] = useState(false);
 
   async function send(message: string) {
     if (!message.trim()) return;
@@ -257,11 +401,20 @@ export function TableTalk({
         body: JSON.stringify({ question: question.trim(), dish_id: dish?.id ?? null }),
       });
       const d = await r.json();
-      setChat((c) => [...c, { me: question.trim(), ai: d.answer ?? "…" }]);
+      // Filed under this sheet's dish, matching what the server stored,
+      // so it stays in scope without a reload.
+      setChat((c) => [
+        ...c,
+        { me: question.trim(), ai: d.answer ?? "…", topic: dish?.name ?? null },
+      ]);
     } catch {
       setChat((c) => [
         ...c,
-        { me: question.trim(), ai: "I could not reach the assistant just then." },
+        {
+          me: question.trim(),
+          ai: "I could not reach the assistant just then.",
+          topic: dish?.name ?? null,
+        },
       ]);
     } finally {
       setBusy(false);
@@ -270,17 +423,28 @@ export function TableTalk({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="mise-pop flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:rounded-3xl">
+      <div className="mise-pop flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-shell shadow-2xl sm:max-h-[85dvh] sm:max-w-2xl sm:rounded-3xl">
         {/* A header that says where you are. The old sheet opened straight onto
             two tabs and a wall of chips, which reads as a settings panel rather
             than a conversation. */}
         <div className="flex items-start gap-3 px-4 pt-4">
-          <span
-            aria-hidden
-            className="mise-well grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
-          >
-            {tab === "ai" ? "✨" : "💬"}
-          </span>
+          {/* The dish you tapped, at the top of the conversation about it.
+              A 44px well with a sparkle in it is the avatar of a support
+              widget; the actual plate is the difference between a dialog and
+              a waiter leaning in. */}
+          {tab === "ai" && dish?.photo ? (
+            <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl bg-glass/5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={dish.photo} alt="" className="h-full w-full object-cover" />
+            </span>
+          ) : (
+            <span
+              aria-hidden
+              className="mise-well grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
+            >
+              {tab === "ai" ? "✨" : "💬"}
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             <p className="font-display text-lg font-semibold leading-tight text-fg">
               {tab === "ai" ? (dish ? dish.name : "Ask about the food") : "Ask for something"}
@@ -387,85 +551,86 @@ export function TableTalk({
             </>
           ) : (
             <>
-              {dish && (
-                <p className="mise-tone-info mb-2 text-xs font-medium">About {dish.name}</p>
-              )}
-              {/* Kept AFTER the first answer, not hidden by it — see
-                  `nextSuggestions`. They sit under the conversation once it has
-                  started, which is where a "what next" belongs. */}
-              {suggestions.length > 0 && (
-                <div className={`flex flex-wrap gap-1.5 ${chat.length > 0 ? "mt-3" : ""}`}>
-                  {suggestions.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => ask(s)}
-                      className="mise-press mise-well rounded-full px-3 py-2 text-xs text-fg-soft disabled:opacity-50"
+              {/* ── WHAT WAS SAID BEFORE, WITHOUT IT ANSWERING FOR YOU ──────
+                  See the note on `scoped`/`earlier`. The table's other
+                  conversations are kept and labelled, one tap up, instead of
+                  being replayed underneath a dish they were not about. */}
+              {earlier.length > 0 && (
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowEarlier((v) => !v)}
+                    aria-expanded={showEarlier}
+                    className="mise-press mise-well flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left"
+                  >
+                    <span aria-hidden className="text-sm">🕘</span>
+                    <span className="min-w-0 flex-1 text-xs font-medium text-fg-soft">
+                      {showEarlier ? "Hide earlier questions" : "Earlier at this table"}
+                      <span className="ml-1.5 rounded-full bg-glass/15 px-1.5 py-0.5 text-[10px] tabular-nums text-fg-faint">
+                        {earlier.length}
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden
+                      className={`text-[10px] text-fg-faint transition-transform ${
+                        showEarlier ? "rotate-180" : ""
+                      }`}
                     >
-                      {s}
-                    </button>
-                  ))}
+                      ▾
+                    </span>
+                  </button>
+                  {showEarlier && (
+                    <div className="mt-2 space-y-3 border-l-2 border-line pl-3">
+                      {earlier.map((c, i) => (
+                        <Exchange
+                          key={`e${i}`}
+                          turn={c}
+                          menu={menu}
+                          onAdd={onAdd}
+                          added={added}
+                          setAdded={setAdded}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              <div className="mt-3 space-y-3">
-                {/* THE ANSWER IS THE PRODUCT HERE.
-                    "this chat UI also not nice — this single page will fetch so
-                     many clients for us indirectly, so build like a premium
-                     one."
-                    The reply was a grey raised slab with a tail: a speech
-                    bubble from a support widget. But this is the restaurant
-                    talking about its own food, and it is the most impressive
-                    thing on the page — a stranger asking "what do you
-                    recommend?" and getting a considered answer about the actual
-                    menu. It reads as a served plate now: the house mark beside
-                    it, generous line height, the dish names the model bolds
-                    carrying real weight. */}
-                {chat.map((c, i) => (
-                  <div key={i} className="space-y-2">
-                    <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm">
-                      {c.me}
-                    </p>
-                    <div className="flex items-start gap-2">
-                      <span
-                        aria-hidden
-                        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs text-white"
-                      >
-                        ✦
-                      </span>
-                      <div className="mise-card-inset mr-auto w-fit max-w-[92%] rounded-2xl rounded-tl-md px-3.5 py-3 text-[15px] leading-relaxed text-fg [&_strong]:font-bold [&_strong]:text-brand-300">
-                        {/* It replies in markdown. This used to print the raw
-                            text, so a diner read literal ** around every bolded
-                            word — on the one screen a stranger ever sees. */}
-                        <ChatMarkdown text={c.ai} />
-                        {/* Act on it here. See `namedDishes`. */}
-                        {onAdd &&
-                          (() => {
-                            const named = namedDishes(c.ai, menu);
-                            if (named.length === 0) return null;
-                            return (
-                              <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line/60 pt-2.5">
-                                {named.map((d) => (
-                                  <button
-                                    key={d.id}
-                                    type="button"
-                                    onClick={() => {
-                                      onAdd(d.id);
-                                      setAdded((s) => new Set(s).add(d.id));
-                                    }}
-                                    data-testid="ai-add"
-                                    className="mise-press rounded-full bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
-                                  >
-                                    {added.has(d.id) ? "✓ Added" : `Add ${d.name}`}
-                                  </button>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                      </div>
-                    </div>
-                  </div>
+              {/* Only when it is actually SEPARATING something. The header
+                  three lines up already says "Chicken Chettinad", so on a
+                  sheet with nothing folded above it this divider printed the
+                  dish name a second time and divided one thing from nothing. */}
+              {dish && earlier.length > 0 && showEarlier && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span aria-hidden className="h-px flex-1 bg-line" />
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                    Now — {dish.name}
+                  </p>
+                  <span aria-hidden className="h-px flex-1 bg-line" />
+                </div>
+              )}
+
+              {/* An empty scope needs an opening line, or a dish nobody has
+                  asked about yet opens on a bare row of chips under a divider,
+                  which reads as a form rather than a conversation. */}
+              {scoped.length === 0 && !busy && (
+                <p className="mb-3 text-sm leading-relaxed text-fg-soft">
+                  {dish
+                    ? `Ask me anything about the ${dish.name} — what's in it, how hot it is, what it goes with.`
+                    : "Ask me about the food, the place, or what to have."}
+                </p>
+              )}
+
+              <div className="space-y-3">
+                {scoped.map((c, i) => (
+                  <Exchange
+                    key={i}
+                    turn={c}
+                    menu={menu}
+                    onAdd={onAdd}
+                    added={added}
+                    setAdded={setAdded}
+                  />
                 ))}
                 {busy && (
                   <div className="flex items-start gap-2">
@@ -476,43 +641,78 @@ export function TableTalk({
                       ✦
                     </span>
                     <div className="mise-card-inset mr-auto flex w-fit items-center gap-1.5 rounded-2xl rounded-tl-md px-3.5 py-3">
-                    {[0, 1, 2].map((d) => (
-                      <span
-                        key={d}
-                        aria-hidden
-                        className="mise-typing h-1.5 w-1.5 rounded-full bg-fg-faint"
-                        style={{ animationDelay: `${d * 160}ms` }}
-                      />
-                    ))}
+                      {[0, 1, 2].map((d) => (
+                        <span
+                          key={d}
+                          aria-hidden
+                          className="mise-typing h-1.5 w-1.5 rounded-full bg-fg-faint"
+                          style={{ animationDelay: `${d * 160}ms` }}
+                        />
+                      ))}
                       <span className="sr-only">thinking</span>
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && ask(q)}
-                  placeholder="Ask about the food or the place…"
-                  className="mise-well min-w-0 flex-1 rounded-xl px-3 py-2.5 text-sm outline-none"
-                />
-                <button
-                  type="button"
-                  disabled={busy || !q.trim()}
-                  onClick={() => ask(q)}
-                  className="mise-press rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-                >
-                  Ask
-                </button>
+              {/* ── BELOW THE ANSWER, WHICH IS WHERE "WHAT NEXT" LIVES ──────
+                  These sat ABOVE the conversation, so chips generated FROM an
+                  answer appeared above the question that produced it and the
+                  eye had to travel backwards to find them. A follow-up reads
+                  as a follow-up only when it follows. */}
+              {suggestions.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => ask(s)}
+                      className="mise-press mise-well rounded-full px-3 py-2 text-xs text-fg-soft transition hover:text-fg disabled:opacity-50"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Pinned, not scrolled away with the conversation. A composer
+                  that leaves the screen as the answers grow is the reason
+                  people give up on a chat after two questions. */}
+              <div className="sticky bottom-0 -mx-4 mt-3 border-t border-line/60 bg-shell px-4 pb-1 pt-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && ask(q)}
+                    placeholder={
+                      dish ? `Ask about the ${dish.name}…` : "Ask about the food or the place…"
+                    }
+                    className="mise-well min-w-0 flex-1 rounded-full px-4 py-3 text-sm outline-none"
+                  />
+                  {/* A round send, not a word.
+                      The old "Ask" button spent its whole life greyed out —
+                      the box starts empty, so the FIRST thing a diner saw was
+                      a disabled button, which reads as a broken screen rather
+                      than as "type something". An arrow is visibly waiting for
+                      input in a way a dimmed verb is not. */}
+                  <button
+                    type="button"
+                    disabled={busy || !q.trim()}
+                    onClick={() => ask(q)}
+                    aria-label="Ask"
+                    className="mise-press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-600 text-white transition disabled:bg-glass/15 disabled:text-fg-faint"
+                  >
+                    <span aria-hidden className="text-lg leading-none">↑</span>
+                  </button>
+                </div>
+                {/* Said plainly, because a guest deserves to know what they are
+                    talking to and what it is allowed to know. */}
+                <p className="mt-2 text-[11px] leading-relaxed text-fg-faint">
+                  Answers come from this restaurant&apos;s own menu. For anything about
+                  allergies, please ask a member of staff.
+                </p>
               </div>
-              {/* Said plainly, because a guest deserves to know what they are
-                  talking to and what it is allowed to know. */}
-              <p className="mt-2 text-[10px] leading-relaxed text-fg-faint">
-                Answers come from this restaurant&apos;s own menu and information. For anything
-                about allergies, please ask a member of staff.
-              </p>
             </>
           )}
         </div>
