@@ -142,6 +142,7 @@ def _order_out(o: Order, rider_name: str | None = None, table_label: str | None 
         "rider_name": rider_name,
         "code": o.code,
         "status": o.status,
+        "accepted_at": o.accepted_at.isoformat() if o.accepted_at else None,
         "fulfilment": o.fulfilment,
         "customer_name": o.customer_name,
         "phone": o.phone,
@@ -453,6 +454,14 @@ async def move_order(
             f"Can't move {order.status} → {payload.status} (allowed: {', '.join(allowed) or '—'})",
         )
     order.status = payload.status
+    # The countdown's true start. Recorded once, on the first move OFF
+    # NEW, so later edits to the row cannot shift it — see the note on
+    # `Order.accepted_at`.
+    if order.accepted_at is None and payload.status not in (
+        OrderStatus.REJECTED.value,
+        OrderStatus.CANCELLED.value,
+    ):
+        order.accepted_at = dt_datetime.now(UTC)
     await db.commit()
     # `updated_at` is computed by the database on UPDATE, so after the commit it
     # is EXPIRED — reading it would trigger a lazy refresh, and a lazy refresh
@@ -1698,6 +1707,14 @@ async def kitchen_screen_move(
             f"Can't move {order.status} to {payload.status}",
         )
     order.status = payload.status
+    # The countdown's true start. Recorded once, on the first move OFF
+    # NEW, so later edits to the row cannot shift it — see the note on
+    # `Order.accepted_at`.
+    if order.accepted_at is None and payload.status not in (
+        OrderStatus.REJECTED.value,
+        OrderStatus.CANCELLED.value,
+    ):
+        order.accepted_at = dt_datetime.now(UTC)
     order.help_requested_at = None
     await db.commit()
     await db.refresh(order)

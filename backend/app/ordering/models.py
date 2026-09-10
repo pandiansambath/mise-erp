@@ -185,6 +185,16 @@ class Order(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    #: When the KITCHEN accepted it — the moment the diner's countdown should
+    #: run from.
+    #:
+    #: The tracker used `updated_at`, which is `onupdate=func.now()` and
+    #: therefore moves whenever ANY column on the row changes. Pressing "Need
+    #: someone" writes `help_requested_at` on this same row, so asking for a
+    #: waiter restarted the diner's clock: a two-day-old order jumped back to
+    #: "9 minutes away". Asking for water must not make the food look newly
+    #: cooked.
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), onupdate=func.now()
     )

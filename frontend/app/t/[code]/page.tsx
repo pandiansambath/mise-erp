@@ -48,6 +48,7 @@ type HotelInfo = {
 };
 type LiveOrder = {
   id: string;
+  accepted_at?: string | null;
   code: string;
   status: string;
   total: string;
@@ -267,6 +268,8 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   // Declared HERE, below `active`: a const cannot be read above its own
   // declaration, and `tsc` catches that where `next build` does not.
   const railHasContent = active.length > 0;
+  // See the note where it is used, in the dish grid.
+  const usedPhotos = new Set<string>();
 
   // Reads the hour so the page is not identical at 9am and 9pm. Computed from
   // `now`, which already ticks for the countdown, so it costs nothing extra
@@ -298,7 +301,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
         <div className="mx-auto flex w-full max-w-[110rem] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:px-8 2xl:px-12">
           <span
             aria-hidden
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-400 text-sm font-bold text-white"
+            className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-400 text-sm font-bold text-white sm:grid"
           >
             {(hotel?.name ?? "·").slice(0, 1).toUpperCase()}
           </span>
@@ -482,7 +485,16 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               // placed — a slammed kitchen that has not looked at the ticket is
               // not five minutes from serving it, and a countdown that lies is
               // worse than none.
-              const from = o.status === "NEW" ? null : new Date(o.updated_at ?? o.created_at).getTime();
+              // FROM ACCEPTANCE, NOT FROM THE LAST EDIT.
+              // This used `updated_at`, which is `onupdate=func.now()` — so it
+              // moved whenever anything on the row changed. Pressing "Need
+              // someone" writes `help_requested_at` on that same row, and a
+              // two-day-old order's clock jumped back to "9 minutes away".
+              // Asking for water must not make the food look newly cooked.
+              const from =
+                o.status === "NEW"
+                  ? null
+                  : new Date(o.accepted_at ?? o.updated_at ?? o.created_at).getTime();
               // Narrowest wins: this ticket's own estimate, then the hotel's.
               const mins = o.eta_minutes ?? hotel?.prep_minutes ?? 20;
               const left = from ? Math.max(0, Math.ceil((from + mins * 60000 - now) / 60000)) : null;
@@ -614,7 +626,16 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                                     ? "bg-amber-500"
                                     : "bg-gradient-to-r from-brand-500 to-brand-300"
                                 }`}
-                                style={{ width: `${o.status === "READY" || late ? 100 : pct}%` }}
+                                // Never quite full until it really is. A 100%
+                                // bar above an unlit "Cooking" reads as
+                                // finished whatever colour it is, so a late
+                                // order stops at 92% and lets the words carry
+                                // the news.
+                                style={{
+                                  width: `${
+                                    o.status === "READY" ? 100 : late ? 92 : Math.min(90, pct)
+                                  }%`,
+                                }}
                               />
                             </div>
 
@@ -729,6 +750,10 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
               thumbnail the size of a favicon sells nothing.
         */}
         <div className="mt-1 space-y-6">
+          {/* Tracks which stock photographs this render has already spent, so
+              the second dish that maps to the same file falls back to its
+              emoji. Rebuilt on every render, deliberately: it is a property of
+              what is on screen right now, not state to keep. */}
           {courses.map(([course, dishes]) => (
             <section key={course}>
               <div className="mb-2.5 flex items-baseline gap-2">
@@ -739,13 +764,36 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                 <span className="text-[11px] tabular-nums text-fg-faint">{dishes.length}</span>
               </div>
 
-              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1800px]:grid-cols-5">
+              {/* NAMED BREAKPOINTS ONLY. I first wrote the widest step as
+                  `min-[1800px]:grid-cols-5`, then as `min-[1800px]:grid-cols-4`,
+                  and neither took effect: Tailwind emits ARBITRARY variants ahead
+                  of named ones, so `xl:grid-cols-3` came later in the stylesheet
+                  and won at every width above 1800. Measured 3 across at 1920
+                  both times. sm → xl → 2xl sort in the order they read. */}
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {dishes.map((m) => {
                   const q = cart[m.id] ?? 0;
                   const off = m.orderable === false;
+                  // THE SAME PICTURE, THREE TIMES, SIDE BY SIDE.
+                  //
+                  // `dishPhoto()` keyword-matches a small bundled library, so
+                  // Mutton, Vegetable and Chicken Biryani all resolve to the
+                  // same photograph — and widening the grid to four columns
+                  // put them next to each other in one row, which makes the
+                  // menu look fake in a way one repeated image never did.
+                  //
+                  // A hotel's OWN photo is always used. A stock stand-in is
+                  // used once per course and after that the dish falls back to
+                  // its emoji: an honest symbol beats a picture of a different
+                  // dish wearing this one's name.
+                  const stock = m.has_photo ? null : dishPhoto(m.name);
+                  const dup = !!stock && usedPhotos.has(stock);
+                  if (stock && !dup) usedPhotos.add(stock);
                   const src = m.has_photo
                     ? `${API_BASE}/api/public/order/menu-photo/${m.id}`
-                    : dishPhoto(m.name);
+                    : dup
+                      ? null
+                      : stock;
                   return (
                     <li key={m.id}>
                       <article
@@ -763,7 +811,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                             type="button"
                             onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
                             aria-label={`More about ${m.name}`}
-                            className="mise-press relative block aspect-[4/3] w-full overflow-hidden bg-glass/5"
+                            className="mise-press relative block aspect-[16/10] w-full overflow-hidden bg-glass/5 sm:aspect-[4/3]"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -784,7 +832,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                             type="button"
                             onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
                             aria-label={`More about ${m.name}`}
-                            className="mise-press grid aspect-[4/3] w-full place-items-center bg-glass/5 text-5xl"
+                            className="mise-press grid aspect-[16/10] w-full place-items-center bg-glass/5 text-5xl sm:aspect-[4/3]"
                           >
                             {m.emoji ?? "🍽️"}
                           </button>
