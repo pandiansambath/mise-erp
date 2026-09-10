@@ -95,14 +95,54 @@ function nextSuggestions(
     .slice(0, 4);
 }
 
+/** The dishes an answer actually named, matched against the real menu.
+ *
+ *  The model bolds dish names, which is the same signal the follow-up chips
+ *  use. Matched case-insensitively against the menu rather than trusted: the
+ *  assistant occasionally bolds a phrase that is not a dish, and offering an
+ *  Add button for something that does not exist would be worse than offering
+ *  nothing. Unorderable dishes are dropped too — "sold out" is not a thing to
+ *  put a buy button on.
+ */
+function namedDishes(
+  answer: string,
+  menu: { id: string; name: string; price: string; orderable?: boolean }[],
+): { id: string; name: string; price: string }[] {
+  const bolded = [...answer.matchAll(/\*\*([^*\n]{2,60}?)\*\*/g)].map((m) =>
+    m[1].trim().replace(/[.,:;!?]$/, "").toLowerCase(),
+  );
+  const out: { id: string; name: string; price: string }[] = [];
+  const seen = new Set<string>();
+  for (const b of bolded) {
+    const hit = menu.find((x) => x.name.toLowerCase() === b);
+    if (hit && hit.orderable !== false && !seen.has(hit.id)) {
+      seen.add(hit.id);
+      out.push({ id: hit.id, name: hit.name, price: hit.price });
+    }
+  }
+  return out.slice(0, 3);
+}
+
 export function TableTalk({
   code,
   dish,
+  menu = [],
+  onAdd,
   onClose,
 }: {
   code: string;
   /** When opened from a dish, the assistant is grounded in that dish. */
   dish?: { id: string; name: string } | null;
+  /** The orderable menu, so a dish the assistant names can be added here.
+   *
+   *  THE BIGGEST MISS ON A PAGE WHOSE JOB IS TAKING AN ORDER. The assistant
+   *  would answer "the Mutton Biryani at £14.95 is a solid choice" and there
+   *  was no way to act on it: you closed the sheet, scrolled the menu, found
+   *  the dish again and pressed Add. Every one of those steps is a chance to
+   *  not bother. A recommendation you cannot accept is a conversation, not a
+   *  waiter. */
+  menu?: { id: string; name: string; price: string; orderable?: boolean }[];
+  onAdd?: (id: string) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"ask" | "ai">(dish ? "ai" : "ask");
@@ -144,6 +184,46 @@ export function TableTalk({
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [chat, setChat] = useState<{ me: string; ai: string }[]>([]);
+  // THE ASSISTANT'S CONVERSATION SURVIVES THE POPUP.
+  //
+  //   "if I close and open, it's not showing the previous history... make
+  //    the history persistent until owner clear that table."
+  //
+  // It lived only in `chat` state, so it died the moment the sheet closed —
+  // and closing the sheet is exactly what a diner does when the answer names
+  // a dish they want to go and look at. Loaded from the table's AI thread on
+  // open; the server keeps it until the table is released.
+  const [loadedAi, setLoadedAi] = useState(false);
+  // Which of the assistant's suggestions have been taken, so the button
+  // confirms rather than looking unpressed.
+  const [added, setAdded] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (tab !== "ai" || loadedAi) return;
+    let stop = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/public/table/${code}/messages?channel=ai`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const rows: { body: string; from_staff: boolean }[] = d.messages ?? [];
+        // Stored as alternating question/answer rows; the UI pairs them.
+        const pairs: { me: string; ai: string }[] = [];
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i].from_staff) continue;
+          const reply = rows[i + 1]?.from_staff ? rows[i + 1].body : "";
+          pairs.push({ me: rows[i].body, ai: reply });
+        }
+        if (!stop && pairs.length) setChat(pairs);
+      } catch {
+        /* an unreachable history is not worth an error on a menu */
+      } finally {
+        if (!stop) setLoadedAi(true);
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [tab, code, loadedAi]);
   // Recomputed after every answer, so the chips move with the
   // conversation instead of vanishing after the first press.
   const suggestions = useMemo(() => nextSuggestions(chat, dish), [chat, dish]);
@@ -359,6 +439,30 @@ export function TableTalk({
                             text, so a diner read literal ** around every bolded
                             word — on the one screen a stranger ever sees. */}
                         <ChatMarkdown text={c.ai} />
+                        {/* Act on it here. See `namedDishes`. */}
+                        {onAdd &&
+                          (() => {
+                            const named = namedDishes(c.ai, menu);
+                            if (named.length === 0) return null;
+                            return (
+                              <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-line/60 pt-2.5">
+                                {named.map((d) => (
+                                  <button
+                                    key={d.id}
+                                    type="button"
+                                    onClick={() => {
+                                      onAdd(d.id);
+                                      setAdded((s) => new Set(s).add(d.id));
+                                    }}
+                                    data-testid="ai-add"
+                                    className="mise-press rounded-full bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
+                                  >
+                                    {added.has(d.id) ? "✓ Added" : `Add ${d.name}`}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
                       </div>
                     </div>
                   </div>

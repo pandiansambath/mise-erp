@@ -911,7 +911,18 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
       </main>
 
       {talk && (
-        <TableTalk code={code} dish={talk.dish} onClose={() => setTalk(null)} />
+        <TableTalk
+          code={code}
+          dish={talk.dish}
+          menu={menu.map((m) => ({
+            id: m.id,
+            name: m.name,
+            price: m.price,
+            orderable: m.orderable,
+          }))}
+          onAdd={(id) => bump(id, 1)}
+          onClose={() => setTalk(null)}
+        />
       )}
 
       {/* ── The basket, pinned. Never a page you have to go to.
