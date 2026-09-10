@@ -280,7 +280,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
             the edge. The buttons drop to their own row on a narrow screen —
             they are the two things a diner reaches for without looking, and
             they should be a comfortable size. */}
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[110rem] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:px-8 2xl:px-12">
           <span
             aria-hidden
             className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-400 text-sm font-bold text-white"
@@ -344,7 +344,22 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           rail is placed with `order` at `lg` only. A screen reader and a phone
           both get the sequence that makes sense; the desktop rearrangement is
           presentational, which is the only kind of reordering that is safe. */}
-      <main className="mx-auto max-w-6xl px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-8 lg:px-8">
+      {/* ── USE THE WHOLE SCREEN ──────────────────────────────────────────
+          "we have so much space wasted in right and left side, only center
+           place we using — please REBUILD this entire page which will utilise
+           the full entire areas."
+
+          It was `max-w-6xl` — 1152px — so on a 1920px monitor there were two
+          384px bands of nothing down the sides. Capping a MENU at reading width
+          is the wrong instinct borrowed from prose: a wall of text needs a
+          narrow measure, a wall of photographs wants the room.
+
+          So the shell goes to 110rem with the padding growing at each step, and
+          the dish grid keeps adding columns as the width allows — two on a
+          tablet, three on a laptop, four on a wide monitor, five past that.
+          The order rail widens slightly too, because a 21rem card beside a
+          1600px menu looks like an afterthought. */}
+      <main className="mx-auto w-full max-w-[110rem] px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-8 lg:px-8 2xl:grid-cols-[minmax(0,1fr)_26rem] 2xl:gap-12 2xl:px-12">
         {/* ── The live ticket. "which will show real-time estimation to bring
                that food" — the reason this page stays open after ordering. */}
         {active.length > 0 && (
@@ -612,7 +627,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                 <span className="text-[11px] tabular-nums text-fg-faint">{dishes.length}</span>
               </div>
 
-              <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1800px]:grid-cols-5">
                 {dishes.map((m) => {
                   const q = cart[m.id] ?? 0;
                   const off = m.orderable === false;
@@ -636,7 +651,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                             type="button"
                             onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
                             aria-label={`More about ${m.name}`}
-                            className="mise-press relative block h-32 w-full overflow-hidden bg-glass/5"
+                            className="mise-press relative block aspect-[4/3] w-full overflow-hidden bg-glass/5"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -657,7 +672,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                             type="button"
                             onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
                             aria-label={`More about ${m.name}`}
-                            className="mise-press grid h-24 w-full place-items-center bg-glass/5 text-4xl"
+                            className="mise-press grid aspect-[4/3] w-full place-items-center bg-glass/5 text-5xl"
                           >
                             {m.emoji ?? "🍽️"}
                           </button>
@@ -748,7 +763,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           id="mise-table-basket"
           className="fixed inset-x-0 bottom-0 z-40 border-t border-glass/10 bg-shell/90 p-3 backdrop-blur-xl"
         >
-          <div className="mx-auto max-w-6xl px-0 lg:px-4">
+          <div className="mx-auto w-full max-w-[110rem] px-0 lg:px-8 2xl:px-12">
             {basketOpen && (
               <div className="mise-pop mb-2 max-h-[45vh] overflow-y-auto rounded-2xl">
                 {lines.map((l) => (
