@@ -15,7 +15,7 @@
 // The chips matter more than the box. Most people will not type on a phone in a
 // restaurant with a drink in their other hand, so the five things anybody
 // actually asks for are one tap away, and the keyboard is the fallback.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { API_BASE } from "@/lib/api";
 
@@ -108,6 +108,39 @@ export function TableTalk({
   const [tab, setTab] = useState<"ask" | "ai">(dish ? "ai" : "ask");
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
+  // THE CONVERSATION, BOTH WAYS.
+  //
+  //   "if customer send msg I can't able to see the reply or the persistent
+  //    history of that time. Please show previous msg too until this table
+  //    is cleared — it should be interactive between both."
+  //
+  // "Sent — someone is on their way" was the whole of the diner's side: a
+  // receipt for a message they could no longer see, with no way to know it
+  // had been read and nothing to show they had already asked twice. Now the
+  // tab IS the thread.
+  const [thread, setThread] = useState<{ id: string; body: string; from_staff: boolean }[]>([]);
+  useEffect(() => {
+    if (tab !== "ask") return;
+    let stop = false;
+    const load = async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/public/table/${code}/messages`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!stop) setThread(d.messages ?? []);
+      } catch {
+        /* a dropped poll is not worth telling a diner about */
+      }
+    };
+    void load();
+    // Slow enough to be free, quick enough that a reply feels answered. The
+    // page is open on a phone at a table, not a dashboard on a wall.
+    const id = window.setInterval(load, 6000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [tab, code]);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [chat, setChat] = useState<{ me: string; ai: string }[]>([]);
@@ -125,6 +158,7 @@ export function TableTalk({
         body: JSON.stringify({ text: message.trim() }),
       });
       setSent(true);
+      setText("");
       setText("");
       window.setTimeout(onClose, 1400);
     } finally {
@@ -208,11 +242,32 @@ export function TableTalk({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           {tab === "ask" ? (
-            sent ? (
-              <p className="py-8 text-center text-sm font-medium text-brand-300">
-                Sent — someone is on their way.
-              </p>
-            ) : (
+            <>
+              {thread.length > 0 && (
+                <ul className="mb-3 space-y-2">
+                  {thread.map((mm) => (
+                    <li key={mm.id} className="flex">
+                      {mm.from_staff ? (
+                        <span className="mise-card-inset mr-auto w-fit max-w-[88%] rounded-2xl rounded-tl-md px-3.5 py-2 text-sm text-fg">
+                          {mm.body}
+                        </span>
+                      ) : (
+                        <span className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white">
+                          {mm.body}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* The receipt is a line in the thread now, not a screen that
+                  replaces it — so you can see what you asked while you wait. */}
+              {sent && thread.length === 0 && (
+                <p className="mb-3 text-center text-sm font-medium text-brand-300">
+                  Sent — someone is on their way.
+                </p>
+              )}
+              {(
               <>
                 <p className="mb-2 text-[11px] text-fg-faint">
                   Tap one, or write your own. It goes straight to the counter.
@@ -248,7 +303,8 @@ export function TableTalk({
                   </button>
                 </div>
               </>
-            )
+            )}
+            </>
           ) : (
             <>
               {dish && (

@@ -209,3 +209,49 @@ class OrderItem(Base):
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
     order: Mapped[Order] = relationship(back_populates="items")
+
+
+class TableMessage(Base):
+    """One line of the conversation between a table and the counter.
+
+      "if customer send msg I can't able to see the reply or the persistent
+       history of that time. Please show previous msg too until this table is
+       cleared — it should be interactive between both."
+
+    Until now a guest message was a single column on the live order
+    (`guest_message`), which can hold exactly one sentence and only travels in
+    one direction. So a diner typed "more water please", it appeared on the
+    pass, and from their side nothing had happened: no acknowledgement, no
+    reply, and no record of what they had already asked. The second time they
+    asked, it overwrote the first.
+
+    A conversation needs rows, not a column.
+
+    Scoped to the TABLE rather than to an order, because the things people ask
+    for — water, the bill, a highchair — are not about a dish and often arrive
+    before anything is ordered at all. The sitting is bounded by
+    `cleared_at`: releasing a table ends its thread, so the next party starts
+    on a blank screen and never reads the last one's conversation.
+    """
+
+    __tablename__ = "table_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    hotel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("hotels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    table_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("dining_tables.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    #: True when the restaurant wrote it, False when the table did.
+    from_staff: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Who replied, when it was us. NULL for the diner's own lines.
+    staff_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    #: Set when the table is released. A thread is not deleted — the audit of
+    #: what a table asked for is worth keeping — it is simply no longer THIS
+    #: sitting's.
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
