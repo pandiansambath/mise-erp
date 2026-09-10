@@ -15,7 +15,7 @@
 // The chips matter more than the box. Most people will not type on a phone in a
 // restaurant with a drink in their other hand, so the five things anybody
 // actually asks for are one tap away, and the keyboard is the fallback.
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { API_BASE } from "@/lib/api";
 
@@ -35,6 +35,66 @@ const QUESTIONS = [
   "How do I contact you?",
 ];
 
+/** What to offer next, given what has already been said.
+ *
+ *   "that suggestion is disappeared after I clicked 1 — why? Please show
+ *    suggestions based on what user is clicking."
+ *
+ * They were rendered behind `chat.length === 0`, so the moment somebody used
+ * one they all went, and the conversation dead-ended at a bare text box. A
+ * diner who liked the first answer is exactly the person most likely to ask a
+ * second question, and that is the moment we stopped helping.
+ *
+ * The follow-ups are drawn from the ANSWER rather than a fixed list, and the
+ * trick is that the model already marks what matters: it bolds dish names.
+ * `**Masala Dosa**` in the reply becomes "What's in the Masala Dosa?" as the
+ * next chip — so the conversation follows the food it just recommended instead
+ * of looping back to "How do I contact you?".
+ *
+ * Anything already asked is dropped, so the chips move forward rather than
+ * offering the question just answered.
+ */
+function nextSuggestions(
+  chat: { me: string; ai: string }[],
+  dish?: { id: string; name: string } | null,
+): string[] {
+  const asked = new Set(chat.map((c) => c.me.trim().toLowerCase()));
+  const out: string[] = [];
+
+  // 1. Dishes the last answer actually named — the model bolds them.
+  const last = chat[chat.length - 1]?.ai ?? "";
+  const named = [...last.matchAll(/\*\*([^*\n]{2,40}?)\*\*/g)]
+    .map((m) => m[1].trim().replace(/[.,:;!?]$/, ""))
+    // A price or a number in bold is not a dish.
+    .filter((n) => /[a-z]/i.test(n) && !/^[£$€₹]/.test(n))
+    .slice(0, 2);
+  for (const n of named) {
+    out.push(`What's in the ${n}?`, `Is the ${n} spicy?`);
+  }
+
+  // 2. The dish this was opened from, if any.
+  if (dish) {
+    out.push(
+      `What's in the ${dish.name}?`,
+      `Is the ${dish.name} light or rich?`,
+      `What goes well with the ${dish.name}?`,
+    );
+  }
+
+  // 3. The standing ones, so there is always something to press.
+  out.push(...QUESTIONS, "Anything vegetarian?", "What's your spiciest dish?");
+
+  const seen = new Set<string>();
+  return out
+    .filter((q) => {
+      const k = q.trim().toLowerCase();
+      if (asked.has(k) || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .slice(0, 4);
+}
+
 export function TableTalk({
   code,
   dish,
@@ -51,6 +111,9 @@ export function TableTalk({
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [chat, setChat] = useState<{ me: string; ai: string }[]>([]);
+  // Recomputed after every answer, so the chips move with the
+  // conversation instead of vanishing after the first press.
+  const suggestions = useMemo(() => nextSuggestions(chat, dish), [chat, dish]);
 
   async function send(message: string) {
     if (!message.trim()) return;
@@ -191,16 +254,12 @@ export function TableTalk({
               {dish && (
                 <p className="mise-tone-info mb-2 text-xs font-medium">About {dish.name}</p>
               )}
-              {chat.length === 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {(dish
-                    ? [
-                        `What's in the ${dish.name}?`,
-                        `Is the ${dish.name} light or rich?`,
-                        `What goes well with the ${dish.name}?`,
-                      ]
-                    : QUESTIONS
-                  ).map((s) => (
+              {/* Kept AFTER the first answer, not hidden by it — see
+                  `nextSuggestions`. They sit under the conversation once it has
+                  started, which is where a "what next" belongs. */}
+              {suggestions.length > 0 && (
+                <div className={`flex flex-wrap gap-1.5 ${chat.length > 0 ? "mt-3" : ""}`}>
+                  {suggestions.map((s) => (
                     <button
                       key={s}
                       type="button"
