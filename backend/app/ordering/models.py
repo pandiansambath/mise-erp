@@ -195,6 +195,31 @@ class Order(Base):
     #: "9 minutes away". Asking for water must not make the food look newly
     #: cooked.
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: When the pass called it away, and when it was marked served.
+    #:
+    #: "what he ordered before, whether it served, after that what he ordered,
+    #:  with time too."
+    #:
+    #: A diner could see a countdown and nothing else: no record of the round
+    #: that already arrived, and no answer to "how long did the last one take?"
+    #: — which is the question that decides whether they order another.
+    #:
+    #: Stamped ONCE, on the first transition into each state, for the reason
+    #: `accepted_at` exists at all: `updated_at` is `onupdate=func.now()`, so it
+    #: moves when anything on the row is written, and a served time that drifts
+    #: every time somebody presses "Need someone" is worse than no time.
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    served_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: When this party got up.
+    #:
+    #: The diner's own order list excluded COMPLETED, so a served round
+    #: VANISHED off their screen the instant it arrived — the page forgot the
+    #: meal as it happened. Completed orders have to stay visible, which needs
+    #: a boundary that is not the order's status: released tables stamp this,
+    #: and the next people to sit down start on a blank page instead of reading
+    #: the last party's dinner. Same shape as `TableMessage.cleared_at`, and for
+    #: the same reason.
+    sitting_ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), onupdate=func.now()
     )
@@ -264,6 +289,24 @@ class TableMessage(Base):
     #: is in the biryani would make both harder to read, and the staff reply
     #: box would then appear to be answering the assistant.
     channel: Mapped[str] = mapped_column(String(12), nullable=False, default="counter")
+    #: On the AI thread, WHICH DISH this turn was asked about — the dish the
+    #: sheet was opened from, or NULL for a general question.
+    #:
+    #:   "I clicked Chettinad but the suggestions are showing for Masala Dosa
+    #:    ... user should not feel this confusing — but still we need to show
+    #:    history, don't compromise history for this."
+    #:
+    #: Persistence landed flat: ONE thread for the table, replayed identically
+    #: whichever dish you opened it from, so the Chettinad sheet's last line was
+    #: an answer about dosa. The two requirements only look opposed — the
+    #: history has to be kept, it just must not be the first thing a dish-scoped
+    #: sheet says. Knowing the topic is what lets the sheet open on THIS dish
+    #: and keep the rest a tap away.
+    #:
+    #: Matched on the name rather than the id because it is also the label the
+    #: sheet prints, and a dish that is renamed should read as the thing it is
+    #: now.
+    topic: Mapped[str | None] = mapped_column(String(120))
     #: True when the restaurant — or, on the AI thread, the assistant — wrote it.
     from_staff: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     #: Who replied, when it was us. NULL for the diner's own lines.

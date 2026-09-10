@@ -22,6 +22,7 @@ import { API_BASE } from "@/lib/api";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
 import { dishPhoto } from "@/lib/dishPhoto";
 import { TableTalk } from "@/components/order/TableTalk";
+import { MealTimeline } from "@/components/order/MealTimeline";
 import { burstAway } from "@/components/order/burst";
 
 type MenuItem = {
@@ -49,6 +50,10 @@ type HotelInfo = {
 type LiveOrder = {
   id: string;
   accepted_at?: string | null;
+  /** When it left the kitchen and when it was marked served. Used to say
+   *  'arrived in 14 min' rather than a raw stamp — see MealTimeline. */
+  ready_at?: string | null;
+  served_at?: string | null;
   code: string;
   status: string;
   total: string;
@@ -95,7 +100,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   const [helped, setHelped] = useState(false);
   const [basketOpen, setBasketOpen] = useState(false);
   // The talk sheet: null = shut, {dish} = opened about a dish.
-  const [talk, setTalk] = useState<{ dish?: { id: string; name: string } | null } | null>(null);
+  const [talk, setTalk] = useState<{
+    dish?: { id: string; name: string; photo?: string | null } | null;
+  } | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const money = (v: string | number) =>
@@ -263,11 +270,6 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
     );
   }
 
-  const active = live.filter((o) => !["COMPLETED", "REJECTED", "CANCELLED"].includes(o.status));
-  // Whether the second column earns its place — see the note on <main>.
-  // Declared HERE, below `active`: a const cannot be read above its own
-  // declaration, and `tsc` catches that where `next build` does not.
-  const railHasContent = active.length > 0;
   // See the note where it is used, in the dish grid.
   const usedPhotos = new Set<string>();
 
@@ -281,6 +283,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
     if (h < 22) return "Good evening";
     return "Still open";
   })();
+  // THE WHOLE SITTING now, served rounds included — the endpoint stopped
+  // filtering out COMPLETED, so this went from 'what is cooking' to 'what
+  // this table has run up', which is what the label already claimed.
   const runningTotal = live.reduce((t, o) => t + Number(o.total), 0);
 
   return (
@@ -468,233 +473,47 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           worse than the centred column it replaced.
           So the split is conditional. Nothing to track and nothing in the
           basket, and the menu simply takes the whole width. */}
-      <main
-        className={`mx-auto w-full max-w-[110rem] px-4 lg:px-8 2xl:px-12 ${
-          railHasContent
-            ? "lg:grid lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-8 2xl:grid-cols-[minmax(0,1fr)_26rem] 2xl:gap-12"
-            : ""
-        }`}
-      >
-        {/* ── The live ticket. "which will show real-time estimation to bring
-               that food" — the reason this page stays open after ordering. */}
-        {active.length > 0 && (
-          <section className="mise-pop mt-4 space-y-2 lg:order-2 lg:sticky lg:top-24">
-            {active.map((o) => {
-              const say = SAY[o.status] ?? SAY.NEW;
-              // The clock starts when the KITCHEN accepted it, not when it was
-              // placed — a slammed kitchen that has not looked at the ticket is
-              // not five minutes from serving it, and a countdown that lies is
-              // worse than none.
-              // FROM ACCEPTANCE, NOT FROM THE LAST EDIT.
-              // This used `updated_at`, which is `onupdate=func.now()` — so it
-              // moved whenever anything on the row changed. Pressing "Need
-              // someone" writes `help_requested_at` on that same row, and a
-              // two-day-old order's clock jumped back to "9 minutes away".
-              // Asking for water must not make the food look newly cooked.
-              const from =
-                o.status === "NEW"
-                  ? null
-                  : new Date(o.accepted_at ?? o.updated_at ?? o.created_at).getTime();
-              // Narrowest wins: this ticket's own estimate, then the hotel's.
-              const mins = o.eta_minutes ?? hotel?.prep_minutes ?? 20;
-              const left = from ? Math.max(0, Math.ceil((from + mins * 60000 - now) / 60000)) : null;
-              return (
-                <div
-                  key={o.id}
-                  className={`mise-card-inset relative overflow-hidden rounded-2xl p-4 ${
-                    o.status === "PREPARING" ? "mise-cooking" : ""
-                  }`}
-                >
-                  {/* ── WAITING IS THE FEELING THIS PAGE HAS TO HANDLE ────────
-                      "what about that updater area — like whenever we customer
-                       ask or order, the notification is there nah, that area
-                       still has old worst UI."
+      {/* ── THE MEAL, ACROSS THE TOP ─────────────────────────────────────
+          "you added that progress bar in right side, but again right side
+           bottom area are empty. Add progress bar in top area like we have in
+           mobile view (mobile view is great). Add menu items to fill that
+           right side."
 
-                      He is right, and it is the most important card on the page.
-                      Everything else is browsing; this is the bit a person keeps
-                      looking at while their food is somewhere they cannot see.
+          The conditional two-column layout was the wrong fix for the wrong
+          problem. I built it to use the width, and it did — for about 200px,
+          after which the rail was a 23rem column of nothing running the whole
+          length of the menu. Making the split conditional on there BEING an
+          order only meant the emptiness appeared the moment somebody ordered,
+          which is the moment the page matters most.
 
-                      It was a raised slab with a label, a hint, and "0" over the
-                      word "about" — which reads as nothing at all, and answers
-                      the wrong question. A diner does not want a STATUS, they
-                      want to know how far along their food is and roughly when
-                      it lands. So: a journey with the current stop lit, a bar
-                      that fills as the minutes go, and a countdown that says
-                      what it is counting.
+          He also pointed at the answer: the phone layout, where the tracker is
+          a full-width band at the top and the food runs underneath. It was
+          better because a band has no second column to leave empty. So the
+          desktop gets the same shape, and the width the rail was hoarding goes
+          to the food — five dishes a row on a wide monitor instead of three.
 
-                      The stages are the diner's four, not the kitchen's seven —
-                      REJECTED and CANCELLED are not steps on a journey, they are
-                      the journey ending, and they get the plain message below
-                      instead of a broken-looking track. */}
-                  {(() => {
-                    const STOPS = [
-                      { key: "NEW", label: "Sent" },
-                      { key: "CONFIRMED", label: "Accepted" },
-                      { key: "PREPARING", label: "Cooking" },
-                      { key: "READY", label: "On its way" },
-                    ];
-                    const at = STOPS.findIndex((s) => s.key === o.status);
-                    const ended = o.status === "REJECTED" || o.status === "CANCELLED";
-                    // How far through the promised wait we are. Only once the
-                    // kitchen has accepted: before that there is nothing to
-                    // measure against and a bar creeping along would be a
-                    // promise nobody made.
-                    // HOW LATE, NOT JUST HOW FAR.
-                    //
-                    // The bar clamped at 100% and the countdown clamped at 0,
-                    // so an order five hours late rendered as a full bar over
-                    // the word "any moment" — while the journey still showed
-                    // "Cooking" unlit. A full bar above an unlit stop is
-                    // self-contradictory, and it is the first thing the eye
-                    // lands on. Telling a waiting diner "any moment" for the
-                    // fifth hour is the fastest way to teach them to stop
-                    // believing the screen.
-                    const overdueBy =
-                      from && mins > 0 ? Math.floor((now - (from + mins * 60000)) / 60000) : 0;
-                    const late = overdueBy > 0;
-                    const pct =
-                      from && left !== null && mins > 0
-                        ? Math.min(100, Math.max(0, ((mins - left) / mins) * 100))
-                        : 0;
-                    return (
-                      <>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className={`font-display text-lg font-bold leading-tight ${say.tone}`}>
-                              {say.label}
-                            </p>
-                            <p className="mt-0.5 text-xs text-fg-soft">{say.hint}</p>
-                          </div>
-                          {o.status === "READY" ? (
-                            <span aria-hidden className="shrink-0 text-3xl">🛎️</span>
-                          ) : late ? (
-                            /* Owned rather than hidden. A kitchen that is
-                               behind is a fact the table already knows; saying
-                               it plainly, and pointing at the button that
-                               fetches a human, is the only version of this that
-                               keeps their trust. */
-                            <div className="shrink-0 text-right">
-                              <p className="font-display text-lg font-bold leading-tight text-amber-500">
-                                Running late
-                              </p>
-                              <p className="mt-0.5 text-[11px] text-fg-soft">
-                                {overdueBy < 60
-                                  ? `about ${overdueBy} min over`
-                                  : "sorry — do ask us"}
-                              </p>
-                            </div>
-                          ) : left !== null ? (
-                            <div className="shrink-0 text-right">
-                              {/* The unit and the hedge belong in one sentence
-                                  under the number, not stacked into a column. */}
-                              <p className="font-display text-3xl font-bold leading-none tabular-nums text-fg">
-                                {left}
-                              </p>
-                              <p className="mt-0.5 text-[11px] text-fg-faint">
-                                {left === 1 ? "min away" : "mins away"}
-                              </p>
-                            </div>
-                          ) : (
-                            /* JUST SENT. `from` is null until the kitchen
-                               accepts, so this used to show no time at all —
-                               the exact moment a diner most wants a number was
-                               the one moment the card had none. The hotel's own
-                               estimate is not a promise the kitchen has made
-                               yet, so it is offered as the guide it is. */
-                            <div className="shrink-0 text-right">
-                              <p className="font-display text-3xl font-bold leading-none tabular-nums text-fg-soft">
-                                ~{mins}
-                              </p>
-                              <p className="mt-0.5 text-[11px] text-fg-faint">mins, usually</p>
-                            </div>
-                          )}
-                        </div>
+          One layout, two sizes, no reordering tricks. */}
+      <main className="mx-auto w-full max-w-[110rem] px-4 lg:px-8 2xl:px-12">
+        {/* Everything that was in the rail lives in `MealTimeline` now, and it
+            knows a great deal more than it did: every round of the sitting in
+            the order it happened, when each was asked for, and how long the
+            served ones took. See the note at the top of that file.
 
-                        {!ended && (
-                          <>
-                            <div
-                              className="mt-3 h-1.5 overflow-hidden rounded-full bg-glass/10"
-                              role="progressbar"
-                              aria-valuenow={Math.round(pct)}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                              aria-label="How far along your order is"
-                            >
-                              <span
-                                className={`block h-full rounded-full transition-[width] duration-1000 ${
-                                  late
-                                    ? "bg-amber-500"
-                                    : "bg-gradient-to-r from-brand-500 to-brand-300"
-                                }`}
-                                // Never quite full until it really is. A 100%
-                                // bar above an unlit "Cooking" reads as
-                                // finished whatever colour it is, so a late
-                                // order stops at 92% and lets the words carry
-                                // the news.
-                                style={{
-                                  width: `${
-                                    o.status === "READY" ? 100 : late ? 92 : Math.min(90, pct)
-                                  }%`,
-                                }}
-                              />
-                            </div>
-
-                            <ol className="mt-2.5 flex items-center gap-1">
-                              {STOPS.map((s, i) => {
-                                const done = at >= 0 && i <= at;
-                                const here = i === at;
-                                return (
-                                  <li key={s.key} className="flex flex-1 flex-col items-center gap-1">
-                                    <span
-                                      aria-hidden
-                                      className={`h-2 w-2 rounded-full transition ${
-                                        here
-                                          ? "bg-brand-500 ring-4 ring-brand-500/20"
-                                          : done
-                                            ? "bg-brand-400"
-                                            : "bg-fg-faint/30"
-                                      }`}
-                                    />
-                                    <span
-                                      className={`text-[10px] leading-none ${
-                                        here ? "font-bold text-fg" : "text-fg-faint"
-                                      }`}
-                                    >
-                                      {s.label}
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ol>
-                          </>
-                        )}
-
-                        {o.items.length > 0 && (
-                          <ul className="mt-3 space-y-1 border-t border-line/60 pt-2.5">
-                            {o.items.map((i) => (
-                              <li
-                                key={`${o.id}-${i.name}`}
-                                className="flex items-baseline gap-2 text-xs text-fg-soft"
-                              >
-                                <span className="font-bold tabular-nums text-brand-300">
-                                  {i.quantity}×
-                                </span>
-                                <span className="min-w-0 flex-1 truncate">{i.name}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              );
-            })}
-          </section>
+            It sits ABOVE the category bar rather than beside the menu, which
+            is what the phone always did. */}
+        {live.length > 0 && (
+          <div className="mt-4">
+            <MealTimeline
+              orders={live}
+              now={now}
+              prepMinutes={hotel?.prep_minutes ?? 20}
+              money={money}
+            />
+          </div>
         )}
 
         {/* ── The menu. */}
-        <div className="lg:order-1 lg:min-w-0">
+        <div className="min-w-0">
         {cats.length > 0 && (
           <div className="mise-noscrollbar sticky top-[4.25rem] z-30 -mx-4 flex gap-2 overflow-x-auto bg-shell/85 px-4 py-3 backdrop-blur-xl lg:mx-0 lg:rounded-xl lg:px-3">
             {/* "All" first, because a diner arriving at a menu wants to SEE the
@@ -770,7 +589,13 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                   of named ones, so `xl:grid-cols-3` came later in the stylesheet
                   and won at every width above 1800. Measured 3 across at 1920
                   both times. sm → xl → 2xl sort in the order they read. */}
-              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {/* NAMED BREAKPOINTS ONLY, in ascending order. Tailwind emits
+                  ARBITRARY variants ahead of named ones, so an earlier
+                  `min-[1800px]:grid-cols-5` lost to `xl:grid-cols-3` every
+                  time and measured 3 across at 1920 twice running.
+                  Five at 2xl is what the rail was costing: the same 1760px
+                  band now carries five dishes instead of three. */}
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {dishes.map((m) => {
                   const q = cart[m.id] ?? 0;
                   const off = m.orderable === false;
@@ -809,7 +634,14 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                         {src ? (
                           <button
                             type="button"
-                            onClick={() => setTalk({ dish: { id: m.id, name: m.name } })}
+                            onClick={() =>
+                              // The picture travels with the dish. A sheet
+                              // titled "Chicken Chettinad" over a plain header
+                              // is a dialog about a string; the same sheet with
+                              // the plate you just tapped is a conversation
+                              // about that plate.
+                              setTalk({ dish: { id: m.id, name: m.name, photo: src } })
+                            }
                             aria-label={`More about ${m.name}`}
                             className="mise-press relative block aspect-[16/10] w-full overflow-hidden bg-glass/5 sm:aspect-[4/3]"
                           >

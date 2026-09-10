@@ -143,6 +143,8 @@ def _order_out(o: Order, rider_name: str | None = None, table_label: str | None 
         "code": o.code,
         "status": o.status,
         "accepted_at": o.accepted_at.isoformat() if o.accepted_at else None,
+        "ready_at": o.ready_at.isoformat() if o.ready_at else None,
+        "served_at": o.served_at.isoformat() if o.served_at else None,
         "fulfilment": o.fulfilment,
         "customer_name": o.customer_name,
         "phone": o.phone,
@@ -462,6 +464,13 @@ async def move_order(
         OrderStatus.CANCELLED.value,
     ):
         order.accepted_at = dt_datetime.now(UTC)
+    # WHEN IT LANDED, recorded once. See the note on `Order.ready_at`: the
+    # diner's meal history needs "how long did that take?", and `updated_at`
+    # cannot answer it because it moves on every write to the row.
+    if payload.status == OrderStatus.READY.value and order.ready_at is None:
+        order.ready_at = dt_datetime.now(UTC)
+    if payload.status == OrderStatus.COMPLETED.value and order.served_at is None:
+        order.served_at = dt_datetime.now(UTC)
     await db.commit()
     # `updated_at` is computed by the database on UPDATE, so after the commit it
     # is EXPIRED — reading it would trigger a lazy refresh, and a lazy refresh
@@ -1348,13 +1357,27 @@ async def table_orders(code: str, db: AsyncSession = Depends(get_db)) -> dict:
     serving it, and a countdown that lies is worse than no countdown.
     """
     t, hotel = await _table_by_code(db, code)
+    # THE WHOLE SITTING, not only what is still cooking.
+    #
+    #   "what he ordered before, whether it served, after that what he ordered,
+    #    with time too."
+    #
+    # This filtered out COMPLETED, so a round DISAPPEARED off the diner's page
+    # at the moment it arrived: the one screen following their meal forgot each
+    # course as it landed, and "how long did the last one take?" — the question
+    # that decides whether they order another — had nowhere to be answered.
+    #
+    # The boundary is the sitting, not the status. Rejected and cancelled
+    # tickets still go: a diner does not need a monument to an order the
+    # kitchen refused, and the refusal is told to them at the time.
     rows = (
         (
             await db.execute(
                 select(Order)
                 .where(
                     Order.table_id == t.id,
-                    Order.status.notin_(["COMPLETED", "REJECTED", "CANCELLED"]),
+                    Order.sitting_ended_at.is_(None),
+                    Order.status.notin_(["REJECTED", "CANCELLED"]),
                 )
                 .order_by(Order.created_at.desc())
             )
@@ -1467,6 +1490,18 @@ async def release_table(
     for o in rows:
         o.status = OrderStatus.COMPLETED.value
         o.help_requested_at = None
+        if o.served_at is None:
+            o.served_at = dt_datetime.now(UTC)
+    # …and the whole sitting closes, completed rounds included. Without this
+    # the next party to scan the same QR code would open the page on the last
+    # party's dinner, because completed orders are now shown rather than
+    # filtered out. Same boundary as the message threads, drawn at the same
+    # moment.
+    await db.execute(
+        update(Order)
+        .where(Order.table_id == t.id, Order.sitting_ended_at.is_(None))
+        .values(sitting_ended_at=dt_datetime.now(UTC))
+    )
     # BOTH conversations belong to the party that just left — the counter
     # thread and the AI one. Ended rather than
     # deleted — what a table asked for is worth keeping — so the next people to
@@ -1716,6 +1751,13 @@ async def kitchen_screen_move(
         OrderStatus.CANCELLED.value,
     ):
         order.accepted_at = dt_datetime.now(UTC)
+    # WHEN IT LANDED, recorded once. See the note on `Order.ready_at`: the
+    # diner's meal history needs "how long did that take?", and `updated_at`
+    # cannot answer it because it moves on every write to the row.
+    if payload.status == OrderStatus.READY.value and order.ready_at is None:
+        order.ready_at = dt_datetime.now(UTC)
+    if payload.status == OrderStatus.COMPLETED.value and order.served_at is None:
+        order.served_at = dt_datetime.now(UTC)
     order.help_requested_at = None
     await db.commit()
     await db.refresh(order)
@@ -2189,6 +2231,10 @@ def _msg_out(m: TableMessage) -> dict:
         "id": str(m.id),
         "body": m.body,
         "from_staff": bool(m.from_staff),
+        # Which dish this turn was about, so the sheet can open on the dish it
+        # was opened FROM instead of on whatever was asked last. See the note
+        # on `TableMessage.topic`.
+        "topic": m.topic,
         "at": m.created_at.isoformat() if m.created_at else None,
     }
 
@@ -2613,12 +2659,14 @@ async def guest_ask(code: str, payload: GuestAskIn, db: AsyncSession = Depends(g
     db.add(
         TableMessage(
             hotel_id=hotel.id, table_id=t.id, channel="ai",
+            topic=dish.name if dish else None,
             body=payload.question.strip(), from_staff=False,
         )
     )
     db.add(
         TableMessage(
             hotel_id=hotel.id, table_id=t.id, channel="ai",
+            topic=dish.name if dish else None,
             body=answer, from_staff=True,
         )
     )
