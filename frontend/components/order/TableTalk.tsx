@@ -161,7 +161,7 @@ export function TableTalk({
                       type="button"
                       disabled={busy}
                       onClick={() => send(a)}
-                      className="mise-press mise-well rounded-full px-3 py-2 text-xs text-fg-soft disabled:opacity-50"
+                      className="mise-press mise-card-inset rounded-full px-3.5 py-2 text-xs font-medium text-fg-soft transition hover:text-fg disabled:opacity-50"
                     >
                       {a}
                     </button>
@@ -215,21 +215,48 @@ export function TableTalk({
               )}
 
               <div className="mt-3 space-y-3">
+                {/* THE ANSWER IS THE PRODUCT HERE.
+                    "this chat UI also not nice — this single page will fetch so
+                     many clients for us indirectly, so build like a premium
+                     one."
+                    The reply was a grey raised slab with a tail: a speech
+                    bubble from a support widget. But this is the restaurant
+                    talking about its own food, and it is the most impressive
+                    thing on the page — a stranger asking "what do you
+                    recommend?" and getting a considered answer about the actual
+                    menu. It reads as a served plate now: the house mark beside
+                    it, generous line height, the dish names the model bolds
+                    carrying real weight. */}
                 {chat.map((c, i) => (
-                  <div key={i} className="space-y-1.5">
-                    <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3 py-2 text-sm text-white">
+                  <div key={i} className="space-y-2">
+                    <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm">
                       {c.me}
                     </p>
-                    <div className="mise-card3d mr-auto w-fit max-w-[92%] rounded-2xl rounded-bl-md p-3 text-sm leading-relaxed text-fg">
-                      {/* It replies in markdown. This used to print the raw
-                          text, so a diner read literal ** around every bolded
-                          word — on the one screen a stranger ever sees. */}
-                      <ChatMarkdown text={c.ai} />
+                    <div className="flex items-start gap-2">
+                      <span
+                        aria-hidden
+                        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs text-white"
+                      >
+                        ✦
+                      </span>
+                      <div className="mise-card-inset mr-auto w-fit max-w-[92%] rounded-2xl rounded-tl-md px-3.5 py-3 text-[15px] leading-relaxed text-fg [&_strong]:font-bold [&_strong]:text-brand-300">
+                        {/* It replies in markdown. This used to print the raw
+                            text, so a diner read literal ** around every bolded
+                            word — on the one screen a stranger ever sees. */}
+                        <ChatMarkdown text={c.ai} />
+                      </div>
                     </div>
                   </div>
                 ))}
                 {busy && (
-                  <div className="mise-card3d mr-auto flex w-fit items-center gap-1.5 rounded-2xl rounded-bl-md px-3.5 py-3">
+                  <div className="flex items-start gap-2">
+                    <span
+                      aria-hidden
+                      className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-xs text-white"
+                    >
+                      ✦
+                    </span>
+                    <div className="mise-card-inset mr-auto flex w-fit items-center gap-1.5 rounded-2xl rounded-tl-md px-3.5 py-3">
                     {[0, 1, 2].map((d) => (
                       <span
                         key={d}
@@ -238,7 +265,8 @@ export function TableTalk({
                         style={{ animationDelay: `${d * 160}ms` }}
                       />
                     ))}
-                    <span className="sr-only">thinking</span>
+                      <span className="sr-only">thinking</span>
+                    </div>
                   </div>
                 )}
               </div>
