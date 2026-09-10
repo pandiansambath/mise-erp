@@ -402,17 +402,58 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
             aria-hidden
             className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-copper-500/10 blur-3xl"
           />
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-300">
-            {greeting}
-          </p>
-          <h2 className="mt-1.5 font-display text-3xl font-bold leading-tight tracking-tight text-fg sm:text-4xl">
-            {hotel?.name ?? "\u00a0"}
-          </h2>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-fg-soft">
-            You&apos;re at <b className="text-fg">{table?.label ?? "your table"}</b>. Everything
-            below is on tonight&apos;s menu — tap a photo to ask about a dish, or press{" "}
-            <b className="text-fg">Need someone</b> and one of us will come over.
-          </p>
+          {/* TWO HALVES, because one was leaving two thirds of a 1760px band
+              empty. A hero whose text stops a third of the way across is not
+              generous, it is unfinished — the same fault as the empty rail,
+              one element further up.
+              The right half is the facts a diner actually wants on arrival:
+              which table they are at, how long food takes, and what the table
+              has run up so far. That last one also rescues "Ordered so far at
+              this table: £10.95", which was floating alone at the far right of
+              the filter row looking like something that had come loose. */}
+          <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-300">
+                {greeting}
+              </p>
+              <h2 className="mt-1.5 font-display text-3xl font-bold leading-tight tracking-tight text-fg sm:text-4xl lg:text-5xl">
+                {hotel?.name ?? "\u00a0"}
+              </h2>
+              {/* SAID ONCE. On a phone this band sat under a header already
+                  reading "You're at Table 13 · food in about 20 min", and then
+                  said the table again in the sentence AND again in a chip —
+                  the same fact three times before any food appeared, on the
+                  page whose whole job is showing food. The header is sticky and
+                  keeps that reminder; the hero can get on with the welcome. */}
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-fg-soft">
+                Everything below is on tonight&apos;s menu. Tap a photo to ask about a
+                dish, or press <b className="text-fg">Need someone</b> and one of us will
+                come over.
+              </p>
+            </div>
+
+            <dl className="flex flex-wrap gap-2 lg:justify-end">
+              {[
+                // No "Your table" chip: the sticky header carries it at all
+                // times, so repeating it here spends a phone's first screen on
+                // something already answered.
+                ["Food in about", hotel?.prep_minutes ? `${hotel.prep_minutes} min` : "—"],
+                ...(runningTotal > 0
+                  ? ([["Ordered so far", money(runningTotal)]] as [string, string][])
+                  : []),
+              ].map(([k, v]) => (
+                <div
+                  key={k}
+                  className="mise-well min-w-[7.5rem] rounded-2xl px-3.5 py-2.5"
+                >
+                  <dt className="text-[10px] uppercase tracking-wide text-fg-faint">{k}</dt>
+                  <dd className="mt-0.5 font-display text-lg font-bold leading-none text-fg">
+                    {v}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </div>
       </section>
 
@@ -691,7 +732,7 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           {courses.map(([course, dishes]) => (
             <section key={course}>
               <div className="mb-2.5 flex items-baseline gap-2">
-                <h2 className="font-display text-base font-bold tracking-tight text-fg">
+                <h2 className="font-display text-xl font-bold tracking-tight text-fg lg:text-2xl">
                   {course}
                 </h2>
                 <span aria-hidden className="h-px flex-1 bg-line" />
@@ -816,12 +857,9 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
 
         </div>
 
-        {runningTotal > 0 && (
-          <p className="mt-5 text-center text-[11px] text-fg-faint lg:order-1">
-            Ordered so far at this table:{" "}
-            <b className="text-fg-soft">{money(runningTotal)}</b>
-          </p>
-        )}
+        {/* The running total moved into the hero, where it sits beside the
+            other two facts about this table instead of hanging off the end of
+            the filter row. */}
       </main>
 
       {talk && (
