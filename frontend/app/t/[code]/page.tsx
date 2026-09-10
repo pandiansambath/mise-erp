@@ -842,7 +842,20 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
                           <p className="font-display text-[15px] font-bold leading-tight text-fg">
                             {m.name}
                           </p>
-                          {/* The line that sells the dish. */}
+                          {/* The line that sells the dish, when the kitchen
+                              has written one.
+                              I filled the empty case with "Ask what's in it →"
+                              and then looked at it: thirteen identical prompts
+                              down the page — the exact fault I had removed
+                              when the blue "What's in it, and what it does for
+                              you" line came off every card. The photo already
+                              carries "✨ about this", so the words were a
+                              second copy of an invitation that was already
+                              there.
+                              Nothing is the right answer. The card closes up,
+                              the row stays aligned because every card in it is
+                              the same shape, and the page gets quieter rather
+                              than busier. */}
                           {m.description && (
                             <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-fg-soft">
                               {m.description}
