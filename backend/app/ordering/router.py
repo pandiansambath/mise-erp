@@ -17,7 +17,7 @@ from io import BytesIO as _BytesIO
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, computed_field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -37,6 +37,7 @@ from app.ordering.models import (
     Order,
     OrderItem,
     OrderStatus,
+    TableMessage,
 )
 from app.ordering.rider_models import Rider
 from app.ordering.rider_router import build_management_endpoints
@@ -128,6 +129,11 @@ def _order_out(o: Order, rider_name: str | None = None, table_label: str | None 
         # Which seat it came from, and whether they have asked for somebody.
         # The kitchen screen reads the table before it reads anything else.
         "table_label": table_label,
+        # …and the id, so the pass can open that table's conversation. The
+        # label is what a chef reads; the id is what the reply endpoint needs,
+        # and looking one up from the other by name would break the moment two
+        # tables are renamed alike.
+        "table_id": str(o.table_id) if o.table_id else None,
         "help_requested_at": (
             o.help_requested_at.isoformat() if o.help_requested_at else None
         ),
@@ -1452,6 +1458,14 @@ async def release_table(
     for o in rows:
         o.status = OrderStatus.COMPLETED.value
         o.help_requested_at = None
+    # The conversation belongs to the party that just left. Ended rather than
+    # deleted — what a table asked for is worth keeping — so the next people to
+    # sit down start on a blank screen instead of reading somebody else's.
+    await db.execute(
+        update(TableMessage)
+        .where(TableMessage.table_id == table_id, TableMessage.cleared_at.is_(None))
+        .values(cleared_at=func.now())
+    )
     await db.commit()
     await events.publish(
         user.hotel_id, {"type": "ordering", "action": "released", "table": t.label}
@@ -2136,6 +2150,107 @@ class GuestMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=300)
 
 
+# ── THE TABLE AND THE COUNTER, TALKING ───────────────────────────────────────
+#
+#   "if customer send msg I can't able to see the reply or the persistent
+#    history of that time. Please show previous msg too until this table is
+#    cleared — it should be interactive between both."
+#
+# The old shape could not do this: one column on the live order, holding one
+# sentence, travelling one way. Asking twice overwrote the first ask, and from
+# the diner's side nothing ever came back.
+#
+# `TableMessage` rows give both directions and a history. The sitting is
+# bounded by `cleared_at`, so releasing a table ends its thread without
+# deleting it — what a table asked for is worth keeping, it just stops being
+# this party's conversation.
+
+
+def _msg_out(m: TableMessage) -> dict:
+    return {
+        "id": str(m.id),
+        "body": m.body,
+        "from_staff": bool(m.from_staff),
+        "at": m.created_at.isoformat() if m.created_at else None,
+    }
+
+
+async def _open_thread(db: AsyncSession, table_id) -> list[TableMessage]:
+    rows = (
+        await db.execute(
+            select(TableMessage)
+            .where(TableMessage.table_id == table_id, TableMessage.cleared_at.is_(None))
+            .order_by(TableMessage.created_at)
+        )
+    ).scalars()
+    return list(rows)
+
+
+@table_router.get("/{code}/messages")
+async def table_thread(code: str, db: AsyncSession = Depends(get_db)) -> dict:
+    """What has been said at this table, this sitting.
+
+    Public and code-keyed like the rest of the diner's side. It exposes only
+    what the people at that table said and what the restaurant replied — no
+    other table's thread, no staff names, no order detail.
+    """
+    t, _hotel = await _table_by_code(db, code)
+    return {"messages": [_msg_out(m) for m in await _open_thread(db, t.id)]}
+
+
+@router.get("/tables/{table_id}/messages")
+async def staff_table_thread(
+    table_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:read")),
+) -> dict:
+    """The same thread, from behind the counter."""
+    t = await db.get(DiningTable, table_id)
+    if t is None or t.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
+    return {
+        "table": t.label,
+        "messages": [_msg_out(m) for m in await _open_thread(db, t.id)],
+    }
+
+
+class StaffReply(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+@router.post("/tables/{table_id}/messages", status_code=status.HTTP_201_CREATED)
+async def staff_reply(
+    table_id: uuid.UUID,
+    payload: StaffReply,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("orders:write")),
+) -> dict:
+    """Answer a table.
+
+    The reply is pushed over the live bus as well as stored, so a phone that
+    already has the page open shows it without waiting for its next poll — the
+    difference between a conversation and a pair of monologues is how long the
+    other person waits.
+    """
+    t = await db.get(DiningTable, table_id)
+    if t is None or t.hotel_id != user.hotel_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
+    m = TableMessage(
+        hotel_id=user.hotel_id,
+        table_id=t.id,
+        body=payload.text.strip(),
+        from_staff=True,
+        staff_user_id=user.id,
+    )
+    db.add(m)
+    await db.commit()
+    await db.refresh(m)
+    await events.publish(
+        user.hotel_id, {"type": "ordering", "action": "table-reply", "table": t.label}
+    )
+    return _msg_out(m)
+
+
 @table_router.post("/{code}/message", status_code=status.HTTP_202_ACCEPTED)
 async def table_message(
     code: str, payload: GuestMessageIn, db: AsyncSession = Depends(get_db)
@@ -2167,6 +2282,11 @@ async def table_message(
 
     now = datetime.now(UTC)
     text = payload.text.strip()
+
+    # Recorded as a line in the conversation as well as flagged on the order.
+    # The order field is what the KITCHEN SCREEN reads and is left alone; this
+    # is what makes the exchange a thread the diner can see.
+    db.add(TableMessage(hotel_id=hotel.id, table_id=t.id, body=text, from_staff=False))
     if live is None:
         live = Order(
             hotel_id=hotel.id,

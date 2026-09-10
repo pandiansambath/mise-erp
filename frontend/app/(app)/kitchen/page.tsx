@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { Workbench } from "@/components/Workbench";
+import { TableThread } from "@/components/order/TableThread";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 
@@ -25,6 +26,7 @@ type Order = {
   customer_name: string;
   fulfilment: string;
   table_label?: string | null;
+  table_id?: string | null;
   note?: string | null;
   total: string;
   created_at: string;
@@ -81,6 +83,7 @@ export default function KitchenPage() {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
+  const [threadFor, setThreadFor] = useState<{ id: string; label: string } | null>(null);
   const [screen, setScreen] = useState<{ url: string } | null>(null);
   const [prep, setPrep] = useState("");
   const [savingPrep, setSavingPrep] = useState(false);
@@ -327,7 +330,7 @@ export default function KitchenPage() {
                         <span className="font-display text-lg font-semibold text-fg">
                           {g.title}
                         </span>
-                        <span className="min-w-0 max-w-[16rem]">
+                        <span className="min-w-0 max-w-[16rem] flex-1">
                           <span className="block truncate text-[11px] text-fg-soft">
                             {said ?? "Asked for a member of staff"}
                           </span>
@@ -336,6 +339,24 @@ export default function KitchenPage() {
                           </span>
                         </span>
                       </a>
+                      {/* SOMEWHERE TO ANSWER FROM. Reading "is the biryani very
+                          spicy?" and having no way to reply meant walking over
+                          for a question a sentence would have settled. */}
+                      {g.rows[0].table_id && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setThreadFor({
+                              id: g.rows[0].table_id as string,
+                              label: g.title,
+                            })
+                          }
+                          data-testid="kds-reply"
+                          className="mise-btn-flat mise-press mt-1 w-full px-3 py-1.5 text-[11px] font-semibold text-fg-soft"
+                        >
+                          💬 Reply
+                        </button>
+                      )}
                     </li>
                   );
                 })}
@@ -513,6 +534,13 @@ export default function KitchenPage() {
             })}
           </ul>
         </>
+      )}
+      {threadFor && (
+        <TableThread
+          tableId={threadFor.id}
+          tableLabel={threadFor.label}
+          onClose={() => setThreadFor(null)}
+        />
       )}
     </Workbench>
   );

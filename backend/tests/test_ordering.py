@@ -1168,3 +1168,90 @@ async def test_real_food_still_has_to_be_cooked_in_order(
         f"/api/ordering/orders/{oid}", json={"status": "COMPLETED"}, headers=h
     )
     assert jump.status_code == 422, "food still has to go through the pass"
+
+
+@pytest.mark.asyncio
+async def test_a_table_and_the_counter_can_talk_both_ways(
+    client, make_user, auth_header, monkeypatch
+):
+    """"if customer send msg I can't able to see the reply or the persistent
+    history of that time. Please show previous msg too until this table is
+    cleared — it should be interactive between both."
+
+    The old shape could not do this. A guest message was ONE COLUMN on the live
+    order: one sentence, one direction. Asking twice overwrote the first ask,
+    and the diner never saw an acknowledgement, let alone a reply.
+
+    This asserts the three properties that make it a conversation: the diner's
+    line is kept, the restaurant can answer, and both sides read the same
+    thread.
+    """
+    monkeypatch.setattr(notify, "send_email", lambda *a, **k: None)
+    admin = await make_user("thread@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    table = (
+        await client.post("/api/ordering/tables", json={"label": "T21", "seats": 4}, headers=h)
+    ).json()
+    code = table["code"]
+
+    # The diner asks twice. BOTH must survive — the old column kept only the last.
+    for said in ("more water please", "and some napkins"):
+        r = await client.post(f"/api/public/table/{code}/message", json={"text": said})
+        assert r.status_code == 202, r.text
+
+    seen = await client.get(f"/api/public/table/{code}/messages")
+    assert seen.status_code == 200, seen.text
+    bodies = [m["body"] for m in seen.json()["messages"]]
+    assert bodies == ["more water please", "and some napkins"], bodies
+    assert all(m["from_staff"] is False for m in seen.json()["messages"])
+
+    # The counter answers.
+    reply = await client.post(
+        f"/api/ordering/tables/{table['id']}/messages",
+        headers=h,
+        json={"text": "On its way!"},
+    )
+    assert reply.status_code == 201, reply.text
+    assert reply.json()["from_staff"] is True
+
+    # And the DINER sees it — the half that did not exist before.
+    seen = await client.get(f"/api/public/table/{code}/messages")
+    thread = seen.json()["messages"]
+    assert [m["body"] for m in thread] == [
+        "more water please",
+        "and some napkins",
+        "On its way!",
+    ]
+    assert [m["from_staff"] for m in thread] == [False, False, True]
+
+    # Staff read the same thread.
+    mine = await client.get(f"/api/ordering/tables/{table['id']}/messages", headers=h)
+    assert mine.status_code == 200
+    assert len(mine.json()["messages"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_clearing_a_table_ends_its_conversation(
+    client, make_user, auth_header, monkeypatch
+):
+    """The next party must not read the last one's messages.
+
+    "until this table is cleared" — so releasing the table closes the thread.
+    Ended rather than deleted: what a table asked for is worth keeping, it
+    simply stops being THIS sitting's conversation.
+    """
+    monkeypatch.setattr(notify, "send_email", lambda *a, **k: None)
+    admin = await make_user("cleared@test.com", Role.SUPER_ADMIN.value)
+    h = auth_header(admin)
+    table = (
+        await client.post("/api/ordering/tables", json={"label": "T22", "seats": 2}, headers=h)
+    ).json()
+
+    await client.post(f"/api/public/table/{table['code']}/message", json={"text": "the bill"})
+    assert len((await client.get(f"/api/public/table/{table['code']}/messages")).json()["messages"]) == 1
+
+    rel = await client.post(f"/api/ordering/tables/{table['id']}/release", headers=h)
+    assert rel.status_code == 200, rel.text
+
+    after = await client.get(f"/api/public/table/{table['code']}/messages")
+    assert after.json()["messages"] == [], "a new party starts on a blank screen"
