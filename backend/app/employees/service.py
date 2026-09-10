@@ -6,6 +6,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.employees.models import (
@@ -42,19 +43,64 @@ def break_penalty(
 
 # ── Employees ─────────────────────────────────────────────────────────────
 async def next_employee_code(db: AsyncSession, hotel_id: uuid.UUID) -> str:
-    count = await db.scalar(
-        select(func.count()).select_from(Employee).where(Employee.hotel_id == hotel_id)
+    """The next free EMPnnn for this hotel.
+
+    COUNTING WAS THE BUG.
+
+        duplicate key value violates unique constraint "uq_emp_hotel_code"
+        DETAIL: Key (hotel_id, employee_code)=(09129f7a…, EMP011) already exists.
+
+    This used `COUNT(*) + 1`. Delete one employee out of eleven and the count
+    drops to ten, so the next hire is offered EMP011 — which the eleventh
+    employee is still holding. The hotel can then never add anybody again, and
+    the failure looks random from the outside: it depends entirely on whether
+    that hotel has ever deleted a member of staff. That is exactly the shape he
+    reported — "for some it's working, for some not".
+
+    A sequence is not a population count. Read the HIGHEST code in use and go
+    one past it. Codes that do not fit EMPnnn are ignored rather than guessed
+    at, and the floor stays at the current headcount so a hotel that renamed
+    everything by hand still moves forward.
+    """
+    rows = await db.execute(
+        select(Employee.employee_code).where(Employee.hotel_id == hotel_id)
     )
-    return f"EMP{(count or 0) + 1:03d}"
+    highest = 0
+    seen = 0
+    for (code,) in rows:
+        seen += 1
+        if code and code.upper().startswith("EMP"):
+            tail = code[3:].strip()
+            if tail.isdigit():
+                highest = max(highest, int(tail))
+    return f"EMP{max(highest, seen) + 1:03d}"
 
 
 async def create_employee(db: AsyncSession, hotel_id: uuid.UUID, **fields) -> Employee:
-    code = await next_employee_code(db, hotel_id)
-    emp = Employee(hotel_id=hotel_id, employee_code=code, **fields)
-    db.add(emp)
-    await db.commit()
-    await db.refresh(emp)
-    return emp
+    """Add a member of staff, minting their code.
+
+    Retried, because `next_employee_code` reads and then writes: two managers
+    adding staff at the same moment can both read EMP011 and one of them will
+    lose the insert. Rare, but the whole point of this change is that adding an
+    employee stops failing, and a unique index is the only thing that can
+    actually enforce the rule. On a clash we re-read and try the next number.
+    """
+    last: Exception | None = None
+    for _ in range(5):
+        code = await next_employee_code(db, hotel_id)
+        emp = Employee(hotel_id=hotel_id, employee_code=code, **fields)
+        db.add(emp)
+        try:
+            await db.commit()
+        except IntegrityError as exc:  # pragma: no cover - needs a real race
+            await db.rollback()
+            if "uq_emp_hotel_code" not in str(exc.orig):
+                raise
+            last = exc
+            continue
+        await db.refresh(emp)
+        return emp
+    raise last or RuntimeError("could not allocate an employee code")
 
 
 class AccountError(Exception):

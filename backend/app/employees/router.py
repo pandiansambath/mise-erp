@@ -417,8 +417,15 @@ async def attendance_hours(
     for i in range(span):
         day = date_from + timedelta(days=i)
         for row in await service.list_attendance(db, user.hotel_id, day):
-            slot = out.setdefault(str(row.employee_id), [0.0] * span)
-            slot[i] = float(row.working_hours or 0)
+            # `list_attendance` returns DICTS, not ORM rows — see
+            # `_attendance_row`, which flattens the Attendance/Employee pair and
+            # adds the computed break penalty. Attribute access raised
+            # `AttributeError: 'dict' object has no attribute 'employee_id'` on
+            # every single call, so this endpoint has been a hard 500 for as
+            # long as it has existed and the weekly hours strip has always been
+            # empty.
+            slot = out.setdefault(str(row["employee_id"]), [0.0] * span)
+            slot[i] = float(row["working_hours"] or 0)
     return out
 
 
