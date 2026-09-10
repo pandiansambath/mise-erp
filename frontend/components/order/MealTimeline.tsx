@@ -194,16 +194,29 @@ export function MealTimeline({
       }`}
       aria-label="Your meal so far"
     >
-      <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-stretch lg:gap-6">
+      <div className="flex flex-col gap-4 p-4 pt-5 sm:p-5 sm:pt-6 lg:flex-row lg:items-stretch lg:gap-6">
         {/* ── 1. THE ONE NUMBER A WAITING PERSON WANTS ────────────────────
             Everything else on this page is browsing. This is the bit somebody
             keeps looking at while their food is somewhere they cannot see. */}
         <div className="flex items-center gap-3.5 lg:w-56 lg:shrink-0">
-          <span
-            className={`font-display text-4xl font-bold leading-none tabular-nums sm:text-5xl ${big.tone}`}
-          >
-            {big.n}
-          </span>
+          {/* THE UNIT GOES UNDER THE NUMBER, NOT UNDER THE HEADLINE.
+              It was in the third slot, so the eye read "5 · Running late" and
+              the word "hours" was 11px of grey two lines away. A quantity and
+              its unit are one thing and have to be laid out as one thing. */}
+          <div className="shrink-0 text-center">
+            <span
+              className={`block font-display text-4xl font-bold leading-none tabular-nums sm:text-5xl ${big.tone}`}
+            >
+              {big.n}
+            </span>
+            <span
+              className={`mt-1 block text-[10px] font-semibold uppercase tracking-wide ${
+                late ? "text-amber-500" : "text-fg-faint"
+              }`}
+            >
+              {big.unit}
+            </span>
+          </div>
           <div className="min-w-0">
             <p className={`text-sm font-bold leading-tight ${late ? "text-amber-500" : say.tone}`}>
               {focus ? (late ? "Running late" : say.label) : "All served"}
@@ -215,14 +228,11 @@ export function MealTimeline({
                 a smaller piece of information, it is a different and wrong
                 one. The apology rides alongside it. */}
             <p className="mt-0.5 text-[11px] leading-tight text-fg-soft">
-              {big.unit}
-              {late && (
-                /* Owned rather than hidden. A kitchen that is behind is a fact
-                   the table already knows; saying it plainly, and pointing at
-                   the button that fetches a human, is the only version of this
-                   that keeps their trust. */
-                <span className="text-fg-faint"> · sorry, do ask us</span>
-              )}
+              {/* Owned rather than hidden. A kitchen that is behind is a fact
+                  the table already knows; saying it plainly, and pointing at
+                  the button that fetches a human, is the only version of this
+                  that keeps their trust. */}
+              {focus ? (late ? "sorry — do ask us" : say.hint) : "anything else, just add it below"}
             </p>
           </div>
         </div>
@@ -297,6 +307,10 @@ export function MealTimeline({
                   key={o.id}
                   className={`rounded-lg px-2 py-1.5 ${isFocus ? "bg-glass/[0.06]" : ""}`}
                 >
+                  {/* The price sits NEXT to the food, not at the far edge of
+                      a thousand-pixel row. Giving the name `flex-1` pushed the
+                      two facts that belong together as far apart as the card
+                      allowed; the slack goes on the outside now. */}
                   <div className="flex items-baseline gap-2">
                     <span
                       aria-hidden
@@ -304,7 +318,7 @@ export function MealTimeline({
                         done ? "bg-emerald-500" : isFocus ? "bg-brand-500" : "bg-fg-faint/40"
                       }`}
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+                    <span className="min-w-0 truncate text-sm font-semibold text-fg">
                       {itemLine(o)}
                     </span>
                     <span className="shrink-0 text-[11px] tabular-nums text-fg-faint">
@@ -334,12 +348,16 @@ export function MealTimeline({
       </div>
 
       {/* ── THE BAR, ACROSS THE WHOLE THING ────────────────────────────────
-          Full-bleed along the bottom edge rather than tucked into a column.
-          It is the one element on the band that genuinely wants the width:
-          a 200px bar reads as a widget, a 1700px one reads as the evening. */}
+          Full-bleed, because it is the one element here that genuinely wants
+          the width: a 200px bar reads as a widget, a 1700px one reads as the
+          evening.
+          At the TOP edge, though. Along the bottom it read as a stray amber
+          highlighter stroke ruled between the band and the category pills —
+          an underline, not a measurement. Over the top of a card is the
+          loading-bar idiom, which everyone already knows how to read. */}
       {focus && (
         <div
-          className="h-1.5 w-full bg-glass/10"
+          className="absolute inset-x-0 top-0 h-1.5 w-full bg-glass/10"
           role="progressbar"
           aria-valuenow={Math.round(pct)}
           aria-valuemin={0}
