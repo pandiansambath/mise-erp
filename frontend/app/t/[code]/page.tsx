@@ -267,6 +267,17 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
   // Declared HERE, below `active`: a const cannot be read above its own
   // declaration, and `tsc` catches that where `next build` does not.
   const railHasContent = active.length > 0;
+
+  // Reads the hour so the page is not identical at 9am and 9pm. Computed from
+  // `now`, which already ticks for the countdown, so it costs nothing extra
+  // and cannot go stale on a tab left open across the evening.
+  const greeting = (() => {
+    const h = new Date(now).getHours();
+    if (h < 11) return "Good morning";
+    if (h < 16) return "Good afternoon";
+    if (h < 22) return "Good evening";
+    return "Still open";
+  })();
   const runningTotal = live.reduce((t, o) => t + Number(o.total), 0);
 
   return (
@@ -363,6 +374,48 @@ export default function TablePage({ params }: { params: Promise<{ code: string }
           tablet, three on a laptop, four on a wide monitor, five past that.
           The order rail widens slightly too, because a 21rem card beside a
           1600px menu looks like an afterthought. */}
+      {/* ── ARRIVING SOMEWHERE ────────────────────────────────────────────
+          "I literally said 1 story and all — like this is customer site, so we
+           need to impress them."
+
+          The page opened straight onto a filter row. Functionally fine, and it
+          gave a person scanning a QR code at a table no sense of having arrived
+          anywhere: no welcome, no name at any size, nothing that belongs to
+          THIS restaurant rather than to a piece of ordering software.
+
+          Deliberately a BAND and not a screen. He has said more than once that
+          he hates scrolling, and a full-height hero on a menu is the most
+          common way to make somebody scroll past the thing they came for. This
+          is about 150px, it scrolls away, and the food starts immediately under
+          it.
+
+          The greeting reads the hour so the page is not the same all day —
+          which is the cheapest possible way for a screen to feel like it knows
+          you are there, and it costs nothing to be right about. */}
+      <section className="mx-auto w-full max-w-[110rem] px-4 pt-5 lg:px-8 2xl:px-12">
+        <div className="mise-card-inset relative overflow-hidden rounded-3xl px-5 py-6 sm:px-8 sm:py-8">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-brand-500/10 blur-3xl"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-copper-500/10 blur-3xl"
+          />
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-300">
+            {greeting}
+          </p>
+          <h2 className="mt-1.5 font-display text-3xl font-bold leading-tight tracking-tight text-fg sm:text-4xl">
+            {hotel?.name ?? "\u00a0"}
+          </h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-fg-soft">
+            You&apos;re at <b className="text-fg">{table?.label ?? "your table"}</b>. Everything
+            below is on tonight&apos;s menu — tap a photo to ask about a dish, or press{" "}
+            <b className="text-fg">Need someone</b> and one of us will come over.
+          </p>
+        </div>
+      </section>
+
       {/* THE RAIL ONLY EXISTS WHEN IT HAS SOMETHING TO SAY.
           I split the page in two and then looked at it on a 1920px screen with
           no live order: a menu on the left and, beside it, six hundred pixels
