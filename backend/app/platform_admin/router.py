@@ -203,15 +203,19 @@ async def set_hotel_flags(
         hotel.ai_daily_override = body.ai_daily_override or None
     if body.ai_monthly_override is not None:
         hotel.ai_monthly_override = body.ai_monthly_override or None
+    await db.commit()
     # AUDITED, finally. This endpoint comps an account and lifts AI spend
     # limits — money decisions — and left no trace at all. A survey of this
     # module found it and permanent deletion as the only two consequential
     # operator actions with no audit row.
+    #
+    # AFTER the commit, and `record()` does its own: it is best-effort by
+    # design, so a failure to log must not roll back the change the operator
+    # actually asked for.
     await audit_service.record(
         db,
         hotel_id=hotel_id,
-        user_id=user.id,
-        user_email=user.email,
+        user=user,
         action="platform.flags",
         summary=(
             f"comped={hotel.is_comp}, ai/day={hotel.ai_daily_override or 'plan'}, "
@@ -220,7 +224,6 @@ async def set_hotel_flags(
         entity_type="hotel",
         entity_id=hotel_id,
     )
-    await db.commit()
     return {
         "is_comp": hotel.is_comp,
         "ai_daily_override": hotel.ai_daily_override,
@@ -848,28 +851,35 @@ async def delete_hotel(
             removed=counts.get("counts") or {},
         )
     )
+    await db.flush()
+
+    removed = await deletion.purge(db, hotel_id)
+    await db.commit()
+
     # AUDITED. The `deleted_hotels` ledger records WHAT was destroyed; this
     # records that an operator did it, in the same stream as every other
-    # platform action — so the audit trail does not have a hole exactly where
-    # the most irreversible action lives.
+    # platform action — so the trail has no hole exactly where the most
+    # irreversible action lives.
     #
-    # Written BEFORE the purge, while the hotel row still exists: the purge
-    # removes this tenant's audit rows too, so the event is deliberately filed
-    # against the OPERATOR's own hotel, where it will survive.
+    # AFTER the commit, deliberately. My first attempt put it before the purge
+    # so a failed purge would still be logged — but `record()` COMMITS, and
+    # that would have split this endpoint's single transaction in two. The
+    # module's opening comment is explicit that a half-deleted restaurant is
+    # worse than a failed delete; a ledger row claiming a deletion that then
+    # failed is the same fault wearing a different hat. Nothing was destroyed
+    # unless we got here, so nothing needs recording unless we got here.
+    #
+    # Filed against the OPERATOR's own hotel: the purge has just removed the
+    # target's audit rows, so an event filed there would delete itself.
     await audit_service.record(
         db,
         hotel_id=operator.hotel_id,
-        user_id=operator.id,
-        user_email=operator.email,
+        user=operator,
         action="platform.hotel_delete",
         summary=f"PERMANENTLY deleted {name} ({expected}) — {counts.get('total_rows', 0)} rows",
         entity_type="hotel",
         entity_id=hotel_id,
     )
-    await db.flush()
-
-    removed = await deletion.purge(db, hotel_id)
-    await db.commit()
 
     log.warning(
         "hotel PERMANENTLY DELETED: %s (%s) by %s — archived to %s",
@@ -995,15 +1005,15 @@ async def hotel_ai_transcript(
     something". An access log that only records successful reads is a log that
     can be evaded by a read that errors.
     """
+    # `record()` commits on our behalf; no second commit needed, and this
+    # endpoint writes nothing else.
     await audit_service.record(
         db,
         hotel_id=hotel_id,
-        user_id=operator.id,
-        user_email=operator.email,
+        user=operator,
         action="platform.read_ai_chat",
         summary=f"Operator opened AI conversation {thread_id}",
         entity_type="assistant_thread",
         entity_id=thread_id,
     )
-    await db.commit()
     return {"messages": await observability.hotel_ai_messages(db, hotel_id, thread_id)}
