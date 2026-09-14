@@ -80,6 +80,11 @@ const NAV: NavItem[] = [
   { href: "/plan", label: "Your plan", icon: "💳", perm: "settings:write", group: "Admin", keywords: "plan pricing subscription upgrade billing tier features ai allowance" },
   { href: "/documents", label: "Documents", icon: "📁", perm: "documents:read", feature: "documents", group: "Admin", keywords: "files certificates" },
   { href: "/audit", label: "Audit log", icon: "📜", perm: "users:read", group: "Admin", keywords: "history who changed" },
+  // Its own entry, not a corner of Settings. The sign-in editor lived inside
+  // a Settings sub-mode and he concluded the feature did not exist — which
+  // the live data confirmed: one restaurant had styled its public page and
+  // never once opened the door.
+  { href: "/customise", label: "Your pages", icon: "🎨", perm: "settings:write", group: "Admin", keywords: "landing login sign-in customise brand theme colours photo website public page door design" },
 ];
 
 /** How many messages are waiting in Team chat. Rendered only on that one nav
@@ -806,7 +811,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // wide: a form beside a live preview does not fit in what is left after a
   // 16rem rail. The rail is replaced by a way back, which is the only thing it
   // was providing here.
-  const wideRoute = pathname === "/settings" || pathname === "/profile";
+  const wideRoute =
+    pathname === "/settings" || pathname === "/profile" || pathname === "/customise";
   const finalNav = selfServiceOnly
     ? navItems.filter((i) => i.href === "/my" || i.href === "/chat")
     : navItems;

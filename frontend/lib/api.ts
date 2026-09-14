@@ -404,6 +404,11 @@ export interface UserOut {
 
 export interface LandingConfig {
   hero?: string; // hero photo style: warm|fine|rustic|spice|cafe|night
+  /** A photograph from the bundled library (`/page-images/...`), chosen in
+   *  Customise. Overrides `hero` when set — `hero` stays for the six built-in
+   *  styles and for every page configured before the library existed, so
+   *  nobody's page changes underneath them. */
+  photo?: string;
   tagline?: string;
   about_title?: string;
   about?: string;

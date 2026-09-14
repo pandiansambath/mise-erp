@@ -1,0 +1,500 @@
+{
+  "moods": [
+    {
+      "slug": "feast",
+      "label": "A table full of food",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/feast-2009590.jpg",
+          "alt": "christmas wallpaper"
+        },
+        {
+          "file": "/page-images/feast-791148.jpg",
+          "alt": "table setting"
+        },
+        {
+          "file": "/page-images/feast-5356682.jpg",
+          "alt": "table"
+        },
+        {
+          "file": "/page-images/feast-1477992.jpg",
+          "alt": "roses"
+        },
+        {
+          "file": "/page-images/feast-5489526.jpg",
+          "alt": "billiards"
+        },
+        {
+          "file": "/page-images/feast-347306.jpg",
+          "alt": "thanksgiving"
+        }
+      ]
+    },
+    {
+      "slug": "curry",
+      "label": "Curry and spice",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/curry-3856046.jpg",
+          "alt": "korma"
+        },
+        {
+          "file": "/page-images/curry-3856050.jpg",
+          "alt": "indian food"
+        },
+        {
+          "file": "/page-images/curry-2362678.jpg",
+          "alt": "food"
+        },
+        {
+          "file": "/page-images/curry-3856044.jpg",
+          "alt": "indian food"
+        },
+        {
+          "file": "/page-images/curry-1784879.jpg",
+          "alt": "indian food"
+        },
+        {
+          "file": "/page-images/curry-2362686.jpg",
+          "alt": "food"
+        }
+      ]
+    },
+    {
+      "slug": "grill",
+      "label": "Fire and grill",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/grill-4683963.jpg",
+          "alt": "bbq"
+        },
+        {
+          "file": "/page-images/grill-417994.jpg",
+          "alt": "shish kebab"
+        },
+        {
+          "file": "/page-images/grill-3978609.jpg",
+          "alt": "food"
+        },
+        {
+          "file": "/page-images/grill-2314654.jpg",
+          "alt": "sausage"
+        },
+        {
+          "file": "/page-images/grill-1440105.jpg",
+          "alt": "meat skewer"
+        },
+        {
+          "file": "/page-images/grill-3524649.jpg",
+          "alt": "sausages"
+        }
+      ]
+    },
+    {
+      "slug": "fresh",
+      "label": "Fresh ingredients",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/fresh-2636.jpg",
+          "alt": "watermelons"
+        },
+        {
+          "file": "/page-images/fresh-2106825.jpg",
+          "alt": "carrots"
+        },
+        {
+          "file": "/page-images/fresh-949913.jpg",
+          "alt": "supermarket"
+        },
+        {
+          "file": "/page-images/fresh-2786684.jpg",
+          "alt": "peppers"
+        },
+        {
+          "file": "/page-images/fresh-673184.jpg",
+          "alt": "carrots"
+        },
+        {
+          "file": "/page-images/fresh-3440339.jpg",
+          "alt": "beetroot"
+        }
+      ]
+    },
+    {
+      "slug": "sweet",
+      "label": "Something sweet",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/sweet-5885584.jpg",
+          "alt": "food"
+        },
+        {
+          "file": "/page-images/sweet-577228.jpg",
+          "alt": "sweets"
+        },
+        {
+          "file": "/page-images/sweet-2832678.jpg",
+          "alt": "diwali sweets"
+        },
+        {
+          "file": "/page-images/sweet-577230.jpg",
+          "alt": "sweets"
+        },
+        {
+          "file": "/page-images/sweet-5977496.jpg",
+          "alt": "laddu"
+        },
+        {
+          "file": "/page-images/sweet-2290593.jpg",
+          "alt": "indian"
+        }
+      ]
+    },
+    {
+      "slug": "dining-room",
+      "label": "The dining room",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/dining-room-5972490.jpg",
+          "alt": "cafe"
+        },
+        {
+          "file": "/page-images/dining-room-1869656.jpg",
+          "alt": "cafe"
+        },
+        {
+          "file": "/page-images/dining-room-5635015.jpg",
+          "alt": "cafe"
+        },
+        {
+          "file": "/page-images/dining-room-6878196.jpg",
+          "alt": "cup"
+        },
+        {
+          "file": "/page-images/dining-room-4697753.jpg",
+          "alt": "cat's cafe"
+        },
+        {
+          "file": "/page-images/dining-room-791168.jpg",
+          "alt": "coffee"
+        }
+      ]
+    },
+    {
+      "slug": "street",
+      "label": "Street food",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/street-2879303.jpg",
+          "alt": "old man"
+        },
+        {
+          "file": "/page-images/street-1841183.jpg",
+          "alt": "fish"
+        },
+        {
+          "file": "/page-images/street-3120056.jpg",
+          "alt": "chinatown"
+        },
+        {
+          "file": "/page-images/street-10453140.jpg",
+          "alt": "indonesian food"
+        },
+        {
+          "file": "/page-images/street-6571007.jpg",
+          "alt": "fruit"
+        },
+        {
+          "file": "/page-images/street-8026947.jpg",
+          "alt": "girl"
+        }
+      ]
+    },
+    {
+      "slug": "drinks",
+      "label": "Drinks and chai",
+      "page": "landing",
+      "images": [
+        {
+          "file": "/page-images/drinks-3681248.jpg",
+          "alt": "chai"
+        },
+        {
+          "file": "/page-images/drinks-1284427.jpg",
+          "alt": "art"
+        },
+        {
+          "file": "/page-images/drinks-5462412.jpg",
+          "alt": "tea"
+        },
+        {
+          "file": "/page-images/drinks-8148062.jpg",
+          "alt": "terraces"
+        },
+        {
+          "file": "/page-images/drinks-164410.jpg",
+          "alt": "rice terraces"
+        },
+        {
+          "file": "/page-images/drinks-975685.jpg",
+          "alt": "chai"
+        }
+      ]
+    },
+    {
+      "slug": "slate",
+      "label": "Dark slate",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/slate-3592117.jpg",
+          "alt": "bricks"
+        },
+        {
+          "file": "/page-images/slate-5348998.jpg",
+          "alt": "stone"
+        },
+        {
+          "file": "/page-images/slate-3176447.jpg",
+          "alt": "background"
+        },
+        {
+          "file": "/page-images/slate-2362261.jpg",
+          "alt": "black"
+        },
+        {
+          "file": "/page-images/slate-5348997.jpg",
+          "alt": "slate"
+        },
+        {
+          "file": "/page-images/slate-7203890.jpg",
+          "alt": "concrete"
+        }
+      ]
+    },
+    {
+      "slug": "wood",
+      "label": "Warm wood",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/wood-1250903.jpg",
+          "alt": "fern"
+        },
+        {
+          "file": "/page-images/wood-10115602.jpg",
+          "alt": "tree"
+        },
+        {
+          "file": "/page-images/wood-10323198.jpg",
+          "alt": "bass guitar"
+        },
+        {
+          "file": "/page-images/wood-409258.jpg",
+          "alt": "leaf"
+        },
+        {
+          "file": "/page-images/wood-5619857.jpg",
+          "alt": "moss"
+        },
+        {
+          "file": "/page-images/wood-7384291.jpg",
+          "alt": "bark"
+        }
+      ]
+    },
+    {
+      "slug": "linen",
+      "label": "Cloth and linen",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/linen-2918844.jpg",
+          "alt": "textile"
+        },
+        {
+          "file": "/page-images/linen-6972452.jpg",
+          "alt": "heart"
+        },
+        {
+          "file": "/page-images/linen-820149.jpg",
+          "alt": "pillows"
+        },
+        {
+          "file": "/page-images/linen-1747649.jpg",
+          "alt": "fabric"
+        },
+        {
+          "file": "/page-images/linen-8688401.jpg",
+          "alt": "towel"
+        },
+        {
+          "file": "/page-images/linen-8293446.jpg",
+          "alt": "bed"
+        }
+      ]
+    },
+    {
+      "slug": "marble",
+      "label": "Marble and stone",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/marble-2362253.jpg",
+          "alt": "black"
+        },
+        {
+          "file": "/page-images/marble-2362265.jpg",
+          "alt": "marble"
+        },
+        {
+          "file": "/page-images/marble-2448222.jpg",
+          "alt": "rock"
+        },
+        {
+          "file": "/page-images/marble-2362243.jpg",
+          "alt": "marble"
+        },
+        {
+          "file": "/page-images/marble-2362267.jpg",
+          "alt": "marble"
+        },
+        {
+          "file": "/page-images/marble-407081.jpg",
+          "alt": "balls"
+        }
+      ]
+    },
+    {
+      "slug": "kitchen-quiet",
+      "label": "A quiet kitchen",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/kitchen-quiet-10005922.jpg",
+          "alt": "kitchen"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-498418.jpg",
+          "alt": "glasses"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-3878570.jpg",
+          "alt": "wood - material"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-3878573.jpg",
+          "alt": "wood - material"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-4104652.jpg",
+          "alt": "table"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-3224498.jpg",
+          "alt": "background"
+        }
+      ]
+    },
+    {
+      "slug": "dawn",
+      "label": "Early light",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/dawn-1979547.jpg",
+          "alt": "dock"
+        },
+        {
+          "file": "/page-images/dawn-9498872.jpg",
+          "alt": "lamps"
+        },
+        {
+          "file": "/page-images/dawn-9908677.jpg",
+          "alt": "vietnam"
+        },
+        {
+          "file": "/page-images/dawn-4717915.jpg",
+          "alt": "landscape"
+        },
+        {
+          "file": "/page-images/dawn-3077019.jpg",
+          "alt": "tree"
+        },
+        {
+          "file": "/page-images/dawn-2082291.jpg",
+          "alt": "silhouette"
+        }
+      ]
+    },
+    {
+      "slug": "spice-dark",
+      "label": "Spices on dark",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/spice-dark-525696.jpg",
+          "alt": "pepper"
+        },
+        {
+          "file": "/page-images/spice-dark-2810491.jpg",
+          "alt": "garlic"
+        },
+        {
+          "file": "/page-images/spice-dark-7976081.jpg",
+          "alt": "powder"
+        },
+        {
+          "file": "/page-images/spice-dark-3151644.jpg",
+          "alt": "onions"
+        },
+        {
+          "file": "/page-images/spice-dark-6704928.jpg",
+          "alt": "mulled wine"
+        },
+        {
+          "file": "/page-images/spice-dark-3549699.jpg",
+          "alt": "beef"
+        }
+      ]
+    },
+    {
+      "slug": "copper",
+      "label": "Copper and brass",
+      "page": "login",
+      "images": [
+        {
+          "file": "/page-images/copper-2943443.jpg",
+          "alt": "pot"
+        },
+        {
+          "file": "/page-images/copper-4876410.jpg",
+          "alt": "still life with onions"
+        },
+        {
+          "file": "/page-images/copper-2912191.jpg",
+          "alt": "saucepans"
+        },
+        {
+          "file": "/page-images/copper-4665913.jpg",
+          "alt": "kitchen"
+        },
+        {
+          "file": "/page-images/copper-85270.jpg",
+          "alt": "kitchen"
+        },
+        {
+          "file": "/page-images/copper-10340038.jpg",
+          "alt": "ai generated"
+        }
+      ]
+    }
+  ]
+}
