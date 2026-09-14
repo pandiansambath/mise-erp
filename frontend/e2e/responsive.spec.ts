@@ -60,13 +60,26 @@ const VIEWPORTS = [
 
 /** Pages worth sweeping. Public ones need no login and run everywhere; the
  *  rest need a token, which is injected. */
-const PAGES = [
+const PAGES: { path: string; name: string; auth: boolean; operator?: boolean }[] = [
   { path: `/t/${TABLE}`, name: "public-table", auth: false },
   { path: "/dashboard", name: "dashboard", auth: true },
   { path: "/customise", name: "customise", auth: true },
   { path: "/employees", name: "employees", auth: true },
   { path: "/inventory", name: "inventory", auth: true },
   { path: "/menu", name: "menu", auth: true },
+
+  // The Control Room. `operator: true` because superadmin@gmail.com is NOT
+  // is_platform_owner — control-room/layout.tsx bounces it to /dashboard, so
+  // sweeping these with the ordinary token silently measures the dashboard
+  // instead and reports a clean pass on a page that was never loaded.
+  { path: "/control-room", name: "cr-overview", auth: true, operator: true },
+  { path: "/control-room/fleet", name: "cr-fleet", auth: true, operator: true },
+  { path: "/control-room/ai", name: "cr-ai", auth: true, operator: true },
+  { path: "/control-room/broadcast", name: "cr-broadcast", auth: true, operator: true },
+  { path: "/control-room/jobs", name: "cr-jobs", auth: true, operator: true },
+  { path: "/control-room/plans", name: "cr-plans", auth: true, operator: true },
+  { path: "/control-room/audit", name: "cr-audit", auth: true, operator: true },
+  { path: "/control-room/operators", name: "cr-operators", auth: true, operator: true },
 ];
 
 type Fault = { kind: string; detail: string };
@@ -190,11 +203,14 @@ async function audit(page: Page, phone: boolean): Promise<Fault[]> {
   }, phone);
 }
 
-async function signIn(page: Page) {
+async function signIn(page: Page, operator = false) {
+  const creds = operator
+    ? { email: "control@mise.app", password: "Control@2026" }
+    : { email: "superadmin@gmail.com", password: "superadmin@123" };
   const r = await fetch(`${PROD}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "superadmin@gmail.com", password: "superadmin@123" }),
+    body: JSON.stringify(creds),
   });
   const d = await r.json();
   await page.addInitScript((t) => {
@@ -219,11 +235,25 @@ for (const vp of VIEWPORTS) {
         await route.fulfill({ response: res });
       });
 
-      if (target.auth) await signIn(page);
-      await page.goto(LOCAL + (target.auth ? "/dashboard" : target.path));
-      await page.waitForTimeout(target.auth ? 6000 : 3500);
+      if (target.auth) await signIn(page, target.operator);
 
-      if (target.auth) {
+      if (target.operator) {
+        // An operator lands straight in the Control Room — there is no tenant
+        // dashboard to pass through and no onboarding tour to dismiss.
+        await page.goto(LOCAL + target.path);
+        await page.waitForTimeout(6000);
+        if (!page.url().includes("/control-room")) {
+          throw new Error(
+            `operator sweep landed on ${page.url()} — not the Control Room. ` +
+              `A clean pass here would be measuring the wrong page.`,
+          );
+        }
+      } else {
+        await page.goto(LOCAL + (target.auth ? "/dashboard" : target.path));
+        await page.waitForTimeout(target.auth ? 6000 : 3500);
+      }
+
+      if (target.auth && !target.operator) {
         // The onboarding tour opens over the dashboard and swallows the next
         // click; a direct URL right after sign-in bounces to /dashboard.
         const skip = page.getByText("Skip tour").first();
