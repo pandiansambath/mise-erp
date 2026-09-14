@@ -1,6 +1,6 @@
 ---
 name: database-engineer
-description: Owns the schema, migrations, query performance and data integrity. Use for migrations, slow queries, data investigations and anything touching multi-tenant isolation of data.
+description: "Owns the schema, migrations, query performance and data integrity. Use for migrations, slow queries, data investigations and anything touching multi-tenant isolation of data."
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 ---

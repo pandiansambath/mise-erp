@@ -1,6 +1,6 @@
 ---
 name: cto
-description: Technical authority. Decides architecture and technical trade-offs, reviews designs before anybody builds them, and says no to approaches that will rot. Use for 'how should we build this' questions.
+description: "Technical authority. Decides architecture and technical trade-offs, reviews designs before anybody builds them, and says no to approaches that will rot. Use for 'how should we build this' questions."
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell, Agent
 ---

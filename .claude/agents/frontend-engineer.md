@@ -1,6 +1,6 @@
 ---
 name: frontend-engineer
-description: Builds and fixes the Next.js/React/Tailwind frontend. Use for any UI implementation work.
+description: "Builds and fixes the Next.js/React/Tailwind frontend. Use for any UI implementation work."
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 ---

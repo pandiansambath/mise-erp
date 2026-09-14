@@ -1,6 +1,6 @@
 ---
 name: data-analyst
-description: Gets evidence from the live database and from AWS. Use whenever a question needs real numbers rather than a guess.
+description: "Gets evidence from the live database and from AWS. Use whenever a question needs real numbers rather than a guess."
 model: sonnet
 tools: Read, Grep, Glob, Bash, PowerShell
 ---

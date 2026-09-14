@@ -1,6 +1,6 @@
 ---
 name: security-engineer
-description: Owns authentication, tenant isolation, secrets and anything that could leak one restaurant's data to another. Use before shipping anything touching auth, permissions or cross-tenant reads.
+description: "Owns authentication, tenant isolation, secrets and anything that could leak one restaurant's data to another. Use before shipping anything touching auth, permissions or cross-tenant reads."
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell
 ---

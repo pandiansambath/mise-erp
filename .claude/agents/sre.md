@@ -1,6 +1,6 @@
 ---
 name: sre
-description: Runs deploys, watches the pipeline, reads CloudWatch and triages incidents. Use immediately after every deploy and for any 'the site is down/slow' question.
+description: "Runs deploys, watches the pipeline, reads CloudWatch and triages incidents. Use immediately after every deploy and for any 'the site is down/slow' question."
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 ---

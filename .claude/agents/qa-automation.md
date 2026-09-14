@@ -1,6 +1,6 @@
 ---
 name: qa-automation
-description: Writes durable automated tests — pytest for the backend, Playwright for the frontend. Use to lock in a fix so it cannot regress.
+description: "Writes durable automated tests — pytest for the backend, Playwright for the frontend. Use to lock in a fix so it cannot regress."
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 ---
