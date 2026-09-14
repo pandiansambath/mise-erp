@@ -24,7 +24,7 @@ from app.auth.models import Role, User
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
-from app.platform_admin import deletion
+from app.platform_admin import deletion, observability
 from app.platform_admin import features as feat
 from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
 
@@ -203,6 +203,23 @@ async def set_hotel_flags(
         hotel.ai_daily_override = body.ai_daily_override or None
     if body.ai_monthly_override is not None:
         hotel.ai_monthly_override = body.ai_monthly_override or None
+    # AUDITED, finally. This endpoint comps an account and lifts AI spend
+    # limits — money decisions — and left no trace at all. A survey of this
+    # module found it and permanent deletion as the only two consequential
+    # operator actions with no audit row.
+    await audit_service.record(
+        db,
+        hotel_id=hotel_id,
+        user_id=user.id,
+        user_email=user.email,
+        action="platform.flags",
+        summary=(
+            f"comped={hotel.is_comp}, ai/day={hotel.ai_daily_override or 'plan'}, "
+            f"ai/month={hotel.ai_monthly_override or 'plan'}"
+        ),
+        entity_type="hotel",
+        entity_id=hotel_id,
+    )
     await db.commit()
     return {
         "is_comp": hotel.is_comp,
@@ -831,6 +848,24 @@ async def delete_hotel(
             removed=counts.get("counts") or {},
         )
     )
+    # AUDITED. The `deleted_hotels` ledger records WHAT was destroyed; this
+    # records that an operator did it, in the same stream as every other
+    # platform action — so the audit trail does not have a hole exactly where
+    # the most irreversible action lives.
+    #
+    # Written BEFORE the purge, while the hotel row still exists: the purge
+    # removes this tenant's audit rows too, so the event is deliberately filed
+    # against the OPERATOR's own hotel, where it will survive.
+    await audit_service.record(
+        db,
+        hotel_id=operator.hotel_id,
+        user_id=operator.id,
+        user_email=operator.email,
+        action="platform.hotel_delete",
+        summary=f"PERMANENTLY deleted {name} ({expected}) — {counts.get('total_rows', 0)} rows",
+        entity_type="hotel",
+        entity_id=hotel_id,
+    )
     await db.flush()
 
     removed = await deletion.purge(db, hotel_id)
@@ -842,3 +877,133 @@ async def delete_hotel(
         extra={"code": "DINE-B2009"},
     )
     return {"deleted": True, "hotel_name": name, "archive_key": key, "removed": removed}
+
+
+# ══ OBSERVABILITY ═══════════════════════════════════════════════════════════
+#
+#     "we need observability feature too, like monitoring dashboard for entire
+#      project — I don't know how to say but yeah we need."
+#
+# None of this collects anything new. `ai_usage`, `audit_events` and
+# `assistant_messages` have been filling up for months with nothing reading
+# them — see the note at the top of `observability.py`.
+
+
+@router.get("/pulse")
+async def pulse(
+    days: int = 30,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Is anything wrong right now. The first screen of the Control Room."""
+    return await observability.platform_pulse(db, days=max(1, min(days, 365)))
+
+
+@router.get("/ai/by-hotel")
+async def ai_spend_by_hotel(
+    days: int = 30,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Who is spending the Bedrock budget — the view that never existed."""
+    return {"hotels": await observability.ai_by_hotel(db, days=max(1, min(days, 365)))}
+
+
+@router.get("/ai/daily")
+async def ai_spend_daily(
+    days: int = 30,
+    hotel_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    return {
+        "days": await observability.ai_daily(
+            db, days=max(1, min(days, 365)), hotel_id=hotel_id
+        )
+    }
+
+
+@router.get("/hotels/{hotel_id}/health")
+async def hotel_vitals(
+    hotel_id: uuid.UUID,
+    days: int = 30,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    return await observability.hotel_health(db, hotel_id, days=max(1, min(days, 365)))
+
+
+@router.get("/hotels/{hotel_id}/activity")
+async def hotel_activity(
+    hotel_id: uuid.UUID,
+    limit: int = 200,
+    before: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Everything this restaurant has done.
+
+    `audit_events` already recorded it for every tenant; the operator side only
+    ever queried `platform.%`, so "who changed this price?" — the single most
+    common support question — was unanswerable from the console.
+    """
+    cutoff = None
+    if before:
+        try:
+            cutoff = datetime.fromisoformat(before)
+        except ValueError:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "`before` must be an ISO timestamp"
+            ) from None
+    return {
+        "events": await observability.hotel_activity(
+            db, hotel_id, limit=max(1, limit), before=cutoff
+        )
+    }
+
+
+@router.get("/hotels/{hotel_id}/ai-threads")
+async def hotel_ai_threads(
+    hotel_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """The AI conversations this restaurant has had. Titles only."""
+    return {"threads": await observability.hotel_ai_threads(db, hotel_id)}
+
+
+@router.get("/hotels/{hotel_id}/ai-threads/{thread_id}")
+async def hotel_ai_transcript(
+    hotel_id: uuid.UUID,
+    thread_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """One conversation in full — AND a record that it was read.
+
+        "literally each and every chat that hotel is making with hotel's AI, so
+         that if any issue means we can easily check and solve."
+
+    This is somebody else's private data and the product should behave like it
+    knows that. The operator AI is still forbidden from reading message bodies
+    (`assistant/query.py` excludes `assistant_messages` and says so in its
+    prompt); this is a named human opening one named conversation because a
+    customer asked for help.
+
+    The audit line is written BEFORE the read and names the thread, so the
+    trail says which conversation was opened rather than "somebody looked at
+    something". An access log that only records successful reads is a log that
+    can be evaded by a read that errors.
+    """
+    await audit_service.record(
+        db,
+        hotel_id=hotel_id,
+        user_id=operator.id,
+        user_email=operator.email,
+        action="platform.read_ai_chat",
+        summary=f"Operator opened AI conversation {thread_id}",
+        entity_type="assistant_thread",
+        entity_id=thread_id,
+    )
+    await db.commit()
+    return {"messages": await observability.hotel_ai_messages(db, hotel_id, thread_id)}
