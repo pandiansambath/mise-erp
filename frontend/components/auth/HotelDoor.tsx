@@ -43,6 +43,13 @@ export type LoginConfig = {
   font?: string;
   /** Photographic mood behind the panel, from the landing page's set. */
   hero?: string;
+  /** A picture from the bundled library (`/page-images/...`).
+   *
+   *  The note further down about this page being on the critical path of
+   *  every shift still stands, which is why the login shelf is textures
+   *  rather than plated food — every one is under 250 KB, and "No
+   *  photograph" is the first option on the shelf, not a buried one. */
+  photo?: string;
   show_logo?: boolean;
   /** A line at the foot of the door — "Staff only · lost your password? ask Sam". */
   footer?: string;
@@ -66,6 +73,7 @@ export const LOGIN_EFFECTS = [
 
 export const DEFAULT_LOGIN: Required<LoginConfig> = {
   enabled: false,
+  photo: "",
   headline: "",
   subline: "",
   layout: "split",
@@ -188,8 +196,22 @@ export function HotelDoor({
   const headline = c.headline?.trim() || `Welcome back to ${hotelName}`;
   const subline = c.subline?.trim() || "Sign in to start your shift.";
 
+  // A library picture, validated as a library path rather than trusted: this
+  // goes into a CSS url() and `login_page` is owner-editable JSON.
+  const photo =
+    typeof c.photo === "string" && /^\/page-images\/[\w.-]+$/.test(c.photo) ? c.photo : null;
+
   const art = (
     <div className="mise-door-art" aria-hidden>
+      {/* Under the wash, never over it. The gradient is what keeps the form
+          readable, and a photograph on top of it would undo the one thing this
+          page cannot afford to get wrong. */}
+      {photo && (
+        <span
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${photo})`, opacity: 0.55 }}
+        />
+      )}
       <span className="mise-door-wash" style={{ background: wash }} />
       {c.effect === "aurora" && <span className="mise-door-aurora" />}
       {c.effect === "glow" && <span className="mise-door-glow" />}

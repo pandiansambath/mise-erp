@@ -32,6 +32,7 @@ export const LANDING_THEMES = [
 /** Mirrors LANDING_DEFAULTS in backend/app/api/site.py — keep the two in step. */
 export const DEFAULT_LANDING: Required<LandingConfig> = {
   hero: "warm",
+  photo: "",
   tagline: "",
   about_title: "Our story",
   about: "",
@@ -140,7 +141,13 @@ export default function HotelSite({
   // WebP: ~36% smaller than the JPEGs across the set, and supported by every
   // browser we target. The .jpg originals stay in the repo as the source of
   // truth for re-encoding, not as a runtime fallback nobody would hit.
-  const hero = `/site/hero-${heroKey}.webp`;
+  // A picture from the library wins over the built-in style. Validated as a
+  // library path rather than trusted: this string goes straight into a CSS
+  // url(), and `landing` is owner-editable JSON.
+  const picked = typeof L.photo === "string" && /^\/page-images\/[\w.-]+$/.test(L.photo)
+    ? L.photo
+    : null;
+  const hero = picked ?? `/site/hero-${heroKey}.webp`;
   const tagline = L.tagline || (data.city ? `A kitchen in ${data.city}` : "Every plate, every penny.");
 
   // ── hero parallax + scrim deepen: one rAF, direct style writes ──
