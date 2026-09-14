@@ -16,6 +16,7 @@ from sqlalchemy import (
     Uuid,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -52,6 +53,13 @@ class Vendor(Base):
     bank_sort_code: Mapped[str | None] = mapped_column(String(10))  # XX-XX-XX
     rating: Mapped[Decimal] = mapped_column(Numeric(2, 1), nullable=False, default=Decimal("5.0"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: Values for this hotel's own extra fields — see `app/custom_fields`.
+    #:
+    #: JSONB rather than a values table, because the only thing anybody ever
+    #: wants is the whole record at once: a row per field per supplier would turn
+    #: every form render into a join and a pivot. A value whose definition is
+    #: later hidden stays here untouched and reappears if the field comes back.
+    custom: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

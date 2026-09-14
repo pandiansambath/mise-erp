@@ -39,6 +39,12 @@ class VendorCreate(BaseModel):
         if len(v) > 40:
             raise ValueError("category must be 40 characters or fewer")
         return v
+    #: This hotel's own extra fields — see `app/custom_fields`. A free-form
+    #: bag on purpose: the whole point is that we do not know what a given
+    #: restaurant keeps. Declared explicitly on Out as well, because
+    #: `response_model` SILENTLY DROPS anything it has not been told about —
+    #: a trap this project has now hit eight times.
+    custom: dict[str, object] = Field(default_factory=dict)
 
 
 class VendorUpdate(BaseModel):
@@ -57,6 +63,12 @@ class VendorUpdate(BaseModel):
     bank_sort_code: str | None = None
     rating: Decimal | None = Field(default=None, ge=0, le=5)
     is_active: bool | None = None
+    #: This hotel's own extra fields — see `app/custom_fields`. A free-form
+    #: bag on purpose: the whole point is that we do not know what a given
+    #: restaurant keeps. Declared explicitly on Out as well, because
+    #: `response_model` SILENTLY DROPS anything it has not been told about —
+    #: a trap this project has now hit eight times.
+    custom: dict[str, object] | None = None
 
 
 class VendorOut(BaseModel):
@@ -75,6 +87,12 @@ class VendorOut(BaseModel):
     credit_days: int
     rating: Decimal
     is_active: bool
+    #: This hotel's own extra fields — see `app/custom_fields`. A free-form
+    #: bag on purpose: the whole point is that we do not know what a given
+    #: restaurant keeps. Declared explicitly on Out as well, because
+    #: `response_model` SILENTLY DROPS anything it has not been told about —
+    #: a trap this project has now hit eight times.
+    custom: dict[str, object] = Field(default_factory=dict)
 
 
 class VendorItemUpsert(BaseModel):
