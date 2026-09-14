@@ -94,3 +94,41 @@ def test_alembic_migrations_import_cleanly_too():
             if not _module_exists(dotted):
                 broken.append(f"{path.name}:{lineno} imports '{dotted}' — no such module")
     assert not broken, "Unresolvable imports in migrations:\n  " + "\n  ".join(broken)
+
+
+def test_no_router_module_stringises_its_annotations():
+    """No `from __future__ import annotations` in a module FastAPI introspects.
+
+    THE SECOND DEPLOY THIS BROKE.
+
+        app/custom_fields/router.py:227: in <module>
+            @router.delete(..., status_code=status.HTTP_204_NO_CONTENT)
+        E   AssertionError: Status code 204 must not have a response body
+
+    PEP 563 stores every annotation as a STRING. FastAPI builds its response
+    model from the return annotation at decorator time, so `-> None` arrives as
+    `"None"`, gets resolved through `ForwardRef` to `NoneType` — a truthy class
+    — and the "204 has no body" assert fires. Without the future import the
+    annotation is the real `None`, which is falsy, and nothing happens.
+
+    It survived review because it does not reproduce on every version: locally
+    fastapi 0.141.0 is fine, `requirements.txt` pins 0.115.6, and CI installs
+    the pin. So the machine that could run it said "fine" and the machine that
+    mattered said "no".
+
+    The narrow fix is `response_model=None` on that one route. This is the
+    general one: FastAPI reads annotations at runtime, so stringising them in a
+    router is hazardous well beyond 204s, and none of the other 26 routers do
+    it. Consistency here is not tidiness — it is the thing that keeps the
+    container booting.
+    """
+    offenders = []
+    for path in sorted(APP.rglob("router.py")):
+        src = path.read_text(encoding="utf-8")
+        for i, line in enumerate(src.splitlines(), 1):
+            if line.strip() == "from __future__ import annotations":
+                offenders.append(f"{path.relative_to(APP.parent)}:{i}")
+    assert not offenders, (
+        "FastAPI reads annotations at runtime; these router modules stringise "
+        "them:\n  " + "\n  ".join(offenders)
+    )

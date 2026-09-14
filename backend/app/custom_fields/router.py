@@ -11,8 +11,6 @@ and suppliers is which catalogue is offered — duplicating the CRUD to express
 that would guarantee the two drift.
 """
 
-from __future__ import annotations
-
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
@@ -224,7 +222,17 @@ async def update_field(
     return _out(field)
 
 
-@router.delete("/{entity}/{field_id}", status_code=status.HTTP_204_NO_CONTENT)
+# `response_model=None` is not decoration. FastAPI infers the response model
+# from the return annotation, and a 204 is asserted to have no body. With
+# `from __future__ import annotations` in scope, `-> None` reaches FastAPI as
+# the STRING "None", which it resolves to `NoneType` — a truthy class — so
+# the inference fires and the assert kills the import. Saying it explicitly
+# stops the inference regardless of how annotations are evaluated.
+@router.delete(
+    "/{entity}/{field_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 async def delete_field(
     field_id: uuid.UUID,
     entity: str = Depends(_entity),
