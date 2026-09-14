@@ -17,6 +17,7 @@ from sqlalchemy import (
     Uuid,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -73,6 +74,13 @@ class Employee(Base):
     bank_sort_code: Mapped[str | None] = mapped_column(String(10))  # XX-XX-XX
     joining_date: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: Values for this hotel's own extra fields — see `app/custom_fields`.
+    #:
+    #: JSONB rather than a values table, because the only thing anybody ever
+    #: wants is the whole record at once: a row per field per employee would turn
+    #: every form render into a join and a pivot. A value whose definition is
+    #: later hidden stays here untouched and reappears if the field comes back.
+    custom: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     #: When each side last opened the message thread. Unread = anything from the
     #: OTHER side newer than my own timestamp. Kept on the employee rather than a
     #: thread table because the employee IS the thread — one fewer join on a

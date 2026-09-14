@@ -39,6 +39,12 @@ class EmployeeCreate(BaseModel):
         if v not in _SAL:
             raise ValueError(f"salary_type must be one of {sorted(_SAL)}")
         return v
+    #: This hotel's own extra fields — see `app/custom_fields`. A free-form
+    #: bag on purpose: the whole point is that we do not know what a given
+    #: restaurant keeps. Declared explicitly on Out as well, because
+    #: `response_model` SILENTLY DROPS anything it has not been told about —
+    #: a trap this project has now hit eight times.
+    custom: dict[str, object] = Field(default_factory=dict)
 
 
 class EmployeeUpdate(BaseModel):
@@ -59,6 +65,12 @@ class EmployeeUpdate(BaseModel):
     bank_sort_code: str | None = None
     joining_date: date_type | None = None
     is_active: bool | None = None
+    #: This hotel's own extra fields — see `app/custom_fields`. A free-form
+    #: bag on purpose: the whole point is that we do not know what a given
+    #: restaurant keeps. Declared explicitly on Out as well, because
+    #: `response_model` SILENTLY DROPS anything it has not been told about —
+    #: a trap this project has now hit eight times.
+    custom: dict[str, object] | None = None
 
 
 class EmployeeOut(BaseModel):
@@ -81,6 +93,12 @@ class EmployeeOut(BaseModel):
     joining_date: date_type | None
     is_active: bool
     user_id: uuid.UUID | None  # linked login account, if any
+    #: This hotel's own extra fields — see `app/custom_fields`. A free-form
+    #: bag on purpose: the whole point is that we do not know what a given
+    #: restaurant keeps. Declared explicitly on Out as well, because
+    #: `response_model` SILENTLY DROPS anything it has not been told about —
+    #: a trap this project has now hit eight times.
+    custom: dict[str, object] = Field(default_factory=dict)
 
 
 class EmployeeAccountIn(BaseModel):
