@@ -1,0 +1,60 @@
+{
+  "samples": [
+    {
+      "at": "2026-09-14T14:16:32.069000+00:00",
+      "weighted": 16686955,
+      "raw": 146315134,
+      "requests": 233
+    },
+    {
+      "at": "2026-09-14T08:01:49.602000+00:00",
+      "weighted": 8264602,
+      "raw": 68539845,
+      "requests": 147
+    },
+    {
+      "at": "2026-09-10T13:26:38.616000+00:00",
+      "weighted": 5486927,
+      "raw": 47516743,
+      "requests": 255
+    },
+    {
+      "at": "2026-09-10T08:24:00.527000+00:00",
+      "weighted": 17550898,
+      "raw": 164248804,
+      "requests": 178
+    },
+    {
+      "at": "2026-09-09T16:30:35.654000+00:00",
+      "weighted": 12794797,
+      "raw": 81512188,
+      "requests": 98
+    },
+    {
+      "at": "2026-09-09T12:54:12.604000+00:00",
+      "weighted": 9300446,
+      "raw": 70818911,
+      "requests": 88
+    },
+    {
+      "at": "2026-09-09T06:05:00.697000+00:00",
+      "weighted": 8809078,
+      "raw": 68075775,
+      "requests": 95
+    },
+    {
+      "at": "2026-09-08T17:50:34.904000+00:00",
+      "weighted": 18907948,
+      "raw": 175658514,
+      "requests": 345
+    }
+  ],
+  "ceiling_weighted": 12794797,
+  "spread": [
+    5486927,
+    18907948
+  ],
+  "sample_count": 8,
+  "calibrated_at": "2026-09-14T16:04:52.627826+00:00",
+  "note": "Learned from this account's own 5-hour 429s only \u2014 weekly-limit errors excluded, and only records marked isApiErrorMessage. The MEDIAN is used: the lowest sample is more often an artefact than the real wall. Treat the percentage as a guide, not a guarantee."
+}

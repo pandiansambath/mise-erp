@@ -4180,6 +4180,10 @@ body.mise-voice-open .mise-launcher-in {
 .mise-chip[data-tone="red"]    { --chip: #f43f5e; --chip-ink: #be123c; }
 .mise-chip[data-tone="sky"]    { --chip: #0ea5e9; --chip-ink: #0369a1; }
 .mise-chip[data-tone="slate"]  { --chip: var(--color-fg-faint); }
+/* Plan tier — the third hue "health" hadn't used yet (green/amber/red are
+   taken), for the Control Room's ENTERPRISE chip. STARTER stays slate, PRO
+   takes sky, so all three plans are pixel-distinct — see fleet/page.tsx. */
+.mise-chip[data-tone="tier"]   { --chip: var(--color-brand-500); --chip-ink: var(--color-brand-700); }
 
 /* ── WHY THE RED CAME OUT MILD ────────────────────────────────────────────
    "why bro in so many place i can [see] this kinda mild red color, its
