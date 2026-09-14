@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "responsive": "playwright test e2e/responsive.spec.ts --project=desktop --reporter=list --workers=2"
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",

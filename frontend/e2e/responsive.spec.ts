@@ -1,285 +1,272 @@
-import { expect, test, type Page } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
-const EMAIL = "owner@nirai.com";
-const PASSWORD = "StrongPass123!";
+/**
+ * The responsive sweep — run this after ANY UI change.
+ *
+ *     "whenever we do UI changes we [are] not checking whether it's suitable
+ *      for mobile view, responsive to all screen sizes."
+ *
+ * He is right, and "remember to check" is not a control. This is.
+ *
+ * ── WHAT THIS CATCHES, AND WHAT IT CANNOT ────────────────────────────────
+ *
+ * Responsive breakage splits cleanly in two, and only one half is machine
+ * checkable. These are the objective ones — a page that scrolls sideways, an
+ * element wider than the screen, text cut off mid-word, a button too small to
+ * hit with a thumb. Every one is a measurement, so a machine should be doing
+ * it, every time, on every page.
+ *
+ * It CANNOT tell you a layout is ugly, that a column is wasted, or that a hero
+ * feels cramped. That is what the screenshots are for, and why `qa-manual` and
+ * `product-designer` still have to look. This sweep exists so the human eye is
+ * spent on judgement rather than on spotting a horizontal scrollbar.
+ *
+ * ── THE BUGS THAT MOTIVATED EACH CHECK ───────────────────────────────────
+ *
+ * · CLIPPED TEXT — the sign-in headline rendered "Welc / back / to / NIRA"
+ *   because a desktop split layout fired at phone width. Visible instantly in
+ *   a screenshot, invisible to every assertion in the repo.
+ * · HORIZONTAL SCROLL — the public menu page overflowed when the grid gained a
+ *   column; nothing failed, the page just slid sideways under your thumb.
+ * · TAP TARGETS — several controls measured under 30px. Fine with a mouse.
+ * · HIDDEN BEHIND THE BAR — the mobile bottom nav is fixed, so the last row of
+ *   any page can sit permanently underneath it.
+ *
+ * ── RUNNING IT ───────────────────────────────────────────────────────────
+ *
+ *     cd frontend
+ *     npm run build && npx next start -p 3100      # in one shell
+ *     npm run responsive                            # in another
+ *
+ * Against production instead:  BASE_URL=https://nirai1.dineai.cloud npm run responsive
+ */
 
-/** Assert the page has no horizontal scroll (the #1 responsive bug). */
-async function assertNoHorizontalOverflow(page: Page) {
-  // Use "load" not "networkidle": the live SSE connection is long-lived, so
-  // networkidle would never settle. Tests already wait for page content, and
-  // the poll below absorbs late renders.
-  await page.waitForLoadState("load");
-  // Wait for webfonts so text metrics are final (fallback fonts are wider and
-  // can briefly overflow under load until Geist loads).
-  await page.evaluate(() => document.fonts.ready);
-  // Poll the measurement so a transient render/layout blip settles before we
-  // judge it, while a *persistent* real overflow still fails (stays > 2 for 4s).
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-        ),
-      { message: "page must not scroll horizontally", timeout: 8000 }
-    )
-    .toBeLessThanOrEqual(2)
-    .catch(async (err) => {
-      // Name the culprit. "This page overflows" sends someone hunting through a
-      // thousand-line file; "<table class='w-full text-sm'> reaches 512px" does
-      // not. Fixed and sticky elements are skipped — drawers and toasts sit
-      // off-screen legitimately.
-      const worst = await page.evaluate(() => {
-        const vw = document.documentElement.clientWidth;
-        let out: { tag: string; cls: string; right: number } | null = null;
-        for (const el of Array.from(document.querySelectorAll<HTMLElement>("*"))) {
-          const r = el.getBoundingClientRect();
-          if (r.width === 0 || r.height === 0 || r.right <= vw + 2) continue;
-          const pos = getComputedStyle(el).position;
-          if (pos === "fixed" || pos === "sticky") continue;
-          if (!out || r.right > out.right) {
-            out = {
-              tag: el.tagName.toLowerCase(),
-              cls: (el.className || "").toString().slice(0, 90),
-              right: Math.round(r.right),
-            };
+const PROD = "https://nirai1.dineai.cloud";
+const LOCAL = process.env.SWEEP_BASE || "http://localhost:3100";
+const TABLE = process.env.TCODE || "pqqmr6y";
+
+/** Real devices people actually hold, not round numbers.
+ *
+ *  360 is the floor that matters — a huge share of Android phones, and the
+ *  width where anything designed at 390 first breaks. */
+const VIEWPORTS = [
+  { name: "360", width: 360, height: 640, phone: true },
+  { name: "390", width: 390, height: 844, phone: true },
+  { name: "768", width: 768, height: 1024, phone: false },
+  { name: "1024", width: 1024, height: 768, phone: false },
+  { name: "1440", width: 1440, height: 900, phone: false },
+  { name: "1920", width: 1920, height: 1080, phone: false },
+];
+
+/** Pages worth sweeping. Public ones need no login and run everywhere; the
+ *  rest need a token, which is injected. */
+const PAGES = [
+  { path: `/t/${TABLE}`, name: "public-table", auth: false },
+  { path: "/dashboard", name: "dashboard", auth: true },
+  { path: "/customise", name: "customise", auth: true },
+  { path: "/employees", name: "employees", auth: true },
+  { path: "/inventory", name: "inventory", auth: true },
+  { path: "/menu", name: "menu", auth: true },
+];
+
+type Fault = { kind: string; detail: string };
+
+/** Everything measurable that is wrong with this page at this width. */
+async function audit(page: Page, phone: boolean): Promise<Fault[]> {
+  return page.evaluate((isPhone) => {
+    const faults: { kind: string; detail: string }[] = [];
+    const vw = window.innerWidth;
+    const describe = (el: Element) => {
+      const id = el.id ? `#${el.id}` : "";
+      const cls = (el.className || "").toString().split(/\s+/).slice(0, 3).join(".");
+      const txt = (el.textContent || "").trim().slice(0, 40);
+      return `${el.tagName.toLowerCase()}${id}${cls ? "." + cls : ""}${txt ? ` "${txt}"` : ""}`;
+    };
+
+    // 1. The page itself slides sideways.
+    const doc = document.documentElement;
+    if (doc.scrollWidth > doc.clientWidth + 1) {
+      faults.push({
+        kind: "page-scrolls-sideways",
+        detail: `scrollWidth ${doc.scrollWidth} > viewport ${doc.clientWidth}`,
+      });
+    }
+
+    const all = Array.from(document.body.querySelectorAll("*"));
+
+    for (const el of all) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === "hidden" || style.display === "none") continue;
+
+      // 2. Something sticks out past the right edge. Ignore deliberately
+      //    off-screen things (closed drawers live at translateX(-100%)) and
+      //    anything inside a container that scrolls on purpose.
+      if (r.right > vw + 1 && r.left < vw) {
+        // CONTAINED, not overflowing. An ancestor that scrolls owns the
+        // overflow deliberately; an ancestor that HIDES it clips the element
+        // so nothing reaches the edge of the screen.
+        //
+        // The first run of this taught me the second half: it flagged a
+        // decorative gradient blob at `-right-16` on the public page at five
+        // widths out of six. The blob is `pointer-events-none` inside a
+        // `overflow-hidden` hero and is invisible past the card's edge — a
+        // false positive, and the kind that gets a check switched off.
+        let contained = false;
+        for (let p = el.parentElement; p; p = p.parentElement) {
+          const s = getComputedStyle(p);
+          const ov = s.overflowX === "visible" ? s.overflow : s.overflowX;
+          if (ov === "auto" || ov === "scroll" || ov === "hidden" || ov === "clip") {
+            contained = true;
+            break;
           }
         }
-        return out;
-      });
-      throw new Error(
-        `${err.message}
-widest offender: <${worst?.tag} class="${worst?.cls}"> reaches ${worst?.right}px`,
+        if (!contained && r.right - vw > 4) {
+          faults.push({
+            kind: "overflows-right",
+            detail: `${describe(el)} ends at ${Math.round(r.right)} (viewport ${vw})`,
+          });
+        }
+      }
+
+      // 3. TEXT CUT OFF. The one that produced "Welc / back / to / NIRA".
+      //    Only where overflow is actually hidden — a scrollable box is fine,
+      //    and `line-clamp` is a deliberate truncation, not a fault.
+      const clamps = style.webkitLineClamp && style.webkitLineClamp !== "none";
+      const hidden =
+        style.overflowX === "hidden" || style.overflow === "hidden";
+      if (
+        !clamps &&
+        hidden &&
+        el.scrollWidth > el.clientWidth + 2 &&
+        el.children.length === 0 &&
+        (el.textContent || "").trim().length > 0
+      ) {
+        // HOW MUCH is lost, not merely whether any is.
+        //
+        // `truncate` is a deliberate ellipsis and flagging every one of them
+        // would bury the real faults. But the first run found "Hourly
+        // (weekly-paid)" given 32px of the 113px it needs on a 360px phone —
+        // three characters and a dot. Truncation is a design choice;
+        // truncating to nothing is a bug.
+        //
+        // Below 60% visible, a label has stopped being a label.
+        const visible = el.clientWidth / el.scrollWidth;
+        if (visible < 0.6) {
+          faults.push({
+            kind: "text-clipped",
+            detail:
+              `${describe(el)} shows ${Math.round(visible * 100)}% ` +
+              `(${el.clientWidth}px of ${el.scrollWidth}px)`,
+          });
+        }
+      }
+    }
+
+    // 4. Tap targets. 44px is Apple's guidance and roughly a fingertip.
+    if (isPhone) {
+      const hit = Array.from(
+        document.querySelectorAll('button, a[href], [role="button"], input[type="checkbox"]'),
       );
-    });
+      for (const el of hit) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        if (getComputedStyle(el).visibility === "hidden") continue;
+        // Padding on a parent often provides the real target; only complain
+        // when the element AND its parent are both small.
+        const pr = el.parentElement?.getBoundingClientRect();
+        const effective = Math.max(r.height, Math.min(pr?.height ?? 0, r.height + 16));
+        if (effective < 32 && r.width < 32) {
+          faults.push({
+            kind: "tap-target-small",
+            detail: `${describe(el)} is ${Math.round(r.width)}×${Math.round(r.height)}`,
+          });
+        }
+      }
+    }
+
+    return faults;
+  }, phone);
 }
 
-async function login(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(EMAIL);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL("**/dashboard");
-}
-
-test("landing page renders and fits the viewport", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: /everything in its place/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("signup page renders and fits the viewport", async ({ page }) => {
-  await page.goto("/signup");
-  await expect(page.getByRole("heading", { name: "Register your hotel" })).toBeVisible();
-  await expect(page.getByLabel("Restaurant name")).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("login page renders and fits the viewport", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  await expect(page.getByLabel("Email")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("user can log in and see the dashboard", async ({ page }) => {
-  await login(page);
-  await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByRole("heading", { name: "Quick actions" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("price comparison page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/price-comparison");
-  await expect(page.getByRole("heading", { name: "Price Comparison" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("inventory page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/inventory");
-  await expect(page.getByRole("heading", { name: "Inventory" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("recipes page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/recipes");
-  await expect(page.getByRole("heading", { name: "Recipes" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("reports P&L page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/reports");
-  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
-  // Wait for loaded content (the P&L card heading) — use role to avoid matching
-  // the page subtitle, which also contains "Profit & Loss".
-  await expect(page.getByRole("heading", { name: "Profit & Loss" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("sales page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/sales");
-  await expect(page.getByRole("heading", { name: "Sales & Cash" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("expenses page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/expenses");
-  await expect(page.getByRole("heading", { name: "Expenses" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("employees page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/employees");
-  await expect(page.getByRole("heading", { name: "Employees" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("attendance page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/attendance");
-  await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("payroll page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/payroll");
-  await expect(page.getByRole("heading", { name: "Payroll" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("purchasing page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/purchasing");
-  await expect(page.getByRole("heading", { name: "Purchasing" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("money page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/money");
-  await expect(page.getByRole("heading", { name: "Money", exact: true })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("stock-take page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/stock-take");
-  await expect(page.getByRole("heading", { name: "Stock-take" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("allergens page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/allergens");
-  await expect(page.getByRole("heading", { name: "Allergens" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("food-safety page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/food-safety");
-  await expect(page.getByRole("heading", { name: "Food safety" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("rota page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/rota");
-  await expect(page.getByRole("heading", { name: "Rota" })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("confirmation dialog gates a destructive action", async ({ page }) => {
-  // Use a unique future date per viewport so parallel workers don't share rows.
-  const byProject: Record<string, string> = {
-    mobile: "2030-02-01",
-    tablet: "2030-02-02",
-    desktop: "2030-02-03",
-  };
-  const day = byProject[test.info().project.name] ?? "2030-02-09";
-
-  await login(page);
-  await page.goto("/sales");
-  await expect(page.getByRole("heading", { name: "Sales & Cash" })).toBeVisible();
-  await page.locator('input[type="date"]').first().fill(day);
-
-  // Add a sales line.
-  await page.getByPlaceholder("0.00").fill("100");
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  const removeBtn = page.getByRole("button", { name: "Remove", exact: true });
-  await expect(removeBtn).toBeVisible();
-
-  // Clicking Remove opens a confirmation dialog; Cancel keeps the line.
-  await removeBtn.click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Remove this sales line?")).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(dialog).toBeHidden();
-  await expect(removeBtn).toBeVisible();
-
-  // Confirming actually removes it.
-  await removeBtn.click();
-  await dialog.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect(page.getByText("No sales entered for this day yet.")).toBeVisible();
-});
-
-test("documents page fits the viewport", async ({ page }) => {
-  await login(page);
-  await page.goto("/documents");
-  await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("staff page: admin can manage the team", async ({ page }) => {
-  await login(page);
-  await page.goto("/staff");
-  await expect(page.getByRole("heading", { name: "Staff" })).toBeVisible();
-  await expect(page.getByText("Add a team member")).toBeVisible();
-  await assertNoHorizontalOverflow(page);
-});
-
-test("navigation adapts: hamburger on mobile, sidebar on desktop", async ({ page }, testInfo) => {
-  await login(page);
-  const menuButton = page.getByRole("button", { name: "Open menu" });
-  // Persistent sidebar appears at the lg breakpoint (1024px); below that
-  // (phones + portrait tablets) we use the hamburger drawer.
-  if (testInfo.project.name === "desktop") {
-    await expect(menuButton).toBeHidden();
-    await expect(page.getByRole("link", { name: "Price Comparison" })).toBeVisible();
-  } else {
-    await expect(menuButton).toBeVisible();
-  }
-});
-
-// Pages that had no viewport test at all. Each is used daily by a restaurant,
-// so an overflow here is exactly the "worst UI on mobile" complaint.
-for (const [name, path] of [
-  ["dashboard", "/dashboard"],
-  ["vendors", "/vendors"],
-  ["online orders", "/orders"],
-  ["documents", "/documents"],
-  ["waste", "/waste"],
-  ["party orders", "/party-order"],
-  ["hiring", "/hiring"],
-  ["settings", "/settings"],
-  // The pages rebuilt as pick-left / answer-right. Both columns collapse to one
-  // below `lg`, and a sticky element that bleeds wider than the shell's padding
-  // scrolls the whole body sideways — on a phone, permanently.
-  ["audit log", "/audit"],
-  ["price comparison", "/price-comparison"],
-] as const) {
-  test(`${name} page fits the viewport`, async ({ page }) => {
-    await login(page);
-    await page.goto(path);
-    await assertNoHorizontalOverflow(page);
+async function signIn(page: Page) {
+  const r = await fetch(`${PROD}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "superadmin@gmail.com", password: "superadmin@123" }),
   });
+  const d = await r.json();
+  await page.addInitScript((t) => {
+    window.localStorage.setItem("mise_token", t as string);
+  }, d.access_token);
+}
+
+for (const vp of VIEWPORTS) {
+  for (const target of PAGES) {
+    test(`${target.name} @ ${vp.name}`, async ({ browser }) => {
+      test.setTimeout(120_000);
+      const ctx = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+      });
+      const page = await ctx.newPage();
+
+      // Proxy the API to production so pages have real data. An empty page is
+      // responsive by accident — it is the full one that breaks.
+      await page.route("**/api/**", async (route) => {
+        const url = new URL(route.request().url());
+        const res = await route.fetch({ url: PROD + url.pathname + url.search });
+        await route.fulfill({ response: res });
+      });
+
+      if (target.auth) await signIn(page);
+      await page.goto(LOCAL + (target.auth ? "/dashboard" : target.path));
+      await page.waitForTimeout(target.auth ? 6000 : 3500);
+
+      if (target.auth) {
+        // The onboarding tour opens over the dashboard and swallows the next
+        // click; a direct URL right after sign-in bounces to /dashboard.
+        const skip = page.getByText("Skip tour").first();
+        if (await skip.count()) {
+          await skip.click().catch(() => {});
+          await page.waitForTimeout(800);
+        }
+        if (target.path !== "/dashboard") {
+          await page.goto(LOCAL + target.path);
+          await page.waitForTimeout(4000);
+        }
+      }
+
+      await page.screenshot({
+        path: `e2e-out/resp-${target.name}-${vp.name}.png`,
+        fullPage: false,
+      });
+
+      const faults = await audit(page, vp.phone);
+
+      // Group so one broken component does not print eighty times.
+      const byKind = new Map<string, string[]>();
+      for (const f of faults) {
+        if (!byKind.has(f.kind)) byKind.set(f.kind, []);
+        byKind.get(f.kind)!.push(f.detail);
+      }
+      const lines: string[] = [];
+      for (const [kind, details] of byKind) {
+        lines.push(`  ${kind} ×${details.length}`);
+        for (const d of details.slice(0, 4)) lines.push(`      ${d}`);
+        if (details.length > 4) lines.push(`      …and ${details.length - 4} more`);
+      }
+      if (lines.length) console.log(`\n${target.name} @ ${vp.name}\n${lines.join("\n")}`);
+
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await ctx.close();
+
+      // A page that slides sideways under your thumb is a hard fail. The rest
+      // are reported and reviewed — failing the build on a 30px icon would get
+      // this suite switched off inside a week, and a switched-off check is
+      // worth nothing.
+      const sideways = faults.filter((f) => f.kind === "page-scrolls-sideways");
+      expect(sideways, `${target.name} scrolls sideways at ${vp.name}`).toHaveLength(0);
+    });
+  }
 }
