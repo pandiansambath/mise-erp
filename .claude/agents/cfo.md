@@ -1,6 +1,6 @@
 ---
 name: cfo
-description: Owns money: AWS spend, the credit runway, pricing and unit economics. Use for cost analysis, bill investigations, and whether a technical choice is affordable.
+description: "Owns money: AWS spend, the credit runway, pricing and unit economics. Use for cost analysis, bill investigations, and whether a technical choice is affordable."
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell
 ---

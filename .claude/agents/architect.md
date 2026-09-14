@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Designs one feature before anybody writes it: data model, endpoints, states, edge cases, what could go wrong. Use before starting anything non-trivial.
+description: "Designs one feature before anybody writes it: data model, endpoints, states, edge cases, what could go wrong. Use before starting anything non-trivial."
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell
 ---

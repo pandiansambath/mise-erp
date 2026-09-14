@@ -1,6 +1,6 @@
 ---
 name: backend-engineer
-description: Builds and fixes the FastAPI/SQLAlchemy backend: endpoints, services, models, Alembic migrations and pytest tests. Use for any backend change.
+description: "Builds and fixes the FastAPI/SQLAlchemy backend: endpoints, services, models, Alembic migrations and pytest tests. Use for any backend change."
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 ---

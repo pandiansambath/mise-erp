@@ -1,6 +1,6 @@
 ---
 name: ceo
-description: The single point of contact for any substantial request. Takes a brief, decides what it really means, delegates to the right lead, and reports back in one honest summary. Use when a task spans more than one discipline.
+description: "The single point of contact for any substantial request. Takes a brief, decides what it really means, delegates to the right lead, and reports back in one honest summary. Use when a task spans more than one discipline."
 model: opus
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell, Agent, TodoWrite
 ---

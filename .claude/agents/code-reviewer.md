@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews a diff for correctness before it ships. Use after any non-trivial change and before deploying anything risky.
+description: "Reviews a diff for correctness before it ships. Use after any non-trivial change and before deploying anything risky."
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell
 ---

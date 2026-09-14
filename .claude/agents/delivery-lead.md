@@ -1,6 +1,6 @@
 ---
 name: delivery-lead
-description: The TPM. Owns the checklist, knows what is genuinely pending versus claimed, sequences work and chases it to done. Use for 'what is left' and for breaking a large request into ordered work.
+description: "The TPM. Owns the checklist, knows what is genuinely pending versus claimed, sequences work and chases it to done. Use for 'what is left' and for breaking a large request into ordered work."
 model: opus
 tools: Read, Grep, Glob, Bash, PowerShell, Write, Edit, Agent, TodoWrite
 ---

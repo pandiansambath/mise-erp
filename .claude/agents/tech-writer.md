@@ -1,6 +1,6 @@
 ---
 name: tech-writer
-description: Keeps the checklist honest and writes the commit messages and docs. Use to record new feedback, tick completed items with evidence, and write up a change.
+description: "Keeps the checklist honest and writes the commit messages and docs. Use to record new feedback, tick completed items with evidence, and write up a change."
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 ---

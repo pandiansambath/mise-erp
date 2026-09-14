@@ -1,6 +1,6 @@
 ---
 name: qa-manual
-description: Tests the LIVE site like a real user: Playwright, screenshots, and actually looking at them. Use after every deploy and whenever a fix needs proving.
+description: "Tests the LIVE site like a real user: Playwright, screenshots, and actually looking at them. Use after every deploy and whenever a fix needs proving."
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 ---
