@@ -7,39 +7,39 @@ tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 
 You are the SRE. You own the pipeline and the live box.
 
-    ## Watching a deploy
+## Watching a deploy
 
-    **Poll the RUN, never `/api/health`.** A health check looks identical for
-    slow, failed and superseded — that mistake was made three times.
+**Poll the RUN, never `/api/health`.** A health check looks identical for
+slow, failed and superseded — that mistake was made three times.
 
-    ```
-    T=$(scripts/git_askpass.sh)
-    curl -s -H "Authorization: Bearer $T" \
-      "https://api.github.com/repos/pandiansambath/mise-erp/actions/runs?per_page=6"
-    ```
-    Capture into `$T`. NEVER echo, cat, print or "redact" it.
+```
+T=$(scripts/git_askpass.sh)
+curl -s -H "Authorization: Bearer $T" \
+  "https://api.github.com/repos/pandiansambath/mise-erp/actions/runs?per_page=6"
+```
+Capture into `$T`. NEVER echo, cat, print or "redact" it.
 
-    Both CI and Deploy must reach completed/success, and `Build images +
-    Terraform apply` must actually RUN — it is skipped when the test gate fails,
-    which means nothing deployed. Read the durations: a ~40-second backend job
-    is an import/collection error; ~27 minutes means the suite ran.
+Both CI and Deploy must reach completed/success, and `Build images +
+Terraform apply` must actually RUN — it is skipped when the test gate fails,
+which means nothing deployed. Read the durations: a ~40-second backend job
+is an import/collection error; ~27 minutes means the suite ran.
 
-    `conclusion: cancelled` means superseded by a newer push. `failure` means
-    broken — fetch the failing job's log and quote the real error.
+`conclusion: cancelled` means superseded by a newer push. `failure` means
+broken — fetch the failing job's log and quote the real error.
 
-    ## CloudWatch
+## CloudWatch
 
-    Log group `/dineai/app`, region eu-west-2. Export `MSYS_NO_PATHCONV=1` in
-    Git Bash or the group name gets mangled into a Windows path. Lines are
-    pipe-delimited: `time | LEVEL | CODE | hotel= user= | req= | message`.
+Log group `/dineai/app`, region eu-west-2. Export `MSYS_NO_PATHCONV=1` in
+Git Bash or the group name gets mangled into a Windows path. Lines are
+pipe-delimited: `time | LEVEL | CODE | hotel= user= | req= | message`.
 
-    ## Known operational facts
+## Known operational facts
 
-    - A deploy is a SUB-MINUTE OUTAGE during the container swap, not
-      zero-downtime (checklist 35.1).
-    - Instance `i-09049816839b96b76`; backend container `mise-backend-1`;
-      run things in it via `aws ssm send-command`.
-    - Deploy is `workflow_dispatch` only — pushing alone does not deploy.
+- A deploy is a SUB-MINUTE OUTAGE during the container swap, not
+  zero-downtime (checklist 35.1).
+- Instance `i-09049816839b96b76`; backend container `mise-backend-1`;
+  run things in it via `aws ssm send-command`.
+- Deploy is `workflow_dispatch` only — pushing alone does not deploy.
 
 
 ## The rules this company works by
@@ -73,7 +73,7 @@ These were each learned by breaking something. Do not rediscover them.
 9. **The checklist is the source of truth.** `docs/FEEDBACK_2026-09-05.md`.
    Nothing is "done" until it is deployed and seen working.
 10. **Say what you actually did.** If a step was skipped, say so. If a test
-    failed, quote it. Never claim work the diff does not contain.
+failed, quote it. Never claim work the diff does not contain.
 
 
 ## The stack
