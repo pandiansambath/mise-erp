@@ -1,370 +1,189 @@
 #!/usr/bin/env python3
-"""How much of the rolling 5-hour Claude budget is spent.
+"""Where we are in the current 5-hour Claude window.
 
-    "there is 2 limit, one is 5hr limit another one is weekly limit. You check
-     5hr limit. If it reaches 95% then inform all agents [that] we are nearing
-     token limit."
+    "if it reaches 95% then inform all agents [that] we are nearing token
+     limit... whoever is working on any task, try to complete."
 
-WHY THIS READS TRANSCRIPTS RATHER THAN ASKING
+WHY THERE IS NO PERCENTAGE HERE
 
-There is no API, file or command that reports the remaining allowance. The real
-number arrives in HTTP response headers that neither the main session nor a
-subagent can see, and the only other signal is the 429 itself — which is the
-moment it is already too late to land safely.
+I built one first. It was a lie, and the evidence that it was a lie is the most
+useful thing in this file.
 
-What IS on disk is every request's token usage with a timestamp, in the session
-transcripts under ~/.claude/projects/*/. Summing the last five hours of those
-is a measurement of the same thing the limiter is counting.
+The plan was: sum the tokens in the window, divide by a ceiling learned from
+past 429s. The tokens are exact — they are the numbers the API returned. The
+ceiling is the problem. This account's own history says:
 
-WHAT IS HONEST ABOUT THIS, AND WHAT IS NOT
+    429 at 08:01 today — that window had reached $41.87
+    429 at 14:16 today — that window had reached $74.20
 
-Honest: the token counts are exact, they are the numbers the API itself
-returned, and the five-hour window is the real window.
+Nearly double, same account, same day. So the limit is not cost, and it is not
+a plain token count either: it weights models differently (opus costs far more
+against it than sonnet) and none of that weighting is published. "73% used"
+built on top of that is a number with a decimal point and no meaning, which is
+worse than no number — people plan around decimal points.
 
-Not exact: the CEILING. Nobody publishes it, it varies by plan, and cache reads
-almost certainly do not count the same as fresh input. So the percentage is
-only as good as the ceiling it is measured against — which is why `--calibrate`
-exists. It finds the moments this account actually hit a 429 and reports what
-the five-hour total was at each, so the ceiling is learned from this account's
-own history rather than assumed.
+WHAT IS ACTUALLY KNOWABLE, AND IS REPORTED
 
-Until it has been calibrated at least once, treat the percentage as a direction
-of travel, not a guarantee. Say so when reporting it.
+  · The window's real boundaries. `ccusage blocks` models the same 5-hour
+    blocks, and its start time matched the reset named in a live 429 exactly.
+  · Everything spent so far — tokens by kind, and cost, which already weights
+    cache reads by price rather than by a factor I invented.
+  · The burn rate, and so what this window is on course to reach.
+  · How that compares with the windows where this account has actually been cut
+    off. Not a percentage — a position in a distribution, which is what the
+    evidence honestly supports.
 
-Usage:
-    python scripts/token_budget.py                 # where we are now
-    python scripts/token_budget.py --calibrate     # learn the ceiling from past 429s
-    python scripts/token_budget.py --json          # for an agent to parse
+CHECKED RATHER THAN ASSUMED — things that do not work
+
+  · `~/.claude/stats-cache.json` — does not exist. Widely repeated online; it
+    is not on this machine, and nothing else in ~/.claude carries usage.
+  · `/usage` — interactive, for a human to read; no stdout to parse.
+  · `claude-code-stats` — needs a Rust toolchain, not installed here.
+  · Response headers hold the real figure, and neither this session nor a
+    subagent can see them.
+
+Needs `npx ccusage` (fetched on demand, nothing to install).
+
+    python scripts/token_budget.py
+    python scripts/token_budget.py --json
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
-import pathlib
-import re
+import subprocess
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-PROJECTS = pathlib.Path.home() / ".claude" / "projects"
-CALIBRATION = pathlib.Path(__file__).resolve().parent.parent / "docs" / "token_ceiling.json"
-WINDOW = timedelta(hours=5)
-
-#: Read this much from the end of each transcript before giving up on finding
-#: older-than-window lines. Transcripts reach 800 MB, so reading whole files is
-#: not an option — and everything we want is at the end.
-TAIL_BYTES = 120 * 1024 * 1024
-
-
-def _tail_lines(path: pathlib.Path, budget: int = TAIL_BYTES):
-    """Yield lines from the END of a file backwards, newest first."""
-    size = path.stat().st_size
-    start = max(0, size - budget)
-    with path.open("rb") as fh:
-        fh.seek(start)
-        if start:
-            fh.readline()  # discard the partial line we landed in
-        chunk = fh.read()
-    for raw in reversed(chunk.split(b"\n")):
-        if raw.strip():
-            yield raw
+#: Windows where this account was actually cut off, and what they had reached.
+#: Measured from real `isApiErrorMessage` 429s naming the 5-HOUR limit — weekly
+#: ones are excluded, because a weekly 429 can fire while the 5-hour window is
+#: nearly empty and would drag this estimate to a third of its true value.
+#:
+#: The SPREAD is the finding. Add to it as more are observed; never average it
+#: away into a single reassuring figure.
+KNOWN_CUTOFFS_USD = [41.87, 74.20]
 
 
-def _when(d: dict) -> datetime | None:
-    for key in ("timestamp", "client_timestamp"):
-        v = d.get(key)
-        if isinstance(v, str):
-            try:
-                return datetime.fromisoformat(v.replace("Z", "+00:00"))
-            except ValueError:
-                pass
-    return None
-
-
-def collect(since: datetime, until: datetime | None = None) -> dict:
-    """Every token recorded between `since` and `until`, across all projects.
-
-    `until` is not optional decoration. Without it, calibrating against a 429
-    from six days ago summed every token from then until NOW — so the older the
-    sample, the bigger it looked, and the "ceiling" rose monotonically with age
-    (21M for today's, 110M for one from six days back). A five-fold spread that
-    was pure measurement error.
-    """
-    totals = {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 0,
-    }
-    requests = 0
-    oldest_seen = None
-    files = sorted(PROJECTS.glob("*/*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
-
-    for path in files:
-        # A transcript last written before the window opened cannot contain
-        # anything inside it.
-        if datetime.fromtimestamp(path.stat().st_mtime, UTC) < since:
-            continue
-        stale = 0
-        for raw in _tail_lines(path):
-            try:
-                d = json.loads(raw)
-            except Exception:
-                continue
-            ts = _when(d)
-            if ts is None:
-                continue
-            if until is not None and ts > until:
-                continue
-            if ts < since:
-                # Lines are broadly chronological; a run of old ones means we
-                # have walked back past the window in this file.
-                stale += 1
-                if stale > 400:
-                    break
-                continue
-            stale = 0
-            usage = (d.get("message") or {}).get("usage")
-            if not isinstance(usage, dict):
-                continue
-            requests += 1
-            if oldest_seen is None or ts < oldest_seen:
-                oldest_seen = ts
-            for k in totals:
-                v = usage.get(k)
-                if isinstance(v, int):
-                    totals[k] += v
-
-    totals["requests"] = requests
-    totals["oldest_in_window"] = oldest_seen.isoformat() if oldest_seen else None
-    # Cache reads are an order of magnitude cheaper than fresh input, so a raw
-    # sum wildly overstates pressure on a session like this one, which re-reads
-    # a huge cached context every turn. Weighted at a tenth — the published
-    # price ratio — and reported alongside the raw figure so nobody has to
-    # trust the weighting blind.
-    totals["weighted"] = (
-        totals["input_tokens"]
-        + totals["output_tokens"]
-        + totals["cache_creation_input_tokens"]
-        + totals["cache_read_input_tokens"] // 10
+def ccusage(*args: str) -> dict:
+    out = subprocess.run(
+        ["npx", "-y", "ccusage@latest", *args, "--json"],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        shell=True,
     )
-    totals["raw"] = (
-        totals["input_tokens"]
-        + totals["output_tokens"]
-        + totals["cache_creation_input_tokens"]
-        + totals["cache_read_input_tokens"]
-    )
-    return totals
+    if out.returncode != 0:
+        raise RuntimeError(f"ccusage failed: {out.stderr.strip()[:300]}")
+    return json.loads(out.stdout)
 
 
-def load_ceiling() -> dict | None:
-    if CALIBRATION.exists():
-        try:
-            return json.loads(CALIBRATION.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-    return None
+def active_block() -> dict | None:
+    blocks = ccusage("blocks", "--active").get("blocks", [])
+    return next((b for b in blocks if b.get("isActive")), None)
 
 
-def calibrate() -> dict:
-    """Find real 5-hour 429s and record what the window total was at each.
+def assess(block: dict) -> dict:
+    cost = block.get("costUSD", 0.0)
+    proj = block.get("projection") or {}
+    burn = block.get("burnRate") or {}
+    tc = block.get("tokenCounts") or {}
 
-    TWO THINGS THE FIRST VERSION GOT WRONG, both caught by running it.
+    low, high = min(KNOWN_CUTOFFS_USD), max(KNOWN_CUTOFFS_USD)
 
-    1. IT MATCHED MY OWN PROSE. The regex looked for "session limit" anywhere
-       in a line, which hits the notification text, the queued user message,
-       and every sentence I have written ABOUT rate limits. 15 genuine errors,
-       33 false positives. A real API failure is marked
-       `isApiErrorMessage: true` on an assistant record — that is the only
-       thing worth matching.
+    # A BAND, not a percentage. "Past the cheapest window that has ever been cut
+    # off" is a claim the evidence supports; "82% used" is not.
+    if cost >= high:
+        state = "CRITICAL"
+        why = (
+            f"${cost:.2f} is past the most expensive window that has ever been "
+            f"cut off (${high:.2f}). It could stop at any point."
+        )
+    elif cost >= low:
+        state = "WARN"
+        why = (
+            f"${cost:.2f} is inside the range where this account has been cut "
+            f"off before (${low:.2f}–${high:.2f})."
+        )
+    elif cost >= low * 0.7:
+        state = "WATCH"
+        why = (
+            f"${cost:.2f} is approaching the cheapest window ever cut off "
+            f"(${low:.2f})."
+        )
+    else:
+        state = "OK"
+        why = f"${cost:.2f}; the earliest cut-off on record was ${low:.2f}."
 
-    2. IT MIXED UP THE TWO LIMITS. There is a 5-hour limit and a weekly one,
-       and they produce different messages ("session limit · resets 4:10pm"
-       versus "weekly limit · resets Sep 14, 3:30am"). A weekly 429 can fire
-       when the 5-hour window is nearly empty, so including those dragged the
-       learned ceiling down to a third of its real value — which is how the
-       tool came to report 100% two minutes after a reset.
+    projected = proj.get("totalCost")
+    if projected and projected >= low and state in ("OK", "WATCH"):
+        why += (
+            f" At the current rate this window is on course for ${projected:.2f}, "
+            f"which would reach it."
+        )
 
-    The median is used rather than the minimum. Samples vary with the mix of
-    models and how much of the context was cached, and the lowest sample is the
-    most likely to be an artefact rather than the true wall.
-    """
-    hits: list[dict] = []
-    files = sorted(PROJECTS.glob("*/*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
-    for path in files[:6]:
-        for raw in _tail_lines(path):
-            if b"session limit" not in raw:
-                continue
-            # The WEEKLY limit is a different wall; its 429 says nothing useful
-            # about the 5-hour window.
-            if b"weekly limit" in raw:
-                continue
-            try:
-                d = json.loads(raw)
-            except Exception:
-                continue
-            # Only a genuine API failure, not a mention of one.
-            if d.get("isApiErrorMessage") is not True:
-                continue
-            ts = _when(d)
-            if ts is None:
-                continue
-            if any(abs((ts - h["at_dt"]).total_seconds()) < 1800 for h in hits):
-                continue  # one incident, several retries
-            spend = collect(ts - WINDOW, until=ts)
-            hits.append(
-                {
-                    "at_dt": ts,
-                    "at": ts.isoformat(),
-                    "weighted": spend["weighted"],
-                    "raw": spend["raw"],
-                    "requests": spend["requests"],
-                }
-            )
-            if len(hits) >= 8:
-                break
-        if len(hits) >= 8:
-            break
-
-    for h in hits:
-        h.pop("at_dt", None)
-    weights = sorted(h["weighted"] for h in hits)
-    median = weights[len(weights) // 2] if weights else None
-    out = {
-        "samples": hits,
-        "ceiling_weighted": median,
-        "spread": [weights[0], weights[-1]] if weights else None,
-        "sample_count": len(hits),
-        "calibrated_at": datetime.now(UTC).isoformat(),
-        "note": (
-            "Learned from this account's own 5-hour 429s only — weekly-limit "
-            "errors excluded, and only records marked isApiErrorMessage. The "
-            "MEDIAN is used: the lowest sample is more often an artefact than "
-            "the real wall. Treat the percentage as a guide, not a guarantee."
+    return {
+        "as_of": datetime.now(UTC).isoformat(),
+        "window_start": block.get("startTime"),
+        "window_end": block.get("endTime"),
+        "minutes_left": proj.get("remainingMinutes"),
+        "cost_usd": round(cost, 2),
+        "projected_cost_usd": round(projected, 2) if projected else None,
+        "total_tokens": block.get("totalTokens"),
+        "input": tc.get("inputTokens"),
+        "output": tc.get("outputTokens"),
+        "cache_write": tc.get("cacheCreationInputTokens"),
+        "cache_read": tc.get("cacheReadInputTokens"),
+        "cost_per_hour": round(burn.get("costPerHour", 0), 2),
+        "models": block.get("models", []),
+        "known_cutoffs_usd": KNOWN_CUTOFFS_USD,
+        "state": state,
+        "reason": why,
+        "caveat": (
+            "There is no readable limit. This is a position relative to windows "
+            "where this account was actually cut off — not a percentage of a "
+            "known allowance. Quote it that way."
         ),
     }
-    CALIBRATION.parent.mkdir(parents=True, exist_ok=True)
-    CALIBRATION.write_text(json.dumps(out, indent=2), encoding="utf-8")
-    return out
-
-
-def last_reset() -> datetime | None:
-    """When the 5-hour window most recently started.
-
-    The limit does not slide — it resets at a stated time ("resets 9pm"), and
-    everything before that no longer counts. A plain rolling five-hour sum
-    therefore OVER-counts right after a reset, which is exactly how this tool
-    first reported 100% used two minutes after the limit had cleared.
-
-    Read from the newest genuine 429: if it names a reset time that has since
-    passed, the window began there.
-    """
-    files = sorted(PROJECTS.glob("*/*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
-    now = datetime.now(UTC)
-    for path in files[:3]:
-        for raw in _tail_lines(path, budget=40 * 1024 * 1024):
-            if b"session limit" not in raw or b"weekly limit" in raw:
-                continue
-            try:
-                d = json.loads(raw)
-            except Exception:
-                continue
-            if d.get("isApiErrorMessage") is not True:
-                continue
-            ts = _when(d)
-            if ts is None:
-                continue
-            # "resets 9pm (Asia/Kolkata)" / "resets 4:10pm"
-            m = re.search(rb"resets\s+(\d{1,2})(?::(\d{2}))?\s*([ap]m)", raw, re.I)
-            if not m:
-                return ts
-            hour = int(m.group(1)) % 12
-            minute = int(m.group(2) or 0)
-            if m.group(3).lower() == b"pm":
-                hour += 12
-            # The stated time is in the user's zone; the error itself gives us
-            # the UTC anchor, so search forward from it for that wall clock.
-            for add in range(0, 24):
-                cand = (ts + timedelta(hours=add)).replace(minute=minute, second=0, microsecond=0)
-                for off in (5.5, 0):  # Asia/Kolkata, then UTC
-                    want = (hour - off) % 24
-                    if cand.hour == int(want) and cand > ts:
-                        if cand <= now:
-                            return cand
-            return ts
-    return None
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--calibrate", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
-    if args.calibrate:
-        out = calibrate()
-        print(json.dumps(out, indent=2))
+    try:
+        block = active_block()
+    except Exception as e:  # noqa: BLE001 - a broken gauge must say it is broken
+        msg = {"state": "UNKNOWN", "error": str(e)[:300]}
+        print(json.dumps(msg, indent=2) if args.json else f"Cannot read usage: {e}")
+        return 1
+
+    if block is None:
+        msg = {"state": "IDLE", "reason": "No active 5-hour window."}
+        print(json.dumps(msg, indent=2) if args.json else "No active window — nothing spent yet.")
         return 0
 
-    now = datetime.now(UTC)
-    # Count from the last RESET when we know it, not from five hours ago.
-    reset = last_reset()
-    window_start = now - WINDOW
-    if reset and reset > window_start:
-        window_start = reset
-    spend = collect(window_start)
-    cal = load_ceiling()
-    ceiling = (cal or {}).get("ceiling_weighted")
-
-    pct = round(100 * spend["weighted"] / ceiling, 1) if ceiling else None
-    result = {
-        "window_hours": 5,
-        "as_of": now.isoformat(),
-        "counting_since": window_start.isoformat(),
-        "since_last_reset": bool(reset and reset > now - WINDOW),
-        "requests": spend["requests"],
-        "weighted_tokens": spend["weighted"],
-        "raw_tokens": spend["raw"],
-        "input": spend["input_tokens"],
-        "output": spend["output_tokens"],
-        "cache_write": spend["cache_creation_input_tokens"],
-        "cache_read": spend["cache_read_input_tokens"],
-        "ceiling_weighted": ceiling,
-        "percent_used": pct,
-        "calibrated": bool(ceiling),
-        "state": (
-            "UNCALIBRATED"
-            if pct is None
-            else "CRITICAL"
-            if pct >= 95
-            else "WARN"
-            if pct >= 80
-            else "OK"
-        ),
-    }
-
+    r = assess(block)
     if args.json:
-        print(json.dumps(result, indent=2))
+        print(json.dumps(r, indent=2))
         return 0
 
-    label = "since the last reset" if (reset and reset > now - WINDOW) else "rolling 5 hours"
-    print(f"Window: {label}, from {window_start:%H:%M} to {now:%H:%M} UTC")
-    print(f"  requests       {spend['requests']:,}")
-    print(f"  input          {spend['input_tokens']:,}")
-    print(f"  output         {spend['output_tokens']:,}")
-    print(f"  cache write    {spend['cache_creation_input_tokens']:,}")
-    print(f"  cache read     {spend['cache_read_input_tokens']:,}  (counted at 1/10)")
-    print(f"  weighted total {spend['weighted']:,}")
-    if ceiling:
-        spread = cal.get("spread")
-        print(f"\n  ceiling        {ceiling:,}  (median of {cal.get('sample_count', 0)} real 5-hour 429s)")
-        if spread:
-            print(f"  observed range {spread[0]:,} .. {spread[1]:,} — the percentage is a guide")
-        print(f"  USED           {pct}%   [{result['state']}]")
-    else:
-        print("\n  ceiling        not calibrated — run --calibrate")
-        print("  Report this as a direction of travel, not a percentage.")
+    print(
+        f"5-hour window  {r['window_start'][11:16]} -> {r['window_end'][11:16]} UTC"
+        f"   ({r['minutes_left']} min left)"
+    )
+    print(f"  spent          ${r['cost_usd']}")
+    print(f"  on course for  ${r['projected_cost_usd']}   (${r['cost_per_hour']}/hr)")
+    print(f"  tokens         {r['total_tokens']:,}")
+    print(
+        f"     output {r['output']:,} | cache write {r['cache_write']:,} "
+        f"| cache read {r['cache_read']:,}"
+    )
+    print(f"  models         {', '.join(r['models'])}")
+    print(f"\n  [{r['state']}] {r['reason']}")
+    print(f"\n  {r['caveat']}")
     return 0
 
 
