@@ -44,6 +44,20 @@ export default function EmployeesPage() {
   // Suspended people are off the roster, not gone. Without this the only
   // screen that can bring them back is the one they vanish from.
   const [showSuspended, setShowSuspended] = useState(false);
+  // A SWAP, NOT A SCROLL.
+  //
+  //   "remove the pay-mix chart from the Employees page. With many employees
+  //    it ends up at the bottom. Put a control at the top that opens it IN
+  //    PLACE by hiding the employee cards — a swap, not a scroll."
+  //
+  // It was below the team, and the SubNav entry for it called `spotlight()`
+  // — which scrolls. That is the thing he asked to stop doing, so the menu
+  // item was quietly the same complaint wearing a shortcut.
+  //
+  // Showing it also gives the donut the FULL page width. Squeezed beside
+  // the roster its legend rendered "Hourly (weekly-paid)" in 48px of the
+  // 113px it needs; with the cards hidden there is room for the words.
+  const [view, setView] = useState<"team" | "paymix">("team");
   const { user } = useAuth();
   const { format } = useCurrency();
   const canWrite = can(user?.role, "employees:write");
@@ -264,7 +278,7 @@ export default function EmployeesPage() {
                 key: "paymix",
                 label: "How they're paid",
                 icon: "🍩",
-                onSelect: () => spotlight("pay-mix"),
+                onSelect: () => setView((v) => (v === "paymix" ? "team" : "paymix")),
               }]
             : []),
         ]}
@@ -429,6 +443,7 @@ export default function EmployeesPage() {
       {/* The team. Cards, per /staff — the page next door about the same
           people. The stripe carries the visa state, so a card that needs
           action says so before it is read. */}
+      {view === "team" && (
       <Card id="team-list" className="scroll-mt-24 p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3">
           <h2 className="mr-auto text-sm font-semibold text-fg">Your team</h2>
@@ -568,16 +583,21 @@ export default function EmployeesPage() {
           </div>
         )}
       </Card>
+      )}
 
       {/* Visa alerts sit BELOW the team, by his rule for every page: the core
           first, the indicators kept but passed on the way rather than waded
 
-      {/* The pay split sits BELOW the team, by the rule he already gave for
-          Sales and Expenses: the numbers and the work first, the pie last.
-          A donut of hourly-vs-salaried is worth having and is not what anyone
-          opens this page to find. */}
-      {employees.length > 1 && (
+      {/* Shown INSTEAD of the roster, never underneath it. */}
+      {view === "paymix" && employees.length > 1 && (
         <Card id="pay-mix" className="mise-feel mb-6 scroll-mt-24">
+          <button
+            type="button"
+            onClick={() => setView("team")}
+            className="mise-press mise-well mb-3 rounded-xl px-3 py-1.5 text-xs font-medium text-fg-soft"
+          >
+            ← Back to the team
+          </button>
           <h3 className="font-semibold text-fg">How the team is paid</h3>
           <p className="text-xs text-fg-faint">hourly staff go on WEEKLY payroll runs; salaried on monthly</p>
           <div className="mt-4">
