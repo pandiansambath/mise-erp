@@ -405,8 +405,18 @@ export function Donut({
                   className="h-2.5 w-2.5 shrink-0 self-center rounded-full"
                   style={{ background: s.color ?? CHART_COLORS[i % CHART_COLORS.length] }}
                 />
-                <span className="min-w-0 max-w-[60%] truncate text-fg-soft">{s.label}</span>
-                <span aria-hidden className="mx-1 flex-1 self-center border-b border-dotted border-line-2" />
+                <span className="min-w-0 flex-1 truncate text-fg-soft">{s.label}</span>
+                {/* The leader is DECORATION and must lose the argument for space.
+                    It had `flex-1` while the label had `max-w-[60%]` and
+                    `min-w-0`, so on a 360px phone a dotted line took the room
+                    and "Hourly (weekly-paid)" rendered in 32px of the 113px it
+                    needs — three characters and an ellipsis. The label takes
+                    the space now; the leader only appears once there is enough
+                    width for it to be a flourish rather than a thief. */}
+                <span
+                  aria-hidden
+                  className="mx-1 hidden min-w-[1.5rem] flex-1 self-center border-b border-dotted border-line-2 sm:block"
+                />
                 <span className="shrink-0 font-mono text-fg-faint">
                   {sel === i ? formatValue(s.value) : total > 0 ? `${Math.round((s.value / total) * 100)}%` : "—"}
                 </span>
@@ -799,7 +809,7 @@ export function RadialBars({
                 title={onItemClick ? `Show ${it.label} in the table` : it.label}
               >
                 <span className="h-2.5 w-2.5 shrink-0 self-center rounded-full" style={{ background: it.color ?? CHART_COLORS[i % CHART_COLORS.length] }} />
-                <span className="min-w-0 max-w-[60%] truncate text-fg-soft">{it.label}</span>
+                <span className="min-w-0 flex-1 truncate text-fg-soft">{it.label}</span>
                 {/* menu-style dot leader — the eye never loses which price is whose */}
                 <span aria-hidden className="mx-1 flex-1 border-b border-dotted border-line-2" />
                 <span className="shrink-0 font-medium text-fg">{formatValue(it.value)}</span>
