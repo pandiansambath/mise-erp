@@ -3,6 +3,7 @@
 import { chainSummary, levelName, priceLines, pricePerBase, stockInPacks, supplierPackSize } from "@/lib/packs";
 
 import { useEffect, useRef, useState } from "react";
+import { CustomFieldInputs, FieldMarketplace, useCustomFields } from "@/components/CustomFields";
 import { PhoneInput } from "@/components/PhoneInput";
 import { Select } from "@/components/Select";
 import { DetailSheet, DetailRow } from "@/components/DetailSheet";
@@ -44,6 +45,11 @@ const inputCls =
 
 export default function VendorsPage() {
   const { hotel, user } = useAuth();
+  // Same story as Employees: 25 ready supplier fields on the server, a built
+  // marketplace component, and nothing importing it.
+  const [shopOpen, setShopOpen] = useState(false);
+  const { fields: extraFields, reload: reloadFields } = useCustomFields("vendor");
+  const [custom, setCustom] = useState<Record<string, unknown>>({});
   const { format } = useCurrency();
   const confirm = useConfirm();
   const canWrite = can(user?.role, "vendors:write");
@@ -228,10 +234,12 @@ export default function VendorsPage() {
         category: vCat,
         contact_person: vContact.trim() || undefined,
         mobile: vMobile.trim() || undefined,
+        ...(Object.keys(custom).length ? { custom } : {}),
       });
       setVName("");
       setVContact("");
       setVMobile("");
+      setCustom({});
       setAddingVendor(false);
       await load();
       selectVendor(v.id);
@@ -673,6 +681,20 @@ export default function VendorsPage() {
                   </button>
                 )}
               </div>
+            </div>
+            <div className="sm:col-span-3">
+              <CustomFieldInputs fields={extraFields} value={custom} onChange={setCustom} />
+              <button
+                type="button"
+                onClick={() => setShopOpen(true)}
+                data-testid="open-field-marketplace"
+                className="mise-press mise-well mt-2 rounded-xl px-3 py-2 text-xs font-medium text-fg-soft"
+              >
+                ➕ Add a field to this form
+                {extraFields.length === 0 && (
+                  <span className="ml-1 text-fg-faint">— 25 ready to pick from</span>
+                )}
+              </button>
             </div>
             <div className="flex gap-2 sm:col-span-3">
               <button type="submit" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
@@ -1878,6 +1900,14 @@ export default function VendorsPage() {
           )}
         </div>
       </SheetPopup>
+      )}
+
+      {shopOpen && (
+        <FieldMarketplace
+          entity="vendor"
+          onClose={() => setShopOpen(false)}
+          onChanged={reloadFields}
+        />
       )}
     </Workbench>
   );
