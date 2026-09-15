@@ -8,6 +8,7 @@
 import dynamic from "next/dynamic";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
+import { PhoneInput } from "@/components/PhoneInput";
 import { ThemeSwitcher } from "@/components/AppShell";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
 import { dishPhoto } from "@/lib/dishPhoto";
@@ -416,7 +417,13 @@ function CheckoutSheet({
           </div>
 
           <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} placeholder="Your name *" aria-label="Your name" className={inputCls} />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} required minLength={5} inputMode="tel" placeholder="Phone (the kitchen may call) *" aria-label="Phone" className={inputCls} />
+          <PhoneInput
+            value={phone}
+            onChange={setPhone}
+            required
+            placeholder="Phone (the kitchen may call) *"
+            aria-label="Phone"
+          />
           {fulfilment === "DELIVERY" && (
             <>
               <textarea
