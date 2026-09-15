@@ -28,6 +28,30 @@
         {
           "file": "/page-images/feast-347306.jpg",
           "alt": "thanksgiving"
+        },
+        {
+          "file": "/page-images/feast-1768906.jpg",
+          "alt": "indian"
+        },
+        {
+          "file": "/page-images/feast-8396731.jpg",
+          "alt": "thanksgiving"
+        },
+        {
+          "file": "/page-images/feast-2032593.jpg",
+          "alt": "table"
+        },
+        {
+          "file": "/page-images/feast-2930293.jpg",
+          "alt": "indian wedding"
+        },
+        {
+          "file": "/page-images/feast-1433494.jpg",
+          "alt": "dinner"
+        },
+        {
+          "file": "/page-images/feast-5994618.jpg",
+          "alt": "serve"
         }
       ]
     },
@@ -59,6 +83,30 @@
         {
           "file": "/page-images/curry-2362686.jpg",
           "alt": "food"
+        },
+        {
+          "file": "/page-images/curry-3688482.jpg",
+          "alt": "fish curry"
+        },
+        {
+          "file": "/page-images/curry-389914.jpg",
+          "alt": "spices"
+        },
+        {
+          "file": "/page-images/curry-991262.jpg",
+          "alt": "chili"
+        },
+        {
+          "file": "/page-images/curry-2933528.jpg",
+          "alt": "food"
+        },
+        {
+          "file": "/page-images/curry-5402507.jpg",
+          "alt": "favor"
+        },
+        {
+          "file": "/page-images/curry-7683485.jpg",
+          "alt": "bowl"
         }
       ]
     },
@@ -90,6 +138,30 @@
         {
           "file": "/page-images/grill-3524649.jpg",
           "alt": "sausages"
+        },
+        {
+          "file": "/page-images/grill-123668.jpg",
+          "alt": "meat"
+        },
+        {
+          "file": "/page-images/grill-1839090.jpg",
+          "alt": "burgers"
+        },
+        {
+          "file": "/page-images/grill-2505236.jpg",
+          "alt": "kebab"
+        },
+        {
+          "file": "/page-images/grill-2415223.jpg",
+          "alt": "grilling"
+        },
+        {
+          "file": "/page-images/grill-2505237.jpg",
+          "alt": "kebab"
+        },
+        {
+          "file": "/page-images/grill-3139641.jpg",
+          "alt": "flesh"
         }
       ]
     },
@@ -115,12 +187,36 @@
           "alt": "peppers"
         },
         {
-          "file": "/page-images/fresh-673184.jpg",
-          "alt": "carrots"
+          "file": "/page-images/fresh-849269.jpg",
+          "alt": "cucumbers"
         },
         {
           "file": "/page-images/fresh-3440339.jpg",
           "alt": "beetroot"
+        },
+        {
+          "file": "/page-images/fresh-673184.jpg",
+          "alt": "carrots"
+        },
+        {
+          "file": "/page-images/fresh-3386212.jpg",
+          "alt": "vegetables"
+        },
+        {
+          "file": "/page-images/fresh-1397037.jpg",
+          "alt": "onions"
+        },
+        {
+          "file": "/page-images/fresh-1280859.jpg",
+          "alt": "tomatoes"
+        },
+        {
+          "file": "/page-images/fresh-1508847.jpg",
+          "alt": "carrots"
+        },
+        {
+          "file": "/page-images/fresh-3592527.jpg",
+          "alt": "potatoes"
         }
       ]
     },
@@ -152,6 +248,30 @@
         {
           "file": "/page-images/sweet-2290593.jpg",
           "alt": "indian"
+        },
+        {
+          "file": "/page-images/sweet-7405202.jpg",
+          "alt": "indian"
+        },
+        {
+          "file": "/page-images/sweet-7683487.jpg",
+          "alt": "motichoor"
+        },
+        {
+          "file": "/page-images/sweet-5549586.jpg",
+          "alt": "mango"
+        },
+        {
+          "file": "/page-images/sweet-241016.jpg",
+          "alt": "sweets"
+        },
+        {
+          "file": "/page-images/sweet-2625911.jpg",
+          "alt": "indian sweets"
+        },
+        {
+          "file": "/page-images/sweet-818316.jpg",
+          "alt": "fresh jalebi"
         }
       ]
     },
@@ -161,28 +281,52 @@
       "page": "landing",
       "images": [
         {
-          "file": "/page-images/dining-room-5972490.jpg",
+          "file": "/page-images/dining-room-1834784.jpg",
+          "alt": "brick wall"
+        },
+        {
+          "file": "/page-images/dining-room-7591296.jpg",
+          "alt": "chinese lanterns"
+        },
+        {
+          "file": "/page-images/dining-room-789635.jpg",
           "alt": "cafe"
         },
         {
-          "file": "/page-images/dining-room-1869656.jpg",
+          "file": "/page-images/dining-room-2616326.jpg",
+          "alt": "food"
+        },
+        {
+          "file": "/page-images/dining-room-5538378.jpg",
           "alt": "cafe"
         },
         {
-          "file": "/page-images/dining-room-5635015.jpg",
-          "alt": "cafe"
+          "file": "/page-images/dining-room-2604645.jpg",
+          "alt": "people"
         },
         {
-          "file": "/page-images/dining-room-6878196.jpg",
-          "alt": "cup"
-        },
-        {
-          "file": "/page-images/dining-room-4697753.jpg",
-          "alt": "cat's cafe"
+          "file": "/page-images/dining-room-658615.jpg",
+          "alt": "bar"
         },
         {
           "file": "/page-images/dining-room-791168.jpg",
           "alt": "coffee"
+        },
+        {
+          "file": "/page-images/dining-room-2625097.jpg",
+          "alt": "bar"
+        },
+        {
+          "file": "/page-images/dining-room-3592100.jpg",
+          "alt": "business"
+        },
+        {
+          "file": "/page-images/dining-room-1975215.jpg",
+          "alt": "warm and cozy"
+        },
+        {
+          "file": "/page-images/dining-room-7004643.jpg",
+          "alt": "lantern"
         }
       ]
     },
@@ -204,16 +348,40 @@
           "alt": "chinatown"
         },
         {
-          "file": "/page-images/street-10453140.jpg",
-          "alt": "indonesian food"
-        },
-        {
           "file": "/page-images/street-6571007.jpg",
           "alt": "fruit"
         },
         {
+          "file": "/page-images/street-10453140.jpg",
+          "alt": "indonesian food"
+        },
+        {
           "file": "/page-images/street-8026947.jpg",
           "alt": "girl"
+        },
+        {
+          "file": "/page-images/street-326146.jpg",
+          "alt": "namdaemun market"
+        },
+        {
+          "file": "/page-images/street-2203635.jpg",
+          "alt": "aerial"
+        },
+        {
+          "file": "/page-images/street-10430815.jpg",
+          "alt": "indonesian cuisine"
+        },
+        {
+          "file": "/page-images/street-4936825.jpg",
+          "alt": "bangkok"
+        },
+        {
+          "file": "/page-images/street-3304310.jpg",
+          "alt": "market"
+        },
+        {
+          "file": "/page-images/street-4998354.jpg",
+          "alt": "lego"
         }
       ]
     },
@@ -245,6 +413,30 @@
         {
           "file": "/page-images/drinks-975685.jpg",
           "alt": "chai"
+        },
+        {
+          "file": "/page-images/drinks-4864287.jpg",
+          "alt": "chai chai cake"
+        },
+        {
+          "file": "/page-images/drinks-4596255.jpg",
+          "alt": "ginger"
+        },
+        {
+          "file": "/page-images/drinks-6932147.jpg",
+          "alt": "spices"
+        },
+        {
+          "file": "/page-images/drinks-2846777.jpg",
+          "alt": "landscape"
+        },
+        {
+          "file": "/page-images/drinks-6833014.jpg",
+          "alt": "tea"
+        },
+        {
+          "file": "/page-images/drinks-6833012.jpg",
+          "alt": "tea"
         }
       ]
     },
@@ -276,6 +468,30 @@
         {
           "file": "/page-images/slate-7203890.jpg",
           "alt": "concrete"
+        },
+        {
+          "file": "/page-images/slate-916678.jpg",
+          "alt": "school"
+        },
+        {
+          "file": "/page-images/slate-543041.jpg",
+          "alt": "school"
+        },
+        {
+          "file": "/page-images/slate-56179.jpg",
+          "alt": "slates"
+        },
+        {
+          "file": "/page-images/slate-51699.jpg",
+          "alt": "mountains"
+        },
+        {
+          "file": "/page-images/slate-1846965.jpg",
+          "alt": "wall"
+        },
+        {
+          "file": "/page-images/slate-2259291.jpg",
+          "alt": "texture"
         }
       ]
     },
@@ -307,6 +523,30 @@
         {
           "file": "/page-images/wood-7384291.jpg",
           "alt": "bark"
+        },
+        {
+          "file": "/page-images/wood-10440951.jpg",
+          "alt": "still life"
+        },
+        {
+          "file": "/page-images/wood-2118348.jpg",
+          "alt": "drink"
+        },
+        {
+          "file": "/page-images/wood-2688597.jpg",
+          "alt": "wood"
+        },
+        {
+          "file": "/page-images/wood-2845119.jpg",
+          "alt": "tree"
+        },
+        {
+          "file": "/page-images/wood-316439.jpg",
+          "alt": "wood"
+        },
+        {
+          "file": "/page-images/wood-982264.jpg",
+          "alt": "wood grain"
         }
       ]
     },
@@ -338,6 +578,30 @@
         {
           "file": "/page-images/linen-8293446.jpg",
           "alt": "bed"
+        },
+        {
+          "file": "/page-images/linen-3667768.jpg",
+          "alt": "read"
+        },
+        {
+          "file": "/page-images/linen-2804900.jpg",
+          "alt": "fabric"
+        },
+        {
+          "file": "/page-images/linen-5706576.jpg",
+          "alt": "table"
+        },
+        {
+          "file": "/page-images/linen-657038.jpg",
+          "alt": "fabric"
+        },
+        {
+          "file": "/page-images/linen-245431.jpg",
+          "alt": "rags"
+        },
+        {
+          "file": "/page-images/linen-5925434.jpg",
+          "alt": "towel"
         }
       ]
     },
@@ -367,8 +631,32 @@
           "alt": "marble"
         },
         {
+          "file": "/page-images/marble-2442147.jpg",
+          "alt": "red roses"
+        },
+        {
           "file": "/page-images/marble-407081.jpg",
           "alt": "balls"
+        },
+        {
+          "file": "/page-images/marble-9490544.jpg",
+          "alt": "mountains"
+        },
+        {
+          "file": "/page-images/marble-1878273.jpg",
+          "alt": "texture"
+        },
+        {
+          "file": "/page-images/marble-1910069.jpg",
+          "alt": "marble"
+        },
+        {
+          "file": "/page-images/marble-4397860.jpg",
+          "alt": "table"
+        },
+        {
+          "file": "/page-images/marble-8431915.jpg",
+          "alt": "hands"
         }
       ]
     },
@@ -400,6 +688,30 @@
         {
           "file": "/page-images/kitchen-quiet-3224498.jpg",
           "alt": "background"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-3224496.jpg",
+          "alt": "handmade"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-3027842.jpg",
+          "alt": "coffee"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-5282718.jpg",
+          "alt": "food"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-3537801.jpg",
+          "alt": "cafe"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-5275191.jpg",
+          "alt": "pizza"
+        },
+        {
+          "file": "/page-images/kitchen-quiet-1869969.jpg",
+          "alt": "book"
         }
       ]
     },
@@ -431,6 +743,30 @@
         {
           "file": "/page-images/dawn-2082291.jpg",
           "alt": "silhouette"
+        },
+        {
+          "file": "/page-images/dawn-7457291.jpg",
+          "alt": "ocean"
+        },
+        {
+          "file": "/page-images/dawn-7460959.jpg",
+          "alt": "power line"
+        },
+        {
+          "file": "/page-images/dawn-7488529.jpg",
+          "alt": "wind turbines"
+        },
+        {
+          "file": "/page-images/dawn-956682.jpg",
+          "alt": "nature"
+        },
+        {
+          "file": "/page-images/dawn-3818968.jpg",
+          "alt": "dawn"
+        },
+        {
+          "file": "/page-images/dawn-2695862.jpg",
+          "alt": "planet"
         }
       ]
     },
@@ -462,6 +798,30 @@
         {
           "file": "/page-images/spice-dark-3549699.jpg",
           "alt": "beef"
+        },
+        {
+          "file": "/page-images/spice-dark-5286228.jpg",
+          "alt": "turmeric"
+        },
+        {
+          "file": "/page-images/spice-dark-10355016.jpg",
+          "alt": "garlic"
+        },
+        {
+          "file": "/page-images/spice-dark-3315561.jpg",
+          "alt": "spices"
+        },
+        {
+          "file": "/page-images/spice-dark-2605037.jpg",
+          "alt": "spices"
+        },
+        {
+          "file": "/page-images/spice-dark-5289431.jpg",
+          "alt": "turmeric"
+        },
+        {
+          "file": "/page-images/spice-dark-2221134.jpg",
+          "alt": "cinnamon"
         }
       ]
     },
@@ -493,6 +853,30 @@
         {
           "file": "/page-images/copper-10340038.jpg",
           "alt": "ai generated"
+        },
+        {
+          "file": "/page-images/copper-1697135.jpg",
+          "alt": "sintra"
+        },
+        {
+          "file": "/page-images/copper-544071.jpg",
+          "alt": "pot"
+        },
+        {
+          "file": "/page-images/copper-7560392.jpg",
+          "alt": "copper teapots"
+        },
+        {
+          "file": "/page-images/copper-544073.jpg",
+          "alt": "potatoes"
+        },
+        {
+          "file": "/page-images/copper-6974153.jpg",
+          "alt": "pot"
+        },
+        {
+          "file": "/page-images/copper-1006694.jpg",
+          "alt": "vegetables"
         }
       ]
     }
