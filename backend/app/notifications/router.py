@@ -64,6 +64,12 @@ _ACTIVITY: dict[str, tuple[str, str, str, str]] = {
 }
 # Prefix fallbacks for the "family" of actions (inventory.create/update/archive…).
 _PREFIX: list[tuple[str, tuple[str, str, str, str]]] = [
+    # `shift.` was missing entirely, so `shift.move` — a real rota action —
+    # rendered as "📝 Shift Move" and was visible ONLY to users:read, which
+    # is to say not to the rota people. A prefix covers the family; an exact
+    # key list only ever covers what somebody remembered to add.
+    ("shift.", ("🗓️", "Rota changed", "/rota", "employees:read")),
+    ("attendance.", ("🕒", "Attendance updated", "/attendance", "attendance:read")),
     ("inventory.", ("📦", "Inventory updated", "/inventory", "inventory:read")),
     ("payroll.", ("💷", "Payroll updated", "/payroll", "payroll:read")),
     ("assistant.", ("✨", "Assistant action", "/dashboard", "reports:read")),
@@ -211,10 +217,18 @@ async def list_notifications(
                         Shift.hotel_id == user.hotel_id,
                         Shift.employee_id == me.id,
                         Shift.date >= date.today(),
-                        Shift.date <= date.today() + timedelta(days=14),
+                        # THREE DAYS, not fourteen.
+                        #
+                        # I built this stream so a document request could not be
+                        # buried, and then made it the thing most able to bury:
+                        # a fortnight of rota is up to twenty rows sitting above
+                        # the out-of-stock alert. What somebody needs from a
+                        # BELL is "am I on tonight" — the fortnight is what the
+                        # Rota tab is for, and it now carries its own +N badge.
+                        Shift.date <= date.today() + timedelta(days=3),
                     )
                     .order_by(Shift.date, Shift.start_time)
-                    .limit(20)
+                    .limit(6)
                 )
             )
             .scalars()
@@ -237,6 +251,21 @@ async def list_notifications(
                 "route": "/my",
                 "at": None,
             })
+
+    # ── DANGER OUTRANKS WARNING. ───────────────────────────────────────────
+    #
+    #     "if I get so many notifications from one area, the important one from
+    #      another area is buried."
+    #
+    # Half of that was a plain ordering bug rather than anything subtle. Alerts
+    # were built price-rises-first and then low stock, so an OUT OF STOCK —
+    # severity danger — sat underneath ten price rises inside the same section.
+    # The empty chicken bin was literally below "flour went up 6%".
+    #
+    # Sorted by severity now, and stably: equal severities keep the order they
+    # were built in, so rows do not shuffle under the cursor between polls.
+    _SEV = {"danger": 0, "warn": 1, "info": 2}
+    alerts.sort(key=lambda a: _SEV.get(a.get("severity", "info"), 2))
 
     # `items` kept for backward-compat (older clients); `count` badges the bell.
     #
