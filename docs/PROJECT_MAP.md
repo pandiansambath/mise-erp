@@ -138,7 +138,10 @@ pushing alone does not deploy. ~27 min for the backend suite, ~31 min end to end
 
 ## 7. What exists already — do not rebuild it
 
-Months of work. **182 checklist items are done.** Before proposing something,
+Months of work. **190 checklist items are done, 45 open** (audited 2026-09-15 —
+the previous figure was wrong in both directions: one item was ticked while
+blocked, and a whole shipped section was never ticked). Before proposing
+something,
 check whether it is there. Notable:
 
 Inventory with per-vendor stock lots and pack chains · recipes costed to the

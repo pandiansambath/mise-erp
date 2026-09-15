@@ -104,7 +104,14 @@ function ConsoleBody({ children, email, logout }: { children: React.ReactNode; e
       <ConfirmProvider>
         <div className="mise-cr-grid flex min-h-[calc(100vh-57px)] flex-col gap-4 px-4 py-4 lg:flex-row lg:gap-5 lg:px-6 lg:py-5">
           <OperatorNav />
-          <main className="min-w-0 flex-1">{children}</main>
+          {/* A COLUMN, so a page can choose to fill the height.
+              The shell was already `min-h-[calc(100vh-57px)]`, so on a
+              fleet of three hotels the cards floated at the top of a tall
+              container and left six hundred pixels of bare ground beneath
+              them. Empty space INSIDE a card is normal; empty space
+              outside one reads as a component that failed to load — which
+              is the complaint he has made more than any other. */}
+          <main className="flex min-w-0 flex-1 flex-col">{children}</main>
         </div>
       </ConfirmProvider>
 

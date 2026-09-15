@@ -34,6 +34,22 @@ DEFAULTS: dict = {
     # than the incoming change, its mere presence made every later preference
     # save fail with 422. A setting the app writes is a setting the app knows.
     "kds_code": None,
+    # THE SAME TRAP, ONE LINE LOWER.
+    #
+    # `_kds_locked()` in app/ordering/router.py reads `kds_pin_required`, and
+    # the whole PIN gate hangs off it — but it was never declared here either,
+    # so the guard below rejected the only request that could switch it on:
+    #
+    #     PATCH /hotels/me {"prefs": {"kds_pin_required": true}}  ->  422
+    #
+    # The lock was unreachable, which means `/kds/<code>` has been a bare URL
+    # showing a restaurant's live orders, table numbers and guest messages to
+    # anyone holding the link, with no way for the owner to close it.
+    #
+    # The comment above records this exact fault being fixed for `kds_code` and
+    # not generalised. A setting the app READS is a setting the app must
+    # DECLARE — the same sentence, now true of both.
+    "kds_pin_required": False,
 }
 
 _ALLOWED = {
