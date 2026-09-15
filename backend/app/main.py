@@ -15,6 +15,7 @@ from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
 from app.core import logging_setup, monitoring
 from app.core.config import settings
+from app.core.pulse import PULSE
 from app.custom_fields.router import router as custom_fields_router
 from app.documents.comments import router as doc_comments_router
 from app.documents.router import router as documents_router
@@ -69,6 +70,23 @@ def create_app() -> FastAPI:
     # We authenticate with Bearer tokens (no cookies), so a "*" origin is safe;
     # browsers forbid credentials + "*", so only enable credentials for explicit origins.
     _wildcard = "*" in settings.cors_origins
+    def _template(path: str) -> str:
+        """/api/hotels/9f3c…/staff -> /api/hotels/{id}/staff.
+
+        Without this, every id becomes its own endpoint: the slowest-endpoint
+        list fills with one-call rows and the genuinely slow route never rises
+        to the top.
+        """
+        out = []
+        for seg in path.split("/"):
+            if len(seg) >= 8 and any(c.isdigit() for c in seg) and any(
+                c in "-abcdef0123456789" for c in seg.lower()
+            ) and all(c in "-abcdefABCDEF0123456789" for c in seg):
+                out.append("{id}")
+            else:
+                out.append(seg)
+        return "/".join(out)
+
     @app.middleware("http")
     async def _log_context(request, call_next):
         """Bind hotel + user to every log line this request produces.
@@ -100,6 +118,12 @@ def create_app() -> FastAPI:
             ms = int((_time.monotonic() - started) * 1000)
             path = request.url.path
             if not path.startswith(("/health", "/static", "/_next")):
+                # One deque append. The Control Room's health page is built
+                # from this — reading it back out of CloudWatch would need IAM
+                # the app does not have and would be billed per GB scanned.
+                # Templated so /api/hotels/<uuid> does not become 400 distinct
+                # "endpoints" that each look rare.
+                PULSE.record(_template(path), response.status_code, ms)
                 log.info(
                     "%s %s -> %s in %dms",
                     request.method,
