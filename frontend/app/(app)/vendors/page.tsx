@@ -3,6 +3,7 @@
 import { chainSummary, levelName, priceLines, pricePerBase, stockInPacks, supplierPackSize } from "@/lib/packs";
 
 import { useEffect, useRef, useState } from "react";
+import { PhoneInput } from "@/components/PhoneInput";
 import { Select } from "@/components/Select";
 import { DetailSheet, DetailRow } from "@/components/DetailSheet";
 import {
@@ -42,7 +43,7 @@ const inputCls =
   "mise-well mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none";
 
 export default function VendorsPage() {
-  const { user } = useAuth();
+  const { hotel, user } = useAuth();
   const { format } = useCurrency();
   const confirm = useConfirm();
   const canWrite = can(user?.role, "vendors:write");
@@ -607,7 +608,18 @@ export default function VendorsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-fg-soft">Mobile (optional)</label>
-              <input value={vMobile} onChange={(e) => setVMobile(e.target.value)} placeholder="phone" className={inputCls} />
+              {/* "pick the region from a dropdown (India → +91) and then type
+                  the number — which will ignore so many confusions."
+                  A UK restaurant with an Indian supplier had 9876543210,
+                  09876543210, +91 9876543210 and 0091-98765 43210 in the same
+                  table, all meaning one person and none of them searchable. */}
+              <PhoneInput
+                value={vMobile}
+                onChange={setVMobile}
+                defaultCountry={hotel?.country || "GB"}
+                placeholder="phone"
+                aria-label="Supplier phone"
+              />
             </div>
             <div className="sm:col-span-3">
               <label className="block text-sm font-medium text-fg-soft">Type</label>

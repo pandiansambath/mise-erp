@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtQtyNumber } from "@/lib/quantity";
 import { API_BASE } from "@/lib/api";
+import { PhoneInput } from "@/components/PhoneInput";
 import { ThemeSwitcher } from "@/components/AppShell";
 import { THEMES, themeVars, useTheme } from "@/lib/theme";
 
@@ -146,7 +147,13 @@ export default function RiderPage() {
           <p className="text-4xl" aria-hidden>🛵</p>
           <h1 className="font-display text-2xl text-fg">Rider sign-in</h1>
           <p className="text-sm text-fg-faint">Use the phone number + PIN your kitchen gave you.</p>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} required inputMode="tel" placeholder="Phone number" aria-label="Phone" className={inputCls} />
+          <PhoneInput
+            value={phone}
+            onChange={setPhone}
+            required
+            placeholder="Phone number"
+            aria-label="Phone"
+          />
           <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} required inputMode="numeric" placeholder="PIN" aria-label="PIN" className={`${inputCls} text-center font-mono tracking-[0.3em]`} />
           {error && <p className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-400">{error}</p>}
           <button type="submit" disabled={busy} className="mise-press w-full rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">

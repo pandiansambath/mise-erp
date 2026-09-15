@@ -10,6 +10,7 @@
 import { fmtQtyNumber } from "@/lib/quantity";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PhoneInput } from "@/components/PhoneInput";
 import { SubNav } from "@/components/SubNav";
 import { spotlight } from "@/components/fx";
 import { API_BASE, api } from "@/lib/api";
@@ -465,7 +466,13 @@ function RidersTab() {
         </p>
         <form onSubmit={add} className="mt-3 grid gap-2 sm:grid-cols-[1fr_150px_100px_auto]">
           <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} placeholder="Rider name" aria-label="Rider name" className={inputCls} />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="Phone" aria-label="Phone" inputMode="tel" className={inputCls} />
+          <PhoneInput
+            value={phone}
+            onChange={setPhone}
+            required
+            placeholder="Phone"
+            aria-label="Phone"
+          />
           <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} required minLength={4} placeholder="PIN" aria-label="PIN" className={`${inputCls} text-center font-mono`} />
           <button type="submit" disabled={busy} className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">Add</button>
         </form>
