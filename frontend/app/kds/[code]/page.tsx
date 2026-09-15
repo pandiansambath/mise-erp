@@ -71,21 +71,102 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
 
+  // THE LOCK.
+  //
+  // This page opens from a bare link with no sign-in, so the link IS the
+  // access. The backend has been able to demand the restaurant's PIN since
+  // `kds_pin_required` shipped, and nothing on this side ever asked for one —
+  // so a locked restaurant would have got a silent, permanently empty board.
+  //
+  // The pass is derived server-side from the hotel id and the PIN HASH, not
+  // stored as a session: changing the PIN invalidates every screen at once,
+  // which is the entire point of being able to change it.
+  //
+  // Kept per SCREEN CODE in localStorage, so a tablet unlocks once and survives
+  // a reload — a wall-mounted screen that asks again after every refresh is a
+  // screen somebody tapes the PIN to.
+  const passKey = `mise.kds.pass.${code}`;
+  const [kdsPass, setKdsPass] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinErr, setPinErr] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+
+  useEffect(() => {
+    try {
+      setKdsPass(window.localStorage.getItem(passKey));
+    } catch {
+      /* a kiosk browser with storage disabled still works, it just asks each time */
+    }
+  }, [passKey]);
+
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}/api/public/kds/${code}`);
+      const r = await fetch(`${API_BASE}/api/public/kds/${code}`, {
+        headers: kdsPass ? { "X-Kds-Pass": kdsPass } : undefined,
+      });
       if (r.status === 404) {
         setMissing(true);
         return;
       }
+      if (r.status === 401) {
+        // Either never unlocked, or the PIN has been changed since. Both mean
+        // the same thing to whoever is standing here: ask again. Drop the stale
+        // pass so we are not sending a dead one every five seconds.
+        setLocked(true);
+        setKdsPass(null);
+        try {
+          window.localStorage.removeItem(passKey);
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
       if (!r.ok) return;
+      setLocked(false);
       const d = await r.json();
       setHotel(d.hotel);
       setOrders(d.orders ?? []);
     } catch {
       /* a kitchen's wifi drops; the last board on screen is better than an error */
     }
-  }, [code]);
+  }, [code, kdsPass, passKey]);
+
+  async function unlock(e: React.FormEvent) {
+    e.preventDefault();
+    if (pin.length < 4 || unlocking) return;
+    setUnlocking(true);
+    setPinErr(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/public/kds/${code}/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+      if (!r.ok) {
+        // The server answers a wrong PIN and an unknown code identically, so
+        // this message must not distinguish them either.
+        setPinErr("That PIN is not right.");
+        setPin("");
+        return;
+      }
+      const d = (await r.json()) as { pass: string | null };
+      if (d.pass) {
+        try {
+          window.localStorage.setItem(passKey, d.pass);
+        } catch {
+          /* no storage: it will ask again next reload, which is correct */
+        }
+        setKdsPass(d.pass);
+      }
+      setLocked(false);
+      setPin("");
+    } catch {
+      setPinErr("Could not reach the restaurant. Check the wifi.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -105,7 +186,13 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
     try {
       await fetch(`${API_BASE}/api/public/kds/${code}/orders/${o.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        // The pass goes on the WRITE as well. Without it a locked screen could
+        // read the board and then fail silently on every tap, which is the
+        // worst of both — it looks like it is working.
+        headers: {
+          "Content-Type": "application/json",
+          ...(kdsPass ? { "X-Kds-Pass": kdsPass } : {}),
+        },
         body: JSON.stringify({ status: step.to }),
       });
       await load();
@@ -155,6 +242,52 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
             Ask the owner to open Kitchen → <b>Open kitchen screen</b> for the current link.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // THE GATE. Rendered INSTEAD of the board, never over it — a board blurred
+  // behind a dialog still shows the orders, and hiding them is the whole job.
+  if (locked) {
+    return (
+      <div
+        data-mode={THEMES[theme].light ? "light" : "dark"}
+        style={themed}
+        className="mise-app grid min-h-dvh place-items-center bg-shell p-6 text-fg"
+      >
+        <form onSubmit={unlock} className="mise-well w-full max-w-sm rounded-3xl p-8 text-center">
+          <p className="text-4xl" aria-hidden>🔒</p>
+          <h1 className="mt-3 font-display text-xl">This kitchen screen is locked</h1>
+          <p className="mt-2 text-sm text-fg-faint">
+            Enter the restaurant&apos;s PIN. This screen will remember it.
+          </p>
+          <input
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            // A kitchen tablet has no keyboard: bring up digits, not letters.
+            inputMode="numeric"
+            autoComplete="off"
+            autoFocus
+            aria-label="Restaurant PIN"
+            className="mise-card-inset mx-auto mt-5 block w-44 rounded-xl bg-transparent py-3 text-center font-mono text-2xl tracking-[0.4em] text-fg outline-none"
+          />
+          {pinErr && (
+            <p role="alert" className="mise-tone-bad mt-3 text-sm">
+              {pinErr}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={pin.length < 4 || unlocking}
+            className="mise-press mt-5 w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {unlocking ? "Checking…" : "Unlock"}
+          </button>
+          <p className="mt-4 text-[11px] leading-relaxed text-fg-faint">
+            It is the same PIN the team uses to clock in. If it has just been
+            changed, every screen asks again — that is what changing it is for.
+          </p>
+        </form>
       </div>
     );
   }
