@@ -31,10 +31,28 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: "npm run start",
+          // `next dev`, NOT `next start`.
+          //
+          // next.config sets `output: "standalone"` for the container build,
+          // and `next start` DOES NOT WORK with it — it prints a warning and
+          // then serves the HTML with NO STYLESHEET AT ALL. The page still
+          // returns 200 and every selector still resolves, so a test run looks
+          // completely normal; it is just measuring unstyled markup.
+          //
+          // That is the worst kind of broken instrument. A contrast check read
+          // rgb(0,0,0) on all sixteen themes and I nearly filed it as a bug in
+          // the page. `npm run responsive` measures layout, so on an unstyled
+          // page every one of its numbers is meaningless too — it only ever
+          // gave real answers when a dev server happened to be up on 3000 and
+          // `reuseExistingServer` silently used that instead.
+          //
+          // The standalone server can be run locally, but it needs .next/static
+          // and public/ copied in by hand first (the Dockerfile does it). Dev
+          // is the honest default; BASE_URL=... still points at prod.
+          command: "npm run dev",
           url: "http://localhost:3000",
           reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
+          timeout: 180_000,
         },
       }),
 });

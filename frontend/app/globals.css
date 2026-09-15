@@ -352,7 +352,9 @@ html:has(.mise-dark-page) { background: #030d09; }
    ════════════════════════════════════════════════════════════════════════ */
 
 /* Dark document behind the app (overscroll + native form controls). */
-html:has(.mise-app) { background: #04120d; }
+/* Follows the THEME. Hard-coded, this was emerald-black behind all ten dark
+   themes — so burgundy's overscroll bounce flashed green. */
+html:has(.mise-app) { background: var(--color-shell, #04120d); }
 .mise-app { color-scheme: dark; }
 
 /* Native date/select controls: keep them legible on dark surfaces. */
@@ -545,18 +547,38 @@ html:has(.mise-app) { background: #04120d; }
    rules are unlayered, so they win over Tailwind's layered utilities. One
    central block → every dashboard page becomes readable on light.
    ════════════════════════════════════════════════════════════════════════ */
-[data-mode="light"] .text-brand-200,
-[data-mode="light"] .text-brand-300,
-[data-mode="light"] .text-brand-400 { color: var(--color-brand-700); }
+/* ────────────────────────────────────────────────────────────────────────
+   …EXCEPT ON A PAGE THAT IS DARK WHATEVER THE THEME.
 
-[data-mode="light"] .text-rose-200,
-[data-mode="light"] .text-rose-300,
-[data-mode="light"] .text-rose-400,
+   "the whole login page fails on the default theme"
+
+   These rescues assume light theme ⇒ light surface. True for the dashboard,
+   FALSE for the landing, the sign-in door and the other public pages: those
+   are a photograph under an ink-950 wash, permanently dark, and they carry
+   `.mise-dark-page`. The theme still applies to :root, so `data-mode="light"`
+   was pulling every accent DOWN to its dark, light-surface shade — on a dark
+   surface:
+
+     · £3,412 (`text-copper-200`) → #9a5a2b on near-black = 2.36:1. FAILS.
+     · every ✓ tick (`text-brand-200`) → brand-700, a dark blob on a photo.
+
+   Claret is the DEFAULT, and it is a light theme. So this was the first screen
+   a stranger sees, on the theme they see it in.
+
+   `:not(.mise-dark-page *)` exempts those pages and nothing else.
+   ──────────────────────────────────────────────────────────────────────── */
+[data-mode="light"] :not(.mise-dark-page *).text-brand-200,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-300,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-400 { color: var(--color-brand-700); }
+
+[data-mode="light"] :not(.mise-dark-page *).text-rose-200,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-300,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-400,
 [data-mode="light"] .hover\:text-rose-300:hover { color: #be123c; }
 
-[data-mode="light"] .text-amber-200,
-[data-mode="light"] .text-amber-300,
-[data-mode="light"] .text-amber-400 { color: #b45309; }
+[data-mode="light"] :not(.mise-dark-page *).text-amber-200,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-300,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-400 { color: #b45309; }
 
 /* ── AND EVERY SHADE THAT WAS SLIPPING PAST IT ────────────────────────────
    "this is in so many pages i guess, please check and solve all area please."
@@ -583,71 +605,71 @@ html:has(.mise-app) { background: #04120d; }
    Still only `color`. The colour VARIABLES are deliberately left alone: they
    also feed `bg-rose-400/10` and friends, and darkening those would turn every
    soft tint on the site into a grey smudge. */
-[data-mode="light"] .text-amber-100,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-100,
 [data-mode="light"] .hover\:text-amber-100:hover,
-[data-mode="light"] .text-amber-200,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-200,
 [data-mode="light"] .hover\:text-amber-200:hover,
-[data-mode="light"] .text-amber-200\/80,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-200\/80,
 [data-mode="light"] .hover\:text-amber-200\/80:hover,
-[data-mode="light"] .text-amber-300,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-300,
 [data-mode="light"] .hover\:text-amber-300:hover,
-[data-mode="light"] .text-amber-300\/80,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-300\/80,
 [data-mode="light"] .hover\:text-amber-300\/80:hover,
-[data-mode="light"] .text-amber-300\/90,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-300\/90,
 [data-mode="light"] .hover\:text-amber-300\/90:hover,
-[data-mode="light"] .text-amber-400,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-400,
 [data-mode="light"] .hover\:text-amber-400:hover,
-[data-mode="light"] .text-amber-500,
+[data-mode="light"] :not(.mise-dark-page *).text-amber-500,
 [data-mode="light"] .hover\:text-amber-500:hover { color: #b45309; }
 
-[data-mode="light"] .text-brand-100,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-100,
 [data-mode="light"] .hover\:text-brand-100:hover,
-[data-mode="light"] .text-brand-200,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-200,
 [data-mode="light"] .hover\:text-brand-200:hover,
-[data-mode="light"] .text-brand-200\/80,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-200\/80,
 [data-mode="light"] .hover\:text-brand-200\/80:hover,
-[data-mode="light"] .text-brand-300,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-300,
 [data-mode="light"] .hover\:text-brand-300:hover,
-[data-mode="light"] .text-brand-300\/80,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-300\/80,
 [data-mode="light"] .hover\:text-brand-300\/80:hover,
-[data-mode="light"] .text-brand-300\/90,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-300\/90,
 [data-mode="light"] .hover\:text-brand-300\/90:hover,
-[data-mode="light"] .text-brand-400,
+[data-mode="light"] :not(.mise-dark-page *).text-brand-400,
 [data-mode="light"] .hover\:text-brand-400:hover { color: var(--color-brand-700); }
 
-[data-mode="light"] .text-emerald-100,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-100,
 [data-mode="light"] .hover\:text-emerald-100:hover,
-[data-mode="light"] .text-emerald-100\/90,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-100\/90,
 [data-mode="light"] .hover\:text-emerald-100\/90:hover,
-[data-mode="light"] .text-emerald-200,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-200,
 [data-mode="light"] .hover\:text-emerald-200:hover,
-[data-mode="light"] .text-emerald-300,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-300,
 [data-mode="light"] .hover\:text-emerald-300:hover,
-[data-mode="light"] .text-emerald-300\/80,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-300\/80,
 [data-mode="light"] .hover\:text-emerald-300\/80:hover,
-[data-mode="light"] .text-emerald-400,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-400,
 [data-mode="light"] .hover\:text-emerald-400:hover,
-[data-mode="light"] .text-emerald-500,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-500,
 [data-mode="light"] .hover\:text-emerald-500:hover { color: #047857; }
 
-[data-mode="light"] .text-rose-100\/90,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-100\/90,
 [data-mode="light"] .hover\:text-rose-100\/90:hover,
-[data-mode="light"] .text-rose-200,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-200,
 [data-mode="light"] .hover\:text-rose-200:hover,
-[data-mode="light"] .text-rose-300,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-300,
 [data-mode="light"] .hover\:text-rose-300:hover,
-[data-mode="light"] .text-rose-300\/80,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-300\/80,
 [data-mode="light"] .hover\:text-rose-300\/80:hover,
-[data-mode="light"] .text-rose-400,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-400,
 [data-mode="light"] .hover\:text-rose-400:hover,
-[data-mode="light"] .text-rose-500,
+[data-mode="light"] :not(.mise-dark-page *).text-rose-500,
 [data-mode="light"] .hover\:text-rose-500:hover { color: #be123c; }
 
-[data-mode="light"] .text-sky-200,
+[data-mode="light"] :not(.mise-dark-page *).text-sky-200,
 [data-mode="light"] .hover\:text-sky-200:hover,
-[data-mode="light"] .text-sky-300,
+[data-mode="light"] :not(.mise-dark-page *).text-sky-300,
 [data-mode="light"] .hover\:text-sky-300:hover,
-[data-mode="light"] .text-sky-400,
+[data-mode="light"] :not(.mise-dark-page *).text-sky-400,
 [data-mode="light"] .hover\:text-sky-400:hover { color: #0369a1; }
 
 /* ── Reading tones: a colour that means something, in EITHER theme ────────────
@@ -726,16 +748,16 @@ html:has(.mise-app) { background: #04120d; }
 .mise-tone-good { color: var(--tone-good); }
 .mise-tone-warn { color: var(--tone-warn); }
 
-[data-mode="light"] .text-sky-200,
-[data-mode="light"] .text-sky-300,
-[data-mode="light"] .text-sky-400 { color: #0369a1; }
+[data-mode="light"] :not(.mise-dark-page *).text-sky-200,
+[data-mode="light"] :not(.mise-dark-page *).text-sky-300,
+[data-mode="light"] :not(.mise-dark-page *).text-sky-400 { color: #0369a1; }
 
-[data-mode="light"] .text-emerald-200,
-[data-mode="light"] .text-emerald-300,
-[data-mode="light"] .text-emerald-400 { color: #047857; }
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-200,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-300,
+[data-mode="light"] :not(.mise-dark-page *).text-emerald-400 { color: #047857; }
 
-[data-mode="light"] .text-copper-200,
-[data-mode="light"] .text-copper-300 { color: #9a5a2b; }
+[data-mode="light"] :not(.mise-dark-page *).text-copper-200,
+[data-mode="light"] :not(.mise-dark-page *).text-copper-300 { color: #9a5a2b; }
 
 /* Native form controls + overscroll backdrop follow the light scheme too
    (the dark defaults above would render dark dropdowns on a light page). */
@@ -4254,7 +4276,7 @@ body.mise-voice-open .mise-launcher-in {
   color: color-mix(in srgb, #fb7185 82%, var(--color-fg));
   font-weight: 600;
 }
-[data-mode="light"] .text-danger { color: #be123c; }
+[data-mode="light"] :not(.mise-dark-page *).text-danger { color: #be123c; }
 
 /* ── THE STAGE ───────────────────────────────────────────────────────────
    "when i turn on voice model it needs to close that bubble chat UI, and the
