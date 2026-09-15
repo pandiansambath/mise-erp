@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { CustomFieldInputs, FieldMarketplace, useCustomFields } from "@/components/CustomFields";
 import { AddLoginModal } from "@/components/AddLoginModal";
 import { SubNav } from "@/components/SubNav";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
@@ -46,6 +47,16 @@ export default function EmployeesPage() {
    *  The empty state used to hand you a link to /staff. Making the login is
    *  the whole reason you opened this, so it happens here. */
   const [makeLoginFor, setMakeLoginFor] = useState<Employee | null>(null);
+  // THE FIELD MARKETPLACE.
+  //
+  // `components/CustomFields.tsx` — the hook, the inputs and the marketplace —
+  // was written, shipped, and imported by NOTHING. The backend serves 31 ready
+  // staff fields across five groups and has done for weeks; there was simply no
+  // way to reach any of it from the app. "Verified live" had meant the API
+  // answered, not that a person could get to it.
+  const [shopOpen, setShopOpen] = useState(false);
+  const { fields: extraFields, reload: reloadFields } = useCustomFields("employee");
+  const [custom, setCustom] = useState<Record<string, unknown>>({});
   const [loginRoles, setLoginRoles] = useState<
     { id: string; name: string; base_role: string }[]
   >([]);
@@ -221,6 +232,7 @@ export default function EmployeesPage() {
     setEditingId(null);
     setAdding(false);
     setForm(EMPTY);
+    setCustom({});
     setError(null);
   }
 
@@ -230,6 +242,10 @@ export default function EmployeesPage() {
     setError(null);
     const payload: Record<string, unknown> = { ...form };
     Object.keys(payload).forEach((k) => payload[k] === "" && delete payload[k]);
+    // The hotel's own fields ride along in one bag. Declared on the Out schema
+    // too — `response_model` silently drops anything it has not been told
+    // about, which this project has now hit eight times.
+    if (Object.keys(custom).length) payload.custom = custom;
     try {
       if (editingId) await api.patch(`/employees/${editingId}`, payload);
       else await api.post("/employees", payload);
@@ -389,6 +405,20 @@ export default function EmployeesPage() {
             <div>
               <label className="block text-sm font-medium text-fg-soft">Account no.</label>
               <input value={form.bank_account_no} onChange={(e) => setForm({ ...form, bank_account_no: e.target.value })} className={inputCls} />
+            </div>
+            <div className="sm:col-span-3">
+              <CustomFieldInputs fields={extraFields} value={custom} onChange={setCustom} />
+              <button
+                type="button"
+                onClick={() => setShopOpen(true)}
+                data-testid="open-field-marketplace"
+                className="mise-press mise-well mt-2 rounded-xl px-3 py-2 text-xs font-medium text-fg-soft"
+              >
+                ➕ Add a field to this form
+                {extraFields.length === 0 && (
+                  <span className="ml-1 text-fg-faint">— 31 ready to pick from</span>
+                )}
+              </button>
             </div>
             <div className="flex items-end gap-2 sm:col-span-3">
               <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
@@ -632,6 +662,14 @@ export default function EmployeesPage() {
             />
           </div>
         </Card>
+      )}
+
+      {shopOpen && (
+        <FieldMarketplace
+          entity="employee"
+          onClose={() => setShopOpen(false)}
+          onChanged={reloadFields}
+        />
       )}
 
       <AddLoginModal
