@@ -101,6 +101,42 @@ const HANGING = new Set([
 ]);
 const GRACE_MS = 1100;
 
+
+/** "#rgb" | "#rrggbb" | "rgb(r g b)" | "rgb(r, g, b)" -> [r,g,b] 0-255.
+ *  A theme's aurora tokens are hex; a computed fallback can be rgb(). */
+function toRgb(v: string): [number, number, number] | null {
+  const s = v.trim();
+  if (s.startsWith("#")) {
+    const h = s.slice(1);
+    const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+    if (full.length !== 6) return null;
+    const n = parseInt(full, 16);
+    if (Number.isNaN(n)) return null;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const m = s.match(/-?[\d.]+/g);
+  if (!m || m.length < 3) return null;
+  return [Number(m[0]), Number(m[1]), Number(m[2])];
+}
+
+/** -> [hue 0-360, sat 0-1, light 0-1]. */
+function rgbToHsl([r, g, b]: [number, number, number]): [number, number, number] {
+  const rr = r / 255;
+  const gg = g / 255;
+  const bb = b / 255;
+  const max = Math.max(rr, gg, bb);
+  const min = Math.min(rr, gg, bb);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === rr) h = ((gg - bb) / d + (gg < bb ? 6 : 0)) * 60;
+  else if (max === gg) h = ((bb - rr) / d + 2) * 60;
+  else h = ((rr - gg) / d + 4) * 60;
+  return [h, s, l];
+}
+
 function looksUnfinished(text: string): boolean {
   const words = text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/);
   const last = words[words.length - 1];
@@ -402,8 +438,28 @@ export function VoiceBubble() {
       // makes it BELONG is the hue, not the weakness. So the theme still picks
       // the hue and the aurora gets its chroma back: each colour is pushed
       // toward full saturation rather than used as-is.
-      const vivid = (name: string, fallback: string) =>
-        `color-mix(in oklab, ${pick(name, fallback)} 62%, ${fallback})`;
+      // …AND THAT STILL LEFT IT GREY ON THE PALE THEMES.
+      //
+      // `color-mix(… 62%, <a fixed green>)` cannot rescue a washed-out
+      // aurora: on latte, honey and apricot the theme's three aurora colours
+      // are all low-chroma beiges, so 62% of a beige plus 38% of a green is
+      // a duller beige. The one element on the page that is supposed to look
+      // ALIVE was rendering as if it were disabled.
+      //
+      // Mixing toward someone else's colour was the wrong operation. Keep the
+      // theme's HUE — that is what makes it belong — and guarantee the
+      // CHROMA, which is what makes it look alive. Below a floor we push
+      // saturation up and pull lightness into a band that glows; above it the
+      // theme is left alone.
+      const vivid = (name: string, fallback: string) => {
+        const raw = pick(name, fallback);
+        const rgb = toRgb(raw) ?? toRgb(fallback);
+        if (!rgb) return fallback;
+        const [h, s, l] = rgbToHsl(rgb);
+        return `hsl(${Math.round(h)} ${Math.round(Math.max(s, 0.72) * 100)}% ${
+          Math.round(Math.min(Math.max(l, 0.46), 0.62) * 100)
+        }%)`;
+      };
       setPaint({
         "--v1": vivid("--mise-aurora-1", "#10b981"),
         "--v2": vivid("--mise-aurora-2", "#0ea5e9"),
