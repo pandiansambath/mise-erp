@@ -448,7 +448,7 @@ export default function SalesPage() {
                     const up = pct >= 0;
                     return (
                       <span
-                        className={`mise-well rounded-full px-2.5 py-1 text-xs font-medium ${up ? "text-brand-400" : "text-rose-400"}`}
+                        className={`mise-well rounded-full px-2.5 py-1 text-xs font-medium ${up ? "mise-tone-good" : "mise-tone-bad"}`}
                         title={`vs the same weekday last week (${format(String(prevVal))})`}
                       >
                         {up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}%

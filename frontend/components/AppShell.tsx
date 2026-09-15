@@ -346,12 +346,30 @@ function NavLinks({
       {NAV_GROUPS.map((group) => {
         const inGroup = items.filter((i) => i.group === group);
         if (inGroup.length === 0) return null;
+        // THE MULTI-COLOUR THEMES.
+        //
+        // `--sect-N` is set only by a theme that declares `sections`. Every
+        // other theme leaves it undefined, so both `var()` calls below fall
+        // back and the nav renders exactly as it always has — no branch, no
+        // second code path to keep in step.
+        //
+        // The hue is on the STRUCTURE only: this label and a 2px spine down
+        // the group. It never touches a reading surface, so you can tell Money
+        // from Stock at a glance and not one word of body text changes
+        // contrast.
+        const hue = `var(--sect-${NAV_GROUPS.indexOf(group) + 1}, transparent)`;
         return (
           <div key={group} className="mb-1.5">
-            <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint/70">
+            <p
+              className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-faint/70"
+              style={{ color: `var(--sect-${NAV_GROUPS.indexOf(group) + 1}, var(--color-fg-faint))` }}
+            >
               {group}
             </p>
-            <div className="flex flex-col gap-0.5">
+            <div
+              className="flex flex-col gap-0.5 border-l-2 border-transparent pl-0 transition-colors"
+              style={{ borderColor: hue }}
+            >
               {inGroup.map((item) => {
                 const active = pathname === item.href;
                 // The page's own jobs, opened out under it while you are

@@ -413,7 +413,7 @@ export default function PartyOrderPage() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-fg-faint">Profit</p>
-                  <p className={`mt-1 text-xl font-bold ${totalProfit >= 0 ? "text-brand-400" : "text-rose-400"}`}>
+                  <p className={`mt-1 text-xl font-bold ${totalProfit >= 0 ? "mise-tone-good" : "mise-tone-bad"}`}>
                     {format(totalProfit)}
                   </p>
                 </div>

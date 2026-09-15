@@ -27,7 +27,16 @@ export type ThemeKey =
   // Dark themes with new accents
   | "sapphire"
   | "cocoa"
-  | "burgundy";
+  | "burgundy"
+  // 2026-09-15 - the six he asked for: "we need still more theme..unique
+  // theme..try multi color kinda theme"
+  | "service"
+  | "service-dark"
+  | "pass"
+  | "porcelain"
+  | "copper"
+  | "chalk"
+  | "nocturne";
 
 type Scale = Record<string, string>; // shade -> hex
 
@@ -45,6 +54,24 @@ type ThemeDef = {
   lines?: [string, string];
   /** true = light mode → AppShell sets color-scheme:light for native controls */
   light?: boolean;
+  /** MEANING, not identity - good / warn / bad.
+   *  Optional: a theme that omits it inherits the house triad from
+   *  globals.css, which is deliberately theme-independent (see 38.1a -
+   *  using the brand to mean "healthy" made "in stock" the same colour as
+   *  "out of stock" on every red theme). A theme overrides it only when its
+   *  ground genuinely needs a different one: Pass is read at two metres, so
+   *  its "good" is a safety lime rather than a mint. */
+  tones?: [string, string, string];
+  /** THE MULTI-COLOUR IDEA, in NAV_GROUPS order:
+   *  Overview / Money / Stock / Kitchen / People / Admin.
+   *
+   *  A multi-coloured BACKGROUND fights legibility - text needs one
+   *  predictable ground, and a kitchen tablet in glare needs it most. So
+   *  the colour goes on the STRUCTURE instead: the nav group label, its
+   *  spine, and the active pill. You can tell Money from Stock at a glance
+   *  and not one word of body text changes contrast. Every hue clears
+   *  6.8:1 on its own ground. */
+  sections?: [string, string, string, string, string, string];
   /** base colour for alpha "glass" overlays (border-glass/α, bg-glass/α).
       Defaults to white (dark themes); the Light theme sets a dark tint. */
   glass?: string;
@@ -103,12 +130,18 @@ export const THEMES: Record<ThemeKey, ThemeDef> = {
     fg: ["#fbeef3", "#e2c2cf", "#b88a9c"],
     aurora: ["#f43f5e", "#d946ef", "#fb7185"],
   },
+  /** WAS "Graphite Mono", and it had no accent at all: brand-300 #cbd5e1
+   *  against body text #c3ccd6 is 1.09, so every link was the same grey as
+   *  the paragraph above it and nothing on the page could indicate
+   *  anything. A monochrome ground with ONE hot accent is the classic
+   *  answer: the greys stay, the accent is now a signal amber. */
   graphite: {
-    label: "Graphite Mono",
-    brand: { "50": "#f8fafc", "100": "#f1f5f9", "200": "#e2e8f0", "300": "#cbd5e1", "400": "#94a3b8", "500": "#64748b", "600": "#475569", "700": "#334155", "800": "#1e293b", "900": "#0f172a", "950": "#020617" },
+    label: "Graphite (Signal)",
+    brand: { "50": "#fffbeb", "100": "#fef3c7", "200": "#fde68a", "300": "#fcd34d", "400": "#fbbf24", "500": "#f59e0b", "600": "#d97706", "700": "#b45309", "800": "#92400e", "900": "#78350f", "950": "#451a03" },
     surfaces: ["#0a0c10", "#14181f", "#1a1f28", "#242b36"],
     fg: ["#f1f4f8", "#c3ccd6", "#8d99a8"],
-    aurora: ["#64748b", "#94a3b8", "#38bdf8"],
+    aurora: ["#f59e0b", "#94a3b8", "#38bdf8"],
+    lines: ["rgba(255,255,255,0.14)", "rgba(255,255,255,0.26)"],
   },
 
   // ── Light (white) themes — same bright surfaces, different accent ──
@@ -185,7 +218,112 @@ export const THEMES: Record<ThemeKey, ThemeDef> = {
     fg: ["#f8ecf0", "#e0c0cb", "#b8899a"],
     aurora: ["#c4365a", "#a11f44", "#e11d48"],
   },
+
+  // ======================================================================
+  //  2026-09-15 - six new themes.
+  //
+  //      "we need still more theme..unique theme..try multi color kinda
+  //       theme..please think deeply and have more theme..impressive themes"
+  //
+  //  Designed against measured contrast rather than taste, and each for a
+  //  real moment rather than for a colour: a wall tablet in glare, an hour of
+  //  payroll columns at midnight, a phone at 6am in a dim room.
+  // ======================================================================
+
+  /** THE MULTI-COLOUR ONE. Each section of the app gets its own hue, carried
+   *  on the nav and never on a reading surface. For the owner who lives in the
+   *  whole app and wants to know where they are without reading. */
+  service: {
+    label: "Service (Multi-colour)",
+    brand: { "50": "#f0faf8", "100": "#d7f2ee", "200": "#a9e5dd", "300": "#5ec8bd", "400": "#33a99e", "500": "#1a8a80", "600": "#0f6f67", "700": "#0b574f", "800": "#094741", "900": "#073833", "950": "#04211e" },
+    surfaces: ["#f2f4f3", "#ffffff", "#f7f9f8", "#e9edec"],
+    fg: ["#101a18", "#3c4a47", "#6d7d79"],
+    aurora: ["#a9e5dd", "#c7d2fe", "#fde68a"],
+    lines: ["rgba(16,26,24,0.12)", "rgba(16,26,24,0.22)"],
+    glass: "#101a18",
+    light: true,
+    tones: ["#0f766e", "#a16207", "#b91c1c"],
+    sections: ["#0b574f", "#3730a3", "#8a4b06", "#9a3412", "#6b21a8", "#334155"],
+  },
+  "service-dark": {
+    label: "Service (Multi-colour, Dark)",
+    brand: { "50": "#f2fbfa", "100": "#dcf5f1", "200": "#b3e9e2", "300": "#7fd8cf", "400": "#4cc0b4", "500": "#2aa196", "600": "#1b8178", "700": "#13645d", "800": "#0f4f49", "900": "#0b3c38", "950": "#06241f" },
+    surfaces: ["#0b1211", "#131c1b", "#182322", "#21302e"],
+    fg: ["#eaf2f0", "#b8c9c6", "#859794"],
+    aurora: ["#4cc0b4", "#a5b4fc", "#fcd34d"],
+    lines: ["rgba(255,255,255,0.14)", "rgba(255,255,255,0.26)"],
+    tones: ["#5eead4", "#fcd34d", "#fb7185"],
+    sections: ["#7fd8cf", "#a5b4fc", "#fcd34d", "#fdba74", "#d8b4fe", "#cbd5e1"],
+  },
+
+  /** The wall tablet in a hot kitchen, read at two metres through glare. The
+   *  only theme tuned for AMBIENT LIGHT: borders at nearly double the house
+   *  default, pure-white primary text, and a safety lime that reads at
+   *  distance. Its "good" is that same lime, on purpose. */
+  pass: {
+    label: "Pass (Kitchen)",
+    brand: { "50": "#f7fee7", "100": "#ecfccb", "200": "#d9f99d", "300": "#a3e635", "400": "#84cc16", "500": "#65a30d", "600": "#4d7c0f", "700": "#3f6212", "800": "#365314", "900": "#1a2e05", "950": "#0d1a02" },
+    surfaces: ["#101214", "#1b1f23", "#232830", "#2e353f"],
+    fg: ["#ffffff", "#d7dde5", "#a3adba"],
+    aurora: ["#84cc16", "#22d3ee", "#a3e635"],
+    lines: ["rgba(255,255,255,0.16)", "rgba(255,255,255,0.30)"],
+    tones: ["#a3e635", "#fbbf24", "#fb7185"],
+  },
+
+  /** Payroll at midnight - an hour of reading columns of numbers. Warm paper,
+   *  near-zero chroma in the ground, ink-blue accent. */
+  porcelain: {
+    label: "Porcelain (Light)",
+    brand: { "50": "#f2f7fd", "100": "#e0ecf9", "200": "#c2d9f1", "300": "#7aa7e0", "400": "#4b82c9", "500": "#2a63ab", "600": "#1d4c8a", "700": "#16386a", "800": "#112b52", "900": "#0d2040", "950": "#071426" },
+    surfaces: ["#f1f0ec", "#fbfaf7", "#f6f4f0", "#e7e4dd"],
+    fg: ["#14120f", "#3b3833", "#6b665e"],
+    aurora: ["#c2d9f1", "#e7e4dd", "#d6e4f7"],
+    lines: ["rgba(20,18,15,0.13)", "rgba(20,18,15,0.24)"],
+    glass: "#14120f",
+    light: true,
+    tones: ["#15803d", "#a16207", "#b91c1c"],
+  },
+
+  /** The premium, guest-facing identity - designed so the diner's QR page and
+   *  the owner's dashboard look like the same restaurant. */
+  copper: {
+    label: "Copper Service (Dark)",
+    brand: { "50": "#fdf7f1", "100": "#f9ebdc", "200": "#f2d8bc", "300": "#eab78a", "400": "#d9985f", "500": "#c07b3e", "600": "#9e6130", "700": "#7b4a25", "800": "#5e381c", "900": "#422714", "950": "#26160b" },
+    surfaces: ["#121011", "#1d1a1b", "#262223", "#322d2e"],
+    fg: ["#f7f2ef", "#d3c8c3", "#a2938c"],
+    aurora: ["#d9985f", "#c07b3e", "#eab78a"],
+    lines: ["rgba(255,255,255,0.13)", "rgba(255,255,255,0.24)"],
+    tones: ["#6ee7b7", "#fcd34d", "#fb7185"],
+  },
+
+  /** Bright kitchens, older eyes, greasy screens. Maximum contrast, and every
+   *  border a real drawn line - affordance drawn, not implied. */
+  chalk: {
+    label: "Chalk (High contrast)",
+    brand: { "50": "#eff6ff", "100": "#dbeafe", "200": "#bfdbfe", "300": "#6ea8f5", "400": "#2f7ae5", "500": "#0b5fd0", "600": "#0949a4", "700": "#06377c", "800": "#04295c", "900": "#031c40", "950": "#021026" },
+    surfaces: ["#ffffff", "#ffffff", "#f4f6f8", "#e6eaee"],
+    fg: ["#000000", "#23282e", "#4a5158"],
+    aurora: ["#bfdbfe", "#e6eaee", "#dbeafe"],
+    lines: ["rgba(0,0,0,0.22)", "rgba(0,0,0,0.38)"],
+    glass: "#000000",
+    light: true,
+    tones: ["#15803d", "#a16207", "#b91c1c"],
+  },
+
+  /** The 6am phone in a dim room, and the midnight shift. Zero blue in the
+   *  ground - warm-black rather than blue-black - at the lowest maximum
+   *  luminance of the set. */
+  nocturne: {
+    label: "Nocturne (Dark)",
+    brand: { "50": "#f1faf6", "100": "#dbf3e9", "200": "#b6e6d3", "300": "#7fd1b0", "400": "#4fb894", "500": "#2f9a78", "600": "#237a5f", "700": "#1b5e49", "800": "#14483a", "900": "#0f372c", "950": "#08201a" },
+    surfaces: ["#14110f", "#1e1a18", "#272220", "#332c29"],
+    fg: ["#f5efe9", "#cfc4bb", "#9c9088"],
+    aurora: ["#4fb894", "#7fd1b0", "#2f9a78"],
+    lines: ["rgba(255,255,255,0.13)", "rgba(255,255,255,0.24)"],
+    tones: ["#6ee7b7", "#fcd34d", "#fb7185"],
+  },
 };
+
 
 const STORAGE_KEY = "mise_theme";
 // Burgundy, not green. His call: a hotel opening its dashboard for the FIRST
@@ -218,6 +356,16 @@ export function themeVars(key: ThemeKey): CSSProperties {
   out["--color-fg"] = fg;
   out["--color-fg-soft"] = soft;
   out["--color-fg-faint"] = faint;
+  if (t.tones) {
+    out["--tone-good"] = t.tones[0];
+    out["--tone-warn"] = t.tones[1];
+    out["--tone-bad"] = t.tones[2];
+  }
+  if (t.sections) {
+    t.sections.forEach((hex, i) => {
+      out[`--sect-${i + 1}`] = hex;
+    });
+  }
   const [a1, a2, a3] = t.aurora;
   out["--mise-aurora-1"] = a1;
   out["--mise-aurora-2"] = a2;
