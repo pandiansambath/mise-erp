@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AddLoginModal } from "@/components/AddLoginModal";
 import { SubNav } from "@/components/SubNav";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
 import { FormShell } from "@/components/EditModal";
@@ -40,6 +41,14 @@ function visaTone(days: number): "red" | "amber" {
 
 export default function EmployeesPage() {
   const [loginFor, setLoginFor] = useState<Employee | null>(null);
+  /** "to give login cred to that employee we need to go to roles page again,
+   *   which is like roaming here and there."
+   *  The empty state used to hand you a link to /staff. Making the login is
+   *  the whole reason you opened this, so it happens here. */
+  const [makeLoginFor, setMakeLoginFor] = useState<Employee | null>(null);
+  const [loginRoles, setLoginRoles] = useState<
+    { id: string; name: string; base_role: string }[]
+  >([]);
   const confirm = useConfirm();
   // Suspended people are off the roster, not gone. Without this the only
   // screen that can bring them back is the one they vanish from.
@@ -83,6 +92,18 @@ export default function EmployeesPage() {
         .get<Employee[]>(`/employees${showSuspended ? "?include_suspended=true" : ""}`)
         .then(setEmployees),
       api.get<VisaAlert[]>("/employees/visa-alerts?within_days=60").then(setAlerts).catch(() => {}),
+      // The same filter the Staff page applies: a one-off "— custom access"
+      // role belongs to the person it was made for, not in a picker.
+      api
+        .get<{ roles: { id: string; name: string; base_role: string; is_active: boolean }[] }>(
+          "/roles",
+        )
+        .then((d) =>
+          setLoginRoles(
+            d.roles.filter((r) => r.is_active && !/— custom access$/.test(r.name)),
+          ),
+        )
+        .catch(() => setLoginRoles([])),
     ]);
   }
 
@@ -613,10 +634,24 @@ export default function EmployeesPage() {
         </Card>
       )}
 
+      <AddLoginModal
+        open={!!makeLoginFor}
+        onClose={() => setMakeLoginFor(null)}
+        onDone={() => {
+          setMakeLoginFor(null);
+          load();
+        }}
+        roles={loginRoles}
+        employees={makeLoginFor ? [{ id: makeLoginFor.id, full_name: makeLoginFor.full_name }] : []}
+        presetEmployeeId={makeLoginFor?.id}
+        isSuperAdmin={user?.role === "SUPER_ADMIN"}
+      />
+
       {loginFor && (
         <StaffLoginModal
           employee={loginFor}
           onClose={() => setLoginFor(null)}
+          onMakeLogin={setMakeLoginFor}
           onSuspend={suspendEmployee}
           onRemove={removeEmployee}
         />
@@ -644,11 +679,14 @@ const ACTION_ICON: Record<string, string> = {
 function StaffLoginModal({
   employee,
   onClose,
+  onMakeLogin,
   onSuspend,
   onRemove,
 }: {
   employee: Employee;
   onClose: () => void;
+  /** Hands the job back to the page, which owns the roster and the role list. */
+  onMakeLogin: (e: Employee) => void;
   /** Acts on the PERSON, not the account — so it lives on the page, which owns
    *  the roster this changes. */
   onSuspend: (e: Employee) => void;
@@ -694,19 +732,22 @@ function StaffLoginModal({
                 DineAI emails them a verification link the moment you create one — they
                 can&apos;t sign in until they confirm it.
               </p>
-              {/* "why no redirect link — please add one."
-                  It named the Staff page and then left you to go and find it,
-                  which is the exact dead end the copy was describing. It lands
-                  on the People door, where logins are made — not on a person,
-                  because the whole reason you are reading this is that this one
-                  has no account to open yet. */}
-              <Link
-                href="/staff?view=people"
+              {/* "to give login cred to that employee we need to go to roles
+                  page again, which is like roaming here and there."
+                  This used to be a link to /staff. It named the destination and
+                  then made you walk there — which is the dead end the complaint
+                  describes, one step better disguised. The login is made here,
+                  for this person, and the picker already knows who they are. */}
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onMakeLogin(employee);
+                }}
                 className="mise-press mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-700"
               >
-                Create a login on Staff
-                <span aria-hidden>→</span>
-              </Link>
+                🔑 Create their login
+              </button>
             </div>
           ) : (
             <>
