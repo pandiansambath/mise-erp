@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { revealForm } from "@/lib/reveal";
+import { PackChainEditor, type PackLevel } from "@/components/PackChainEditor";
 import { DetailSheet, SheetRing } from "@/components/DetailSheet";
 import { SheetPopup } from "@/components/SheetPopup";
 import { MoveToCategory } from "@/components/inventory/MoveToCategory";
@@ -155,6 +156,22 @@ export default function InventoryPage() {
   const [moveOpen, setMoveOpen] = useState(false);
   const [catTo, setCatTo] = useState("");
   const [allergensTouched, setAllergensTouched] = useState(false);
+  // THE BUYING CHAIN — and the reason it is guarded exactly like allergens.
+  //
+  // `PackChainEditor` was written, with his brief inside it, and imported by
+  // NOTHING. Every reference to `pack_levels` anywhere in the frontend was a
+  // READ: the chain could be displayed on four pages and created on none. The
+  // backend has accepted it the whole time. Items that have a chain got one
+  // from a seed or an AI import; nobody could ever type one.
+  //
+  // It is guarded because `set_levels` REPLACES the chain, and
+  // `vendor_items.pack_level_id` is ON DELETE SET NULL — so saving this form
+  // while carrying a stale chain would silently un-set the pack every supplier
+  // had chosen. "Not mentioned" and "sent empty" mean different things to the
+  // API for exactly this reason, so the field is sent ONLY if somebody touched
+  // the editor.
+  const [chain, setChain] = useState<PackLevel[]>([]);
+  const [chainTouched, setChainTouched] = useState(false);
   // Per-item "purchases by supplier" record (expand a row to load + show it).
   const [expanded, setExpanded] = useState<string | null>(null);
   /** The item whose supplier picker is open — the in-place answer to both
@@ -352,6 +369,14 @@ export default function InventoryPage() {
   }, []);
 
   function startEdit(item: Item) {
+    // The chain as it stands, so editing one rung does not wipe the rest.
+    setChain(
+      ((item.pack_levels ?? []) as { name: string; contains: unknown }[]).map((l) => ({
+        name: l.name,
+        contains: String(l.contains ?? ""),
+      })),
+    );
+    setChainTouched(false);
     setEditingId(item.id);
     // preselect whoever is already the chosen supplier
     setFormVendor((itemSuppliers[item.id] ?? []).find((v) => v.is_preferred)?.vendor_id ?? "");
@@ -366,6 +391,7 @@ export default function InventoryPage() {
       packSize: item.pack_size ?? "",
     });
     setAllergensTouched(false);
+    setChainTouched(false);
     setError(null);
     // No scrolling: the form opens over the row you clicked. The modal focuses
     // its first field itself, so the caret still lands where you need it.
@@ -381,6 +407,7 @@ export default function InventoryPage() {
     setNewVendorName("");
     setForm(EMPTY);
     setAllergensTouched(false);
+    setChainTouched(false);
     setError(null);
   }
 
@@ -413,6 +440,13 @@ export default function InventoryPage() {
     // Write allergens whenever the user touched the picker (works for add + edit).
     // Left untouched → stays "not reviewed" so the Allergens sheet still prompts.
     if (allergensTouched) payload.allergens = form.allergens;
+    // Only when edited — see the note on `chain`. Rows with no name or no
+    // positive count are dropped: a half-typed rung is not a rung.
+    if (chainTouched) {
+      payload.pack_levels = chain.filter(
+        (l) => l.name.trim() && parseFloat(l.contains) > 0,
+      );
+    }
     try {
       if (editingId) {
         await api.patch<Item>(`/inventory/items/${editingId}`, payload);
@@ -1319,6 +1353,24 @@ export default function InventoryPage() {
               no clashes.
             </div>
           )}
+
+          <div className="rounded-xl border border-line bg-paper-2/60 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+              How do you buy it?
+            </p>
+            <p className="mb-2 text-xs text-fg-faint">
+              Only if it arrives in boxes or packets. Leave it alone and nothing
+              changes — suppliers keep whatever pack they already sell.
+            </p>
+            <PackChainEditor
+              baseUnit={form.unit}
+              levels={chain}
+              onChange={(next) => {
+                setChain(next);
+                setChainTouched(true);
+              }}
+            />
+          </div>
 
           {(
             <div className="rounded-xl border border-line bg-paper-2/60 p-3">
