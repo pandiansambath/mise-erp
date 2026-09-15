@@ -32,7 +32,10 @@ function PnlLine({
 }) {
   const { currency } = useCurrency();
   const profit =
-    tone === "profit" ? (parseFloat(value) >= 0 ? "text-brand-400" : "text-rose-400") : "";
+    // Profit is MEANING, not identity. `text-brand-400` made the best number
+    // on the money screen the same colour as the alarm on every red theme —
+    // on burgundy, NET PROFIT read exactly like LOW STOCK.
+    tone === "profit" ? (parseFloat(value) >= 0 ? "mise-tone-good" : "mise-tone-bad") : "";
   const n = Math.abs(parseFloat(value) || 0) * CURRENCIES[currency].rate;
   return (
     <div
@@ -220,9 +223,25 @@ export default function ReportsPage() {
         <>
           <div className="mise-stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label="Net sales" value={format(pnl.net_sales)} />
-            <StatCard label="Net profit" value={format(pnl.net_profit)} accent={parseFloat(pnl.net_profit) >= 0 ? "brand" : "rose"} />
-            <StatCard label="Net margin" value={`${pnl.net_margin_pct}%`} accent="brand" />
-            <StatCard label="Food cost" value={`${pnl.food_cost_pct}%`} hint="target 25-35%" accent="amber" />
+            <StatCard label="Net profit" value={format(pnl.net_profit)} accent={parseFloat(pnl.net_profit) >= 0 ? "good" : "bad"} />
+            <StatCard label="Net margin" value={`${pnl.net_margin_pct}%`} accent="good" />
+            {/* This card used to be amber ALWAYS. At 18.4% it flagged a
+                warning directly above a Meter showing the same figure in green
+                and the words "Under 30% of sales is healthy" — the page
+                contradicting itself on the one screen that is about money.
+                It now follows the same rule as that Meter. */}
+            <StatCard
+              label="Food cost"
+              value={`${pnl.food_cost_pct}%`}
+              hint="healthy under 30%"
+              accent={
+                (parseFloat(pnl.food_cost_pct) || 0) <= 30
+                  ? "good"
+                  : (parseFloat(pnl.food_cost_pct) || 0) <= 35
+                    ? "amber"
+                    : "bad"
+              }
+            />
           </div>
 
           {compare && prev && (
@@ -314,7 +333,7 @@ export default function ReportsPage() {
                   segments={[
                     { label: "Food", value: num(pnl.cost_of_sales), color: "#f43f5e" },
                     { label: "Running costs", value: num(pnl.operating_expenses), color: "#f59e0b" },
-                    { label: "Profit kept", value: num(pnl.net_profit), color: "#10b981" },
+                    { label: "Profit kept", value: num(pnl.net_profit), color: "var(--tone-good)" },
                   ]}
                 />
               </div>
@@ -335,7 +354,7 @@ export default function ReportsPage() {
               </div>
               <div className="mise-well mt-4 flex items-center justify-between rounded-xl px-4 py-3">
                 <span className="text-sm font-medium text-fg">Net profit this period</span>
-                <span className={`text-xl font-bold ${parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}`}>
+                <span className={`text-xl font-bold ${parseFloat(pnl.net_profit) >= 0 ? "mise-tone-good" : "mise-tone-bad"}`}>
                   <AnimatedNumber value={parseFloat(pnl.net_profit) * rate} prefix={symbol} decimals={2} />
                 </span>
               </div>

@@ -102,7 +102,8 @@ export function StatCard({
   label: string;
   value: ReactNode;
   hint?: string;
-  accent?: "slate" | "brand" | "amber" | "rose" | "copper";
+  /** `good`/`bad` are MEANING and survive a red theme; `brand` is identity. */
+  accent?: "slate" | "brand" | "amber" | "rose" | "copper" | "good" | "bad";
   /** Makes the whole card a shortcut (e.g. "Low stock" → inventory, filtered). */
   href?: string;
   /** e.g. { value: "↑ 12%", up: true } — tinted change chip next to the value */
@@ -113,6 +114,8 @@ export function StatCard({
   const accents: Record<string, string> = {
     slate: "text-fg",
     brand: "text-brand-400",
+    good: "mise-tone-good",
+    bad: "mise-tone-bad",
     amber: "text-amber-400",
     rose: "text-rose-400",
     copper: "text-copper-300",
