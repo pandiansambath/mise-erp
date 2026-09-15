@@ -25,7 +25,7 @@ import Link from "next/link";
 // needs. That is what fixes the wrapping and the truncation: not smaller type,
 // more room. And you only ever see the empty state of the thing you asked for.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   api,
@@ -255,6 +255,62 @@ export default function MySpacePage() {
       .sort((a, b) => (a.date + a.start_time).localeCompare(b.date + b.start_time))[0];
   }, [shifts, today]);
 
+  // "+1, +2, +3 — once they open it, the count clears."
+  //
+  // The badges here were TOTALS: Rota showed how many shifts exist in the
+  // window, so it read "7" forever and told a chef nothing about whether
+  // anything had CHANGED. A number that never clears is decoration.
+  //
+  // What he asked for is a count of what is NEW TO THIS PERSON since they last
+  // looked. That is per-viewer state and it needs no table: the same
+  // seen-set-in-localStorage the notification bell already uses. Wrapped in
+  // try/catch because a kiosk browser with storage disabled must still render
+  // the page — it just always shows the badge, which is the safe direction.
+  const seenKey = `mise.my.seen.${emp?.id ?? "anon"}`;
+  const [seen, setSeen] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    try {
+      setSeen(JSON.parse(window.localStorage.getItem(seenKey) || "{}"));
+    } catch {
+      /* no storage: every badge shows, which errs toward telling them */
+    }
+  }, [seenKey]);
+
+  const unseen = useCallback(
+    (bucket: string, ids: string[]) => ids.filter((id) => !(seen[bucket] ?? []).includes(id)).length,
+    [seen],
+  );
+
+  /** Called when a tab is OPENED — not on render, or the badge would clear
+   *  itself before anybody saw it. */
+  const markSeen = useCallback(
+    (bucket: string, ids: string[]) => {
+      setSeen((prev) => {
+        const next = { ...prev, [bucket]: ids };
+        try {
+          window.localStorage.setItem(seenKey, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [seenKey],
+  );
+
+  const rotaIds = useMemo(() => shifts.map((s) => String(s.id)), [shifts]);
+  const payslipIds = useMemo(() => payslips.map((p) => String(p.id)), [payslips]);
+  const docIds = useMemo(
+    () => [...docs.map((d) => `d${d.id}`), ...pendingReqs.map((r) => `r${r.id}`)],
+    [docs, pendingReqs],
+  );
+
+  // These sit ABOVE the `if (!emp) return` below, not beside the badges they
+  // feed. Hooks after an early return are called conditionally, and React
+  // will mismatch the hook order the first time a staff login is not linked
+  // to an employee. It passes `tsc` and `next build` and fails `npm run
+  // lint` — which is the fourth time that trap has caught something here.
+
   if (loading) return <Spinner />;
 
   if (notLinked || !emp) {
@@ -287,13 +343,13 @@ export default function MySpacePage() {
   // Within 90 days, compared as ISO strings so nothing reads the clock here.
   const visaSoon = Boolean(emp.visa_expiry_date && emp.visa_expiry_date < visaWarnFrom);
 
-  const TABS: { key: Tab; label: string; icon: string; count?: number }[] = [
+  const TABS: { key: Tab; label: string; icon: string; count?: number; ids?: string[] }[] = [
     { key: "attendance", label: "Attendance", icon: "⏱" },
-    { key: "rota", label: "Rota", icon: "📅", count: shifts.length || undefined },
-    { key: "payslips", label: "Payslips", icon: "💷", count: payslips.length || undefined },
+    { key: "rota", label: "Rota", icon: "📅", count: unseen("rota", rotaIds) || undefined, ids: rotaIds },
+    { key: "payslips", label: "Payslips", icon: "💷", count: unseen("payslips", payslipIds) || undefined, ids: payslipIds },
     // The badge means "things needing your attention", not "files on record" —
     // a request you have not sent is the thing worth a number.
-    { key: "documents", label: "Documents", icon: "📄", count: (docs.length + pendingReqs.length) || undefined },
+    { key: "documents", label: "Documents", icon: "📄", count: unseen("documents", docIds) || undefined, ids: docIds },
   ];
 
   return (
@@ -387,7 +443,10 @@ export default function MySpacePage() {
               key={t.key}
               role="tab"
               aria-selected={on}
-              onClick={() => setTab(t.key)}
+              onClick={() => {
+                setTab(t.key);
+                if (t.ids) markSeen(t.key, t.ids);
+              }}
               className={`mise-press flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition ${
                 on ? "bg-brand-600 text-white shadow-sm" : "text-fg-soft hover:text-fg"
               }`}
