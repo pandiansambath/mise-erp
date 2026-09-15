@@ -97,6 +97,9 @@ belongs to (vendor × item × FORM) — never divide a box price to get a loose 
 | Media queries in a scaled preview | They respond to the VIEWPORT, not the element. Needs an iframe. |
 | Portals escape ancestor selectors | A popup rendered to `document.body` is outside `.mise-app`. |
 | `git add -A` with agents running | Sweeps their in-progress work into your commit. |
+| `next start` with `output: "standalone"` | Serves **no CSS**. 200s, selectors resolve, every visual test silently meaningless. |
+| Appending hex alpha to a colour (`${c}26`) | Fine on a literal, invalid on a `var()`. Use `color-mix()`. |
+| Theme key is `mise_theme` | Underscore. `mise-theme` silently leaves every run on the default theme — identical numbers across 'six themes' is the tell. |
 
 ---
 
@@ -138,7 +141,7 @@ pushing alone does not deploy. ~27 min for the backend suite, ~31 min end to end
 
 ## 7. What exists already — do not rebuild it
 
-Months of work. **190 checklist items are done, 45 open** (audited 2026-09-15 —
+Months of work. **202 checklist items are done, 83 open** (2026-09-15 —
 the previous figure was wrong in both directions: one item was ticked while
 blocked, and a whole shipped section was never ticked). Before proposing
 something,
@@ -164,9 +167,22 @@ dishes, a blank white preview, four grey boxes where food should be, and a
 progress bar saying "any moment" on a five-hour-late order. The selector count
 lied every time; the picture told the truth.
 
-- Local loop: `cd frontend && npm run build && npx next start -p 3100`, with
-  Playwright proxying `**/api/**` to prod. ~15s a cycle instead of 27 minutes.
-  Kill port 3100 first (PowerShell `Get-NetTCPConnection -LocalPort 3100`).
+- **Local loop: `npx next dev -p 3100`, NOT `next start`.** `next.config` sets
+  `output: "standalone"`, and **`next start` does not work with it — it serves
+  the HTML with NO STYLESHEET.** One warning, then 200 for every route, every
+  selector resolving, every test running normally against unstyled markup. A
+  contrast probe came back `rgb(0,0,0)` on all six themes and it looked like a
+  bug in the page. `playwright.config.ts` used to boot it too, so any run
+  without `BASE_URL` was measuring an unstyled page unless a dev server
+  happened to be up on 3000 and `reuseExistingServer` quietly used that.
+  Fixed 2026-09-15; if you see uniformly black text, suspect the server first.
+- There is **no backend on localhost:8000** in a frontend-only checkout, so
+  proxy the app's own calls: `page.route("**/api/**", …)` → prod. Sign-in works
+  through it. `e2e/chart-theme.spec.ts` has the pattern.
+- Kill port 3100 first (PowerShell `Get-NetTCPConnection -LocalPort 3100`).
+- **CSS edits need ~20s for dev to recompile.** Re-measuring after 3 seconds
+  returns the OLD stylesheet and looks exactly like "my change did nothing" —
+  it cost a wrong conclusion once already today.
 - `npm run responsive` sweeps 360/390/768/1024/1440/1920 for objective faults —
   sideways scroll, overflow, clipped text, small tap targets. It cannot tell you
   something is ugly.
