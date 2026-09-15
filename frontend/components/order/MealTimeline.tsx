@@ -32,6 +32,8 @@
  *  grows a line. Nothing is ever padded out to look busy.
  */
 
+
+import { timeAgo } from "@/lib/date";
 export type TimelineOrder = {
   id: string;
   status: string;
@@ -75,20 +77,7 @@ const SAY: Record<string, { label: string; hint: string; tone: string }> = {
  *  the first screenshot of a late order duly read "ordered 10:13 PM", which is
  *  the exact thing he asked not to see. It stays relative all the way up.
  */
-function ago(iso: string | null | undefined, now: number): string {
-  if (!iso) return "";
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return "";
-  const m = Math.max(0, Math.floor((now - t) / 60000));
-  if (m < 1) return "just now";
-  if (m === 1) return "a minute ago";
-  if (m < 60) return `${m} min ago`;
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  if (h < 24) return r ? `${h} hr ${r} min ago` : `${h} hr ago`;
-  const d = Math.floor(h / 24);
-  return d === 1 ? "yesterday" : `${d} days ago`;
-}
+const ago = (iso: string | null | undefined, now: number) => timeAgo(iso, now);
 
 /** How long something took, in words. Empty when we cannot honestly say:
  *  orders placed before these columns existed have no `served_at`, and an

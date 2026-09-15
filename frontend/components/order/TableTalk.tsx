@@ -16,6 +16,7 @@
 // restaurant with a drink in their other hand, so the five things anybody
 // actually asks for are one tap away, and the keyboard is the fallback.
 import { useState, useMemo, useEffect, useRef } from "react";
+import { timeAgo } from "@/lib/date";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { API_BASE } from "@/lib/api";
 
@@ -272,7 +273,17 @@ export function TableTalk({
   // receipt for a message they could no longer see, with no way to know it
   // had been read and nothing to show they had already asked twice. Now the
   // tab IS the thread.
-  const [thread, setThread] = useState<{ id: string; body: string; from_staff: boolean }[]>([]);
+  // A minute is a long time at a table. Without this, "just now" stays "just
+  // now" for the whole sitting and the times quietly become a lie.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const [thread, setThread] = useState<
+    { id: string; body: string; from_staff: boolean; at?: string | null }[]
+  >([]);
   useEffect(() => {
     if (tab !== "ask") return;
     let stop = false;
@@ -493,19 +504,46 @@ export function TableTalk({
             <>
               {thread.length > 0 && (
                 <ul className="mb-3 space-y-2">
-                  {thread.map((mm) => (
-                    <li key={mm.id} className="flex">
-                      {mm.from_staff ? (
-                        <span className="mise-card-inset mr-auto w-fit max-w-[88%] rounded-2xl rounded-tl-md px-3.5 py-2 text-sm text-fg">
-                          {mm.body}
+                  {thread.map((mm, i) => {
+                    // WAITING, not ignored.
+                    //
+                    // The last thing the table said with nothing after it has
+                    // been seen by nobody as far as the diner can tell. That is
+                    // the moment someone gets up and goes to find a waiter, so
+                    // the screen should say where it stands rather than leave a
+                    // bubble sitting there looking sent-and-forgotten.
+                    const answered = thread.slice(i + 1).some((x) => x.from_staff);
+                    const awaiting = !mm.from_staff && !answered;
+                    return (
+                      <li key={mm.id} className={`flex flex-col ${mm.from_staff ? "items-start" : "items-end"}`}>
+                        {mm.from_staff ? (
+                          <span className="mise-card-inset w-fit max-w-[88%] rounded-2xl rounded-tl-md px-3.5 py-2 text-sm text-fg">
+                            {mm.body}
+                          </span>
+                        ) : (
+                          <span className="w-fit max-w-[88%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white">
+                            {mm.body}
+                          </span>
+                        )}
+                        {/* "with time too (dont harcode timesatpo as raw)" */}
+                        <span className="mt-0.5 px-1 text-[10px] text-fg-faint">
+                          {timeAgo(mm.at, now)}
+                          {awaiting && (
+                            <>
+                              {mm.at ? " · " : ""}
+                              <span className="mise-tone-warn font-medium">waiting for the counter</span>
+                            </>
+                          )}
+                          {mm.from_staff && (
+                            <>
+                              {mm.at ? " · " : ""}
+                              <span className="mise-tone-good font-medium">from the counter</span>
+                            </>
+                          )}
                         </span>
-                      ) : (
-                        <span className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-brand-600 px-3.5 py-2 text-sm font-medium text-white">
-                          {mm.body}
-                        </span>
-                      )}
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {/* The receipt is a line in the thread now, not a screen that
