@@ -42,6 +42,12 @@ export default function HotelLayout({
   children: React.ReactNode;
   params: Promise<{ hotelId: string }>;
 }) {
+  // `healthOf` needs a clock — 'Quiet' versus 'Dormant' is a question about
+  // how long ago. Taken once at mount via a lazy initialiser: calling
+  // Date.now() in the render body is impure and the React Compiler refuses
+  // it, and for thresholds of 3 and 14 days a fixed mount time is exact
+  // enough to be indistinguishable from a live one.
+  const [nowTs] = useState(() => Date.now());
   const { hotelId } = use(params);
   const { user } = useAuth();
   const { hotels, loading, error, reload } = useFleet();
@@ -72,7 +78,7 @@ export default function HotelLayout({
     );
   }
 
-  const hp = healthOf(hotel);
+  const hp = healthOf(hotel, nowTs);
   const tabs = [
     { href: `/control-room/hotels/${hotelId}`, label: "Vitals", exact: true },
     { href: `/control-room/hotels/${hotelId}/activity`, label: "Activity", exact: false },

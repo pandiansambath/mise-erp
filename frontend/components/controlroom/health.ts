@@ -4,9 +4,12 @@
 
 import type { HotelRow } from "./FleetProvider";
 
-/** Active = traded/logged in this week · Quiet = seen in 14d · Dormant = gone cold */
-export function healthOf(h: HotelRow): { label: "Active" | "Quiet" | "Dormant"; tone: "green" | "amber" | "slate" } {
-  const days = h.last_active ? (Date.now() - new Date(h.last_active).getTime()) / 86400000 : Infinity;
+/** Active = traded/logged in this week · Quiet = seen in 14d · Dormant = gone cold.
+ *  `now` is passed in rather than read here: reading the clock during render
+ *  is impure, and a list that draws differently on two renders with no state
+ *  change is a flicker nobody can point at (see TileCard.tsx:35-38). */
+export function healthOf(h: HotelRow, now: number): { label: "Active" | "Quiet" | "Dormant"; tone: "green" | "amber" | "slate" } {
+  const days = h.last_active ? (now - new Date(h.last_active).getTime()) / 86400000 : Infinity;
   if ((h.sales_entries_7d ?? 0) > 0 || days <= 3) return { label: "Active", tone: "green" };
   if (days <= 14) return { label: "Quiet", tone: "amber" };
   return { label: "Dormant", tone: "slate" };
@@ -24,12 +27,9 @@ export type AttentionItem = {
  * already returned by GET /platform/hotels or /platform/pulse — no new
  * backend work.
  *
- * `trialsEnding` is /platform/pulse's `tenants.trials_ending[]`. The live
- * capture of that endpoint returned an EMPTY array (nothing was ending that
- * day), so the shape of an individual entry was never actually observed —
- * only that the bucket exists. Read defensively: try the field names the
- * rest of the API uses (hotel_id/name/trial_ends_on) and skip an entry
- * silently if none match, rather than assume a shape nobody has seen.
+ * `trialsEnding` is /platform/pulse's `tenants.trials_ending[]`, serialised
+ * by backend/app/platform_admin/observability.py:155-163 as exactly
+ * `{ id, name, handle, ends_on }`. Match that shape exactly.
  */
 export function attention(hotels: HotelRow[], trialsEnding: unknown[] = []): AttentionItem[] {
   const now = Date.now();
@@ -37,8 +37,8 @@ export function attention(hotels: HotelRow[], trialsEnding: unknown[] = []): Att
   for (const raw of trialsEnding) {
     if (!raw || typeof raw !== "object") continue;
     const r = raw as Record<string, unknown>;
-    const id = (r.hotel_id ?? r.id) as string | undefined;
-    const ends = (r.trial_ends_on ?? r.ends_at ?? r.trial_end ?? r.date) as string | undefined;
+    const id = r.id as string | undefined;
+    const ends = r.ends_on as string | undefined;
     if (id && ends) trialFor.set(id, ends);
   }
 
@@ -68,7 +68,7 @@ export function attention(hotels: HotelRow[], trialsEnding: unknown[] = []): Att
       });
     }
 
-    if (h.is_active && healthOf(h).label === "Dormant") {
+    if (h.is_active && healthOf(h, now).label === "Dormant") {
       const days = h.last_active ? Math.floor((now - new Date(h.last_active).getTime()) / 86400000) : null;
       out.push({
         hotelId: h.id,

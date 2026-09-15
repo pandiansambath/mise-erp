@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { PageHeader, Spinner, EmptyState } from "@/components/ui";
@@ -45,14 +46,15 @@ function ErrorCard({ title, error, retry }: { title: string; error: ApiError; re
 /** suspended -> overdue · at-cap -> soon · dormant -> none · else -> ok.
  *  Trial-ending cannot be shown here — /platform/hotels does not return
  *  subscription_status/trial_ends_on, only /pulse's aggregate does. */
-function railOf(h: HotelRow): StripeTone {
+function railOf(h: HotelRow, now: number): StripeTone {
   if (!h.is_active) return "overdue";
   if (h.max_users > 0 && h.max_users < 100000 && h.user_count >= h.max_users) return "soon";
-  if (healthOf(h).label === "Dormant") return "none";
+  if (healthOf(h, now).label === "Dormant") return "none";
   return "ok";
 }
 
 export default function FleetPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const { hotels, loading, error, reload } = useFleet();
   const [f, setF] = useListFilter("cr.fleet");
@@ -80,10 +82,10 @@ export default function FleetPage() {
         (h.city ?? "").toLowerCase().includes(s),
     );
     if (healthFilter === "suspended") list = list.filter((h) => !h.is_active);
-    else if (healthFilter !== "all") list = list.filter((h) => h.is_active && healthOf(h).label === healthFilter);
+    else if (healthFilter !== "all") list = list.filter((h) => h.is_active && healthOf(h, nowTs).label === healthFilter);
     const val = (h: HotelRow): number | string => {
       if (sortKey === "name") return h.name.toLowerCase();
-      if (sortKey === "health") return rank[healthOf(h).label] ?? 3;
+      if (sortKey === "health") return rank[healthOf(h, nowTs).label] ?? 3;
       if (sortKey === "last") return h.last_active ? -new Date(h.last_active).getTime() : Infinity;
       if (sortKey === "sales") return -(h.sales_entries_7d ?? 0);
       return -h.user_count;
@@ -93,7 +95,7 @@ export default function FleetPage() {
       const vb = val(b);
       return (va < vb ? -1 : va > vb ? 1 : 0) * sortDir;
     });
-  }, [hotels, f.q, healthFilter, sortKey, sortDir]);
+  }, [hotels, f.q, healthFilter, sortKey, sortDir, nowTs]);
 
   const pageRows = pageOf(filtered, f);
 
@@ -173,13 +175,17 @@ export default function FleetPage() {
               </thead>
               <tbody>
                 {pageRows.map((h) => {
-                  const hp = healthOf(h);
+                  const hp = healthOf(h, nowTs);
                   const atCap = h.max_users > 0 && h.max_users < 100000 && h.user_count >= h.max_users;
                   return (
-                    <tr key={h.id} className={`group border-b border-line/60 transition hover:bg-glass/[0.04] ${!h.is_active ? "opacity-70" : ""}`}>
+                    <tr
+                      key={h.id}
+                      onClick={() => router.push(`/control-room/hotels/${h.id}`)}
+                      className={`group cursor-pointer border-b border-line/60 transition hover:bg-glass/[0.04] ${!h.is_active ? "opacity-70" : ""}`}
+                    >
                       <td className="relative py-2.5 pl-4 pr-3">
-                        <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${STRIPE[railOf(h)]}`} />
-                        <Link href={`/control-room/hotels/${h.id}`} className="block min-w-0">
+                        <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${STRIPE[railOf(h, nowTs)]}`} />
+                        <Link href={`/control-room/hotels/${h.id}`} onClick={(e) => e.stopPropagation()} className="block min-w-0">
                           <span className="block truncate text-sm font-semibold text-fg">{h.name}</span>
                           <span className="block truncate font-mono text-[11px] text-fg-faint">
                             {[h.city, h.admin_email ?? "no admin"].filter(Boolean).join(" · ")}
