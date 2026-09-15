@@ -146,11 +146,19 @@ async function audit(page: Page, phone: boolean): Promise<Fault[]> {
       // 3. TEXT CUT OFF. The one that produced "Welc / back / to / NIRA".
       //    Only where overflow is actually hidden — a scrollable box is fine,
       //    and `line-clamp` is a deliberate truncation, not a fault.
+      // Screen-reader-only text is clipped ON PURPOSE — `.sr-only` is a 1px
+      // box by definition. Flagging it ("Trend from £0.00 to £0.00 shows 1%")
+      // is noise of exactly the kind that gets a check switched off.
+      const srOnly =
+        el.classList.contains("sr-only") ||
+        (r.width <= 1 && r.height <= 1) ||
+        style.clipPath === "inset(50%)";
       const clamps = style.webkitLineClamp && style.webkitLineClamp !== "none";
       const hidden =
         style.overflowX === "hidden" || style.overflow === "hidden";
       if (
         !clamps &&
+        !srOnly &&
         hidden &&
         el.scrollWidth > el.clientWidth + 2 &&
         el.children.length === 0 &&

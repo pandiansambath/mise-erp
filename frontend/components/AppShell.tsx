@@ -1017,7 +1017,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             pb is generous so the floating "Ask DineAI" launcher (bottom-right)
             never covers a page's last action button. */}
-        <main className="flex-1 px-4 pb-28 pt-6 lg:overflow-y-auto lg:px-8 lg:pb-28 lg:pt-8 has-[[data-bench]]:pt-0 has-[[data-bench]]:pb-0 has-[[data-bench]]:lg:pt-0 has-[[data-bench]]:lg:pb-0">
+        <main /* pb-36 on a phone, not pb-28: the voice button is fixed 80px up and is
+             56px tall, so it occupies to 136px — content ending at 112px sat
+             underneath it. It was overlapping the "Show suspended" toggle on
+             Employees and a card's action row on Inventory, which is worse
+             than untidy because a fixed element on top of a control eats the
+             tap. Desktop is unchanged; the button sits lower there. */
+        className="flex-1 px-4 pb-36 pt-6 lg:overflow-y-auto lg:px-8 lg:pb-28 lg:pt-8 has-[[data-bench]]:pt-0 has-[[data-bench]]:pb-0 has-[[data-bench]]:lg:pt-0 has-[[data-bench]]:lg:pb-0">
         {/* One line, every page, until the address is confirmed. Loosening the
             gate without saying what it costs just moves the confusion. */}
         <VerifyBanner />
