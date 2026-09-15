@@ -44,6 +44,7 @@ import contextvars
 import threading
 import time
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 #: Per-request DB tallies. A ContextVar rather than `request.state` because the
@@ -61,6 +62,11 @@ _INTERNAL: contextvars.ContextVar[bool] = contextvars.ContextVar(
 )
 
 ANON = "00000000-0000-0000-0000-000000000000"
+
+#: Bumped whenever the allocation formula changes, and returned with every
+#: allocated figure — so a screenshot of a per-hotel cost can always be
+#: traced back to the arithmetic that produced it.
+BASIS_VERSION = "v1-2026-09"
 
 #: Anything at or above this and a single request's DB time is suspicious
 #: rather than merely slow. Only used for the docstring's sake today.
@@ -244,3 +250,176 @@ async def flush(db: Any) -> int:
 
     COUNTERS.last_flush = time.time()
     return len(payload)
+
+
+# ── the allocation, and what it is honestly claiming ──────────────────────
+#
+#     "ALSO SHOW HOTEL WISE TOO..WHO COST HOW MUHC N WHY WITH PROOFs"
+#
+# AWS has never heard of a hotel. Three restaurants share one EC2 instance, one
+# database and one IP, and no tag can change that — I checked: every resource
+# carries Project/ManagedBy/Name and nothing tenant-shaped, and nothing could.
+#
+# So this is a MODEL. It is labelled one everywhere it is shown, it prints its
+# own formula and inputs, and the page puts it beside the measured figure
+# rather than adding them into a single total.
+#
+# AND THE SENTENCE THAT MAKES IT HONEST: on a fixed t3.micro and db.t4g.micro
+# the marginal cost of this pool is ZERO until you resize. The box costs $22 a
+# month with one restaurant or with fifty. A share of it is a fair split of
+# RENT — not a statement about who caused spend. That is why every per-hotel
+# row carries two numbers:
+#
+#     attributed share of shared costs      $4.12   (model)
+#     would actually stop being spent       $0.31   (measured)
+#
+# Either one alone is a lie, in a different direction.
+
+
+class _Allocation(dict):
+    """A plain mapping of hotel -> row, with the model's working on `.meta`.
+
+    A subclass rather than a tuple so it still satisfies "returns a dict keyed
+    by hotel", which is what every caller and test expects to iterate.
+    """
+
+    meta: dict[str, Any]
+
+
+def allocate_shared_cost(
+    hotel_stats: dict[Any, dict[str, float]],
+    shared_usd: dict[str, float],
+) -> dict[Any, dict[str, Any]]:
+    """Split the SHARED pool across hotels, and show the working.
+
+    `hotel_stats` — key -> {"duration_ms", "db_ms", "ai_latency_ms"}, RAW.
+    The netting happens in here, deliberately:
+
+        app_ms = max(0, duration_ms − db_ms − ai_latency_ms)
+
+    A caller that had to do that itself would eventually forget, and the
+    failure is invisible: charge a tenant for wall-clock and you over-bill
+    exactly the AI-heavy ones, because a four-second Bedrock turn is mostly
+    idle waiting. Subtracting db and AI time is what makes duration a CPU
+    proxy rather than a PATIENCE proxy.
+
+    `shared_usd` — {"ec2_compute", "ebs", "rds_instance", "rds_storage"} for
+    the period.
+
+    ⚠️ rds_storage RIDES WITH rds_instance IN w_db, and that is an assumption
+    rather than something the brief stated. The design named four components
+    and defined only two weights, so storage had no home and the shares could
+    not sum to 1. Storage is the database's disk and the hotels that write most
+    fill it, so `db` is the defensible home — but splitting it by rows-per-
+    hotel is the better model, needs a weekly row-count sweep that does not
+    exist, and `basis_version` moves if that lands.
+
+    Returns key -> {"share", "allocated_usd", "app_ms", "db_ms"}.
+
+    The pool, the weights and the share total ride on `.meta` — an ATTRIBUTE,
+    not a sibling key. They were a `_meta` entry first and that was wrong: any
+    caller iterating the result as rows hits a row with no "share" in it, which
+    is a KeyError at best and a fake hotel in a table at worst.
+    """
+    app_pool = max(0.0, float(shared_usd.get("ec2_compute", 0.0))) + max(
+        0.0, float(shared_usd.get("ebs", 0.0))
+    )
+    db_pool = max(0.0, float(shared_usd.get("rds_instance", 0.0))) + max(
+        0.0, float(shared_usd.get("rds_storage", 0.0))
+    )
+    total = app_pool + db_pool
+
+    netted: dict[Any, dict[str, float]] = {}
+    for key, s in hotel_stats.items():
+        db_ms = max(0.0, float(s.get("db_ms", 0.0)))
+        app_ms = max(
+            0.0,
+            float(s.get("duration_ms", 0.0)) - db_ms - float(s.get("ai_latency_ms", 0.0)),
+        )
+        netted[key] = {"app_ms": app_ms, "db_ms": db_ms}
+
+    sum_app = sum(v["app_ms"] for v in netted.values())
+    sum_db = sum(v["db_ms"] for v in netted.values())
+
+    meta: dict[str, Any] = {
+        "pool_usd": round(total, 6),
+        "basis_version": BASIS_VERSION,
+        "inputs": {"sum_app_ms": sum_app, "sum_db_ms": sum_db},
+    }
+
+    # NOTHING MEASURED MEANS NO ANSWER — not an equal split. An equal split
+    # looks like a measurement and is not one. The page says "no activity in
+    # this period", which is true.
+    if total <= 0 or not netted or (sum_app <= 0 and sum_db <= 0):
+        empty = _Allocation(
+            {k: {"share": 0.0, "allocated_usd": 0.0, **v} for k, v in netted.items()}
+        )
+        meta.update(
+            share_total=0.0,
+            weights={"app": 0.0, "db": 0.0},
+            note="no measured usage in this period — nothing to allocate",
+        )
+        empty.meta = meta
+        return empty
+
+    w_app = app_pool / total
+    w_db = db_pool / total
+
+    # A pool with no measured driver cannot be allocated on that driver. Fold
+    # its weight into the other rather than divide by zero — and SAY SO, because
+    # silently dropping a term is how a model starts lying.
+    renormalised = None
+    if sum_app <= 0:
+        w_db, w_app, renormalised = w_db + w_app, 0.0, "app"
+    elif sum_db <= 0:
+        w_app, w_db, renormalised = w_app + w_db, 0.0, "db"
+
+    out = _Allocation()
+    for key, v in netted.items():
+        share = (w_app * (v["app_ms"] / sum_app) if sum_app > 0 else 0.0) + (
+            w_db * (v["db_ms"] / sum_db) if sum_db > 0 else 0.0
+        )
+        out[key] = {
+            "share": share,
+            "allocated_usd": round(total * share, 6),
+            "app_ms": v["app_ms"],
+            "db_ms": v["db_ms"],
+        }
+
+    meta.update(
+        weights={"app": round(w_app, 6), "db": round(w_db, 6)},
+        renormalised=renormalised,
+        #: Rendered as an equation that visibly balances. If this is not
+        #: 1.0000 the model has a bug and the operator can see it.
+        share_total=round(sum(r["share"] for r in out.values()), 6),
+    )
+    out.meta = meta
+    return out
+
+
+def reconcile_bedrock(
+    aws_billed_usd: float,
+    ai_usage_cost_usd_sum: float,
+) -> float | None:
+    """How far our own AI ledger is from what AWS actually charged.
+
+    `ai_usage.cost_usd` is OUR estimate from a token price table, not AWS's
+    charge, and it under-reports: 76% of AWS's Bedrock figure over 15 days and
+    41% over 30. He asked for per-hotel cost "with proofs", and a proof that
+    disagrees with the bill he can check himself fails on the first click.
+
+    So the per-hotel AI figure is an ALLOCATION of AWS's billed total, using our
+    logged tokens as the key — and this ratio is shown, because if it drifts
+    from ~1.0 the token price table is stale and the page has just said so.
+
+    Returns None when there is nothing to divide by. NOT 1.0: a made-up
+    agreement is worse than an admitted gap.
+    """
+    if ai_usage_cost_usd_sum <= 0:
+        return None
+    # Decimal in, Decimal out. Money arrives as Decimal everywhere else in this
+    # codebase and converting to float here would put a binary rounding error
+    # into the one figure whose job is to prove two ledgers agree.
+    if isinstance(aws_billed_usd, Decimal) or isinstance(ai_usage_cost_usd_sum, Decimal):
+        return Decimal(str(aws_billed_usd)) / Decimal(str(ai_usage_cost_usd_sum))
+    return round(float(aws_billed_usd) / float(ai_usage_cost_usd_sum), 4)
