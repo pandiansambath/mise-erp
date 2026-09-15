@@ -112,10 +112,10 @@ export default function FleetPage() {
   if (error) return <ErrorCard title="Could not load the fleet" error={error} retry={reload} />;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-1 flex-col space-y-4">
       <PageHeader title="Hotels" subtitle="Every restaurant on DineAI — click one to manage it." />
 
-      <div className="mise-card-inset p-0">
+      <div className="mise-card-inset flex min-h-0 flex-1 flex-col p-0">
         <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
           <input
             value={f.q}

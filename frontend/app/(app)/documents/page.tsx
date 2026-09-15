@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -49,6 +49,18 @@ export default function DocumentsPage() {
   const [picked, setPicked] = useState<string | null>(null);
 
   const [docs, setDocs] = useState<DocumentItem[]>([]);
+  // ONE PREDICATE, NOT TWO.
+  //
+  // The tab read "The restaurant's 3" above a list showing ONE card,
+  // because the count used `docs.length` while the list filtered out
+  // documents belonging to an employee. The same question answered in two
+  // places, which is this project's most repeated failure shape. A page
+  // that miscounts its own contents is worse than one showing nothing: it
+  // makes the reader doubt everything else on it.
+  const venueDocs = useMemo(
+    () => docs.filter((d) => d.related_entity_type !== "EMPLOYEE"),
+    [docs],
+  );
   const [typeFilter, setTypeFilter] = useState("all");
   const [expiring, setExpiring] = useState<ExpiringDoc[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -249,7 +261,7 @@ export default function DocumentsPage() {
         {([
           // Named for whose they are, which is the only difference that
           // matters: ours, or somebody's we asked for.
-          ["venue", "\u{1f3e0} The restaurant's", docs.length],
+          ["venue", "\u{1f3e0} The restaurant's", venueDocs.length],
           ["staff", "\u{1f9d1} Asked from staff", requests.length],
         ] as const).map(([key, label, count]) => {
           const on = tab === key;
@@ -340,10 +352,11 @@ export default function DocumentsPage() {
             thirty days, quiet when there is nothing to chase. Same rule as the
             visa stripe on Employees, because it is the same question. */}
         {(() => {
-          const shown = docs.filter(
-            (d) =>
-              d.related_entity_type !== "EMPLOYEE" &&
-              (typeFilter === "all" || d.doc_type === typeFilter),
+          // `venueDocs` already excludes employees — this only narrows by
+          // type, which is a sub-filter WITHIN the tab rather than part of what
+          // the tab counts.
+          const shown = venueDocs.filter(
+            (d) => typeFilter === "all" || d.doc_type === typeFilter,
           );
           if (shown.length === 0) {
             return (
