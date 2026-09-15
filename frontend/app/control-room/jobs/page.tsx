@@ -100,13 +100,21 @@ export default function JobBoardPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-1 flex-col space-y-5">
       <PageHeader
         title="Job board"
         subtitle="Every vacancy on the public /careers board across the fleet — close or remove anything, all audited."
       />
 
-      <Card className="p-0">
+      {/* FILL THE COLUMN.
+          A qa pass found ~265px of bare ground under the last card here, and
+          the same on the Job board. His most repeated complaint, and the
+          codebase's own layout note already says why it matters: empty space
+          INSIDE a card is normal; empty space OUTSIDE one reads as a component
+          that failed to load.
+          `<main>` is already `flex flex-1 flex-col`, so the page only has to
+          claim it — which is what the Hotels page does and these did not. */}
+      <Card className="flex min-h-0 flex-1 flex-col p-0">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
           <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">
             Postings

@@ -36,9 +36,19 @@ class EmployeeCreate(BaseModel):
     @field_validator("salary_type")
     @classmethod
     def valid_salary(cls, v: str) -> str:
-        if v not in _SAL:
-            raise ValueError(f"salary_type must be one of {sorted(_SAL)}")
-        return v
+        """Accept either case, and say what is valid when it is neither.
+
+        The app always sends "MONTHLY"/"HOURLY", so this only ever bit somebody
+        integrating against the API or typing a request by hand — who got a 422
+        for a difference that carries no meaning. Case is not information here;
+        rejecting on it is a rule with nothing behind it.
+        """
+        if v is None:
+            return v
+        up = str(v).strip().upper()
+        if up not in _SAL:
+            raise ValueError(f"salary_type must be one of {sorted(_SAL)} (any case)")
+        return up
     #: This hotel's own extra fields — see `app/custom_fields`. A free-form
     #: bag on purpose: the whole point is that we do not know what a given
     #: restaurant keeps. Declared explicitly on Out as well, because
@@ -47,10 +57,26 @@ class EmployeeCreate(BaseModel):
     custom: dict[str, object] = Field(default_factory=dict)
 
 
+def valid_salary_value(cls, v: str | None) -> str | None:  # noqa: N805
+    """Shared by create and update so the two cannot drift apart."""
+    if v is None:
+        return v
+    up = str(v).strip().upper()
+    if up not in _SAL:
+        raise ValueError(f"salary_type must be one of {sorted(_SAL)} (any case)")
+    return up
+
+
 class EmployeeUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=120)
     job_title: str | None = None
+    #: VALIDATED HERE TOO. It was not, so a PATCH could set salary_type to any
+    #: string at all — "banana" would have been stored, and payroll branches on
+    #: this field. Create was guarded and update was not, which is the more
+    #: dangerous half: a bad value arrives on a record that already has pay
+    #: attached to it.
     salary_type: str | None = None
+    _norm_salary = field_validator("salary_type")(valid_salary_value)
     monthly_salary: Decimal | None = Field(default=None, ge=0)
     hourly_rate: Decimal | None = Field(default=None, ge=0)
     pay_day: int | None = Field(default=None, ge=1, le=28)

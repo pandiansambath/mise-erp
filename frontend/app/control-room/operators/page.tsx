@@ -111,7 +111,7 @@ export default function OperatorsPage() {
   const ops = opsQ.data?.operators ?? [];
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-1 flex-col space-y-5">
       <PageHeader
         title="Operators"
         subtitle="Who can open this Control Room — add a colleague, cut access instantly, all audited."
@@ -167,7 +167,15 @@ export default function OperatorsPage() {
         {addMsg && <p className="mt-2 text-xs font-medium text-brand-300">{addMsg}</p>}
       </Card>
 
-      <Card className="p-0">
+      {/* FILL THE COLUMN.
+          A qa pass found ~265px of bare ground under the last card here, and
+          the same on the Job board. His most repeated complaint, and the
+          codebase's own layout note already says why it matters: empty space
+          INSIDE a card is normal; empty space OUTSIDE one reads as a component
+          that failed to load.
+          `<main>` is already `flex flex-1 flex-col`, so the page only has to
+          claim it — which is what the Hotels page does and these did not. */}
+      <Card className="flex min-h-0 flex-1 flex-col p-0">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
           <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">
             Operator accounts
