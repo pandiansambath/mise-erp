@@ -1635,14 +1635,14 @@ export default function InventoryPage() {
                   onClick={renameCategory}
                   disabled={!catFrom || !catTo.trim()}
                   data-tone="brand"
-                  className="mise-btn-flat mise-press px-3 py-2 text-sm font-semibold text-brand-300 disabled:opacity-40"
+                  className="mise-btn-flat mise-press shrink-0 whitespace-nowrap px-3 py-2 text-sm font-semibold text-brand-300 disabled:opacity-40"
                 >
                   Rename
                 </button>
                 <button
                   type="button"
                   onClick={() => { setCatMgr(false); setCatFrom(""); setCatTo(""); }}
-                  className="mise-btn-flat mise-press px-3 py-2 text-sm text-fg-soft"
+                  className="mise-btn-flat mise-press shrink-0 whitespace-nowrap px-3 py-2 text-sm text-fg-soft"
                 >
                   Cancel
                 </button>
@@ -1669,7 +1669,7 @@ export default function InventoryPage() {
                     setCatFilter("all");
                     setVendorFocus("all");
                   }}
-                  className="mise-btn-flat mise-press w-full px-4 py-2.5 text-sm text-fg-soft"
+                  className="mise-btn-flat mise-press shrink-0 whitespace-nowrap w-full px-4 py-2.5 text-sm text-fg-soft"
                 >
                   Clear all filters
                 </button>
@@ -1873,7 +1873,7 @@ export default function InventoryPage() {
                           >
                             🛒 Order
                           </button>
-                          <button onClick={() => startEdit(item)} className="mise-btn-flat mise-press min-h-[34px] rounded-lg px-3 py-2 text-xs font-medium text-fg-soft">
+                          <button onClick={() => startEdit(item)} className="mise-btn-flat mise-press shrink-0 whitespace-nowrap min-h-[34px] rounded-lg px-3 py-2 text-xs font-medium text-fg-soft">
                             ✎
                           </button>
                         </>
@@ -2040,7 +2040,7 @@ export default function InventoryPage() {
                                 onClick={(e) => { e.stopPropagation(); setSupplierFor(item); }}
                                 title="Nobody sells this yet — add the first price, here"
                                 data-testid="inv-add-supplier"
-                                className="mise-btn-flat mise-press inline-flex min-h-[32px] items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium text-fg-soft"
+                                className="mise-btn-flat mise-press shrink-0 whitespace-nowrap inline-flex min-h-[32px] items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium text-fg-soft"
                               >
                                 ＋ supplier
                               </button>
@@ -2084,13 +2084,13 @@ export default function InventoryPage() {
                                    whose cards are pressed in. Same shape now,
                                    with colour saying which is which. */
                                 data-tone="brand"
-                                className="mise-btn-flat mise-press min-h-[34px] px-2.5 py-2 text-xs font-medium text-brand-300 disabled:cursor-not-allowed"
+                                className="mise-btn-flat mise-press shrink-0 whitespace-nowrap min-h-[34px] px-2.5 py-2 text-xs font-medium text-brand-300 disabled:cursor-not-allowed"
                               >
                                 🛒 Order
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); startEdit(item); }}
-                                className="mise-btn-flat mise-press min-h-[34px] px-2.5 py-2 text-xs font-medium text-fg-soft"
+                                className="mise-btn-flat mise-press shrink-0 whitespace-nowrap min-h-[34px] px-2.5 py-2 text-xs font-medium text-fg-soft"
                               >
                                 Edit
                               </button>
@@ -2099,7 +2099,7 @@ export default function InventoryPage() {
                                   onClick={(e) => { e.stopPropagation(); removeItem(item); }}
                                   title="Remove from inventory (Super Admin)"
                                   data-tone="danger"
-                                  className="mise-btn-flat mise-press min-h-[34px] px-2.5 py-2 text-xs text-fg-faint hover:text-rose-300"
+                                  className="mise-btn-flat mise-press shrink-0 whitespace-nowrap min-h-[34px] px-2.5 py-2 text-xs text-fg-faint hover:text-rose-300"
                                 >
                                   ✕
                                 </button>
@@ -2658,7 +2658,7 @@ export default function InventoryPage() {
                       <button
                         type="button"
                         onClick={() => setSupplierFor(openItem)}
-                        className="mise-btn-flat mise-press mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-fg-soft"
+                        className="mise-btn-flat mise-press shrink-0 whitespace-nowrap mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-fg-soft"
                       >
                         <span aria-hidden>＋</span> Add another supplier price
                       </button>

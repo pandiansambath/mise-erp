@@ -1468,7 +1468,7 @@ export function VoiceBubble() {
         aria-label="Talk to DineAI"
         title="Talk to DineAI"
         style={{ ...paint, ...bubbleDrag.style } as React.CSSProperties}
-        className={`mise-voice-launch fixed bottom-44 right-5 z-[60] grid h-14 w-14 touch-none place-items-center rounded-full text-white lg:bottom-24 lg:right-6 ${
+        className={`mise-voice-launch fixed bottom-20 right-5 z-[60] grid h-14 w-14 touch-none place-items-center rounded-full text-white lg:bottom-24 lg:right-6 ${
           bubbleDrag.dragging ? "scale-110 cursor-grabbing" : "cursor-grab"
         }`}
       >
@@ -1523,7 +1523,7 @@ export function VoiceBubble() {
            the top of the screen and the panel is not drawn at all, so the page
            he is working on is completely clear while he talks to it. */
         data-staged={staged || undefined}
-        className="mise-voice fixed bottom-44 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6"
+        className="mise-voice fixed bottom-20 right-5 z-[65] w-[min(23rem,calc(100vw-2.5rem))] lg:bottom-24 lg:right-6"
       >
         <div
           className="mise-voice-card relative rounded-3xl border border-line"

@@ -440,7 +440,13 @@ export default function EmployeesPage() {
             onClick={() => setShowSuspended((v) => !v)}
             data-tone={showSuspended ? "brand" : undefined}
             data-testid="show-suspended"
-            className={`mise-btn-flat mise-press min-h-[36px] px-3 py-1.5 text-xs font-medium ${
+            /* `shrink-0 whitespace-nowrap`, because `flex-wrap` alone does not
+               save a label. A flex item will happily squeeze below its own
+               content width before the row agrees to wrap, so at 360px this
+               button rendered "Show suspende" — a control whose label has been
+               truncated mid-word reads as a rendering fault, not as a tight
+               fit. Now it wraps to its own line and stays readable. */
+            className={`mise-btn-flat mise-press min-h-[36px] shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium ${
               showSuspended ? "text-brand-300" : "text-fg-soft"
             }`}
           >

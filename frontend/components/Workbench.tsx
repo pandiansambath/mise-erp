@@ -189,7 +189,12 @@ export function Workbench({
                  gets squeezed. A grid-rows collapse needs a child that will
                  accept being squashed, which means overflow:hidden on it. */
               <div className="mise-bench-sub">
-                <p className="truncate text-sm text-fg-faint">{subtitle}</p>
+                {/* Truncated on a wide screen where one line is plenty, and
+                    allowed to WRAP on a phone. At 360px "Items, stock levels,
+                    suppliers and weighted-average cost." showed 43% of itself
+                    — a sentence cut at "and weigh" tells a reader less than
+                    no sentence, and costs a line to fix. */}
+                <p className="text-sm text-fg-faint sm:truncate">{subtitle}</p>
               </div>
             )}
           </div>
