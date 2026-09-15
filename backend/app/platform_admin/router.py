@@ -21,11 +21,12 @@ from app.audit.models import AuditEvent
 from app.auth import service as auth_service
 from app.auth.deps import get_current_user
 from app.auth.models import Role, User
+from app.core import usage as usage_mod
 from app.core.database import get_db
 from app.core.pulse import PULSE
 from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
-from app.platform_admin import deletion, observability
+from app.platform_admin import costs, deletion, observability
 from app.platform_admin import features as feat
 from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
 
@@ -908,6 +909,190 @@ async def pulse(
 ) -> dict:
     """Is anything wrong right now. The first screen of the Control Room."""
     return await observability.platform_pulse(db, days=max(1, min(days, 365)))
+
+
+@router.get("/costs/summary")
+async def costs_summary(
+    days: int = 30,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """The one number first, and everything needed to trust it.
+
+        "litrelly when i eneter i need ot know 'oh ths is the amount' fine"
+
+    Two halves with different freshness, marked as such rather than blended:
+    what WE measured is live to the second; what AWS BILLED is hours behind and
+    costs a cent a call to refresh, so it is served from cache and never
+    fetched here.
+
+    Returns plain dict on purpose. No `response_model` — it SILENTLY DROPS
+    undeclared fields and this payload is deeply nested, which is exactly where
+    that trap has bitten nine times.
+    """
+    start, end = costs.window(days)
+    m_start, m_end = await costs.month_to_date_cost(db)
+
+    meas = await costs.measured(db, start=start, end=end)
+    bill = await costs.billed(db, start=m_start, end=m_end)
+
+    ai = await observability.platform_pulse(db, days=max(1, min(days, 365)))
+    ai_block = ai.get("ai", {}) if isinstance(ai, dict) else {}
+
+    # The marginal pool: what one more request actually adds. Everything else
+    # is the box, which is paid for whether anybody calls it or not.
+    marginal = None
+    if bill["available"]:
+        marginal = float(bill["pools"].get("direct", 0.0))
+
+    econ = costs.unit_economics(
+        gross_usd=bill.get("gross_usd"),
+        marginal_usd=marginal,
+        requests=meas["totals"]["requests"],
+        ai_calls=int(ai_block.get("calls") or 0),
+        ai_usd=float(ai_block.get("cost_usd") or 0) or None,
+    )
+
+    cfg = (
+        await db.execute(select(PlatformConfig).limit(1))
+    ).scalar_one_or_none()
+    credits = (getattr(cfg, "aws_credits", None) or {}) if cfg else {}
+
+    return {
+        "window": {"from": start.isoformat(), "to": end.isoformat(), "days": days},
+        "month": {"from": m_start.isoformat(), "to": m_end.isoformat()},
+        "billed": bill,
+        "measured": meas,
+        "unit_economics": econ,
+        #: Typed in by a person — AWS gives no API for the EXPIRY, only the
+        #: balance — so it is rendered as hand-entered and never as measured.
+        "credits": {
+            **credits,
+            "kind": costs.ENTERED,
+            "note": "read off the AWS console; the balance is also readable by API",
+        },
+        "collectors": {
+            "usage_flush": await costs.last_sync(db, "usage_flush"),
+            "aws_costs": await costs.last_sync(db, "aws_costs"),
+        },
+    }
+
+
+@router.get("/costs/hotels")
+async def costs_by_hotel(
+    days: int = 30,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Who cost how much, and why — with the model's working attached.
+
+        "ALSO SHOW HOTEL WISE TOO..WHO COST HOW MUHC N WHY WITH PROOFs"
+
+    TWO MONEY COLUMNS PER HOTEL, deliberately never added together:
+
+      · what they cost us for real — AI, logged per call, exact
+      · their share of the shared box — a MODEL, labelled one, with its formula
+
+    And the sentence that makes the second honest: on a fixed t3.micro the
+    marginal cost of that pool is ZERO until we resize. The box costs the same
+    with one restaurant or fifty, so a share of it is a fair split of rent —
+    not a claim about who caused spend.
+    """
+    start, end = costs.window(days)
+    m_start, m_end = await costs.month_to_date_cost(db)
+
+    meas = await costs.measured(db, start=start, end=end)
+    bill = await costs.billed(db, start=m_start, end=m_end)
+    ai_rows = await observability.ai_by_hotel(db, days=max(1, min(days, 365)))
+
+    ai_by_id = {str(r["hotel_id"]): r for r in ai_rows}
+    logged_ai = sum(float(r.get("cost_usd") or 0) for r in ai_rows)
+
+    aws_bedrock = None
+    if bill["available"]:
+        aws_bedrock = sum(
+            r["amount_usd"] for r in bill["by_service"] if "bedrock" in r["service"].lower()
+        )
+    k = (
+        usage_mod.reconcile_bedrock(aws_bedrock, logged_ai)
+        if aws_bedrock is not None
+        else None
+    )
+
+    shared_usd = {}
+    if bill["available"]:
+        split = bill.get("shared_split", {})
+        shared_usd = {
+            "ec2_compute": split.get("app", 0.0),
+            "ebs": 0.0,
+            "rds_instance": split.get("db", 0.0),
+            "rds_storage": 0.0,
+        }
+
+    stats = {
+        hid: {
+            "duration_ms": h["duration_ms"],
+            "db_ms": h["db_ms"],
+            "ai_latency_ms": float(ai_by_id.get(hid, {}).get("avg_latency_ms") or 0)
+            * float(ai_by_id.get(hid, {}).get("calls") or 0),
+        }
+        for hid, h in meas["per_hotel"].items()
+    }
+    alloc = usage_mod.allocate_shared_cost(stats, shared_usd) if shared_usd else {}
+    alloc_meta = getattr(alloc, "meta", {})
+
+    rows = []
+    for hid, h in meas["per_hotel"].items():
+        a = ai_by_id.get(hid, {})
+        raw_ai = float(a.get("cost_usd") or 0)
+        rows.append({
+            "hotel_id": hid,
+            "name": a.get("name") or ("(anonymous / public traffic)"
+                                      if hid == usage_mod.ANON else "(deleted restaurant)"),
+            "requests": h["requests"],
+            "db_selects": h["db_selects"],
+            "db_writes": h["db_writes"],
+            "ai_calls": int(a.get("calls") or 0),
+            #: MEASURED — logged per call. Reconciled to AWS's billed total
+            #: when we have one, because our token price table under-reports.
+            "ai_usd": costs.envelope(
+                round(raw_ai * float(k), 6) if k else raw_ai,
+                costs.MEASURED,
+                source="ai_usage" + (" reconciled to AWS" if k else ""),
+                raw_usd=raw_ai,
+                reconciliation_k=float(k) if k else None,
+            ),
+            #: ESTIMATE — a share of rent, with its formula one click away.
+            "shared_usd": costs.envelope(
+                (alloc.get(hid) or {}).get("allocated_usd"),
+                costs.ESTIMATE,
+                source=f"model:{alloc_meta.get('basis_version', 'v1')}",
+                share=(alloc.get(hid) or {}).get("share"),
+            ),
+        })
+    rows.sort(
+        key=lambda r: (r["ai_usd"]["value"] or 0) + (r["shared_usd"]["value"] or 0),
+        reverse=True,
+    )
+
+    return {
+        "rows": rows,
+        "model": {
+            **alloc_meta,
+            "explains": "share = w_app*(app_ms/Σapp_ms) + w_db*(db_ms/Σdb_ms); "
+                        "app_ms = max(0, duration − db − ai_latency)",
+            "marginal_truth": "the shared box costs the same with one restaurant or "
+                              "fifty — this is a split of rent, not of blame",
+        },
+        "reconciliation": {
+            "aws_bedrock_usd": aws_bedrock,
+            "our_ledger_usd": logged_ai,
+            "k": float(k) if k else None,
+            "note": "k is AWS billed ÷ our logged. Undefined when nothing was logged — "
+                    "never 1.0, which would claim agreement with no evidence.",
+        },
+        "billed_available": bill["available"],
+    }
 
 
 @router.get("/pulse/http")
