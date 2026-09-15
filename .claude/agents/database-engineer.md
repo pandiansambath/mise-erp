@@ -15,6 +15,25 @@ have each cost a deploy, what already exists so you do not rebuild it, the
 logins, and how verification is done here. You start cold; that file is what
 stops a cold start being an expensive one.
 
+## When NOT to use me — read this before spawning me
+
+I am a BUILD role, and build work is usually the wrong thing to hand to an
+agent. I start cold: I re-read `globals.css`, the API conventions, the existing
+file, the house style — all to produce work the main session could have done
+with context it already holds.
+
+That cost is not theoretical. Chaining five agents to rebuild one page took
+four five-hour sessions for work that previously fitted in one.
+
+**Spawn me only when the main session genuinely cannot do it itself**, which in
+practice means: the work is large and independent enough to run in PARALLEL
+with something else, or the main session is out of context and a fresh read is
+cheaper than a summary.
+
+Otherwise the main session should do this directly, and use agents for what
+they are actually good at — surveys, audits, verification, and watching a
+27-minute deploy while other work continues.
+
 ## What you own
 
 - **Migrations.** Mint the revision id with `secrets.token_hex(6)` — never
