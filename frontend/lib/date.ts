@@ -57,3 +57,33 @@ export function localISODate(d: Date = new Date()): string {
     `${String(d.getDate()).padStart(2, "0")}`
   );
 }
+
+/** How long ago, in words a diner reads without doing arithmetic.
+ *
+ *     "dont harcode timesatpo as raw"
+ *
+ *  STAYS RELATIVE ALL THE WAY UP, deliberately. An earlier version switched to
+ *  clock time past an hour, and the first screenshot of a late order duly read
+ *  "ordered 10:13 PM" — which is the exact thing he asked not to see. Somebody
+ *  sitting at a table wants to know it has been forty minutes, not what the
+ *  clock said when it started.
+ *
+ *  This was written four times in four files (MealTimeline, NotificationBell,
+ *  DocComments, and nearly a fifth here) with four different sets of words, so
+ *  the same gap read as "38 min ago" on one screen and "38m ago" on the next.
+ *  One implementation now.
+ */
+export function timeAgo(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const m = Math.max(0, Math.floor((now - t) / 60000));
+  if (m < 1) return "just now";
+  if (m === 1) return "a minute ago";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h < 24) return r ? `${h} hr ${r} min ago` : `${h} hr ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "yesterday" : `${d} days ago`;
+}
