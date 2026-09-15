@@ -16,7 +16,7 @@
 //
 // All three end in the same place: a table of exactly what is about to be
 // created, checked, then one click. Nobody should make a hundred logins blind.
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useConfirm } from "@/components/confirm";
@@ -54,6 +54,7 @@ export function AddLoginModal({
   roles,
   employees,
   isSuperAdmin,
+  presetEmployeeId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -61,6 +62,10 @@ export function AddLoginModal({
   roles: { id: string; name: string; base_role: string }[];
   employees: { id: string; full_name: string }[];
   isSuperAdmin: boolean;
+  /** Opened FROM a person — the Employees page knows who this is for, so it
+   *  should not ask again. Seeded each time the dialog opens rather than once,
+   *  or the second person you open it for gets the first one's name. */
+  presetEmployeeId?: string;
 }) {
   const confirm = useConfirm();
   const [mode, setMode] = useState<Mode>("one");
@@ -72,6 +77,10 @@ export function AddLoginModal({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("STAFF");
   const [linkEmpId, setLinkEmpId] = useState("");
+
+  useEffect(() => {
+    if (open && presetEmployeeId) setLinkEmpId(presetEmployeeId);
+  }, [open, presetEmployeeId]);
 
   // many at once — both routes land here
   const [rows, setRows] = useState<Row[]>([]);
