@@ -73,7 +73,13 @@ class _Pulse:
         base = {
             "uptime_seconds": uptime_s,
             "started_at": datetime.fromtimestamp(self.started_at, UTC).isoformat(),
-            "version": os.getenv("GIT_SHA") or os.getenv("IMAGE_TAG") or "unknown",
+            # APP_COMMIT is the name that actually exists: the Dockerfile takes
+            # it as a build arg and the deploy passes ${{ github.sha }} into it.
+            # I first wrote GIT_SHA/IMAGE_TAG — neither is set anywhere — and the
+            # live endpoint duly returned "unknown". Read the signature.
+            "version": os.getenv("APP_COMMIT")
+            or os.getenv("GIT_SHA")
+            or "unknown",
             "window_seconds": window_s,
             "capacity": CAPACITY,
             "requests": total,
