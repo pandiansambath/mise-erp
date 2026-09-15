@@ -67,7 +67,10 @@ function StockBar({ item }: { item: Item }) {
   const cap = max > 0 ? max : min > 0 ? min * 2 : 0;
   const pct = cap > 0 ? Math.max(2, Math.min(100, (cur / cap) * 100)) : cur > 0 ? 100 : 0;
   const st = statusOf(item);
-  const color = st === "out" ? "bg-rose-500" : st === "low" ? "bg-amber-400" : "bg-brand-500";
+  // Meaning, not identity — see `.mise-bg-*` in globals.css. `bg-brand-500`
+  // here made "in stock" the same colour as "out of stock" on every red
+  // theme, the default included.
+  const color = st === "out" ? "mise-bg-bad" : st === "low" ? "mise-bg-warn" : "mise-bg-good";
   return (
     <div className="mt-1 h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-glass/10" title={`${Math.round(pct)}% of par`}>
       <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
