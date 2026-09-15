@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties } from "react";
+import { api, getToken } from "./api";
 
 // A theme remaps the WHOLE dashboard skin at runtime: the brand-* accent ramp,
 // the dark surface tokens (shell/paper/...), the text ramp (fg/...) and the
@@ -333,7 +334,10 @@ const STORAGE_KEY = "mise_theme";
 // ThemeProvider reads localStorage first, so every existing account keeps
 // exactly the theme it is on and nobody's screen changes underneath them.
 // "claret" is Burgundy (Light); "burgundy" is the dark cut of the same hue.
-const DEFAULT: ThemeKey = "claret";
+/** Exported so a PUBLIC screen can pin a sane theme instead of inheriting
+ *  whatever the visitor happens to have saved for their own business. */
+export const DEFAULT_THEME: ThemeKey = "claret";
+const DEFAULT: ThemeKey = DEFAULT_THEME;
 
 /** Every CSS variable a theme drives. Apply to the dashboard shell container. */
 export function themeVars(key: ThemeKey): CSSProperties {
@@ -389,6 +393,36 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY) as ThemeKey | null;
     if (saved && saved in THEMES) setThemeState(saved);
+
+    // THE THEME BELONGS TO THE RESTAURANT, NOT TO THE BROWSER.
+    //
+    // It was only ever read from localStorage, so it did not follow the owner
+    // to a second laptop, to their phone, or to a new browser profile — they
+    // signed in and the app was a different colour. The switcher has always
+    // WRITTEN it to the database (`PATCH /hotels/me`); nothing ever read it
+    // back.
+    //
+    // localStorage stays as the fast local cache so there is no flash of the
+    // wrong colour on load; the database is the source of truth and wins a
+    // moment later. Only for someone signed in — this provider also wraps
+    // every public page, and an anonymous visitor must not trigger a 401 on
+    // the landing page.
+    if (!getToken()) return;
+    let cancelled = false;
+    api
+      .get<{ theme?: string | null }>("/hotels/me")
+      .then((h) => {
+        const t = h?.theme;
+        if (cancelled || !t || !(t in THEMES) || t === saved) return;
+        setThemeState(t as ThemeKey);
+        window.localStorage.setItem(STORAGE_KEY, t);
+      })
+      .catch(() => {
+        /* offline, or no permission to read the hotel — keep the local one */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const setTheme = useCallback((t: ThemeKey) => {

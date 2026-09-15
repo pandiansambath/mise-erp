@@ -19,7 +19,7 @@
 //      part, so the page turns into a live ticket rather than a receipt.
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
-import { THEMES, themeVars, useTheme } from "@/lib/theme";
+import { DEFAULT_THEME, THEMES, themeVars, type ThemeKey } from "@/lib/theme";
 import { assignPhotos } from "@/lib/dishPhoto";
 import { TableTalk } from "@/components/order/TableTalk";
 import { MealTimeline } from "@/components/order/MealTimeline";
@@ -46,6 +46,8 @@ type HotelInfo = {
   currency: string;
   prep_minutes?: number;
   paused?: boolean;
+  /** The restaurant's chosen theme, from the DB — see the note where it is used. */
+  theme?: string | null;
 };
 type LiveOrder = {
   id: string;
@@ -82,13 +84,24 @@ const SAY: Record<string, { label: string; hint: string; tone: string }> = {
 
 export default function TablePage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
-  const { theme } = useTheme();
+  const [table, setTable] = useState<TableInfo | null>(null);
+  const [hotel, setHotel] = useState<HotelInfo | null>(null);
+
+  // THE RESTAURANT'S THEME, NOT THE DINER'S.
+  //
+  // This used to be `useTheme()` — the visitor's OWN localStorage. So a
+  // diner who had once opened a DineAI dashboard on that phone saw this
+  // restaurant's menu painted in the theme they had chosen for their own
+  // business, and a diner who had never seen DineAI got our default. Neither
+  // of those is the restaurant whose table they are sitting at.
+  //
+  // The theme has always been in the database; this page simply never asked
+  // for it. Falls back to the house default, never to the visitor's.
+  const theme: ThemeKey =
+    hotel?.theme && hotel.theme in THEMES ? (hotel.theme as ThemeKey) : DEFAULT_THEME;
   // Palette variables live on :root, so a public screen has to pin them itself
   // or it inherits whatever the last app page left behind.
   const themed = useMemo(() => themeVars(theme), [theme]);
-
-  const [table, setTable] = useState<TableInfo | null>(null);
-  const [hotel, setHotel] = useState<HotelInfo | null>(null);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [missing, setMissing] = useState(false);
   const [cat, setCat] = useState<string | null>(null);

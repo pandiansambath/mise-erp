@@ -1220,6 +1220,15 @@ async def table_menu(code: str, db: AsyncSession = Depends(get_db)) -> dict:
             "currency": hotel.base_currency,
             "prep_minutes": hotel.prep_minutes,
             "paused": hotel.ordering_paused,
+            # THE RESTAURANT'S theme, not the diner's.
+            #
+            # This page pinned `themeVars(useTheme())`, which reads the
+            # DINER's own localStorage. So somebody who had once opened a
+            # DineAI dashboard on that phone saw this restaurant's menu in
+            # whatever theme they had chosen for their own business — and a
+            # diner who had never seen DineAI got the default. Neither is the
+            # restaurant's.
+            "theme": hotel.theme,
         },
         "menu": menu,
     }
