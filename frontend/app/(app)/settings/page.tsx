@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Fold } from "@/components/Fold";
+import { ImageShelf } from "@/components/pages/ImageShelf";
 import { useConfirm } from "@/components/confirm";
 import { SheetPopup } from "@/components/SheetPopup";
 import { api, ApiError, type HotelLanding, type LandingConfig } from "@/lib/api";
@@ -444,7 +446,16 @@ export default function SettingsPage() {
 
       {canConfigure && (
       <Card className="mise-feel mb-6" id="s-display">
-        <h3 className="font-semibold text-fg">Display currency</h3>
+        {/* SHUT, WITH THE ANSWER ON THE LID.
+            Fourteen currency tiles were open permanently on a page that also
+            holds Email & 2FA, Hotel handle, Public page, Billing, Attendance
+            rules, Payroll and Account. The lid reads "Display currency · £ GBP",
+            which is the whole question most visits are asking. */}
+        <Fold
+          title="Display currency"
+          value={`${CURRENCIES[currency].symbol} ${currency}`}
+          hint="Converts what you see. The stored figures never change."
+        >
         <p className="mt-1 text-sm text-fg-faint">
           Amounts are stored in the restaurant&apos;s base currency (GBP). This converts
           what you see — it doesn&apos;t change the underlying figures.
@@ -476,6 +487,7 @@ export default function SettingsPage() {
             .map((c) => `${CURRENCIES[c].symbol}${CURRENCIES[c].rate}`)
             .join("  ·  ")}
         </p>
+        </Fold>
       </Card>
       )}
 
@@ -1112,6 +1124,27 @@ export default function SettingsPage() {
         {door.enabled && (
           <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
             <div className="space-y-4">
+              {/* THE PICTURE. It was not here at all.
+                  "currently there is no imporssive image for signin page" —
+                  and the reason is that this editor offered GREETING, LAYOUT
+                  and MOTION and no photograph, so the preview could only ever
+                  be a bare gradient. `/customise` has mounted an ImageShelf for
+                  this page the whole time; this editor never did.
+                  The library is not missing either: 96 pictures in 16 moods,
+                  eight of them chosen specifically for a sign-in page — calm,
+                  dark, not busy, because a form sits on top of them. */}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                  Picture
+                </label>
+                <div className="mt-1.5">
+                  <ImageShelf
+                    page="login"
+                    value={(door.photo as string) || null}
+                    onPick={(f) => setD("photo", f ?? "")}
+                  />
+                </div>
+              </div>
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
                   Greeting
