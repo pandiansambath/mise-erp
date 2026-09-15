@@ -437,7 +437,7 @@ export default function ProfilePage() {
             />
           </label>
           {pwMsg && (
-            <p className={`text-sm ${pwMsg.ok ? "text-brand-400" : "text-rose-400"}`}>{pwMsg.text}</p>
+            <p className={`text-sm ${pwMsg.ok ? "mise-tone-good" : "mise-tone-bad"}`}>{pwMsg.text}</p>
           )}
           <button
             type="submit"

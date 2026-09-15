@@ -603,7 +603,7 @@ export default function MoneyPage() {
               )}
               <p>
                 That leaves{" "}
-                <b className={parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}>{format(pnl.net_profit)}</b>{" "}
+                <b className={parseFloat(pnl.net_profit) >= 0 ? "mise-tone-good" : "mise-tone-bad"}>{format(pnl.net_profit)}</b>{" "}
                 in your pocket — <b className="text-fg">{Math.round(parseFloat(pnl.net_margin_pct) || 0)}p of every £1</b>{" "}
                 {parseFloat(pnl.net_profit) >= 0 ? "stays with you." : "— the month is currently loss-making."}
               </p>
@@ -678,7 +678,7 @@ export default function MoneyPage() {
                 <InfoDot id="net" open={openInfo === "net"} onToggle={setOpenInfo} text="What you actually keep after EVERYTHING — food and running costs. This is your real bottom line." />
                 <span className="ml-2 text-xs text-fg-faint">what you keep</span>
               </span>
-              <span className={`text-2xl font-bold ${parseFloat(pnl.net_profit) >= 0 ? "text-brand-400" : "text-rose-400"}`}>
+              <span className={`text-2xl font-bold ${parseFloat(pnl.net_profit) >= 0 ? "mise-tone-good" : "mise-tone-bad"}`}>
                 <AnimatedNumber value={parseFloat(pnl.net_profit) * rate} prefix={symbol} decimals={2} />
               </span>
             </div>

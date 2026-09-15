@@ -55,7 +55,7 @@ function WowStat({
     <div className="mise-well mise-feel rounded-xl p-3.5">
       <p className="text-xs uppercase tracking-wide text-fg-faint">{label}</p>
       <p className="mt-1 font-mono text-xl font-semibold text-fg">{show(cur)}</p>
-      <p className={`mt-0.5 text-xs ${diff === 0 ? "text-fg-faint" : good ? "text-brand-400" : "text-rose-400"}`}>
+      <p className={`mt-0.5 text-xs ${diff === 0 ? "text-fg-faint" : good ? "mise-tone-good" : "mise-tone-bad"}`}>
         {arrow} {Math.abs(pctChange).toFixed(0)}% vs {show(prev)} last week
       </p>
     </div>
@@ -318,7 +318,7 @@ export default function DashboardPage() {
           <StatCard
             label="Month profit"
             value={format(kpis.month_net_profit)}
-            accent={parseFloat(kpis.month_net_profit) >= 0 ? "brand" : "rose"}
+            accent={parseFloat(kpis.month_net_profit) >= 0 ? "good" : "bad"}
             hint={`${kpis.month_net_margin_pct}% margin`}
             href="/reports"
           />
