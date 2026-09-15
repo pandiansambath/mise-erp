@@ -4,7 +4,7 @@
 // header (rubric H3 — the deleted ledger left for /audit and does not
 // live here any more).
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api";
@@ -57,20 +57,16 @@ export default function FleetPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { hotels, loading, error, reload } = useFleet();
-  const [f, setF] = useListFilter("cr.fleet");
+  const [f, setF] = useListFilter("cr.fleet", 50);
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("health");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
   const [nowTs] = useState(() => Date.now());
 
-  // Default page size 50 (DESIGN-STANDARD) — there is no size control in this
-  // UI (ListControls' own selector is deliberately not adopted, see the
-  // column-sort note below), so this is the one and only value it ever takes.
-  useEffect(() => {
-    setF({ ...f, size: 50 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // Page size 50 (DESIGN-STANDARD) is passed to useListFilter above rather than
+  // set from a mount effect — that used to paint 10 rows and jump to 50 a tick
+  // later. It is NOT a change to EMPTY_FILTER's default, which stays at 10
+  // because purchasing's indent/PO lists share it.
   const filtered = useMemo(() => {
     const s = f.q.trim().toLowerCase();
     const rank: Record<string, number> = { Active: 0, Quiet: 1, Dormant: 2 };

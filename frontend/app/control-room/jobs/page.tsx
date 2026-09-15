@@ -50,7 +50,7 @@ export default function JobBoardPage() {
   const confirm = useConfirm();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actErr, setActErr] = useState<string | null>(null);
-  const [f, setF] = useListFilter("cr.jobs");
+  const [f, setF] = useListFilter("cr.jobs", 50);
 
   const rows = useMemo(() => listQ.data?.postings ?? [], [listQ.data]);
   const filtered = useMemo(

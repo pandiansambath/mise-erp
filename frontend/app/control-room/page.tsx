@@ -88,10 +88,22 @@ export default function ControlRoomOverviewPage() {
 
   const active = hotels.filter((h) => h.is_active).length;
   const traded = hotels.filter((h) => h.has_traded).length;
+  const hotelsNeeding = new Set(items.map((it) => it.hotelId)).size;
   const p = pulseQ.data;
+  // Zero-value tiers stay IN the legend (an "Enterprise 0" is information an
+  // operator wants), only the arc itself thins to nothing. If every hotel
+  // carries a legacy/raw plan key the backend never canonicalised (router.py
+  // stores `body.plan` as-is on assign), planTotal is 0 and none of the three
+  // canonical segments have anything to draw — show a real message instead of
+  // a blank ring under a heading that says "Fleet by plan".
+  const planSegments = ["starter", "pro", "enterprise"].map((k) => ({
+    label: k[0].toUpperCase() + k.slice(1),
+    value: hotels.filter((h) => h.plan === k).length,
+  }));
+  const planTotal = planSegments.reduce((s, x) => s + x.value, 0);
 
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <PageHeader title="Overview" subtitle="The platform's pulse — every hotel, one screen." />
 
       {pulseQ.error && (
@@ -115,18 +127,21 @@ export default function ControlRoomOverviewPage() {
       />
 
       {/* B4 — two columns at 1920. Left: what needs a human. Right: the
-          platform's shape. Each card owns its own internal scroll so the
-          PAGE never does (rubric A1). */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
-        <section className="mise-card-inset flex min-h-0 flex-col p-4">
+          platform's shape. Neither column is stretched to match the other
+          (lg:items-start) — each sizes to its own content, with an internal
+          cap + scroll on the left list for when it is long (rubric A1/B2). */}
+      <div className="grid grid-cols-1 gap-4 lg:items-start lg:grid-cols-[1fr_360px]">
+        <section className="mise-card-inset flex flex-col p-4">
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">Needs you</h3>
-            <span className="font-mono text-[11px] tabular-nums text-fg-faint">{items.length} of {items.length}</span>
+            <span className="font-mono text-[11px] tabular-nums text-fg-faint">
+              {items.length} issue{items.length === 1 ? "" : "s"} across {hotelsNeeding} of {hotels.length} hotels
+            </span>
           </div>
           {items.length === 0 ? (
             <EmptyState chef={false} icon="✓" title="Nothing needs you right now" body="Every hotel is active, trading, and inside its plan." />
           ) : (
-            <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+            <ul className="max-h-[min(420px,50vh)] space-y-1.5 overflow-y-auto pr-1">
               {items.map((it, i) => (
                 <li key={`${it.hotelId}-${i}`}>
                   <Link
@@ -146,7 +161,7 @@ export default function ControlRoomOverviewPage() {
           )}
         </section>
 
-        <section className="mise-card-inset flex min-h-0 flex-col gap-3 overflow-y-auto p-4">
+        <section className="mise-card-inset flex flex-col gap-3 p-4">
           <div className="mise-well rounded-xl p-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">Signups · 12 months</p>
             <Sparkline data={signupSeries.counts} height={56} className="mt-2 w-full" />
@@ -160,6 +175,10 @@ export default function ControlRoomOverviewPage() {
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">Fleet by plan</p>
             {hotels.length === 0 ? (
               <p className="mt-2 text-xs text-fg-faint">No hotels yet.</p>
+            ) : planTotal === 0 ? (
+              <p className="mt-2 text-xs text-fg-faint">
+                No hotel carries a recognised plan key — check the fleet table for legacy plan values.
+              </p>
             ) : (
               <Donut
                 className="mt-2"
@@ -167,10 +186,7 @@ export default function ControlRoomOverviewPage() {
                 thickness={11}
                 centerLabel="hotels"
                 centerValue={String(hotels.length)}
-                segments={["starter", "pro", "enterprise"].map((k) => ({
-                  label: k[0].toUpperCase() + k.slice(1),
-                  value: hotels.filter((h) => h.plan === k).length,
-                }))}
+                segments={planSegments}
               />
             )}
             <p className="mt-2 text-[11px] text-fg-faint">

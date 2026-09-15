@@ -3,7 +3,7 @@
 // AI, Settings) can offer it from the same action bar without repeating the
 // origin-switching logic.
 
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 /** How long a "View as" key lasts, read by both this and SupportWindowPicker
  *  (components/DeletedHotels.tsx) — same localStorage key, one control. */
@@ -27,5 +27,16 @@ export async function openSupportView(hotelId: string): Promise<void> {
     host === "localhost" || /^\d+(\.\d+){3}$/.test(host)
       ? window.location.origin
       : `${window.location.protocol}//${apex}`;
-  window.open(`${base}/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
+  const win = window.open(`${base}/impersonate#t=${encodeURIComponent(r.token)}`, "_blank", "noopener");
+  // The await above already broke the click's user-activation chain, so a
+  // blocked popup is the common case here, not the rare one. window.open
+  // returns null rather than throwing — surface it through the same
+  // ApiError path the caller (hotels/[hotelId]/layout.tsx's viewAsErr) already
+  // renders, instead of the button just flickering back to "View as".
+  if (!win) {
+    throw new ApiError(
+      0,
+      "Your browser blocked the support window — allow pop-ups for this site and try again.",
+    );
+  }
 }

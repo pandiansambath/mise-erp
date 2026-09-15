@@ -55,6 +55,13 @@ export default function HotelLayout({
   const pathname = usePathname();
   const [suspendBusy, setSuspendBusy] = useState(false);
   const [viewAsBusy, setViewAsBusy] = useState(false);
+  // Both mutations used a bare `try { await api.post(...) } finally {}` — a
+  // rejection (e.g. impersonate 404s "Hotel has no admin user" when the
+  // SUPER_ADMIN was deleted, or suspend 404s on a stale fleet row) escaped as
+  // an unhandled promise rejection and the operator saw only a button
+  // flicker.
+  const [suspendErr, setSuspendErr] = useState<ApiError | null>(null);
+  const [viewAsErr, setViewAsErr] = useState<ApiError | null>(null);
 
   if (!user?.is_platform_owner) return null; // flash-guard; layout above redirects
 
@@ -98,9 +105,12 @@ export default function HotelLayout({
     });
     if (!ok) return;
     setSuspendBusy(true);
+    setSuspendErr(null);
     try {
       await api.post(`/platform/hotels/${hotelId}/suspend`, { active: !suspending });
       reload();
+    } catch (e) {
+      setSuspendErr(e instanceof ApiError ? e : new ApiError(0, "Could not update this hotel."));
     } finally {
       setSuspendBusy(false);
     }
@@ -108,8 +118,11 @@ export default function HotelLayout({
 
   async function viewAs() {
     setViewAsBusy(true);
+    setViewAsErr(null);
     try {
       await openSupportView(hotelId);
+    } catch (e) {
+      setViewAsErr(e instanceof ApiError ? e : new ApiError(0, "Could not open the support view."));
     } finally {
       setViewAsBusy(false);
     }
@@ -170,6 +183,20 @@ export default function HotelLayout({
             </button>
           </div>
         </div>
+        {viewAsErr && (
+          <div className="mt-3">
+            <ErrorCard title="Could not open the support view" error={viewAsErr} retry={viewAs} />
+          </div>
+        )}
+        {suspendErr && (
+          <div className="mt-3">
+            <ErrorCard
+              title={hotel.is_active ? "Could not suspend this hotel" : "Could not reactivate this hotel"}
+              error={suspendErr}
+              retry={toggleSuspend}
+            />
+          </div>
+        )}
       </div>
 
       <nav

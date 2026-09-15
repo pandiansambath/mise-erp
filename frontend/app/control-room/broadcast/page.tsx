@@ -71,12 +71,16 @@ export default function BroadcastPage() {
   const [busy, setBusy] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
 
-  const [f, setF] = useListFilter("cr.broadcast.history");
+  const [f, setF] = useListFilter("cr.broadcast.history", 50);
 
   const activeHotels = useMemo(() => hotels.filter((h) => h.is_active), [hotels]);
 
   async function send() {
-    if (message.trim().length < 3) return;
+    if (message.trim().length < 3) {
+      setSendErr("Write at least 3 characters before broadcasting.");
+      return;
+    }
+    setSendErr(null);
     const ok = await confirm({
       title: `Broadcast to ${activeHotels.length} active restaurant${activeHotels.length === 1 ? "" : "s"}?`,
       message: (
@@ -165,7 +169,10 @@ export default function BroadcastPage() {
             <span className="text-xs font-medium text-fg-faint">Message</span>
             <input
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                if (sendErr) setSendErr(null);
+              }}
               maxLength={500}
               placeholder="e.g. DineAI gets new charts tonight 22:00–22:15 — nothing you need to do."
               className="mise-well mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
@@ -188,18 +195,22 @@ export default function BroadcastPage() {
               className="mise-well mt-1 rounded-lg px-2.5 py-1.5 text-sm outline-none"
             />
           </label>
-          <Button variant="primary" onClick={send} busy={busy} disabled={message.trim().length < 3}>
-            Broadcast
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button variant="primary" onClick={send} busy={busy}>
+              Broadcast
+            </Button>
+            {sendErr && (
+              <p role="alert" className="max-w-[16rem] text-right text-xs font-medium text-danger">
+                {sendErr}
+              </p>
+            )}
+          </div>
         </div>
         <p className="mt-3 text-xs text-fg-faint">
           Goes to <b className="text-fg-soft">{activeHotels.length}</b> active restaurant
           {activeHotels.length === 1 ? "" : "s"}. Each gets an in-app banner, and their admins
           also get an email unless they have turned broadcast emails off.
         </p>
-        {sendErr && (
-          <p className="mt-2 text-xs font-medium text-danger">{sendErr}</p>
-        )}
       </Card>
 
       <Card className="p-0">

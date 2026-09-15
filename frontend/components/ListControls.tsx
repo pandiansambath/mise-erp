@@ -307,14 +307,20 @@ export function pageOf<T>(rows: T[], f: ListFilter): T[] {
 }
 
 /** Remembers a list's filter for the session, per list. */
-export function useListFilter(key: string) {
+/** `size` is the page size this list STARTS at. It is a parameter rather than a
+ *  change to EMPTY_FILTER because that default is shared — the operator console
+ *  wants 50 dense rows, and purchasing's indent/PO lists were built around 10.
+ *  Passing it here also means the first paint is already the right size: setting
+ *  it from a mount effect instead renders 10 rows and then visibly reflows. */
+export function useListFilter(key: string, size: number = EMPTY_FILTER.size) {
+  const initial = { ...EMPTY_FILTER, size };
   const [f, setF] = useState<ListFilter>(() => {
-    if (typeof window === "undefined") return EMPTY_FILTER;
+    if (typeof window === "undefined") return initial;
     try {
       const raw = sessionStorage.getItem(`mise.list.${key}`);
-      return raw ? { ...EMPTY_FILTER, ...JSON.parse(raw) } : EMPTY_FILTER;
+      return raw ? { ...initial, ...JSON.parse(raw) } : initial;
     } catch {
-      return EMPTY_FILTER;
+      return initial;
     }
   });
   const set = (next: ListFilter) => {

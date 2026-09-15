@@ -104,11 +104,18 @@ export default function HotelSettingsPage({ params }: { params: Promise<{ hotelI
   if (!hotel) return null; // the hotel layout above already renders the not-found state
 
   async function applyPlan() {
+    // Without this, clicking "Apply plan" while the selector still reads the
+    // hotel's CURRENT plan (e.g. just to confirm the tier) reassigns
+    // hotel.features = plan_features(plan) wholesale (router.py:283) — any
+    // toggle manually flipped off this plan's default silently comes back on.
+    if (planSel === hotel!.plan) return;
     const p = plans.find((x) => x.key === planSel);
     const ok = await confirm({
       title: `Move ${hotel!.name} to ${p?.label ?? planSel}?`,
-      message: "This applies that plan's feature preset. You can still fine-tune individual toggles below afterwards.",
+      message:
+        "This RESETS every feature toggle below to that plan's defaults — any feature you've manually switched on or off for this hotel will be overwritten.",
       confirmText: "Apply plan",
+      tone: "danger",
     });
     if (!ok) return;
     setPlanBusy(true);
@@ -216,9 +223,9 @@ export default function HotelSettingsPage({ params }: { params: Promise<{ hotelI
             <button
               type="button"
               onClick={applyPlan}
-              disabled={planBusy}
+              disabled={planBusy || planSel === hotel.plan}
               data-tone="brand"
-              className="mise-btn-flat mise-press px-3 py-2 text-xs font-semibold"
+              className="mise-btn-flat mise-press px-3 py-2 text-xs font-semibold disabled:opacity-50"
             >
               {planBusy ? "Applying…" : "Apply plan"}
             </button>

@@ -72,11 +72,12 @@ function ErrorCard({ error, onRetry }: { error: ApiError; onRetry: () => void })
 }
 
 /** Zero-fill the sparse daily series — /ai/daily only returns days WITH
- *  activity, so charting it raw would draw a false trend line across gaps. */
-function fillDays(rows: DailyPoint[], days: number): { date: string; cost: number }[] {
+ *  activity, so charting it raw would draw a false trend line across gaps.
+ *  `today` is passed in rather than read here: reading the clock during
+ *  render is impure (see health.ts's healthOf for the same rule). */
+function fillDays(rows: DailyPoint[], days: number, today: Date): { date: string; cost: number }[] {
   const byDay = new Map(rows.map((r) => [r.day, r]));
   const out: { date: string; cost: number }[] = [];
-  const today = new Date();
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
@@ -96,7 +97,11 @@ export default function AiSpendPage() {
   const dailyQ = useOperatorQuery<{ days: DailyPoint[] }>(`/platform/ai/daily?days=${daysNum}`);
   const plansQ = useOperatorQuery<{ plans: PlanFull[] }>("/platform/plans");
 
-  const [f, setF] = useListFilter("cr.ai.byhotel");
+  const [f, setF] = useListFilter("cr.ai.byhotel", 50);
+  // Frozen at mount — the same lazy-initialiser idiom fleet/page.tsx uses for
+  // "days ago" math, so the React Compiler does not see a bare `new Date()`
+  // read during render.
+  const [today] = useState(() => new Date());
 
   const planByKey = useMemo(
     () => Object.fromEntries((plansQ.data?.plans ?? []).map((p) => [p.key, p])),
@@ -116,7 +121,10 @@ export default function AiSpendPage() {
   );
   const shown = pageOf(filtered, f);
 
-  const filled = dailyQ.data ? fillDays(dailyQ.data.days, daysNum) : [];
+  const filled = useMemo(
+    () => (dailyQ.data ? fillDays(dailyQ.data.days, daysNum, today) : []),
+    [dailyQ.data, daysNum, today],
+  );
   const platformFailureRate = pulseQ.data?.ai.failure_rate ?? 0;
 
   return (
@@ -171,8 +179,6 @@ export default function AiSpendPage() {
             <ErrorCard error={dailyQ.error} onRetry={dailyQ.reload} />
           ) : dailyQ.loading ? (
             <Spinner />
-          ) : filled.length < 2 ? (
-            <p className="py-8 text-center text-sm text-fg-faint">Not enough days to chart yet.</p>
           ) : (
             <div className="max-w-[45rem]">
               <AreaChart
