@@ -432,7 +432,6 @@ export default function SettingsPage() {
                 ["#s-billing", "💳 Billing"],
                 ["#s-attendance", "⏱️ Attendance rules"],
                 ["#s-payroll", "💷 Payroll"],
-                ["#s-door", "🚪 Sign-in page"],
               ]
             : []),
           ["#s-account", "👤 Account"],
@@ -987,15 +986,32 @@ export default function SettingsPage() {
                 sees. Design both here.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setStudio("site")}
-              data-testid="open-studio-site"
-              data-tone="brand"
-              className="mise-btn-flat mise-press min-h-[44px] shrink-0 px-4 text-sm font-bold text-brand-300"
-            >
-              Design your pages →
-            </button>
+            {/* TWO DOORS INTO THE SAME ROOM, because he went looking for the
+                second one and could not find it. The jump-nav above used to
+                carry a "🚪 Sign-in page" chip pointing at `#s-door` — an
+                anchor that does not exist anywhere in this file, so clicking
+                it moved nothing. Removed, and replaced with a button that
+                opens the studio ON that page. */}
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setStudio("site")}
+                data-testid="open-studio-site"
+                data-tone="brand"
+                className="mise-btn-flat mise-press min-h-[44px] px-4 text-sm font-bold text-brand-300"
+              >
+                🌐 Public page →
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudio("door")}
+                data-testid="open-studio-door"
+                data-tone="brand"
+                className="mise-btn-flat mise-press min-h-[44px] px-4 text-sm font-bold text-brand-300"
+              >
+                🚪 Sign-in page →
+              </button>
+            </div>
           </div>
         </Card>
       )}
@@ -1580,6 +1596,10 @@ export default function SettingsPage() {
         }
         preview={
           <SettingsPreview
+            // The tab and the editor are one thing. Switching to
+            // "Sign-in page" now switches the controls too.
+            which={studio === "door" ? "door" : "site"}
+            onWhichChange={(w) => setStudio(w)}
             host={siteHost ?? ""}
             site={<HotelSite data={previewData} config={land} preview />}
             door={

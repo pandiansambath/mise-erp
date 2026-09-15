@@ -14,8 +14,8 @@ manual dish-count entry — out of scope here. These all need zero new data entr
 """
 import uuid
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
@@ -97,33 +97,57 @@ async def price_alerts(
     from app.purchasing.models import POItem, PurchaseOrder
     from app.vendors.models import Vendor
 
-    rows = await db.execute(
+    # BOUNDED BY WHAT THE ALGORITHM NEEDS, NOT BY A DATE.
+    #
+    # This used to select every purchase-order line the hotel had EVER had,
+    # joined three ways, and reduce it in Python — and the notification bell
+    # calls it every 45 seconds, per open tab, per user. Cheap today only
+    # because the data is small, and worse every week a restaurant trades.
+    #
+    # My first fix was a 180-day cut-off. CI rejected it, and CI was right for
+    # a better reason than the one it gave: a date window is a CLIFF. An item
+    # ordered twice a year would have had its genuine price rise silently
+    # disappear from the alerts — a correctness bug traded for a performance
+    # one, on the feature whose entire job is noticing that something got more
+    # expensive.
+    #
+    # What this actually needs per item is the latest price and the most recent
+    # DIFFERENT one before it. Six points is comfortably enough for that even
+    # when a supplier repeats the same price several times running. So: rank
+    # each item's lines newest-first in the database and take the top six.
+    # Bounded work, no cliff, and no item can age out of its own alert.
+    ranked = (
         select(
-            POItem.item_id,
-            Item.name,
-            PurchaseOrder.created_at,
-            POItem.unit_price,
-            Vendor.name,
+            POItem.item_id.label("item_id"),
+            PurchaseOrder.created_at.label("created_at"),
+            POItem.unit_price.label("unit_price"),
+            PurchaseOrder.vendor_id.label("vendor_id"),
+            func.row_number()
+            .over(
+                partition_by=POItem.item_id,
+                order_by=PurchaseOrder.created_at.desc(),
+            )
+            .label("rn"),
         )
         .join(PurchaseOrder, PurchaseOrder.id == POItem.po_id)
-        .join(Item, Item.id == POItem.item_id)
-        .join(Vendor, Vendor.id == PurchaseOrder.vendor_id, isouter=True)
-        .where(
-            PurchaseOrder.hotel_id == hotel_id,
-            POItem.unit_price > 0,
-            # BOUNDED. This selected every purchase-order line the hotel had
-            # EVER had, joined three ways, and reduced it in Python — and the
-            # notification bell calls it every 45 seconds, per open tab, per
-            # user. It is cheap today because the data is small; it gets worse
-            # every week a restaurant trades, which is the wrong direction for
-            # a query on a polling path.
-            #
-            # Six months is the window a price comparison is meaningful over
-            # anyway: "this cost more than last time" stops being news when
-            # "last time" was last year.
-            PurchaseOrder.created_at >= datetime.now(UTC) - timedelta(days=180),
+        .where(PurchaseOrder.hotel_id == hotel_id, POItem.unit_price > 0)
+        .subquery()
+    )
+
+    rows = await db.execute(
+        select(
+            ranked.c.item_id,
+            Item.name,
+            ranked.c.created_at,
+            ranked.c.unit_price,
+            Vendor.name,
         )
-        .order_by(POItem.item_id, PurchaseOrder.created_at)
+        .join(Item, Item.id == ranked.c.item_id)
+        .join(Vendor, Vendor.id == ranked.c.vendor_id, isouter=True)
+        .where(ranked.c.rn <= 6)
+        # Oldest-first WITHIN each item, because the reducer below walks the
+        # series forward and takes points[-1] as the latest.
+        .order_by(ranked.c.item_id, ranked.c.created_at)
     )
     series: dict[uuid.UUID, list[tuple]] = defaultdict(list)
     for item_id, item_name, created_at, price, vendor_name in rows.all():

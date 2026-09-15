@@ -33,17 +33,40 @@ const SIZES: Record<Shape, { w: number; h: number; label: string; hint: string }
 };
 
 export function SettingsPreview({
+  which: controlledWhich,
+  onWhichChange,
   site,
   door,
   host,
   className = "",
 }: {
+  /** Which page is being previewed. Pass it to keep the EDITOR in step. */
+  which?: Which;
+  onWhichChange?: (w: Which) => void;
   site: ReactNode;
   door: ReactNode;
   host: string;
   className?: string;
 }) {
-  const [which, setWhich] = useState<Which>("site");
+  // CONTROLLED BY THE PARENT.
+  //
+  //     "for signin page where is the customisation features? only for landing
+  //      we have"
+  //
+  // It was local state. So these two tabs switched the PREVIEW and nothing
+  // else, while the editor beside them stayed on whichever page the studio was
+  // opened for — always the public one, because `setStudio("door")` was never
+  // called anywhere in the app. Pressing "Sign-in page" showed you a sign-in
+  // page next to a panel of HERO PHOTO / THEME / COLOUR PALETTE, which are
+  // landing controls. The sign-in editor existed, fully built, with no way in.
+  //
+  // One piece of state now: the tab IS the mode.
+  const [localWhich, setLocalWhich] = useState<Which>("site");
+  const which = controlledWhich ?? localWhich;
+  const setWhich = (w: Which) => {
+    setLocalWhich(w);
+    onWhichChange?.(w);
+  };
   const [shape, setShape] = useState<Shape>("wide");
   const shellRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
