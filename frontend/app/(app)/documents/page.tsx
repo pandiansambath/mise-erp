@@ -607,7 +607,17 @@ export default function DocumentsPage() {
                 </thead>
                 <tbody>
                   {requests.map((r) => (
-                    <tr key={r.id} className="border-b border-line">
+                    // "that click notes to open message below is not nice."
+                    //
+                    // Click anywhere in the ROW. The whole request opens in one
+                    // place — the thread, the file, the status and what you can
+                    // do about it — instead of a drawer unfolding underneath and
+                    // pushing every other row down the page.
+                    <tr
+                      key={r.id}
+                      onClick={() => setNoteOn(r.id)}
+                      className="cursor-pointer border-b border-line transition hover:bg-glass/5"
+                    >
                       <td className="px-3 py-2 text-fg-soft">{r.employee_name}</td>
                       <td className="px-3 py-2 font-medium text-fg">{r.title}</td>
                       <td className="px-3 py-2">
@@ -615,7 +625,11 @@ export default function DocumentsPage() {
                           {r.status.toLowerCase()}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      {/* The row opens the sheet, so the buttons inside it
+                          must stop the click travelling — otherwise
+                          "Approve" also opens a panel over what you just
+                          approved. */}
+                      <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-1">
                           {r.document_id && (
                             <button onClick={() => downloadFile(`/documents/${r.document_id}/download`, docName(r.employee_name, r.doc_type, docs.find((x) => x.id === r.document_id)?.filename))} className="rounded-md border border-line px-2 py-1 text-xs text-brand-300 hover:bg-brand-400/10">View</button>
@@ -628,39 +642,84 @@ export default function DocumentsPage() {
                           )}
                           <button
                             type="button"
-                            onClick={() => setNoteOn((n) => (n === r.id ? null : r.id))}
+                            onClick={() => setNoteOn(r.id)}
                             data-testid="doc-notes"
                             className="rounded-md border border-line px-2 py-1 text-xs text-fg-soft hover:bg-paper-2"
-                            title="Notes about this document"
+                            title="Everything about this request"
                           >
-                            💬 Notes
+                            💬 Open
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {/* The owner's end of the same thread. Kept as a row that
-                      opens rather than a popup, so the note sits under the
-                      document it is about — which is the entire point of
-                      these not being chat messages. */}
-                  {requests
-                    .filter((r) => r.id === noteOn)
-                    .map((r) => (
-                      <tr key={`${r.id}-notes`} className="border-b border-line">
-                        <td colSpan={4} className="px-3 py-3">
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
-                            Notes · {r.employee_name} · {r.title}
-                          </p>
-                          <DocComments requestId={r.id} mine="owner" />
-                        </td>
-                      </tr>
-                    ))}
                 </tbody>
               </table>
             </div>
           )}
         </Card>
       )}
+
+      {/* EVERYTHING ABOUT THIS REQUEST, IN ONE PLACE.
+          The thread, the file, the status and the actions — which were
+          previously spread across a row and a drawer beneath it. */}
+      {noteOn &&
+        (() => {
+          const r = requests.find((x) => x.id === noteOn);
+          if (!r) return null;
+          const file = docs.find((x) => x.id === r.document_id);
+          return (
+            <SheetPopup
+              onClose={() => setNoteOn(null)}
+              title={r.title}
+              subtitle={`${r.employee_name} · ${r.status.toLowerCase()}`}
+            >
+              <div className="space-y-4">
+                <div className="mise-well flex flex-wrap items-center gap-2 rounded-xl p-3">
+                  <Badge tone={r.status === "APPROVED" ? "green" : r.status === "UPLOADED" ? "amber" : "slate"}>
+                    {r.status.toLowerCase()}
+                  </Badge>
+                  {file && <span className="truncate text-xs text-fg-faint">{file.filename}</span>}
+                  <span className="ml-auto flex flex-wrap gap-1.5">
+                    {r.document_id && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          downloadFile(
+                            `/documents/${r.document_id}/download`,
+                            docName(r.employee_name, r.doc_type, file?.filename),
+                          )
+                        }
+                        className="mise-press rounded-lg border border-line px-2.5 py-1.5 text-xs text-brand-300"
+                      >
+                        View the file
+                      </button>
+                    )}
+                    {r.status === "PENDING" && (
+                      <button
+                        type="button"
+                        onClick={() => pickReqFile(r.id)}
+                        className="mise-press rounded-lg border border-line px-2.5 py-1.5 text-xs text-fg-soft"
+                      >
+                        Upload for them
+                      </button>
+                    )}
+                    {r.status === "UPLOADED" && (
+                      <button
+                        type="button"
+                        onClick={() => approveRequest(r.id)}
+                        className="mise-press rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white"
+                      >
+                        Approve
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <DocComments requestId={r.id} mine="owner" />
+              </div>
+            </SheetPopup>
+          );
+        })()}
     </div>
   );
 }
