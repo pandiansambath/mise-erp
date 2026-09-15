@@ -17,7 +17,13 @@ import { CR_NAV, isActive } from "./nav";
 import { useFleet } from "./FleetProvider";
 
 export function OperatorNav() {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  // On controlroom.dineai.cloud, middleware.ts rewrites "/" to "/control-room"
+  // server-side, but a rewrite (unlike a redirect) never touches the browser's
+  // address bar — so the client router's usePathname() keeps reporting "/",
+  // and isActive() (which matches on "/control-room" prefixes) lit up nothing
+  // at all on the operator's actual bookmark.
+  const pathname = rawPathname === "/" ? "/control-room" : rawPathname;
   const { hotels } = useFleet();
   const activeRef = useRef<HTMLAnchorElement>(null);
 

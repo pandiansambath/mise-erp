@@ -51,14 +51,20 @@ function ConsoleBody({ children, email, logout }: { children: React.ReactNode; e
 
   return (
     <>
-      {/* ONE ROW, <=60px at 390 (rubric E1) — the title truncates rather than
-          wrapping, "Log out" never breaks to "Log / out" (E2). */}
+      {/* ONE ROW, <=60px at 390 (rubric E1) — "DineAI" drops below `sm` so
+          "Control Room" stays legible instead of the whole string
+          truncating; "Log out" never breaks to "Log / out" (E2). */}
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-glass/10 bg-shell/70 px-4 py-3 backdrop-blur-xl lg:px-6">
         <Logo size={24} />
-        <span className="max-w-[9.5rem] truncate font-display text-base font-semibold tracking-tight text-fg sm:max-w-none sm:text-lg">
-          DineAI <span className="text-brand-400">Control Room</span>
+        <span className="min-w-0 truncate font-display text-base font-semibold tracking-tight text-fg sm:text-lg">
+          <span className="hidden sm:inline">DineAI </span>
+          <span className="text-brand-400">Control Room</span>
         </span>
-        <span className="mise-chip hidden shrink-0 sm:inline-flex" data-tone="slate">
+        {/* `.mise-chip` sets `display: inline-flex` unconditionally and,
+            being plain CSS rather than a layered utility, otherwise beats
+            `hidden` at the cascade level regardless of breakpoint — the
+            `!` modifier is the one way a utility outranks it. */}
+        <span className="mise-chip !hidden shrink-0 sm:!inline-flex" data-tone="slate">
           Operator
         </span>
 

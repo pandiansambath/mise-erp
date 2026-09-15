@@ -203,16 +203,37 @@ async function audit(page: Page, phone: boolean): Promise<Fault[]> {
   }, phone);
 }
 
-async function signIn(page: Page, operator = false) {
+// One token per account for the whole sweep, not one per test. 14 pages across 6
+// viewports is 80-odd logins; issued back-to-back they get throttled part-way
+// through, and a throttled login yields no token, which lands the page on /login.
+// That is exactly what happened: every control-room page failed at 390 while the
+// same pages passed at 360 and 768 — a contiguous block of the run, not a width.
+const tokenCache = new Map<string, Promise<string>>();
+
+function tokenFor(operator: boolean): Promise<string> {
+  const key = operator ? "operator" : "tenant";
+  const cached = tokenCache.get(key);
+  if (cached) return cached;
   const creds = operator
     ? { email: "control@mise.app", password: "Control@2026" }
     : { email: "superadmin@gmail.com", password: "superadmin@123" };
-  const r = await fetch(`${PROD}/api/auth/login`, {
+  const p = fetch(`${PROD}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(creds),
-  });
-  const d = await r.json();
+  })
+    .then((r) => r.json())
+    .then((d) => {
+      const t = d.access_token;
+      if (!t) throw new Error(`login for ${key} returned no token: ${JSON.stringify(d).slice(0, 160)}`);
+      return t as string;
+    });
+  tokenCache.set(key, p);
+  return p;
+}
+
+async function signIn(page: Page, operator = false) {
+  const d = { access_token: await tokenFor(operator) };
   await page.addInitScript((t) => {
     window.localStorage.setItem("mise_token", t as string);
   }, d.access_token);

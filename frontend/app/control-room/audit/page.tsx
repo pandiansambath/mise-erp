@@ -60,7 +60,7 @@ function EventTable({
   emptyTitle: string;
   emptyBody: string;
 }) {
-  const [f, setF] = useListFilter(filterKey);
+  const [f, setF] = useListFilter(filterKey, 50);
   const filtered = useMemo(
     () =>
       applyFilter(rows, f, (e) => ({
@@ -105,9 +105,9 @@ function EventTable({
           <tbody>
             {shown.map((e) => (
               <tr key={e.id} className="border-b border-line/60 transition hover:bg-glass/[0.04]">
-                <td data-label="Action" className="px-4 py-2.5">
-                  <span className="block truncate font-mono text-[11px] text-fg-faint">{e.action}</span>
-                  <span className="block truncate text-sm text-fg">{e.summary}</span>
+                <td className="px-4 py-2.5">
+                  <span className="block break-words font-mono text-[11px] text-fg-faint">{e.action}</span>
+                  <span className="block break-words text-sm text-fg">{e.summary}</span>
                 </td>
                 <td data-label="Restaurant" className="px-3 py-2.5 text-xs text-fg-soft">
                   {hotelName(e.hotel_id)}

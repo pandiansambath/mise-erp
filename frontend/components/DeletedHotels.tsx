@@ -13,7 +13,8 @@
 // only a promise if the key is written down.
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { useOperatorQuery, errorCopy } from "@/components/controlroom/useOperatorQuery";
+import { Spinner } from "@/components/ui";
 
 type Row = {
   id: string;
@@ -30,35 +31,48 @@ type Row = {
 };
 
 export function DeletedHotels() {
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const rowsQ = useOperatorQuery<Row[]>("/platform/deleted-hotels");
   const [openId, setOpenId] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .get<Row[]>("/platform/deleted-hotels")
-      .then(setRows)
-      .catch(() => setRows([]));
-  }, []);
-
-  if (!rows) return null;
+  const rows = rowsQ.data ?? [];
 
   return (
-    <section
-      id="cr-deleted"
-      className="mise-feel mb-6 scroll-mt-24 rounded-2xl border border-rose-500/25 bg-rose-500/[0.04] p-5"
-    >
+    <section className="mise-feel mise-card-inset scroll-mt-24 rounded-2xl p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-semibold text-fg">🗑 Deleted restaurants</h3>
-        <span className="text-xs text-fg-faint">
-          {rows.length === 0 ? "none yet" : `${rows.length} on record · kept for ever`}
-        </span>
+        <h3 className="font-semibold text-fg">Deleted restaurants</h3>
+        {!rowsQ.error && !rowsQ.loading && (
+          <span className="text-xs text-fg-faint">
+            {rows.length === 0 ? "none yet" : `${rows.length} on record · kept for ever`}
+          </span>
+        )}
       </div>
       <p className="mt-1 text-xs text-fg-faint">
         The only surviving trace once the rows are gone — including where the S3 archive
         went, so the &ldquo;archived first&rdquo; promise can still be checked.
       </p>
 
-      {rows.length === 0 ? (
+      {rowsQ.error ? (
+        <div className="mise-card-inset relative mt-4 flex items-start gap-3 overflow-hidden p-4 pl-5">
+          <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-rose-400" />
+          <span className="font-mono text-2xl font-bold leading-none text-danger">
+            {rowsQ.error.status || "!"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-fg">This did not load</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-fg-soft">{errorCopy(rowsQ.error)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={rowsQ.reload}
+            className="mise-btn-flat mise-press shrink-0 px-3 py-1.5 text-xs font-semibold"
+          >
+            Retry
+          </button>
+        </div>
+      ) : rowsQ.loading ? (
+        <div className="py-6">
+          <Spinner />
+        </div>
+      ) : rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-fg-faint">
           No restaurant has ever been permanently deleted.
         </p>
@@ -85,8 +99,8 @@ export function DeletedHotels() {
                     </span>
                   )}
                   <span className="flex-1" />
-                  <span className="text-xs tabular-nums text-rose-300">
-                    {r.total_rows} records
+                  <span className="text-xs tabular-nums text-fg-soft">
+                    {r.total_rows} record{r.total_rows === 1 ? "" : "s"}
                   </span>
                   <span aria-hidden className={`text-fg-faint transition ${open ? "rotate-90" : ""}`}>
                     ›

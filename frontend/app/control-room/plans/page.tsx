@@ -60,6 +60,14 @@ function ErrorCard({ error, onRetry }: { error: ApiError; onRetry: () => void })
 
 export default function PlansPage() {
   const matrixQ = useOperatorQuery<MatrixResp>("/platform/plans/matrix");
+  // `/platform/plans/matrix` calls plans_public() with no override — it always
+  // reflects the DEFAULT price, never what the operator saved. Seeding the
+  // price editor from it meant the box reverted to the default on every visit,
+  // and a Save then wiped the saved override wholesale (set_plan_prices
+  // replaces plan_prices, it doesn't merge). `/platform/plans` passes the
+  // saved overrides through, so the price editor reads from here instead —
+  // the matrix query stays purely for the feature grid + per-plan blurb.
+  const plansQ = useOperatorQuery<{ plans: PlanFull[] }>("/platform/plans");
 
   const [priceEdits, setPriceEdits] = useState<Record<string, string>>({});
   const [savingPrices, setSavingPrices] = useState(false);
@@ -67,18 +75,22 @@ export default function PlansPage() {
   const [priceMsg, setPriceMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (matrixQ.data) {
-      setPriceEdits(Object.fromEntries(matrixQ.data.plans.map((p) => [p.key, p.price_hint])));
+    if (plansQ.data) {
+      setPriceEdits(Object.fromEntries(plansQ.data.plans.map((p) => [p.key, p.price_hint])));
     }
-  }, [matrixQ.data]);
+  }, [plansQ.data]);
 
   async function savePrices() {
     setSavingPrices(true);
     setPriceErr(null);
     setPriceMsg(null);
     try {
-      await api.patch("/platform/plans/prices", { prices: priceEdits });
-      matrixQ.reload();
+      // Re-seed from the PATCH response so the box reflects exactly what was
+      // saved, rather than re-fetching a different (unoverridden) endpoint.
+      const res = await api.patch<{ plans: PlanFull[] }>("/platform/plans/prices", {
+        prices: priceEdits,
+      });
+      setPriceEdits(Object.fromEntries(res.plans.map((p) => [p.key, p.price_hint])));
       setPriceMsg("Saved — live on the pricing page.");
       window.setTimeout(() => setPriceMsg(null), 3000);
     } catch (err) {
@@ -90,6 +102,12 @@ export default function PlansPage() {
 
   const plans = matrixQ.data?.plans ?? [];
   const features = matrixQ.data?.features ?? [];
+  const loadError = matrixQ.error ?? plansQ.error;
+  const stillLoading = matrixQ.loading || plansQ.loading || !matrixQ.data || !plansQ.data;
+  const retryAll = () => {
+    matrixQ.reload();
+    plansQ.reload();
+  };
 
   return (
     <div className="space-y-5">
@@ -98,9 +116,9 @@ export default function PlansPage() {
         subtitle="What each tier costs, and what it actually includes — the two things an operator has never seen side by side."
       />
 
-      {matrixQ.error ? (
-        <ErrorCard error={matrixQ.error} onRetry={matrixQ.reload} />
-      ) : matrixQ.loading || !matrixQ.data ? (
+      {loadError ? (
+        <ErrorCard error={loadError} onRetry={retryAll} />
+      ) : stillLoading ? (
         <Spinner />
       ) : (
         <>
