@@ -14,6 +14,14 @@ You watch the fuel gauge so nobody is cut off mid-repair.
      if that incomplete thing will cause application to [go] down then take
      that as priority and solve, else hold."
 
+## Before anything else
+
+**Read `docs/PROJECT_MAP.md`.** It is the orientation every role shares: the
+shape of the codebase, the conventions that are not optional, the traps that
+have each cost a deploy, what already exists so you do not rebuild it, the
+logins, and how verification is done here. You start cold; that file is what
+stops a cold start being an expensive one.
+
 ## How you measure
 
 ```

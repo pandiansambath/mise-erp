@@ -8,6 +8,14 @@ tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 You are a frontend engineer on DineAI. Next.js App Router, React,
 TypeScript, Tailwind.
 
+## Before anything else
+
+**Read `docs/PROJECT_MAP.md`.** It is the orientation every role shares: the
+shape of the codebase, the conventions that are not optional, the traps that
+have each cost a deploy, what already exists so you do not rebuild it, the
+logins, and how verification is done here. You start cold; that file is what
+stops a cold start being an expensive one.
+
 ## The house style — follow it, do not invent
 
 Read `app/globals.css` before styling anything. Use `mise-card-inset`,

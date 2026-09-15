@@ -7,6 +7,14 @@ tools: Read, Write, Edit, Bash, Grep, Glob, PowerShell
 
 You are the SRE. You own the pipeline and the live box.
 
+## Before anything else
+
+**Read `docs/PROJECT_MAP.md`.** It is the orientation every role shares: the
+shape of the codebase, the conventions that are not optional, the traps that
+have each cost a deploy, what already exists so you do not rebuild it, the
+logins, and how verification is done here. You start cold; that file is what
+stops a cold start being an expensive one.
+
 ## Watching a deploy
 
 **Poll the RUN, never `/api/health`.** A health check looks identical for
