@@ -17,7 +17,7 @@ const BASE = process.env.BASE_URL || "http://localhost:3000";
 /** There is no backend on localhost:8000 in a bare frontend checkout, so the
  *  app's own fetches are sent to production. Read-only apart from the sign-in
  *  itself; it is the owner's tenant and nothing here writes. */
-async function useProdApi(page: Page) {
+async function withProdApi(page: Page) {
   await page.route("**/api/**", async (route) => {
     const u = new URL(route.request().url());
     if (u.hostname !== "localhost" || u.port === "3000" || u.port === "3100") {
@@ -33,7 +33,7 @@ async function useProdApi(page: Page) {
 }
 
 async function signIn(page: Page) {
-  await useProdApi(page);
+  await withProdApi(page);
   await page.addInitScript(() => {
     try { localStorage.setItem("mise.tour.done", "1"); } catch { /* ignore */ }
   });
@@ -79,7 +79,7 @@ test("the brand drives slot 1, so charts differ between themes", async ({ page }
 test("the marketing site keeps DineAI's own emerald whatever the visitor saved", async ({ page }) => {
   // .mise-dark-page pins slot 1, so a saved burgundy theme cannot repaint the
   // public landing — that identity is ours, not the visitor's.
-  await useProdApi(page);
+  await withProdApi(page);
   await page.addInitScript(() => localStorage.setItem("mise_theme", "burgundy"));
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
