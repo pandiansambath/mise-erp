@@ -13,7 +13,7 @@ from app.audit.router import router as audit_router
 from app.auth.roles_router import router as roles_router
 from app.auth.router import router as auth_router
 from app.billing.router import router as billing_router
-from app.core import logging_setup, monitoring
+from app.core import logging_setup, monitoring, usage
 from app.core.config import settings
 from app.core.pulse import PULSE
 from app.custom_fields.router import router as custom_fields_router
@@ -51,8 +51,57 @@ from app.vendors.router import router as vendors_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup / shutdown hooks go here (warm caches, etc.).
-    yield
+    """Start the usage flusher, and make sure a deploy loses nothing.
+
+    The counters live in memory (see `app/core/usage.py` for why). A normal
+    deploy is `docker compose up -d`, which sends SIGTERM and runs this
+    shutdown path — so the flush below is what makes "a deploy loses no counts"
+    true rather than hopeful. Only a hard kill loses the last few minutes, and
+    the page can see that gap because every flush stamps `last_flush`.
+
+    OFF IN TESTS. The suite is 812 tests and 27 minutes; a background task and
+    a collector inside it would be a slow, confusing failure that has nothing
+    to do with what is being tested.
+    """
+    import asyncio
+    import contextlib
+    import sys
+
+    from app.core import usage
+    from app.core.database import AsyncSessionLocal, engine
+
+    # `settings.env` DOES NOT EXIST — I wrote against it first and a
+    # getattr default would have quietly switched the collector ON inside the
+    # test suite, which is the opposite of the intent. pytest announces itself
+    # in sys.modules; that is true whatever the config happens to hold.
+    enabled = "pytest" not in sys.modules
+
+    if enabled:
+        with contextlib.suppress(Exception):
+            usage.attach_db_counters(engine.sync_engine)
+
+    async def _flush_once() -> None:
+        with contextlib.suppress(Exception):
+            async with AsyncSessionLocal() as db:
+                await usage.flush(db)
+
+    async def _loop() -> None:
+        # Five minutes. At sixty seconds this would be 1,440 upserts a day
+        # touching the same few hundred rows; at five it is 288, which
+        # autovacuum absorbs without noticing.
+        while True:
+            await asyncio.sleep(300)
+            await _flush_once()
+
+    task = asyncio.create_task(_loop()) if enabled else None
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            await _flush_once()
 
 
 def create_app() -> FastAPI:
@@ -100,6 +149,10 @@ def create_app() -> FastAPI:
 
         rid = _uuid.uuid4().hex[:8]
         logging_setup.bind(request_id=rid)
+        # Opens the per-request DB tally that the SQLAlchemy events fill in.
+        # Must be before call_next, or the first queries of the request are
+        # counted against nobody.
+        usage.begin_request()
         started = _time.monotonic()
         try:
             response = await call_next(request)
@@ -123,7 +176,17 @@ def create_app() -> FastAPI:
                 # the app does not have and would be billed per GB scanned.
                 # Templated so /api/hotels/<uuid> does not become 400 distinct
                 # "endpoints" that each look rare.
-                PULSE.record(_template(path), response.status_code, ms)
+                templated = _template(path)
+                PULSE.record(templated, response.status_code, ms)
+                # The same event, kept for the BILL rather than for health.
+                # pulse resets on deploy by design; this one survives.
+                usage.end_request(
+                    hotel_id=getattr(request.state, "log_hotel", None),
+                    method=request.method,
+                    endpoint=templated,
+                    status=response.status_code,
+                    ms=ms,
+                )
                 log.info(
                     "%s %s -> %s in %dms",
                     request.method,
