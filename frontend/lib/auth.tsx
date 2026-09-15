@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { nextFromLocation } from "./nextPath";
 import { setGrantedPermissions } from "./permissions";
 import { setAppTimeZone } from "./date";
 import { useRouter } from "next/navigation";
@@ -95,8 +96,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(res.user);
       setHotel(res.hotel);
       setGrantedPermissions(res.permissions);
-      // Operators go straight to the standalone Control Room; everyone else to the app.
-      await sweepThenGo(res.user.is_platform_owner ? "/control-room" : "/dashboard");
+      // Where they were actually trying to go, if anywhere.
+      //
+      // `safeNext` is an allowlist of SHAPE — one leading slash, no scheme, no
+      // host — because `?next=` is attacker-controlled and an open redirect
+      // after a successful sign-in is the most convincing phishing page there
+      // is: the victim has just proved the site is real.
+      //
+      // An operator's destination has to be inside the Control Room. Sending
+      // one to a tenant page would render the app shell around somebody who
+      // has no hotel, which the app-group layout then bounces anyway.
+      const wanted = nextFromLocation();
+      const home = res.user.is_platform_owner ? "/control-room" : "/dashboard";
+      const allowed =
+        wanted &&
+        (res.user.is_platform_owner
+          ? wanted.startsWith("/control-room")
+          : !wanted.startsWith("/control-room"));
+      await sweepThenGo(allowed ? wanted : home);
     },
     [sweepThenGo]
   );

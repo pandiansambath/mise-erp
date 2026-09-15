@@ -211,13 +211,44 @@ lied every time; the picture told the truth.
 numbered item, in his own words. **Nothing is ticked without evidence it is
 deployed and working.** New feedback goes in BEFORE work starts.
 
-**When to use an agent, and when not.** Learned the expensive way: chaining five
-agents to build one feature took four sessions for work that used to take one.
-Every spawn starts cold and re-derives context the main session already holds.
+### ROUTING — who works, and when
 
-- **Good:** parallel, read-heavy, small output — surveys, audits, verification,
-  watching a 27-minute deploy while other work continues.
-- **Bad:** sequential chains, and build work where the main session already has
-  the context.
+His standing instruction, 2026-09-15:
 
-**Never run a git write command from an agent.** The main session owns commits.
+    "please dont wokr as single...use our organisation style..hereafter..
+     whatever task we need to follow our orgsanisation agents (refine them...
+     to consume or who need to work and when instead of alllllat once unless
+     its needed)"
+
+Both halves are the rule. Use the organisation — AND engage roles selectively,
+not all of them on everything. The failure mode he is guarding against is the
+one he already lived through: chaining five agents to build one feature took
+four sessions for work that used to take one, because every spawn starts cold
+and re-derives what the main session already holds.
+
+**The routing table. Match the task, engage that role, and no others.**
+
+| The work | Who | Why not someone else |
+|---|---|---|
+| "What is left / what next" | **delivery-lead** | It owns the checklist. Nobody else should be guessing at sequence. |
+| A bug he has reported | **main session** — CloudWatch first | Evidence is cheap and an agent re-deriving the repo to read one log is not. |
+| Building a feature the main session already has context for | **main session** | This is the expensive mistake. Do not spawn for it. |
+| Designing something non-trivial BEFORE building | **architect**, then main session builds | One design pass, not a chain. |
+| Judging whether a screen looks right | **product-designer** | It takes screenshots and LOOKS. Its two audits each found faults nobody had reported. |
+| Proving a fix on the live site after deploy | **qa-manual** | Fresh eyes, parallel with the next build. Its §33 pass stopped a wrong tick. |
+| Locking a fix so it cannot regress | **qa-automation** | Only when the fix is worth a permanent test. |
+| Anything touching auth, tenant isolation, secrets | **security-engineer** | Non-negotiable. It added the AI privacy gate nobody asked for. |
+| Money, AWS spend, pricing | **cfo** | |
+| Schema, migrations, slow queries | **database-engineer** | |
+| Reviewing a risky diff before it ships | **code-reviewer** | |
+| Deploys, pipeline, CloudWatch, incidents | **sre** | |
+| Capacity before a long run | **capacity-monitor** | Cheap, runs on haiku. |
+| WAITING for anything — a deploy, a build, a run | **nobody. Use `Monitor`.** | An SRE agent once burned 151k tokens and 94 tool calls parking on background commands and produced no report. Waiting is not agent work. |
+
+**Two roles run on a schedule rather than on request:** delivery-lead holds the
+checklist continuously, and qa-manual verifies after every deploy.
+
+**Never run a git write command from an agent.** The main session owns commits —
+and `git add -A` while an agent is running sweeps its in-progress files into
+your commit. That has now happened twice. Stage explicit paths.
+
