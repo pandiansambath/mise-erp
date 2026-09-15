@@ -6,10 +6,28 @@ right now. Two streams, both computed on the fly and strictly hotel-scoped:
   • ACTIVITY — a live feed of everything happening in the business (sales, waste,
                deliveries, payroll, shifts, expenses, price changes…), read straight
                from the audit log so the bell doubles as a "recent history".
+  • MINE     — things addressed to THIS PERSON. Added 2026-09-16:
+
+                   "Requesting a document, or putting someone on the rota, must
+                    notify THEM."
+
+               The other two streams are hotel-wide and PERMISSION-gated, which
+               means a chef sees nothing: `shift.add` requires `employees:read`,
+               a permission a kitchen porter does not have and should not have.
+               So the two features that are ABOUT a staff member notified
+               everyone except the staff member.
+
+               This stream is gated on IDENTITY instead — you always see what
+               was asked of you — and it is still computed on the fly, from the
+               rows the features already write. No new table, nothing to keep
+               in step.
 
 No storage: the header bell polls this and tracks 'seen' client-side. Every item is
 permission-gated so a user only sees streams for areas they can access."""
+from datetime import UTC, date, datetime, timedelta
+
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit_service
@@ -17,8 +35,11 @@ from app.auth.deps import get_current_user
 from app.auth.models import User
 from app.core.database import get_db
 from app.core.rbac import has_permission
+from app.documents.models import DocRequestStatus, DocumentRequest
+from app.employees.models import Employee
 from app.inventory import service as inv_service
 from app.reports import insights
+from app.rota.models import Shift
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -127,10 +148,107 @@ async def list_notifications(
         if len(activity) >= 25:
             break
 
+    # ── FOR YOU ───────────────────────────────────────────────────────────
+    #
+    # Addressed to this person, and therefore NOT permission-gated: you always
+    # see what was asked of you. Everything here is read from rows the features
+    # already write, so there is no second source of truth to drift.
+    mine: list[dict] = []
+    me = (
+        await db.execute(
+            select(Employee).where(
+                Employee.hotel_id == user.hotel_id,
+                Employee.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if me is not None:
+        # Documents somebody has asked YOU for, oldest first — the one waiting
+        # longest is the one that matters.
+        pending = (
+            (
+                await db.execute(
+                    select(DocumentRequest)
+                    .where(
+                        DocumentRequest.hotel_id == user.hotel_id,
+                        DocumentRequest.employee_id == me.id,
+                        DocumentRequest.status == DocRequestStatus.PENDING.value,
+                    )
+                    .order_by(DocumentRequest.created_at)
+                    .limit(20)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for r in pending:
+            waited = (datetime.now(UTC) - r.created_at).days if r.created_at else 0
+            mine.append({
+                "id": f"docreq:{r.id}",
+                "kind": "document_requested",
+                "severity": "warn" if waited >= 7 else "info",
+                "icon": "📄",
+                "title": f"{r.title} was asked of you",
+                # Days, not a raw timestamp — "asked 9 days ago" is the fact.
+                "body": (
+                    "asked just now" if waited < 1
+                    else "asked yesterday" if waited == 1
+                    else f"asked {waited} days ago"
+                ),
+                "route": "/my",
+                "at": r.created_at.isoformat() if r.created_at else None,
+            })
+
+        # YOUR shifts, from today forward. Past shifts are history, not news —
+        # telling somebody on Friday that they were on the rota on Tuesday is
+        # noise, and noise is exactly what buries the document request above.
+        shifts = (
+            (
+                await db.execute(
+                    select(Shift)
+                    .where(
+                        Shift.hotel_id == user.hotel_id,
+                        Shift.employee_id == me.id,
+                        Shift.date >= date.today(),
+                        Shift.date <= date.today() + timedelta(days=14),
+                    )
+                    .order_by(Shift.date, Shift.start_time)
+                    .limit(20)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for s in shifts:
+            days = (s.date - date.today()).days
+            when = (
+                "today" if days == 0
+                else "tomorrow" if days == 1
+                else s.date.strftime("%a %d %b")
+            )
+            mine.append({
+                "id": f"shift:{s.id}",
+                "kind": "rota_shift",
+                "severity": "info",
+                "icon": "🗓️",
+                "title": f"You are on the rota {when}",
+                "body": f"{s.start_time.strftime('%H:%M')}–{s.end_time.strftime('%H:%M')}",
+                "route": "/my",
+                "at": None,
+            })
+
     # `items` kept for backward-compat (older clients); `count` badges the bell.
+    #
+    # `mine` is counted FIRST and separately: a thing asked of you personally
+    # must not be buried by forty sales rows, which is 32.12's complaint in
+    # miniature. The client badges `count`; `mine_count` lets the Rota and My
+    # sections carry their own +1/+2/+3 without re-deriving it.
     return {
         "alerts": alerts,
         "activity": activity,
+        "mine": mine,
+        "mine_count": len(mine),
         "items": alerts,
-        "count": len(alerts) + len(activity),
+        "count": len(mine) + len(alerts) + len(activity),
     }

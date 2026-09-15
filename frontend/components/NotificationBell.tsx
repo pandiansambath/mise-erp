@@ -12,7 +12,16 @@ type Activity = {
   id: string; kind: string; icon: string; title: string; body: string;
   route: string; at: string; who: string;
 };
-type Feed = { alerts: Alert[]; activity: Activity[]; count: number };
+/** Addressed to THIS person — a document somebody asked them for, a shift they
+ *  are on. Not permission-gated, because you always see what was asked of you. */
+type Mine = Alert & { at?: string | null };
+type Feed = {
+  alerts: Alert[];
+  activity: Activity[];
+  mine: Mine[];
+  mine_count: number;
+  count: number;
+};
 type ChatUnread = {
   chat_id: string; other_hotel: string; last_message: string | null;
   last_message_at: string | null; unread: number;
@@ -51,7 +60,13 @@ const SEV: Record<string, string> = {
 
 export default function NotificationBell() {
   const router = useRouter();
-  const [feed, setFeed] = useState<Feed>({ alerts: [], activity: [], count: 0 });
+  const [feed, setFeed] = useState<Feed>({
+    alerts: [],
+    activity: [],
+    mine: [],
+    mine_count: 0,
+    count: 0,
+  });
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState<Set<string>>(new Set());
   const [chats, setChats] = useState<ChatUnread[]>([]);
@@ -60,7 +75,13 @@ export default function NotificationBell() {
   const refresh = useCallback(async () => {
     try {
       const res = await api.get<Feed>("/notifications");
-      setFeed({ alerts: res.alerts || [], activity: res.activity || [], count: res.count || 0 });
+      setFeed({
+        alerts: res.alerts || [],
+        activity: res.activity || [],
+        mine: res.mine || [],
+        mine_count: res.mine_count || 0,
+        count: res.count || 0,
+      });
     } catch {
       /* header must never break — ignore transient errors */
     }
@@ -92,7 +113,10 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  const all = [...feed.alerts, ...feed.activity];
+  // `mine` first everywhere: a thing asked of YOU must not be buried under
+  // forty sales rows. That is 32.12's complaint in miniature, and it is
+  // cheaper to get right here than to solve generally later.
+  const all = [...feed.mine, ...feed.alerts, ...feed.activity];
   const chatUnread = chats.reduce((t, c) => t + c.unread, 0);
   const unseen = all.filter((i) => !seen.has(i.id)).length + chatUnread;
 
@@ -187,6 +211,35 @@ export default function NotificationBell() {
                       </span>
                       <span className="truncate text-xs text-fg-faint">{c.last_message ?? "new message"}</span>
                     </span>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* FOR YOU — addressed to this person, so it leads. */}
+            {feed.mine.length > 0 && (
+              <>
+                <p className="sticky top-0 bg-shell/95 px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-fg-soft backdrop-blur">
+                  🙋 For you
+                </p>
+                {feed.mine.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => go(n.route, n.id)}
+                    className={`flex w-full items-start gap-3 px-4 py-2.5 text-left transition hover:bg-glass/5 ${seen.has(n.id) ? "opacity-75" : ""}`}
+                  >
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-sm ring-1 ${SEV[n.severity] ?? SEV.info}`}>
+                      {n.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        {!seen.has(n.id) && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" aria-label="unread" />}
+                        <span className="truncate text-sm font-medium text-fg">{n.title}</span>
+                      </span>
+                      <span className="block truncate text-xs text-fg-soft">{n.body}</span>
+                    </span>
+                    <span aria-hidden className="mt-1 text-fg-faint">›</span>
                   </button>
                 ))}
               </>
