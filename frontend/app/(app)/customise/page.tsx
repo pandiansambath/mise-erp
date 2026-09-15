@@ -62,6 +62,7 @@ export default function CustomisePage() {
   const [door, setDoor] = useState<LoginConfig>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -97,12 +98,16 @@ export default function CustomisePage() {
   async function save(what: Which) {
     setSaving(true);
     setSaved(null);
+    setSaveErr(null);
     try {
       await api.patch("/hotels/me", what === "site" ? { landing: land } : { login_page: door });
       setSaved(what === "site" ? "Public page saved" : "Sign-in page saved");
       setTimeout(() => setSaved(null), 2600);
     } catch {
-      setSaved("Could not save — try again");
+      // A FAILURE WAS BEING PAINTED GREEN. Both outcomes went into one
+      // `saved` string rendered through `mise-tone-good`, so "Could not
+      // save — try again" arrived in the colour that means it worked.
+      setSaveErr("Could not save — try again");
     } finally {
       setSaving(false);
     }
@@ -208,6 +213,11 @@ export default function CustomisePage() {
       </div>
 
       {saved && <p className="mise-tone-good text-sm font-medium">{saved}</p>}
+      {saveErr && (
+        <p role="alert" className="mise-tone-bad text-sm font-medium">
+          {saveErr}
+        </p>
+      )}
 
       {/* Preview FIRST and wide. The controls are the small half — what you are
           looking at is the page, not the form. */}

@@ -289,7 +289,17 @@ export default function HotelSite({
         {/* readability scrim — the glass-readability rule: text never fights the photo */}
         <div aria-hidden className="absolute inset-0 -z-10"
              style={{
+               // A VERTICAL RAMP TUNED FOR COPY THAT IS NOT THERE.
+               //
+               // It thins to 35% at 38% down — and the copy block sits at ~44%.
+               // The scrim was at its weakest exactly where the headline is,
+               // because it was tuned when the copy was top-anchored and the
+               // copy is centred now.
+               //
+               // The ramp stays (it still carries the top bar and the fade into
+               // the page), and a centred radial is added behind the words.
                background:
+                 `radial-gradient(70% 55% at 50% 46%, rgba(0,0,0,${t.scrim * 0.6}), transparent 72%),` +
                  `linear-gradient(180deg, rgba(0,0,0,${t.scrim * 0.85}) 0%, rgba(0,0,0,${t.scrim * 0.35}) 38%, ${t.bg} 99%)`,
              }} />
         <div ref={veilRef} aria-hidden className="absolute inset-0 -z-10"
@@ -324,8 +334,20 @@ export default function HotelSite({
                   <span
                     className="bg-clip-text text-transparent"
                     style={{
-                      backgroundImage: `linear-gradient(120deg, #fff 4%, ${accent} 38%, ${accent2} 78%, #fff 100%)`,
-                      filter: "drop-shadow(0 3px 18px rgba(0,0,0,.55))",
+                      // THE NAME HAS TO BE LEGIBLE. IT IS THE NAME.
+                      //
+                      // This ran the gradient through the raw accent at 38% —
+                      // and NIRAI's accent is #334155, a dark slate, landing on
+                      // the middle letters of a five-letter word over a white
+                      // plate. The restaurant's own name was the least readable
+                      // thing on its page.
+                      //
+                      // The accent still colours the word; it just cannot go
+                      // darker than the scrim behind it can carry, so the stops
+                      // are lifted toward white. The identity survives and the
+                      // word stays a word.
+                      backgroundImage: `linear-gradient(120deg, #fff 4%, color-mix(in srgb, ${accent} 55%, #fff) 38%, color-mix(in srgb, ${accent2} 65%, #fff) 78%, #fff 100%)`,
+                      filter: "drop-shadow(0 3px 18px rgba(0,0,0,.65))",
                     }}
                   >
                     {w}
@@ -482,12 +504,32 @@ export default function HotelSite({
                     style={{ borderColor: t.line, background: `linear-gradient(150deg, ${accent}1e, ${accent2}12)` }}
                   >
                     <div className="relative h-32 overflow-hidden">
-                      <div
-                        className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-                        style={{
-                          backgroundImage: `url(${d.photo_url ? `${API_BASE}${d.photo_url}` : `/dishes/${GALLERY[i % GALLERY.length]}.jpg`})`,
-                        }}
-                      />
+                      {/* A DISH IS NEVER ILLUSTRATED WITH A DIFFERENT DISH.
+                          This fell back to `/dishes/${GALLERY[i % GALLERY.length]}.jpg`
+                          — a stock photo chosen by the dish's POSITION in the
+                          list. So "Idli (plate) £4.95" was shown as gulab
+                          jamun, and "Gobi Manchurian" as a cream curry. On a
+                          page that takes orders that is not a styling choice;
+                          it is telling somebody they are buying one thing and
+                          delivering another.
+                          With no photograph we draw the NAME instead. A
+                          typographic tile is honest about having no picture;
+                          a picture of something else is not. */}
+                      {d.photo_url ? (
+                        <div
+                          className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+                          style={{ backgroundImage: `url(${API_BASE}${d.photo_url})` }}
+                        />
+                      ) : (
+                        <div
+                          className="absolute inset-0 grid place-items-center px-3 text-center transition-transform duration-700 group-hover:scale-105"
+                          style={{ background: `linear-gradient(135deg, ${accent}, ${accent2})` }}
+                        >
+                          <span className="font-display text-sm font-semibold leading-tight text-white drop-shadow-[0_1px_8px_rgba(0,0,0,.45)]">
+                            {d.name}
+                          </span>
+                        </div>
+                      )}
                       <div aria-hidden className="absolute inset-0"
                            style={{ background: `linear-gradient(0deg, ${t.bg}cc, transparent 62%)` }} />
                       <span className="absolute right-2.5 top-2.5 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-lg"

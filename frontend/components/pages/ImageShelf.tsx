@@ -133,11 +133,26 @@ export function ImageShelf({
                       value === img.file ? "ring-brand-500" : "ring-transparent hover:ring-line"
                     }`}
                   >
+                    {/* THE THUMBNAIL, NOT THE HERO.
+                        This drew the full image — around 300 KB — inside a tile
+                        a few centimetres across. Fine at six pictures a mood;
+                        at twelve, opening one mood was pulling ~3.6 MB to show
+                        somebody a grid of squares. `scripts/make_page_thumbs.py`
+                        writes 480px copies: the picker now loads 10% of what it
+                        did (56.2 MB → 5.5 MB across the library).
+                        onError falls back to the full image, so a mood fetched
+                        before the thumbs existed still shows something rather
+                        than a row of broken tiles. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={img.file}
+                      src={img.file.replace("/page-images/", "/page-images/thumbs/")}
+                      onError={(e) => {
+                        const el = e.currentTarget;
+                        if (el.src.includes("/thumbs/")) el.src = img.file;
+                      }}
                       alt={img.alt}
                       loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover"
                     />
                     {value === img.file && (
