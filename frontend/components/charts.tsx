@@ -13,16 +13,33 @@
 import { useId, useRef, useState } from "react";
 import { AnimatedNumber, useInView, usePrefersReducedMotion } from "@/components/fx";
 
-/** Default categorical palette — brand-led, readable on paper in both themes. */
+/** The categorical palette.
+ *
+ *  SLOT 1 IS THE BRAND. It used to be a literal emerald, which meant every
+ *  chart in the app was emerald on every one of the sixteen themes — an
+ *  emerald donut and emerald margin figures on a burgundy Reports page, next
+ *  to a burgundy NET PROFIT and a rose expense bar. Five colour systems on the
+ *  one screen that is about money. A single-series trend IS this restaurant's
+ *  own number, so it should be the colour they chose.
+ *
+ *  SLOTS 2-8 STAY CATEGORICAL, deliberately. A donut of expense categories
+ *  needs hues you can tell apart; tinting them all with the brand would make
+ *  them one colour at eight opacities, which is unreadable. Identity belongs
+ *  to slot 1; the rest are just labels.
+ *
+ *  These are `var()` rather than hex so a theme change repaints live with no
+ *  React involved. Verified that var() resolves in SVG `fill`, `stroke` and
+ *  `stop-color` presentation attributes before relying on it.
+ */
 export const CHART_COLORS = [
-  "#10b981", // emerald
-  "#eab78a", // copper
-  "#0ea5e9", // sky
-  "#f59e0b", // amber
-  "#f43f5e", // rose
-  "#14b8a6", // teal
-  "#a78bfa", // violet
-  "#94a3b8", // slate
+  "var(--chart-1)", // the brand
+  "var(--chart-2)", // copper
+  "var(--chart-3)", // sky
+  "var(--chart-4)", // amber
+  "var(--chart-5)", // rose
+  "var(--chart-6)", // teal
+  "var(--chart-7)", // violet
+  "var(--chart-8)", // slate
 ];
 
 const easeDraw = "cubic-bezier(0.22, 1, 0.36, 1)";
@@ -71,7 +88,7 @@ function ChartTip({ tip }: { tip: TipState }) {
 export function Sparkline({
   data,
   labels,
-  color = "#10b981",
+  color = "var(--chart-1)",
   height = 36,
   formatValue = (v: number) => v.toLocaleString("en-GB"),
   className = "",
@@ -153,7 +170,7 @@ export function Sparkline({
 export function AreaChart({
   data,
   labels,
-  color = "#10b981",
+  color = "var(--chart-1)",
   height = 120,
   formatValue = (v: number) => v.toLocaleString("en-GB"),
   className = "",
@@ -214,7 +231,7 @@ export function AreaChart({
         {hoverI != null && (
           <g>
             <line x1={pts[hoverI][0]} x2={pts[hoverI][0]} y1={0} y2={height} stroke={color} strokeOpacity="0.35" strokeDasharray="3 4" />
-            <circle cx={pts[hoverI][0]} cy={pts[hoverI][1]} r="5" fill={color} stroke="#fff" strokeWidth="1.5" />
+            <circle cx={pts[hoverI][0]} cy={pts[hoverI][1]} r="5" fill={color} stroke="var(--color-paper)" strokeWidth="1.5" />
           </g>
         )}
         <defs>
@@ -513,7 +530,10 @@ export function Meter({
   const { tip, show, hide, boxRef } = useChartTip();
   const drawn = inView || reduced;
   const healthy = goodBelow ? value <= target : value >= target;
-  const tone = healthy ? "#10b981" : "#f59e0b";
+  // Meaning, not identity — see 38.1a. Hard-coded emerald here made "on
+  // target" the same green on a burgundy page as everywhere else, while
+  // "over" was an unrelated amber.
+  const tone = healthy ? "var(--tone-good)" : "var(--tone-warn)";
   const maxScale = Math.max(value, target) * 1.25 || 1;
   return (
     <div
@@ -626,8 +646,10 @@ export function Treemap({
                   style={{
                     flexGrow: it.value,
                     flexBasis: 0,
-                    background: `${it.color ?? CHART_COLORS[idx % CHART_COLORS.length]}26`,
-                    border: `1px solid ${it.color ?? CHART_COLORS[idx % CHART_COLORS.length]}55`,
+                    // color-mix, NOT `${color}26` — appending hex alpha only
+                    // works on a literal hex, and these are var() now.
+                    background: `color-mix(in srgb, ${it.color ?? CHART_COLORS[idx % CHART_COLORS.length]} 15%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${it.color ?? CHART_COLORS[idx % CHART_COLORS.length]} 33%, transparent)`,
                     opacity: drawn ? 1 : 0,
                     transform: drawn ? "scale(1)" : "scale(0.92)",
                     transition: `opacity 600ms ${easeDraw} ${idx * 90}ms, transform 600ms ${easeDraw} ${idx * 90}ms`,
@@ -836,7 +858,7 @@ export function RadialBars({
 
 export function CalendarHeat({
   days,
-  color = "#10b981",
+  color = "var(--chart-1)",
   formatValue = (v: number) => v.toLocaleString("en-GB"),
   className = "",
 }: {

@@ -343,7 +343,29 @@ body {
 }
 
 /* Dark document behind the landing/signup (kills white overscroll flash). */
+/* ── CHART PALETTE ────────────────────────────────────────────────────────
+   Slot 1 follows the BRAND — every chart used to be a literal emerald on all
+   sixteen themes. Slots 2-8 stay categorical and fixed: a pie of expense
+   categories needs hues you can tell apart, and tinting them all with the
+   brand would make them one colour at eight opacities. See CHART_COLORS.
+
+   A plain :root rule, NOT inside @theme — @theme is for Tailwind's own
+   namespaces and an arbitrary --chart-N there is not reliably emitted. */
+:root {
+  --chart-1: var(--color-brand-400);
+  --chart-2: #eab78a;
+  --chart-3: #0ea5e9;
+  --chart-4: #f59e0b;
+  --chart-5: #f43f5e;
+  --chart-6: #14b8a6;
+  --chart-7: #a78bfa;
+  --chart-8: #94a3b8;
+}
+
 html:has(.mise-dark-page) { background: #030d09; }
+/* The landing and the auth pages are DineAI's OWN identity. A visitor's
+   saved dashboard theme must not repaint the marketing site's charts. */
+.mise-dark-page { --chart-1: #10b981; }
 
 /* ════════════════════════════════════════════════════════════════════════
    DASHBOARD DARK SYSTEM — the logged-in app shares the landing's midnight
@@ -716,7 +738,10 @@ html:has(.mise-app) { background: var(--color-shell, #04120d); }
 .mise-bg-warn { background-color: var(--tone-warn); }
 .mise-bg-bad  { background-color: var(--tone-bad); }
 .mise-bg-info { background-color: var(--tone-info); }
-.mise-tone-bad { color: var(--tone-bad); }
+.mise-tone-good { color: var(--tone-good); }
+.mise-tone-warn { color: var(--tone-warn); }
+.mise-tone-bad  { color: var(--tone-bad); }
+.mise-tone-info { color: var(--tone-info); }
 /* 4.1 — "that 'unusual' text and surrounding yellow is not showing clearly...
    I can barely read it, it's not in HD form, it's like blur form."
    It was 9px uppercase amber-300 on amber-400/15. On the light theme that is
