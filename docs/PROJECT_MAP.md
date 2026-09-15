@@ -179,8 +179,11 @@ lied every time; the picture told the truth.
 - Tenant: `superadmin@gmail.com` / `superadmin@123` — his own restaurant.
   **NOT a platform owner.**
 - Operator: `control@mise.app` / `Control@2026` — the Control Room.
-  `/api/auth/me` does NOT return `is_platform_owner`; test with
-  `GET /api/platform/hotels` returning 200.
+  `/api/auth/me` DOES return it, but NESTED: `me.user.is_platform_owner`,
+  not at the top level. (An earlier version of this line said the field was
+  absent — I had read the top level of the response and stopped there.
+  `frontend/app/control-room/layout.tsx` gates the whole operator area on
+  it.) `GET /api/platform/hotels` returning 200 is the other way to check.
 
 **Clean up every artifact you create on his live tenant, and say that you did.**
 

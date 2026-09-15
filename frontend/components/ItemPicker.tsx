@@ -53,10 +53,26 @@ export function stockState(it: Item): StockState {
   const qty = parseFloat(it.current_stock || "0");
   const min = parseFloat(it.min_stock_level || "0");
   if (qty <= 0)
-    return { dot: statusDot("bg-rose-400 ring-2 ring-rose-400/20"), label: "out of stock", cls: "text-rose-300" };
+    return {
+      dot: statusDot("mise-bg-bad ring-2 ring-[color-mix(in_srgb,var(--tone-bad)_25%,transparent)]"),
+      label: "out of stock",
+      cls: "mise-tone-bad",
+    };
   if (min > 0 && qty <= min)
-    return { dot: statusDot("bg-amber-300 ring-2 ring-amber-300/20"), label: "running low", cls: "text-amber-200" };
-  return { dot: statusDot("bg-brand-400 ring-2 ring-brand-400/20"), label: "in stock", cls: "text-brand-300" };
+    return {
+      dot: statusDot("mise-bg-warn ring-2 ring-[color-mix(in_srgb,var(--tone-warn)_25%,transparent)]"),
+      label: "running low",
+      cls: "mise-tone-warn",
+    };
+  // "in stock" must not be the brand colour. On a red-accented theme it came
+  // out the same red as "out of stock" — measured at ratio 1.00 on rose,
+  // 1.17 on the default. Green/amber/red is not a style choice; it is
+  // something people read without looking. See `.mise-bg-*` in globals.css.
+  return {
+    dot: statusDot("mise-bg-good ring-2 ring-[color-mix(in_srgb,var(--tone-good)_25%,transparent)]"),
+    label: "in stock",
+    cls: "mise-tone-good",
+  };
 }
 
 const OTHER = "Other";

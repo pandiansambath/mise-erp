@@ -55,8 +55,16 @@
   --color-paper: #0a2018; /* card surface (ink-800 family) */
   --color-paper-2: #0e2a1f; /* nested surface / hover */
   --color-paper-3: #14352a; /* strong hover / active */
-  --color-line: rgba(255, 255, 255, 0.09); /* hairline borders */
-  --color-line-2: rgba(255, 255, 255, 0.18); /* input borders / stronger lines */
+  /* "in this theme some pages are blur, some are not shown clearly."
+     Measured rather than guessed: at 9% white on a card only ~4% of a
+     luminance apart from the page behind it, a border is not a line — it is a
+     suggestion. So on every dark theme the tour button, the currency selector,
+     the category chips on the diner's page and the price inputs all render as
+     bare floating text with no visible box. That reads exactly as "blurred".
+     14% and 26% give a control an edge on every dark theme without turning the
+     interface into a wireframe. */
+  --color-line: rgba(255, 255, 255, 0.14); /* hairline borders */
+  --color-line-2: rgba(255, 255, 255, 0.26); /* input borders / stronger lines */
   --color-fg: #eef6f1; /* primary text */
   --color-fg-soft: #bdd0c6; /* secondary text */
   --color-fg-faint: #87a294; /* muted text / labels */
@@ -658,12 +666,35 @@ html:has(.mise-app) { background: #04120d; }
   --tone-info: #7dd3fc;  /* a fact you already had — stock on hand */
   --tone-good: #6ee7b7;  /* healthy after this order */
   --tone-warn: #fcd34d;  /* still short after this order */
+  --tone-bad: #fb7185;   /* out, overdue, failed */
 }
 [data-mode="light"] {
   --tone-info: #0369a1;
   --tone-good: #047857;
   --tone-warn: #b45309;
+  --tone-bad: #be123c;
 }
+
+/* ── MEANING IS NOT IDENTITY ───────────────────────────────────────────────
+   A theme audit measured the default theme's inventory bar and found "in
+   stock" and "out of stock" rendering as THE SAME COLOUR — on the rose theme
+   literally identical, contrast ratio 1.00; on claret, the default, 1.17.
+
+   The cause is that `brand-*` was doing two jobs. It is the restaurant's
+   identity AND it was being used to mean "this is healthy": the stock bar read
+   `st === "out" ? "bg-rose-500" : st === "low" ? "bg-amber-400" :
+   "bg-brand-500"`. Pick a red brand and the good news and the alarm become the
+   same red. The same fault made MONTH PROFIT the exact colour of LOW STOCK.
+
+   Identity may be any colour the owner likes. Meaning may not — green/amber/red
+   is not a style, it is something people read without looking. So the tones
+   above are deliberately theme-INDEPENDENT, and these classes exist so nobody
+   has to reach for `bg-brand-500` to say "fine". */
+.mise-bg-good { background-color: var(--tone-good); }
+.mise-bg-warn { background-color: var(--tone-warn); }
+.mise-bg-bad  { background-color: var(--tone-bad); }
+.mise-bg-info { background-color: var(--tone-info); }
+.mise-tone-bad { color: var(--tone-bad); }
 /* 4.1 — "that 'unusual' text and surrounding yellow is not showing clearly...
    I can barely read it, it's not in HD form, it's like blur form."
    It was 9px uppercase amber-300 on amber-400/15. On the light theme that is
