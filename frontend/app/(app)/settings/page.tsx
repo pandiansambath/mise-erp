@@ -581,6 +581,40 @@ export default function SettingsPage() {
           </label>
         </div>
 
+        {/* THE KITCHEN SCREEN LOCK.
+            `/kds/<code>` is a bare URL. Anyone holding the link sees this
+            restaurant's live orders, table numbers and whatever guests have
+            typed at the table — with no login, for as long as the code lives.
+            The backend has been able to demand a PIN since the `kds_pin_required`
+            preference shipped; there has never been a way for an owner to turn
+            it on, so in practice it has always been open.
+
+            OPT-IN, deliberately. A screen bolted to a kitchen wall that asks for
+            a PIN after every reload is a screen somebody tapes the PIN to. This
+            is for a tablet that leaves the pass. */}
+        <div className="mt-5 border-t border-line pt-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={hotelPrefs.kds_pin_required === true}
+              onChange={(e) => savePref("kds_pin_required", e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-500"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-fg">
+                Ask for the PIN on the kitchen screen
+              </span>
+              <span className="block text-[11px] leading-relaxed text-fg-faint">
+                The kitchen screen opens from a link with no sign-in, so anyone
+                who has the link can watch your live orders. Turn this on and the
+                screen asks for the restaurant&apos;s PIN once, then remembers on
+                that device. Changing the PIN logs every screen out at once.
+                Leave it off for a tablet that never leaves the pass.
+              </span>
+            </span>
+          </label>
+        </div>
+
         {hotelPrefsSaved && (
           <p className="mt-3 text-xs text-brand-300">Saved for the whole restaurant.</p>
         )}
