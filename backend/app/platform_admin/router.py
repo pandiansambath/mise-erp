@@ -22,6 +22,7 @@ from app.auth import service as auth_service
 from app.auth.deps import get_current_user
 from app.auth.models import Role, User
 from app.core.database import get_db
+from app.core.pulse import PULSE
 from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
 from app.platform_admin import deletion, observability
@@ -907,6 +908,26 @@ async def pulse(
 ) -> dict:
     """Is anything wrong right now. The first screen of the Control Room."""
     return await observability.platform_pulse(db, days=max(1, min(days, 365)))
+
+
+@router.get("/pulse/http")
+async def pulse_http(
+    minutes: int = 60,
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """The SOFTWARE's vitals, as opposed to the business's.
+
+    The Control Room had AI and tenant observability and nothing at all about
+    the app itself — no uptime, no error rate, no slow endpoints, no idea which
+    version was running. Its own copy admitted it and pointed at CloudWatch,
+    which is not a monitoring dashboard, it is homework.
+
+    Served from an in-process ring buffer (`app.core.pulse`), so it costs one
+    deque append per request and no query. Read the module docstring for what
+    that deliberately does NOT cover — it is this container since it started,
+    not a fleet-wide figure, and it must never be presented as one.
+    """
+    return PULSE.snapshot(window_s=max(60, min(minutes, 720)) * 60)
 
 
 @router.get("/ai/by-hotel")
