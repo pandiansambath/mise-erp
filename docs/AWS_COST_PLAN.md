@@ -44,12 +44,23 @@ So the bill is genuinely being generated. You can see both halves:
 | Sep 2026 (to 9th) | $10.77 | −$10.77 | $0.00 |
 | **Burned so far** | **$61.90** | **−$61.90** | **$0.00** |
 
-**Roughly $138 of the $200 is left.** When it hits zero, the number in that
-column starts coming out of your bank account. That is the whole reason this
-document exists.
+**$92.56 of the credits is left, and the pot was never $200.**
+
+CORRECTED 2026-09-15, measured from the account rather than reasoned about.
+`freetier:GetAccountPlanState` returns the balance directly — an API I had
+twice said did not exist. It reads **$92.56**, and it reconciles exactly:
+$9.22 burned in July + $41.91 in August + $16.34 in Sep 1-15 = $67.48, and
+$67.48 + $92.56 = **$160.04**. So the pot is $100 on sign-up plus up to five
+$20 activity rewards, three of which were claimed — not a flat $200.
+
+💷 **Two $20 rewards are still unclaimed** ("use a foundation model in the
+Bedrock playground", "create a web app using AWS Lambda"). Minutes of console
+work each, and at the measured run rate that is six more weeks of runway.
 
 > Please confirm the exact remaining balance in the console — **Billing →
-> Credits**. AWS gives no API for it, so $138 is my arithmetic, not their
+> Credits**. (The BALANCE is now read by API; only the EXPIRY DATE still needs
+> the console — AWS did not populate `accountPlanExpirationDate` for us.) Was:
+> "AWS gives no API for it, so $138 is my arithmetic, not their
 > figure. The expiry date matters too: credits expire whether you use them or
 > not.
 
@@ -148,7 +159,10 @@ This must be a **lifecycle policy**, not a one-off delete, or it grows straight
 back at $2.50/month.
 
 - Frees roughly **103 GB** → ECR drops from **$10.17 to about $0.30/month**
-- **Saves ~$9.90/month — 28% of the entire bill**
+- **Saves $5.25/month — MEASURED, not projected.** (Was estimated at $9.90.
+  ECR bills UNIQUE LAYERS, and we sized it by summing per-image totals; 896
+  images sharing base layers dedupe to about half of the 104 GB. The policy
+  is live and working: $0.177/day on 9 Sep → $0.002/day from 11 Sep.)
 - Zero risk to the running site: the live containers already have their images
   on the server, and the last three deploys stay available to roll back to
 
@@ -182,7 +196,7 @@ machines**, and in stopping the waste.
 
 ### Now — free, no commitment, no risk
 
-**① ECR lifecycle policy, keep 3.** Saves **$9.90/month (28%)**. Five minutes.
+**① ECR lifecycle policy, keep 3.** DONE — saves **$5.25/month, measured**.
 Do this one first regardless of everything else.
 
 **② Move the budget off forecast.** `mise-monthly-all` at $40 will keep
@@ -224,7 +238,7 @@ RDS also sells **All Upfront** at **$106 for the year**, which is $8.83/month
 equivalent — better than the $9.67 No-Upfront rate. And an upfront RI purchase
 can be paid for **with your existing credits**.
 
-So: spend $106 of the remaining ~$138 now, and the database costs nothing at
+So: spend $106 of the remaining **$92.56** now, and the database costs nothing at
 all until September 2027. Rough twelve-month comparison:
 
 | | Credits burn out | Cash out over 12 months |
@@ -287,7 +301,7 @@ Steady state today, with ECR at its current 104 GB:
 part-month ECR charge. $42.75 is the honest steady-state figure, and it climbs
 about $2.50 a month while ECR is unmanaged.)*
 
-| Stage | $/month | Credits (~$138) last |
+| Stage | $/month | Credits ($92.56) last |
 |---|---:|---|
 | Today, unchanged | **~$42.75**, rising | ~3.2 months → **mid-Dec 2026** |
 | ① ECR lifecycle policy | **~$32.40** | ~4.3 months → **mid-Jan 2027** |
