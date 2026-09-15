@@ -46,11 +46,17 @@ export function TotalsStrip({
   }[];
   className?: string;
 }) {
+  // MEANING, not identity. `good` was `text-brand-300` — the brand accent used
+  // to say "healthy" — so on a claret or burgundy theme good news came out the
+  // same red as the alarm beside it. That is §38.1a, and I had swept the app
+  // for it and missed this one, which is a SHARED component: it was still
+  // shipping on Overview, AI spend and the Health page I wrote today.
+  // `bad`/`warn` were literals, so they ignored a theme's own triad.
   const tones: Record<string, string> = {
     plain: "text-fg",
-    good: "text-brand-300",
-    bad: "text-rose-300",
-    warn: "text-amber-300",
+    good: "mise-tone-good",
+    bad: "mise-tone-bad",
+    warn: "mise-tone-warn",
   };
   return (
     <div

@@ -552,9 +552,20 @@ export function Meter({
     >
       <ChartTip tip={tip} />
       {label ? (
-        <div className="mb-1.5 flex items-baseline justify-between text-xs">
-          <span className="text-fg-soft">{label}</span>
-          <span className="font-mono font-semibold" style={{ color: tone }}>
+        // `justify-between` with no gap is fine at 300px and collides at 160.
+        // In the Control Room's 40-wide allowance column it rendered
+        //     tokens/mo10.1% / 100% target
+        // — the label welded to the value with no space, on every row, at both
+        // 1280 and 1920. flex-wrap does not save it either: a flex item
+        // squeezes below its own content width long before the row wraps.
+        // A real gap, a label allowed to shrink and truncate, and a value that
+        // refuses to.
+        <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+          <span className="min-w-0 truncate text-fg-soft">{label}</span>
+          <span
+            className="shrink-0 whitespace-nowrap font-mono font-semibold"
+            style={{ color: tone }}
+          >
             <AnimatedNumber value={value} suffix={suffix} decimals={value % 1 ? 1 : 0} />
             <span className="ml-1 text-fg-faint">/ {target}{suffix} target</span>
           </span>
