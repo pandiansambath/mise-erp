@@ -14,8 +14,8 @@ manual dish-count entry — out of scope here. These all need zero new data entr
 """
 import uuid
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
@@ -108,7 +108,21 @@ async def price_alerts(
         .join(PurchaseOrder, PurchaseOrder.id == POItem.po_id)
         .join(Item, Item.id == POItem.item_id)
         .join(Vendor, Vendor.id == PurchaseOrder.vendor_id, isouter=True)
-        .where(PurchaseOrder.hotel_id == hotel_id, POItem.unit_price > 0)
+        .where(
+            PurchaseOrder.hotel_id == hotel_id,
+            POItem.unit_price > 0,
+            # BOUNDED. This selected every purchase-order line the hotel had
+            # EVER had, joined three ways, and reduced it in Python — and the
+            # notification bell calls it every 45 seconds, per open tab, per
+            # user. It is cheap today because the data is small; it gets worse
+            # every week a restaurant trades, which is the wrong direction for
+            # a query on a polling path.
+            #
+            # Six months is the window a price comparison is meaningful over
+            # anyway: "this cost more than last time" stops being news when
+            # "last time" was last year.
+            PurchaseOrder.created_at >= datetime.now(UTC) - timedelta(days=180),
+        )
         .order_by(POItem.item_id, PurchaseOrder.created_at)
     )
     series: dict[uuid.UUID, list[tuple]] = defaultdict(list)
