@@ -620,6 +620,18 @@ async def compact_closed_months(db: AsyncSession, *, keep_days: int = 45) -> int
     with usage.internal():
         # Sum every day of a closed month onto that month's first day, then
         # delete the days that fed it. One statement each, no row-by-row work.
+        #
+        # ⚠️ NO `HAVING COUNT(*) > 1`, AND IT MUST STAY THAT WAY. Skipping
+        # single-row months looks like a free optimisation — nothing to sum —
+        # and it silently destroys them: the rollup is skipped, so no row is
+        # written on the 1st, and the DELETE below then removes that single row
+        # because it is neither on the 1st nor tagged `ce-rollup`. A month whose
+        # only activity was, say, the 15th would lose its entire bill with no
+        # error anywhere. Rolling up a single row is a no-op that costs nothing
+        # and keeps the delete safe.
+        #
+        # Still idempotent: a second pass sums the one rollup row to itself and
+        # ON CONFLICT writes back the same figure.
         await db.execute(
             text("""
             WITH rolled AS (
@@ -631,7 +643,6 @@ async def compact_closed_months(db: AsyncSession, *, keep_days: int = 45) -> int
                   FROM cloud_cost_daily
                  WHERE day < :before
                  GROUP BY 1, 2, 3, 4
-                HAVING COUNT(*) > 1
             )
             INSERT INTO cloud_cost_daily
                 (id, day, service, usage_type, record_type,
