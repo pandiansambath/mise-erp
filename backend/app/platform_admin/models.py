@@ -113,6 +113,19 @@ class DeletedHotel(Base):
 #: constraint behaves; all zeroes so it is obvious in a query result.
 ANON_HOTEL = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
+#: US, running the Control Room — not a restaurant.
+#:
+#: Every operator is a user of SOME hotel, and `control@mise.app` happens to
+#: belong to NIRAI. So every Control Room page load — including the money page
+#: that reports it — was counted as NIRAI's traffic and inflated NIRAI's share
+#: of the shared box. The page answering "who cost how much and why" was itself
+#: one of the largest contributors to the answer.
+#:
+#: A request to `/api/platform/*` is platform traffic whoever signs it, so it
+#: gets its own bucket: still counted, still visible, never billed to a
+#: customer. All-ones so it is as obvious in a query result as ANON is.
+OPERATOR_HOTEL = uuid.UUID("11111111-1111-1111-1111-111111111111")
+
 
 class UsageDaily(Base):
     """What we measured, by day / hotel / endpoint.

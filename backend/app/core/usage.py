@@ -62,6 +62,9 @@ _INTERNAL: contextvars.ContextVar[bool] = contextvars.ContextVar(
 )
 
 ANON = "00000000-0000-0000-0000-000000000000"
+#: Our own Control Room traffic. See `platform_admin.models.OPERATOR_HOTEL` for
+#: why it needs a bucket of its own rather than landing on a real restaurant.
+OPERATOR = "11111111-1111-1111-1111-111111111111"
 
 #: Bumped whenever the allocation formula changes, and returned with every
 #: allocated figure — so a screenshot of a per-hotel cost can always be

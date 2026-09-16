@@ -35,6 +35,7 @@ from app.ordering.router import router as ordering_router
 from app.ordering.router import table_router as dine_in_table_router
 from app.party.router import router as party_router
 from app.payroll.router import router as payroll_router
+from app.platform_admin.models import OPERATOR_HOTEL
 from app.platform_admin.router import router as platform_router
 from app.purchasing.router import router as purchasing_router
 from app.recipes.router import router as recipes_router
@@ -208,7 +209,13 @@ def create_app() -> FastAPI:
             )
             ms = int((_time.monotonic() - started) * 1000)
             path = request.url.path
-            if not path.startswith(("/health", "/static", "/_next")):
+            # `/api/health`, NOT `/health`. The health router is mounted under
+            # the `/api` prefix, so this prefix test never matched it and every
+            # 30-second load-balancer probe was recorded as a real request with
+            # no hotel — landing in the anonymous bucket and inflating it to
+            # 72% of all traffic. A skip-list that does not match the thing it
+            # names is worse than no skip-list, because everyone believes it.
+            if not path.startswith(("/health", "/api/health", "/static", "/_next")):
                 # One deque append. The Control Room's health page is built
                 # from this — reading it back out of CloudWatch would need IAM
                 # the app does not have and would be billed per GB scanned.
@@ -219,7 +226,15 @@ def create_app() -> FastAPI:
                 # The same event, kept for the BILL rather than for health.
                 # pulse resets on deploy by design; this one survives.
                 usage.end_request(
-                    hotel_id=getattr(request.state, "log_hotel", None),
+                    # PLATFORM TRAFFIC IS NOT A RESTAURANT'S TRAFFIC. An
+                    # operator is always signed in as a user of some hotel, so
+                    # without this every Control Room page load was billed to
+                    # whichever restaurant the operator happens to belong to.
+                    hotel_id=(
+                        str(OPERATOR_HOTEL)
+                        if path.startswith("/api/platform")
+                        else getattr(request.state, "log_hotel", None)
+                    ),
                     method=request.method,
                     endpoint=templated,
                     status=response.status_code,
