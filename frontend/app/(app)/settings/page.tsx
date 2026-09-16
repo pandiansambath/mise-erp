@@ -17,7 +17,7 @@ import {
 import { SITE_FONTS } from "@/components/site/fonts";
 import { Card, PageHeader } from "@/components/ui";
 import { PageStudio } from "@/components/PageStudio";
-import { SettingsPreview } from "@/components/SettingsPreview";
+import { PagePreview } from "@/components/pages/PagePreview";
 import { useAuth } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { rippleEnabled, setRippleEnabled } from "@/lib/ripplePref";
@@ -127,6 +127,7 @@ export default function SettingsPage() {
   // somebody opens the studio — "it need to show only when we reach the
   // preview edit area".
   const [studio, setStudio] = useState<null | "site" | "door">(null);
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "phone">("desktop");
   const isAdmin = canConfigure;
 
   const [allowance, setAllowance] = useState("0");
@@ -1628,34 +1629,97 @@ export default function SettingsPage() {
           )
         }
         preview={
-          <SettingsPreview
-            // The tab and the editor are one thing. Switching to
-            // "Sign-in page" now switches the controls too.
-            which={studio === "door" ? "door" : "site"}
-            onWhichChange={(w) => setStudio(w)}
-            host={siteHost ?? ""}
-            site={<HotelSite data={previewData} config={land} preview />}
-            door={
-              <HotelDoor
-                cfg={door}
-                hotelName={hotel?.name ?? "Your restaurant"}
-                hotelTheme={hotel?.theme}
-                logoUrl={hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null}
-                preview
-              >
-                <div className="space-y-2.5" aria-hidden>
-                  <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
-                  <div className="h-9 rounded-lg border border-white/15 bg-white/10" />
-                  <div
-                    className="h-10 rounded-lg"
-                    style={{
-                      background: `linear-gradient(100deg, ${door.accent ?? DEFAULT_LOGIN.accent}, ${door.accent2 ?? DEFAULT_LOGIN.accent2})`,
-                    }}
-                  />
-                </div>
-              </HotelDoor>
-            }
-          />
+          /* AN IFRAME, NOT A TRANSFORM.
+             ------------------------------------------------------------------
+             "waht hte hell..not cool preiview" — his phone preview rendered
+             "Welcome back to NIRAI" as "Welc / back / to / NIRA", clipped, with
+             a horizontal scrollbar INSIDE the 390px frame.
+
+             Measured cause: `SettingsPreview` scaled with a CSS transform, and
+             a transform is PAINT. Media queries and `vw` resolve against the
+             VIEWPORT, never the element — so at 1440px the "phone" still
+             matched `@media (min-width: 900px)`, took the two-column desktop
+             grid, and sized its headline from `4.2vw` of 1440. That is 194px of
+             text in a 109px box at a 46px font: the clipping, arithmetically.
+
+             `PagePreview` renders into an iframe, which has its own viewport,
+             and has been right about this the whole time. Same component the
+             /customise editor uses, so there is now one preview rather than two
+             that disagree — this one also called the laptop 1280x720 while
+             /customise called it 1440x900, i.e. two editors disagreeing about
+             where the real page wraps. */
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="mise-card-inset flex w-fit gap-1 rounded-xl p-1">
+              {(
+                [
+                  ["site", "Public page"],
+                  ["door", "Sign-in page"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStudio(key)}
+                  data-testid={`preview-${key}`}
+                  className={`mise-press min-h-[36px] rounded-lg px-3.5 text-xs font-semibold transition ${
+                    (studio === "door" ? "door" : "site") === key
+                      ? "bg-brand-600 text-white"
+                      : "text-fg-soft hover:text-fg"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <span className="ml-1 flex gap-1">
+                {(["desktop", "phone"] as const).map((dv) => (
+                  <button
+                    key={dv}
+                    type="button"
+                    onClick={() => setPreviewDevice(dv)}
+                    className={`mise-press min-h-[36px] rounded-lg px-3 text-xs font-semibold transition ${
+                      previewDevice === dv ? "bg-brand-600 text-white" : "text-fg-soft hover:text-fg"
+                    }`}
+                  >
+                    {dv === "desktop" ? "Laptop" : "Phone"}
+                  </button>
+                ))}
+              </span>
+            </div>
+            <div className="min-h-0 flex-1">
+              <PagePreview device={previewDevice}>
+                {studio === "door" ? (
+                  <HotelDoor
+                    cfg={door}
+                    hotelName={hotel?.name ?? "Your restaurant"}
+                    hotelTheme={hotel?.theme}
+                    logoUrl={hotel?.has_logo ? `/api/hotels/${hotel.id}/logo` : null}
+                    preview
+                  >
+                    {/* The form stand-in uses TOKENS, not white-on-white.
+                        It was `border-white/15 bg-white/10`, and the door
+                        inherits a light theme — so the preview showed a sign-in
+                        page with no visible fields at all, only the button. */}
+                    <div className="space-y-2.5" aria-hidden>
+                      <div className="h-9 rounded-lg border border-line bg-paper-2" />
+                      <div className="h-9 rounded-lg border border-line bg-paper-2" />
+                      <div
+                        className="h-10 rounded-lg"
+                        style={{
+                          background: `linear-gradient(100deg, ${door.accent ?? DEFAULT_LOGIN.accent}, ${door.accent2 ?? DEFAULT_LOGIN.accent2})`,
+                        }}
+                      />
+                    </div>
+                  </HotelDoor>
+                ) : (
+                  <HotelSite data={previewData} config={land} preview />
+                )}
+              </PagePreview>
+            </div>
+            <p className="text-[11px] text-fg-faint">
+              {previewDevice === "phone" ? "390x844" : "1440x900"}, laid out at the width it
+              will really have — scroll inside it.
+            </p>
+          </div>
         }
       />
 

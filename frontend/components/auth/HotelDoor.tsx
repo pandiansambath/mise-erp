@@ -207,10 +207,27 @@ export function HotelDoor({
           readable, and a photograph on top of it would undo the one thing this
           page cannot afford to get wrong. */}
       {photo && (
-        <span
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${photo})`, opacity: 0.55 }}
-        />
+        <>
+          {/* FULL OPACITY, then a SCRIM — not a washed-out photograph.
+              `opacity: 0.55` faded the picture AND left it evenly bright, so
+              the greeting sat on whatever the middle of the image happened to
+              be. On a pale stone shot that is dark navy text on light grey.
+              The picture stays a picture; a directional scrim carries the
+              text, heavier where the words are. */}
+          <span
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${photo})` }}
+          />
+          <span
+            className="absolute inset-0"
+            style={{
+              background:
+                c.theme === "light"
+                  ? "linear-gradient(105deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.78) 45%, rgba(255,255,255,.90) 100%)"
+                  : "linear-gradient(105deg, rgba(0,0,0,.34) 0%, rgba(0,0,0,.58) 45%, rgba(0,0,0,.80) 100%)",
+            }}
+          />
+        </>
       )}
       <span className="mise-door-wash" style={{ background: wash }} />
       {c.effect === "aurora" && <span className="mise-door-aurora" />}

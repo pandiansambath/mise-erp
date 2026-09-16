@@ -89,6 +89,17 @@ async def test_refetching_the_same_day_replaces_rather_than_doubles_the_amount(d
     await db.execute(_upsert_stmt(day, Decimal("4.15"), t1))  # AWS restated the day
     await db.commit()
 
+    # EXPIRE FIRST, or this test lies.
+    #
+    # The upsert above is CORE sql: it changes the row in the database and the
+    # ORM session knows nothing about it. The select below would otherwise
+    # return the SAME instance already in the identity map from the query
+    # further up — still holding 4.02 — and the assertion would report "a
+    # restated figure was added to the old one" when the database is in fact
+    # perfectly correct. That is a false failure about the most important
+    # property on this page, which is worse than no test.
+    db.expire_all()
+
     row = (await db.execute(select(CloudCostDaily).where(CloudCostDaily.day == day))).scalar_one()
     assert row.amount_usd == Decimal("4.15"), "a restated figure was added to the old one instead of replacing it"
     assert row.as_of == t1
