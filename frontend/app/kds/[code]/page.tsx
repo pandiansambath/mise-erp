@@ -68,7 +68,15 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
   const [orders, setOrders] = useState<Order[]>([]);
   const [hotel, setHotel] = useState<{ name: string } | null>(null);
   const [missing, setMissing] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  // ZERO UNTIL MOUNTED, not Date.now().
+  //
+  // The server renders one clock value and the client renders another a
+  // moment later, so the two never match and React throws the whole tree away
+  // and re-renders it — "server rendered text didn't match the client". On a
+  // wall-mounted kitchen screen that is a visible flash, and it fired on every
+  // load. Nothing here is urgent enough to render on the server, so it starts
+  // at 0 and the two places that read it fall back until the effect runs.
+  const [now, setNow] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
 
   // THE LOCK.
@@ -175,6 +183,7 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
   }, [load]);
 
   useEffect(() => {
+    setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
@@ -306,7 +315,9 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
           </p>
         </div>
         <span className="text-xs text-fg-faint">
-          {new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {now === 0
+            ? "—"
+            : new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
       </header>
 
@@ -321,11 +332,25 @@ export default function KitchenScreen({ params }: { params: Promise<{ code: stri
       ) : (
         <ul
           className="grid gap-3"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(24rem, 100%), 1fr))" }}
+          // A BIG CARD, NOT A STRETCHED ONE.
+          //
+          //   "1 table itself taking entire page, which is not nice to see"
+          //
+          // The track was `1fr`, so with a single ticket on the board that one
+          // ticket grew to the full 1400px. A 1400px ticket is not a big card,
+          // it is one card pretending to be a page — and the moment a second
+          // order lands the layout jumps.
+          // Bounded track and `justify-start`: one ticket is a tablet-sized
+          // card at the left, and the tenth lands beside the ninth without
+          // anything moving.
+          style={{
+            gridTemplateColumns: "repeat(auto-fill, minmax(min(22rem, 100%), 26rem))",
+            justifyContent: "start",
+          }}
         >
           {groups.map((g) => {
             const first = g.rows[0];
-            const mins = Math.floor((now - +new Date(first.created_at)) / 60000);
+            const mins = now === 0 ? 0 : Math.floor((now - +new Date(first.created_at)) / 60000);
             const w = waited(mins);
             const help = g.rows.some((r) => r.help_requested_at);
             const heat =
