@@ -376,7 +376,24 @@ async def build(
         })
 
     # -- AWS services --
+    #
+    # SEVEN OF SEVENTEEN BILLED NOTHING. Glue, SQS, SNS, Textract, KMS,
+    # Transcribe, Secrets Manager — services that exist on the account and cost
+    # nothing this period. As nodes they are half the picture carrying none of
+    # the information, and a map you have to visually filter is a map that is
+    # costing you something.
+    #
+    # They are COUNTED AND STATED rather than silently dropped: `meta.silent`
+    # carries the number and the names, so "nothing is hidden" stays true
+    # without spending a node on each. The moment one of them starts billing it
+    # crosses the threshold and appears, at its real size, in rank order — which
+    # is exactly when it is worth looking at.
+    silent_services = [
+        name for name, s in by_service.items() if abs(s["usd"]) < Decimal("0.005")
+    ]
     for name, s in sorted(by_service.items(), key=lambda kv: -kv[1]["usd"]):
+        if abs(s["usd"]) < Decimal("0.005"):
+            continue
         pool = SHARED if SHARED in s["pools"] else (
             PLATFORM if PLATFORM in s["pools"] else sorted(s["pools"])[0]
         )
@@ -450,6 +467,18 @@ async def build(
                 d.isoformat()
                 if (d := (await db.execute(select(func.min(UsageDaily.day)))).scalar())
                 else None
+            ),
+            #: Services on the account that billed NOTHING this period. Kept as a
+            #: count and a list rather than as nodes — see the service loop.
+            "silent": {"services": sorted(silent_services)},
+            #: AI calls with no model string recorded. Real calls, real tokens,
+            #: attached to no model node — so the model edges will not sum to
+            #: the AI total and the page must say why rather than let somebody
+            #: discover the gap by subtracting.
+            "unattributed_ai_calls": max(
+                0,
+                sum(v["calls"] for v in ai.values())
+                - sum(m["calls"] for m in models.values()),
             ),
             "totals": {
                 "requests": total_requests,

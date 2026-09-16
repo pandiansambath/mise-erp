@@ -242,6 +242,24 @@ export default function MoneyPage() {
     return out.sort((a, b) => (b.requests ?? 0) - (a.requests ?? 0));
   }, [h.data, fleet.hotels]);
 
+  /** Was anything even WATCHING during the period on screen?
+   *
+   *  Our counters start long after AWS's billing does — `measured_first_day` is
+   *  currently TODAY, while the bill goes back to July. So selecting July shows
+   *  a real AWS figure beside a measured figure of zero, and "0 requests in
+   *  July" is not something we know: it is an invention, and it is the exact
+   *  failure this page's own docstring was written to prevent.
+   *
+   *  Where the period predates the counters, every measured figure becomes a
+   *  dash with the reason attached. A dash is not worse than a number here —
+   *  it is the only honest one available. */
+  const measuredGap = useMemo(() => {
+    const first = d?.measured_first_day;
+    if (!first || !range) return null;
+    if (range.to >= first) return null;
+    return first;
+  }, [d?.measured_first_day, range]);
+
   const unnamed = useMemo(() => {
     const rows = billed?.unclassified ?? [];
     const total = rows.reduce((a, r) => a + Math.abs(r.amount_usd || 0), 0);
@@ -430,9 +448,17 @@ export default function MoneyPage() {
                   credits={d.credits}
                   onSaved={() => s.reload()}
                 />
+                {measuredGap && (
+                  <p className="px-1 text-[11px] leading-relaxed text-fg-faint">
+                    Nothing was measured in this period — our counters start{" "}
+                    {measuredGap}. The AWS figures above are real; the ones below
+                    are dashes rather than zeros, because &ldquo;nothing
+                    happened&rdquo; is not something we know.
+                  </p>
+                )}
                 <Row
                   label="Measured requests"
-                  value={n(d.measured.totals.requests)}
+                  value={measuredGap ? "—" : n(d.measured.totals.requests)}
                   chip={
                     <Source
                       kind="live"
@@ -446,7 +472,11 @@ export default function MoneyPage() {
                 />
                 <Row
                   label="DB reads / writes"
-                  value={`${n(d.measured.totals.db_selects)} / ${n(d.measured.totals.db_writes)}`}
+                  value={
+                    measuredGap
+                      ? "—"
+                      : `${n(d.measured.totals.db_selects)} / ${n(d.measured.totals.db_writes)}`
+                  }
                   chip={<Source kind="live" note="capacity, not cost — RDS here has no per-IO charge" />}
                 />
               </div>
