@@ -18,11 +18,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useOperatorQuery, errorCopy } from "@/components/controlroom/useOperatorQuery";
+import { useFleet } from "@/components/controlroom/FleetProvider";
 import { api, ApiError } from "@/lib/api";
 import { n, usd } from "@/components/controlroom/format";
 import { Source, type SourceKind } from "@/components/controlroom/Source";
 import { Card, PageHeader, Segmented, Spinner } from "@/components/ui";
-import { Bars } from "@/components/charts";
+import { BillLines, CreditFields, PeriodTabs, usd as money2, type MonthTotal } from "./parts";
 
 type Env<T> = { value: T; kind: SourceKind; source?: string; stale_seconds?: number } & Record<
   string,
@@ -51,6 +52,16 @@ type Summary = {
   unit_economics: Record<string, { value: number | null; definition: string } | number>;
   credits: Record<string, unknown>;
   collectors: Record<string, { ok: boolean; api_cost_usd: number; error?: string } | null>;
+  months?: MonthTotal[];
+  measured_first_day?: string | null;
+  refresh?: {
+    calls_this_month: number;
+    ceiling: number;
+    spent_usd: number;
+    cooling_down: boolean;
+    next_allowed: string | null;
+    at_ceiling: boolean;
+  };
 };
 
 type HotelRow = {
@@ -86,6 +97,24 @@ function money(v: number | null | undefined): string {
 
 export default function MoneyPage() {
   const [days, setDays] = useState("30");
+  /** Which month the WHOLE page is about. "all" spans everything we hold.
+   *  Empty until the first payload names a month — picking a default before we
+   *  know what exists would request a period that may not exist. */
+  const [period, setPeriod] = useState<string>("");
+
+  /** The month list, HELD IN STATE rather than read straight off the response.
+   *
+   *  It has to be, and the reason is worth stating: the months come FROM the
+   *  payload, but they also decide which payload to ask for. Reading them off
+   *  `s.data` would mean the strip vanished on every reload — each fetch would
+   *  blank the list that chose the fetch, and the selected month with it.
+   *  Keeping the last known list means the strip stays put and stays pressable
+   *  while the numbers behind it refresh. */
+  const [periodMonths, setPeriodMonths] = useState<MonthTotal[]>([]);
+
+  // Already fetched by the Control Room layout for the rail's hotel count, so
+  // this costs nothing and carries `admin_email` for every restaurant.
+  const fleet = useFleet();
   // Frozen at mount, then ticked. Reading the clock DURING render is impure —
   // lint catches it, and the reason it matters is that two renders in the same
   // second would disagree about how stale a figure is.
@@ -94,11 +123,36 @@ export default function MoneyPage() {
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
-  const s = useOperatorQuery<Summary>(`/platform/costs/summary?days=${days}`);
-  const h = useOperatorQuery<Hotels>(`/platform/costs/hotels?days=${days}`);
+  // ONE PERIOD DRIVES BOTH HALVES. They used to disagree: `measured` followed
+  // `?days=` while `billed` was pinned to the calendar month, so the two halves
+  // of this page described different spans of time and nothing said so.
+  const range = useMemo(() => {
+    const ms = periodMonths;
+    if (!period || !ms.length) return null;
+    if (period === "all") {
+      const first = ms[0], last = ms[ms.length - 1];
+      return first?.from && last?.to ? { from: first.from, to: last.to } : null;
+    }
+    const m = ms.find((x) => x.month === period);
+    return m?.from && m?.to ? { from: m.from, to: m.to } : null;
+  }, [period, periodMonths]);
+
+  const qs = range ? `from=${range.from}&to=${range.to}` : `days=${days}`;
+  const s = useOperatorQuery<Summary>(`/platform/costs/summary?${qs}`);
+  const h = useOperatorQuery<Hotels>(`/platform/costs/hotels?${qs}`);
 
   const d = s.data;
   const billed = d?.billed;
+
+  // Adopt the month list, and land on the newest month the first time we learn
+  // what months exist. Not in render: setting state during render is the bug
+  // lint catches here, and two renders in one second would disagree.
+  useEffect(() => {
+    const ms = d?.months;
+    if (!ms?.length) return;
+    setPeriodMonths(ms);
+    setPeriod((cur) => cur || ms[ms.length - 1].month);
+  }, [d?.months]);
   const services = useMemo(
     () =>
       (billed?.by_service ?? []).slice(0, 10).map((r) => ({
@@ -109,6 +163,100 @@ export default function MoneyPage() {
   );
 
   const flushed = d?.measured?.counters_flushed_seconds_ago ?? null;
+
+  /** The lines we have no rule for — ranked by MONEY, not by count.
+   *
+   *  "whats that ec2other ec2 other" — thirteen rows, all reading the identical
+   *  words, all painted amber. Every one of them is inbound data transfer from
+   *  a different AWS region, and every one is worth $0.0000. The page was
+   *  spending its only alarm colour on nothing, thirteen times over, which is
+   *  how an alarm stops meaning anything.
+   *
+   *  So the sentence tells the truth about the MONEY, and it only turns amber
+   *  when unnamed lines are actually worth something — past a dollar, or 5% of
+   *  the period. A permanent warning is not a warning. */
+  /** EVERY RESTAURANT THAT EXISTS, not every restaurant that made a request.
+   *
+   *      "why only 1 hotel 'nirai' is shwowing? what abt other hotels?
+   *       plsea list all the hotel wiht thier email id too"
+   *
+   *  The table was built by iterating `usage_daily`, so a restaurant with no
+   *  traffic had no row and vanished from a page whose whole job is "who cost
+   *  how much and why". An ABSENT row and a ZERO row mean different things, and
+   *  only one of them is an answer: NIRAI Madras Kitchen and NIRAI.Reading cost
+   *  nothing this month, and that is a fact worth showing, not an omission.
+   *
+   *  Left-joined onto the fleet, which the Control Room layout already has
+   *  mounted and which already carries `admin_email` — so the email he asked
+   *  for needed no backend work at all.
+   *
+   *  Silent restaurants render `—`, never `0`: we did not measure zero requests,
+   *  we measured nothing. And the anonymous sentinel is kept and named, because
+   *  it is 72% of all traffic and dropping it would make the column stop adding
+   *  up. */
+  const tableRows = useMemo(() => {
+    const costRows = h.data?.rows ?? [];
+    const byId = new Map(costRows.map((r) => [r.hotel_id, r]));
+    const out: {
+      hotel_id: string;
+      name: string;
+      email: string | null;
+      requests: number;
+      ai_calls: number;
+      ai_usd: number | null;
+      shared_usd: number | null;
+      silent: boolean;
+    }[] = [];
+
+    for (const ht of fleet.hotels) {
+      const r = byId.get(ht.id);
+      byId.delete(ht.id);
+      out.push({
+        hotel_id: ht.id,
+        name: ht.name,
+        email: ht.admin_email,
+        requests: r?.requests ?? 0,
+        ai_calls: r?.ai_calls ?? 0,
+        ai_usd: r ? r.ai_usd.value : null,
+        shared_usd: r ? r.shared_usd.value : null,
+        silent: !r || (r.requests ?? 0) === 0,
+      });
+    }
+
+    // Anything left is not a restaurant we know — the anonymous sentinel, or a
+    // hotel deleted since the usage was recorded. Both must stay visible.
+    for (const r of byId.values()) {
+      out.push({
+        hotel_id: r.hotel_id,
+        name: r.name,
+        email: null,
+        requests: r.requests,
+        ai_calls: r.ai_calls,
+        ai_usd: r.ai_usd.value,
+        shared_usd: r.shared_usd.value,
+        silent: false,
+      });
+    }
+
+    // Biggest spender first; the silent ones settle at the bottom on their own.
+    return out.sort((a, b) => (b.requests ?? 0) - (a.requests ?? 0));
+  }, [h.data, fleet.hotels]);
+
+  const unnamed = useMemo(() => {
+    const rows = billed?.unclassified ?? [];
+    const total = rows.reduce((a, r) => a + Math.abs(r.amount_usd || 0), 0);
+    const gross = Math.abs(billed?.gross_usd ?? 0);
+    const biggest = [...rows].sort(
+      (a, b) => Math.abs(b.amount_usd) - Math.abs(a.amount_usd),
+    )[0];
+    return {
+      n: rows.length,
+      usd: total,
+      allFree: rows.length > 0 && total < 0.005,
+      loud: total >= 1 || (gross > 0 && total / gross >= 0.05),
+      top: biggest ? `${biggest.usage_type || biggest.service}` : "",
+    };
+  }, [billed]);
 
   /** How long the credit lasts at the rate we are actually burning it.
    *
@@ -137,7 +285,18 @@ export default function MoneyPage() {
     ).getUTCDate();
     const perMonth = (gross / Math.max(1, elapsed)) * inMonth;
     if (perMonth <= 0) return null;
-    return { perMonth, months: balance / perMonth };
+    const months = balance / perMonth;
+    const out = new Date();
+    out.setUTCDate(out.getUTCDate() + Math.round(months * 30.44));
+    return {
+      perMonth,
+      months,
+      on: out.toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }),
+    };
   }, [d?.credits, billed?.gross_usd]);
 
   /** The one button in this application that spends money: two Cost Explorer
@@ -246,17 +405,31 @@ export default function MoneyPage() {
                   chip={<Source kind={(d.credits?.kind as never) ?? "entered_by_hand"} />}
                 />
                 {runway && (
-                  <p className="px-1 text-[12px] leading-relaxed text-fg-faint">
-                    About{" "}
-                    <span className={runway.months < 2 ? "mise-tone-bad font-semibold" : "font-semibold text-fg"}>
-                      {runway.months < 1
-                        ? "under a month"
-                        : `${runway.months.toFixed(1)} months`}
-                    </span>{" "}
-                    left at {money(runway.perMonth)}/month — this month&rsquo;s consumption so
-                    far, projected. {d.credits?.plan_type === "PAID" && "The plan is already PAID: when it runs out, nothing stops — the charges just begin."}
-                  </p>
+                  <div className="px-1">
+                    {/* THE DATE, not just "2.8 months". This is the sentence the
+                        whole page exists for and it was not on it — and nobody
+                        can put "2.8 months" in a calendar. */}
+                    <p className="text-[13px] font-semibold text-fg">
+                      Runs out around{" "}
+                      <span className={runway.months < 2 ? "mise-tone-bad" : ""}>
+                        {runway.on}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-fg-faint">
+                      {money(runway.perMonth)}/month at this period&rsquo;s rate
+                      {d.credits?.plan_type === "PAID" &&
+                        " · the plan is already PAID, so nothing switches off — the charges just begin."}
+                    </p>
+                  </div>
                 )}
+                {/* HIS ASK: "please have a manual enter field for remaining
+                    credits if u cant able to fetch the exact crdits". It fetches
+                    live today, so this is the fallback AND the only home for the
+                    expiry date, which has no API at all. */}
+                <CreditFields
+                  credits={d.credits}
+                  onSaved={() => s.reload()}
+                />
                 <Row
                   label="Measured requests"
                   value={n(d.measured.totals.requests)}
@@ -281,7 +454,17 @@ export default function MoneyPage() {
           </Card>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Segmented value={days} onChange={setDays} options={WINDOWS} />
+            {/* MONTHS, NOT AN ABSTRACT WINDOW. "when i click this 90 days
+                window..the amount is not chaing" — it did not, because the
+                headline was pinned to the calendar month while this sat under
+                it. Now each chip carries its own total and IS the label of the
+                big number, so it cannot be dead, and the last chip is the
+                ~$60 he was looking for, exact. */}
+            {periodMonths.length > 0 ? (
+              <PeriodTabs months={periodMonths} value={period} onChange={setPeriod} />
+            ) : (
+              <Segmented value={days} onChange={setDays} options={WINDOWS} />
+            )}
             {/* THE ONLY BUTTON HERE THAT SPENDS MONEY — two Cost Explorer calls
                 at a cent each. It says so, because a refresh button that looks
                 free gets pressed like one. The server refuses politely inside a
@@ -298,8 +481,8 @@ export default function MoneyPage() {
               {refreshing ? "Asking AWS…" : "↻ Refresh AWS figures"}
             </button>
             <p className="text-xs text-fg-faint">
-              The amount above is always THIS CALENDAR MONTH — a bill is a month, and a
-              filtered figure beside the word &ldquo;bill&rdquo; would be read as one.
+              A bill is a month, so every choice here is one — except the last,
+              which is every month we hold, added up.
             </p>
           </div>
           {refreshNote && (
@@ -322,15 +505,16 @@ export default function MoneyPage() {
                 </p>
               ) : (
                 <div className="mt-3">
-                  <Bars items={services} />
+                  <BillLines rows={billed?.by_service ?? []} />
                 </div>
               )}
               {!!billed?.unclassified?.length && (
-                <p className="mise-tone-warn mt-3 text-xs">
-                  {billed.unclassified.length} unclassified service
-                  {billed.unclassified.length === 1 ? "" : "s"} —{" "}
-                  {billed.unclassified.map((u) => u.service).join(", ")}. Shown rather than
-                  folded into a pool, so a new charge cannot hide.
+                <p className={`mt-3 text-xs ${unnamed.loud ? "mise-tone-warn" : "text-fg-faint"}`}>
+                  {unnamed.n} line{unnamed.n === 1 ? "" : "s"} we cannot name —{" "}
+                  <b>{money2(unnamed.usd)}</b> between them
+                  {unnamed.allFree
+                    ? ", all inbound data transfer, which AWS does not charge for. Nothing unexplained is costing money."
+                    : `. Largest: ${unnamed.top}.`}
                 </p>
               )}
             </Card>
@@ -386,29 +570,59 @@ export default function MoneyPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {h.data.rows.map((r) => (
+                      {tableRows.map((r) => (
                         <tr key={r.hotel_id} className="border-b border-line">
-                          <td className="px-3 py-2 font-medium text-fg">{r.name}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-fg-soft">
-                            {n(r.requests)}
+                          <td className="px-3 py-2 font-medium text-fg" data-label="Restaurant">
+                            {r.name}
+                            {/* THE EMAIL, which he asked for and which was on
+                                the fleet payload all along. */}
+                            {r.email && (
+                              <span className="mt-0.5 block font-mono text-[10px] font-normal text-fg-faint">
+                                {r.email}
+                              </span>
+                            )}
+                            {r.silent && (
+                              <span className="mt-0.5 block text-[10px] font-normal text-fg-faint">
+                                no requests in this period
+                              </span>
+                            )}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-fg-soft">
-                            {n(r.ai_calls)}
+                          <td
+                            className="px-3 py-2 text-right tabular-nums text-fg-soft"
+                            data-label="Requests"
+                          >
+                            {r.silent ? "—" : n(r.requests)}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-fg">
-                            {money(r.ai_usd.value)}
+                          <td
+                            className="px-3 py-2 text-right tabular-nums text-fg-soft"
+                            data-label="AI calls"
+                          >
+                            {r.silent ? "—" : n(r.ai_calls)}
+                          </td>
+                          <td
+                            className="px-3 py-2 text-right tabular-nums text-fg"
+                            data-label="AI cost"
+                          >
+                            {r.silent ? "—" : money(r.ai_usd)}
                           </td>
                           {/* A DASHED UNDERLINE is the tell for "modelled".
                               It survives greyscale and all 23 themes; colour
                               alone would not. */}
-                          <td className="px-3 py-2 text-right tabular-nums text-fg">
-                            <span className="underline decoration-dashed underline-offset-4">
-                              {money(r.shared_usd.value)}
-                            </span>
+                          <td
+                            className="px-3 py-2 text-right tabular-nums text-fg"
+                            data-label="Share of the box"
+                          >
+                            {r.silent ? (
+                              <span title="Nothing measured, so nothing to apportion.">—</span>
+                            ) : (
+                              <span className="underline decoration-dashed underline-offset-4">
+                                {money(r.shared_usd)}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
-                      {h.data.rows.length === 0 && (
+                      {tableRows.length === 0 && (
                         <tr>
                           <td colSpan={5} className="px-3 py-6 text-center text-sm text-fg-faint">
                             No measured usage yet. The counters begin from the first request
