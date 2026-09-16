@@ -1,5 +1,13 @@
 /** Where every node sits — worked out, not simulated.
  *
+ *  ⚠️ NAMED `geometry.ts`, NOT `layout.ts`. Inside `app/`, `layout.*` is a
+ *  RESERVED Next.js App Router filename: the router treats any such file as a
+ *  route layout and requires a default-exported React component. A module of
+ *  pure maths called `layout.ts` therefore fails the build with
+ *  "Property 'default' is missing ... in type LayoutConfig" — and only at
+ *  `next build`, because `tsc --noEmit` and `npm run lint` both pass. It cost a
+ *  deploy.
+ *
  *  TWO HEMISPHERES: demand on the left, supply on the right, the platform as
  *  the stem between them. Restaurants, public traffic and orphans branch left;
  *  AWS services branch right, with the AI models hanging off Bedrock.

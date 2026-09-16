@@ -86,6 +86,7 @@ belongs to (vendor × item × FORM) — never divide a box price to get a loose 
 
 | Trap | What happens |
 |---|---|
+| **`layout.ts` inside `app/` is a RESERVED name** | The App Router treats any `layout.*` as a route layout and demands a default-exported React component. A module of pure maths named `layout.ts` fails with "Property 'default' is missing … in type LayoutConfig" — and ONLY at `next build`: `tsc --noEmit` and `npm run lint` both pass it. Same for `page`, `route`, `template`, `loading`, `error`, `default`. Cost a deploy. |
 | `response_model` drops undeclared fields | Silently. **Nine occurrences.** Declare every field the client needs on the Out schema. |
 | `audit_service.record()` takes `user=`, not `user_id=` — and it **COMMITS** | Wrong kwarg is a TypeError; placing it mid-transaction splits that transaction. |
 | `Order.updated_at` is `onupdate=func.now()` | Moves on ANY write to the row. Never an event time — stamp a dedicated column once. |

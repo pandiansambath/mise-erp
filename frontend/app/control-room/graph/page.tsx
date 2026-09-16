@@ -26,7 +26,7 @@ import { Card, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
 
 import { NeuralMap } from "./NeuralMap";
-import type { GraphEdge, GraphNode } from "./layout";
+import type { GraphEdge, GraphNode } from "./geometry";
 
 type Payload = {
   period: { from: string; to: string };

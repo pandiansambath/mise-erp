@@ -34,7 +34,7 @@ import {
   type GraphEdge,
   type GraphNode,
   type Placed,
-} from "./layout";
+} from "./geometry";
 
 /** Shape per kind. Colour alone never carries meaning — the accessibility floor
  *  and, more practically, it is what makes the picture readable in a
