@@ -20,6 +20,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useOperatorQuery, errorCopy } from "@/components/controlroom/useOperatorQuery";
 import { useFleet } from "@/components/controlroom/FleetProvider";
 import { api, ApiError } from "@/lib/api";
+import { SheetPopup } from "@/components/SheetPopup";
+
+import { describeLine, POOL_STYLE } from "./lines";
 import { n, usd } from "@/components/controlroom/format";
 import { Source, type SourceKind } from "@/components/controlroom/Source";
 import { Card, PageHeader, Segmented, Spinner } from "@/components/ui";
@@ -357,6 +360,15 @@ export default function MoneyPage() {
    *  cooldown and a monthly ceiling), so this only has to report what it was
    *  told — including a refusal, which arrives as a normal 200 because "you
    *  refreshed 20 minutes ago" is a correct answer, not an error. */
+  /** The bill line opened for detail. "click anything, do anything" — and
+   *  this page had exactly one control on it that was not a period chip. */
+  const [openLine, setOpenLine] = useState<{
+    service: string;
+    usage_type: string;
+    amount_usd: number;
+    pool: string;
+  } | null>(null);
+
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const refresh = async () => {
@@ -594,7 +606,7 @@ export default function MoneyPage() {
                 </p>
               ) : (
                 <div className="mt-3">
-                  <BillLines rows={billed?.by_service ?? []} />
+                  <BillLines rows={billed?.by_service ?? []} onPick={setOpenLine} />
                 </div>
               )}
               {!!billed?.unclassified?.length && (
@@ -774,6 +786,14 @@ export default function MoneyPage() {
           </Card>
         </>
       )}
+      {openLine && (
+        <SheetPopup
+          onClose={() => setOpenLine(null)}
+          title={describeLine(openLine.service, openLine.usage_type).label}
+        >
+          <LineDetail line={openLine} periodLabel={periodLabel} />
+        </SheetPopup>
+      )}
     </div>
   );
 }
@@ -786,6 +806,86 @@ function Row({ label, value, chip }: { label: string; value: string; chip?: Reac
         <span className="font-mono text-sm text-fg">{value}</span>
         {chip}
       </span>
+    </div>
+  );
+}
+
+/** One line of the bill, opened.
+ *
+ *  The reason this is worth a sheet rather than a tooltip: every line that
+ *  carries real money also carries a LEVER — the thing you could actually do
+ *  about it. A cost you cannot act on is trivia, and a bill that only tells you
+ *  its own total is a receipt, not a tool. `lines.ts` holds all three facts
+ *  (what it is, what generates it, what to do), so this is presentation of data
+ *  that already exists rather than a new lookup.
+ */
+function LineDetail({
+  line,
+  periodLabel,
+}: {
+  line: { service: string; usage_type: string; amount_usd: number; pool: string };
+  periodLabel: string;
+}) {
+  const info = describeLine(line.service, line.usage_type);
+  const style = POOL_STYLE[line.pool] ?? POOL_STYLE.unclassified;
+
+  return (
+    <div className="space-y-4">
+      <div className="mise-well rounded-xl p-4">
+        <p className="font-display text-4xl font-bold tabular-nums text-fg">
+          {money2(line.amount_usd)}
+        </p>
+        <p className="mt-1 text-[11px] uppercase tracking-wide text-fg-faint">
+          {periodLabel}
+        </p>
+      </div>
+
+      <div>
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+          What this is
+        </p>
+        <p className="text-sm leading-relaxed text-fg-soft">{info.what}</p>
+      </div>
+
+      {info.lever ? (
+        <div>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+            What you can do about it
+          </p>
+          <p className="text-sm leading-relaxed text-fg-soft">{info.lever}</p>
+        </div>
+      ) : (
+        /* NOT AN EMPTY SECTION. "there is nothing to do" is a real answer and a
+           useful one — it stops somebody going looking for a saving that does
+           not exist. A blank space would just look unfinished. */
+        <p className="text-sm leading-relaxed text-fg-faint">
+          There is no lever on this one — it is either free or it moves only
+          with real traffic.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded px-2 py-1 text-[10px] font-semibold ${style.chip}`}>
+          {style.label}
+        </span>
+        {!info.known && (
+          <span className="rounded bg-amber-500/15 px-2 py-1 text-[10px] font-bold uppercase text-amber-500">
+            no rule yet
+          </span>
+        )}
+      </div>
+
+      <div className="mise-well rounded-xl p-3">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+          How AWS names it
+        </p>
+        {/* The exact key, untruncated and selectable — this is the string
+            somebody needs when they go looking in the AWS console, and the
+            list view has to ellipsis it at narrow widths. */}
+        <p className="break-all font-mono text-[11px] leading-relaxed text-fg-soft">
+          {info.key}
+        </p>
+      </div>
     </div>
   );
 }

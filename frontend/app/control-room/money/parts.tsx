@@ -236,7 +236,15 @@ export function BillLines({
 }: {
   rows: { service: string; usage_type: string; amount_usd: number; pool: string }[];
   top?: number;
-  onPick?: (r: { service: string; usage_type: string }) => void;
+  /** The WHOLE row, not just its identity. The detail sheet shows the amount
+   *  and the pool, and re-deriving those from the id would mean two places
+   *  computing the same figure — which is how they end up disagreeing. */
+  onPick?: (r: {
+    service: string;
+    usage_type: string;
+    amount_usd: number;
+    pool: string;
+  }) => void;
 }) {
   const merged = new Map<
     string,
