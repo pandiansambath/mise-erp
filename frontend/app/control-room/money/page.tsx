@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useOperatorQuery, errorCopy } from "@/components/controlroom/useOperatorQuery";
+import { api, ApiError } from "@/lib/api";
 import { n, usd } from "@/components/controlroom/format";
 import { Source, type SourceKind } from "@/components/controlroom/Source";
 import { Card, PageHeader, Segmented, Spinner } from "@/components/ui";
@@ -109,6 +110,66 @@ export default function MoneyPage() {
 
   const flushed = d?.measured?.counters_flushed_seconds_ago ?? null;
 
+  /** How long the credit lasts at the rate we are actually burning it.
+   *
+   *  Projected from THIS MONTH'S consumption rather than from a 7- or 30-day
+   *  window, because the window selector above does not move the bill and this
+   *  figure must not appear to change when he presses "7 days".
+   *
+   *  Gross, not net. Net is $0.00 every month — the credits cancel the usage
+   *  exactly — and dividing a balance by a net of zero is both an infinity and
+   *  a lie. What eats the credit is the GROSS usage.
+   *
+   *  Projected to a whole month from the days elapsed: a balance divided by 16
+   *  days of a 30-day month would read almost twice the true runway, and this
+   *  is a number he would plan around.
+   */
+  const runway = useMemo(() => {
+    const balance = Number(d?.credits?.remaining_usd ?? d?.credits?.balance_usd);
+    const gross = Number(billed?.gross_usd);
+    if (!Number.isFinite(balance) || balance <= 0) return null;
+    if (!Number.isFinite(gross) || gross <= 0) return null;
+
+    const today = new Date();
+    const elapsed = today.getUTCDate();
+    const inMonth = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0),
+    ).getUTCDate();
+    const perMonth = (gross / Math.max(1, elapsed)) * inMonth;
+    if (perMonth <= 0) return null;
+    return { perMonth, months: balance / perMonth };
+  }, [d?.credits, billed?.gross_usd]);
+
+  /** The one button in this application that spends money: two Cost Explorer
+   *  calls at a cent each. The server holds the brakes (a shared 6-hour
+   *  cooldown and a monthly ceiling), so this only has to report what it was
+   *  told — including a refusal, which arrives as a normal 200 because "you
+   *  refreshed 20 minutes ago" is a correct answer, not an error. */
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
+  const refresh = async () => {
+    setRefreshing(true);
+    setRefreshNote(null);
+    try {
+      const r = await api.post<{
+        ok: boolean;
+        skipped?: boolean;
+        reason?: string;
+        rows_written?: number;
+      }>("/platform/costs/refresh", {});
+      if (r.ok) {
+        setRefreshNote(`Fetched — ${r.rows_written ?? 0} lines updated.`);
+        s.reload();
+      } else {
+        setRefreshNote(r.reason ?? "AWS would not answer.");
+      }
+    } catch (e) {
+      setRefreshNote(e instanceof ApiError ? errorCopy(e) : "Something went wrong.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="flex flex-1 flex-col space-y-5">
       <PageHeader
@@ -164,11 +225,38 @@ export default function MoneyPage() {
               </div>
 
               <div className="mise-well m-3 space-y-2 rounded-xl p-4">
+                {/* THE RUNWAY.
+                    ------------------------------------------------------------
+                    The balance is read from AWS (`freetier:GetAccountPlanState`,
+                    free), so it is chipped with whatever provenance the server
+                    actually had rather than a hardcoded "entered_by_hand" — I
+                    twice said this number had no API, and hardcoding the chip is
+                    how that mistake stayed invisible.
+
+                    It is the most consequential figure on the page. The account
+                    plan is already PAID: when this reaches zero nothing switches
+                    off, the charges simply start arriving. So it carries the
+                    months-left estimate beside it — a balance with no burn rate
+                    beside it is a number nobody can act on. */}
                 <Row
                   label="Credit left"
-                  value={money(Number(d.credits?.balance_usd) || null)}
-                  chip={<Source kind="entered_by_hand" />}
+                  value={money(
+                    Number(d.credits?.remaining_usd ?? d.credits?.balance_usd) || null,
+                  )}
+                  chip={<Source kind={(d.credits?.kind as never) ?? "entered_by_hand"} />}
                 />
+                {runway && (
+                  <p className="px-1 text-[12px] leading-relaxed text-fg-faint">
+                    About{" "}
+                    <span className={runway.months < 2 ? "mise-tone-bad font-semibold" : "font-semibold text-fg"}>
+                      {runway.months < 1
+                        ? "under a month"
+                        : `${runway.months.toFixed(1)} months`}
+                    </span>{" "}
+                    left at {money(runway.perMonth)}/month — this month&rsquo;s consumption so
+                    far, projected. {d.credits?.plan_type === "PAID" && "The plan is already PAID: when it runs out, nothing stops — the charges just begin."}
+                  </p>
+                )}
                 <Row
                   label="Measured requests"
                   value={n(d.measured.totals.requests)}
@@ -194,11 +282,31 @@ export default function MoneyPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Segmented value={days} onChange={setDays} options={WINDOWS} />
+            {/* THE ONLY BUTTON HERE THAT SPENDS MONEY — two Cost Explorer calls
+                at a cent each. It says so, because a refresh button that looks
+                free gets pressed like one. The server refuses politely inside a
+                6-hour window and the refusal lands in the note below rather than
+                as a red error, since "you already refreshed" is a correct answer
+                to a reasonable request. */}
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              className="mise-press mise-well rounded-xl px-3 py-1.5 text-xs font-semibold text-fg-soft disabled:opacity-50"
+              title="Two Cost Explorer calls, $0.01 each"
+            >
+              {refreshing ? "Asking AWS…" : "↻ Refresh AWS figures"}
+            </button>
             <p className="text-xs text-fg-faint">
               The amount above is always THIS CALENDAR MONTH — a bill is a month, and a
               filtered figure beside the word &ldquo;bill&rdquo; would be read as one.
             </p>
           </div>
+          {refreshNote && (
+            <p className="text-xs text-fg-faint" role="status">
+              {refreshNote}
+            </p>
+          )}
 
           {/* ── WHERE IT GOES ──────────────────────────────────────────── */}
           <div className="grid gap-4 lg:grid-cols-2">
@@ -209,8 +317,8 @@ export default function MoneyPage() {
               </div>
               {services.length === 0 ? (
                 <p className="mt-3 text-sm text-fg-faint">
-                  Nothing fetched yet. The server has no permission to read Cost Explorer
-                  until the IAM change is applied.
+                  Nothing fetched yet. The bill is read twice a day — press Refresh
+                  above to fetch it now.
                 </p>
               ) : (
                 <div className="mt-3">

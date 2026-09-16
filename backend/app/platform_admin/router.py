@@ -26,7 +26,7 @@ from app.core.database import get_db
 from app.core.pulse import PULSE
 from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
-from app.platform_admin import costs, deletion, observability
+from app.platform_admin import aws_bill, costs, deletion, observability
 from app.platform_admin import features as feat
 from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
 
@@ -957,6 +957,10 @@ async def costs_summary(
         await db.execute(select(PlatformConfig).limit(1))
     ).scalar_one_or_none()
     credits = (getattr(cfg, "aws_credits", None) or {}) if cfg else {}
+    # Free to read and cached for 15 minutes, so this is not a round trip per
+    # page load. Returns None if AWS will not answer, and the page says so
+    # rather than showing a runway it cannot stand behind.
+    live_credits = await aws_bill.credit_balance()
 
     return {
         "window": {"from": start.isoformat(), "to": end.isoformat(), "days": days},
@@ -964,18 +968,63 @@ async def costs_summary(
         "billed": bill,
         "measured": meas,
         "unit_economics": econ,
-        #: Typed in by a person — AWS gives no API for the EXPIRY, only the
-        #: balance — so it is rendered as hand-entered and never as measured.
+        #: THE RUNWAY, READ FROM AWS.
+        #:
+        #: This was hand-entered because I twice said the balance could only be
+        #: read from the console. It cannot: `freetier:GetAccountPlanState`
+        #: returns it, free, and it is $92.23 today. So the balance is live and
+        #: chipped live.
+        #:
+        #: The EXPIRY DATE stays hand-entered — AWS publishes no API for it — and
+        #: keeps its own `kind` so the live balance cannot lend it credibility it
+        #: has not got. Two fields on one card with two different provenances,
+        #: each labelled with its own.
         "credits": {
             **credits,
-            "kind": costs.ENTERED,
-            "note": "read off the AWS console; the balance is also readable by API",
+            **(
+                {
+                    "remaining_usd": live_credits["remaining_usd"],
+                    "plan_type": live_credits.get("plan_type"),
+                    "plan_status": live_credits.get("plan_status"),
+                    "kind": costs.LIVE,
+                }
+                if live_credits
+                else {"kind": costs.ENTERED}
+            ),
+            "expiry_kind": costs.ENTERED,
+            "note": (
+                "Balance read from AWS. The expiry date has no API and is typed in."
+                if live_credits
+                else "AWS would not answer for the balance; this is the hand-entered figure."
+            ),
         },
         "collectors": {
             "usage_flush": await costs.last_sync(db, "usage_flush"),
-            "aws_costs": await costs.last_sync(db, "aws_costs"),
+            "aws_costs": await costs.last_sync(db, aws_bill.JOB),
         },
     }
+
+
+@router.post("/costs/refresh")
+async def costs_refresh(
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Ask AWS again, now — the only button in this app that spends money.
+
+    A cent a call, two calls a fetch. That is cheap enough to offer and far too
+    cheap-looking to leave unguarded, so the brakes live in `aws_bill` and this
+    endpoint is a thin door onto them: a database-held 6-hour cooldown shared
+    across every operator and every tab, and a hard monthly ceiling counted from
+    calls actually made.
+
+    A refusal comes back as `ok: false, skipped: true` with a `reason` in plain
+    words, HTTP 200. Deliberately not a 4xx: "you refreshed 20 minutes ago" is a
+    normal, correct answer to a reasonable request, and a red error toast would
+    teach him the page is broken when it is behaving exactly as designed.
+    """
+    result = await aws_bill.fetch(db, reason=f"manual:{operator.email}")
+    return result
 
 
 @router.get("/costs/hotels")

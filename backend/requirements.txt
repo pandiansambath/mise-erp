@@ -15,7 +15,17 @@ httpx==0.28.1
 openpyxl==3.1.5
 fpdf2==2.8.2
 greenlet==3.1.1
-boto3==1.35.80
+# 1.40 is the FLOOR, not a preference: `freetier:GetAccountPlanState` — the
+# call that returns the remaining AWS credit, the single most important number
+# on the money dashboard — does not exist in botocore before 1.40.0. I checked
+# the shipped service model rather than guessing: 1.35.80 and 1.38.0 expose
+# only `GetFreeTierUsage`; 1.40.0 is where `GetAccountPlanState` and
+# `ListAccountActivities` appear.
+#
+# This mattered because the calling code degrades gracefully on failure, so the
+# old pin would not have crashed — it would have quietly served the
+# hand-entered credit figure forever while the page claimed to read it live.
+boto3==1.40.76
 tzdata==2024.2
 sentry-sdk[fastapi]==2.19.2
 segno==1.6.1

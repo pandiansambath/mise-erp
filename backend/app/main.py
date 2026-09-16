@@ -85,6 +85,25 @@ async def lifespan(app: FastAPI):
             async with AsyncSessionLocal() as db:
                 await usage.flush(db)
 
+    async def _aws_bill_once() -> None:
+        """Ask AWS what it charged. TWICE A DAY, because it costs a cent a call.
+
+        The first run of all reaches back two whole calendar months, so the
+        money page has history the moment it exists rather than filling in over
+        the following month — "i thoguht previous month datas will show here".
+
+        Failures are swallowed on purpose: a Cost Explorer outage, an expired
+        credential or a throttle must never take down an app that serves
+        restaurants their orders. `aws_bill.fetch` writes its own failure row to
+        `telemetry_sync`, so the dashboard SHOWS the gap instead of quietly
+        drawing a flat line — which is the whole reason that table exists.
+        """
+        from app.platform_admin import aws_bill
+
+        with contextlib.suppress(Exception):
+            async with AsyncSessionLocal() as db:
+                await aws_bill.fetch(db, reason="scheduled")
+
     async def _loop() -> None:
         # Five minutes. At sixty seconds this would be 1,440 upserts a day
         # touching the same few hundred rows; at five it is 288, which
@@ -93,10 +112,29 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(300)
             await _flush_once()
 
+    async def _bill_loop() -> None:
+        # Every six hours, which the collector's own cooldown then holds to
+        # roughly four fetches a day at 2 calls each: about $2.40 a month to
+        # keep a $30 bill on screen. The cooldown is the real limit; this
+        # interval only decides how often we ASK to be allowed.
+        #
+        # A short first delay, not an immediate call: the box has just booted
+        # and the first thing it owes anyone is health checks, not a 3-second
+        # round trip to us-east-1.
+        await asyncio.sleep(90)
+        while True:
+            await _aws_bill_once()
+            await asyncio.sleep(6 * 3600)
+
     task = asyncio.create_task(_loop()) if enabled else None
+    bill_task = asyncio.create_task(_bill_loop()) if enabled else None
     try:
         yield
     finally:
+        if bill_task is not None:
+            bill_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await bill_task
         if task is not None:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
