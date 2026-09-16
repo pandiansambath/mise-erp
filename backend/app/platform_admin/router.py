@@ -949,6 +949,12 @@ async def costs_summary(
         m_start, m_end = await costs.month_to_date_cost(db)
 
     meas = await costs.measured(db, start=start, end=end)
+    # FETCH ON DEMAND, ONCE. If nobody has ever asked AWS about this period, ask
+    # now — then never again, because a settled month does not change. That is
+    # "fetch based on whenever user needed" without paying a cent per page view,
+    # which is what fetching on every view would actually cost.
+    if date_from and date_to:
+        await aws_bill.ensure_period(db, start=m_start, end=m_end)
     bill = await costs.billed(db, start=m_start, end=m_end)
 
     ai = await observability.platform_pulse(db, days=max(1, min(days, 365)))
