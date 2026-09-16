@@ -97,7 +97,7 @@ async def process(
 
 @router.get("", response_model=list[PayrollRow])
 async def list_payroll(
-    pay_period: str = Query(..., pattern=r"^\d{4}-(\d{2}|W\d{2})$"),
+    pay_period: str = Query(..., pattern=service.PERIOD_PATTERN),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:read")),
 ) -> list[PayrollRow]:
@@ -107,7 +107,7 @@ async def list_payroll(
 
 @router.post("/approve-all", response_model=list[PayrollRow])
 async def approve_all(
-    pay_period: str = Query(..., pattern=r"^\d{4}-(\d{2}|W\d{2})$"),
+    pay_period: str = Query(..., pattern=service.PERIOD_PATTERN),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:write")),
 ) -> list[PayrollRow]:
@@ -125,7 +125,7 @@ async def approve_all(
 
 @router.get("/payslips.pdf")
 async def payslips_pdf(
-    pay_period: str = Query(..., pattern=r"^\d{4}-(\d{2}|W\d{2})$"),
+    pay_period: str = Query(..., pattern=service.PERIOD_PATTERN),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require("payroll:read")),
 ) -> Response:

@@ -88,6 +88,20 @@ class SalaryAdvance(Base):
     reason: Mapped[str | None] = mapped_column(Text)
     given_date: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
     deduct_period: Mapped[str] = mapped_column(String(10), nullable=False)  # 2026-06
+    #: How much of `amount` has actually come back out of a payslip.
+    #:
+    #: An advance is not all-or-nothing, and pretending it was produced a
+    #: -£3,500 payslip marked PAID. If somebody owes £3,500 and earns £400 this
+    #: period, £400 is recovered and £3,100 is still owed. Without this column
+    #: the run had exactly two options, and both lose money: pay a negative net
+    #: (the live bug), or floor the net at zero and mark the advance recovered,
+    #: which forgives £3,100 of the restaurant's money with no record of it.
+    amount_recovered: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    #: True only when `amount_recovered >= amount`. Kept as a column rather than
+    #: computed because it is what the "pending advances" query filters on, and
+    #: that query runs for every employee in every run.
     is_deducted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
