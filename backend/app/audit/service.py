@@ -45,6 +45,8 @@ async def list_events(
     limit: int = 150,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
+    entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
 ) -> list[AuditEvent]:
     """Recent events, or a window of them.
 
@@ -58,6 +60,19 @@ async def list_events(
     if date_to:
         # Inclusive of the end day: a range ending "today" must contain today.
         q = q.where(AuditEvent.created_at <= datetime.combine(date_to, time.max))
+    # ONE THING'S OWN HISTORY.
+    #
+    #     "if I change the table20 to pandi, then how will I know that I changed
+    #      table 20 to pandi? Where is the proof?"
+    #
+    # The proof was never missing from the database once the event is written —
+    # it was unreachable, because this only answered "what happened lately" and
+    # never "what happened to THIS". You do not go to an audit page to find out
+    # what a table used to be called; you look at the table.
+    if entity_type:
+        q = q.where(AuditEvent.entity_type == entity_type)
+    if entity_id:
+        q = q.where(AuditEvent.entity_id == entity_id)
     rows = await db.execute(q.order_by(desc(AuditEvent.created_at)).limit(limit))
     return list(rows.scalars().all())
 
