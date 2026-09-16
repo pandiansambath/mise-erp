@@ -50,7 +50,7 @@ export function LineRow({
     <button
       type="button"
       onClick={onClick}
-      className="mise-press relative block w-full overflow-hidden rounded-xl px-3 py-2 text-left"
+      className="mise-press relative block w-full min-w-0 overflow-hidden rounded-xl px-3 py-2 text-left"
     >
       {/* The magnitude, behind the words. Low opacity so the text stays the
           thing you read and the size is something you feel. */}
@@ -59,7 +59,7 @@ export function LineRow({
         className="absolute inset-y-0 left-0 rounded-xl opacity-[0.18] transition-[width] duration-300"
         style={{ width: `${Math.max(1, Math.min(100, share * 100))}%`, background: style.fill }}
       />
-      <span className="relative flex items-baseline gap-2">
+      <span className="relative flex min-w-0 items-baseline gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
           {info.label}
           {!info.known && (
@@ -75,7 +75,14 @@ export function LineRow({
           {usd(amount)}
         </span>
       </span>
-      <span className="relative mt-0.5 flex items-center gap-2">
+      <span className="relative mt-0.5 flex min-w-0 items-center gap-2">
+        {/* THE AWS KEY IS THE FIELD THAT TELLS TWO ROWS APART — three RDS lines
+            differ only here — so it must shrink rather than push the row wide.
+            Without `min-w-0` on the flex parents a long key sets a min-content
+            width of 524px inside a 348px phone column, and `overflow-x: clip`
+            on the body then swallows the overflow silently: every price on the
+            card is off-screen and unreachable, and the responsive sweep reports
+            the page as fine because nothing scrolls sideways. */}
         <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-fg-faint">
           {info.key}
         </span>

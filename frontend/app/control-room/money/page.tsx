@@ -82,6 +82,9 @@ type Hotels = {
   billed_available: boolean;
 };
 
+/** The sentinel used for traffic belonging to no restaurant. */
+const ANON_ID = "00000000-0000-0000-0000-000000000000";
+
 const WINDOWS = [
   { value: "7", label: "7 days" },
   { value: "30", label: "30 days" },
@@ -260,6 +263,21 @@ export default function MoneyPage() {
     return first;
   }, [d?.measured_first_day, range]);
 
+  /** What the big number is OF, in words, keyed off the same state as the
+   *  number itself so the two cannot drift apart again. */
+  const periodLabel = useMemo(() => {
+    if (!period || !periodMonths.length) return "This month so far";
+    if (period === "all") return `All ${periodMonths.length} months`;
+    const m = periodMonths.find((x) => x.month === period);
+    if (!m) return "Selected period";
+    const name = new Date(`${m.month}-01T00:00:00Z`).toLocaleDateString(undefined, {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+    return m.is_partial ? `${name} so far` : name;
+  }, [period, periodMonths]);
+
   const unnamed = useMemo(() => {
     const rows = billed?.unclassified ?? [];
     const total = rows.reduce((a, r) => a + Math.abs(r.amount_usd || 0), 0);
@@ -296,12 +314,29 @@ export default function MoneyPage() {
     if (!Number.isFinite(balance) || balance <= 0) return null;
     if (!Number.isFinite(gross) || gross <= 0) return null;
 
+    // DIVIDE BY THE DAYS THE PERIOD ACTUALLY COVERS.
+    //
+    // This divided by TODAY'S DAY OF MONTH whatever was selected, which was
+    // right only while the hero was pinned to the current month. The month
+    // strip moved the hero and this was never re-pinned, so a three-month
+    // total ($68.63) was treated as 16 days of spend: $128.69/month, and
+    // "Runs out around 9 October" in ALARM RED. The true date is 11 December.
+    //
+    // A wrong number is bad; a wrong number in the colour that means "act now"
+    // is worse, and this is the one figure on the page meant to make him act.
+    const from = new Date(`${range?.from ?? ""}T00:00:00Z`);
+    const to = new Date(`${range?.to ?? ""}T00:00:00Z`);
     const today = new Date();
-    const elapsed = today.getUTCDate();
-    const inMonth = new Date(
-      Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0),
-    ).getUTCDate();
-    const perMonth = (gross / Math.max(1, elapsed)) * inMonth;
+    let days: number;
+    if (range && !Number.isNaN(from.valueOf()) && !Number.isNaN(to.valueOf())) {
+      // An unfinished period only ran until today, so count to today — not to
+      // the 30th of a month we are 16 days into, which would halve the rate.
+      const last = to.valueOf() > today.valueOf() ? today : to;
+      days = Math.floor((last.valueOf() - from.valueOf()) / 86_400_000) + 1;
+    } else {
+      days = today.getUTCDate();
+    }
+    const perMonth = (gross / Math.max(1, days)) * 30.44;
     if (perMonth <= 0) return null;
     const months = balance / perMonth;
     const out = new Date();
@@ -374,8 +409,13 @@ export default function MoneyPage() {
           <Card className="p-0">
             <div className="grid gap-px sm:grid-cols-[1.4fr_1fr]">
               <div className="p-5">
+                {/* THE LABEL HAS TO FOLLOW THE CHIP. It read "THIS MONTH SO
+                    FAR" above $9.22 with July selected and above $68.63 with
+                    three months selected — the number moved and the sentence
+                    over it did not, which is worse than a dead selector
+                    because it states something false rather than nothing. */}
                 <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-fg-faint">
-                  This month so far · USD
+                  {periodLabel} · USD
                 </p>
                 <p className="mt-1 font-display text-5xl font-bold tabular-nums text-fg sm:text-6xl">
                   {money(billed?.gross_usd)}
@@ -522,7 +562,7 @@ export default function MoneyPage() {
           )}
 
           {/* ── WHERE IT GOES ──────────────────────────────────────────── */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <Card className="p-4">
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="font-semibold text-fg">By service</h3>
@@ -588,8 +628,18 @@ export default function MoneyPage() {
             {h.loading && !h.data && <Spinner />}
             {h.data && (
               <>
-                <div className="mise-stack mt-3 overflow-x-auto">
-                  <table className="w-full text-sm">
+                {/* `mise-stack` BELONGS ON THE <table>, not on a wrapping div.
+                    The rule in globals.css names `.mise-stack, .mise-stack
+                    tbody, .mise-stack tr, .mise-stack td` — it never names
+                    `table`. On the div the table stayed `display: table` and
+                    kept its natural 454px width inside a 306px column, so on a
+                    phone every restaurant card printed five labels
+                    ("Requests", "AI calls"…) with NOTHING beside them and the
+                    names clipped mid-word. The other ten `mise-stack` tables in
+                    this app all put it on the element it is written for; this
+                    was the only one that did not. */}
+                <div className="mt-3 overflow-x-auto">
+                  <table className="mise-stack w-full text-sm">
                     <thead>
                       <tr className="border-y border-line text-left text-xs uppercase text-fg-faint">
                         <th className="px-3 py-2 font-medium">Restaurant</th>
@@ -609,6 +659,16 @@ export default function MoneyPage() {
                             {r.email && (
                               <span className="mt-0.5 block font-mono text-[10px] font-normal text-fg-faint">
                                 {r.email}
+                              </span>
+                            )}
+                            {r.hotel_id === ANON_ID && (
+                              /* §45.1 — "whats the anonymous public traffic
+                                 means?" was his question verbatim, and the row
+                                 answered it nowhere. It is the biggest row in
+                                 the table and it is not a customer. */
+                              <span className="mt-0.5 block text-[10px] font-normal leading-relaxed text-fg-faint">
+                                Not a restaurant — public pages, sign-in, diner
+                                QR menus and health checks.
                               </span>
                             )}
                             {r.silent && (
