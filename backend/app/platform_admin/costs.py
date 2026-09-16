@@ -28,7 +28,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import usage as usage_mod
@@ -291,3 +291,86 @@ ANON = uuid.UUID(usage_mod.ANON)
 def window(days: int) -> tuple[date, date]:
     end = datetime.now(UTC).date()
     return end - timedelta(days=max(1, days) - 1), end
+
+
+async def months(db: AsyncSession) -> list[dict]:
+    """Every calendar month we hold a bill for, with its totals.
+
+        "when i click this 90 days window..the amount is not chaing..i thouhgt
+         it wil show 60 dollars"
+        "here please show histotical datas too...eveeytihin we need ot see"
+
+    Both of those are one problem and this is one answer: the period selector
+    stops being an abstract window and becomes a row of MONTHS, each carrying
+    its own total, and selecting one drives the whole page. A control that is
+    the LABEL of a number cannot be dead, which is what "90 days" was.
+
+    No Cost Explorer call. July and August are already in `cloud_cost_daily`
+    because the collector backfills two months on its first run — the history he
+    is asking for has been sitting in our own Postgres the whole time, one
+    GROUP BY away from the screen.
+
+    `gross` excludes credits and `net` includes them, because both are true and
+    the page shows both: gross is what we consumed and what eats the runway;
+    net is what the card is charged. For this account net is $0.00 every month
+    and gross is not.
+    """
+    month = func.to_char(CloudCostDaily.day, "YYYY-MM").label("month")
+    rows = (
+        await db.execute(
+            select(
+                month,
+                func.sum(
+                    case(
+                        (CloudCostDaily.record_type.in_(("Credit", "Refund")), 0),
+                        else_=CloudCostDaily.amount_usd,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            CloudCostDaily.record_type.in_(("Credit", "Refund")),
+                            CloudCostDaily.amount_usd,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.min(CloudCostDaily.day),
+                func.max(CloudCostDaily.day),
+                func.max(CloudCostDaily.as_of),
+                func.bool_or(CloudCostDaily.is_estimate),
+            )
+            .group_by(month)
+            .order_by(month)
+        )
+    ).all()
+
+    out: list[dict] = []
+    for m, gross, credits, first, last, as_of, est in rows:
+        gross = Decimal(gross or 0)
+        credits = Decimal(credits or 0)
+        out.append({
+            "month": m,
+            "from": first.isoformat() if first else None,
+            "to": last.isoformat() if last else None,
+            "gross_usd": float(gross),
+            "credits_usd": float(credits),
+            "net_usd": float(gross + credits),
+            # The open month is partial by definition and must be labelled, or a
+            # half-finished September reads as a fall in spend next to August.
+            "is_partial": bool(est),
+            "as_of": as_of.isoformat() if as_of else None,
+        })
+    return out
+
+
+async def measured_first_day(db: AsyncSession) -> date | None:
+    """The first day we ever measured anything.
+
+    THE TRAP THE MONTH SELECTOR CREATES. Our own counters started long after
+    July, so selecting July and rendering `0 requests` would be an invention —
+    the page would state as fact that nothing happened, when the truth is that
+    nothing was watching. Every measured figure for a period before this date
+    must be a dash with that reason, never a zero.
+    """
+    return (await db.execute(select(func.min(UsageDaily.day)))).scalar()

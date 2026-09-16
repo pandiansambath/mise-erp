@@ -10,11 +10,14 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
+from datetime import date as date_type
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.audit import service as audit_service
 from app.audit.models import AuditEvent
@@ -914,6 +917,8 @@ async def pulse(
 @router.get("/costs/summary")
 async def costs_summary(
     days: int = 30,
+    date_from: date_type | None = Query(default=None, alias="from"),
+    date_to: date_type | None = Query(default=None, alias="to"),
     db: AsyncSession = Depends(get_db),
     operator: User = Depends(require_platform_owner),
 ) -> dict:
@@ -930,8 +935,18 @@ async def costs_summary(
     undeclared fields and this payload is deeply nested, which is exactly where
     that trap has bitten nine times.
     """
-    start, end = costs.window(days)
-    m_start, m_end = await costs.month_to_date_cost(db)
+    # ONE PERIOD DRIVES THE WHOLE PAGE.
+    #
+    # `measured` used `?days=` while `billed` used the calendar month, so the
+    # two halves of that page described different spans of time and nothing on
+    # it said so. An explicit from/to — sent by the month strip — makes them
+    # agree; `days` stays accepted so nothing else that calls this breaks.
+    if date_from and date_to:
+        start, end = date_from, date_to
+        m_start, m_end = date_from, date_to
+    else:
+        start, end = costs.window(days)
+        m_start, m_end = await costs.month_to_date_cost(db)
 
     meas = await costs.measured(db, start=start, end=end)
     bill = await costs.billed(db, start=m_start, end=m_end)
@@ -1002,6 +1017,20 @@ async def costs_summary(
             "usage_flush": await costs.last_sync(db, "usage_flush"),
             "aws_costs": await costs.last_sync(db, aws_bill.JOB),
         },
+        #: EVERY MONTH WE HOLD, WITH ITS TOTAL. This is the period selector and
+        #: the history at once — read out of our own Postgres, no AWS call.
+        "months": await costs.months(db),
+        #: The first day anything was measured. Before it, every measured figure
+        #: must render as a dash with a reason — `0 requests in July` would be an
+        #: invention, because nothing was watching in July.
+        "measured_first_day": (
+            d.isoformat() if (d := await costs.measured_first_day(db)) else None
+        ),
+        #: What a refresh would cost and whether one is allowed right now, so the
+        #: button can say "next free read in 3h 12m" AND STAY PRESSABLE. A
+        #: control disabled on arrival reads as broken; the polite 200 refusal
+        #: already exists and is a better answer than a dead button.
+        "refresh": await aws_bill.spend_guard(db),
     }
 
 
@@ -1027,9 +1056,73 @@ async def costs_refresh(
     return result
 
 
+class CreditsIn(BaseModel):
+    """What a person can say about the credits that AWS will not tell us."""
+
+    #: A fallback for the balance. Normally read live from
+    #: `freetier:GetAccountPlanState`, but he asked for the field explicitly —
+    #: "please have a manual enter field for remaining credits if u cant able to
+    #: fetch the exact credits" — and an API that answers today can stop
+    #: answering tomorrow.
+    balance_usd: Decimal | None = Field(default=None, ge=0, le=1_000_000)
+    #: THE ONE FIGURE WITH NO API AT ALL. AWS publishes the balance and not the
+    #: date it dies. Hand-entered is the only honest source, so it is stored as
+    #: such and always chipped as such.
+    expiry_on: date_type | None = None
+    note: str | None = Field(default=None, max_length=280)
+
+
+@router.patch("/costs/credits")
+async def set_credits(
+    payload: CreditsIn,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """Write the hand-entered half of the credit card on the money page.
+
+    MERGES rather than replaces: setting the expiry must not wipe a balance
+    somebody typed last week. Only keys actually sent are touched — `None` means
+    "not mentioned", which is why `exclude_unset` is what drives the merge and
+    not a truthiness test. Sending `balance_usd: 0` is a real statement (the
+    credits are gone) and must be storable.
+    """
+    cfg = (await db.execute(select(PlatformConfig).limit(1))).scalar_one_or_none()
+    if cfg is None:
+        cfg = PlatformConfig()
+        db.add(cfg)
+
+    current = dict(getattr(cfg, "aws_credits", None) or {})
+    sent = payload.model_dump(exclude_unset=True)
+    for key, value in sent.items():
+        if isinstance(value, Decimal):
+            current[key] = float(value)
+        elif isinstance(value, date_type):
+            current[key] = value.isoformat()
+        else:
+            current[key] = value
+    current["entered_by"] = operator.email
+    current["entered_at"] = datetime.now(UTC).isoformat()
+    cfg.aws_credits = current
+    # A JSON column mutated in place is not seen by the ORM's change detection,
+    # so the write would be silently dropped. Reassigning the whole dict above
+    # is what makes it dirty; flag_modified is the belt to that braces.
+    flag_modified(cfg, "aws_credits")
+    await db.commit()
+
+    # AFTER the commit, deliberately: `audit_service.record` commits internally,
+    # so calling it mid-transaction commits a half-finished write.
+    await audit_service.record(
+        db, hotel_id=operator.hotel_id, user=operator, action="platform.credits_set",
+        summary=f"Set AWS credit figures: {', '.join(sorted(sent))}"[:300],
+    )
+    return {"credits": current}
+
+
 @router.get("/costs/hotels")
 async def costs_by_hotel(
     days: int = 30,
+    date_from: date_type | None = Query(default=None, alias="from"),
+    date_to: date_type | None = Query(default=None, alias="to"),
     db: AsyncSession = Depends(get_db),
     operator: User = Depends(require_platform_owner),
 ) -> dict:
@@ -1047,7 +1140,9 @@ async def costs_by_hotel(
     with one restaurant or fifty, so a share of it is a fair split of rent —
     not a claim about who caused spend.
     """
-    start, end = costs.window(days)
+    start, end = (
+        (date_from, date_to) if date_from and date_to else costs.window(days)
+    )
     m_start, m_end = await costs.month_to_date_cost(db)
 
     meas = await costs.measured(db, start=start, end=end)
