@@ -500,7 +500,11 @@ export default function SettingsPage() {
           migration each time. */}
       {canConfigure && (
       <Card className="mise-feel mb-6" id="s-paperwork">
-        <h3 className="font-semibold text-fg">Paperwork &amp; numbers</h3>
+        <Fold
+          title="Paperwork &amp; numbers"
+          value={<span className="font-mono">{`${String(hotelPrefs.pdf_group_by ?? "category") === "category" ? "By category" : "Plain list"}`}</span>}
+          hint="How order sheets are laid out, and how much detail a number shows"
+        >
         <p className="mt-1 text-sm text-fg-faint">
           How order sheets are laid out, and how much detail a number shows. This
           is for the whole restaurant, not just this device.
@@ -630,12 +634,17 @@ export default function SettingsPage() {
         {hotelPrefsSaved && (
           <p className="mt-3 text-xs text-brand-300">Saved for the whole restaurant.</p>
         )}
-      </Card>
+      </Fold>
+        </Card>
       )}
 
       {canConfigure && (
       <Card className="mise-feel mb-6" id="s-alerts">
-        <h3 className="font-semibold text-fg">Email alerts</h3>
+        <Fold
+          title="Email alerts"
+          value={<span className="font-mono">{prefs ? `${Object.values(prefs).filter(Boolean).length} on` : "—"}</span>}
+          hint="Which moments are worth an email, and two-step sign-in"
+        >
         <p className="mt-1 text-sm text-fg-faint">
           Sent from <b className="text-fg-soft">{senderEmail()}</b> to{" "}
           <b className="text-fg-soft">{user?.email}</b>. Pick exactly which moments deserve an
@@ -708,7 +717,8 @@ export default function SettingsPage() {
             />
           </div>
         </div>
-      </Card>
+      </Fold>
+        </Card>
       )}
 
       {isAdmin && (
@@ -780,7 +790,11 @@ export default function SettingsPage() {
 
       {isAdmin && (
         <Card className="mise-feel mb-6" id="s-attendance">
-          <h3 className="font-semibold text-fg">Attendance: break &amp; penalty policy</h3>
+          <Fold
+            title="Attendance: break &amp; penalty policy"
+            value={<span className="font-mono">{`${allowance} min free`}</span>}
+            hint="Paid break minutes per shift, and what a longer one costs"
+          >
           <p className="mt-1 text-sm text-fg-faint">
             Paid break minutes allowed per shift. Minutes beyond this are flagged on the
             timesheet and charged at the penalty rate below.
@@ -919,12 +933,17 @@ export default function SettingsPage() {
           <p className="mt-2 text-xs text-fg-faint">
             Set allowance to 0 with a 0 penalty to disable break penalties.
           </p>
-        </Card>
+        </Fold>
+          </Card>
       )}
 
       {isAdmin && (
         <Card className="mise-feel mb-6" id="s-payroll">
-          <h3 className="font-semibold text-fg">Payroll: minimum wage</h3>
+          <Fold
+            title="Payroll: minimum wage"
+            value={<span className="font-mono">{`${CURRENCIES[currency].symbol}${minWage}/hr`}</span>}
+            hint="The lowest hourly rate payroll will let you pay"
+          >
           <p className="mt-1 text-sm text-fg-faint">
             The lowest hourly rate you&apos;re allowed to pay. Payroll blocks any run where
             an hourly employee&apos;s rate is below this. Set it to your country&apos;s statutory
@@ -947,7 +966,8 @@ export default function SettingsPage() {
             </button>
             {savedWage && <span className="text-sm text-brand-400">Saved ✓</span>}
           </form>
-        </Card>
+        </Fold>
+          </Card>
       )}
 
       {isAdmin && (
