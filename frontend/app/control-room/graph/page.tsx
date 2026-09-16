@@ -169,6 +169,35 @@ function Key({ svg, children }: { svg: React.ReactNode; children: React.ReactNod
   );
 }
 
+/** URL area → the name the product uses for it.
+ *
+ *  `/api/purchasing/...` is "Purchasing" on every screen a restaurant sees, and
+ *  showing them the path segment instead would be the same failure as printing
+ *  `EUW2-InstanceUsage:db.t4g.micro` where "Database — the server" belongs.
+ *  Anything unmapped falls through to its own name rather than being hidden. */
+const AREA_LABEL: Record<string, string> = {
+  inventory: "Inventory",
+  vendors: "Vendors",
+  purchasing: "Purchasing",
+  recipes: "Recipes & costing",
+  sales: "Sales",
+  expenses: "Expenses",
+  reports: "Reports (P&L)",
+  payroll: "Payroll",
+  employees: "Employees",
+  attendance: "Attendance",
+  ordering: "Ordering & tables",
+  assistant: "The AI assistant",
+  documents: "Documents",
+  settings: "Settings",
+  hotels: "Hotel profile",
+  auth: "Signing in",
+  platform: "Control Room",
+  public: "Public pages",
+  waste: "Waste log",
+  audit: "Trail",
+};
+
 function NodeDetail({ node, edges }: { node: GraphNode; edges: GraphEdge[] }) {
   const m = node.metrics ?? {};
   const rows: [string, string][] = [];
@@ -194,6 +223,8 @@ function NodeDetail({ node, edges }: { node: GraphNode; edges: GraphEdge[] }) {
   add("Tokens", m.tokens);
 
   const what = node.detail?.what as string | undefined;
+  const areas = (node.detail?.areas as { area: string; requests: number }[]) ?? [];
+  const busiest = Math.max(1, ...areas.map((a) => a.requests));
 
   return (
     <div className="space-y-4">
@@ -234,6 +265,37 @@ function NodeDetail({ node, edges }: { node: GraphNode; edges: GraphEdge[] }) {
               </div>
             ))}
           </dl>
+        </div>
+      )}
+
+      {areas.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+            What they actually use
+          </p>
+          {/* MEASURED, NOT CONFIGURED. The features map on the hotel says what
+              is switched ON, which is a much weaker claim than what anybody
+              opened. This is the second one. */}
+          <ul className="space-y-1">
+            {areas.map((a) => (
+              <li
+                key={a.area}
+                className="mise-well relative flex items-baseline justify-between gap-3 overflow-hidden rounded-lg px-2.5 py-1.5"
+              >
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 bg-brand-600/10"
+                  style={{ width: `${(a.requests / busiest) * 100}%` }}
+                />
+                <span className="relative text-xs capitalize text-fg-soft">
+                  {AREA_LABEL[a.area] ?? a.area.replace(/[-_]/g, " ")}
+                </span>
+                <span className="relative font-mono text-[11px] tabular-nums text-fg-faint">
+                  {a.requests.toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

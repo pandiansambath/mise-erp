@@ -190,6 +190,39 @@ async def build(
         )
     ).all()
 
+    # ── 6. WHAT EACH RESTAURANT ACTUALLY USES ─────────────────────────────
+    #
+    #     "unders hotel what are all ther..what using"
+    #
+    # Grouped by the AREA of the endpoint — `/api/inventory/items` is the
+    # inventory area — because that is the closest thing we measure to "a
+    # feature somebody used". It is EVIDENCE rather than configuration: the
+    # features map on `hotels` says what is switched ON, which is a different
+    # and much weaker claim than what anybody opened.
+    #
+    # Attached to the restaurant rather than promoted to its own ring of nodes.
+    # Thirty-three feature nodes per restaurant would triple the node count to
+    # say something that belongs on one node's own card, and the map's whole
+    # argument is that thirteen big legible nodes beat a hundred small ones.
+    area_rows = (
+        await db.execute(
+            select(
+                UsageDaily.hotel_id,
+                func.split_part(UsageDaily.endpoint, "/", 3).label("area"),
+                func.sum(UsageDaily.requests),
+            )
+            .where(UsageDaily.day >= start, UsageDaily.day <= end)
+            .group_by(UsageDaily.hotel_id, "area")
+        )
+    ).all()
+    areas: dict[Any, list[dict]] = {}
+    for hid, area, reqs in area_rows:
+        if not area:
+            continue
+        areas.setdefault(hid, []).append({"area": area, "requests": int(reqs or 0)})
+    for v in areas.values():
+        v.sort(key=lambda r: -r["requests"])
+
     # ── 5. the AWS bill, grouped by service ───────────────────────────────
     cost_rows = (
         await db.execute(
@@ -256,6 +289,9 @@ async def build(
                 "handle": handle,
                 "is_active": bool(is_active),
                 "created_at": created.isoformat() if created else None,
+                #: The areas they actually opened, busiest first. Measured, not
+                #: configured — "switched on" and "used" are different claims.
+                "areas": (areas.get(hid) or [])[:12],
             },
             # PER CHANNEL, because a node can be alive on one and silent on the
             # other and a single boolean would have to call one of them a lie.
