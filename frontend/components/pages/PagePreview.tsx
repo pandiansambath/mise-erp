@@ -29,6 +29,20 @@
  *  The device frame is not decoration either: floating on white, a preview has
  *  no edges, so you cannot tell where the page stops and the editor begins —
  *  which is what made the old one read as "a weird small box".
+ *
+ *  ⚠️ THE CALLER MUST GIVE THIS A BOUNDED HEIGHT.
+ *
+ *      "they are hitting bottom" / "the previow is very worst its not
+ *       responsvie..previw is cutting in bottom"
+ *
+ *  It fits the page to the room it is in, so it has to BE in a room. Render it
+ *  as a flex child of a column that has a real height — the studio cell, or a
+ *  card with an explicit `h-[...]`. Drop it into a plain block div and its
+ *  measured height becomes its own content height, which means the height term
+ *  silently evaluates to "whatever I already am" and only the width constrains
+ *  anything. That is not a visible failure; it is a preview that looks fine on
+ *  a laptop and runs off the bottom edge on everything else, which is why it
+ *  survived two attempts at fixing it.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -83,21 +97,29 @@ function mirrorStyles(doc: Document): () => void {
   // for them the preview silently drifts out of date.
   const mo = new MutationObserver(copy);
   mo.observe(document.head, { childList: true });
+
+  // A tap on "Order online" inside a PREVIEW must go nowhere — it is a picture
+  // of the page, not the page. Capture phase so it lands before any handler the
+  // real component attached.
+  //
+  // THIS WAS WRITTEN BELOW THE `return` AND HAD NEVER ONCE RUN. Unreachable
+  // code after a return is not an error in TypeScript and not a lint failure
+  // here, so it type-checked, built, shipped and did nothing — clicks inside
+  // the preview were live the whole time, which on the sign-in preview means a
+  // click could try to actually sign in.
+  const swallow = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  doc.addEventListener("click", swallow, true);
+  doc.addEventListener("submit", swallow, true);
+
   return () => {
     mo.disconnect();
+    doc.removeEventListener("click", swallow, true);
+    doc.removeEventListener("submit", swallow, true);
     for (const old of added) old.parentNode?.removeChild(old);
   };
-  // A tap on "Order online" inside a PREVIEW must go nowhere — it is a
-  // picture of the page, not the page. Capture phase so it lands before any
-  // handler the real component attached.
-  doc.addEventListener(
-    "click",
-    (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    },
-    true,
-  );
 }
 
 export function PagePreview({
@@ -147,6 +169,14 @@ export function PagePreview({
   const [scale, setScale] = useState(0.5);
   const { w, h } = SIZE[device];
 
+  // The bezel is not free. `p-2` on a phone and `p-1.5` on a laptop are real
+  // pixels around the screen, and the laptop also carries a 24px browser-chrome
+  // strip above it. Fitting `h` into the available height and then drawing
+  // those on top is how the frame ends up taller than the space it was measured
+  // against — which is the bottom edge he keeps photographing.
+  const pad = device === "phone" ? 16 : 12;
+  const chrome = device === "desktop" ? 24 : 0;
+
   // Fit to whatever room the editor leaves us, and re-fit when that changes.
   // ResizeObserver rather than a window listener: the preview column resizes
   // when the editor panel opens and closes, which no window event reports.
@@ -157,25 +187,47 @@ export function PagePreview({
       const availW = el.clientWidth;
       const availH = el.clientHeight;
       if (availW <= 0) return;
-      // FIT TO BOTH AXES. This fitted width only, so at 1440x900 a 390x844
-      // phone rendered at 100% and its bottom ~128px sat below the window
-      // edge — a preview whose job is showing the whole page, cutting the page
-      // off. `min-h-0 flex-1` on the column is what gives clientHeight a value
-      // to observe; without it this term is 0 and the old behaviour returns.
-      setScale(Math.min(1, availW / w, availH > 0 ? availH / h : 1));
+
+      // WHY THIS WAS STILL WRONG AFTER I "FIXED" IT.
+      //
+      // The height term was already here. It never did anything, because the
+      // element being measured was `<div class="w-full">` — a block div, whose
+      // clientHeight IS its content. So `availH` was whatever the frame had
+      // already decided to be, the ratio was always >= 1, and `Math.min` threw
+      // it away every time. A constraint computed from the thing it is meant to
+      // constrain is not a constraint. The parent chain was bounded the whole
+      // time; the ruler was the problem.
+      //
+      // `box` is now a flex child with `min-h-0 flex-1`, so clientHeight is the
+      // room actually left over after the caption — a number that does not
+      // depend on the frame at all.
+      const fitsW = (availW - pad) / w;
+      const fitsH = (availH - pad - chrome) / h;
+      setScale(Math.max(0.05, Math.min(1, fitsW, fitsH)));
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [w, h]);
-
-  const pad = device === "phone" ? 16 : 12;
+  }, [w, h, pad, chrome]);
 
   return (
-    <div ref={box} className="w-full">
+    /* THREE ELEMENTS, EACH WITH ONE JOB — and the middle one is the fix.
+       -----------------------------------------------------------------------
+       outer:  fills the height it is given (`h-full min-h-0`), column flex.
+       box:    `min-h-0 flex-1` — it CANNOT size to its content, so measuring it
+               gives the room left over. This is the element the old code got
+               wrong by making it `w-full` and nothing else.
+       caption: `shrink-0`, outside the measured area, so the two lines of text
+               under the frame stop silently stealing the height the frame was
+               told it could have.
+       `min-h-0` is load-bearing on both: a flex child defaults to min-height
+       auto, which lets it push past its parent — the exact overflow being
+       photographed. */
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center">
+      <div ref={box} className="flex min-h-0 w-full flex-1 items-center justify-center">
       <div
-        className={`relative mx-auto overflow-hidden bg-black shadow-2xl ring-1 ring-black/20 ${
+        className={`relative overflow-hidden bg-black shadow-2xl ring-1 ring-black/20 ${
           device === "phone" ? "rounded-[2.25rem] p-2" : "rounded-xl p-1.5"
         }`}
         style={{ width: w * scale + pad, transition: "width .2s" }}
@@ -242,7 +294,8 @@ export function PagePreview({
           </p>
         )}
       </div>
-      <p className="mt-2 text-center text-[11px] text-fg-faint">
+      </div>
+      <p className="mt-2 shrink-0 text-center text-[11px] text-fg-faint">
         {device === "desktop" ? "1440 × 900 — laptop" : "390 × 844 — phone"} ·{" "}
         {Math.round(scale * 100)}%
       </p>
