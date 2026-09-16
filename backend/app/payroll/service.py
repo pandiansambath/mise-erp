@@ -36,6 +36,24 @@ month_range = period_range
 
 _CUSTOM_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})→(\d{4}-\d{2}-\d{2})$")
 
+#: EVERY SHAPE A PAY PERIOD LABEL CAN TAKE: a month (2026-07), a week
+#: (2026-W28), or a custom range (2026-07-01→2026-07-07).
+#:
+#: The endpoints that read a run back — list, approve-all, the payslip PDF —
+#: each validated against month-or-week only. A custom run therefore created
+#: its payslips happily and then could not be LISTED, let alone approved: the
+#: request 422'd before it reached any of this code. The rows sat in DRAFT
+#: forever, so their wages never reached Expenses and the month's labour cost
+#: was quietly short by everyone paid on a custom range.
+#:
+#: One constant, because three copies of a pattern is how one of them ends up
+#: not knowing about a third label shape.
+PERIOD_PATTERN = r"^\d{4}-(\d{2}|W\d{2})$|^\d{4}-\d{2}-\d{2}→\d{4}-\d{2}-\d{2}$"
+
+
+class MissingPayBasisError(ValueError):
+    """No hourly rate or monthly salary — pay would silently be £0.00."""
+
 
 class AlreadyPaidError(ValueError):
     """This employee already has pay covering (part of) the requested dates."""
@@ -123,6 +141,92 @@ async def list_advances(
 
 
 # ── Process a pay run ─────────────────────────────────────────────────────────
+async def pending_advances(
+    db: AsyncSession, employee_id: uuid.UUID, label: str, start: date, end: date
+) -> tuple[list[SalaryAdvance], Decimal]:
+    """The advances a run for this period will actually recover, and their total.
+
+    ONE QUERY, USED BY BOTH THE PREVIEW AND THE RUN. It is a function because it
+    was two copies and they had already drifted: the run filtered
+    `deduct_period IN (this period)`, the preview filtered only
+    `is_deducted = false`. So the preview summed EVERY outstanding advance the
+    employee had, from any period, and the confirmation screen showed a
+    deduction — and a net — that the run would then not produce.
+
+    A dry run that disagrees with the run is worse than no dry run, because the
+    number it shows is the number somebody approves.
+
+    Returns the rows oldest-first (recovery is partial, so the order decides
+    which advance clears first) and the total STILL OWED rather than the amount
+    originally borrowed.
+    """
+    # WHICH `deduct_period` VALUES THIS RUN ANSWERS FOR.
+    #
+    # An advance is scheduled against a period label, so the run has to work out
+    # which labels it is settling. A monthly run is its own label. A weekly run
+    # also picks up advances scheduled against the month the week ends in —
+    # "take it out of my next pay" means the next payslip, whatever shape the
+    # run happens to be.
+    #
+    # A CUSTOM RANGE matches no label at all: its own is "2026-07-01→2026-07-07"
+    # and nothing is ever scheduled against that. So it answers for every month
+    # it SPANS — otherwise paying somebody by custom range silently skips the
+    # advance they owe, and the debt sits there looking unpaid while the payslip
+    # says they were paid in full.
+    periods = {label}
+    if is_weekly(label):
+        periods.add(f"{end.year:04d}-{end.month:02d}")
+    else:
+        y, m = start.year, start.month
+        while (y, m) <= (end.year, end.month):
+            periods.add(f"{y:04d}-{m:02d}")
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+
+    rows = await db.execute(
+        select(SalaryAdvance).where(
+            SalaryAdvance.employee_id == employee_id,
+            SalaryAdvance.deduct_period.in_(periods),
+            SalaryAdvance.is_deducted.is_(False),
+        )
+    )
+    advances = sorted(rows.scalars().all(), key=lambda a: (a.given_date, a.created_at))
+    total = sum(
+        ((a.amount - (a.amount_recovered or Decimal("0"))) for a in advances),
+        Decimal("0"),
+    )
+    return advances, total
+
+
+def check_pay_basis(employee: Employee) -> None:
+    """Refuse to run pay for somebody who has no rate set.
+
+    `monthly_salary or Decimal("0")` turned a NULL salary into a £0.00 payslip,
+    and the run approved it like any other. Live data had four of them:
+
+        Mohamed / Praveen / Rajkumar / Sundar   gross 0.00   APPROVED
+
+    Nobody notices a £0.00 payslip. It is not an empty list — the employee IS in
+    the run, with a row, a status and a payslip PDF — so the screen looks
+    complete and the person simply is not paid. `sarathkumar` has
+    `monthly_salary: null` on production right now.
+
+    Zero is a legitimate NET (somebody who worked no days, or whose advance took
+    the lot). It is never a legitimate RATE, which is why the check is here on
+    the basis rather than on the result.
+    """
+    if employee.salary_type == SalaryType.HOURLY.value:
+        if not employee.hourly_rate or employee.hourly_rate <= 0:
+            raise MissingPayBasisError(
+                f"{employee.full_name} has no hourly rate set, so their pay would "
+                "come out as £0.00. Set their rate on the Employees page first."
+            )
+    elif not employee.monthly_salary or employee.monthly_salary <= 0:
+        raise MissingPayBasisError(
+            f"{employee.full_name} has no monthly salary set, so their pay would "
+            "come out as £0.00. Set their salary on the Employees page first."
+        )
+
+
 async def _resolve_run(
     employee: Employee, pay_period: str | None, date_from: date | None, date_to: date | None
 ) -> tuple[str, date, date]:
@@ -166,6 +270,7 @@ async def process_payroll(
     min_wage: Decimal = calculator.MIN_WAGE_UK,
 ) -> Payroll:
     label, start, end = await _resolve_run(employee, pay_period, date_from, date_to)
+    check_pay_basis(employee)
     weekly = is_weekly(label)
     overlaps = await find_overlaps(db, employee.id, start, end, exclude_period=label)
     if overlaps:
@@ -179,20 +284,7 @@ async def process_payroll(
     pay_period = label
     stats = await _attendance_stats(db, employee.id, start, end)
 
-    # Pending advances for this period. A weekly run also picks up advances
-    # scheduled for the month the week ends in — "deduct from their next pay".
-    periods = {pay_period}
-    if weekly:
-        periods.add(f"{end.year:04d}-{end.month:02d}")
-    adv_rows = await db.execute(
-        select(SalaryAdvance).where(
-            SalaryAdvance.employee_id == employee.id,
-            SalaryAdvance.deduct_period.in_(periods),
-            SalaryAdvance.is_deducted.is_(False),
-        )
-    )
-    advances = list(adv_rows.scalars().all())
-    advance_total = sum((a.amount for a in advances), Decimal("0"))
+    advances, advance_total = await pending_advances(db, employee.id, pay_period, start, end)
 
     if employee.salary_type == SalaryType.HOURLY.value:
         calc = calculator.calc_hourly(
@@ -240,8 +332,28 @@ async def process_payroll(
     rec.processed_by = processed_by
     rec.processed_at = datetime.now(UTC)
 
+    # SPREAD WHAT WAS ACTUALLY RECOVERED ACROSS THE ADVANCES.
+    #
+    # `calc["advance_deduction"]` is what the payslip could afford, which is not
+    # necessarily what was owed. Marking every advance recovered regardless —
+    # which is what this did — is how a floored net turns into a forgiven debt:
+    # the employee keeps the money, the restaurant has no record, and the only
+    # evidence is an advance row silently flagged as paid back.
+    remaining = calc["advance_deduction"]
     for a in advances:
-        a.is_deducted = True
+        if remaining <= 0:
+            break
+        owed = a.amount - (a.amount_recovered or Decimal("0"))
+        if owed <= 0:
+            a.is_deducted = True
+            continue
+        take = min(owed, remaining)
+        a.amount_recovered = (a.amount_recovered or Decimal("0")) + take
+        # Only when it is genuinely square. `>=` rather than `==` because an
+        # advance edited downward after a partial recovery would otherwise never
+        # close and would be chased forever.
+        a.is_deducted = a.amount_recovered >= a.amount
+        remaining -= take
 
     await db.commit()
     await db.refresh(rec)
@@ -330,13 +442,10 @@ async def preview_payroll(
     the human commits."""
     label, start, end = await _resolve_run(employee, pay_period, date_from, date_to)
     stats = await _attendance_stats(db, employee.id, start, end)
-    adv_rows = await db.execute(
-        select(SalaryAdvance).where(
-            SalaryAdvance.employee_id == employee.id,
-            SalaryAdvance.is_deducted.is_(False),
-        )
-    )
-    advance_total = sum((a.amount for a in adv_rows.scalars().all()), Decimal("0"))
+    # THE SAME QUERY THE RUN WILL USE. This used to filter on `is_deducted`
+    # alone, so it showed a deduction for every advance the employee had ever
+    # taken and the run then deducted only this period's.
+    _, advance_total = await pending_advances(db, employee.id, label, start, end)
     if employee.salary_type == SalaryType.HOURLY.value:
         calc = calculator.calc_hourly(
             hourly_rate=employee.hourly_rate or Decimal("0"),
@@ -356,6 +465,13 @@ async def preview_payroll(
             other_deductions=other_deductions,
         )
     overlaps = await find_overlaps(db, employee.id, start, end, exclude_period=label)
+    # A dry run must never raise where the real run would refuse — it is there
+    # to REPORT the refusal, with the person's name on it.
+    try:
+        check_pay_basis(employee)
+        blocked = None
+    except MissingPayBasisError as exc:
+        blocked = str(exc)
     return {
         "employee_id": str(employee.id),
         "employee_name": employee.full_name,
@@ -371,6 +487,15 @@ async def preview_payroll(
         "advance_deduction": str(calc["advance_deduction"]),
         "other_deductions": str(calc["other_deductions"]),
         "net_pay": str(calc["net_pay"]),
+        # STILL OWED AFTER THIS PAYSLIP. Shown on the dry run because "we could
+        # only take £400 of the £3,500" is exactly the thing somebody needs to
+        # know BEFORE they approve, not after.
+        "advance_outstanding": str(calc.get("advance_outstanding", "0.00")),
+        # WHY THIS RUN WOULD BE WRONG, in words, before it is committed. The run
+        # itself refuses on a missing rate; the dry run has to SAY so, because a
+        # preview that shows £0.00 and no explanation is how four people ended
+        # up with approved £0.00 payslips nobody questioned.
+        "blocked": blocked,
         "already_paid": [
             {
                 "pay_period": o.pay_period,

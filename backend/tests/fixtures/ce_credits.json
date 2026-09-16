@@ -1,0 +1,1600 @@
+{
+ "_provenance": "OURS, NOT AWS'S. Trimmed from a live capture of `aws ce get-cost-and-usage` (account 887514555232, 2026-07-01..2026-09-17, taken 2026-09-16). Kept: the whole of July 2026 (the account's first month of billing, so the month total is COMPLETE and reconciles to the real invoice), plus 2026-09-01 and 2026-09-15 for AWS's own Estimated=True flag, plus two empty blocks. Everything inside ResultsByTime is byte-for-byte as AWS returned it. Full capture was 1.4MB and is not committed.",
+ "_month_totals_full_capture_usd": {
+  "2026-07": {
+   "usage": "9.2219913368",
+   "credit": "-9.2219912924"
+  },
+  "2026-08": {
+   "usage": "41.9124719294",
+   "credit": "-41.9124717712"
+  },
+  "2026-09": {
+   "usage": "16.6690034181",
+   "credit": "-16.6690035553"
+  }
+ },
+ "GroupDefinitions": [
+  {
+   "Type": "DIMENSION",
+   "Key": "SERVICE"
+  },
+  {
+   "Type": "DIMENSION",
+   "Key": "RECORD_TYPE"
+  }
+ ],
+ "ResultsByTime": [
+  {
+   "TimePeriod": {
+    "Start": "2026-07-22",
+    "End": "2026-07-23"
+   },
+   "Total": {
+    "UnblendedCost": {
+     "Amount": "0",
+     "Unit": "USD"
+    },
+    "UsageQuantity": {
+     "Amount": "0",
+     "Unit": "N/A"
+    }
+   },
+   "Groups": [],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-23",
+    "End": "2026-07-24"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.002848872",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.00192732",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.047541982",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2140126706",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.393562852",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.00138472",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.09161251",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-24",
+    "End": "2026-07-25"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000859973",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "AWS Secrets Manager",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000005",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.003342384",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0598709668",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0006057554",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-25",
+    "End": "2026-07-26"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0002277738",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.00344211",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0598709668",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0005889855",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-26",
+    "End": "2026-07-27"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0000018652",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.003679992",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0598709668",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0005411244",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-27",
+    "End": "2026-07-28"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0000323076",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "AWS Secrets Manager",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.00001",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.006930726",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0598709668",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0011808492",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000055",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Claude Opus 4.6 (Amazon Bedrock Edition)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000275",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.00033",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-28",
+    "End": "2026-07-29"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0001271038",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "AWS Secrets Manager",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000005",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.010220607",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0598709668",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0010708004",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.01422806",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0004752",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-29",
+    "End": "2026-07-30"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Cost Explorer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.02",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0001237952",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "AWS Secrets Manager",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000005",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.019034793",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0589597367",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2830164392",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0017566722",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.120133335",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.488148045",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-30",
+    "End": "2026-07-31"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0000014098",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.021951096",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0598709668",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0005382489",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-07-31",
+    "End": "2026-08-01"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0007423882",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.021951096",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0598709668",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5178064502",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0005543241",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": false
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-09-01",
+    "End": "2026-09-02"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000003344",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.139613832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0618666716",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2832",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.5277038918",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0007313955",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.12",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": true
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-09-15",
+    "End": "2026-09-16"
+   },
+   "Total": {},
+   "Groups": [
+    {
+     "Keys": [
+      "AWS Data Transfer",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0000009246",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon EC2 Container Registry (ECR)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.000938627",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "EC2 - Other",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0283555578",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Elastic Compute Cloud - Compute",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.1355557804",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Relational Database Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.2603333369",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Simple Storage Service",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0005826062",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Amazon Virtual Private Cloud",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.065",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    },
+    {
+     "Keys": [
+      "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+      "Credit"
+     ],
+     "Metrics": {
+      "UnblendedCost": {
+       "Amount": "-0.0489885",
+       "Unit": "USD"
+      },
+      "UsageQuantity": {
+       "Amount": "0",
+       "Unit": "N/A"
+      }
+     }
+    }
+   ],
+   "Estimated": true
+  },
+  {
+   "TimePeriod": {
+    "Start": "2026-09-16",
+    "End": "2026-09-17"
+   },
+   "Total": {
+    "UnblendedCost": {
+     "Amount": "0",
+     "Unit": "USD"
+    },
+    "UsageQuantity": {
+     "Amount": "0",
+     "Unit": "N/A"
+    }
+   },
+   "Groups": [],
+   "Estimated": true
+  }
+ ],
+ "DimensionValueAttributes": []
+}

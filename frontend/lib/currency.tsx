@@ -116,11 +116,25 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     (gbpAmount: string | number | null | undefined) => {
       const n = typeof gbpAmount === "string" ? parseFloat(gbpAmount) : gbpAmount ?? 0;
       const value = (Number.isFinite(n) ? (n as number) : 0) * CURRENCIES[currency].rate;
-      const formatted = value.toLocaleString(undefined, {
+      // THE SIGN GOES OUTSIDE THE SYMBOL.
+      //
+      // Concatenating the symbol onto a formatted negative produced
+      // "£-3,500.00" — which is not how anyone writes money, and which is
+      // easy to misread as a positive at a glance in a column of figures. The
+      // minus belongs in front of the whole amount: "−£3,500.00".
+      //
+      // A real minus sign (U+2212), not a hyphen: at small sizes a hyphen is
+      // barely a pixel wider than nothing, and this is the one character that
+      // reverses the meaning of the number it sits next to.
+      // Rounded first, so a value of -0.004 does not render as "−£0.00".
+      // A minus in front of a zero reads as a debt that is not there.
+      const rounded = Math.round(value * 100) / 100;
+      const negative = rounded < 0;
+      const formatted = Math.abs(rounded).toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-      return `${CURRENCIES[currency].symbol}${formatted}`;
+      return `${negative ? "−" : ""}${CURRENCIES[currency].symbol}${formatted}`;
     },
     [currency]
   );
