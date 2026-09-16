@@ -70,9 +70,12 @@ def stub_aws(monkeypatch, *, rows: list[dict] | None = None, calls: int = 2) -> 
     """Replace the two Cost Explorer calls; return the windows asked for."""
     asked: list[tuple] = []
 
-    def _fake(start: date, end: date):
+    def _fake(start: date, end: date, tally: list[int]):
         asked.append((start, end))
-        return list(rows or []), calls
+        # Count into the CALLER's list, the way the real one does — billed when
+        # the request goes out, not when it comes back.
+        tally[0] += calls
+        return list(rows or [])
 
     monkeypatch.setattr(aws_bill, "_fetch_blocking", _fake)
     return asked
@@ -329,7 +332,7 @@ async def test_a_failed_fetch_is_still_written_down(db, monkeypatch) -> None:
     only reason the page can say "AWS figures have never been fetched" instead
     of quietly showing stale ones as current.
     """
-    def _boom(start, end):
+    def _boom(start, end, tally):
         raise RuntimeError("AccessDeniedException: user is not authorized to perform ce:GetCostAndUsage")
 
     monkeypatch.setattr(aws_bill, "_fetch_blocking", _boom)
@@ -350,18 +353,11 @@ async def test_a_failed_fetch_is_still_written_down(db, monkeypatch) -> None:
     assert len(runs[0].error) <= 500, "the error column is Text but the module truncates at 500"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "REAL BUG, reported not patched: `fetch` learns the call count only from "
-        "`_fetch_blocking`'s RETURN VALUE (`rows, calls = await asyncio.to_thread(...)`), "
-        "so any failure after the first billed request records api_calls=0. The module's "
-        "own comment promises the opposite — 'record the calls it burned ... leaving it "
-        "uncounted would let a broken collector spend past a ceiling that believes it "
-        "never ran'. Throttling on the second of the two calls is the everyday way in. "
-        "Remove this marker when _fetch_blocking reports calls on the failure path too."
-    ),
-)
+# WAS `xfail(strict=True)`, and the marker did its job: it documented a real bug
+# rather than papering over it, and turned the suite red the moment the fix
+# landed so that nobody could forget to remove it. The bug is fixed — the tally
+# is the caller's list and `_pages` increments it BEFORE using each response —
+# so this is now an ordinary passing test and the guard it describes is real.
 async def test_a_failure_after_the_first_call_still_counts_the_cent_it_spent(db, monkeypatch) -> None:
     """Charges fetched, then AWS throttles the credits call. One cent is gone.
 

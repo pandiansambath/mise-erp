@@ -18,7 +18,7 @@
 // side with room to breathe, the page itself down the other at its real size.
 // Nothing else on screen, because nothing else is the job.
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useBackToClose } from "@/components/useBackToClose";
@@ -43,6 +43,32 @@ export function PageStudio({
   footer?: ReactNode;
 }) {
   useBackToClose(open, onClose);
+
+  /** Phone only. Desktop shows both columns and ignores this entirely. */
+  const [tab, setTab] = useState<"edit" | "preview">("edit");
+
+  const mobile = (
+    <div className="flex shrink-0 gap-1 border-b border-line bg-paper px-4 py-2 lg:hidden">
+      {(
+        [
+          ["edit", "Edit"],
+          ["preview", "Preview"],
+        ] as const
+      ).map(([k, label]) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => setTab(k)}
+          aria-pressed={tab === k}
+          className={`mise-press min-h-[36px] flex-1 rounded-lg px-3 text-xs font-semibold transition ${
+            tab === k ? "bg-brand-600 text-white" : "mise-well text-fg-soft"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -86,9 +112,23 @@ export function PageStudio({
         {footer}
       </header>
 
-      {/* Controls left, page right. On a phone they stack, controls first,
-          because you cannot edit and watch at once on 390px anyway. */}
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_1fr] overflow-hidden lg:grid-cols-[34rem_1fr] lg:grid-rows-1">
+      {/* ON A PHONE THIS IS TWO SCREENS, NOT TWO ROWS.
+          --------------------------------------------------------------------
+          It stacked: `grid-rows-[auto_1fr]`, controls first. `auto` means the
+          controls take their full CONTENT height — which on this form is well
+          over a screen — so the preview row was handed whatever was left, which
+          was nothing. Measured at 390x844: the device frame's top edge sat at
+          y=873, below the bottom of the window, and six wheel gestures moved it
+          0px because the containers are `overflow:hidden`. Not "cut off at the
+          bottom": not on screen at all, and unreachable.
+
+          The old comment had the right insight and drew the wrong conclusion —
+          you genuinely cannot edit and watch at once on 390px, so the answer is
+          not to stack them and hope, it is to show ONE of them. A toggle costs
+          one tap and never costs a scroll. Desktop is untouched: side by side,
+          where there is room for both. */}
+      {mobile}
+      <div className="grid min-h-0 flex-1 grid-rows-1 overflow-hidden lg:grid-cols-[34rem_1fr]">
         {/* WHY THE CONTROLS LOOKED CLUMSY, AND WHY THE FIRST FIX WAS WORSE.
             They were written for a 42rem card and carry two- and three-column
             grids; in a 26rem column every text field became a stub — "Add",
@@ -100,7 +140,11 @@ export function PageStudio({
             tiles and the inputs get their room back. Only the story box is
             overridden, because it ships two rows tall and is meant for a
             paragraph. */}
-        <div className="mise-noscrollbar min-h-0 overflow-y-auto border-line p-4 lg:border-r lg:p-6 [&_textarea]:min-h-[6rem]">
+        <div
+          className={`mise-noscrollbar min-h-0 overflow-y-auto border-line p-4 lg:border-r lg:p-6 [&_textarea]:min-h-[6rem] ${
+            tab === "edit" ? "" : "hidden lg:block"
+          }`}
+        >
           {controls}
         </div>
         {/* FLEX, NOT A BLOCK. The preview's own wrapper asks for `flex-1
@@ -109,7 +153,11 @@ export function PageStudio({
             measured itself, and the whole fit-to-height calculation downstream
             had nothing real to measure. The cell was bounded; it just never
             passed that down. */}
-        <div className="flex min-h-0 flex-col overflow-hidden bg-shell p-4 lg:p-6">
+        <div
+          className={`min-h-0 flex-col overflow-hidden bg-shell p-4 lg:flex lg:p-6 ${
+            tab === "preview" ? "flex" : "hidden"
+          }`}
+        >
           {preview}
         </div>
       </div>
