@@ -29,7 +29,7 @@ from app.core.database import get_db
 from app.core.pulse import PULSE
 from app.core.security import create_access_token, hash_password
 from app.hotels.models import Hotel
-from app.platform_admin import aws_bill, costs, deletion, observability
+from app.platform_admin import aws_bill, costs, deletion, graph, observability
 from app.platform_admin import features as feat
 from app.platform_admin.models import PlatformAnnouncement, PlatformConfig
 
@@ -1116,6 +1116,39 @@ async def set_credits(
         summary=f"Set AWS credit figures: {', '.join(sorted(sent))}"[:300],
     )
     return {"credits": current}
+
+
+@router.get("/graph")
+async def platform_graph(
+    days: int = 90,
+    date_from: date_type | None = Query(default=None, alias="from"),
+    date_to: date_type | None = Query(default=None, alias="to"),
+    include_silent: bool = True,
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(require_platform_owner),
+) -> dict:
+    """The whole platform as one graph — nodes, edges, and what flows down them.
+
+    Five SQL queries, no AWS call, and the query count does NOT grow with the
+    number of restaurants: everything aggregates in SQL and groups by hotel. A
+    per-hotel query in a loop would be correct at three restaurants and fifty
+    round trips at fifty, which is the failure this shape exists to avoid.
+
+    `include_silent=false` drops nodes with no edges. It defaults to TRUE and
+    should stay that way: a restaurant that spent nothing is an answer to "who
+    cost how much", and a map that hides what is quiet cannot be trusted to show
+    what is loud.
+
+    Plain dict, no `response_model` — it silently drops undeclared fields and
+    this payload is deeply nested, which is exactly where that has bitten nine
+    times.
+    """
+    start, end = (
+        (date_from, date_to)
+        if date_from and date_to
+        else costs.window(max(1, min(days, 400)))
+    )
+    return await graph.build(db, start=start, end=end, include_silent=include_silent)
 
 
 @router.get("/costs/hotels")
