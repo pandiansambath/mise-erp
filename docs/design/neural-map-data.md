@@ -645,3 +645,401 @@ Plus `usage_mod.COUNTERS.snapshot()`, which is in memory and not a query. It
 current to the second. It is keyed by (day, hotel, method, endpoint), so it is
 bucketed to an area in Python exactly as query 2's rows are. Without it the
 graph freezes at the last five-minute flush while claiming to be live.
+
+### 5.2 The main aggregate
+
+**Traffic — one grouped scan, not one per restaurant:**
+
+```sql
+SELECT u.hotel_id,
+       split_part(u.endpoint, '/', 3)   AS seg1,
+       split_part(u.endpoint, '/', 4)   AS seg2,
+       sum(u.requests)                  AS requests,
+       sum(u.errors_4xx)                AS errors_4xx,
+       sum(u.errors_5xx)                AS errors_5xx,
+       sum(u.duration_ms)               AS duration_ms,
+       sum(u.db_selects)                AS db_selects,
+       sum(u.db_writes)                 AS db_writes,
+       sum(u.db_ms)                     AS db_ms
+FROM usage_daily u
+WHERE u.day >= :day_from AND u.day <= :day_to
+GROUP BY u.hotel_id, 2, 3;
+```
+
+`endpoint` is already templated by `main._template()` (`/api/hotels/{id}/staff`),
+so the segments are stable. `seg1` is the router area; `seg2` gives the two
+cases that need a second level — `public/order` vs `public/table` vs
+`public/kds` vs `public/hotel-landing`, and `vendors/compare`, since price
+comparison is a sub-router of vendors gated by
+`require_feature("price_comparison")`. Python then does longest-prefix matching
+of seg1/seg2, then seg1, against the registry's `areas`. Rows back are hotels
+times distinct (seg1, seg2), roughly 40 per hotel.
+
+**AI — windowed and lifetime in ONE pass**, which is what makes per-axis
+presence free:
+
+```sql
+SELECT a.hotel_id, a.model, a.kind,
+       count(*)                      FILTER (WHERE a.created_at >= :ts_from
+                                               AND a.created_at <  :ts_to) AS calls,
+       coalesce(sum(a.input_tokens)  FILTER (WHERE a.created_at >= :ts_from
+                                               AND a.created_at <  :ts_to), 0) AS tokens_in,
+       coalesce(sum(a.output_tokens) FILTER (WHERE a.created_at >= :ts_from
+                                               AND a.created_at <  :ts_to), 0) AS tokens_out,
+       coalesce(sum(a.cost_usd)      FILTER (WHERE a.created_at >= :ts_from
+                                               AND a.created_at <  :ts_to), 0) AS cost_usd,
+       coalesce(sum(a.latency_ms)    FILTER (WHERE a.created_at >= :ts_from
+                                               AND a.created_at <  :ts_to), 0) AS latency_ms_sum,
+       max(a.latency_ms)             FILTER (WHERE a.created_at >= :ts_from
+                                               AND a.created_at <  :ts_to)     AS latency_ms_max,
+       count(*)                      FILTER (WHERE a.created_at >= :ts_from
+                                               AND a.created_at <  :ts_to
+                                               AND NOT a.ok)                   AS failures,
+       count(*)                                                                AS calls_ever,
+       min(a.created_at)                                                       AS first_ever,
+       max(a.created_at)                                                       AS last_ever
+FROM ai_usage a
+GROUP BY a.hotel_id, a.model, a.kind;
+```
+
+Expressible in SQLAlchemy 2 as `func.count().filter(cond)` — no raw SQL needed,
+which matters because every other read module here is Core.
+
+> **`< :ts_to`, half-open.** `ts_to` is midnight UTC of the day AFTER `to`.
+> `created_at <= to` on a `timestamptz` silently drops everything after
+> 00:00:00 on the last day, which is the whole last day. `usage_daily.day` is a
+> `Date`, so `<= :day_to` is correct there. The two tables genuinely need
+> different comparisons, and that is the trap.
+>
+> **Everything is UTC.** `usage_daily.day` is UTC because AWS bills in UTC and
+> the money page says so; `cloud_cost_daily.day` is the AWS day. Do not bring
+> `hotels.timezone` into this. It is an infrastructure map, not a trading day.
+
+Query 4 is a full scan of `ai_usage` — about 400 rows today, perhaps 200k a year
+into a 50-restaurant fleet, so tens of milliseconds, once per cache period. It
+buys existence, lifetime bounds and windowed measures in one statement. If it
+ever stops being cheap, split it: windowed on `ix_ai_usage_hotel_time`, plus a
+tiny `GROUP BY hotel_id, model` for the bounds. Do not split it before
+measuring.
+
+### 5.3 The other five
+
+```sql
+-- 1. identity and people, one query for the whole fleet.
+--    /platform/hotels currently loads every User row into Python to do this.
+SELECT h.id, h.name, h.username, h.city, h.country, h.plan, h.subscription_status,
+       h.trial_ends_on, h.is_active, h.is_comp, h.created_at, h.features, h.timezone,
+       h.ai_daily_override, h.ai_monthly_override,
+       count(u.id)                             AS users,
+       count(u.id) FILTER (WHERE u.is_active)  AS users_active,
+       max(u.last_login)                       AS last_login
+FROM hotels h
+LEFT JOIN users u ON u.hotel_id = h.id
+GROUP BY h.id;                     -- legal: h.id is the primary key
+
+-- 3. traffic coverage per hotel. Index-only on ix_usage_daily_hotel_day.
+SELECT hotel_id, min(day) AS first_day, max(day) AS last_day
+FROM usage_daily
+GROUP BY hotel_id;
+
+-- 6. what they have been doing. NOTHING from `summary` - that is tenant content.
+SELECT hotel_id,
+       count(*) FILTER (WHERE created_at >= :ts_from AND created_at < :ts_to) AS actions,
+       max(created_at) AS last_action
+FROM audit_events
+GROUP BY hotel_id;
+
+-- 7. collector freshness, so a gap in collection is visible
+SELECT DISTINCT ON (job) job, started_at, finished_at, ok, rows_written, api_calls, error
+FROM telemetry_sync
+ORDER BY job, started_at DESC;
+
+-- 8. give the orphans their real names
+SELECT hotel_id, hotel_name, handle, plan, deleted_at, total_rows
+FROM deleted_hotels
+WHERE hotel_id = ANY(:orphan_ids);
+```
+
+Query 5 is `costs.billed(db, start, end)` called as-is and query 9 is
+`costs.months(db)`. Neither is reimplemented — one AWS-cost reader, not two.
+
+### 5.4 Indexes
+
+Queries 1 to 5, 7 and 9 are served by what already exists. **Query 6 is not.**
+`audit_events` is indexed on `hotel_id` alone, so `GROUP BY hotel_id` with
+`max(created_at)` has to visit the heap for every row, and `audit_events` is the
+fastest-growing table in this set.
+
+```python
+op.create_index("ix_audit_events_hotel_time", "audit_events", ["hotel_id", "created_at"])
+```
+
+It mirrors `ix_ai_usage_hotel_time`, which exists for exactly this shape, and it
+also helps `observability.hotel_activity()` — `WHERE hotel_id = ... ORDER BY
+created_at DESC LIMIT 200` does the same heap walk today.
+
+Nothing else. Query 2 reads the whole window out of `usage_daily` because that
+IS the data, and a covering index would have to include `endpoint` and would end
+up the size of the table. At 50 restaurants across 30 days that scan is roughly
+1.2M rows and low seconds — which is an argument for the cache, not for an
+index. If it is ever measured above ~2s, the right fix is a
+`(day, hotel_id, area)` rollup written by the same five-minute flush that
+already writes `usage_daily`. Measure first.
+
+---
+
+## 6. Scale, level of detail, cache
+
+### At 3 restaurants (today)
+
+About 41 nodes and 96 edges, ~25 KB of JSON. Nothing needs collapsing.
+
+### At 50 restaurants, 30 days of usage_daily
+
+| Nodes | n | Edges | n |
+|---|---|---|---|
+| platform | 1 | `hosts` | 54 |
+| pools | 4 | `on_plan` | 50 |
+| aws services | ~13 | `entitles` | ~70 |
+| plans | 3 | `overrides` | ~100 |
+| features | 33 | `uses` | ~750 |
+| models | ~5 | `invokes` | ~100 |
+| hotels (50 + anon + ~3 orphans) | 54 | `shares` | ~100 |
+| | | `bills` + `billed_as` | ~20 |
+| **~113** | | **~1,240** | |
+
+**About 340 KB raw, ~40 KB gzipped.** For one viewer on a page he opens
+deliberately, that is not a payload problem. Nodes barely grow — 33 features and
+about 5 models are fixed — so growth is almost entirely `uses` and `shares`,
+both linear in the fleet.
+
+### Where it actually breaks
+
+Not the payload; the layout. A force simulation is comfortable to roughly 2,000
+edges and starts costing frames past that, which arrives at about **150 to 200
+restaurants**. So:
+
+* **Never paginate.** A graph cut into pages is not a graph. You cut it by
+  DEPTH, not by page.
+* `depth=1` — platform, hotels, plans, pools, aws services. Spine and money, no
+  capability layer. About 75 nodes at 50 restaurants.
+* `depth=2` (default) — everything above.
+* `?hotel=<id>` — one restaurant's full sub-graph plus the shared nodes it
+  touches. This is the "expand a node" call, and it is the same endpoint
+  returning the same shape, so the client merges rather than branches.
+* Above 2,000 edges the builder emits the top 8 `uses` edges per hotel by
+  requests, folds the rest into `hotel.metrics.requests_other`, and sets
+  `meta.counts.truncated = true` alongside what was dropped. Truncation that
+  does not announce itself is the same lie as a zero.
+
+### Cache
+
+**In-process dict, keyed by (from, to, depth, include).** One container, one
+viewer, no Redis.
+
+* **60s TTL when the window includes today.** Long enough that opening four node
+  sheets in a row does not rebuild the graph four times; short enough that
+  "live" stays true, given the counters flush every five minutes and today is
+  composed with the in-memory delta on top of the stored rows.
+* **900s for a closed period.** A finished month cannot change — except that
+  Cost Explorer restates the last few days, which is why it is fifteen minutes
+  rather than forever.
+* `meta.cached_at` and `meta.cache_ttl_s` ride in the payload so the UI can say
+  "as of 12s ago" and offer a refresh, and `?refresh=1` forces a rebuild.
+* Cap the dict at about 8 entries and evict oldest. He can click twelve months
+  in the strip; twelve full graphs pinned in a t3.micro's memory is not free.
+
+Deliberately **not** an HTTP `Cache-Control`. A browser caching this would make
+the refresh button lie, which is the same class of fault as a health check that
+looks identical for slow and failed.
+
+---
+
+## 7. Time
+
+**Yes, it takes a period — the same one the money page takes.** `from` / `to`
+aliases, `days` as a fallback, and `meta.months` is `costs.months(db)`, so the
+graph and `/control-room/money` are driven by an identical month strip reading
+identical rows. The alternative — a second period control with its own semantics
+— is the two-places-kept-in-step failure again, and that page already carries a
+written apology for having had two windows that disagreed.
+
+**What the period changes:** every `w` and every `measures` on `uses`,
+`invokes`, `shares`, `bills`, `billed_as` and `hosts`; every windowed figure in
+`node.metrics`; the `aws_service` node set, since a service AWS did not bill
+that month is not a node; and each model's windowed counts.
+
+**What the period must NOT change: which nodes exist.** Hotels, features, plans,
+models and orphans are the platform's identity, and identity does not depend on
+a date range. A restaurant that vanished from the map because it was quiet in
+September would be the same failure as printing 0 for it — worse, in fact,
+because there would be nothing on screen to question. A quiet node is drawn,
+ghosted, with `presence.*.seen = false` and a reason.
+
+The one thing that genuinely narrows the node set is `depth`, which is a request
+about detail, not about time.
+
+---
+
+## 8. Multi-tenant safety
+
+This is the one endpoint in DineAI that legitimately crosses tenants, and the
+standard is the one `platform_admin/ai.py` already sets: **aggregates and
+metadata, never a restaurant's actual operating data.** It is an infrastructure
+map, not a data browser.
+
+**Never in this payload, at any depth:**
+
+- dish, menu, recipe, ingredient or item names; any price, cost or margin
+- vendor names, invoice numbers, PO contents
+- sales, takings, petty cash, P&L or budget figures
+- staff or employee names, payroll, payslips, wages, visas, document names
+- customer or diner names, addresses, phone numbers, order contents, table codes
+- assistant message bodies **and thread titles** — a title is auto-written from
+  the first question, so the title IS the question
+- `audit_events.summary` — it contains entity names ("Changed price of Basmati
+  20kg from 38 to 41"). **Count the rows, never carry the text.**
+- `chat_messages` content, and hotel-to-hotel relationships unless
+  `?include=chat` is passed
+- `users.email` — including `admin_email`, which `/platform/hotels` returns and
+  this endpoint has no need of
+
+**Allowed:** hotel name, handle, city, country, plan, subscription status,
+active and comp flags, created and last-login timestamps, counts, sums of
+requests, DB statements, tokens, latency and cost, feature keys, model ids, AWS
+service keys.
+
+Three more:
+
+1. **`require_platform_owner`, no exceptions** — including the `?hotel=`
+   variant, which must be guarded by the same dependency and never by a
+   comparison against `user.hotel_id`, or an operator-shaped route quietly
+   becomes a tenant-shaped one.
+2. **The anonymous node is not clickable.** `href: null`, `linkable: false`.
+   `/control-room/hotels/0000...` is a 404, and the sentinel is not a
+   restaurant.
+3. **No new AWS API calls.** Everything comes from our own Postgres.
+   `cloud_cost_daily` is the cache and `/costs/refresh` is the only button in
+   this app that spends money. The graph must never sit on that path, or opening
+   it costs a cent a look.
+
+---
+
+## 9. What could go wrong, specifically
+
+1. **A query inside a `for hotel in hotels:`.** The failure this design exists
+   to prevent. 50 restaurants means 50 round trips per page load, on a t3.micro
+   sharing a db.t4g.micro with the app everyone is using. **Pin it with a
+   test**: attach a `before_cursor_execute` counter, call the endpoint with 3
+   hotels and again with 12, and assert the statement count is identical and no
+   more than 9.
+2. **`response_model` drops half the payload.** Nine occurrences. Plain dict.
+3. **A zero where the truth is "not measured".** The whole of section 4. The
+   specific trap: `sum()` over an empty group returns 0 in Python, and
+   `coalesce(..., 0)` returns 0 in SQL. Both produce a confident zero for a
+   restaurant nobody was watching. `presence` is computed from the coverage
+   dates BEFORE the metrics are formatted, and it decides which of them become
+   `null`.
+4. **An orphan silently dropped** by an inner join to `hotels`. Then the
+   per-hotel AI column stops summing to the platform total, and `meta.checks`
+   catches it — which only works if the check is actually emitted. Every
+   aggregate joins `hotels` with `isouter=True`, exactly as
+   `observability.ai_by_hotel()` already does.
+5. **Matching a Bedrock service key by equality.** `cost_map.py` warns about
+   this in capitals: the model name is INSIDE the key, July billed three models
+   at once, and the key changes when the model does. Substring on "bedrock",
+   everywhere, collapsed to one node.
+6. **`created_at <= :to`** dropping the last day of every window. See 5.2.
+7. **The operator's own traffic counted as his restaurant's.**
+   `/api/platform/*` is stamped with his hotel_id by `auth/deps.py:52`. Left in,
+   the busiest node on the map is an artefact of him looking at the map.
+8. **Health checks and pool pre-pings inflating every hotel.**
+   `costs.measured()`'s caveat string is the evidence, and `/api/health` is
+   counted because `main.py` tests its skip-list against a path that starts
+   `/api/`.
+9. **Normalising weights across edge types** — dividing tokens by dollars. `w`
+   is computed server-side, per type, or not at all.
+10. **The cache freezing "live".** A payload served from a 60-second cache and
+    labelled `kind: "live"` with no `cached_at` cannot be dated from a
+    screenshot. Both fields ship.
+11. **A client parsing node ids.** Service keys contain " - " and parentheses;
+    model ids contain dots and colons. `ref` is the contract.
+12. **The area map rotting** the way `deletion.ORDERED_TABLES` did — a new
+    router appears, no feature claims it, and a whole capability silently
+    disappears from the map. The import-time self-check in `features.py` turns
+    that from an invisible omission into a failed deploy.
+
+---
+
+## 10. What I deliberately did NOT include
+
+1. **A node per user.** 750 nodes at 50 restaurants, carrying names and email
+   addresses, telling you nothing the count does not. The hotel node carries
+   `users` and `users_active`; `/platform/hotels/{id}/users` already covers the
+   rest.
+2. **A node per endpoint.** Cardinality explodes and the feature layer already
+   aggregates them. Escape hatch if it is ever wanted:
+   `?hotel=<id>&detail=endpoints`, scoped to one restaurant.
+3. **Per-hotel row counts, "data volumes".** He asked "under hotel what are all
+   there", and the honest answer is a `COUNT(*)` per table per hotel — about 50
+   queries for ONE restaurant, via `deletion._delete_plan()`. That must never be
+   inside a graph build. **It already exists as its own endpoint:**
+   `GET /api/platform/hotels/{id}/deletion-preview` returns
+   `{counts: {table: n}, total_rows}` derived from the live FK graph. Call it on
+   node expand. If a fleet-wide figure is ever wanted, it is a nightly rollup
+   table, not a page load.
+4. **Per-hotel Polly and Transcribe cost.** Not logged anywhere (4.4). Dividing
+   it by request share would be inventing a measurement.
+5. **Splitting the anonymous node across restaurants.** Tempting, since it is
+   72% of traffic. But the public routes carry either a UUID (templated to
+   `{id}`) or a table code; the only one carrying a handle is
+   `/api/public/hotel-landing/{handle}`, and `_template()` leaves short handles
+   intact only by accident of its length-and-hex rule. A v2 could attribute that
+   one route by joining seg2 to `hotels.username`. Guessing at the others would
+   be fiction.
+6. **Per-hotel S3 storage.** Attributable by key prefix
+   (`{hotel_id}/{doc_id}/{filename}`) and immaterial at $0.014/month —
+   `cost_map.S3_IS_ATTRIBUTABLE_BUT_IMMATERIAL` already records that as a
+   decision with a written reason. Reading it would also need an S3 API call,
+   which is out of scope by constraint.
+7. **`talks_to` edges by default** (hotel to hotel chat). Behind
+   `?include=chat`, because it is the only edge made of a relationship between
+   two customers rather than of infrastructure.
+8. **Live streaming or websockets.** A 60-second cache and a refresh button. He
+   opens this deliberately; it is not a wallboard.
+9. **Stored snapshots, "what changed since last month".** The period selector
+   answers it by re-querying. A snapshot table would be a second source of truth
+   for numbers that already have one.
+10. **p95 latency.** Over six calls it is noise in a statistical costume. Avg
+    and max, and `percentile_cont` is one line away when the fleet grows.
+11. **A separate machine or resource node type.** The EC2 and RDS `aws_service`
+    nodes ARE the boxes. A parallel type would create a second place where the
+    box's cost lives.
+12. **`hotels.prefs`, `landing`, `login_page`, `theme`, kiosk settings.** They
+    are configuration, not structure, and putting them on the map would turn an
+    infrastructure graph into a settings browser.
+
+---
+
+## 11. Build order
+
+1. `features.py` — add `areas` to `Feature`, the `ai_usage.kind` to feature map
+   beside `AI_KEYS`, `PLATFORM_AREAS` and `UNSOLD_AREAS`, and the import-time
+   self-check. Expect it to fail on the first run; that is it working.
+2. `costs.py` — `UNMEASURED` and `unmeasured()` beside `envelope()`.
+3. Migration — `ix_audit_events_hotel_time`. Revision id from
+   `secrets.token_hex(6)`, single head.
+4. `graph.py` — the eight aggregates, the presence resolver, the node and edge
+   builders, the normaliser, `meta.checks`, the cache.
+5. `router.py` — `@router.get("/graph")`, plain dict, `require_platform_owner`.
+6. `Source.tsx` — `measured` and `unmeasured` in the kind union and in `COPY`.
+7. Tests, `backend/tests/test_platform_graph.py`:
+   - statement count flat across 3 and 12 hotels, and no more than 9
+   - a hotel with no `usage_daily` rows renders `not_measured_yet`, not `0`
+   - an orphan survives, keeps its spend, and `meta.checks` balances
+   - `share_total` is 1.0 when anything was measured, and the EC2 edge is absent
+     rather than zero when `sum_app_ms` is 0
+   - no `audit_events.summary`, no `users.email`, no `assistant_threads.title`
+     anywhere in the serialised payload. Assert on the JSON string: it is the
+     cheap version of the privacy rule and it catches the field somebody adds
+     next year.

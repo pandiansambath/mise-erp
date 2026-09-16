@@ -73,13 +73,19 @@ from app.assistant.models import AiUsage
 from app.core import usage as usage_mod
 from app.hotels.models import Hotel
 from app.platform_admin.cost_map import PLATFORM, SHARED, classify
-from app.platform_admin.models import ANON_HOTEL, CloudCostDaily, UsageDaily
+from app.platform_admin.models import (
+    ANON_HOTEL,
+    OPERATOR_HOTEL,
+    CloudCostDaily,
+    UsageDaily,
+)
 
 #: Node kinds. The UI keys shape and colour off these, so they are part of the
 #: contract and not free-form labels.
 PLATFORM_NODE = "platform"
 RESTAURANT = "restaurant"
 ANON = "anonymous"
+OPERATOR = "operator"
 ORPHAN = "orphan"
 SERVICE = "service"
 MODEL = "model"
@@ -287,9 +293,33 @@ async def build(
         edges.append(_edge(str(ANON_HOTEL), "platform", "http", anon["requests"],
                            measured=True, label=f"{anon['requests']:,} requests"))
 
+    # -- US, running the Control Room --
+    op = http.get(OPERATOR_HOTEL)
+    if op:
+        nodes.append({
+            "id": str(OPERATOR_HOTEL),
+            "kind": OPERATOR,
+            "label": "Control Room",
+            "detail": {
+                "what": (
+                    "Our own operator traffic. Counted, but never billed to a "
+                    "restaurant — an operator is always signed in as a user of "
+                    "some hotel, and without this bucket every Control Room "
+                    "page load landed on whichever one that was."
+                ),
+            },
+            "channels": {
+                "http": _channel(op, "requests"),
+                "ai": _channel(None, "calls"),
+            },
+            "metrics": op,
+        })
+        edges.append(_edge(str(OPERATOR_HOTEL), "platform", "http", op["requests"],
+                           measured=True, label=f"{op['requests']:,} requests"))
+
     # -- orphans: usage whose restaurant is gone --
     for hid in sorted(set(ai) | set(http), key=str):
-        if hid in known_ids or hid == ANON_HOTEL:
+        if hid in known_ids or hid in (ANON_HOTEL, OPERATOR_HOTEL):
             continue
         a, h = ai.get(hid), http.get(hid)
         nodes.append({

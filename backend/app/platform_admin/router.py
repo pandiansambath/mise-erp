@@ -1118,6 +1118,21 @@ async def set_credits(
     return {"credits": current}
 
 
+def _bucket_name(hid: str) -> str:
+    """Name the rows that are not restaurants.
+
+    Three of them are not customers at all and must never read as one: public
+    traffic, our own Control Room, and usage left behind by a deleted
+    restaurant. A raw UUID in this column is how "who cost how much" turns into
+    a puzzle.
+    """
+    if hid == usage_mod.ANON:
+        return "(anonymous / public traffic)"
+    if hid == usage_mod.OPERATOR:
+        return "(our Control Room — not billed to anyone)"
+    return "(deleted restaurant)"
+
+
 @router.get("/graph")
 async def platform_graph(
     days: int = 90,
@@ -1224,8 +1239,7 @@ async def costs_by_hotel(
         raw_ai = float(a.get("cost_usd") or 0)
         rows.append({
             "hotel_id": hid,
-            "name": a.get("name") or ("(anonymous / public traffic)"
-                                      if hid == usage_mod.ANON else "(deleted restaurant)"),
+            "name": a.get("name") or _bucket_name(hid),
             "requests": h["requests"],
             "db_selects": h["db_selects"],
             "db_writes": h["db_writes"],
