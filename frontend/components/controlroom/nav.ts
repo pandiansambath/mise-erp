@@ -6,6 +6,7 @@ export const CR_NAV = [
   { href: "/control-room", label: "Overview" },
   { href: "/control-room/fleet", label: "Hotels", owns: ["/control-room/hotels"] },
   { href: "/control-room/money", label: "AWS bill" },
+  { href: "/control-room/graph", label: "The map" },
   { href: "/control-room/health", label: "Health" },
   { href: "/control-room/ai", label: "AI spend" },
   { href: "/control-room/broadcast", label: "Broadcast" },
