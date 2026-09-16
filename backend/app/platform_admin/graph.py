@@ -534,13 +534,41 @@ def _edge(
 
 
 def _pretty_model(model: str) -> str:
-    """`eu.anthropic.claude-sonnet-4-6-20260321-v1:0` is not a label.
+    """`eu.anthropic.claude-sonnet-4-6-20260321-v1:0` -> `Claude Sonnet 4.6`.
 
-    Trimmed for the picture only — the raw id stays in `detail.model_id`,
-    because that is the string somebody needs when they go looking in AWS.
+    THE VERSION IS THE POINT, and the first version of this dropped it: both
+    Sonnet 4.6 and Sonnet 5 came out as "Claude Sonnet", so two distinct nodes
+    carried identical labels — the same fault as the three "Amazon Relational
+    ..." bars on the money page, which is what that page was rebuilt to fix.
+
+    It is also the fact worth knowing. Sonnet 5 is $2/$10 per million tokens
+    against 4.6's $3/$15, so "which Sonnet" is a third off the AI bill, and a
+    map that cannot tell them apart cannot answer the question it exists for.
+
+    So short numeric segments are KEPT and joined as a version (`4-6` -> `4.6`)
+    while long ones are dropped as build dates. The raw id stays in
+    `detail.model_id` — that is the string somebody needs in the AWS console.
     """
-    m = model.split(".")[-1]
-    m = m.split(":")[0]
-    parts = [p for p in m.split("-") if not p.isdigit() and len(p) < 12]
-    out = " ".join(p.capitalize() for p in parts if p not in ("v1", "claude"))
-    return f"Claude {out}".strip() if out else model
+    m = model.split(".")[-1].split(":")[0]
+    name: list[str] = []
+    version: list[str] = []
+    for seg in m.split("-"):
+        if not seg or seg in ("v1", "v2", "claude"):
+            continue
+        if seg.isdigit():
+            # A date stamp, not a version. 20260321 is not a model number.
+            if len(seg) < 4:
+                version.append(seg)
+            continue
+        if len(seg) < 12:
+            name.append(seg.capitalize())
+    label = " ".join(name)
+    if version:
+        label = f"{label} {'.'.join(version)}".strip()
+    if not label:
+        return model
+    # ONLY CLAUDE MODELS GET THE CLAUDE PREFIX. Hardcoding it turned
+    # `amazon.titan-text-express-v1` into "Claude Titan Text Express" — a label
+    # that is confidently wrong, which on a page whose whole argument is
+    # provenance is worse than an ugly one.
+    return f"Claude {label}" if "claude" in model.lower() else label
