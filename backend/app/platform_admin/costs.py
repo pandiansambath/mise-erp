@@ -36,6 +36,12 @@ from app.platform_admin.cost_map import DIRECT, PLATFORM, SHARED, classify, shar
 from app.platform_admin.models import CloudCostDaily, TelemetrySync, UsageDaily
 
 MEASURED = "measured"
+#: A reading taken from the source RIGHT NOW, as opposed to one we recorded
+#: ourselves (MEASURED) or one AWS settled hours ago (BILLED). The credit
+#: balance is the only one of these: free to read, current to the second, and
+#: nobody's estimate. Must match `SourceKind` in `components/controlroom/
+#: Source.tsx` — the chip is rendered straight from this string.
+LIVE = "live"
 BILLED = "billed"
 ESTIMATE = "estimate"
 ENTERED = "entered_by_hand"
