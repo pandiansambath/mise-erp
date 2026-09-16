@@ -37,6 +37,16 @@ _PRICES: list[tuple[str, Decimal, Decimal]] = [
     ("sonnet-5", Decimal("2.00"), Decimal("10.00")),
     ("sonnet", Decimal("3.00"), Decimal("15.00")),
     ("opus", Decimal("15.00"), Decimal("75.00")),
+    # POLLY IS PRICED PER MILLION CHARACTERS, NOT PER TOKEN — which is why it
+    # fits this table at all: the arithmetic is the same shape, the unit is
+    # different, and `input_tokens` carries characters for these rows. Output is
+    # zero because Polly returns audio, and audio is not billed.
+    #
+    # Generative $30/M, neural $16/M, standard $4/M (eu-west-2, 2026).
+    # Longest key first so "polly-generative" cannot be caught by "polly".
+    ("polly-generative", Decimal("30.00"), Decimal("0")),
+    ("polly-neural", Decimal("16.00"), Decimal("0")),
+    ("polly", Decimal("4.00"), Decimal("0")),
 ]
 _FALLBACK = (Decimal("3.00"), Decimal("15.00"))
 
@@ -54,7 +64,15 @@ class AiQuotaExceeded(HTTPException):
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> Decimal:
     """Best-effort cost of one call. Stored per row so spend is attributable."""
     m = (model or "").lower()
-    rates = next(((i, o) for key, i, o in _PRICES if key in m), _FALLBACK)
+    # LONGEST MATCH WINS. `next()` over declaration order meant the first
+    # substring hit won, so "polly-neural" would be priced by whichever of
+    # "polly" or "polly-neural" happened to be listed first — a four-times
+    # difference decided by line order.
+    hits = sorted(
+        ((key, i, o) for key, i, o in _PRICES if key in m),
+        key=lambda r: -len(r[0]),
+    )
+    rates = (hits[0][1], hits[0][2]) if hits else _FALLBACK
     million = Decimal(1_000_000)
     cost = (Decimal(input_tokens) * rates[0] + Decimal(output_tokens) * rates[1]) / million
     return cost.quantize(Decimal("0.000001"))

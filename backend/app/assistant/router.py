@@ -1001,6 +1001,21 @@ async def voice_stream(
     )
 
 
+def _polly_model(voice_id: str | None) -> str:
+    """The pricing tier, carried in the model string so `estimate_cost` can see
+    it. Polly's three engines differ by 7.5x — generative $30/M characters,
+    neural $16/M, standard $4/M — so "polly" alone would misprice every row."""
+    from app.assistant import voice as _v
+
+    # VOICES already carries `engine` per voice, and the difference is 7.5x —
+    # generative $30 per million characters against standard $4. Guessing one
+    # constant here would misprice most rows in the one pool that exists to be
+    # exactly attributable.
+    row = next((v for v in _v.VOICES if v.get("id") == voice_id), None)
+    engine = (row or {}).get("engine") or _v.FAST_ENGINE
+    return f"polly-{str(engine).lower()}"
+
+
 @router.post("/voice/speak")
 async def voice_speak(
     payload: "SpeakIn",
@@ -1010,13 +1025,40 @@ async def voice_speak(
     """Say it out loud. MP3 back, played by the bubble."""
     from app.assistant import voice
 
+    started = time.monotonic()
     try:
         audio = await run_in_threadpool(voice.speak, payload.text, payload.voice)
     except Exception as exc:  # noqa: BLE001
         log.exception("polly failed")
+        # RECORD THE FAILURE TOO. Polly bills on the request, and a voice that
+        # keeps failing is a voice that keeps costing — invisible if only
+        # successes are logged.
+        await guard.record(
+            db, user, kind="speech", model=_polly_model(payload.voice),
+            input_tokens=len(payload.text or ""),
+            latency_ms=int((time.monotonic() - started) * 1000), ok=False,
+        )
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "The voice is not available right now."
         ) from exc
+
+    # POLLY WAS BILLED AND UNATTRIBUTABLE.
+    #
+    # `cost_map.py` states that DIRECT means "Bedrock and Polly — we log every
+    # call", and nothing in the voice path ever imported `guard`. So speech
+    # appeared on the AWS bill ($0.39 over 90 days) with no way to say which
+    # restaurant caused a penny of it — a directly attributable cost sitting in
+    # the one pool that is supposed to be attributable by definition.
+    #
+    # Characters, not tokens: Polly prices per million CHARACTERS, which is why
+    # `input_tokens` carries a character count for these rows and the price
+    # table has `polly-*` entries whose output rate is zero. Audio is not
+    # billed; the text that produced it is.
+    await guard.record(
+        db, user, kind="speech", model=_polly_model(payload.voice),
+        input_tokens=len(payload.text or ""),
+        latency_ms=int((time.monotonic() - started) * 1000),
+    )
     return Response(content=audio, media_type="audio/mpeg")
 
 
