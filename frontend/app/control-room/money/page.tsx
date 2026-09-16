@@ -407,7 +407,15 @@ export default function MoneyPage() {
         <>
           {/* ── THE AMOUNT ─────────────────────────────────────────────── */}
           <Card className="p-0">
-            <div className="grid gap-px sm:grid-cols-[1.4fr_1fr]">
+            {/* THREE POPULATED COLUMNS, which is what the design called for
+                and what did not ship. Two columns left a ~725x240px void
+                beside the hero at 1920 — the wider the monitor, the bigger the
+                hole — and that emptiness is the exact fault that triggered this
+                rebuild. Asymmetry has to come from TYPE SIZE (a 60px figure
+                against 20px everywhere else), never from leaving a cell blank.
+                Moving the measured figures out of the credit well also takes
+                ~150px off the page height, which is the other complaint. */}
+            <div className="grid gap-px lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
               <div className="p-5">
                 {/* THE LABEL HAS TO FOLLOW THE CHIP. It read "THIS MONTH SO
                     FAR" above $9.22 with July selected and above $68.63 with
@@ -488,10 +496,21 @@ export default function MoneyPage() {
                   credits={d.credits}
                   onSaved={() => s.reload()}
                 />
+              </div>
+
+              {/* ── WHAT WE MEASURED, same period ───────────────────────────
+                  Its own column now. Sharing the credit well made that card
+                  long and this side of the band empty, and it mixed two
+                  different provenances — a balance read from AWS sitting in the
+                  same box as counters we keep ourselves. */}
+              <div className="mise-well m-3 space-y-2 rounded-xl p-4">
+                <p className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-fg-faint">
+                  What we measured
+                </p>
                 {measuredGap && (
                   <p className="px-1 text-[11px] leading-relaxed text-fg-faint">
                     Nothing was measured in this period — our counters start{" "}
-                    {measuredGap}. The AWS figures above are real; the ones below
+                    {measuredGap}. The AWS figures beside this are real; these
                     are dashes rather than zeros, because &ldquo;nothing
                     happened&rdquo; is not something we know.
                   </p>
