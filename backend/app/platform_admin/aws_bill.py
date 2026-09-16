@@ -533,3 +533,131 @@ async def credit_balance(*, force: bool = False) -> dict | None:
     # is -- a runway that vanishes because of one timeout is worse than a
     # runway with an age on it.
     return value if value is not None else _CREDIT_CACHE["value"]
+
+
+async def ensure_period(db: AsyncSession, *, start: date, end: date) -> dict:
+    """Fetch a period ONLY if we have never fetched it. His §45.8, honestly.
+
+        "fetcah based on whenver user needed"
+
+    The instinct is right and the naive version is expensive: Cost Explorer
+    bills per CALL, so fetching on every page view is a cent a view. Fetching
+    the first time a period is ASKED FOR, and never again, is a cent per period
+    for the life of the account — which is what he actually wants.
+
+    A closed month is fetched once, ever. The open month is refreshed by the
+    scheduled job, so this does nothing for it. Asking for July in six months'
+    time costs nothing, because July is already on disk.
+
+    Returns a small dict the caller can pass through; it never raises, because
+    a history lookup failing must not take down the page that was already able
+    to answer.
+    """
+    have = (
+        await db.execute(
+            select(func.count(CloudCostDaily.id)).where(
+                CloudCostDaily.day >= start, CloudCostDaily.day <= end
+            )
+        )
+    ).scalar()
+    if have:
+        return {"fetched": False, "reason": "already held"}
+
+    # Never reach past what Cost Explorer keeps (~14 months), and never ask for
+    # the future — both come back as errors that cost a cent to be told.
+    today = datetime.now(UTC).date()
+    if start > today or start < month_start(today, 13):
+        return {"fetched": False, "reason": "outside the window AWS keeps"}
+
+    result = await fetch(db, start=start, end=min(end, today), reason="on-demand")
+    return {"fetched": bool(result.get("ok")), **result}
+
+
+# -- keeping only what is worth keeping -----------------------------------
+
+
+async def compact_closed_months(db: AsyncSession, *, keep_days: int = 45) -> int:
+    """Roll finished months down to one row per line. Returns rows removed.
+
+        "insted of fetch and keep all..fetcah based on whenver user needed...
+         this will minimze db cost and fetcha cost"
+
+    He is half right, and the half that is wrong is worth stating plainly
+    because it costs money in the other direction: Cost Explorer bills per CALL,
+    not per row returned, so fetching on every page view is a cent a view —
+    MORE than storing, not less. The brakes above exist precisely because that
+    arithmetic runs away.
+
+    But the storage half of his instinct is exactly right. We were keeping
+    ~51 rows a day per service+usage_type to render a MONTHLY total, and a
+    closed month never changes again. Cost Explorer restates the last few days
+    and then the month is settled forever — so daily detail for August is
+    ~1,500 rows answering a question nobody asks at day resolution.
+
+    So: daily rows for the open month and the restatement window, and one row
+    per line for everything older, summed onto the first of its month. About a
+    thirtyfold reduction, with every figure the page actually renders
+    unchanged — `months()` and `billed()` both aggregate over a day RANGE, and
+    a whole-month range still picks up the single row that now carries it.
+
+    WHAT THIS DELIBERATELY GIVES UP: you can no longer ask what the 14th of
+    August cost. Nothing asks that — the month strip asks for whole months —
+    and if something ever does, the answer is another Cost Explorer call for
+    that month, which is one cent and is exactly the fetch-on-demand he wants.
+    """
+    from sqlalchemy import delete, text
+
+    cutoff = month_start(datetime.now(UTC).date())
+    # Never touch the open month, and never touch the restatement window even
+    # if it reaches back into the previous one: AWS is still revising those
+    # figures and compacting them would freeze a number that is still moving.
+    safe_before = min(cutoff, datetime.now(UTC).date() - timedelta(days=keep_days))
+
+    # `usage.internal()`: the compaction's own writes must not be counted as a
+    # restaurant's database activity. A maintenance job inflating the figures on
+    # the page it maintains is the same mistake as the Control Room billing
+    # itself to NIRAI, which is the bug that shipped this morning.
+    with usage.internal():
+        # Sum every day of a closed month onto that month's first day, then
+        # delete the days that fed it. One statement each, no row-by-row work.
+        await db.execute(
+            text("""
+            WITH rolled AS (
+                SELECT date_trunc('month', day)::date AS m,
+                       service, usage_type, record_type,
+                       SUM(amount_usd) AS amount_usd,
+                       SUM(quantity)   AS quantity,
+                       MAX(as_of)      AS as_of
+                  FROM cloud_cost_daily
+                 WHERE day < :before
+                 GROUP BY 1, 2, 3, 4
+                HAVING COUNT(*) > 1
+            )
+            INSERT INTO cloud_cost_daily
+                (id, day, service, usage_type, record_type,
+                 amount_usd, quantity, source, as_of, is_estimate, fetched_at)
+            SELECT gen_random_uuid(), m, service, usage_type, record_type,
+                   amount_usd, quantity, 'ce-rollup', as_of, false, now()
+              FROM rolled
+            ON CONFLICT ON CONSTRAINT uq_cloud_cost_key DO UPDATE SET
+                amount_usd = EXCLUDED.amount_usd,
+                quantity   = EXCLUDED.quantity,
+                source     = 'ce-rollup',
+                fetched_at = now()
+            """),
+            {"before": safe_before},
+        )
+        res = await db.execute(
+            delete(CloudCostDaily).where(
+                CloudCostDaily.day < safe_before,
+                # Everything except the row we just rolled the month onto.
+                CloudCostDaily.day != func.date_trunc("month", CloudCostDaily.day),
+                CloudCostDaily.source != "ce-rollup",
+            )
+        )
+        await db.commit()
+    removed = res.rowcount or 0
+    if removed:
+        log.info("compacted %s daily cost rows older than %s", removed, safe_before)
+    return removed
+

@@ -104,6 +104,11 @@ async def lifespan(app: FastAPI):
         with contextlib.suppress(Exception):
             async with AsyncSessionLocal() as db:
                 await aws_bill.fetch(db, reason="scheduled")
+                # Then throw away detail nobody asks for. A settled month is
+                # ~1,500 daily rows answering a question only ever asked at
+                # month resolution; rolled up it is ~50. Same answers on every
+                # screen, a thirtieth of the table.
+                await aws_bill.compact_closed_months(db)
 
     async def _loop() -> None:
         # Five minutes. At sixty seconds this would be 1,440 upserts a day
