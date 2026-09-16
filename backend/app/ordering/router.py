@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.assistant import bedrock, websearch
+from app.audit import service as audit_service
 from app.auth.deps import require
 from app.auth.models import User
 from app.core import events, notify
@@ -1103,12 +1104,51 @@ async def update_table(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Table not found")
     # The CODE is deliberately not editable: it is printed on a card sitting on
     # that table, and changing it silently turns the card into a dead end.
+    #
+    # WHAT IT WAS, BEFORE WE OVERWRITE IT.
+    #
+    #     "if I change the table20 to pandi, then how will I know that I
+    #      changed table 20 to pandi? Where is the proof?"
+    #
+    # There was none: this handler wrote the new name and recorded nothing, so
+    # a renamed table simply looked as though it had always been called that.
+    # `audit_events` already exists and already feeds the Control Room's
+    # per-hotel activity log, so the proof needs a line of code rather than a
+    # new table.
+    was_label = t.label
+    was_seats = t.seats
+    was_active = t.is_active
+
     t.label = payload.label.strip()
     t.seats = payload.seats
     t.sort_order = payload.sort_order
     t.is_active = payload.is_active
     await db.commit()
     await db.refresh(t)
+
+    # AFTER the commit, deliberately. `audit_service.record()` COMMITS
+    # internally, so calling it mid-transaction splits the transaction the
+    # update is in — a trap this project has already paid a broken deploy for.
+    changes: list[str] = []
+    if was_label != t.label:
+        changes.append(f'renamed "{was_label}" to "{t.label}"')
+    if was_seats != t.seats:
+        changes.append(f"seats {was_seats} to {t.seats}")
+    if was_active != t.is_active:
+        changes.append("reopened" if t.is_active else "closed")
+    # Only a REAL change is worth a line. Saving a form without altering
+    # anything must not fill the history with entries that prove nothing —
+    # a log nobody trusts to be meaningful is a log nobody reads.
+    if changes:
+        await audit_service.record(
+            db,
+            hotel_id=user.hotel_id,
+            user=user,
+            action="table.update",
+            summary=f"Table {t.code}: " + ", ".join(changes),
+            entity_type="dining_table",
+            entity_id=t.id,
+        )
     return TableOut.model_validate(t)
 
 

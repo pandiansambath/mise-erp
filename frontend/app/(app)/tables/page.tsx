@@ -30,6 +30,7 @@
 // the orders table — nobody had joined them up. A printing utility became a
 // floor view for the cost of one grouped query.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { timeAgo } from "@/lib/date";
 import { api, ApiError, API_BASE, downloadFile } from "@/lib/api";
 import { Card, Spinner } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
@@ -378,6 +379,67 @@ export default function TablesPage() {
    Everything that used to be printed on every card in the grid — the code, the
    URL, three download buttons — lives here, where it is read once by somebody
    who came looking for it, rather than nineteen times by everybody else. */
+
+/** What happened to THIS table.
+ *
+ *     "if I change the table20 to pandi, then how will I know that I changed
+ *      table 20 to pandi? Where is the proof?"
+ *
+ *  There was none: the update handler wrote the new name and recorded nothing,
+ *  so a renamed table looked as though it had always been called that. It
+ *  writes an audit event now — and this is where somebody actually asks the
+ *  question, so this is where the answer goes. Nobody opens an audit page to
+ *  find out what a table used to be called; they look at the table.
+ */
+function TableHistory({ tableId, stamp }: { tableId: string; stamp: number }) {
+  const [rows, setRows] = useState<
+    { id: string; summary: string; created_at: string; user_email?: string | null }[] | null
+  >(null);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get<{ id: string; summary: string; created_at: string; user_email?: string | null }[]>(
+        `/audit?entity_type=dining_table&entity_id=${tableId}&limit=25`,
+      )
+      .then((r) => alive && setRows(r))
+      // A history that fails to load must not break the sheet somebody opened
+      // to rename a table.
+      .catch(() => alive && setRows([]));
+    return () => {
+      alive = false;
+    };
+  }, [tableId, stamp]);
+
+  if (rows === null) return <p className="text-xs text-fg-faint">Loading history…</p>;
+
+  if (rows.length === 0) {
+    // NOT an empty box. "Nothing yet" and "this only started being recorded
+    // recently" are different facts, and the second is the true one here.
+    return (
+      <p className="text-xs leading-relaxed text-fg-faint">
+        No changes recorded for this table yet. Renames, seat changes and
+        closures are logged from now on — anything done before that was not
+        being written down.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {rows.map((r) => (
+        <li key={r.id} className="mise-well rounded-xl px-3 py-2">
+          <p className="text-xs text-fg">{r.summary}</p>
+          <p className="mt-0.5 text-[10px] text-fg-faint">
+            {timeAgo(r.created_at)}
+            {r.user_email ? ` · ${r.user_email}` : ""}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function TableSheet({
   table,
   canWrite,
@@ -576,6 +638,17 @@ function TableSheet({
               >
                 {saving ? "Saving…" : dirty ? "Save and redraw the code" : "Saved"}
               </button>
+
+              {/* THE PROOF, where the question is asked.
+                  "if I change the table20 to pandi, how will I know?" —
+                  nobody opens an audit page to find out what a table used to
+                  be called; they look at the table. */}
+              <div className="mt-4 border-t border-line pt-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+                  What changed
+                </p>
+                <TableHistory tableId={table.id} stamp={stamp} />
+              </div>
             </section>
           )}
 

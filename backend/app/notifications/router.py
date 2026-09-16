@@ -68,6 +68,10 @@ _PREFIX: list[tuple[str, tuple[str, str, str, str]]] = [
     # rendered as "📝 Shift Move" and was visible ONLY to users:read, which
     # is to say not to the rota people. A prefix covers the family; an exact
     # key list only ever covers what somebody remembered to add.
+    # Added with 32.21. Without a prefix entry a table rename renders as
+    # "📝 Table Update" and is visible only to users:read — i.e. not to the
+    # people who run the room. Same gap `shift.` had.
+    ("table.", ("🪑", "Tables changed", "/tables", "orders:read")),
     ("shift.", ("🗓️", "Rota changed", "/rota", "employees:read")),
     ("attendance.", ("🕒", "Attendance updated", "/attendance", "attendance:read")),
     ("inventory.", ("📦", "Inventory updated", "/inventory", "inventory:read")),
