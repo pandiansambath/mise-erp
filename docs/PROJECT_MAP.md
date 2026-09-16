@@ -100,6 +100,13 @@ belongs to (vendor × item × FORM) — never divide a box price to get a loose 
 | `next start` with `output: "standalone"` | Serves **no CSS**. 200s, selectors resolve, every visual test silently meaningless. |
 | Appending hex alpha to a colour (`${c}26`) | Fine on a literal, invalid on a `var()`. Use `color-mix()`. |
 | Theme key is `mise_theme` | Underscore. `mise-theme` silently leaves every run on the default theme — identical numbers across 'six themes' is the tell. |
+| **`DISPATCHED (204)` is not a deploy** | It means GitHub accepted the TRIGGER. The workflow runs `Test · backend` (~30 min) first and SKIPS the build if it fails — silently, as far as `deploy.sh` output goes. Four pieces of work were reported live on 2026-09-16 while production sat on an older commit. Only `curl /api/health` → `commit` proves it. |
+| **`flex-1` against a `display:block` parent is inert** | Three separate places in the page-preview chain. The child sizes to its content, so anything MEASURING that child measures the child's own height — a "fit to available height" that can never bind. Cost three attempts at one bug. Measured proof: 877px available, 486px reported. |
+| **`100vh` / `fixed inset-0` on a phone** | Both are the LAYOUT viewport, which includes the strip under the collapsing address bar. Content sized against it is taller than the screen and its bottom is unreachable. Use `100dvh`. |
+| **Unreachable code after `return`** | Type-checks, builds, and lints clean. A capture-phase click-swallower written below a `return` in `PagePreview` had never run — clicks inside a sign-in PREVIEW were live. |
+| **An operator is a user of some hotel** | `deps.py` stamps `request.state.log_hotel` from `user.hotel_id`, so every Control Room page load was counted as that restaurant's traffic. `control@mise.app` belongs to NIRAI, so the money page was inflating the very figure it reported. Platform traffic needs its own bucket. |
+| **A skip-list prefix that never matches** | `path.startswith("/health")` while the router is mounted at `/api/health`. Every 30s probe counted as real anonymous traffic — a large part of why "public" read as 72%. A skip-list that does not match what it names is worse than none, because everyone believes it. |
+| **`git add -A` while agents are running** | Sweeps their half-written files into your commit, and their throwaway specs too. Fired three times on 2026-09-16 — once committing 1,000 lines of someone else's in-progress test suite under a payroll commit message. Stage paths explicitly. |
 
 ---
 
