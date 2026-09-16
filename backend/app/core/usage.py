@@ -423,3 +423,97 @@ def reconcile_bedrock(
     if isinstance(aws_billed_usd, Decimal) or isinstance(ai_usage_cost_usd_sum, Decimal):
         return Decimal(str(aws_billed_usd)) / Decimal(str(ai_usage_cost_usd_sum))
     return round(float(aws_billed_usd) / float(ai_usage_cost_usd_sum), 4)
+
+
+# ── the AWS side ──────────────────────────────────────────────────────────
+
+
+async def upsert_cloud_cost(db: Any, rows: list[dict]) -> int:
+    """Write what AWS said into `cloud_cost_daily`. REPLACES, never adds.
+
+    This is the one write on this page that must not accumulate. Cost Explorer
+    RESTATES the last few days — the same day comes back with a different
+    figure as usage settles — so an append or an `+= excluded` would make the
+    bill drift upward on every refresh. Drift that looks like growth is the
+    worst failure a billing page can have, because it is the failure you act
+    on.
+
+    Each row: day, service, usage_type, record_type, amount_usd, quantity,
+    as_of, is_estimate, source.
+
+    Returns rows written. Idempotent by construction: running it twice over the
+    same period leaves the table identical.
+    """
+    from sqlalchemy.dialects.postgresql import insert
+
+    from app.platform_admin.models import CloudCostDaily
+
+    if not rows:
+        return 0
+
+    with internal():
+        stmt = insert(CloudCostDaily).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_cloud_cost_key",
+            set_={
+                # REPLACE. Deliberately not `+ excluded`, which is what
+                # `usage_daily` does and what this must never do.
+                "amount_usd": stmt.excluded.amount_usd,
+                "quantity": stmt.excluded.quantity,
+                "as_of": stmt.excluded.as_of,
+                "is_estimate": stmt.excluded.is_estimate,
+                "source": stmt.excluded.source,
+                "fetched_at": _sa_now(),
+            },
+        )
+        await db.execute(stmt)
+        await db.commit()
+    return len(rows)
+
+
+def _sa_now():
+    from sqlalchemy import func as _f
+
+    return _f.now()
+
+
+async def record_sync(
+    db: Any,
+    *,
+    job: str,
+    ok: bool,
+    rows_written: int = 0,
+    api_calls: int = 0,
+    api_cost_usd: float = 0.0,
+    covers_from: date | None = None,
+    covers_to: date | None = None,
+    error: str | None = None,
+    detail: dict | None = None,
+) -> None:
+    """One row per run of either collector.
+
+    This is what makes a GAP VISIBLE. Without it a quiet day and a dead
+    collector look identical on the chart, which is the billing equivalent of
+    "page scrolls 0px" — the instrument reporting the same thing for success
+    and for failure. It also carries `api_cost_usd`, so the dashboard can show
+    what it costs to run itself: Cost Explorer is $0.01 a call and that lands
+    on the real bill.
+    """
+    from app.platform_admin.models import TelemetrySync
+
+    with internal():
+        db.add(
+            TelemetrySync(
+                job=job,
+                finished_at=datetime.now(UTC),
+                ok=ok,
+                rows_written=rows_written,
+                api_calls=api_calls,
+                api_cost_usd=api_cost_usd,
+                covers_from=covers_from,
+                covers_to=covers_to,
+                error=(error or None),
+                detail=detail or {},
+            )
+        )
+        await db.commit()

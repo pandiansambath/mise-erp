@@ -188,11 +188,21 @@ async def test_deleting_a_hotel_does_not_erase_its_usage_daily_rows(db, hotel) -
 
     await deletion.purge(db, hotel.id)
     await db.commit()
-    db.expire_all()
+    # EXPUNGE, not expire.
+    #
+    # `purge()` deletes with raw `text()` SQL, so the ORM never learns the row
+    # is gone. `expire_all()` only marks the loaded attributes stale — the Hotel
+    # INSTANCE stays in the identity map, so `db.get()` hands it straight back
+    # and then raises ObjectDeletedError the moment anything touches a column.
+    # Expunging drops it, so the query below actually goes to the database.
+    db.expunge_all()
 
     # the hotel really is gone — otherwise the row "surviving" would be
     # meaningless, nothing was actually deleted
-    assert await db.get(Hotel, hotel.id) is None
+    gone = (
+        await db.execute(select(Hotel).where(Hotel.id == hotel.id))
+    ).scalar_one_or_none()
+    assert gone is None
 
     survivors = (
         await db.execute(select(UsageDaily).where(UsageDaily.hotel_id == hotel.id))

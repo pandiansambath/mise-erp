@@ -87,6 +87,17 @@ function mirrorStyles(doc: Document): () => void {
     mo.disconnect();
     for (const old of added) old.parentNode?.removeChild(old);
   };
+  // A tap on "Order online" inside a PREVIEW must go nowhere — it is a
+  // picture of the page, not the page. Capture phase so it lands before any
+  // handler the real component attached.
+  doc.addEventListener(
+    "click",
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true,
+  );
 }
 
 export function PagePreview({
@@ -143,14 +154,21 @@ export function PagePreview({
     const el = box.current;
     if (!el) return;
     const fit = () => {
-      const avail = el.clientWidth;
-      if (avail > 0) setScale(Math.min(1, avail / w));
+      const availW = el.clientWidth;
+      const availH = el.clientHeight;
+      if (availW <= 0) return;
+      // FIT TO BOTH AXES. This fitted width only, so at 1440x900 a 390x844
+      // phone rendered at 100% and its bottom ~128px sat below the window
+      // edge — a preview whose job is showing the whole page, cutting the page
+      // off. `min-h-0 flex-1` on the column is what gives clientHeight a value
+      // to observe; without it this term is 0 and the old behaviour returns.
+      setScale(Math.min(1, availW / w, availH > 0 ? availH / h : 1));
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [w]);
+  }, [w, h]);
 
   const pad = device === "phone" ? 16 : 12;
 
@@ -197,7 +215,15 @@ export function PagePreview({
                 setDoc(d);
               }
             }}
-            className="pointer-events-none origin-top-left border-0"
+            // SCROLLABLE, BUT NOT CLICKABLE.
+            //
+            // `pointer-events-none` made the frame inert — so a page taller
+            // than the device could never be seen below the fold, and the old
+            // transform-scaled preview grew a spacer hack to fake it. In an
+            // iframe the scrollHeight is real, so the wheel can just work; the
+            // clicks are swallowed inside the document instead (see the
+            // capture-phase listener where the styles are mirrored).
+            className="origin-top-left border-0"
             style={{
               width: w,
               height: h,
