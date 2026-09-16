@@ -36,6 +36,8 @@
 
 import { useMemo } from "react";
 
+import { Select } from "@/components/Select";
+
 export type Country = { code: string; name: string; dial: string; flag: string };
 
 /** Ordered so the two that matter here are first, then alphabetical.
@@ -141,26 +143,28 @@ export function PhoneInput({
 
   return (
     <div className={`flex min-w-0 items-stretch gap-1.5 ${className}`}>
-      <select
-        value={country}
-        disabled={disabled}
-        onChange={(e) => onChange(joinPhone(e.target.value, number))}
-        aria-label="Country code"
-        // shrink-0 and a fixed width: a select that squeezes below its content
-        // shows "+9" and the user picks the wrong country. A flex item collapses
-        // below its content long before the row wraps — a trap this repo has
-        // already paid for.
-        className={`mise-card-inset w-[5.5rem] shrink-0 rounded-xl bg-transparent px-2 py-2 text-sm text-fg outline-none ${inputClassName}`}
-      >
-        {COUNTRIES.map((c) => (
-          // The flag is decoration; the DIAL CODE is the label, because that is
-          // what the person is choosing. A flag alone is unreadable at 14px and
-          // renders as two letters on Windows.
-          <option key={c.code} value={c.code} title={c.name}>
-            {c.flag} {c.dial}
-          </option>
-        ))}
-      </select>
+      {/* THE HOUSE DROPDOWN, not a raw <select>.
+          "every dropdown in the project must share ONE cool UI" — and this one
+          earns more than consistency. `Select` matches on `keywords`, so
+          typing "india" finds +91. That is the exact example in Select's own
+          docstring: a country is looked for by its NAME far more often than by
+          its dialling code, and "India" appears nowhere in "🇮🇳 +91".
+          shrink-0 and a fixed width: a dropdown squeezed below its content
+          shows "+9" and somebody picks the wrong country. */}
+      <div className="w-[7rem] shrink-0">
+        <Select
+          value={country}
+          onChange={(v) => onChange(joinPhone(v, number))}
+          options={COUNTRIES.map((c) => ({
+            value: c.code,
+            label: `${c.flag} ${c.dial}`,
+            hint: c.name,
+            keywords: `${c.name} ${c.code} ${c.dial}`,
+          }))}
+          searchable
+          className={inputClassName}
+        />
+      </div>
       <input
         id={id}
         value={number}
