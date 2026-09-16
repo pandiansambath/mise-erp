@@ -62,7 +62,14 @@ export function PageStudio({
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex flex-col bg-shell">
+    /* `h-[100dvh]` as well as inset-0: on a phone, `100vh` (and a fixed
+       inset-0 box) is the LAYOUT viewport, which includes the space under the
+       browser's collapsing address bar. So the studio is taller than what you
+       can actually see and the bottom of it — the preview — sits under the
+       chrome. `dvh` is the viewport as it is right now. This is the specific
+       reason the preview "cuts at the bottom" on a phone even when the maths
+       above is right. */
+    <div className="fixed inset-0 z-[90] flex h-[100dvh] flex-col overflow-hidden bg-shell">
       <header className="flex shrink-0 items-center gap-3 border-b border-line bg-paper px-4 py-3">
         <button
           type="button"
@@ -96,7 +103,15 @@ export function PageStudio({
         <div className="mise-noscrollbar min-h-0 overflow-y-auto border-line p-4 lg:border-r lg:p-6 [&_textarea]:min-h-[6rem]">
           {controls}
         </div>
-        <div className="min-h-0 overflow-hidden bg-shell p-4 lg:p-6">{preview}</div>
+        {/* FLEX, NOT A BLOCK. The preview's own wrapper asks for `flex-1
+            min-h-0` so it can fill this cell — and `flex-1` against a block
+            parent is inert, so the wrapper sized to its content, the frame
+            measured itself, and the whole fit-to-height calculation downstream
+            had nothing real to measure. The cell was bounded; it just never
+            passed that down. */}
+        <div className="flex min-h-0 flex-col overflow-hidden bg-shell p-4 lg:p-6">
+          {preview}
+        </div>
       </div>
     </div>,
     document.body,

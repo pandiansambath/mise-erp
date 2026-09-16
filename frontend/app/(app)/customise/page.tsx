@@ -222,7 +222,12 @@ export default function CustomisePage() {
       {/* Preview FIRST and wide. The controls are the small half — what you are
           looking at is the page, not the form. */}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
-        <div className="mise-card-inset rounded-2xl p-4">
+        {/* A REAL HEIGHT, because `PagePreview` fits to the room it is given and
+            a block card offers none. 70dvh rather than 70vh: on a phone `vh`
+            counts the strip under the collapsing address bar, so the frame is
+            sized against space that is not on screen and its bottom is cut off
+            — the same fault as in the studio, in a different container. */}
+        <div className="mise-card-inset flex h-[70dvh] min-h-0 flex-col rounded-2xl p-4">
           {isSite ? (
             <PagePreview device={device} note={saving ? "saving…" : null}>
               <HotelSite data={previewData} config={land} preview />
@@ -334,7 +339,15 @@ function PageCard({
           {on ? "● On" : "Off"}
         </span>
       </div>
-      <div className="pointer-events-none mx-auto w-full max-w-[13rem]">{preview}</div>
+      {/* A HEIGHT AS WELL AS A WIDTH. `PagePreview` fits to both axes, so a
+          container with only a width leaves the height term measuring the
+          frame's own content — which is not a constraint, it is an echo. 26rem
+          is about what a 390x844 phone comes to at this width, so the width is
+          what actually binds here and the height is simply a floor that stops
+          the card growing if the device ever changes. */}
+      <div className="pointer-events-none mx-auto flex h-[26rem] w-full max-w-[13rem] flex-col">
+        {preview}
+      </div>
       <p className="truncate text-[11px] text-fg-faint">{where}</p>
       <span className="mise-press w-fit rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">
         Customise →
