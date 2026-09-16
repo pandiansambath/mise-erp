@@ -21,8 +21,9 @@ Revision ID: 26a0d4975473
 Revises: 5f17953ca95d
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "26a0d4975473"
 down_revision = "5f17953ca95d"
