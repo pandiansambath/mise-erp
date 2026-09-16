@@ -281,6 +281,32 @@ export default function MoneyPage() {
     return m.is_partial ? `${name} so far` : name;
   }, [period, periodMonths]);
 
+  /** Does the table close on the hero? Say so, in figures.
+   *
+   *  The two money columns are deliberately NOT added together — AI cost is
+   *  measured per call, the share of the box is a model — so the footer states
+   *  each separately and then says what is left over and why. The remainder is
+   *  the PLATFORM pool: the part of the bill no restaurant caused, which on
+   *  this account is most of it. Naming it is the difference between a table
+   *  that reconciles and a table that merely looks complete. */
+  const recon = useMemo(() => {
+    if (!tableRows.length || !billed?.available) return null;
+    const ai = tableRows.reduce((a, r) => a + (r.ai_usd ?? 0), 0);
+    const shared = tableRows.reduce((a, r) => a + (r.shared_usd ?? 0), 0);
+    const gross = billed.gross_usd ?? 0;
+    const platform = Math.max(0, gross - shared - (billed.pools?.direct ?? 0));
+    return {
+      ai,
+      shared,
+      requests: tableRows.reduce((a, r) => a + (r.requests ?? 0), 0),
+      aiCalls: tableRows.reduce((a, r) => a + (r.ai_calls ?? 0), 0),
+      note:
+        platform > 0.005
+          ? `plus ${money(platform)} nobody caused — the platform's own share of ${money(gross)}`
+          : `the whole ${money(gross)} bill is accounted for`,
+    };
+  }, [tableRows, billed]);
+
   const unnamed = useMemo(() => {
     const rows = billed?.unclassified ?? [];
     const total = rows.reduce((a, r) => a + Math.abs(r.amount_usd || 0), 0);
@@ -743,6 +769,33 @@ export default function MoneyPage() {
                           </td>
                         </tr>
                       ))}
+                      {/* THE TABLE HAS TO CLOSE ON THE HEADLINE.
+                          "WHO COST HOW MUHC N WHY WITH PROOFs" — a proof is
+                          something that adds up. Five rows of plausible figures
+                          that do not reconcile to the big number are not
+                          evidence, they are a second opinion. */}
+                      {tableRows.length > 0 && recon && (
+                        <tr className="border-t-2 border-line font-semibold">
+                          <td className="px-3 py-2 text-fg" data-label="Total">
+                            Everything above
+                            <span className="mt-0.5 block text-[10px] font-normal text-fg-faint">
+                              {recon.note}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-fg-soft" data-label="Requests">
+                            {measuredGap ? "—" : n(recon.requests)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-fg-soft" data-label="AI calls">
+                            {measuredGap ? "—" : n(recon.aiCalls)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-fg" data-label="AI cost">
+                            {money(recon.ai)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-fg" data-label="Share of the box">
+                            {money(recon.shared)}
+                          </td>
+                        </tr>
+                      )}
                       {tableRows.length === 0 && (
                         <tr>
                           <td colSpan={5} className="px-3 py-6 text-center text-sm text-fg-faint">

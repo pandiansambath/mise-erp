@@ -57,7 +57,15 @@ export function LineRow({
       <span
         aria-hidden
         className="absolute inset-y-0 left-0 rounded-xl opacity-[0.18] transition-[width] duration-300"
-        style={{ width: `${Math.max(1, Math.min(100, share * 100))}%`, background: style.fill }}
+        /* CAPPED AT 88%, NOT 100%. At full width the largest line's fill
+           reaches both edges and stops reading as a bar at all — it reads as a
+           SELECTED ROW, which is a different thing and an actively misleading
+           one in a list you can click. Leaving a visible gutter on the right
+           keeps it a measurement. */
+        style={{
+          width: `${Math.max(2, Math.min(88, share * 88))}%`,
+          background: style.fill,
+        }}
       />
       <span className="relative flex min-w-0 items-baseline gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
