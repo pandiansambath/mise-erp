@@ -453,7 +453,12 @@ def test_the_bill_is_two_filtered_calls_never_one_unfiltered_one(fake_ce) -> Non
     """
     client = fake_ce()
 
-    rows, calls = _fetch_blocking(date(2026, 7, 23), date(2026, 7, 31))
+    # The tally is the CALLER's list now, incremented before each response is
+    # used, so a throttle on the second call cannot discard the cent the first
+    # one already spent. Passing it in is the contract.
+    tally = [0]
+    rows = _fetch_blocking(date(2026, 7, 23), date(2026, 7, 31), tally)
+    calls = tally[0]
 
     assert calls == 2, "the number of calls billed is what the ceiling counts"
     assert len(client.requests) == 2
@@ -491,7 +496,7 @@ def test_the_last_day_asked_for_is_not_dropped_from_the_bill(fake_ce) -> None:
     """
     client = fake_ce()
 
-    _fetch_blocking(date(2026, 7, 1), date(2026, 9, 16))
+    _fetch_blocking(date(2026, 7, 1), date(2026, 9, 16), [0])
 
     for req in client.requests:
         assert req["TimePeriod"] == {"Start": "2026-07-01", "End": "2026-09-17"}
@@ -506,7 +511,9 @@ def test_every_page_of_a_paginated_answer_is_counted_as_a_billed_call(fake_ce) -
     """
     client = fake_ce(page_charges_twice=True)
 
-    rows, calls = _fetch_blocking(date(2026, 7, 1), date(2026, 9, 16))
+    tally = [0]
+    rows = _fetch_blocking(date(2026, 7, 1), date(2026, 9, 16), tally)
+    calls = tally[0]
 
     assert calls == 3, "a paginated fetch billed 3 requests and reported fewer"
     assert len(client.requests) == 3

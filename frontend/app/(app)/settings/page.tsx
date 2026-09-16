@@ -1705,7 +1705,16 @@ export default function SettingsPage() {
                 ))}
               </span>
             </div>
-            <div className="min-h-0 flex-1">
+            {/* `flex flex-col`, not a bare block.
+                THE THIRD PLACE THIS SAME MISTAKE WAS HIDING. `PagePreview`'s
+                root asks for `flex-1` so it can fill this box, and `flex-1`
+                against a `display:block` parent is inert — so the root sized to
+                its content, the ruler measured the frame again, and the fit had
+                a fixed point at its initial 50%. Measured: this div offered
+                877px of room and the observed element reported 486px, which is
+                exactly frame + bezel + chrome. The component was right both
+                times; the parent was not. */}
+            <div className="flex min-h-0 flex-1 flex-col">
               <PagePreview device={previewDevice}>
                 {studio === "door" ? (
                   <HotelDoor

@@ -168,8 +168,9 @@ def _ce_client() -> Any:
 def _pages(client: Any, tally: list[int], **kw: Any) -> list[dict]:
     """Run one GetCostAndUsage to exhaustion, counting as it goes.
 
-    THE COUNT IS INCREMENTED BEFORE THE RESULT IS USED, and into a list the
-    caller already holds, because AWS bills the request, not the success.
+    THE COUNT GOES INTO A LIST THE CALLER ALREADY HOLDS, so it survives an
+    exception thrown later in the pair. That — not the moment of incrementing —
+    is what was broken.
 
     This started life returning the count, which is wrong in the one case that
     costs money: `_fetch_blocking` makes two of these, and a throttle on the
@@ -187,8 +188,16 @@ def _pages(client: Any, tally: list[int], **kw: Any) -> list[dict]:
     while True:
         if token:
             kw["NextPageToken"] = token
-        tally[0] += 1  # billed NOW, whatever happens next
         resp = client.get_cost_and_usage(**kw)
+        # COUNTED ON THE WAY BACK, not on the way out.
+        #
+        # A request that AWS refused before serving it — a throttle, an auth
+        # failure, a dropped connection — is not billed, so counting it would
+        # burn the ceiling on calls that never cost anything and could lock the
+        # dashboard out of a month it had not spent. A response that arrived IS
+        # billed, whatever we then do with it, so anything that fails after this
+        # line is still counted.
+        tally[0] += 1
         out.extend(resp.get("ResultsByTime", []))
         token = resp.get("NextPageToken")
         if not token:
