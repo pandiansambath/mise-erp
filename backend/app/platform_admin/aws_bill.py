@@ -165,27 +165,34 @@ def _ce_client() -> Any:
     return boto3.client("ce", region_name=CE_REGION)
 
 
-def _pages(client: Any, **kw: Any) -> tuple[list[dict], int]:
-    """Run one GetCostAndUsage to exhaustion.
+def _pages(client: Any, tally: list[int], **kw: Any) -> list[dict]:
+    """Run one GetCostAndUsage to exhaustion, counting as it goes.
 
-    Returns the results and THE NUMBER OF CALLS BILLED. Pagination is not free:
-    every `NextPageToken` round trip is another cent, so the caller must be told
-    the real count rather than assuming one call per query. Our daily volumes
-    fit in a single page today; that will stop being true and the accounting
-    should not quietly go wrong when it does.
+    THE COUNT IS INCREMENTED BEFORE THE RESULT IS USED, and into a list the
+    caller already holds, because AWS bills the request, not the success.
+
+    This started life returning the count, which is wrong in the one case that
+    costs money: `_fetch_blocking` makes two of these, and a throttle on the
+    second — the most ordinary Cost Explorer failure there is — discarded the
+    return value along with the cent already spent on the first. The failure
+    row then recorded `api_calls=0`, and a ceiling that believes it never ran is
+    a ceiling a broken collector can spend straight past. Pagination makes it
+    worse: every page already billed is forgotten with it.
+
+    A mutable tally is not elegant. It is, however, the only shape that survives
+    an exception, which is the entire requirement.
     """
     out: list[dict] = []
-    calls = 0
     token: str | None = None
     while True:
         if token:
             kw["NextPageToken"] = token
+        tally[0] += 1  # billed NOW, whatever happens next
         resp = client.get_cost_and_usage(**kw)
-        calls += 1
         out.extend(resp.get("ResultsByTime", []))
         token = resp.get("NextPageToken")
         if not token:
-            return out, calls
+            return out
 
 
 def _rows_from(results: list[dict], *, record_type: str | None) -> list[dict]:
@@ -241,8 +248,11 @@ def _rows_from(results: list[dict], *, record_type: str | None) -> list[dict]:
     return rows
 
 
-def _fetch_blocking(start: date, end: date) -> tuple[list[dict], int]:
-    """The two queries, run on a worker thread. Returns rows + calls billed.
+def _fetch_blocking(start: date, end: date, tally: list[int]) -> list[dict]:
+    """The two queries, run on a worker thread. Returns the rows.
+
+    `tally[0]` is the running count of BILLED calls, owned by the caller so it
+    survives an exception thrown part-way through. See `_pages`.
 
     TWO queries, not one, and not three.
 
@@ -271,8 +281,9 @@ def _fetch_blocking(start: date, end: date) -> tuple[list[dict], int]:
         "Metrics": ["UnblendedCost", "UsageQuantity"],
     }
 
-    charges, c1 = _pages(
+    charges = _pages(
         client,
+        tally,
         **common,
         GroupBy=[
             {"Type": "DIMENSION", "Key": "SERVICE"},
@@ -280,8 +291,9 @@ def _fetch_blocking(start: date, end: date) -> tuple[list[dict], int]:
         ],
         Filter={"Not": {"Dimensions": {"Key": "RECORD_TYPE", "Values": CREDIT_TYPES}}},
     )
-    credits, c2 = _pages(
+    credits = _pages(
         client,
+        tally,
         **common,
         GroupBy=[
             {"Type": "DIMENSION", "Key": "SERVICE"},
@@ -291,7 +303,7 @@ def _fetch_blocking(start: date, end: date) -> tuple[list[dict], int]:
     )
 
     rows = _rows_from(charges, record_type="Usage") + _rows_from(credits, record_type=None)
-    return _dedupe(rows), c1 + c2
+    return _dedupe(rows)
 
 
 def _dedupe(rows: list[dict]) -> list[dict]:
@@ -420,9 +432,13 @@ async def fetch(
         )
     end = end or today
 
-    calls = 0
+    # Owned HERE so the failure path can still read what was spent. `calls` is
+    # not a return value any more precisely because a return value is the one
+    # thing an exception destroys.
+    tally = [0]
     try:
-        rows, calls = await asyncio.to_thread(_fetch_blocking, start, end)
+        rows = await asyncio.to_thread(_fetch_blocking, start, end, tally)
+        calls = tally[0]
         written = await usage.upsert_cloud_cost(db, rows)
         await usage.record_sync(
             db,
@@ -452,6 +468,7 @@ async def fetch(
         # RECORD THE FAILURE, and record the calls it burned. A failed call is
         # billed exactly like a successful one; leaving it uncounted would let a
         # broken collector spend past a ceiling that believes it never ran.
+        calls = tally[0]
         await usage.record_sync(
             db,
             job=JOB,
