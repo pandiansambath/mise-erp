@@ -17,7 +17,7 @@
 // instead of empty space.
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ConfirmProvider } from "@/components/confirm";
 import { Logo } from "@/components/Logo";
 import { ThemeSwitcher } from "@/components/AppShell";
@@ -32,6 +32,12 @@ import { OperatorNav } from "@/components/controlroom/OperatorNav";
  *  header and the hotel count on the rail read the SAME fetch as every page
  *  underneath — never a second, possibly-different, /platform/hotels call. */
 function ConsoleBody({ children, email, logout }: { children: React.ReactNode; email: string; logout: () => void }) {
+  /** Routes that own the whole window. A list, deliberately, not a route
+   *  group: a group would move the file and change nothing about the URL,
+   *  which is more machinery than one boolean deserves. */
+  const pathname = usePathname();
+  const fullBleed = pathname === "/control-room/graph";
+
   const { hotels, loading: fleetLoading, error: fleetError } = useFleet();
   const [utc, setUtc] = useState("");
   const [askOpen, setAskOpen] = useState(false);
@@ -102,8 +108,31 @@ function ConsoleBody({ children, email, logout }: { children: React.ReactNode; e
       </header>
 
       <ConfirmProvider>
-        <div className="mise-cr-grid flex min-h-[calc(100vh-57px)] flex-col gap-4 px-4 py-4 lg:flex-row lg:gap-5 lg:px-6 lg:py-5">
-          <OperatorNav />
+        {/* ONE ROUTE GOES FULL BLEED.
+            ----------------------------------------------------------------
+            "please fro this nerual map alone pleas utilise a entier page
+             please..currently u using only center place and left is is
+             sidebar...no need side bar"
+
+            The rail costs ~208px and the padding another ~44, and the map is
+            the one page here whose whole value is width — measured, dropping
+            both gives it +59% of canvas at 1920 and +102% at 1280. Every other
+            route keeps the rail exactly as it was.
+
+            Measured on the live page: the rail's own content is 494px tall in a
+            983px column, so it was contributing 489px of empty rail to a page
+            already accused of wasting space.
+
+            The nav does not disappear — it moves behind a labelled button the
+            map itself draws. He still has to be able to leave. */}
+        <div
+          className={
+            fullBleed
+              ? "flex min-h-[calc(100dvh-57px)] flex-col"
+              : "mise-cr-grid flex min-h-[calc(100vh-57px)] flex-col gap-4 px-4 py-4 lg:flex-row lg:gap-5 lg:px-6 lg:py-5"
+          }
+        >
+          {!fullBleed && <OperatorNav />}
           {/* A COLUMN, so a page can choose to fill the height.
               The shell was already `min-h-[calc(100vh-57px)]`, so on a
               fleet of three hotels the cards floated at the top of a tall

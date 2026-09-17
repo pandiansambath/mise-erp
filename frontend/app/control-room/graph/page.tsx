@@ -22,7 +22,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { errorCopy, useOperatorQuery } from "@/components/controlroom/useOperatorQuery";
-import { Card, PageHeader, Segmented, Spinner } from "@/components/ui";
+import Link from "next/link";
+
+import { Card, Segmented, Spinner } from "@/components/ui";
 import { SheetPopup } from "@/components/SheetPopup";
 
 import { NeuralMap } from "./NeuralMap";
@@ -71,16 +73,28 @@ export default function GraphPage() {
   );
 
   return (
-    <div className="flex flex-1 flex-col space-y-4">
-      <PageHeader
-        title="The map"
-        subtitle="Size is volume. Solid lines were measured. Dashed lines are a model."
-      />
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Segmented value={days} onChange={setDays} options={WINDOWS} />
+    /* FULL BLEED. The rail is gone on this route (see control-room/layout.tsx)
+       and the chrome floats OVER the canvas rather than stacking above it, so
+       every pixel of the window is map. A page header and a control row would
+       have taken ~150px off the top of the one page whose value is area. */
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* THE WAY BACK. The rail is hidden here, so the map owes him a door —
+          and a labelled one: five of the eleven Control Room destinations
+          ("AWS bill", "AI spend", "Trail", "Plans", "Broadcast") have no
+          guessable icon, and the house law is less confusion, not fewer
+          pixels. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-center gap-2 p-3">
+        <Link
+          href="/control-room"
+          className="mise-press pointer-events-auto rounded-xl bg-paper/90 px-3 py-1.5 text-xs font-semibold text-fg-soft shadow-sm backdrop-blur"
+        >
+          ‹ Control Room
+        </Link>
+        <span className="pointer-events-auto rounded-xl bg-paper/90 px-3 py-1.5 shadow-sm backdrop-blur">
+          <Segmented value={days} onChange={setDays} options={WINDOWS} />
+        </span>
         {totals && (
-          <p className="text-xs text-fg-faint">
+          <p className="pointer-events-auto rounded-xl bg-paper/90 px-3 py-2 text-xs text-fg-faint shadow-sm backdrop-blur">
             {totals.requests.toLocaleString()} requests ·{" "}
             {totals.ai_calls.toLocaleString()} AI calls ·{" "}
             {totals.ai_tokens.toLocaleString()} tokens · $
@@ -119,8 +133,9 @@ export default function GraphPage() {
 
           {/* THE LEGEND IS RENDERED AS THE ACTUAL THING, not as swatches — a key
               made of coloured squares has to be translated before it can be
-              used, and a legend you have to open is a legend nobody reads. */}
-          <div className="mise-well flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl px-3 py-2 text-[11px] text-fg-faint">
+              used, and a legend you have to open is a legend nobody reads.
+              Floating at the bottom so it costs the canvas no height. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-wrap items-center gap-x-5 gap-y-2 bg-paper/85 px-4 py-2 text-[11px] text-fg-faint backdrop-blur">
             <Key svg={<circle cx="9" cy="9" r="7" className="fill-none stroke-fg-soft" />}>
               restaurant
             </Key>
@@ -140,7 +155,7 @@ export default function GraphPage() {
           </div>
 
           {d.meta.measured_from && (
-            <p className="text-[11px] text-fg-faint">
+            <p className="pointer-events-none absolute bottom-10 right-4 z-20 max-w-sm text-right text-[10px] leading-relaxed text-fg-faint">
               Our counters start {d.meta.measured_from}. Anything before that is
               not zero — it is unmeasured, and the map says so rather than
               drawing a nought.
