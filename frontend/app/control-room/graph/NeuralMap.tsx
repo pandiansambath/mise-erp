@@ -28,12 +28,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  assertNoOverlap,
   curve,
   layout,
   pointOnCurve,
   type GraphEdge,
   type GraphNode,
+  subtitleFor,
   type Placed,
+  type Widths,
 } from "./geometry";
 
 /** Shape per kind. Colour alone never carries meaning — the accessibility floor
@@ -118,6 +121,16 @@ function shapePath(kind: string, x: number, y: number, r: number): string {
 
 type Pulse = { edge: GraphEdge; a: Placed; b: Placed; t: number; speed: number };
 
+/** The spines for one node: the areas it opened, normalised against its own
+ *  busiest one so the ring shows SHAPE OF USE rather than size of restaurant —
+ *  a small restaurant that uses everything should look busy, because it is. */
+function areasOf(p: Placed): { area: string; share: number }[] {
+  const raw = (p.detail?.areas as { area: string; requests: number }[]) ?? [];
+  if (!raw.length) return [];
+  const top = Math.max(1, ...raw.map((a) => a.requests));
+  return raw.slice(0, 24).map((a) => ({ area: a.area, share: a.requests / top }));
+}
+
 export function NeuralMap({
   nodes,
   edges,
@@ -162,10 +175,45 @@ export function NeuralMap({
     return () => mo.disconnect();
   }, []);
 
+  /** MEASURED label widths, not estimated ones.
+   *
+   *  The column solve sizes each column from the widest label in it, so an
+   *  estimate that is 10% low produces exactly the clipped text it was meant to
+   *  prevent. Rendered into a hidden <text> in the real SVG, with the real
+   *  fonts, and read back with getComputedTextLength(). */
+  const [widths, setWidths] = useState<Widths>(new Map());
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || !nodes.length) return;
+    const probe = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    probe.setAttribute("visibility", "hidden");
+    probe.setAttribute("font-size", "12");
+    probe.setAttribute("font-weight", "600");
+    svg.appendChild(probe);
+    const next: Widths = new Map();
+    for (const n of nodes) {
+      for (const s of [n.label, subtitleFor(n)]) {
+        if (!s || next.has(s)) continue;
+        probe.textContent = s;
+        next.set(s, probe.getComputedTextLength());
+      }
+    }
+    svg.removeChild(probe);
+    setWidths(next);
+  }, [nodes]);
+
   const { placed, byId } = useMemo(
-    () => layout(nodes, size.w, size.h),
-    [nodes, size.w, size.h],
+    () => layout(nodes, size.w, size.h, widths),
+    [nodes, size.w, size.h, widths],
   );
+
+  // A PROOF, in development. The previous layout drew one restaurant inside
+  // another and shipped; nobody found it until a person looked at a picture.
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production" || !placed.length) return;
+    const bad = assertNoOverlap(placed);
+    if (bad.length) console.error(["[map] nodes overlap:", ...bad].join(" | "));
+  }, [placed]);
 
   const drawn = useMemo(
     () =>
@@ -200,7 +248,16 @@ export function NeuralMap({
     // A pulse means THIS HAPPENED. Only measured edges emit one — nothing
     // modelled may ever fire a discrete packet, because that would dress an
     // apportionment up as an event.
-    const live = drawn.filter((d) => d.e.measured && d.e.weight > 0);
+    // A PULSE IS A PACKET, SO ONLY THINGS THAT COME IN PACKETS MAY PULSE.
+    //
+    // Nine of sixteen edges were cost edges, and a dollar is a RATE, not an
+    // event — animating one dresses an accounting figure up as something that
+    // happened at a moment. The original spec forbids exactly this and the
+    // first build did it anyway. Requests and AI calls are discrete; money is
+    // not, so cost edges carry their thickness and stay still.
+    const live = drawn.filter(
+      (d) => d.e.measured && d.e.weight > 0 && d.e.kind !== "cost",
+    );
     if (!live.length) return;
 
     const pulses: Pulse[] = [];
@@ -213,10 +270,23 @@ export function NeuralMap({
       const pick = live[Math.floor(Math.random() * live.length)];
       const share = Math.abs(pick.e.weight) / maxW;
       if (Math.random() > 0.15 + share * 0.85) return;
-      // LATENCY DRIVES SPEED: one second of travel per second of real call,
-      // clamped so a 20-second outlier does not park a dot on the canvas.
-      const ms = pick.e.latency_ms ?? 900;
-      const seconds = Math.max(0.4, Math.min(6, ms / 1000));
+      // LATENCY DRIVES SPEED — but it has to be REAL latency, and for HTTP
+      // edges `latency_ms` is null, so thirteen of sixteen pulses were running
+      // at a hardcoded 900ms: the one thing on this page that is supposed to be
+      // measured, invented. The per-node average response time was already in
+      // the payload and unused. Falling back to it means an HTTP packet crosses
+      // at the speed that restaurant's requests actually take.
+      //
+      // And the floor is 0.18s, not 0.4s: real HTTP latencies here are 7-95ms,
+      // so a 0.4s floor flattened every one of them to the same speed and threw
+      // away the difference the animation exists to show. AI calls (857ms vs
+      // 5,242ms) keep their six-fold spread either way.
+      const ms =
+        pick.e.latency_ms ??
+        Number(pick.a.metrics?.avg_ms) ??
+        Number(pick.a.metrics?.ai_avg_latency_ms) ??
+        900;
+      const seconds = Math.max(0.18, Math.min(6, (Number(ms) || 900) / 1000));
       pulses.push({ edge: pick.e, a: pick.a, b: pick.b, t: 0, speed: 1 / seconds });
     };
 
@@ -280,7 +350,7 @@ export function NeuralMap({
     );
 
   return (
-    <div ref={box} className="mise-card-inset relative min-h-0 w-full flex-1 rounded-2xl">
+    <div ref={box} className="relative min-h-0 w-full flex-1">
       <svg
         ref={svgRef}
         width={size.w}
@@ -289,6 +359,29 @@ export function NeuralMap({
         role="img"
         aria-label="A map of the platform: restaurants, what they use, and what it costs."
       >
+        {/* A SPHERE, NOT A DISC. "im expecting more grapgical ui" — a flat
+            circle with a label beside it is a diagram; an off-centre highlight
+            falling to a darker rim is an object with a light on it, which is
+            the whole difference between a chart and something that looks alive.
+            Four lines of <defs> and no library.
+
+            Both stops obey the direction-not-colour rule: the highlight mixes
+            toward --color-fg and the rim toward --color-shell, so on a light
+            theme it reads as a deepening and on a dark one as a glow, with no
+            branching and no second palette. */}
+        <defs>
+          {pal &&
+            Object.keys(KIND_VAR).map((kind) => {
+              const base = pal[kind] ?? pal.restaurant;
+              return (
+                <radialGradient key={kind} id={`sphere-${kind}`} cx="34%" cy="28%" r="78%">
+                  <stop offset="0%" stopColor={mix(base, pal.fg, 0.1)} />
+                  <stop offset="55%" stopColor={mix(base, pal.shell, 0.45)} />
+                  <stop offset="100%" stopColor={mix(base, pal.shell, 0.78)} />
+                </radialGradient>
+              );
+            })}
+        </defs>
         {/* ── edges ─────────────────────────────────────────────────── */}
         <g fill="none">
           {drawn.map(({ e, a, b }) => {
@@ -352,7 +445,7 @@ export function NeuralMap({
               )}
               <path
                 d={shapePath(p.kind, p.x, p.y, p.r)}
-                fill={pal ? mix(base, pal.shell, anyFired ? 0.55 : 0.84) : "none"}
+                fill={pal ? (anyFired ? `url(#sphere-${p.kind})` : mix(base, pal.shell, 0.86)) : "none"}
                 stroke={anyFired ? lit : quiet}
                 // SEVERED: a GAP, not a dash. Usage whose restaurant no longer
                 // exists — charge with nowhere to go. A gap reads as cut
@@ -389,24 +482,86 @@ export function NeuralMap({
                 );
               })}
 
-              <text
-                x={p.x}
-                y={p.y + 4}
-                textAnchor="middle"
-                className="pointer-events-none fill-fg text-[11px] font-semibold"
-              >
-                {p.label.length > 16 ? `${p.label.slice(0, 15)}…` : p.label}
-              </text>
-              <text
-                x={p.x}
-                y={p.y + p.r + 15}
-                textAnchor="middle"
-                /* TEXT NEVER DIMS. Luminance carries activity; opacity carries
-                   nothing. A dimmed label reads as disabled. */
-                className="pointer-events-none fill-fg-faint text-[10px] font-mono"
-              >
-                {subtitleFor(p)}
-              </text>
+              {/* THE DENDRITE RING — specified in the first design and never
+                  built, and it is the thing that makes thirteen nodes look
+                  like a brain rather than a bubble chart.
+                  ------------------------------------------------------------
+                  One spine per AREA THE RESTAURANT ACTUALLY OPENED, lit in
+                  proportion to how much. Measured, not configured: the features
+                  map says what is switched ON, which is a far weaker claim than
+                  what anybody used, and a ring of 33 identical toggles would
+                  look the same for every restaurant on the platform.
+
+                  It is also what stops a quiet restaurant looking broken.
+                  NIRAI.Reading has no HTTP traffic at all, so it draws a
+                  COMPLETE ring of unlit tracks: visibly whole, visibly idle —
+                  a neuron at rest, not a dead one. */}
+              {areasOf(p).length > 0 && (
+                <g className="pointer-events-none">
+                  {areasOf(p).map((a, i, arr) => {
+                    const ang = (i / arr.length) * Math.PI * 2 - Math.PI / 2;
+                    const inner = p.r + 3;
+                    const len = 4 + (a.share || 0) * 7;
+                    return (
+                      <line
+                        key={a.area}
+                        x1={p.x + Math.cos(ang) * inner}
+                        y1={p.y + Math.sin(ang) * inner}
+                        x2={p.x + Math.cos(ang) * (inner + len)}
+                        y2={p.y + Math.sin(ang) * (inner + len)}
+                        stroke={a.share > 0 ? lit : quiet}
+                        strokeWidth={a.share > 0 ? 1.7 : 1}
+                        strokeLinecap="round"
+                        opacity={a.share > 0 ? 0.85 : 0.5}
+                      />
+                    );
+                  })}
+                </g>
+              )}
+
+              {/* LABELS SIT BESIDE THE NODE, NOT INSIDE IT.
+                  The single highest-leverage change in this redesign. Inside,
+                  a name has to fit a circle — so every long one was truncated
+                  ("adras Ki…", "Virtual Pri…"), seven of sixteen of them, and
+                  the AWS key that distinguishes one line from another was the
+                  first thing lost. Outside, the column solve has already
+                  reserved exactly the width the widest label needs, so nothing
+                  truncates and the node interior is free for graphics.
+
+                  One direction per column — A points left, C and D point right
+                  — so a label can never wander into a neighbour's space. */}
+              {p.col !== "B" && (
+                <>
+                  <text
+                    x={p.x + (p.anchor === -1 ? -(p.r + 12) : p.r + 12)}
+                    y={p.y - 1}
+                    textAnchor={p.anchor === -1 ? "end" : "start"}
+                    className="pointer-events-none fill-fg text-[12px] font-semibold"
+                  >
+                    {p.label}
+                  </text>
+                  <text
+                    x={p.x + (p.anchor === -1 ? -(p.r + 12) : p.r + 12)}
+                    y={p.y + 13}
+                    textAnchor={p.anchor === -1 ? "end" : "start"}
+                    /* TEXT NEVER DIMS. Luminance carries activity; opacity
+                       carries nothing, and a dimmed label reads as disabled. */
+                    className="pointer-events-none fill-fg-faint text-[10.5px] font-mono"
+                  >
+                    {p.sub}
+                  </text>
+                </>
+              )}
+              {p.col === "B" && (
+                <text
+                  x={p.x}
+                  y={p.y + 4}
+                  textAnchor="middle"
+                  className="pointer-events-none fill-fg text-[12px] font-bold"
+                >
+                  {p.label}
+                </text>
+              )}
             </g>
           );
         })}
@@ -421,22 +576,3 @@ export function NeuralMap({
   );
 }
 
-/** The one figure under each node. WORDS, never a bare zero.
- *
- *  "nothing yet" and "0" are different claims: the first says we have no
- *  record, the second says we watched and it did nothing. This page is not
- *  allowed to make the second claim unless it is true. */
-function subtitleFor(p: Placed): string {
-  const m = p.metrics ?? {};
-  if (p.kind === "service") return `$${Number(m.usd ?? 0).toFixed(2)}`;
-  if (p.kind === "model") {
-    const tok = Number(m.tokens ?? 0);
-    return tok > 999 ? `${Math.round(tok / 1000)}k tokens` : `${tok} tokens`;
-  }
-  if (p.kind === "platform") return "";
-  const req = Number(m.requests ?? 0);
-  const calls = Number(m.ai_calls ?? 0);
-  if (!req && !calls) return "ready · nothing yet";
-  if (!req && calls) return `${calls} AI calls`;
-  return `${req.toLocaleString()} req`;
-}
