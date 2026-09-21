@@ -58,6 +58,10 @@ class Plan:
     def duplicates(self) -> list[Row]:
         return [r for r in self.rows if r.verdict == "duplicate"]
 
+    @property
+    def invalid(self) -> list[Row]:
+        return [r for r in self.rows if r.verdict == "invalid"]
+
     def as_dict(self) -> dict:
         return {
             "errors": self.errors,
@@ -67,6 +71,7 @@ class Plan:
                 "unchanged": len(
                     [r for r in self.duplicates if r.differences == []]
                 ),
+                "invalid": len(self.invalid),
                 "total": len(self.rows),
             },
             "rows": [
@@ -102,11 +107,27 @@ def build_plan(
     spec: ListSpec,
     existing: list[Any],
 ) -> Plan:
-    """Read the file and say what would happen. Writes nothing."""
+    """Read a FILE and say what would happen. Writes nothing."""
     raw, errors = parse_upload(file_bytes, filename, mime, spec.template())
     if errors:
         return Plan(rows=[], errors=errors)
+    return classify(raw, spec, existing)
 
+
+def classify(raw: list[dict], spec: ListSpec, existing: list[Any]) -> Plan:
+    """Rows in, plan out — WHEREVER THE ROWS CAME FROM.
+
+    Split out of `build_plan` because the assistant has no file: somebody pastes
+    a list of suppliers into the chat and the model turns prose into rows. Those
+    rows need the same treatment a spreadsheet's rows get.
+
+    The reason this is one function rather than two is stronger than saving
+    code. `_key()` is the only place in the product that knows what "already
+    here" MEANS — the name, case-folded, whitespace-collapsed, because that is
+    a person's idea of a duplicate. A second copy of that rule in the chat path
+    would be the same definition living in two files, which is exactly how the
+    export and the import drifted until our own files stopped importing.
+    """
     have: dict[str, dict] = {}
     for obj in existing:
         rec = {
@@ -118,9 +139,30 @@ def build_plan(
     rows: list[Row] = []
     seen_in_file: dict[str, int] = {}
 
+    required = [f for f in spec.fields if f.required]
+
     for i, rec in enumerate(raw, start=1):
         clean = {k: _jsonable(v) for k, v in spec.clean(rec).items()}
         k = _key(spec, clean)
+
+        # A ROW MISSING ITS REQUIRED FIELD COSTS ONE ROW, NOT THE LIST.
+        #
+        # `verdict` has documented `invalid` since this file was written and
+        # nothing ever emitted it: `parse_upload` rejects the WHOLE FILE on any
+        # row error and returns zero rows, so a plan was always all-or-nothing.
+        # That is survivable for a spreadsheet somebody can edit. It is not
+        # survivable for the chat path, where one nameless row out of forty
+        # would throw away thirty-nine good ones the model got right.
+        missing = [f.header for f in required if not str(clean.get(f.key) or "").strip()]
+        if missing:
+            rows.append(Row(
+                n=i, values=clean, verdict="invalid",
+                reason=(
+                    ("no " + " or ".join(m.lower() for m in missing))
+                    + " — add it and this row goes in with the rest"
+                ),
+            ))
+            continue
 
         # A FILE CAN REPEAT ITSELF. Two rows for "Fresh Farms" in one upload is
         # a duplicate just as much as a clash with the database, and it is the

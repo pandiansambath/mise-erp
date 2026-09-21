@@ -3,13 +3,13 @@ import uuid
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.auth.deps import require, require_feature
 from app.auth.models import User
-from app.core import list_io, lists, roundtrip, template_io
+from app.core import list_commit, list_io, lists, roundtrip, template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
@@ -315,6 +315,65 @@ async def preview_vendor_import(
         lists.VENDORS, existing,
     )
     return plan.as_dict()
+
+
+class _CommitIn(BaseModel):
+    """Per-row decisions from a plan a person has actually looked at.
+
+    Deliberately NOT `{plan_id}` or `{rows: list[dict]}`. Every row must carry
+    its own `action`, so there is no shape of request that means "just do the
+    whole thing" — which is what makes the preview impossible to skip rather
+    than merely expected.
+    """
+
+    rows: list[dict] = Field(default_factory=list)
+    #: Where it came from, for the audit line. "file" | "copilot".
+    source: str = "file"
+
+
+@router.post("/import/commit")
+async def commit_vendor_import(
+    payload: _CommitIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> dict:
+    """Write the decided rows. Re-checks the world first.
+
+    `require("vendors:write")` rather than a bare session, and that matters
+    more than it looks: it is the only path that resolves CUSTOM ROLES, refuses
+    a support-view session, and returns 402 on an unpaid account. The
+    assistant's own write path does none of those, so routing bulk through here
+    fixes all three for free — and is why this endpoint, not a new bulk verb on
+    the assistant.
+    """
+    decisions, errors = list_commit.clean_decisions(payload.rows, lists.VENDORS)
+    if errors:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "; ".join(errors[:3]))
+
+    existing = await service.list_vendors(db, user.hotel_id, active_only=False)
+
+    async def _create(values: dict):
+        return await service.create_vendor(db, user.hotel_id, **values)
+
+    async def _update(target, values: dict):
+        return await service.update_vendor(db, target, **values)
+
+    report = await list_commit.apply(
+        decisions, lists.VENDORS, existing, create=_create, update=_update
+    )
+    out = report.as_dict(sent=len(decisions))
+
+    # AFTER the writes: `audit.record` commits internally, so calling it
+    # mid-loop would commit a half-finished batch.
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="vendors.import",
+        summary=(
+            f"Imported suppliers from {payload.source}: "
+            f"{out['counts']['created']} added, {out['counts']['updated']} updated, "
+            f"{out['counts']['skipped']} left, {out['counts']['failed']} failed"
+        ),
+    )
+    return out
 
 
 @router.get("/{vendor_id}", response_model=VendorOut)
