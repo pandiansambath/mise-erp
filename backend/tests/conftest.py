@@ -188,3 +188,44 @@ def auth_header():
         return {"Authorization": f"Bearer {token}"}
 
     return _header
+
+
+# ── a failing test must not be able to kill the run ───────────────────────
+@pytest.hookimpl(hookwrapper=True, trylast=True)
+def pytest_runtest_makereport(item, call):
+    """Scrub unpaired surrogates out of a failure report before xdist sends it.
+
+    Running in parallel, a worker serialises each report back to the
+    controller through execnet, which encodes strictly as UTF-8. A report
+    containing a LONE SURROGATE — from captured output, a filename, an
+    exception carrying raw bytes — raises
+    `UnicodeEncodeError: surrogates not allowed` INSIDE the reporting
+    machinery, and pytest answers that with INTERNALERROR and abandons the
+    entire session.
+
+    Observed exactly once and it cost the whole run: one test failed at 63%,
+    and the other 300-odd never reported at all. Serial pytest never showed
+    this because nothing crosses a process boundary — so it is a cost of
+    parallelism and it gets paid here, not by going back to serial.
+
+    Scrubbing rather than fixing the producing test on purpose: whichever
+    test it was, the NEXT one to emit a stray byte would do the same thing,
+    and losing a run's results to a formatting detail is never an acceptable
+    failure mode. `errors="replace"` keeps every legible character and turns
+    the unsendable ones into U+FFFD, which is exactly what a person reading
+    the report needs.
+    """
+    outcome = yield
+    report = outcome.get_result()
+
+    def _safe(text: str) -> str:
+        return text.encode("utf-8", "replace").decode("utf-8")
+
+    if report.longrepr is not None:
+        as_text = str(report.longrepr)
+        cleaned = _safe(as_text)
+        if cleaned != as_text:
+            report.longrepr = cleaned
+
+    if report.sections:
+        report.sections = [(_safe(name), _safe(body)) for name, body in report.sections]
