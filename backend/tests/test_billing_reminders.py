@@ -5,6 +5,7 @@ fires every day for three days looks like broken software at exactly the moment
 we are asking someone to trust us with a card, and a reminder that never fires
 leaves them to discover the trial ended by finding the app shut.
 """
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -33,7 +34,25 @@ def sent(monkeypatch):
         box.append((to, subject))
         return _ok()
 
+    # CAPTURE AT `send_alert`, WHICH IS WHAT BILLING NOW CALLS.
+    #
+    # Outbound alerts are held until an address is proven, because signup no
+    # longer verifies at the door — so an owner can be using the product with a
+    # mistyped address, and a billing email must not land in a stranger's
+    # inbox. `_send_to_owners` therefore calls `send_alert(..., verified=...)`
+    # rather than `send_email`.
+    #
+    # Patching both is deliberate: these tests assert WHO gets billed mail, and
+    # if the billing module is ever pointed back at `send_email` the capture
+    # should keep working rather than silently recording nothing — an empty
+    # `box` and "we correctly sent no mail" look identical.
+    def _capture_alert(to, subject, text, html=None, *, verified=True):
+        # The hold itself has its own test; here we record the intent to send.
+        box.append((to, subject))
+        return _ok()
+
     monkeypatch.setattr(emails.notify, "send_email", _capture)
+    monkeypatch.setattr(emails.notify, "send_alert", _capture_alert)
     monkeypatch.setattr(emails.notify, "fire", lambda coro: coro.close())
     return box
 
@@ -119,7 +138,12 @@ async def test_only_owners_are_emailed(db, make_user, monkeypatch) -> None:
         recipients.append(to)
         return _ok()
 
+    def _capture_alert(to, subject, text, html=None, *, verified=True):
+        recipients.append(to)
+        return _ok()
+
     monkeypatch.setattr(emails.notify, "send_email", _capture)
+    monkeypatch.setattr(emails.notify, "send_alert", _capture_alert)
     monkeypatch.setattr(emails.notify, "fire", lambda coro: coro.close())
 
     await emails.trial_ending(db, hotel, 1)
@@ -141,3 +165,53 @@ async def test_a_billing_email_failure_cannot_break_billing(db, make_user, monke
     await emails.payment_failed(db, hotel, 2)
     await emails.trial_ending(db, hotel, 1)
     await emails.subscription_ended(db, hotel)
+
+
+@pytest.mark.asyncio
+async def test_billing_mail_is_held_until_the_address_is_proven(
+    db, make_user, monkeypatch
+) -> None:
+    """An unverified address gets no unsolicited mail.
+
+        "let them give whatever mail they have...then after enterred the site
+         they can verify the email or they vhnage the email (untill then
+         restric the email service...)"
+
+    Signup stopped verifying at the door, which is right — being locked on the
+    doorstep of a product you just paid attention to is worse than a typo. But
+    it means an owner can be using DineAI with an address that belongs to
+    somebody else, and a billing email is precisely the kind that must not land
+    in a stranger's inbox.
+
+    Nothing is lost by holding: the moment they confirm, the next reminder goes
+    out normally, with nothing to re-request.
+    """
+    hotel = await _trial_hotel(db, days_out=1)
+    owner = await make_user("unproven@trial.test", Role.SUPER_ADMIN.value, hotel_id=hotel.id)
+    owner.email_verified = False
+    await db.commit()
+
+    sent: list[str] = []
+
+    async def _real_alert(to, subject, text, html=None, *, verified):
+        # The real guard, not a stand-in — this is the behaviour under test.
+        if not verified:
+            return False
+        sent.append(to)
+        return True
+
+    monkeypatch.setattr(emails.notify, "send_alert", _real_alert)
+    monkeypatch.setattr(emails.notify, "fire", lambda coro: asyncio.ensure_future(coro))
+
+    await emails.trial_ending(db, hotel, 1)
+    await asyncio.sleep(0)  # let the fired task run
+
+    assert sent == [], "a billing email went to an address nobody has proven"
+
+    # And it resumes by itself once they confirm — no re-request, no queue.
+    owner.email_verified = True
+    await db.commit()
+    await emails.trial_ending(db, hotel, 1)
+    await asyncio.sleep(0)
+
+    assert sent == ["unproven@trial.test"]
