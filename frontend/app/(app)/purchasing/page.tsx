@@ -1865,7 +1865,7 @@ export default function PurchasingPage() {
                   {recvScanBusy ? "Reading…" : "Upload bill"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf,.csv,.xlsx,.xls,.txt,.doc,.docx"
                     className="hidden"
                     disabled={recvScanBusy}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) scanBill(f); e.currentTarget.value = ""; }}

@@ -112,6 +112,7 @@ async def scan_note(
             data,
             file.content_type or "image/jpeg",
             kind="recipe",
+            filename=file.filename or "",
             known_items=[
                 {"id": str(i.id), "name": i.name, "unit": i.unit or ""} for i in items
             ],
