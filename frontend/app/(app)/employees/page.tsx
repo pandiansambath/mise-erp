@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CustomFieldInputs, FieldMarketplace, useCustomFields } from "@/components/CustomFields";
 import { AddLoginModal } from "@/components/AddLoginModal";
+import { ListPortability } from "@/components/ListPortability";
 import { SubNav } from "@/components/SubNav";
 import { api, ApiError, type Employee, type VisaAlert } from "@/lib/api";
 import { FormShell } from "@/components/EditModal";
@@ -276,6 +277,14 @@ export default function EmployeesPage() {
   return (
     <div>
       <PageHeader title="Employees" subtitle="Your team — pay, UK compliance, and each person’s login & access (verify, email, password, history) on their 🔐 Login button." />
+
+      {/* TAKE THE LIST OUT, BRING ONE BACK. There was no way to get staff out
+          of this product at all, which is what he hit when moving a restaurant
+          to a new account. Pay and NI are NOT in this file — they have their
+          own export behind the payroll permission. */}
+      <div className="mb-3">
+        <ListPortability base="employees" noun="staff" onDone={load} />
+      </div>
 
       {/* What this page can DO. Everything here existed; none of it was
           findable without scrolling and recognising it. */}
