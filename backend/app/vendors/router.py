@@ -218,6 +218,105 @@ async def set_preferred(
     return PriceComparison.model_validate(result)
 
 
+# ⚠️ THESE LITERAL ROUTES MUST STAY ABOVE `/{id}`.
+#
+# Starlette matches in DECLARATION ORDER, so `@router.get("/{employee_id}")`
+# declared first swallows the literal string "export.csv" and tries to parse it
+# as a UUID — every one of these returned 422 while appearing, in the source, to
+# exist. Declared below the id route they are dead code that reviews clean.
+#
+# `visa-alerts` above is placed correctly for the same reason; follow it.
+
+# ── the round trip: export, template, and an import that shows its work ────
+#
+#     "likweise i need vebdor but here export feature is missing"
+#
+# Vendors could be imported (per-vendor price lists) and never exported, so a
+# restaurant could put its suppliers in and never get them out. That is not a
+# missing convenience; for somebody moving to a new account it is a wall.
+
+
+def _list_file(content: bytes, media: str, name: str) -> Response:
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.get("/export.csv")
+async def export_vendors_csv(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> Response:
+    """Every supplier, in a file this app will accept back unchanged."""
+    rows = await service.list_vendors(db, user.hotel_id, active_only=False)
+    # The supplier list with emails, VAT numbers and payment terms is the asset
+    # a departing manager walks out with. It left no trace at all until now.
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="vendors.export",
+        summary=f"Exported {len(rows)} suppliers",
+    )
+    return _list_file(
+        roundtrip.to_csv(lists.VENDORS, rows), "text/csv", "dineai-vendors.csv"
+    )
+
+
+@router.get("/export.xlsx")
+async def export_vendors_xlsx(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> Response:
+    rows = await service.list_vendors(db, user.hotel_id, active_only=False)
+    return _list_file(
+        roundtrip.to_xlsx(lists.VENDORS, rows), XLSX_MIME, "dineai-vendors.xlsx"
+    )
+
+
+@router.get("/import-template.xlsx")
+async def vendors_template(user: User = Depends(require("vendors:read"))) -> Response:
+    """The blank version, for a restaurant with nothing to export yet."""
+    return _list_file(
+        template_io.template_xlsx(lists.VENDORS.template()),
+        XLSX_MIME, "dineai-vendors-template.xlsx",
+    )
+
+
+@router.post("/import/preview")
+async def preview_vendor_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> dict:
+    """WHAT WOULD HAPPEN. Writes nothing.
+
+        "if duplcaite ask user to chekc and remove duplcaite by showing the
+         previw of duplcaute before ading wihtut confirmaiton"
+
+    Every row comes back classified new or duplicate, and a duplicate carries
+    BOTH versions plus the list of fields that actually differ — so the choice
+    is made looking at the two, not at a count.
+    """
+    # THE SIZE CHECK EVERY OTHER UPLOAD IN THIS APP DOES, and these two did not.
+    #
+    # XLSX is zipped XML: a repetitive sheet compresses about a thousand to one,
+    # so a few megabytes becomes gigabytes of Python objects when the parser
+    # materialises the rows. One authenticated user with write access could OOM
+    # the container and take every other restaurant down with it — and there is
+    # no body cap at the edge either, the Caddyfile sets none.
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds {settings.max_upload_mb} MB",
+        )
+    existing = await service.list_vendors(db, user.hotel_id, active_only=False)
+    plan = list_io.build_plan(
+        data, file.filename or "", file.content_type or "",
+        lists.VENDORS, existing,
+    )
+    return plan.as_dict()
+
+
 @router.get("/{vendor_id}", response_model=VendorOut)
 async def get_vendor(
     vendor_id: uuid.UUID,
@@ -591,74 +690,3 @@ async def switching_savings(
             else None
         ),
     }
-
-
-# ── the round trip: export, template, and an import that shows its work ────
-#
-#     "likweise i need vebdor but here export feature is missing"
-#
-# Vendors could be imported (per-vendor price lists) and never exported, so a
-# restaurant could put its suppliers in and never get them out. That is not a
-# missing convenience; for somebody moving to a new account it is a wall.
-
-
-def _list_file(content: bytes, media: str, name: str) -> Response:
-    return Response(
-        content=content, media_type=media,
-        headers={"Content-Disposition": f'attachment; filename="{name}"'},
-    )
-
-
-@router.get("/export.csv")
-async def export_vendors_csv(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("vendors:read")),
-) -> Response:
-    """Every supplier, in a file this app will accept back unchanged."""
-    rows = await service.list_vendors(db, user.hotel_id, active_only=False)
-    return _list_file(
-        roundtrip.to_csv(lists.VENDORS, rows), "text/csv", "dineai-vendors.csv"
-    )
-
-
-@router.get("/export.xlsx")
-async def export_vendors_xlsx(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("vendors:read")),
-) -> Response:
-    rows = await service.list_vendors(db, user.hotel_id, active_only=False)
-    return _list_file(
-        roundtrip.to_xlsx(lists.VENDORS, rows), XLSX_MIME, "dineai-vendors.xlsx"
-    )
-
-
-@router.get("/import-template.xlsx")
-async def vendors_template(user: User = Depends(require("vendors:read"))) -> Response:
-    """The blank version, for a restaurant with nothing to export yet."""
-    return _list_file(
-        template_io.template_xlsx(lists.VENDORS.template()),
-        XLSX_MIME, "dineai-vendors-template.xlsx",
-    )
-
-
-@router.post("/import/preview")
-async def preview_vendor_import(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("vendors:write")),
-) -> dict:
-    """WHAT WOULD HAPPEN. Writes nothing.
-
-        "if duplcaite ask user to chekc and remove duplcaite by showing the
-         previw of duplcaute before ading wihtut confirmaiton"
-
-    Every row comes back classified new or duplicate, and a duplicate carries
-    BOTH versions plus the list of fields that actually differ — so the choice
-    is made looking at the two, not at a count.
-    """
-    existing = await service.list_vendors(db, user.hotel_id, active_only=False)
-    plan = list_io.build_plan(
-        await file.read(), file.filename or "", file.content_type or "",
-        lists.VENDORS, existing,
-    )
-    return plan.as_dict()

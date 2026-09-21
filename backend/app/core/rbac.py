@@ -72,7 +72,18 @@ PERMISSIONS: dict[str, list[str]] = {
     # the employee list only to show names worth tapping.
     Role.KIOSK.value: [
         "attendance:write",
-        "employees:read",
+        # ⚠️ `employees:roster`, NOT `employees:read`.
+        #
+        # The comment above says this reads the list "only to show names worth
+        # tapping". It did not: `employees:read` returns `EmployeeOut`, which
+        # carries monthly_salary, hourly_rate, ni_number, bank_sort_code and
+        # bank_account_no — and the kiosk's credential is a door PIN typed on a
+        # tablet that lives on a wall all night.
+        #
+        # So the intent is now a permission rather than a sentence. `roster`
+        # gets names and nothing else; the endpoint narrows its own response
+        # when that is all the caller holds.
+        "employees:roster",
     ],
 }
 
@@ -251,6 +262,14 @@ def resolve_permissions(base_role: str, overrides: dict[str, bool] | None) -> li
     return sorted(effective)
 
 
+#: A narrow permission -> the wider one that implies it. Held deliberately
+#: small: every entry here is a place where one credential silently satisfies
+#: another, which is the kind of rule that should be short enough to read.
+NARROWER_THAN: dict[str, str] = {
+    "employees:roster": "employees:read",
+}
+
+
 def has_permission(role: str, permission: str) -> bool:
     perms = PERMISSIONS.get(role, [])
     if "*" in perms or permission in perms:
@@ -260,4 +279,13 @@ def has_permission(role: str, permission: str) -> bool:
         module = permission.rsplit(":", 1)[0]
         if f"{module}:write" in perms:
             return True
+    # A NARROWER PERMISSION IS IMPLIED BY ITS WIDER ONE.
+    #
+    # `employees:roster` is names-only, held by the kiosk. Anyone with the full
+    # `employees:read` obviously satisfies it — and without this line, moving
+    # the roster endpoint onto the narrow permission would have 403'd every
+    # manager and owner in the product, which is a far worse bug than the one
+    # being fixed.
+    if permission in NARROWER_THAN:
+        return has_permission(role, NARROWER_THAN[permission])
     return False

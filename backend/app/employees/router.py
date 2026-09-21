@@ -9,6 +9,7 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     Response,
     UploadFile,
     status,
@@ -20,7 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
-from app.core import list_io, lists, roundtrip, template_io
+from app.core import list_io, lists, ratelimit, roundtrip, template_io
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import verify_password
 from app.employees import attendance_lock, service, timesheet
@@ -48,22 +50,71 @@ attendance_router = APIRouter(prefix="/attendance", tags=["attendance"])
 
 
 # ── Employees ─────────────────────────────────────────────────────────────
-@router.get("", response_model=list[EmployeeOut])
+class RosterOut(BaseModel):
+    """What a wall tablet is allowed to know: who to tap.
+
+    `EmployeeOut` carries monthly_salary, hourly_rate, ni_number, bank_sort_code
+    and bank_account_no. The kiosk needs none of them — it needs a name and an
+    id — and its credential is a PIN typed on a device that sits out all night.
+    """
+
+    id: uuid.UUID
+    full_name: str
+    employee_code: str
+    job_title: str | None = None
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+# `response_model` is deliberately absent: this endpoint returns one of two
+# shapes, and declaring either would SILENTLY STRIP the other — the trap this
+# project has hit nine times.
+@router.get("")
 async def list_employees(
     include_suspended: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("employees:read")),
-) -> list[EmployeeOut]:
+    user: User = Depends(require("employees:roster")),
+) -> list:
     """The roster. `include_suspended` is what makes suspension reversible.
 
     Without it, suspending someone hid them from the only page that could bring
     them back — a one-way door wearing a two-way label. The list is
     active-only by default because that is the roster you work from day to day.
+
+    ⚠️ TWO SHAPES. Asking for `employees:roster` rather than `employees:read`
+    lets the kiosk in — and then the kiosk gets NAMES ONLY. Anyone holding the
+    full `employees:read` gets the full record as before. The permission decides
+    the payload, so a narrower credential cannot widen itself by calling the
+    same URL.
     """
+    full = await _may_read_full(db, user)
     emps = await service.list_employees(
         db, user.hotel_id, active_only=not include_suspended
     )
+    if not full:
+        return [RosterOut.model_validate(e) for e in emps]
     return [EmployeeOut.model_validate(e) for e in emps]
+
+
+async def _may_read_full(db: AsyncSession, user: User) -> bool:
+    """Does this caller hold the FULL `employees:read`, or only the roster?
+
+    Mirrors `require()`'s own resolution so a runtime-invented role behaves the
+    same here as it does at the door: a custom role granted `employees:write`
+    implies read, exactly as it does for the archetypes.
+    """
+    from app.auth.deps import effective_permissions
+    from app.core.rbac import has_permission
+
+    granted = await effective_permissions(db, user)
+    if granted is None:
+        return has_permission(user.role, "employees:read")
+    return (
+        "*" in granted
+        or "employees:read" in granted
+        or "employees:write" in granted
+    )
 
 
 @router.post("", response_model=EmployeeOut, status_code=status.HTTP_201_CREATED)
@@ -84,6 +135,137 @@ async def visa_alerts(
 ) -> list[VisaAlert]:
     alerts = await service.visa_alerts(db, user.hotel_id, within_days)
     return [VisaAlert.model_validate(a) for a in alerts]
+
+
+# ⚠️ THESE LITERAL ROUTES MUST STAY ABOVE `/{id}`.
+#
+# Starlette matches in DECLARATION ORDER, so `@router.get("/{employee_id}")`
+# declared first swallows the literal string "export.csv" and tries to parse it
+# as a UUID — every one of these returned 422 while appearing, in the source, to
+# exist. Declared below the id route they are dead code that reviews clean.
+#
+# `visa-alerts` above is placed correctly for the same reason; follow it.
+
+# ── the round trip ────────────────────────────────────────────────────────
+#
+#     "exployee here also export fteayre not there"
+#
+# ⚠️ TWO EXPORTS, ON PURPOSE. The plain one carries names, roles and contact
+# details. Pay and National Insurance live behind `payroll:read`, because an
+# export is a file that ends up in email and on somebody's desktop, and "export
+# the staff list" should never be the action that puts every salary in it.
+
+
+def _emp_file(content: bytes, media: str, name: str) -> Response:
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.get("/export.csv")
+async def export_employees_csv(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> Response:
+    rows = await service.list_employees(db, user.hotel_id, active_only=False)
+    # Every home address and next-of-kin number in one file. Cheap to record,
+    # and the only way to answer "who took the staff list" three months later.
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="employees.export",
+        summary=f"Exported {len(rows)} staff records (no pay)",
+    )
+    return _emp_file(
+        roundtrip.to_csv(lists.EMPLOYEES, rows), "text/csv", "dineai-employees.csv"
+    )
+
+
+@router.get("/export.xlsx")
+async def export_employees_xlsx(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> Response:
+    rows = await service.list_employees(db, user.hotel_id, active_only=False)
+    return _emp_file(
+        roundtrip.to_xlsx(lists.EMPLOYEES, rows), XLSX_MIME, "dineai-employees.xlsx"
+    )
+
+
+@router.get("/export-with-pay.xlsx")
+async def export_employees_with_pay(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:read")),
+    # BOTH, and this is not belt-and-braces.
+    #
+    # The file is the pay fields PLUS the whole employee record — home address,
+    # next of kin, their phone. A hotel that invents a "Payroll Clerk" role and
+    # grants only `payroll:read` would otherwise have handed that person every
+    # employee's home address in one click. Asking for the roster permission
+    # too makes the file's real contents the thing being authorised.
+    _roster: User = Depends(require("employees:read")),
+) -> Response:
+    """Salary and NI included. `payroll:read`, not `employees:read`.
+
+    Anyone who can see the staff list is not thereby entitled to see what each
+    of them earns — that is a different question and it has its own permission
+    already. It is also audited, because a file containing every salary leaving
+    the building is an event somebody may need to account for later.
+    """
+    # NOT IN A SUPPORT VIEW. `require()` lets impersonated sessions through any
+    # permission ending in ":read", which is right for nearly everything and
+    # wrong for this: it would let a platform operator click "view as" on any
+    # tenant and download that restaurant's complete salary and NI list. The
+    # audit row would name the RESTAURANT'S OWNER, because the token resolves to
+    # them — so the one record of it would be false as well.
+    if getattr(user, "is_impersonated_session", False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Not available in a support view — ask the restaurant to export it.",
+        )
+
+    rows = await service.list_employees(db, user.hotel_id, active_only=False)
+    out = roundtrip.to_xlsx(lists.EMPLOYEES_WITH_PAY, rows)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="employees.export_pay",
+        summary=f"Exported {len(rows)} staff records INCLUDING pay and NI numbers",
+    )
+    return _emp_file(out, XLSX_MIME, "dineai-employees-with-pay.xlsx")
+
+
+@router.get("/import-template.xlsx")
+async def employees_template(user: User = Depends(require("employees:read"))) -> Response:
+    return _emp_file(
+        template_io.template_xlsx(lists.EMPLOYEES.template()),
+        XLSX_MIME, "dineai-employees-template.xlsx",
+    )
+
+
+@router.post("/import/preview")
+async def preview_employee_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    """What would happen. Writes nothing — see `core/list_io`."""
+    # THE SIZE CHECK EVERY OTHER UPLOAD IN THIS APP DOES, and these two did not.
+    #
+    # XLSX is zipped XML: a repetitive sheet compresses about a thousand to one,
+    # so a few megabytes becomes gigabytes of Python objects when the parser
+    # materialises the rows. One authenticated user with write access could OOM
+    # the container and take every other restaurant down with it — and there is
+    # no body cap at the edge either, the Caddyfile sets none.
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds {settings.max_upload_mb} MB",
+        )
+    existing = await service.list_employees(db, user.hotel_id, active_only=False)
+    plan = list_io.build_plan(
+        data, file.filename or "", file.content_type or "",
+        lists.EMPLOYEES, existing,
+    )
+    return plan.as_dict()
 
 
 @router.get("/{employee_id}", response_model=EmployeeOut)
@@ -599,6 +781,7 @@ class KioskOpen(BaseModel):
 @attendance_router.post("/kiosk-open")
 async def open_kiosk(
     payload: KioskOpen,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """PIN in, attendance-only session out. No login required.
@@ -611,8 +794,16 @@ async def open_kiosk(
     What comes back is KIOSK-scoped — record a punch, read staff names, nothing
     else. A wrong PIN and a wrong restaurant give the same answer, so this
     cannot be used to discover which handles exist.
+
+    ⚠️ RATE-LIMITED, because this is a PASSWORD PROMPT that happens to be called
+    a PIN. It was the only unauthenticated door in the product with no limiter
+    on it: six digits is a million candidates, and what a correct guess returns
+    is a fourteen-hour token for the whole restaurant. Metered per site as well
+    as per IP — one tablet behind one NAT address is the normal case, and a
+    script from many addresses against one handle is the attack.
     """
     site = (payload.site or "").strip().lower()
+    ratelimit.guard(request, "kiosk_open", site)
     rows = await db.execute(select(Hotel).where(Hotel.username == site))
     hotel = rows.scalars().first()
 
@@ -883,86 +1074,3 @@ async def cancel_leave(
     await db.delete(row)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# ── the round trip ────────────────────────────────────────────────────────
-#
-#     "exployee here also export fteayre not there"
-#
-# ⚠️ TWO EXPORTS, ON PURPOSE. The plain one carries names, roles and contact
-# details. Pay and National Insurance live behind `payroll:read`, because an
-# export is a file that ends up in email and on somebody's desktop, and "export
-# the staff list" should never be the action that puts every salary in it.
-
-
-def _emp_file(content: bytes, media: str, name: str) -> Response:
-    return Response(
-        content=content, media_type=media,
-        headers={"Content-Disposition": f'attachment; filename="{name}"'},
-    )
-
-
-@router.get("/export.csv")
-async def export_employees_csv(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("employees:read")),
-) -> Response:
-    rows = await service.list_employees(db, user.hotel_id, active_only=False)
-    return _emp_file(
-        roundtrip.to_csv(lists.EMPLOYEES, rows), "text/csv", "dineai-employees.csv"
-    )
-
-
-@router.get("/export.xlsx")
-async def export_employees_xlsx(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("employees:read")),
-) -> Response:
-    rows = await service.list_employees(db, user.hotel_id, active_only=False)
-    return _emp_file(
-        roundtrip.to_xlsx(lists.EMPLOYEES, rows), XLSX_MIME, "dineai-employees.xlsx"
-    )
-
-
-@router.get("/export-with-pay.xlsx")
-async def export_employees_with_pay(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("payroll:read")),
-) -> Response:
-    """Salary and NI included. `payroll:read`, not `employees:read`.
-
-    Anyone who can see the staff list is not thereby entitled to see what each
-    of them earns — that is a different question and it has its own permission
-    already. It is also audited, because a file containing every salary leaving
-    the building is an event somebody may need to account for later.
-    """
-    rows = await service.list_employees(db, user.hotel_id, active_only=False)
-    out = roundtrip.to_xlsx(lists.EMPLOYEES_WITH_PAY, rows)
-    await audit.record(
-        db, hotel_id=user.hotel_id, user=user, action="employees.export_pay",
-        summary=f"Exported {len(rows)} staff records INCLUDING pay and NI numbers",
-    )
-    return _emp_file(out, XLSX_MIME, "dineai-employees-with-pay.xlsx")
-
-
-@router.get("/import-template.xlsx")
-async def employees_template(user: User = Depends(require("employees:read"))) -> Response:
-    return _emp_file(
-        template_io.template_xlsx(lists.EMPLOYEES.template()),
-        XLSX_MIME, "dineai-employees-template.xlsx",
-    )
-
-
-@router.post("/import/preview")
-async def preview_employee_import(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require("employees:write")),
-) -> dict:
-    """What would happen. Writes nothing — see `core/list_io`."""
-    existing = await service.list_employees(db, user.hotel_id, active_only=False)
-    plan = list_io.build_plan(
-        await file.read(), file.filename or "", file.content_type or "",
-        lists.EMPLOYEES, existing,
-    )
-    return plan.as_dict()

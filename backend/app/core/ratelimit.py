@@ -41,6 +41,16 @@ LIMITS: dict[str, tuple[int, int]] = {
     "forgot_password": (5, 3600),
     "resend_verification": (5, 3600),
     "login_otp": (20, 300),
+    # THE KIOSK PIN IS A PASSWORD AND WAS THE ONLY UNMETERED DOOR.
+    #
+    # `/attendance/kiosk-open` is unauthenticated by design — a tablet on a wall
+    # boots to it — and it was not in this table and never called `guard`. A
+    # six-digit PIN is a million candidates; unmetered, that is an afternoon,
+    # and what comes out is a 14-hour token for the hotel.
+    #
+    # 10 per 10 minutes per site: a manager who fat-fingers it twice is fine, a
+    # script is not.
+    "kiosk_open": (10, 600),
 }
 
 _hits: dict[str, deque[float]] = defaultdict(deque)
