@@ -14,12 +14,12 @@ Nothing here writes to the database. Extraction proposes; a human disposes.
 """
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import re
 from typing import Any
 
+from app.assistant import docbytes
 from app.core.config import settings
 
 log = logging.getLogger("mise.bedrock")
@@ -225,11 +225,26 @@ def understand_document(
     known_vendors: list[str] | None = None,
     meter: dict[str, Any] | None = None,
     model: str = "",
+    filename: str = "",
 ) -> dict[str, Any]:
-    """Read a bill or handwritten recipe into structured, human-confirmable data.
+    """Read a bill, a recipe, a menu - or a spreadsheet - into confirmable data.
 
     `known_items` / `known_vendors` come from THIS hotel only, so matching
     can never reach across tenants.
+
+    THE FILE IS DECODED BY `docbytes`, NOT WRAPPED IN AN IMAGE BLOCK.
+    This function used to send every upload as an image block labelled with
+    the browser's content type. That is right for a photograph of a delivery
+    note and wrong for everything else: Bedrock's image block takes jpeg, png,
+    gif and webp only. So once the upload check was widened to let spreadsheets
+    through, an .xlsx got past our own edge and was rejected by AWS instead -
+    the same refusal he complained about, one step further back and with a
+    worse message. A workbook now arrives as CSV text, a PDF as a document
+    block, and a photo is unchanged.
+
+    `filename` is consulted alongside the mime type because CONTENT TYPES LIE:
+    a .csv this product exported, re-uploaded from Windows, routinely arrives
+    as application/octet-stream.
     """
     # A menu is its own kind of paperwork. Leaving it out of this map meant
     # kind="menu" fell through to "either a bill or a recipe", so the model was
@@ -251,6 +266,19 @@ def understand_document(
     if known_vendors:
         context += "\n\nKNOWN SUPPLIERS: " + ", ".join(known_vendors[:120])
 
+    instruction = (
+        (
+            "This is a RESTAURANT MENU. List every dish you can read, with its "
+            "price and the section it sits under (starters, mains, drinks...). "
+            "Keep the dish names exactly as printed. Do not invent prices: if "
+            "one is unreadable use null.\n\n"
+            if kind == "menu"
+            else "Read this document and "
+        )
+        + "Return JSON in exactly this shape:\n"
+        + schema
+    )
+
     body = {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 4096,
@@ -258,32 +286,7 @@ def understand_document(
         "messages": [
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": base64.standard_b64encode(image_bytes).decode(),
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            (
-                                "This is a RESTAURANT MENU. List every dish you can "
-                                "read, with its price and the section it sits under "
-                                "(starters, mains, drinks...). Keep the dish names "
-                                "exactly as printed. Do not invent prices: if one is "
-                                "unreadable use null.\n\n"
-                                if kind == "menu"
-                                else "Read this document and "
-                            )
-                            + "Return JSON in exactly this shape:\n"
-                            + schema
-                        ),
-                    },
-                ],
+                "content": docbytes.blocks(image_bytes, media_type, filename, instruction),
             }
         ],
     }

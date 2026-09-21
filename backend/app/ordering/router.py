@@ -2762,14 +2762,16 @@ async def read_menu_document(
         proposed = _rows_from_sheet(data, name)
         source = "spreadsheet"
     else:
-        if media == "application/pdf":
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Please upload a photo of the menu (JPG or PNG) or a spreadsheet.",
-            )
+        # A PDF MENU IS THE COMMONEST MENU THERE IS, and this refused it.
+        # The refusal was honest when written - the reader could only send an
+        # image block - and `docbytes` has made it false.
         try:
             read = await run_in_threadpool(
-                bedrock.understand_document, data, media or "image/jpeg", kind="menu"
+                bedrock.understand_document,
+                data,
+                media or "image/jpeg",
+                kind="menu",
+                filename=file.filename or "",
             )
         except Exception as exc:  # noqa: BLE001 - surfaced as-is
             raise HTTPException(

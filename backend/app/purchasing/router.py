@@ -406,11 +406,9 @@ async def scan_bill(
 
     po_lines = await service.po_items(db, po.id)
     media = file.content_type or "image/jpeg"
-    if media == "application/pdf":
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Please upload a photo of the bill (JPG or PNG) rather than a PDF.",
-        )
+    # A SUPPLIER INVOICE ARRIVES AS A PDF. Turning that away and asking for a
+    # photograph of a document they already had digitally was the single most
+    # absurd thing this endpoint did; `docbytes` sends it as a document block.
 
     try:
         read = await run_in_threadpool(
@@ -418,6 +416,7 @@ async def scan_bill(
             data,
             media,
             kind="bill",
+            filename=file.filename or "",
             # Only THIS order's lines, so the match is against a handful of
             # things it should contain rather than the whole catalogue.
             known_items=[

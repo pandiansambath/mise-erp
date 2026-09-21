@@ -301,7 +301,7 @@ export default function MenuPage() {
                 {reading ? "Reading…" : "📷 Read a menu"}
                 <input
                   type="file"
-                  accept="image/*,.csv,.xlsx,.xls"
+                  accept="image/*,application/pdf,.csv,.xlsx,.xls,.txt,.doc,.docx"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];

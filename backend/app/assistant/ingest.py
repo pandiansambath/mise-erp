@@ -9,7 +9,6 @@ Two steps so a human always confirms before anything is written:
 """
 from __future__ import annotations
 
-import base64
 import json
 import re
 from datetime import date as date_type
@@ -28,7 +27,7 @@ from app.recipes import service as recipe_service
 from app.sales import service as sales_service
 from app.vendors import service as vendor_service
 
-from . import bedrock
+from . import bedrock, docbytes
 from .provider import ProviderError
 
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -181,65 +180,9 @@ def kind_perm(kind: str) -> str | None:
     return cfg["perm"] if cfg else None
 
 
-_EXCEL_MIMES = {
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
-    "application/vnd.ms-excel",  # .xls (older; openpyxl reads xlsx, best-effort here)
-}
-
-
-#: Things that are TEXT and must be handed over as text.
-#:
-#: A .csv was falling into the document branch and being base64'd to Bedrock
-#: labelled `media_type: "application/pdf"` — a CSV described to the model as a
-#: PDF. It is also the format of our own `GET /vendors/export.csv`, so the file
-#: this product hands you was the file its AI could not read.
-_TEXT_MIMES = {
-    "text/csv",
-    "text/plain",
-    "text/tab-separated-values",
-    "application/csv",
-    "application/json",
-}
-
-#: Suffix fallbacks. Browsers and phones lie about content types constantly —
-#: a .csv from Windows often arrives as application/octet-stream, and an
-#: octet-stream is exactly the file somebody just exported from us.
-_TEXT_SUFFIXES = (".csv", ".txt", ".tsv", ".json", ".md")
-_EXCEL_SUFFIXES = (".xlsx", ".xlsm", ".xls")
-
-
-def _is_excel(mime: str, filename: str = "") -> bool:
-    if (mime or "").split(";")[0].strip() in _EXCEL_MIMES:
-        return True
-    return (filename or "").lower().endswith(_EXCEL_SUFFIXES)
-
-
-def _is_text(mime: str, filename: str = "") -> bool:
-    if (mime or "").split(";")[0].strip() in _TEXT_MIMES:
-        return True
-    return (filename or "").lower().endswith(_TEXT_SUFFIXES)
-
-
-def _xlsx_to_csv(file_bytes: bytes, max_rows: int = 500) -> str:
-    """Flatten the first worksheet to CSV text so the model can read it. Best-effort:
-    if openpyxl/the file fails, returns '' (the model then sees an empty sheet)."""
-    import csv
-    import io
-
-    try:
-        from openpyxl import load_workbook
-
-        wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-        ws = wb.active
-        out = io.StringIO()
-        w = csv.writer(out)
-        for i, row in enumerate(ws.iter_rows(values_only=True)):
-            if i >= max_rows:
-                break
-            w.writerow(["" if c is None else c for c in row])
-        return out.getvalue()
-    except Exception:  # noqa: BLE001 — bad/unsupported file → let the model see nothing
-        return ""
+# The file-type helpers that used to live here moved to `docbytes`, whole.
+# They were correct; the problem was that `understand_document` had its own,
+# incorrect copy of the same decision, and only one of the two got fixed.
 
 
 async def extract(
@@ -267,52 +210,10 @@ async def extract(
         + json.dumps(cfg["schema"], default=str)[:2000]
     )
 
-    if _is_text(mime, filename):
-        # Straight in as text. No base64, and no pretending it is a document:
-        # the model reads a CSV far better than it reads a picture of one.
-        #
-        # A .csv used to land in the document branch and get base64'd to
-        # Bedrock labelled `media_type: application/pdf` — a spreadsheet
-        # described to the model as a PDF. It is also the format of our own
-        # `GET /vendors/export.csv`, so the file this product hands you was
-        # a file its own assistant could not read.
-        content: list[dict] = [
-            {
-                "type": "text",
-                "text": (
-                    cfg["prompt"]
-                    + "\n\nFILE CONTENTS:\n"
-                    + file_bytes.decode("utf-8-sig", errors="replace")[:200_000]
-                    + schema_hint
-                ),
-            }
-        ]
-    elif _is_excel(mime, filename):
-        content: list[dict] = [
-            {
-                "type": "text",
-                "text": (
-                    cfg["prompt"]
-                    + "\n\nSPREADSHEET CONTENTS (CSV):\n"
-                    + _xlsx_to_csv(file_bytes)
-                    + schema_hint
-                ),
-            }
-        ]
-    else:
-        media = mime.split(";")[0]
-        is_image = media.startswith("image/")
-        content = [
-            {
-                "type": "image" if is_image else "document",
-                "source": {
-                    "type": "base64",
-                    "media_type": media if is_image else "application/pdf",
-                    "data": base64.b64encode(file_bytes).decode(),
-                },
-            },
-            {"type": "text", "text": cfg["prompt"] + schema_hint},
-        ]
+    # ONE DECODER, SHARED WITH `understand_document`. This branch used to live
+    # here and only here, which is exactly why the other reader still wrapped
+    # spreadsheets in an image block long after this one had stopped.
+    content = docbytes.blocks(file_bytes, mime, filename, cfg["prompt"] + schema_hint)
 
     try:
         raw = bedrock._invoke(

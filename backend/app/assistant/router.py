@@ -423,6 +423,10 @@ async def vision_read(
             known_vendors=[v.name for v in vendors],
             meter=meter,
             model=await guard.model_for(db, user),
+            # THE SUFFIX, because the content type lies. A .csv this product
+            # exported and he re-uploaded from Windows arrives as
+            # application/octet-stream, which reads as neither text nor image.
+            filename=file.filename or "",
         )
     except bedrock.BedrockUnavailable as exc:
         await guard.record(

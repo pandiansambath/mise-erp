@@ -776,7 +776,7 @@ export default function RecipesPage() {
           would either drop the links silently or wire dishes to the wrong
           stock. Dishes first, then cost them where the items are real. */}
       <div className="mb-2">
-        <ListPortability base="recipes" noun="dishes" onDone={load} />
+        <ListPortability base="recipes" noun="dishes" onDone={reload} />
       </div>
 
       {/* The jobs this page does. Sorting by margin and finding the dishes
@@ -885,7 +885,7 @@ export default function RecipesPage() {
                     {noteBusy ? "Reading…" : "📷 From handwritten note"}
                     <input
                       type="file"
-                      accept="image/*,application/pdf"
+                      accept="image/*,application/pdf,.csv,.xlsx,.xls,.txt,.doc,.docx"
                       className="hidden"
                       disabled={noteBusy}
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) scanNote(f); e.currentTarget.value = ""; }}
