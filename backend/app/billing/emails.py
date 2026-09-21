@@ -45,7 +45,17 @@ def _billing_url() -> str:
 async def _send_to_owners(db: AsyncSession, hotel, subject: str, text: str, html: str) -> None:
     try:
         for owner in await _owners(db, hotel.id):
-            notify.fire(notify.send_email(owner.email, subject, text, html=html))
+            # HELD IF THE ADDRESS IS NOT PROVEN. Signup no longer verifies at
+            # the door, so an owner can be using the product with a mistyped
+            # address — and a billing email is exactly the sort that must not
+            # land in a stranger's inbox. It resumes by itself the moment they
+            # confirm, from Settings, with nothing to re-request.
+            notify.fire(
+                notify.send_alert(
+                    owner.email, subject, text, html=html,
+                    verified=bool(getattr(owner, "email_verified", False)),
+                )
+            )
     except Exception:  # noqa: BLE001 — never let a notification break billing state
         log.exception("could not queue billing email", extra={"code": "DINE-B4001"})
 

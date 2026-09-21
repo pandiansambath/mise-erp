@@ -261,14 +261,30 @@ async def register_hotel(
         db, payload.email, payload.password, Role.SUPER_ADMIN.value, hotel.id
     )
     await db.refresh(hotel)  # create_user committed; reload before serialising
-    # New owners must click the emailed link before the app opens. This is the
-    # ONE login the loosened gate still stops: "new hotel definitely need to
-    # verify on the spot so that we can send welcome mail to them etc, else
-    # suppose they give wrong mail id and we didn't verify means it will create
-    # so many real confusion." Everything hangs off this address — the welcome
-    # mail, billing, and the only route back into the account.
+    # THE DOOR IS OPEN. VERIFY FROM INSIDE.
+    #
+    #     "we dont need thsi strcik email verification in signup area: please
+    #      it will make customer to spoil mood... let them give whatever mail
+    #      they have...then after enterred the site they can verify the email
+    #      or they vhnage the email (untill then restric the email service,
+    #      fotgot password service ectetc)"
+    #
+    # ⚠️ THIS REVERSES HIS EARLIER INSTRUCTION, deliberately and on his say-so.
+    # The previous rule was that a new hotel verifies on the spot "else suppose
+    # they give wrong mail id... it will create so many real confusion". The
+    # confusion is real; being locked on the doorstep of a product you just
+    # signed up for is worse, and it is the first thing a restaurant owner ever
+    # experiences of us.
+    #
+    # The risk that rule was protecting against does not go away, so it moves
+    # rather than disappearing: an unverified address is not a way back INTO
+    # the account. `forgot_password` already refuses an unverified address, and
+    # outbound alerts are held below. So a mistyped address costs the owner
+    # nothing except the alerts they have not set up yet, and it can be
+    # corrected from Settings — which is the one thing they could not do while
+    # standing outside the door.
     user.email_verified = False
-    user.verify_required = True
+    user.verify_required = False
     user.verify_token = secrets.token_urlsafe(32)
     await db.commit()
     # ONE welcome-and-verify email: the confirm button is the door.
