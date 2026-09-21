@@ -138,3 +138,86 @@ def test_vendors_round_trip_clean_too():
     }
     plan = classify([parsed], lists.VENDORS, [Vendor()])
     assert plan.rows[0].differences == []
+
+
+# ── stock: the same bug, on a field that is not a column ──────────────────
+#
+# Found on live immediately after the recipes fix shipped, in the list that
+# had only just joined this screen. Every item with a chosen supplier was
+# flagged as changed, on every re-import:
+#
+#     Bay Leaves   Supplier: — → ★ Exotic
+#     Red Onion    Supplier: — → ★ Exotic
+#
+# `supplier` is not a column on Item. The exporter resolves it through
+# `best_vendors` and marks the chosen one with a ★; `classify` read
+# `getattr(item, "supplier", None)` and got None every time. Two different
+# sources for the two sides of one comparison — the same shape as
+# `servings_default`, which is why both live in this file.
+
+STAR = "\u2605 "
+
+
+class Item:
+    """`supplier` is set by the router from `best_vendors`, exactly as the
+    exporter does. The real ORM row has no such column."""
+
+    def __init__(self, name="Bay Leaves", unit="kg", category="Spices",
+                 current_stock=2.0, supplier=None):
+        self.name = name
+        self.unit = unit
+        self.category = category
+        self.current_stock = current_stock
+        self.supplier = supplier
+
+
+def _stock_row(**over):
+    row = {"name": "Bay Leaves", "unit": "kg", "category": "Spices",
+           "current_stock": 2.0, "supplier": STAR + "Exotic"}
+    row.update(over)
+    return row
+
+
+def test_a_starred_supplier_matches_the_plain_one_we_hold():
+    """THE REGRESSION. The export writes "★ Exotic" so a person can see which
+    supplier is chosen; the comparison must not read the decoration as data."""
+    plan = classify([_stock_row()], lists.ITEMS, [Item(supplier="Exotic")])
+    assert plan.rows[0].differences == []
+
+
+def test_a_real_supplier_change_is_still_caught():
+    plan = classify(
+        [_stock_row(supplier=STAR + "Farm2Land")], lists.ITEMS, [Item(supplier="Exotic")]
+    )
+    (diff,) = plan.rows[0].differences
+    assert (diff["label"], diff["ours"], diff["theirs"]) == ("Supplier", "Exotic", "Farm2Land")
+
+
+def test_no_supplier_either_side_is_not_a_change():
+    plan = classify([_stock_row(supplier="")], lists.ITEMS, [Item(supplier=None)])
+    assert plan.rows[0].differences == []
+
+
+def test_assigning_a_supplier_to_an_item_that_had_none_is_a_change():
+    plan = classify([_stock_row()], lists.ITEMS, [Item(supplier=None)])
+    (diff,) = plan.rows[0].differences
+    assert diff["ours"] == "—" and diff["theirs"] == "Exotic"
+
+
+def test_a_whole_untouched_stock_export_comes_back_unchanged():
+    """The acceptance test, for the list he actually managed to export."""
+    held = [
+        Item("Bay Leaves", "kg", "Spices", 2.0, "Exotic"),
+        Item("Red Onion", "kg", "Vegetables", 12.0, "Exotic"),
+        Item("Paneer", "kg", "Dairy", 10.0, None),
+    ]
+    rows = [
+        _stock_row(),
+        _stock_row(name="Red Onion", category="Vegetables", current_stock=12.0),
+        _stock_row(name="Paneer", category="Dairy", current_stock=10.0, supplier=""),
+    ]
+    plan = classify(rows, lists.ITEMS, held)
+    assert all(r.verdict == "duplicate" for r in plan.rows)
+    assert all(r.differences == [] for r in plan.rows), [
+        (r.values["name"], r.differences) for r in plan.rows if r.differences
+    ]

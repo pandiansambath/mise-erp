@@ -170,6 +170,14 @@ RECIPES = ListSpec(
 # list, per the pricing law — a cost typed into a stock sheet would be a second
 # source of truth for the number this whole product exists to get right.
 
+def _unstar(v: str) -> str:
+    """Drop the ★ the exporter uses to mark the chosen supplier."""
+    from app.inventory.export import CHOSEN_MARK
+
+    s = (v or "").strip()
+    return s[len(CHOSEN_MARK):].strip() if s.startswith(CHOSEN_MARK.strip()) else s
+
+
 def _exp_header(key: str) -> str:
     """The header the CSV exporter writes this field under, lower-cased."""
     from app.inventory.export import ITEM_IMPORT_HEADERS
@@ -195,7 +203,12 @@ ITEMS = ListSpec(
               aliases=("stock", "quantity", "qty", "opening", _exp_header("current_stock")),
               right=True, width=14),
         Field("supplier", "Supplier",
-              aliases=("vendor", "supplier name", _exp_header("supplier")), width=24),
+              aliases=("vendor", "supplier name", _exp_header("supplier")), width=24,
+              # THE EXPORT WRITES "★ Fresh Farms" so a person can see which
+              # supplier is chosen. `_find_vendor` already strips the mark
+              # before matching; the COMPARISON did not, so a re-imported
+              # export read "★ Exotic" against "Exotic" and called it a change.
+              from_cell=_unstar),
     ],
     sample_rows=[
         ["Basmati Rice", "kg", "Dry Goods", 25, "Fresh Farms"],
