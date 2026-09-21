@@ -29,7 +29,12 @@ export type PlanRow = {
   values: Record<string, unknown>;
   verdict: "new" | "duplicate" | "invalid";
   existing: Record<string, unknown> | null;
-  differences: string[] | null;
+  /** Each difference CARRIES ITS TWO VALUES. It used to be a list of column
+   *  headers that this file had to resolve back to keys itself, by swapping
+   *  underscores for spaces — so "Serves" hunted for a key called "serves"
+   *  while the row held "servings_default", and the only flagged field on the
+   *  screen rendered as "— vs —". Nothing to look up, nothing to mismatch. */
+  differences: { field: string; label: string; ours: string; theirs: string }[] | null;
   reason: string | null;
 };
 
@@ -156,14 +161,14 @@ export function ImportPlan({
                     row where one phone number changed is how a person stops
                     reading these. */}
                 <dl className="mt-2 space-y-1">
-                  {(r.differences ?? []).map((field) => (
-                    <div key={field} className="grid grid-cols-[7rem_1fr_1fr] gap-2 text-[11px]">
-                      <dt className="truncate text-fg-faint">{field}</dt>
+                  {(r.differences ?? []).map((d) => (
+                    <div key={d.field} className="grid grid-cols-[7rem_1fr_1fr] gap-2 text-[11px]">
+                      <dt className="truncate text-fg-faint">{d.label}</dt>
                       <dd className={`truncate ${take[r.n] ? "text-fg-faint line-through" : "text-fg"}`}>
-                        {show(r.existing, field)}
+                        {d.ours}
                       </dd>
                       <dd className={`truncate ${take[r.n] ? "text-fg" : "text-fg-faint line-through"}`}>
-                        {show(r.values, field)}
+                        {d.theirs}
                       </dd>
                     </div>
                   ))}
@@ -260,15 +265,6 @@ function summarise(g: {
     return `${g.fresh.length} new — you have none yet, so all of them are new.`;
   }
   return bits.join(" · ");
-}
-
-function show(src: Record<string, unknown> | null, header: string): string {
-  if (!src) return "—";
-  const k = Object.keys(src).find(
-    (key) => key.replace(/_/g, " ").toLowerCase() === header.toLowerCase(),
-  );
-  const v = k ? src[k] : undefined;
-  return v === undefined || v === null || v === "" ? "—" : String(v);
 }
 
 function Choice({

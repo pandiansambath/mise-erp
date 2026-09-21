@@ -38,10 +38,11 @@ class Row:
     verdict: str
     #: For a duplicate: what we already hold, so the two can be compared.
     existing: dict[str, Any] | None = None
-    #: What differs between the file and what we hold. Empty means the row is
-    #: identical to what is already stored — importing it would do nothing,
-    #: which is worth saying rather than counting as a change.
-    differences: list[str] | None = None
+    #: What differs, one entry per field, each carrying BOTH values:
+    #: {field, label, ours, theirs}. Empty means the row is identical to what
+    #: is already stored — importing it would do nothing, which is worth
+    #: saying rather than counting as a change.
+    differences: list[dict] | None = None
     reason: str | None = None
 
 
@@ -86,6 +87,50 @@ class Plan:
                 for r in self.rows
             ],
         }
+
+
+def _same(field, a, b) -> bool:
+    """Is the file's value the same as ours?
+
+    NOT `str(a) != str(b)`. Every kind="number" column is parsed as
+    `float(Decimal(...))` on the way in, so an INTEGER column round-trips as
+    25 -> "25" -> 25.0, and a string comparison calls that a change. It made
+    a restaurant's own untouched menu export come back reading "17 already
+    here but different" — which is precisely the false alarm the preview
+    exists to avoid, and the fastest way to teach somebody to stop reading it.
+    """
+    if getattr(field, "kind", "text") == "number":
+        na, nb = _num(a), _num(b)
+        if na is not None or nb is not None:
+            return na == nb
+    # Booleans arrive as bool from `from_cell` and as bool from the ORM, but a
+    # CSV that skipped the column leaves the key absent rather than false.
+    if isinstance(a, bool) or isinstance(b, bool):
+        return bool(a) == bool(b)
+    return str(a if a is not None else "").strip() == str(b if b is not None else "").strip()
+
+
+def _num(v):
+    from decimal import Decimal, InvalidOperation
+
+    if v is None or v == "":
+        return None
+    try:
+        return Decimal(str(v).replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _shown(v) -> str:
+    """What a person should see for this value in the comparison table."""
+    if v is None or v == "":
+        return "—"
+    if isinstance(v, bool):
+        return "yes" if v else "no"
+    if isinstance(v, float) and v.is_integer():
+        # 25.0 is a parsing artefact, never something anybody typed.
+        return str(int(v))
+    return str(v)
 
 
 def _key(spec: ListSpec, rec: dict) -> str:
@@ -180,18 +225,28 @@ def classify(raw: list[dict], spec: ListSpec, existing: list[Any]) -> Plan:
 
         if k and k in have:
             prior = have[k]
+            # EACH DIFFERENCE CARRIES ITS OWN TWO VALUES. The popup used to be
+            # handed a list of headers and had to find the matching key itself,
+            # by swapping underscores for spaces — so "Serves" went looking for
+            # a key called "serves" while the data held "servings_default", and
+            # the one field it had flagged displayed as "— vs —".
             diffs = [
-                f.header
+                {
+                    "field": f.key,
+                    "label": f.header,
+                    "ours": _shown(prior.get(f.key)),
+                    "theirs": _shown(clean.get(f.key)),
+                }
                 for f in spec.fields
-                if f.key in clean
-                and str(clean.get(f.key) or "") != str(prior.get(f.key) or "")
+                if f.key in clean and not _same(f, clean.get(f.key), prior.get(f.key))
             ]
             rows.append(Row(
                 n=i, values=clean, verdict="duplicate", existing=prior,
                 differences=diffs,
                 reason=(
                     "already here, and identical" if not diffs
-                    else "already here — these differ: " + ", ".join(diffs)
+                    else "already here — these differ: "
+                    + ", ".join(d["label"] for d in diffs)
                 ),
             ))
         else:
