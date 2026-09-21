@@ -215,12 +215,33 @@ def parse_upload(
         ]
 
     by_key = {c.key: c for c in spec.columns}
+    #: Column positions of the required fields, for the footer test above.
+    req_idx = [colmap[c.key] for c in spec.columns if c.required and c.key in colmap]
     out: list[dict] = []
     errors: list[str] = []
     data = rows[header_idx + 1:][:MAX_ROWS]
     for n, row in enumerate(data, start=1):
         if not any(_norm(c) for c in row):
             continue  # blank line
+
+        # A ROW WITH NONE OF THE REQUIRED FIELDS IS NOT A BROKEN ROW — IT IS NOT
+        # A ROW.
+        #
+        # Our own exports end with a totals footer ("", "", "", "", "Total",
+        # 70.00, ...). Re-importing one produced
+        #     Row 4: "Name" is required; "Unit" is required
+        # and, because any error empties the result, THE ENTIRE IMPORT FAILED on
+        # a file we had just written ourselves. That is the wall he hit on
+        # Friday with his whole inventory.
+        #
+        # Skipping only when EVERY required field is empty keeps the error that
+        # matters: a row with a name and no unit is still a genuine mistake and
+        # still reported. A footer, a note, a signature line — none of those
+        # claim to be data, so none of them should be able to fail the file.
+        if req_idx and not any(
+            _norm(row[i]) for i in req_idx if i < len(row)
+        ):
+            continue
         rec: dict = {}
         row_errs: list[str] = []
         for key, idx in colmap.items():

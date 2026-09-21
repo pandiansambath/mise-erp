@@ -34,7 +34,7 @@ def _supplier(item, suppliers: dict | None) -> str:
     if not chosen:
         return ""
     name, is_chosen = chosen[0], chosen[1]
-    return f"{'★ ' if is_chosen else ''}{name}"
+    return f"{CHOSEN_MARK if is_chosen else ''}{name}"
 
 
 # ── Inventory stock valuation ────────────────────────────────────────────────
@@ -47,6 +47,31 @@ _ITEM_COLS = [
     "Avg cost", "Stock value (avg)", "Current buy price", "Value at current price",
     "Supplier", "Status",
 ]
+
+#: THE HEADER EACH IMPORTABLE FIELD IS EXPORTED UNDER — and the single source the
+#: importer builds its aliases from.
+#:
+#: "whatever we export we can import and use the same"
+#:
+#: It did not. The exporter wrote "In stock"; the importer accepted
+#: "Opening stock" plus stock/quantity/qty/opening — and "in stock" is none of
+#: those, so every quantity was DROPPED SILENTLY on the way back in. Not an
+#: error; the import "succeeded" with zero stock against every item.
+#:
+#: Two lists of English, maintained in two files, drifted. So there is one list
+#: now: the importer reads this, and a header that changes here changes there.
+ITEM_IMPORT_HEADERS: dict[str, str] = {
+    "name": "Item",
+    "category": "Category",
+    "current_stock": "In stock",
+    "unit": "Unit",
+    "supplier": "Supplier",
+}
+
+#: Marks the CHOSEN supplier in a human-readable export. Stripped on the way
+#: back in — `_find_vendor` matched names exactly, so every starred supplier
+#: failed to link and the import quietly produced items with no vendor.
+CHOSEN_MARK = "★ "
 
 
 def items_to_csv(items, suppliers: dict | None = None) -> bytes:

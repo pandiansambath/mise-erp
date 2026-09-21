@@ -462,19 +462,37 @@ async def waste_xlsx(
 # NO price column — prices live with the supplier (single source of truth). The
 # optional Supplier column only LINKS an existing vendor price: if that vendor
 # already prices the item we set it as the ★ chosen one; otherwise we tell you why.
+def _exp(key: str) -> str:
+    """The header the exporter writes this field under. Lower-cased because the
+    matcher normalises; missing keys fall back to the key itself rather than
+    raising, so adding a column to the template never breaks the export."""
+    return export.ITEM_IMPORT_HEADERS.get(key, key).lower()
+
+
 ITEMS_TEMPLATE = TemplateSpec(
     name="Inventory items",
     subtitle=(
         "One row per item. Name + Unit required (*). Supplier is optional — its price "
         "is read from Vendors (you never type a price here)."
     ),
+    # ⚠️ EVERY COLUMN CARRIES ITS EXPORT HEADER AS AN ALIAS, read from
+    # `export.ITEM_IMPORT_HEADERS` rather than retyped. His rule is "whatever we
+    # export we can import and use the same", and the way that broke was two
+    # lists of English in two files: the exporter said "In stock", the importer
+    # accepted "Opening stock" and four aliases that did not include it, and the
+    # quantity column was dropped on every single re-import WITHOUT AN ERROR.
+    #
+    # Reading the aliases from the exporter makes the round trip structural. A
+    # header renamed in one place is renamed in both, and `test_round_trip`
+    # fails if anybody splits them again.
     columns=[
-        Column("name", "Name", required=True, aliases=("item", "product", "ingredient")),
-        Column("unit", "Unit", required=True, aliases=("uom", "units")),
-        Column("category", "Category", aliases=("type", "group")),
+        Column("name", "Name", required=True,
+               aliases=("item", "product", "ingredient", _exp("name"))),
+        Column("unit", "Unit", required=True, aliases=("uom", "units", _exp("unit"))),
+        Column("category", "Category", aliases=("type", "group", _exp("category"))),
         Column("current_stock", "Opening stock", kind="number",
-               aliases=("stock", "quantity", "qty", "opening")),
-        Column("supplier", "Supplier", aliases=("vendor", "supplier name")),
+               aliases=("stock", "quantity", "qty", "opening", _exp("current_stock"))),
+        Column("supplier", "Supplier", aliases=("vendor", "supplier name", _exp("supplier"))),
     ],
     sample_rows=[
         ["Basmati Rice", "kg", "Dry Goods", 25, "Fresh Farms"],
@@ -487,7 +505,12 @@ ITEMS_TEMPLATE = TemplateSpec(
 async def _find_vendor(db: AsyncSession, hotel_id: uuid.UUID, name: str):
     """Find a vendor by normalised (trim + case-fold) name. Does NOT create one —
     a missing supplier is reported so the user adds it on Vendors."""
-    nl = name.strip().casefold()
+    # STRIP THE CHOSEN MARK. The exporter writes "★ Fresh Farms" so a person can
+    # see which supplier is selected; this matched names exactly, so every
+    # starred supplier failed to resolve and the re-import produced items with
+    # no vendor at all — silently, because a missing supplier is only "reported"
+    # and never fails the row.
+    nl = name.strip().lstrip(export.CHOSEN_MARK.strip()).strip().casefold()
     vendors = await vendor_service.list_vendors(db, hotel_id)
     return next((v for v in vendors if v.name and v.name.strip().casefold() == nl), None)
 
