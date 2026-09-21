@@ -16,11 +16,18 @@ import { useDraggable } from "@/components/useDraggable";
 import { useResizable } from "@/components/useResizable";
 import { speak, speechOutputSupported, stopSpeaking, useVoiceInput } from "@/lib/useVoice";
 import ChefMascot from "@/components/auth/ChefMascot";
+import { ImportPlan, type Decision, type Plan as ImportPlanData } from "@/components/ImportPlan";
+import { SheetPopup } from "@/components/SheetPopup";
 
 type Action = { label: string; href: string };
 type Row = Record<string, unknown>;
 type Pending = {
   kind: string; label: string; summary: string; fields: Row;
+  /** A BULK import's plan, when `kind === "list_import"`. Carried rather than
+   *  re-fetched: the classification was done server-side when the model
+   *  proposed, and asking again would risk the chat showing one verdict and
+   *  the confirm screen another. */
+  plan?: ImportPlanData;
   done?: boolean; result?: string; undo?: { type: string; id: string }; undone?: boolean; busy?: boolean;
   /** The server could not tell which item a supplier's wording meant, and is
    *  asking rather than guessing — a price on the wrong item is invisible. */
@@ -208,6 +215,17 @@ function assistantError(e: unknown): string {
 
 export function Copilot() {
   const [open, setOpen] = useState(false);
+
+  /** A bulk import the model proposed, opened for review.
+   *
+   *  `at` remembers which message and which pending card it came from, so the
+   *  aftermath lands back on the card that asked rather than as a loose toast
+   *  — the conversation is where he is looking. */
+  const [listPlan, setListPlan] = useState<{
+    plan: ImportPlanData;
+    base: string;
+    at: [number, number];
+  } | null>(null);
   // Remembered, because a preference you have to set every visit is not a
   // preference. Defaults to the old behaviour so nothing changes uninvited.
   const [closeOnOutside, setCloseOnOutside] = useState(true);
@@ -647,6 +665,44 @@ export function Copilot() {
       push({ role: "assistant", content: "Sorry — I couldn't save those. Please try again." });
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** Write a reviewed bulk import.
+   *
+   *  Goes to the SAME endpoint the file import uses, which is the point: that
+   *  route carries `require("…:write")`, and the assistant's own write path
+   *  does not — it checks the base role only, so it misses custom roles, does
+   *  not refuse a support-view session, and never returns 402 on an unpaid
+   *  account. At one row those are bugs; at four hundred they are a different
+   *  conversation with a customer. */
+  async function commitList(decisions: Decision[]) {
+    if (!listPlan) return;
+    const [mi, pi] = listPlan.at;
+    patchPending(mi, pi, { busy: true });
+    try {
+      const res = await api.post<{
+        counts: { created: number; updated: number; skipped: number; failed: number };
+      }>(`/${listPlan.base}/import/commit`, { rows: decisions, source: "copilot" });
+      const c = res.counts;
+      patchPending(mi, pi, {
+        busy: false,
+        done: true,
+        // The numbers, in a sentence. "Done" is also what an import that lost
+        // half the list says.
+        result:
+          `Added ${c.created}` +
+          (c.updated ? `, updated ${c.updated}` : "") +
+          (c.skipped ? `, left ${c.skipped} alone` : "") +
+          (c.failed ? `, ${c.failed} could not be saved` : "") +
+          ".",
+      });
+      setListPlan(null);
+    } catch (err) {
+      patchPending(mi, pi, {
+        busy: false,
+        result: err instanceof ApiError ? err.message : "Could not save those.",
+      });
     }
   }
 
@@ -1174,7 +1230,41 @@ export function Copilot() {
                     );
                   })()}
                   {/* Confirm cards (proposed write actions) */}
-                  {m.pending?.map((p, k) => (
+                  {m.pending?.map((p, k) =>
+                    // A BULK IMPORT IS NOT A CONFIRM CARD.
+                    //
+                    // Forty rows will not fit in a phone-width chat bubble, and
+                    // the comparison a duplicate needs — what we hold beside
+                    // what the file says, field by field — is a table. So the
+                    // bubble keeps the sentence and the count, and the table
+                    // opens in the SAME sheet the file import uses. He learns
+                    // one screen, not two, whether the list arrived as a
+                    // spreadsheet, a photograph or a paste.
+                    p.kind === "list_import" && p.plan ? (
+                      <div key={k} className="mt-2 rounded-xl border border-brand-500/30 bg-brand-500/5 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-400">
+                          Review · {p.label}
+                        </p>
+                        <p className="mt-1 text-sm text-fg">{p.summary}</p>
+                        {p.done ? (
+                          <p className="mt-1.5 text-xs text-fg-soft">{p.result}</p>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setListPlan({
+                                plan: p.plan!,
+                                base: String(p.fields?.list ?? "vendors"),
+                                at: [i, k],
+                              })
+                            }
+                            className="mise-press mt-2 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Look at these first
+                          </button>
+                        )}
+                      </div>
+                    ) : (
                     <div key={k} className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-3">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-300/90">Confirm · {p.label}</p>
                       <p className="mt-1 text-sm text-fg">{p.summary}</p>
@@ -1281,7 +1371,8 @@ export function Copilot() {
                         </button>
                       )}
                     </div>
-                  ))}
+                    )
+                  )}
 
                   {/* Onboarding preview (bulk items/suppliers) */}
                   {m.ingest && (
@@ -1521,6 +1612,23 @@ export function Copilot() {
             <button type="submit" disabled={loading || (!input.trim() && !staged)} aria-label="Send" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-500 disabled:opacity-40">↑</button>
           </form>
         </div>
+      )}
+
+      {/* THE SAME SHEET THE FILE IMPORT OPENS. Forty rows do not fit in a chat
+          bubble, and the field-by-field comparison a duplicate needs is a
+          table — so the conversation keeps the sentence and the table gets a
+          surface of its own. */}
+      {listPlan && (
+        <SheetPopup
+          onClose={() => setListPlan(null)}
+          title={`Import ${listPlan.base}`}
+        >
+          <ImportPlan
+            plan={listPlan.plan}
+            onCancel={() => setListPlan(null)}
+            onCommit={commitList}
+          />
+        </SheetPopup>
       )}
     </>
   );
