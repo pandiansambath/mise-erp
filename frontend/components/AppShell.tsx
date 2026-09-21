@@ -839,11 +839,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Not for a self-service login. A tour of one page is not a tour, and this
     // one used to march them through Money and Payroll on the way.
     if (selfServiceOnly) return;
+    // AND NOT ON TOP OF /setup. A brand-new owner is sent there by sign-in
+    // precisely because it is the first thing they should see; opening a
+    // modal over it 700ms later means the first impression of this product
+    // is a dialog covering the page we chose to show them. They get the tour
+    // when they reach the dashboard, which is where its steps start anyway.
+    if (pathname === "/setup") return;
     if (shouldAutoStartTour()) {
       const t = window.setTimeout(() => setTourOpen(true), 700);
       return () => window.clearTimeout(t);
     }
-  }, [selfServiceOnly]);
+  }, [selfServiceOnly, pathname]);
 
   // Sign-in always lands on /dashboard, so hiding the link is not enough — they
   // would still start on the page that cannot show them anything. My Space IS

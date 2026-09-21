@@ -31,7 +31,11 @@ function VerifyInner() {
       .then((res) => {
         setToken(res.access_token);
         setState("done");
-        window.setTimeout(() => window.location.assign("/onboarding"), 900);
+        // /setup, not /onboarding. The old target was a standalone route
+        // painted near-black, so a restaurant on any of the other themes
+        // confirmed its email and was dropped into what looked like a
+        // different product. /setup lives inside the app shell.
+        window.setTimeout(() => window.location.assign("/setup"), 900);
       })
       .catch((err) => {
         setError(err instanceof ApiError ? err.message : "That link is invalid or already used.");
