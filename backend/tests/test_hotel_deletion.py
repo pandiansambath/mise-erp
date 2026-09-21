@@ -265,10 +265,26 @@ async def test_the_archive_contains_every_row_and_the_hotel_itself(
     assert key.startswith("deleted-hotels/doomed-")
     assert written["Bucket"] == "test-bucket"
 
+    # THE ROWS MOVED UNDER "tables" in v2, alongside the restore order, the
+    # per-table counts and a version. The nesting is the point: a restore that
+    # infers table order from JSON key order gets it wrong on a foreign key,
+    # and a count is how you tell a genuinely empty table from one that
+    # silently failed to read.
     dump = json.loads(written["Body"].decode())
-    assert len(dump["items"]) == 2
-    assert len(dump["hotels"]) == 1
-    assert dump["hotels"][0]["name"] == "Doomed Diner"
+    assert dump["version"] == 2
+    tables = dump["tables"]
+    assert len(tables["items"]) == 2
+    assert len(tables["hotels"]) == 1
+    assert tables["hotels"][0]["name"] == "Doomed Diner"
+    assert dump["row_counts"]["items"] == 2
+
+    # And the guarantee the v2 format exists for: the backup covers EXACTLY
+    # what the purge would remove. It used to walk a hand-typed list while the
+    # purge walked the live foreign-key graph, so the backup was a subset —
+    # which looks like it worked right up until somebody needs it.
+    doomed = {tbl for tbl, _where in await deletion._delete_plan(db)}
+    assert doomed <= set(tables), f"purged but never archived: {doomed - set(tables)}"
+    assert dump["order"][-1] == "hotels"
 
 
 async def test_a_broken_s3_reports_failure_rather_than_pretending(
