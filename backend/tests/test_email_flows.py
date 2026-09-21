@@ -5,7 +5,7 @@ from app.auth.models import Role
 
 
 @pytest.mark.asyncio
-async def test_signup_requires_verification_then_link_opens_the_app(client, db):
+async def test_signup_lets_them_in_and_the_link_still_verifies(client, db):
     r = await client.post(
         "/api/auth/register-hotel",
         json={
@@ -19,12 +19,14 @@ async def test_signup_requires_verification_then_link_opens_the_app(client, db):
     )
     assert r.status_code == 201
 
-    # unverified -> login is refused with a verify-first message
-    blocked = await client.post(
+    # UNVERIFIED -> THEY GET IN. The name of this test used to promise the
+    # opposite; signup is the one place the wall came down, and the verify
+    # link below still has to work for somebody already inside.
+    straight_in = await client.post(
         "/api/auth/login", json={"email": "owner@verifypalace.com", "password": "password123"}
     )
-    assert blocked.status_code == 403
-    assert "verify" in blocked.json()["detail"].lower()
+    assert straight_in.status_code == 200, straight_in.text
+    assert straight_in.json()["user"]["email_verified"] is False
 
     # grab the token the email would carry, straight from the DB
     from sqlalchemy import select

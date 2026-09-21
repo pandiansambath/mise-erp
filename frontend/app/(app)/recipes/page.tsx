@@ -16,6 +16,7 @@ import { useCurrency } from "@/lib/currency";
 import { can } from "@/lib/permissions";
 import { useDeepLink } from "@/components/fx";
 import { FormShell } from "@/components/EditModal";
+import { ListPortability } from "@/components/ListPortability";
 import { SubNav } from "@/components/SubNav";
 
 function marginTone(pct: number): "green" | "amber" | "red" {
@@ -767,6 +768,16 @@ export default function RecipesPage() {
         </div>
       )}
       <PageHeader title="Recipes" subtitle="Cost per plate and profit margin for each dish." />
+
+      {/* The menu can leave and come back — the last of the four lists that
+          could only be typed in. Dishes only: INGREDIENT LINES ARE NOT IN THIS
+          FILE, because a line points at an inventory item by id and a
+          spreadsheet from another account has different ids, so a flat export
+          would either drop the links silently or wire dishes to the wrong
+          stock. Dishes first, then cost them where the items are real. */}
+      <div className="mb-2">
+        <ListPortability base="recipes" noun="dishes" onDone={load} />
+      </div>
 
       {/* The jobs this page does. Sorting by margin and finding the dishes
           losing money were both buried in controls further down. */}

@@ -51,8 +51,22 @@ async def test_a_new_hotel_owner_still_has_to_verify(client, db, make_user, hote
 
 
 @pytest.mark.asyncio
-async def test_registration_marks_the_owner_as_must_verify(client, db):
-    """Set at the one place it should be set, and nowhere else."""
+async def test_registration_does_not_lock_the_new_owner_out(client, db):
+    """THE EXCEPTION IS WITHDRAWN, and this test is the record of that.
+
+        "we dont need thsi strcik email verification in signup area: please it
+         will make customer to spoil mood... let them give whatever mail they
+         have...then after enterred the site they can verify the email"
+
+    The earlier rule kept ONE wall standing — the new hotel owner — and this
+    test asserted it. Signup is precisely the wall he has now taken down, so
+    the assertion is inverted rather than deleted: the flag must be OFF at
+    registration, and the only way to know it stayed off is to keep checking.
+
+    What did NOT change is what being unverified COSTS: `email_verified` is
+    still false, so password reset and outbound alerts stay paused. That is
+    the half that makes this safe, and it is asserted two tests below.
+    """
     from sqlalchemy import select
 
     from app.auth.models import User
@@ -71,8 +85,15 @@ async def test_registration_marks_the_owner_as_must_verify(client, db):
     owner = (
         await db.execute(select(User).where(User.email == "newowner@nirai.com"))
     ).scalar_one()
-    assert owner.verify_required is True
-    assert owner.email_verified is False
+    assert owner.verify_required is False, "signup must not raise the wall he took down"
+    assert owner.email_verified is False, "unverified, though — the limits still apply"
+
+    # And the proof that matters: they can actually get in.
+    login = await client.post(
+        "/api/auth/login",
+        json={"email": "newowner@nirai.com", "password": "OwnerPass123"},
+    )
+    assert login.status_code == 200, login.text
 
 
 @pytest.mark.asyncio

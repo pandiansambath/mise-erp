@@ -379,6 +379,15 @@ async def _propose(kind: str, user: User, args: dict) -> dict:
 #: SAY SO; never drop silently.
 MAX_LIST_ROWS = 200
 
+#: Every list the assistant may propose in bulk, and the permission that
+#: governs it. `employees-with-pay` is absent on purpose — the chat is not a
+#: route to setting salaries — and so is anything not listed here.
+_LIST_WRITE_PERM = {
+    "vendors": "vendors:write",
+    "employees": "employees:write",
+    "recipes": "recipes:write",
+}
+
 
 async def propose_list(db: AsyncSession, user: User, args: dict) -> dict:
     """Many rows at once — the thing he actually asked for.
@@ -406,10 +415,21 @@ async def propose_list(db: AsyncSession, user: User, args: dict) -> dict:
     # Resolved from OUR table, never from a name the model invents — and
     # `employees-with-pay` is deliberately not reachable here, so the assistant
     # cannot become a side door for setting salaries.
-    if spec is None or slug.endswith("-with-pay"):
-        return {"error": "I can only add suppliers or staff in bulk at the moment."}
-
-    perm = {"vendors": "vendors:write", "employees": "employees:write"}[slug]
+    # A SLUG WITHOUT A PERMISSION IS NOT REACHABLE. This is one table, not two,
+    # because the pair that used to exist went out of step the moment `recipes`
+    # joined EXPORTABLE: the spec resolved, the `-with-pay` guard passed, and
+    # then `{...}[slug]` raised KeyError — a 500 inside the tool loop, where the
+    # nearest handler turns it into "something went wrong" with no clue which
+    # list caused it. Keying the permission table IS the allow-list, so a new
+    # exportable list is refused politely until somebody names its permission.
+    perm = _LIST_WRITE_PERM.get(slug)
+    if spec is None or perm is None:
+        return {
+            "error": (
+                "I can add suppliers, staff or menu dishes in bulk. "
+                "Which of those is this?"
+            )
+        }
     if not has_permission(user.role, perm):
         return {"error": f"You don't have permission to add {slug}."}
 
@@ -459,14 +479,28 @@ async def propose_list(db: AsyncSession, user: User, args: dict) -> dict:
 
 
 async def _existing_for(db: AsyncSession, user: User, slug: str) -> list:
-    """What the restaurant already has, for the duplicate check."""
+    """What the restaurant already has, for the duplicate check.
+
+    ⚠️ EXHAUSTIVE, AND IT RAISES ON A SLUG IT DOES NOT KNOW. The `if vendors /
+    else employees` shape this replaces meant any new list was silently
+    compared against the STAFF — so every dish came back "new" because no
+    dish is named after a chef, and the preview promised forty additions while
+    the commit (which re-classifies properly) quietly skipped the duplicates.
+    A preview that disagrees with the write is worse than no preview.
+    """
     if slug == "vendors":
         from app.vendors import service as vendor_service
 
         return await vendor_service.list_vendors(db, user.hotel_id, active_only=False)
-    from app.employees import service as employee_service
+    if slug == "recipes":
+        from app.recipes import service as recipe_service
 
-    return await employee_service.list_employees(db, user.hotel_id, active_only=False)
+        return await recipe_service.list_recipes(db, user.hotel_id, active_only=False)
+    if slug.startswith("employees"):
+        from app.employees import service as employee_service
+
+        return await employee_service.list_employees(db, user.hotel_id, active_only=False)
+    raise KeyError(slug)  # unreachable: _LIST_WRITE_PERM gates the slug first
 
 
 async def propose_expense(db: AsyncSession, user: User, args: dict) -> dict:
@@ -1862,7 +1896,7 @@ TOOLS: list[dict] = [
             "properties": {
                 "list": {
                     "type": "string",
-                    "enum": ["vendors", "employees"],
+                    "enum": ["vendors", "employees", "recipes"],
                     "description": "which list these rows belong to",
                 },
                 "rows": {
@@ -1871,8 +1905,9 @@ TOOLS: list[dict] = [
                         "One object per record. Suppliers take name (required), "
                         "category, contact_person, mobile, email, address, "
                         "vat_number. Staff take full_name (required), job_title, "
-                        "mobile, employee_code. Leave out anything you were not "
-                        "told rather than guessing it."
+                        "mobile, employee_code. Menu dishes take name (required), "
+                        "category, servings_default, selling_price. Leave out "
+                        "anything you were not told rather than guessing it."
                     ),
                     "items": {"type": "object"},
                 },
