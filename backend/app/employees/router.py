@@ -3,7 +3,16 @@ import uuid
 from datetime import date as date_type
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
+from app.core import list_io, lists, roundtrip, template_io
 from app.core.database import get_db
 from app.core.security import verify_password
 from app.employees import attendance_lock, service, timesheet
@@ -873,3 +883,86 @@ async def cancel_leave(
     await db.delete(row)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── the round trip ────────────────────────────────────────────────────────
+#
+#     "exployee here also export fteayre not there"
+#
+# ⚠️ TWO EXPORTS, ON PURPOSE. The plain one carries names, roles and contact
+# details. Pay and National Insurance live behind `payroll:read`, because an
+# export is a file that ends up in email and on somebody's desktop, and "export
+# the staff list" should never be the action that puts every salary in it.
+
+
+def _emp_file(content: bytes, media: str, name: str) -> Response:
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.get("/export.csv")
+async def export_employees_csv(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> Response:
+    rows = await service.list_employees(db, user.hotel_id, active_only=False)
+    return _emp_file(
+        roundtrip.to_csv(lists.EMPLOYEES, rows), "text/csv", "dineai-employees.csv"
+    )
+
+
+@router.get("/export.xlsx")
+async def export_employees_xlsx(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:read")),
+) -> Response:
+    rows = await service.list_employees(db, user.hotel_id, active_only=False)
+    return _emp_file(
+        roundtrip.to_xlsx(lists.EMPLOYEES, rows), XLSX_MIME, "dineai-employees.xlsx"
+    )
+
+
+@router.get("/export-with-pay.xlsx")
+async def export_employees_with_pay(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("payroll:read")),
+) -> Response:
+    """Salary and NI included. `payroll:read`, not `employees:read`.
+
+    Anyone who can see the staff list is not thereby entitled to see what each
+    of them earns — that is a different question and it has its own permission
+    already. It is also audited, because a file containing every salary leaving
+    the building is an event somebody may need to account for later.
+    """
+    rows = await service.list_employees(db, user.hotel_id, active_only=False)
+    out = roundtrip.to_xlsx(lists.EMPLOYEES_WITH_PAY, rows)
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="employees.export_pay",
+        summary=f"Exported {len(rows)} staff records INCLUDING pay and NI numbers",
+    )
+    return _emp_file(out, XLSX_MIME, "dineai-employees-with-pay.xlsx")
+
+
+@router.get("/import-template.xlsx")
+async def employees_template(user: User = Depends(require("employees:read"))) -> Response:
+    return _emp_file(
+        template_io.template_xlsx(lists.EMPLOYEES.template()),
+        XLSX_MIME, "dineai-employees-template.xlsx",
+    )
+
+
+@router.post("/import/preview")
+async def preview_employee_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("employees:write")),
+) -> dict:
+    """What would happen. Writes nothing — see `core/list_io`."""
+    existing = await service.list_employees(db, user.hotel_id, active_only=False)
+    plan = list_io.build_plan(
+        await file.read(), file.filename or "", file.content_type or "",
+        lists.EMPLOYEES, existing,
+    )
+    return plan.as_dict()

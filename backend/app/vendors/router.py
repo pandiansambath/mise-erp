@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import service as audit
 from app.auth.deps import require, require_feature
 from app.auth.models import User
-from app.core import template_io
+from app.core import list_io, lists, roundtrip, template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import XLSX_MIME, Column, TemplateSpec
@@ -591,3 +591,74 @@ async def switching_savings(
             else None
         ),
     }
+
+
+# ── the round trip: export, template, and an import that shows its work ────
+#
+#     "likweise i need vebdor but here export feature is missing"
+#
+# Vendors could be imported (per-vendor price lists) and never exported, so a
+# restaurant could put its suppliers in and never get them out. That is not a
+# missing convenience; for somebody moving to a new account it is a wall.
+
+
+def _list_file(content: bytes, media: str, name: str) -> Response:
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@router.get("/export.csv")
+async def export_vendors_csv(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> Response:
+    """Every supplier, in a file this app will accept back unchanged."""
+    rows = await service.list_vendors(db, user.hotel_id, active_only=False)
+    return _list_file(
+        roundtrip.to_csv(lists.VENDORS, rows), "text/csv", "dineai-vendors.csv"
+    )
+
+
+@router.get("/export.xlsx")
+async def export_vendors_xlsx(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:read")),
+) -> Response:
+    rows = await service.list_vendors(db, user.hotel_id, active_only=False)
+    return _list_file(
+        roundtrip.to_xlsx(lists.VENDORS, rows), XLSX_MIME, "dineai-vendors.xlsx"
+    )
+
+
+@router.get("/import-template.xlsx")
+async def vendors_template(user: User = Depends(require("vendors:read"))) -> Response:
+    """The blank version, for a restaurant with nothing to export yet."""
+    return _list_file(
+        template_io.template_xlsx(lists.VENDORS.template()),
+        XLSX_MIME, "dineai-vendors-template.xlsx",
+    )
+
+
+@router.post("/import/preview")
+async def preview_vendor_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("vendors:write")),
+) -> dict:
+    """WHAT WOULD HAPPEN. Writes nothing.
+
+        "if duplcaite ask user to chekc and remove duplcaite by showing the
+         previw of duplcaute before ading wihtut confirmaiton"
+
+    Every row comes back classified new or duplicate, and a duplicate carries
+    BOTH versions plus the list of fields that actually differ — so the choice
+    is made looking at the two, not at a count.
+    """
+    existing = await service.list_vendors(db, user.hotel_id, active_only=False)
+    plan = list_io.build_plan(
+        await file.read(), file.filename or "", file.content_type or "",
+        lists.VENDORS, existing,
+    )
+    return plan.as_dict()
