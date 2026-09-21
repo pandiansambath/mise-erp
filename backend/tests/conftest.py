@@ -12,7 +12,26 @@ import re
 
 # 1. Point the app at a dedicated test database (swap the db-name segment).
 _base_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://mise:mise@db:5432/mise")
-_test_url = re.sub(r"/[^/]+$", "/mise_test", _base_url)
+
+# ONE DATABASE PER PARALLEL WORKER.
+#
+# The suite takes about thirty minutes, and almost all of it is `_reset_db`
+# below: it is `autouse=True` and drops and recreates EVERY TABLE before EVERY
+# ONE of 834 tests. That per-test rebuild is what buys the isolation this suite
+# relies on, so it is not something to remove casually — but it parallelises
+# perfectly, because the only thing 834 sequential rebuilds are waiting on is
+# each other.
+#
+# pytest-xdist gives each worker a name in PYTEST_XDIST_WORKER (gw0, gw1, …).
+# Giving each its own database means four workers rebuild four schemas at once
+# with no more contention than one worker had. Nothing about the isolation
+# changes; only how many happen at the same time.
+#
+# Unset (a plain `pytest` run, or a single test in an editor) keeps the exact
+# old name, so nothing about running one test locally changes.
+_worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+_db_name = f"mise_test_{_worker}" if _worker else "mise_test"
+_test_url = re.sub(r"/[^/]+$", f"/{_db_name}", _base_url)
 os.environ["DATABASE_URL"] = _test_url
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 # Force (not setdefault): the dev container sets these, but tests need ci/NullPool
@@ -37,7 +56,28 @@ async def _ensure_test_db() -> None:
     try:
         exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", url.database)
         if not exists:
-            await conn.execute(f'CREATE DATABASE "{url.database}"')
+            # RETRIED, because four workers now start at the same moment.
+            #
+            # Each creates its OWN database so there is no name collision — but
+            # `CREATE DATABASE` copies template1, and Postgres refuses while
+            # another backend is connected to the template. Four simultaneous
+            # creates make that likely rather than theoretical, and a failure
+            # here kills the whole worker before a single test runs.
+            #
+            # DuplicateDatabase is caught as well: harmless, and it means
+            # somebody else got there first.
+            for attempt in range(6):
+                try:
+                    await conn.execute(f'CREATE DATABASE "{url.database}"')
+                    break
+                except Exception as exc:  # noqa: BLE001 - asyncpg error classes vary
+                    text = str(exc).lower()
+                    if "already exists" in text:
+                        break
+                    if "being accessed" in text or "source database" in text:
+                        await asyncio.sleep(0.4 * (attempt + 1))
+                        continue
+                    raise
     finally:
         await conn.close()
 

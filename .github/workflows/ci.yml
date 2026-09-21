@@ -54,7 +54,10 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://mise:mise@localhost:5432/mise_test
           SECRET_KEY: ci-secret
-        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=70
+        # Coverage lives HERE, not on the deploy path. Same workers, so the
+        # honest quality gate is fast too — it just is not what stands between
+        # a fix and production.
+        run: pytest -n 4 --dist loadfile --cov=app --cov-report=term-missing --cov-fail-under=70
 
   frontend:
     name: Frontend — lint & build

@@ -46,7 +46,29 @@ jobs:
           SECRET_KEY: ci-secret
         run: |
           alembic upgrade head
-          pytest -q --cov=app --cov-fail-under=70
+          # FOUR WORKERS, AND NO COVERAGE ON THE DEPLOY PATH.
+          #
+          # "why the hell each and every migration taking 30+ minutes...i cant
+          #  wait 40 min for new deployements"
+          #
+          # Two costs, removed for different reasons.
+          #
+          # `-n 4`: the suite's time is almost entirely `_reset_db`, which
+          # drops and recreates every table before every one of 834 tests.
+          # That per-test rebuild IS the isolation and stays; it simply had no
+          # reason to happen one at a time. Each worker gets its own database
+          # (see tests/conftest.py), so four rebuild at once with no more
+          # contention than one had. `--dist loadfile` keeps a file's tests on
+          # one worker, which matters because some of them share module-level
+          # setup.
+          #
+          # Coverage is gone from HERE and stays in ci.yml. Instrumenting every
+          # line costs 20-40% of the run, and it answers "is this well tested",
+          # which is a question about the codebase — not "is this safe to
+          # deploy", which is the only question this gate exists to ask. The
+          # threshold is still enforced on every push; it just no longer stands
+          # between him and a release.
+          pytest -q -n 4 --dist loadfile
 
   test-frontend:
     name: Test · frontend

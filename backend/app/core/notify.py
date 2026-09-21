@@ -218,3 +218,33 @@ async def email_hotel_admins(
         elif await send_email(user.email, subject, text, html):
             sent += 1
     return sent
+
+
+async def send_alert(to: str, subject: str, text: str, html: str | None = None,
+                     *, verified: bool) -> bool:
+    """An UNSOLICITED email, held until we know the address is really theirs.
+
+        "let them give whatever mail they have...then after enterred the site
+         they can verify the email or they vhnage the email (untill then
+         restric the email service, fotgot password service ectetc)"
+
+    Signup no longer stops at the door, so an unverified address can now belong
+    to a real, working account — and it might be a typo that lands on a
+    stranger. Two consequences, and this handles the second:
+
+      * it must not be a way back IN. `forgot_password` already refuses an
+        unverified address, so that half was already true.
+      * it must not be a way for US to send mail OUT to somebody who never
+        asked. A low-stock warning arriving at a mistyped address is us
+        spamming an innocent inbox with another restaurant's business.
+
+    ⚠️ VERIFICATION LINKS AND SIGN-IN CODES DO NOT GO THROUGH HERE, and must
+    not. They are how an address BECOMES verified; routing them through a
+    verified-only gate would be a lock whose key is inside the box.
+    """
+    if not verified:
+        log.info(
+            "[alert held — address not verified yet] to=%s subject=%s", to, subject
+        )
+        return False
+    return await send_email(to, subject, text, html=html)

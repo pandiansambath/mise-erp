@@ -3,6 +3,9 @@
 pytest==8.3.4
 pytest-asyncio==0.25.0
 pytest-cov==6.0.0
+# Parallel test workers. The suite's cost is a per-test schema rebuild, which
+# parallelises perfectly — see the worker-database note in tests/conftest.py.
+pytest-xdist==3.6.1
 httpx==0.28.1
 aiosqlite==0.20.0
 ruff==0.8.4
