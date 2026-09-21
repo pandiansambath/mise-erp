@@ -275,7 +275,9 @@ function LoginForm({ active, bare = false }: { active: boolean; bare?: boolean }
 }
 
 function SignupForm({ active }: { active: boolean }) {
-  const { registerHotel } = useAuth();
+  // `login` too: registering signs them straight in rather than parking
+  // them in front of their inbox.
+  const { registerHotel, login } = useAuth();
   const [hotelName, setHotelName] = useState("");
   const [username, setUsername] = useState("");
   const [usernameEdited, setUsernameEdited] = useState(false);
@@ -301,7 +303,24 @@ function SignupForm({ active }: { active: boolean }) {
         hotel_name: hotelName, username, country, city: city || undefined, email, password, plan,
       });
       setSiteUrl(res.site_url ?? null);
-      setSent(true);
+
+      // STRAIGHT IN. Registering IS the intent to use the product, and making
+      // somebody go and find an email before they can see anything they just
+      // created is the friction he asked to remove. The verification mail is
+      // still sent and the address is still unverified until they click it —
+      // what that costs them is spelled out on the banner inside, next to a
+      // button that resends it. `login` stores the token and routes a
+      // brand-new owner to /setup by itself.
+      try {
+        const outcome = await login(email, password);
+        if (outcome === "otp") setSent(true); // can't happen on a new account
+        return;
+      } catch {
+        // The account EXISTS. Falling back to the inbox screen is the only
+        // honest option left — silently failing here would leave somebody
+        // convinced their signup did not work when it did.
+        setSent(true);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register. Is the server running?");
       setShake(true);
@@ -315,7 +334,7 @@ function SignupForm({ active }: { active: boolean }) {
     return (
       <div className="mise-glass mise-liquid relative space-y-4 rounded-3xl p-6 text-center sm:p-7">
         <ChefMascot mood="point" className="mx-auto w-24" />
-        <h2 className="font-display text-2xl text-white">Check your inbox ✉️</h2>
+        <h2 className="font-display text-2xl text-white">Your kitchen is ready ✉️</h2>
         <p className="text-sm leading-relaxed text-slate-300">
           We sent a confirmation link to <b className="text-white">{email}</b>.
           One click and your kitchen opens — it also proves alerts and reports
