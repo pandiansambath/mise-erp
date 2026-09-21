@@ -42,12 +42,35 @@ async def test_register_hotel_creates_hotel_and_super_admin(client):
     assert body["site_url"].startswith("https://spicegarden.")
     assert body["subdomain"].startswith("spicegarden.")
 
-    # real-email era: login is gated until the emailed link is clicked
+    # THE DOOR IS OPEN, AND VERIFICATION HAPPENS FROM INSIDE.
+    #
+    #     "we dont need thsi strcik email verification in signup area: please
+    #      it will make customer to spoil mood... let them give whatever mail
+    #      they have...then after enterred the site they can verify"
+    #
+    # This asserted 403 — a new owner locked on the doorstep of a product they
+    # had just signed up for, which is the first thing they ever experience of
+    # us. It is also unrecoverable when the mail lands in spam, which is what
+    # happened: Resend reported "delivered" while Gmail filed it away, and
+    # there was no DMARC record on the domain.
+    #
+    # The risk the old rule guarded against moves rather than vanishing, and
+    # the next two assertions are where it went.
     login = await client.post(
         "/api/auth/login",
         json={"email": "owner@spicegarden.com", "password": "StrongPass123"},
     )
-    assert login.status_code == 403
+    assert login.status_code == 200, "a new owner must not be locked out of their own signup"
+
+    # But an unproven address is still not a way BACK IN...
+    forgot = await client.post(
+        "/api/auth/forgot-password", json={"email": "owner@spicegarden.com"}
+    )
+    assert forgot.status_code in (200, 202), "forgot-password answers the same either way"
+
+    # ...and the account knows it is unverified, which is what holds the
+    # outbound alerts until somebody proves the inbox is theirs.
+    assert login.json()["user"]["email_verified"] is False
     assert "verify" in login.json()["detail"].lower()
 
     # duplicate email is rejected

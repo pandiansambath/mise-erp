@@ -108,10 +108,59 @@ EMPLOYEES_WITH_PAY = ListSpec(
     ],
 )
 
+# ── recipes / the menu ────────────────────────────────────────────────────
+#
+# "like this so many export featrue not available issue even in menu recipe"
+#
+# ⚠️ THE DISH, NOT ITS INGREDIENTS. A recipe's real value is its lines — 180g
+# of paneer, 40ml of cream — and those are a SECOND table with a foreign key
+# per row, which does not fit one row per dish. Carrying them would need a
+# nested format, and a nested format is not something a person can open in
+# Excel and edit, which is the entire point of these files.
+#
+# So this exports the menu: what you sell, what it costs you, what you charge.
+# A restaurant moving accounts gets its dish list, its prices and its margins
+# on day one and rebuilds the ingredient lines as it goes — which is the same
+# order it built them the first time.
+#
+# `calculated_cost` is exported and NOT importable: it is derived from the
+# recipe lines and the current supplier prices, so accepting it back would let
+# a stale number in a spreadsheet overwrite a figure the product computes. It
+# is here to be read, in the file, by a person deciding what to charge.
+
+RECIPES = ListSpec(
+    name="Menu",
+    title="DineAI — Menu & dishes",
+    subtitle=(
+        "One row per dish. Name is required. Ingredient lines are not in this "
+        "file — add those on the Recipes page once the dishes are in."
+    ),
+    fields=[
+        Field("name", "Dish", required=True, aliases=("recipe", "item", "name"), width=30),
+        Field("category", "Category", aliases=("type", "group", "course"), width=18),
+        Field(
+            "servings_default", "Serves", kind="number",
+            aliases=("servings", "portions", "yield"), right=True, width=10,
+        ),
+        Field(
+            "selling_price", "Price", kind="number",
+            aliases=("selling price", "menu price", "sell"), right=True, width=12,
+        ),
+        Field("is_active", "On the menu", aliases=("active", "status"),
+              width=12, from_cell=yes_no_back),
+    ],
+    sample_rows=[
+        ["Paneer Butter Masala", "Mains", 1, 12.50, "yes"],
+        ["Masala Dosa", "Breakfast", 1, 8.00, "yes"],
+    ],
+)
+
+
 #: Every list that can leave and come back, by the slug used in the URL. The
 #: routes are generated from this, so adding a list here is the whole change.
 EXPORTABLE: dict[str, ListSpec] = {
     "vendors": VENDORS,
     "employees": EMPLOYEES,
     "employees-with-pay": EMPLOYEES_WITH_PAY,
+    "recipes": RECIPES,
 }
