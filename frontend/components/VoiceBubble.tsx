@@ -2062,7 +2062,15 @@ export function VoiceBubble() {
             <input
               ref={camRef}
               type="file"
-              accept="image/*"
+
+              /* ANY DOCUMENT, NOT JUST A PHOTOGRAPH.
+                 "it only accpeintg images png...whats the hell it need to
+                  acceppt litrelly all type of dcouements" — and `accept`
+                 meant the spreadsheet could not even be SELECTED, so the
+                 rejection he saw came before any upload happened. The server
+                 reads text, spreadsheets, PDFs and images; this had to stop
+                 narrowing the choice to one of those. */
+              accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf,.doc,.docx,image/*"
               capture="environment"
               className="sr-only"
               onChange={(e) => {

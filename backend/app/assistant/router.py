@@ -191,7 +191,7 @@ async def ingest_extract(
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (max 15MB)")
     mime = file.content_type or "application/pdf"
     try:
-        rows = await ingest.extract(data, mime, kind)
+        rows = await ingest.extract(data, mime, kind, file.filename or "")
     except ProviderError:
         if not provider.is_configured():
             raise HTTPException(
@@ -368,13 +368,29 @@ async def vision_read(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
     if len(data) > 15 * 1024 * 1024:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Image too large (max 15MB)")
-    media = (file.content_type or "image/jpeg").split(";")[0]
-    if media not in (
-        "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf",
-    ):
+    # WHATEVER THEY HAVE, NOT WHATEVER WE PREFER.
+    #
+    #     "also it only accpeintg images png...whats the hell it need to
+    #      acceppt litrelly all type of dcouements"
+    #
+    # He uploaded a spreadsheet of suppliers and was told "Please upload a
+    # photo (JPEG, PNG, WEBP or GIF)". A restaurant's data arrives as whatever
+    # it arrives as — a photo of a stock sheet, a supplier's PDF, a CSV this
+    # product exported ten minutes earlier — and the job of this endpoint is to
+    # work out what it is, not to have a preference.
+    #
+    # The list is a DENY of things we genuinely cannot read, not an ALLOW of
+    # four image types: `ingest.extract` handles text, spreadsheets, PDFs and
+    # images, and an unknown type is better attempted than refused, because the
+    # model will say so itself if it cannot read it.
+    media = (file.content_type or "").split(";")[0]
+    name = (file.filename or "").lower()
+    unreadable = (".zip", ".exe", ".dmg", ".mp4", ".mov", ".mp3", ".wav")
+    if name.endswith(unreadable):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Please upload a photo (JPEG, PNG, WEBP or GIF).",
+            "That looks like an archive or a media file. Send a document, a "
+            "spreadsheet or a photograph.",
         )
 
     items = (
