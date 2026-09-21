@@ -173,17 +173,34 @@ async def archive(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> str | N
     if not bucket:
         return None
 
+    # ⚠️ THE SAME PLAN THE PURGE RUNS. Not `ORDERED_TABLES` — that is the
+    # hand-typed list `preview` and `purge` both stopped using, and the gap
+    # was silent: `audit_events` is deleted while the list names `audit_logs`,
+    # and `chats`, `dining_tables`, `baskets` and `ai_usage` were deleted and
+    # never saved at all. A backup that is a SUBSET of the delete is the worst
+    # shape this can take, because it looks like it worked.
+    #
+    # The plan also carries the right WHERE per table: several are reached
+    # through a parent and have no `hotel_id` of their own, so the old
+    # `column = "hotel_id"` assumption skipped them even when they WERE listed.
+    #
+    # Saved in DELETE order (children first) and restored in reverse, so
+    # parents exist before the rows that point at them.
     dump: dict[str, list[dict]] = {}
-    for table in ORDERED_TABLES + ("hotels",):
-        if not await _table_exists(db, table):
-            continue
-        column = "id" if table == "hotels" else "hotel_id"
-        if table != "hotels" and not await _has_hotel_column(db, table):
-            continue
+    plan = await _delete_plan(db)
+    for table, where in plan:
         rows = await db.execute(
-            text(f"SELECT * FROM {table} WHERE {column} = :h"), {"h": str(hotel_id)}
+            text(f"SELECT * FROM {table} WHERE {where}"), {"h": str(hotel_id)}
         )
         dump[table] = [dict(r._mapping) for r in rows]
+
+    rows = await db.execute(text("SELECT * FROM hotels WHERE id = :h"), {"h": str(hotel_id)})
+    dump["hotels"] = [dict(r._mapping) for r in rows]
+
+    # THE ORDER IS PART OF THE BACKUP. A restore that has to guess it will get
+    # it wrong on a foreign key, and JSON object order is not something to
+    # stake a recovery on.
+    saved_order = [tbl for tbl, _w in plan] + ["hotels"]
 
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     key = f"deleted-hotels/{handle or hotel_id}-{stamp}.json"
@@ -193,7 +210,19 @@ async def archive(db: AsyncSession, hotel_id: uuid.UUID, handle: str) -> str | N
         boto3.client("s3", region_name=settings.aws_region).put_object(
             Bucket=bucket,
             Key=key,
-            Body=json.dumps(dump, default=str).encode(),
+            Body=json.dumps(
+                {
+                    "version": 2,
+                    "hotel_id": str(hotel_id),
+                    "handle": handle,
+                    "taken_at": datetime.now(UTC).isoformat(),
+                    #: Delete order. Restore walks it BACKWARDS.
+                    "order": saved_order,
+                    "row_counts": {k: len(v) for k, v in dump.items()},
+                    "tables": dump,
+                },
+                default=str,
+            ).encode(),
             ContentType="application/json",
         )
     except Exception:
