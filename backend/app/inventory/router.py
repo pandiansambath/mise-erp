@@ -4,14 +4,14 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import service as audit
 from app.auth.deps import require
 from app.auth.models import User
-from app.core import template_io
+from app.core import list_commit, list_io, lists, template_io
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.template_io import Column, TemplateSpec
@@ -535,6 +535,113 @@ async def items_template_pdf(user: User = Depends(require("inventory:read"))) ->
     return _file(
         template_io.template_pdf(ITEMS_TEMPLATE), "application/pdf", "mise-inventory-template.pdf"
     )
+
+
+# ── the round trip, on the same machinery as the other four lists ─────────
+#
+#     "there is strick import efatrue whic donstn not accepting the doc which
+#      i exported ealier(waht the hell)"
+#
+# Inventory already had an importer, and it was the careful one — its column
+# aliases are read from the exporter so the two cannot drift. What it did NOT
+# have was a preview: `/import-template/commit` created what it could and put
+# the duplicates in a `skipped` list nobody was shown. That is the exact
+# failure the preview screen exists to replace, still live on the one list he
+# managed to export.
+#
+# `/import-template` stays — other callers use it. This is the pair `/setup`
+# and the assistant speak, and the pair that shows its work.
+
+
+class _InvCommitIn(BaseModel):
+    rows: list[dict] = Field(default_factory=list)
+    source: str = "file"
+
+
+async def _items_now(db: AsyncSession, hotel_id: uuid.UUID) -> list:
+    """Every item, active or not. An ARCHIVED item is still a duplicate — and
+    re-creating one is how a restaurant ends up with two Paneers, one of which
+    holds all the history."""
+    return await service.list_items(db, hotel_id, active_only=False)
+
+
+@router.post("/import/preview")
+async def preview_item_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """What would happen to your stock list. Writes nothing."""
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"File exceeds {settings.max_upload_mb} MB",
+        )
+    existing = await _items_now(db, user.hotel_id)
+    plan = list_io.build_plan(
+        data, file.filename or "", file.content_type or "", lists.ITEMS, existing
+    )
+    return plan.as_dict()
+
+
+@router.post("/import/commit")
+async def commit_item_import(
+    payload: _InvCommitIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require("inventory:write")),
+) -> dict:
+    """Write the decided items, and link suppliers where we can."""
+    decisions, errors = list_commit.clean_decisions(payload.rows, lists.ITEMS)
+    if errors:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "; ".join(errors[:3]))
+
+    existing = await _items_now(db, user.hotel_id)
+    notes: list[str] = []
+
+    def _fields(values: dict) -> dict:
+        # `supplier` IS NOT A COLUMN ON Item. It names a vendor, and the link
+        # is made after the row exists — passing it to the constructor would
+        # be a TypeError on every row that named one.
+        return {
+            k: v for k, v in values.items()
+            if k != "supplier" and v is not None and v != ""
+        }
+
+    async def _link(item, values: dict) -> None:
+        """Best-effort supplier link. A missing vendor is REPORTED, never
+        invented: creating a supplier as a side effect of a stock import is
+        how a vendor list fills with typos nobody chose."""
+        name = str(values.get("supplier") or "").strip()
+        if not name or item is None:
+            return
+        vendor = await _find_vendor(db, user.hotel_id, name)
+        if vendor is None:
+            notes.append(f"{item.name}: no supplier called “{name}” — add it on Vendors")
+
+    async def _create(values: dict):
+        item = await service.create_item(db, user.hotel_id, **_fields(values))
+        await _link(item, values)
+        return item
+
+    async def _update(target, values: dict):
+        item = await service.update_item(db, target, **_fields(values))
+        await _link(item, values)
+        return item
+
+    report = await list_commit.apply(
+        decisions, lists.ITEMS, existing, create=_create, update=_update
+    )
+    out = report.as_dict(sent=len(decisions))
+    out["notes"] = notes[:20]
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="inventory.import",
+        summary=(
+            f"Imported stock from {payload.source}: {out['counts']['created']} added, "
+            f"{out['counts']['updated']} updated, {out['counts']['failed']} failed"
+        ),
+    )
+    return out
 
 
 @router.post("/import-template")

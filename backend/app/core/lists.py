@@ -158,7 +158,54 @@ RECIPES = ListSpec(
 
 #: Every list that can leave and come back, by the slug used in the URL. The
 #: routes are generated from this, so adding a list here is the whole change.
+# ── stock items ───────────────────────────────────────────────────────────
+#
+# ALIASES COME FROM THE EXPORTER, not from a second list of English typed here.
+# That is not tidiness: the way this round trip broke the first time was the
+# exporter writing "In stock" while the importer accepted "Opening stock" and
+# four aliases that did not include it, so the quantity column was dropped on
+# every re-import WITHOUT AN ERROR.
+#
+# Price is deliberately absent. An item's cost comes from the vendor's price
+# list, per the pricing law — a cost typed into a stock sheet would be a second
+# source of truth for the number this whole product exists to get right.
+
+def _exp_header(key: str) -> str:
+    """The header the CSV exporter writes this field under, lower-cased."""
+    from app.inventory.export import ITEM_IMPORT_HEADERS
+
+    return ITEM_IMPORT_HEADERS.get(key, key).lower()
+
+
+ITEMS = ListSpec(
+    name="Stock",
+    title="DineAI — Stock items",
+    subtitle=(
+        "One row per item. Name and Unit are required. Supplier is optional and "
+        "links to that vendor's existing price — you never type a price here."
+    ),
+    fields=[
+        Field("name", "Name", required=True,
+              aliases=("item", "product", "ingredient", _exp_header("name")), width=30),
+        Field("unit", "Unit", required=True,
+              aliases=("uom", "units", _exp_header("unit")), width=12),
+        Field("category", "Category",
+              aliases=("type", "group", _exp_header("category")), width=18),
+        Field("current_stock", "Opening stock", kind="number",
+              aliases=("stock", "quantity", "qty", "opening", _exp_header("current_stock")),
+              right=True, width=14),
+        Field("supplier", "Supplier",
+              aliases=("vendor", "supplier name", _exp_header("supplier")), width=24),
+    ],
+    sample_rows=[
+        ["Basmati Rice", "kg", "Dry Goods", 25, "Fresh Farms"],
+        ["Paneer", "kg", "Dairy", 10, ""],
+    ],
+)
+
+
 EXPORTABLE: dict[str, ListSpec] = {
+    "inventory": ITEMS,
     "vendors": VENDORS,
     "employees": EMPLOYEES,
     "employees-with-pay": EMPLOYEES_WITH_PAY,

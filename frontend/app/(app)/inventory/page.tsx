@@ -25,6 +25,7 @@ import { Card, Spinner } from "@/components/ui";
 import { Workbench, BenchMenu } from "@/components/Workbench";
 import { chainSummary, levelName, packDisagreement, packSizes, pricePerBase, stockInPacks, supplierPackSize } from "@/lib/packs";
 import { FormShell } from "@/components/EditModal";
+import { ImportPlan, type Decision, type Plan } from "@/components/ImportPlan";
 import { SubNav } from "@/components/SubNav";
 import { AreaChart, RadialBars } from "@/components/charts";
 import { ComboBox } from "@/components/ComboBox";
@@ -283,7 +284,7 @@ export default function InventoryPage() {
   // ── Strict template import (Excel/CSV only — no AI) ─────────────────────────
   const templateInput = useRef<HTMLInputElement>(null);
   const [templateModal, setTemplateModal] = useState(false);
-  const [importRows, setImportRows] = useState<Record<string, unknown>[] | null>(null);
+  const [importPlan, setImportPlan] = useState<Plan | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importErrors, setImportErrors] = useState<string[] | null>(null);
@@ -301,11 +302,12 @@ export default function InventoryPage() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await postForm<{ rows: Record<string, unknown>[] }>(
-        "/inventory/import-template", fd
-      );
-      if (!res.rows.length) setImportMsg("No data rows found — fill in at least one row.");
-      else setImportRows(res.rows);
+      // /import/preview, not /import-template. The template route parses and
+      // hands back rows; this one also says which of them we ALREADY HAVE and
+      // what differs, which is the only part worth a person's attention.
+      const res = await postForm<Plan>("/inventory/import/preview", fd);
+      if (!res.rows?.length) setImportMsg("No data rows found — fill in at least one row.");
+      else setImportPlan(res);
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
         const d = err.detail as { errors?: string[] } | undefined;
@@ -320,18 +322,21 @@ export default function InventoryPage() {
     }
   }
 
-  async function commitImport() {
-    if (!importRows) return;
+  async function commitImport(decisions: Decision[]) {
     setImportBusy(true);
     try {
-      const res = await api.post<{ created: string[]; skipped: string[]; linked?: string[]; notes?: string[] }>(
-        "/inventory/import-template/commit",
-        { rows: importRows }
+      const res = await api.post<{
+        counts: { created: number; updated: number; skipped: number; failed: number };
+        failed: { name: string; why: string }[];
+        notes?: string[];
+      }>("/inventory/import/commit", { rows: decisions, source: "file" });
+      setImportPlan(null);
+      const c = res.counts;
+      setImportMsg(
+        `Added ${c.created}${c.updated ? `, updated ${c.updated}` : ""}` +
+          `${c.skipped ? `, left ${c.skipped} alone` : ""}` +
+          `${c.failed ? `. ${c.failed} could not be saved: ${res.failed[0]?.why}` : "."}`,
       );
-      setImportRows(null);
-      const skip = res.skipped.length ? `, ${res.skipped.length} already there` : "";
-      const link = res.linked?.length ? `, ${res.linked.length} linked to a supplier` : "";
-      setImportMsg(`Added ${res.created.length} item${res.created.length === 1 ? "" : "s"}${skip}${link}.`);
       setImportNotes(res.notes?.length ? res.notes : null);
       await load();
     } catch (err) {
@@ -1072,58 +1077,19 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {importRows && (
-        <div
-          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !importBusy && setImportRows(null)}
-        >
-          <div
-            className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-line px-5 py-3">
-              <h3 className="font-semibold text-fg">
-                Review {importRows.length} item{importRows.length === 1 ? "" : "s"} from your file
-              </h3>
-              <button onClick={() => setImportRows(null)} disabled={importBusy} className="text-fg-faint hover:text-fg" aria-label="Close">✕</button>
-            </div>
-            <div className="max-h-[60vh] overflow-y-auto px-5 py-3">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase text-fg-faint">
-                    <th className="py-1">Name</th>
-                    <th>Unit</th>
-                    <th>Category</th>
-                    <th className="text-right">Opening stock</th>
-                    <th>Supplier</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {importRows.map((r, i) => (
-                    <tr key={i} className="border-t border-line/50">
-                      <td className="py-1.5 font-medium text-fg">{String(r.name ?? "")}</td>
-                      <td className="text-fg-soft">{String(r.unit ?? "")}</td>
-                      <td className="text-fg-soft">{String(r.category ?? "")}</td>
-                      <td className="text-right text-fg-soft">
-                        {r.current_stock != null && r.current_stock !== "" ? String(r.current_stock) : "—"}
-                      </td>
-                      <td className="text-fg-soft">{String(r.supplier ?? "—")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-end gap-3 border-t border-line px-5 py-3">
-              <p className="mr-auto text-xs text-fg-faint">Nothing is saved until you add them. Duplicates are skipped.</p>
-              <button onClick={() => setImportRows(null)} disabled={importBusy} className="rounded-lg border border-line px-4 py-2 text-sm text-fg-soft hover:bg-paper-2">
-                Cancel
-              </button>
-              <button onClick={commitImport} disabled={importBusy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
-                {importBusy ? "Adding…" : `Add ${importRows.length} item${importRows.length === 1 ? "" : "s"}`}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* THE SAME SCREEN a vendor list, a staff list and a menu land on. The
+          dialog this replaces listed the file's rows and nothing about what
+          the restaurant already had, with "Duplicates are skipped." in the
+          footer — the one decision worth making, taken on his behalf. */}
+      {importPlan && (
+        <SheetPopup onClose={() => !importBusy && setImportPlan(null)} title="Import stock items">
+          <ImportPlan
+            plan={importPlan}
+            busy={importBusy}
+            onCancel={() => setImportPlan(null)}
+            onCommit={commitImport}
+          />
+        </SheetPopup>
       )}
 
       {/* Adding happens at the top of the page (you came here to do it);

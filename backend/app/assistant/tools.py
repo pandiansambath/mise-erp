@@ -383,6 +383,7 @@ MAX_LIST_ROWS = 200
 #: governs it. `employees-with-pay` is absent on purpose — the chat is not a
 #: route to setting salaries — and so is anything not listed here.
 _LIST_WRITE_PERM = {
+    "inventory": "inventory:write",
     "vendors": "vendors:write",
     "employees": "employees:write",
     "recipes": "recipes:write",
@@ -426,7 +427,8 @@ async def propose_list(db: AsyncSession, user: User, args: dict) -> dict:
     if spec is None or perm is None:
         return {
             "error": (
-                "I can add suppliers, staff or menu dishes in bulk. "
+                "I can add stock items, suppliers, staff or menu dishes in "
+                "bulk. "
                 "Which of those is this?"
             )
         }
@@ -492,6 +494,10 @@ async def _existing_for(db: AsyncSession, user: User, slug: str) -> list:
         from app.vendors import service as vendor_service
 
         return await vendor_service.list_vendors(db, user.hotel_id, active_only=False)
+    if slug == "inventory":
+        from app.inventory import service as item_service
+
+        return await item_service.list_items(db, user.hotel_id, active_only=False)
     if slug == "recipes":
         from app.recipes import service as recipe_service
 
@@ -1896,13 +1902,15 @@ TOOLS: list[dict] = [
             "properties": {
                 "list": {
                     "type": "string",
-                    "enum": ["vendors", "employees", "recipes"],
+                    "enum": ["inventory", "vendors", "employees", "recipes"],
                     "description": "which list these rows belong to",
                 },
                 "rows": {
                     "type": "array",
                     "description": (
-                        "One object per record. Suppliers take name (required), "
+                        "One object per record. Stock items take name and unit "
+                        "(both required), category, current_stock, supplier. "
+                        "Suppliers take name (required), "
                         "category, contact_person, mobile, email, address, "
                         "vat_number. Staff take full_name (required), job_title, "
                         "mobile, employee_code. Menu dishes take name (required), "
