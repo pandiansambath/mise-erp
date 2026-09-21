@@ -297,7 +297,7 @@ export default function DashboardPage() {
             👋 Let&apos;s finish setting up — import your items, suppliers, menu &amp; team so your dashboard fills with real numbers.
           </p>
           <div className="flex items-center gap-2">
-            <Link href="/onboarding" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-500">
+            <Link href="/setup" className="mise-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-500">
               Finish setup →
             </Link>
             <button
