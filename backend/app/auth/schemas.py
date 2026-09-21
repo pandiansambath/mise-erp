@@ -87,6 +87,21 @@ class HotelOut(BaseModel):
     min_hourly_rate: Decimal = Decimal("11.44")
     plan: str = "pro"
     has_logo: bool = False
+    #: TRUE ONLY WHILE THE RESTAURANT IS COMPLETELY EMPTY — no stock, no
+    #: suppliers, no dishes, no staff. Sign-in reads it to decide whether to
+    #: land on the dashboard or on setup.
+    #:
+    #: ⚠️ DECLARED HERE ON PURPOSE. `response_model` silently drops any field
+    #: the schema does not name, and this project has lost nine fields that
+    #: way — a routing decision that depends on a field the response never
+    #: carries fails by sending every new owner to an empty dashboard, which
+    #: is the exact bug being fixed.
+    #:
+    #: All four, not any one: a restaurant that has entered a single thing has
+    #: found its way, and redirecting it away from the dashboard on every
+    #: sign-in would be nagging. Counted, never stored, so a hotel that is
+    #: genuinely emptied gets the guidance back.
+    needs_setup: bool = False
     features: dict = Field(default_factory=dict)
     landing: dict = Field(default_factory=dict)  # customizable public-page config
     login_page: dict = Field(default_factory=dict)  # customizable staff sign-in door

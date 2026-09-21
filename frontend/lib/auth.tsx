@@ -107,7 +107,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // one to a tenant page would render the app shell around somebody who
       // has no hotel, which the app-group layout then bounces anyway.
       const wanted = nextFromLocation();
-      const home = res.user.is_platform_owner ? "/control-room" : "/dashboard";
+      // A BRAND-NEW RESTAURANT LANDS ON SETUP, NOT ON AN EMPTY DASHBOARD.
+      //
+      // This line sent every non-operator to /dashboard, and the ONLY route to
+      // onboarding was a 900ms timer on the verify-email page — so an owner
+      // who signed up, confirmed later, or simply signed in again never saw it
+      // once. A 601-line page nobody could reach is indistinguishable from a
+      // page that does not exist, which is exactly how he described it.
+      //
+      // `needs_setup` is true only while the restaurant has no stock, no
+      // suppliers, no dishes and no staff, so this redirects once and then
+      // stops. It is computed, never stored — a hotel that is emptied gets the
+      // guidance back rather than being stranded on a dashboard of zeros.
+      const home = res.user.is_platform_owner
+        ? "/control-room"
+        : res.hotel?.needs_setup
+          ? "/setup"
+          : "/dashboard";
       const allowed =
         wanted &&
         (res.user.is_platform_owner

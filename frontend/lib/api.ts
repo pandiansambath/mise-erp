@@ -440,6 +440,11 @@ export interface LandingConfig {
 }
 
 export interface Hotel {
+  /** True only while the restaurant has no stock, no suppliers, no dishes and
+   *  no staff. Sign-in reads it to land a brand-new owner on /setup instead of
+   *  a dashboard of zeros. Computed server-side on every login, never stored,
+   *  so an emptied hotel gets its guidance back. */
+  needs_setup?: boolean;
   /** The restaurant's own theme, on the HOTEL rather than in a browser —
    *  devices the owner never signs into (the wall tablet) have to honour it.
    *
