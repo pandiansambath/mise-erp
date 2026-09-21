@@ -370,6 +370,105 @@ async def _propose(kind: str, user: User, args: dict) -> dict:
                          "summary": p["summary"], "fields": p["fields"]}}
 
 
+#: The most rows the model may hand over in one go.
+#:
+#: The message limit already caps a paste at roughly 80-130 supplier lines, so
+#: this is not really about size — it is about a model that PADS. A forty-line
+#: paste coming back as three hundred rows is a hallucination, and the cap
+#: turns that into a refusal rather than 260 invented suppliers. Truncate and
+#: SAY SO; never drop silently.
+MAX_LIST_ROWS = 200
+
+
+async def propose_list(db: AsyncSession, user: User, args: dict) -> dict:
+    """Many rows at once — the thing he actually asked for.
+
+        "i tried like 'thsi si the list of vendor please add this to our
+         vendor' but ai said i cant able to add"
+
+    It was not a permission problem. Every other propose_* tool is documented
+    "Propose adding ONE supplier", so faced with fifteen the model's only
+    options were fifteen calls or an apology — and fifteen calls would have
+    died half way through a four-lap reasoning loop, which is worse than the
+    apology.
+
+    THE MODEL DOES NOT WRITE ANYTHING. It turns prose into rows; the server
+    classifies them against what the restaurant already has, and the person
+    confirms on the same preview screen a spreadsheet lands on. Duplicate
+    detection, permission, tenancy and the write all stay exactly where they
+    were.
+    """
+    from app.core import lists as list_specs
+    from app.core.list_io import classify
+
+    slug = str(args.get("list") or "").strip().lower()
+    spec = list_specs.EXPORTABLE.get(slug)
+    # Resolved from OUR table, never from a name the model invents — and
+    # `employees-with-pay` is deliberately not reachable here, so the assistant
+    # cannot become a side door for setting salaries.
+    if spec is None or slug.endswith("-with-pay"):
+        return {"error": "I can only add suppliers or staff in bulk at the moment."}
+
+    perm = {"vendors": "vendors:write", "employees": "employees:write"}[slug]
+    if not has_permission(user.role, perm):
+        return {"error": f"You don't have permission to add {slug}."}
+
+    rows = args.get("rows") or []
+    if not isinstance(rows, list) or not rows:
+        return {"error": "I could not find any rows in that."}
+
+    truncated = len(rows) > MAX_LIST_ROWS
+    rows = rows[:MAX_LIST_ROWS]
+
+    allowed = {f.key for f in spec.fields}
+    cleaned = [
+        {k: v for k, v in r.items() if k in allowed}
+        for r in rows
+        if isinstance(r, dict)
+    ]
+
+    existing = await _existing_for(db, user, slug)
+    plan = classify(cleaned, spec, existing)
+    counts = plan.as_dict()["counts"]
+
+    return {
+        # THE COUNT FIRST, so he can compare it against what he sent. Forty in
+        # and sixty out is visible before anything is written.
+        "read": len(cleaned),
+        "counts": counts,
+        "truncated": truncated,
+        #: Harvested into the confirm card, exactly as a single proposal is —
+        #: and rendered by the SAME preview screen the file import uses.
+        "proposal": {
+            "kind": "list_import",
+            "label": f"Import {slug}",
+            "summary": (
+                f"{counts['new']} new, {counts['duplicates']} already here"
+                + (f", {counts.get('invalid', 0)} unreadable" if counts.get("invalid") else "")
+                + (f" (only the first {MAX_LIST_ROWS} of {len(args['rows'])})" if truncated else "")
+            ),
+            "fields": {"list": slug},
+            "plan": plan.as_dict(),
+        },
+        "note": (
+            "Describe the counts in one sentence and let them review it. "
+            "Do NOT claim you have added anything — nothing is saved until "
+            "they confirm on the preview."
+        ),
+    }
+
+
+async def _existing_for(db: AsyncSession, user: User, slug: str) -> list:
+    """What the restaurant already has, for the duplicate check."""
+    if slug == "vendors":
+        from app.vendors import service as vendor_service
+
+        return await vendor_service.list_vendors(db, user.hotel_id, active_only=False)
+    from app.employees import service as employee_service
+
+    return await employee_service.list_employees(db, user.hotel_id, active_only=False)
+
+
 async def propose_expense(db: AsyncSession, user: User, args: dict) -> dict:
     return await _propose("expense", user, args)
 
@@ -1749,6 +1848,39 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "propose_list",
+        "description": (
+            "Propose adding MANY suppliers or staff at once, from a list the user "
+            "pasted or dictated. USE THIS whenever they give you more than one of "
+            "anything — never call the single-record tools repeatedly, which fails "
+            "part way through and leaves half a list added. You get back how many "
+            "are new and how many they already have; say that in one sentence and "
+            "let them review it. Nothing is saved until they confirm."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "string",
+                    "enum": ["vendors", "employees"],
+                    "description": "which list these rows belong to",
+                },
+                "rows": {
+                    "type": "array",
+                    "description": (
+                        "One object per record. Suppliers take name (required), "
+                        "category, contact_person, mobile, email, address, "
+                        "vat_number. Staff take full_name (required), job_title, "
+                        "mobile, employee_code. Leave out anything you were not "
+                        "told rather than guessing it."
+                    ),
+                    "items": {"type": "object"},
+                },
+            },
+            "required": ["list", "rows"],
+        },
+    },
+    {
         "name": "propose_vendor",
         "description": "Propose adding ONE supplier. Needs a name. Does not save until confirmed.",
         "parameters": {
@@ -1968,6 +2100,7 @@ EXECUTORS: dict[str, Executor] = {
     "propose_expense": propose_expense,
     "propose_sale": propose_sale,
     "propose_item": propose_item,
+    "propose_list": propose_list,
     "propose_vendor": propose_vendor,
     "propose_employee": propose_employee,
     "propose_waste": propose_waste,
@@ -1998,6 +2131,9 @@ TOOL_PERMS: dict[str, str] = {
     "propose_expense": "expenses:write",
     "propose_sale": "sales:write",
     "propose_item": "inventory:write",
+    # Checked again INSIDE the tool against the list actually named, so a
+    # caller who can write vendors cannot use it to add staff.
+    "propose_list": "vendors:write",
     "propose_vendor": "vendors:write",
     "propose_employee": "employees:write",
     "propose_waste": "inventory:write",
