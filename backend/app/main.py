@@ -24,6 +24,7 @@ from app.employees.router import router as employees_router
 from app.events.router import router as events_router
 from app.expenses.router import router as expenses_router
 from app.hotels.router import router as hotels_router
+from app.hotels.transfer_router import router as transfer_router
 from app.inventory.router import router as inventory_router
 from app.jobs.router import public_router as jobs_public_router
 from app.jobs.router import router as jobs_router
@@ -299,6 +300,9 @@ def create_app() -> FastAPI:
     app.include_router(doc_comments_router, prefix="/api")
     app.include_router(selfservice_router, prefix="/api")
     app.include_router(hotels_router, prefix="/api")
+    # Half authenticated (the owner asks), half public (the receiver
+    # has no account yet) - see the module docstring.
+    app.include_router(transfer_router, prefix="/api")
     app.include_router(events_router, prefix="/api")
     app.include_router(assistant_router, prefix="/api")
     app.include_router(notifications_router, prefix="/api")
