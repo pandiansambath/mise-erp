@@ -15,7 +15,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assistant import actions, guard, ingest, memory, provider, service
+from app.assistant import (
+    actions,
+    docbytes,
+    guard,
+    ingest,
+    memory,
+    provider,
+    service,
+    tools,
+)
 from app.assistant.provider import ProviderError
 from app.assistant.schemas import (
     ActRequest,
@@ -30,6 +39,7 @@ from app.assistant.schemas import (
 from app.audit import service as audit
 from app.auth.deps import get_current_user, require, require_feature
 from app.auth.models import User
+from app.core import list_io, lists
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.rbac import has_permission
@@ -466,6 +476,101 @@ class VisionCommit(BaseModel):
     total: float = Field(gt=0)
     category: str = Field(default="Food", max_length=60)
     lines: list[VisionCommitLine] = Field(default_factory=list)
+
+
+@router.post("/read-any")
+async def read_any_document(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Read ANY document and say which list it is, as a reviewable plan.
+
+        "ai will play big role here as it wil dected whatever the doc or images
+         or ahwtever it is it need to analyse and do the needefulll"
+
+    This is the fallback behind `/setup`'s one drop rail. A file whose column
+    headings we recognise never reaches here — that path is exact and free.
+    This is for the rest: a supplier's PDF, a photographed stock sheet, a
+    spreadsheet with somebody else's headings.
+
+    IT RETURNS A PLAN, NOT A RESULT. The rows go through the same `classify`
+    the file importers use, against the same existing records, and come back
+    on the same preview screen. So the AI route cannot write something the
+    file route would have shown you first — there is no second commit path to
+    keep in step, because the commit is `/{list}/import/commit`, which already
+    re-checks everything at write time.
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
+    if len(data) > ingest.MAX_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (max 15MB)")
+    if docbytes.is_unreadable(file.filename or ""):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "That looks like an archive or a media file. Send a document, a "
+            "spreadsheet or a photograph.",
+        )
+
+    meter: dict = {}
+    started = time.monotonic()
+    try:
+        slug, rows = await ingest.read_any(
+            data, file.content_type or "", file.filename or ""
+        )
+    except ProviderError:
+        await guard.record(
+            db, user, kind="vision", model=meter.get("model", ""),
+            latency_ms=int((time.monotonic() - started) * 1000), ok=False,
+        )
+        if not provider.is_configured():
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "The AI can't be reached right now, so I can't read documents.",
+            ) from None
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "The AI is busy right now — please try that again in a moment.",
+        ) from None
+
+    await guard.record(
+        db, user, kind="vision", model=meter.get("model", ""),
+        latency_ms=int((time.monotonic() - started) * 1000),
+    )
+
+    if slug is None or not rows:
+        # NOT AN ERROR. A person can upload their gas bill, and being told
+        # plainly that this is not one of the four lists beats a 400.
+        return {"list": None, "plan": None, "why": (
+            "I read that, but it isn't a list of suppliers, staff, stock or "
+            "menu dishes. If it is one of those, open that page and use "
+            "Import there — the columns will tell me what I'm looking at."
+        )}
+
+    # PERMISSION IS CHECKED AFTER WE KNOW WHAT IT IS, and before anything is
+    # returned. The same table the assistant's bulk tool uses, so a list is
+    # unreachable here the moment it is unreachable there.
+    perm = tools._LIST_WRITE_PERM.get(slug)
+    if perm is None or not has_permission(user.role, perm):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"That looks like a {slug} list, and you don't have permission to add those.",
+        )
+
+    rows = rows[:tools.MAX_LIST_ROWS]
+    spec = lists.EXPORTABLE[slug]
+    allowed = {f.key for f in spec.fields}
+    cleaned = [{k: v for k, v in r.items() if k in allowed} for r in rows]
+
+    existing = await tools._existing_for(db, user, slug)
+    plan = list_io.classify(cleaned, spec, existing)
+
+    await audit.record(
+        db, hotel_id=user.hotel_id, user=user, action="ai.read_any",
+        summary=f"AI read a document as {slug} ({len(cleaned)} rows, nothing saved yet)",
+    )
+    return {"list": slug, "label": spec.name, "plan": plan.as_dict()}
 
 
 @router.post("/vision/commit")

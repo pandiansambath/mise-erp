@@ -300,6 +300,90 @@ async def _commit_sales(db: AsyncSession, user: User, rows: list[dict]) -> dict:
     return {"kind": "sales", "created": created, "skipped": skipped}
 
 
+
+#: The lists `read_any` can recognise, in the order it should prefer them when
+#: a document genuinely could be two things. Stock last: a delivery note looks
+#: like stock AND like a supplier, and the supplier is the more useful read.
+AUTO_LISTS = ("vendors", "employees", "recipes", "inventory")
+
+
+def _auto_prompt() -> str:
+    """Built FROM THE SPECS, so a field added to a list reaches the model
+    without anybody remembering to edit a prompt."""
+    from app.core import lists as list_specs
+
+    described = []
+    for slug in AUTO_LISTS:
+        spec = list_specs.EXPORTABLE[slug]
+        fields = ", ".join(
+            f.key + (" (required)" if f.required else "") for f in spec.fields
+        )
+        described.append(f'  "{slug}" — {spec.name}. Fields: {fields}')
+
+    return (
+        "You are reading a document a restaurant has just uploaded. Work out "
+        "WHICH ONE of these lists it is, then extract every row of it.\n\n"
+        + "\n".join(described)
+        + "\n\nReply with JSON only — no prose, no code fences:\n"
+        '{"list": "<one of: ' + ", ".join(AUTO_LISTS) + '>", '
+        '"rows": [ {...}, {...} ]}\n\n'
+        "Rules:\n"
+        "- Use exactly the field names listed above for the list you chose.\n"
+        "- Omit any field the document does not state. DO NOT GUESS A VALUE; "
+        "an empty field is fixable by a person, an invented one is not.\n"
+        "- Skip headers, totals, subtotals, page numbers and signature lines.\n"
+        "- Money and quantities as plain numbers, no currency symbols.\n"
+        '- If it is none of these four, reply {"list": null, "rows": []} and '
+        "nothing else."
+    )
+
+
+async def read_any(
+    file_bytes: bytes, mime: str, filename: str = ""
+) -> tuple[str | None, list[dict]]:
+    """Identify the list and extract its rows, in a single model call.
+
+    Returns (slug, rows). `slug` is None when the document is none of the four
+    — a takeaway leaflet, a bank statement, a photo of a dog — and the caller
+    says so plainly rather than proposing rows nobody asked for.
+    """
+    content = docbytes.blocks(file_bytes, mime, filename, _auto_prompt())
+    try:
+        raw = bedrock._invoke(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 8192,
+                "messages": [{"role": "user", "content": content}],
+            }
+        )
+    except bedrock.BedrockUnavailable as exc:
+        raise ProviderError(str(exc)) from exc
+
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-z]*\s*|\s*```$", "", text, flags=re.S)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, flags=re.S)
+        if not m:
+            raise ProviderError("The AI returned something we couldn't read.") from None
+        try:
+            data = json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            raise ProviderError("The AI returned something we couldn't read.") from exc
+
+    if not isinstance(data, dict):
+        return None, []
+    slug = data.get("list")
+    # RESOLVED AGAINST OUR OWN TABLE, never trusted as a path or a key. A model
+    # that answers "employees-with-pay" must not thereby reach the pay list.
+    if slug not in AUTO_LISTS:
+        return None, []
+    rows = data.get("rows")
+    return slug, [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
 async def commit(db: AsyncSession, user: User, kind: str, rows: list[dict]) -> dict:
     """Create the confirmed rows. Skips duplicates/invalid; audit-logged."""
     cfg = KINDS.get(kind)
