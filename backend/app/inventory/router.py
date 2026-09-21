@@ -559,10 +559,29 @@ class _InvCommitIn(BaseModel):
 
 
 async def _items_now(db: AsyncSession, hotel_id: uuid.UUID) -> list:
-    """Every item, active or not. An ARCHIVED item is still a duplicate — and
-    re-creating one is how a restaurant ends up with two Paneers, one of which
-    holds all the history."""
-    return await service.list_items(db, hotel_id, active_only=False)
+    """Every item, active or not, WITH ITS SUPPLIER RESOLVED.
+
+    Archived counts: an archived item is still a duplicate, and re-creating
+    one is how a restaurant ends up with two Paneers, one of which holds all
+    the history.
+
+    WARNING: `supplier` IS NOT A COLUMN ON Item. It is resolved through
+    `best_vendors` — which is exactly what the EXPORTER does. Without this the
+    comparison read `getattr(item, "supplier", None)`, got None for every
+    single item, and so flagged every stock line that HAS a supplier as
+    changed, on every re-import, forever. Hanging the resolved name on the
+    instance keeps `classify`'s generic lookup working AND keeps the update
+    target an ORM row rather than a dict.
+    """
+    items = await service.list_items(db, hotel_id, active_only=False)
+    chosen = await service.best_vendors(db, hotel_id)
+    for it in items:
+        picked = chosen.get(it.id)
+        # No chosen-mark here. The star is decoration for a human reading a
+        # spreadsheet, and it is stripped off the incoming side too, so both
+        # sides of the comparison are plain supplier names.
+        it.supplier = picked[0] if picked else None
+    return items
 
 
 @router.post("/import/preview")
