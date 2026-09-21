@@ -33,7 +33,10 @@ from app.hotels.models import Hotel
 
 # Long enough not to be guessed by a bored customer, short enough to type with
 # one hand while carrying plates.
-MIN_PIN = 4
+# SIX, not four. Four digits is ten thousand candidates and this PIN opens a
+# 14-hour session for the whole restaurant; `suggest()` already generates six,
+# so the floor was below what we ourselves hand out.
+MIN_PIN = 6
 MAX_PIN = 8
 
 # A shift, not a day. The tablet re-unlocks each morning, which is the moment

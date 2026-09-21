@@ -12,7 +12,7 @@ from app.auth.service import get_user_by_id
 from app.core import logging_setup, monitoring
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.rbac import has_permission
+from app.core.rbac import NARROWER_THAN, has_permission
 from app.core.security import create_access_token, decode_token
 from app.hotels import access
 from app.hotels.models import Hotel
@@ -180,6 +180,21 @@ def require(permission: str) -> Callable[..., Coroutine[Any, Any, User]]:
                 or permission in granted
                 or (permission.endswith(":read") and f"{module}:write" in granted)
             )
+            # AND THE SAME NARROWING RULE THE BASE ROLES GET.
+            #
+            # `employees:roster` is satisfied by `employees:read`. Without this,
+            # a hotel's runtime-invented role granted `employees:read` would be
+            # refused the roster endpoint while the built-in roles sailed
+            # through — custom roles behaving "subtly differently from the
+            # archetypes they are built on" is the exact failure the comment
+            # above this block warns about.
+            if not allowed and permission in NARROWER_THAN:
+                wider = NARROWER_THAN[permission]
+                w_module = wider.rsplit(":", 1)[0]
+                allowed = (
+                    wider in granted
+                    or (wider.endswith(":read") and f"{w_module}:write" in granted)
+                )
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
